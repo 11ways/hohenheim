@@ -30,7 +30,9 @@ public enum PlacementRefusal {
     CHECK_NOW_REQUIRED(HohenheimMicrocopy.VIOLATIONS.of("host_preflight_check_now_required"), Remedy.CHECK_AGAIN),
     CONTACT_LAPSED(HohenheimMicrocopy.VIOLATIONS.of("host_contact_lapsed"), Remedy.OPEN_HOST),
     /** No memory reading inside the freshness bound: the chooser cannot ration the host, so it never picks it. */
-    CAPACITY_UNPROVEN(HohenheimMicrocopy.VIOLATIONS.of("host_capacity_unproven"), Remedy.CHECK_AGAIN);
+    CAPACITY_UNPROVEN(HohenheimMicrocopy.VIOLATIONS.of("host_capacity_unproven"), Remedy.CHECK_AGAIN),
+    /** Less memory free than the smallest new app books at its kind's default: no new app fits (the booking rule). */
+    FULL(HohenheimMicrocopy.VIOLATIONS.of("host_full"), Remedy.OPEN_HOST);
 
     /** What clears a refusal, as the operator does it on the host. */
     public enum Remedy {

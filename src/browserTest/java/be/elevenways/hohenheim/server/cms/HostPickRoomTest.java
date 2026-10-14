@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.host.HostStanding;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.instance.InstancePlacement;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
 import be.elevenways.hohenheim.test.HardDeletes;
@@ -83,6 +85,31 @@ class HostPickRoomTest extends HohenheimTestBase {
 
         // 3. The roomy host stays a choice.
         assertThat(judged.refusal(create, container, roomy)).as("step 3: a host with room is a choice").isNull();
+    }
+
+    /**
+     * The Hosts list's standing asks the run's own room rule, at the smallest new app's default memory: a host without
+     * room for any new app reads full, in the list, the host pick's line and the gate's host verdict alike.
+     */
+    @Test
+    void aHostWithoutRoomForAnyNewAppReadsFullInTheHostsList() {
+        // 1. The full host is admitted and measured, yet takes no new app: its standing says so, with the reason.
+        HostVerdict fullVerdict = HostVerdict.of(server(full));
+        assertThat(fullVerdict.standing()).as("step 1: a full host takes no new apps")
+            .isEqualTo(HostStanding.REFUSING);
+        Microcopy reason = Objects.requireNonNull(fullVerdict.reason(), "step 1: the standing says why");
+        assertThat(reason.key()).as("step 1: it is full").isEqualTo("host_full");
+        assertThat(reason.args().get("free")).as("step 1: saying what is free").isEqualTo(3L);
+        assertThat((Long) reason.args().get("smallest")).as("step 1: and what the smallest new app needs")
+            .isGreaterThan(3L);
+
+        // 2. The gate's host verdict is that same refusal, so the list and the pick cannot disagree.
+        assertThat(Objects.requireNonNull(InstancePlacement.hostRefusal(server(full))).key())
+            .as("step 2: the host verdict is the list's").isEqualTo("host_full");
+
+        // 3. A host with room still takes new apps.
+        assertThat(HostVerdict.of(server(roomy)).standing()).as("step 3: the roomy host takes new apps")
+            .isEqualTo(HostStanding.TAKING);
     }
 
     private static Row server(int id) {

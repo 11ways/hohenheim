@@ -265,10 +265,20 @@ version of the same procedure.
 ## Configuration
 
 Every setting lives in `settings/local.dry`: Zenit's own (the admin listener
-included) and Hohenheim's under the `hohenheim` key. Copy
-[`local.dry.example`](settings/local.dry.example) and uncomment what you need.
-`ZENIT__GROUP__KEY` environment variables override the file, e.g.
-`ZENIT__HOHENHEIM__PROXY__HTTP_PORT`.
+included) and Hohenheim's under the `hohenheim` key. For a developer machine,
+copy [`local.dry.example`](settings/local.dry.example) to `settings/local.dry`
+as it is: it runs the admin UI on 3000 (trusting forwarded headers only from
+loopback), the public listeners on 8080/8443 (ports below 1024 need a
+capability) with no proxy trust keys or PROXY v2 peers, and Let's Encrypt off.
+Change or delete keys from there; the examples below list the rest.
+
+A `.dry` file is DRY (JSON): it has NO comments, so never comment a key out,
+delete it instead (its default applies). The `//` notes in the blocks below are
+explanation only. A settings file that does not parse stops the boot, naming
+its line and column. `settings/local.dry` is loaded after `settings/default.dry`,
+so its entries win, and `ZENIT__GROUP__KEY` environment variables override both,
+e.g. `ZENIT__HOHENHEIM__PROXY__HTTP_PORT`. `local.dry` is gitignored: it pins
+machine-local ports and paths and often carries proxy trust keys.
 
 An install from before this layout had `settings/hohenheim.dry`: the first boot
 moves its keys under `hohenheim` in `settings/local.dry` and keeps the old file

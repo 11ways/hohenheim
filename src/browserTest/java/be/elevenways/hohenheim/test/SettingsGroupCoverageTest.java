@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.server.HohenheimSettingsBoot;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.setting.SettingGroup;
 import be.elevenways.zenit.common.setting.SettingsForms;
 import be.elevenways.zenit.forms.common.render.FormEntryFacets;
 import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
@@ -13,12 +14,15 @@ import be.elevenways.zenit.server.setting.DryFileSource;
 import be.elevenways.zenit.server.setting.EnvSettingsSource;
 import be.elevenways.zenit.server.setting.RetiredConfiguration;
 import be.elevenways.zenit.server.setting.RetiredName;
+import be.elevenways.zenit.server.setting.ServerSettings;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -176,6 +180,39 @@ class SettingsGroupCoverageTest {
         assertThat(Files.readString(gitignore).lines().map(String::trim).toList())
             .as("step 4: settings/local.dry and the retired file's backups are gitignored")
             .contains("settings/hohenheim.dry*", "settings/local.dry");
+    }
+
+    /**
+     * The tracked example is meant to be copied to {@code settings/local.dry} as it is, so it must parse (DRY has no
+     * comments; the explanation lives in the README) and name only settings that exist.
+     */
+    @Test
+    void theTrackedExampleParsesAndNamesOnlyDeclaredSettings() {
+        HohenheimSettingsBoot.forceDefinitions();
+        assertThat(ServerSettings.Network.PORT.getPath()).as("the admin listener's group is declared").isNotEmpty();
+
+        // 1. The example loads as a settings file; a refusal names its line and column.
+        Path example = Path.of("settings/local.dry.example");
+        assertThat(Files.exists(example)).as("step 1: the example is tracked").isTrue();
+        Map<String, Object> values = new DryFileSource(example).snapshot();
+        assertThat(values).as("step 1: the example sets something").isNotEmpty();
+
+        // 2. Every key it sets is a declared setting, so a copy changes what it says it changes.
+        List<String> undeclared = new ArrayList<>();
+        collectUndeclared(Zenit.SETTINGS, values, "", undeclared);
+        assertThat(undeclared).as("step 2: the example names only declared settings").isEmpty();
+    }
+
+    private static void collectUndeclared(SettingGroup group, Map<?, ?> values, String prefix, List<String> out) {
+        values.forEach((key, value) -> {
+            String name = String.valueOf(key);
+            SettingGroup child = group.getChildGroup(name);
+            if (child != null && value instanceof Map<?, ?> nested) {
+                collectUndeclared(child, nested, prefix + name + ".", out);
+            } else if (group.getDefinition(name) == null) {
+                out.add(prefix + name);
+            }
+        });
     }
 
     /**

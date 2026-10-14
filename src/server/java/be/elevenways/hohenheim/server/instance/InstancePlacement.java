@@ -317,8 +317,10 @@ public final class InstancePlacement {
      * (the kind's own placeability): the admission gate for every isolation a kind on this runtime provides (refused
      * only when all refuse, so a VM-isolated Incus host that takes VMs reads as taking apps), with the owner of a
      * workload already there (a dedicated host takes its owner's apps), then the memory budget the chooser rations
-     * against. An admitted host the chooser never picks (a stale memory reading) therefore never reads "Takes new
-     * apps" (as Starfleet's local host once did, measured 2026-08-29).
+     * against: an unmeasured host, and a host without room for the smallest new app (the booking rule,
+     * {@link InstanceCapacity#fullRefusal}), take none. An admitted host the chooser never picks (a stale memory reading)
+     * therefore never reads "Takes new apps" (as Starfleet's local host once did, measured 2026-08-29), nor does a
+     * full one (Starfleet's local host with 3 MB free, 2026-10-14).
      *
      * @return the first refusal in the gate's own words, null when an ordinary new app could land here
      */
@@ -331,16 +333,38 @@ public final class InstancePlacement {
         Row resident = Models.get(InstanceModel.class).find().where(InstanceModel.SERVER_ID.eq(serverId)).first();
         String owner = resident == null ? null : resident.get(InstanceModel.QUOTA_BUCKET);
         Microcopy first = null;
-        for (WorkloadIsolation isolation : InstanceKinds.isolationsOn(ServerModel.runtimeOf(server))) {
+        String runtime = ServerModel.runtimeOf(server);
+        for (WorkloadIsolation isolation : InstanceKinds.isolationsOn(runtime)) {
             Microcopy refusal = HostAdmission.instancePlacementRefusal(serverId, isolation, owner);
             if (refusal == null) {
-                return InstanceCapacity.budgetMbOf(server) == null ? capacityUnproven(serverId) : null;
+                return InstanceCapacity.budgetMbOf(server) == null ? capacityUnproven(serverId)
+                    : InstanceCapacity.fullRefusal(serverId, smallestNewAppMbOn(runtime));
             }
             if (first == null) {
                 first = refusal;
             }
         }
         return first;
+    }
+
+    /**
+     * What the smallest new app a user can create on this runtime books, priced as the chooser prices a create
+     * ({@link Workload#footprintMb}) at its kind's default settings: what "full" means without a requested size.
+     *
+     * @return the memory in MB, 0 when no such kind books any (such a host is never full)
+     */
+    static long smallestNewAppMbOn(@NonNull String runtime) {
+        long smallest = 0;
+        for (String kind : InstanceKinds.kindsWhere(handler -> handler.supportedRuntimes().contains(runtime))) {
+            if (!InstanceKinds.isUserDeployable(kind)) {
+                continue;
+            }
+            long footprint = Workload.of(InstanceKinds.getHandler(kind), Map.of()).footprintMb();
+            if (footprint > 0 && (smallest == 0 || footprint < smallest)) {
+                smallest = footprint;
+            }
+        }
+        return smallest;
     }
 
     /**

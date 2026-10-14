@@ -6579,6 +6579,10 @@
     "text": "Het geheugen van {$name} is te lang geleden gemeten om er een nieuwe app te plaatsen",
     "scope": "violations"
   },
+  "host_full": {
+    "text": "{$name} is vol: slechts {$free} MB van het geheugenbudget is vrij, minder dan de kleinste nieuwe app nodig heeft ({$smallest} MB)",
+    "scope": "violations"
+  },
   "host_prepared_image_missing": {
     "text": "Host '{$name}' bevat de voorbereide image '{$image}' niet: publiceer ze in de imagestore van die host, of kies een host die ze al heeft",
     "scope": "violations"

@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.host.HostCapacityView;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.host.HostPreflight;
+import be.elevenways.hohenheim.server.host.PlacementRefusal;
 import be.elevenways.hohenheim.server.quota.ChargedDimension;
 import be.elevenways.hohenheim.server.quota.ChargedModel;
 import be.elevenways.protoblast.common.Blast;
@@ -280,11 +281,32 @@ public final class InstanceCapacity {
      * never refused here, exactly as {@link #reserve} books it against nothing.
      */
     public static @Nullable Microcopy roomRefusal(int serverId, long amountMb) {
-        if (amountMb <= 0) {
-            return null;
-        }
-        long free = limitMbOn(serverId) - bookedMbOn(serverId);
-        return amountMb <= free ? null : capacityReached(serverId, amountMb, free);
+        long free = freeMbOn(serverId);
+        return fits(amountMb, free) ? null : capacityReached(serverId, amountMb, free);
+    }
+
+    /**
+     * Why this host takes no new app at all, or null: {@link #roomRefusal}'s rule asked for the smallest new app, worded
+     * for a reader with no workload in hand (the Hosts list, the host pick's line).
+     *
+     * @param smallestMb what the smallest new app books at its kind's default; 0 when none books memory (never full)
+     */
+    public static @Nullable Microcopy fullRefusal(int serverId, long smallestMb) {
+        long free = freeMbOn(serverId);
+        return fits(smallestMb, free) ? null : PlacementRefusal.FULL.text()
+            .withArg("name", ServerModel.labelOf(serverId))
+            .withArg("free", Math.max(0, free))
+            .withArg("smallest", smallestMb);
+    }
+
+    /** {@link #reserve}'s guard ({@code used <= limit - amount}) asked without booking; nothing always fits. */
+    private static boolean fits(long amountMb, long freeMb) {
+        return amountMb <= 0 || amountMb <= freeMb;
+    }
+
+    /** @return what {@link #reserve} could still book on this host now; unbounded without a usable reading */
+    private static long freeMbOn(int serverId) {
+        return limitMbOn(serverId) - bookedMbOn(serverId);
     }
 
     /** @return the cap {@link #reserve} judges a booking on this host against; unbounded without a usable reading */

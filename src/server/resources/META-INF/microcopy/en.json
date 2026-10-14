@@ -6579,6 +6579,10 @@
     "text": "The memory of {$name} was measured too long ago to place a new app there",
     "scope": "violations"
   },
+  "host_full": {
+    "text": "{$name} is full: only {$free} MB of its memory budget is free, less than the smallest new app needs ({$smallest} MB)",
+    "scope": "violations"
+  },
   "host_prepared_image_missing": {
     "text": "Host '{$name}' does not carry the prepared image '{$image}': publish it into that host's image store, or pick a host that already has it",
     "scope": "violations"
