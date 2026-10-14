@@ -13254,7 +13254,7 @@
       "scope": "database"
     },
     {
-      "text": "Saving a new memory or CPU ceiling recreates a running workload's container, so it is briefly down and its published port may change.",
+      "text": "Saving a new memory or CPU ceiling recreates a running workload's container, so it is briefly down. It keeps its published ports: only a number the host picked itself (not one you set) can change, and only when another program takes that number while the container is recreated.",
       "scope": "instance"
     },
     {

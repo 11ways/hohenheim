@@ -13254,7 +13254,7 @@
       "scope": "database"
     },
     {
-      "text": "Een nieuwe geheugen- of CPU-limiet opslaan hermaakt de container van een draaiende workload, dus die is even offline en de gepubliceerde poort kan wijzigen.",
+      "text": "Een nieuwe geheugen- of CPU-limiet opslaan hermaakt de container van een draaiende workload, dus die is even offline. Hij houdt zijn gepubliceerde poorten: alleen een nummer dat de host zelf koos (niet een dat jij instelde) kan wijzigen, en enkel als een ander programma dat nummer inneemt terwijl de container hermaakt wordt.",
       "scope": "instance"
     },
     {

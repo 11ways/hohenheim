@@ -134,7 +134,7 @@ class MachineRecordPageJourneyTest extends HohenheimTestBase {
             String vmEdit = adminGet(vmPage).body();
             assertThat(vmEdit).as("step 5: the resize notice speaks of Incus")
                 .contains("in place through Incus")
-                .doesNotContain("its published port may change")
+                .doesNotContain("It keeps its published ports")
                 .as("step 5: no kind card offers a website kind")
                 .doesNotContain("Build from a repository");
             assertThat(InstanceKinds.kindChangesOf(vm)).as("step 5: a running VM can only stay a VM")
@@ -160,6 +160,10 @@ class MachineRecordPageJourneyTest extends HohenheimTestBase {
                 .isTrue();
             assertThat(adminGet(appPage).body()).as("step 7: its resize recreates the container")
                 .contains("recreates a running workload's container")
+                .as("step 7: and says the ports are kept, naming the one case a number can still change")
+                .contains("It keeps its published ports")
+                .contains("only a number the host picked itself")
+                .doesNotContain("published port may change")
                 .as("step 7: its kind cards offer only what this record can become")
                 .contains("data-value=\"hohenheim:docker_container\"")
                 .doesNotContain("data-value=\"hohenheim:vm\"")
