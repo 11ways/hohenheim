@@ -12,6 +12,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * THE git-source vocabulary, contributed INTO a host schema rather than owning one.
@@ -24,6 +25,22 @@ import java.util.Map;
  * host schema; the NAMES stay constants here, which is what every reader actually uses.
  */
 public final class GitSourceSchema {
+
+    /**
+     * An optional part of the source that a kind's lane reads; a part a kind does not name stays declared (a stored
+     * value reads, the closed-world coercion accepts an API request sending it) but no edit view offers it.
+     */
+    public enum Offer {
+
+        /** The preview lane: previews on/off, preview branches and their environment. */
+        PREVIEWS,
+
+        /** A build command, and the folder it runs in. */
+        BUILD_COMMAND,
+
+        /** Environment variables that exist only while the build command runs. */
+        BUILD_ENVIRONMENT
+    }
 
     public static final String REPOSITORY_URL = "repository_url";
     public static final String PROVIDER_ID = "provider_id";
@@ -113,23 +130,12 @@ public final class GitSourceSchema {
     }
 
     /**
-     * Add the git-source fields to a kind's settings schema, the preview lane included.
+     * Add the git-source fields to a kind's settings schema, offering the optional parts its lane reads.
      *
+     * @param offers what the kind's lane reads beyond repository, branch, timeout, delivery and checkout options
      * @return the same schema, so a kind can chain its own fields after
      */
-    public static @NonNull Schema addTo(@NonNull Schema schema) {
-        return addTo(schema, true);
-    }
-
-    /**
-     * Add the git-source fields to a kind's settings schema.
-     *
-     * @param offersPreviews false for a kind the preview lane refuses (it only builds applications): its preview fields
-     *                       stay DECLARED, so a stored value reads and the closed-world coercion accepts an API request
-     *                       sending them, but no edit view offers a switch that cannot work
-     * @return the same schema, so a kind can chain its own fields after
-     */
-    public static @NonNull Schema addTo(@NonNull Schema schema, boolean offersPreviews) {
+    public static @NonNull Schema addTo(@NonNull Schema schema, @NonNull Set<Offer> offers) {
 
         // Deliberately NOT secret(): a credentialed https://user:TOKEN@host URL is REFUSED at
         // the write (InstanceDeclarations, GitRepository.embeddedCredential), and provider
@@ -159,13 +165,13 @@ public final class GitSourceSchema {
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("branch"))
             .help(HohenheimMicrocopy.HELP.of("branch")).build());
 
-        schema.addField(StringField.builder().name(BUILD_COMMAND)
+        schema.addField(offered(StringField.builder().name(BUILD_COMMAND)
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("build_command"))
-            .help(HohenheimMicrocopy.HELP.of("build_command")).build());
+            .help(HohenheimMicrocopy.HELP.of("build_command")), offers, Offer.BUILD_COMMAND).build());
 
-        schema.addField(PathField.builder().name(BUILD_DIRECTORY)
+        schema.addField(offered(PathField.builder().name(BUILD_DIRECTORY)
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("build_directory"))
-            .help(HohenheimMicrocopy.HELP.of("build_directory")).build());
+            .help(HohenheimMicrocopy.HELP.of("build_directory")), offers, Offer.BUILD_COMMAND).build());
 
         schema.addField(IntegerField.builder().name(BUILD_TIMEOUT).suffix("s")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("build_timeout"))
@@ -194,38 +200,43 @@ public final class GitSourceSchema {
 
         // Build-only environment variables as an ordered name -> value map.
         // secret(): redacted on derived surfaces.
-        schema.addField(StringMapField.builder(BUILD_ENVIRONMENT_VARIABLES)
+        schema.addField(offered(StringMapField.builder(BUILD_ENVIRONMENT_VARIABLES)
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("build_environment_variables"))
-            .help(HohenheimMicrocopy.HELP.of("build_environment_variables")).secret().build());
+            .help(HohenheimMicrocopy.HELP.of("build_environment_variables")).secret(), offers, Offer.BUILD_ENVIRONMENT)
+            .build());
 
         /* Opt-in: pull-request webhook events create/update/destroy preview deployments. */
-        schema.addField(previewLane(BooleanField.builder(PREVIEWS_ENABLED).defaultValue(false)
+        schema.addField(offered(BooleanField.builder(PREVIEWS_ENABLED).defaultValue(false)
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("previews_enabled"))
-            .help(HohenheimMicrocopy.HELP.of("previews_enabled")), offersPreviews).build());
+            .help(HohenheimMicrocopy.HELP.of("previews_enabled")), offers, Offer.PREVIEWS).build());
 
         // Per-BRANCH previews are opt-in PER PATTERN, never on by default: a default that
         // mints a preview per pushed branch is a build + container + hostname the owner
         // never asked for, charged against the same per-owner cap the pull-request lane
         // uses -- three stale branches would silently lock out the PR previews the owner
         // DID opt into. Empty list = pull-request previews only.
-        schema.addField(previewLane(ListField.builder(StringField.builder().name("pattern").build())
+        schema.addField(offered(ListField.builder(StringField.builder().name("pattern").build())
             .name(PREVIEW_BRANCHES)
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("preview_branches"))
-            .help(HohenheimMicrocopy.HELP.of("preview_branches")), offersPreviews).build());
+            .help(HohenheimMicrocopy.HELP.of("preview_branches")), offers, Offer.PREVIEWS).build());
 
         // The ONLY runtime environment a preview receives. Previews deliberately inherit
         // NOTHING from the production runtime: not environment_variables, not injected
         // database credentials, not volumes -- a preview builds arbitrary branch code and
         // must never see production secrets or data by default.
-        schema.addField(previewLane(StringMapField.builder(PREVIEW_ENVIRONMENT_VARIABLES)
+        schema.addField(offered(StringMapField.builder(PREVIEW_ENVIRONMENT_VARIABLES)
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("preview_environment_variables"))
-            .help(HohenheimMicrocopy.HELP.of("preview_environment_variables")).secret(), offersPreviews).build());
+            .help(HohenheimMicrocopy.HELP.of("preview_environment_variables")).secret(), offers, Offer.PREVIEWS)
+            .build());
 
         return schema;
     }
 
-    /** A preview field as declared: offered as is, or visible in no view where the kind has no preview lane. */
-    private static <B extends Field.Builder<?, ?, ?, B>> @NonNull B previewLane(@NonNull B builder, boolean offered) {
-        return offered ? builder : builder.attribute(FieldAttributes.VISIBLE_IN, EnumSet.noneOf(EditView.class));
+    /** An optional field as declared: offered as is, or visible in no view where the kind does not offer its part. */
+    private static <B extends Field.Builder<?, ?, ?, B>> @NonNull B offered(@NonNull B builder,
+                                                                          @NonNull Set<Offer> offers,
+                                                                          @NonNull Offer part) {
+        return offers.contains(part) ? builder
+            : builder.attribute(FieldAttributes.VISIBLE_IN, EnumSet.noneOf(EditView.class));
     }
 }

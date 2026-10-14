@@ -23,6 +23,7 @@ import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 
@@ -41,8 +42,10 @@ public final class StaticSiteKind implements InstanceKindHandler {
 
     public static final Identifier ID = HohenheimIds.id("static_site");
 
-    // No preview lane: the preview builder reads an application's own Dockerfile settings.
-    public static final Schema SETTINGS_SCHEMA = GitSourceSchema.addTo(new Schema(), false);
+    // Its build command runs in a generated build stage that takes no environment, and the preview builder reads an
+    // application's own Dockerfile settings, so it offers neither.
+    public static final Schema SETTINGS_SCHEMA =
+        GitSourceSchema.addTo(new Schema(), EnumSet.of(GitSourceSchema.Offer.BUILD_COMMAND));
 
     /** The folder served, relative to the repository root; empty serves the root itself. */
     public static final StringField OUTPUT_DIRECTORY = SETTINGS_SCHEMA.addField(

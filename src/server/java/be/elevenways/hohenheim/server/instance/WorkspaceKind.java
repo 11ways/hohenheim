@@ -42,6 +42,7 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -71,7 +72,8 @@ public final class WorkspaceKind implements InstanceKindHandler {
 
     public static final Identifier ID = HohenheimIds.id("workspace");
     // Previews build applications only (PreviewQuota refuses any other owner), so a workspace offers none.
-    public static final Schema SETTINGS_SCHEMA = GitSourceSchema.addTo(new Schema(), false);
+    public static final Schema SETTINGS_SCHEMA = GitSourceSchema.addTo(new Schema(),
+        EnumSet.of(GitSourceSchema.Offer.BUILD_COMMAND, GitSourceSchema.Offer.BUILD_ENVIRONMENT));
 
     /** The one declared volume of every workspace, named in {@code instance_volumes}. */
     public static final String HOME_VOLUME = "home";

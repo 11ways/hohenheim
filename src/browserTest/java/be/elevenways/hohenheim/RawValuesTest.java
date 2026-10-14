@@ -13,6 +13,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -85,7 +86,8 @@ class RawValuesTest {
         // 4. auto_deploy has ONE default: what the form seeds a missing key with is what every reader answers for it,
         //    so a source that never stored the flag shows and gets auto-deploy alike (on by default), and a stored
         //    false (what M011 wrote on every source stored before) still stays off.
-        Object declared = GitSourceSchema.addTo(new Schema()).getField(GitSourceSchema.AUTO_DEPLOY).getDefaultValue();
+        Object declared = GitSourceSchema.addTo(new Schema(), Set.of()).getField(GitSourceSchema.AUTO_DEPLOY)
+            .getDefaultValue();
         assertThat(declared).as("step 4: the form's declared default").isEqualTo(true);
         assertThat(GitSourceSchema.autoDeploys(Map.of())).as("step 4: an absent flag reads that same on").isTrue();
         assertThat(GitSourceSchema.autoDeploys(Map.of(GitSourceSchema.AUTO_DEPLOY, false)))

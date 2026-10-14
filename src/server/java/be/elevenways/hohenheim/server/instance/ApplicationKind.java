@@ -51,7 +51,10 @@ import java.util.Map;
 public final class ApplicationKind implements InstanceKindHandler {
 
     public static final Identifier ID = HohenheimIds.id("application");
-    public static final Schema SETTINGS_SCHEMA = GitSourceSchema.addTo(new Schema());
+    // Its release builds a Dockerfile or a buildpack, so no build command (nor its folder or build-only environment)
+    // is ever run: the source offers only its preview lane.
+    public static final Schema SETTINGS_SCHEMA =
+        GitSourceSchema.addTo(new Schema(), EnumSet.of(GitSourceSchema.Offer.PREVIEWS));
 
     /**
      * A prebuilt image to release instead of building one.
@@ -157,13 +160,12 @@ public final class ApplicationKind implements InstanceKindHandler {
         // first decision and no variable can be meaningful yet.
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.open(HohenheimFormSections.SOURCE, List.of(
             GitSourceSchema.REPOSITORY_URL, GitSourceSchema.PROVIDER_ID, GitSourceSchema.REPOSITORY,
-            GitSourceSchema.BRANCH, BUILDER.getName(), GitSourceSchema.BUILD_COMMAND, GitSourceSchema.BUILD_DIRECTORY,
+            GitSourceSchema.BRANCH, BUILDER.getName(),
             IMAGE.getName(), TAG.getName(), CONTAINER_PORT.getName(),
             GitSourceSchema.AUTO_DEPLOY, GitSourceSchema.PREVIEWS_ENABLED, GitSourceSchema.PREVIEW_BRANCHES)));
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.open(HohenheimFormSections.VARIABLES,
             HohenheimMicrocopy.FORM_SECTION.of("variables_description"), List.of(
-            ENVIRONMENT_VARIABLES.getName(), GitSourceSchema.BUILD_ENVIRONMENT_VARIABLES,
-            GitSourceSchema.PREVIEW_ENVIRONMENT_VARIABLES)));
+            ENVIRONMENT_VARIABLES.getName(), GitSourceSchema.PREVIEW_ENVIRONMENT_VARIABLES)));
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.BUILD, List.of(
             DOCKERFILE.getName(), BUILD_ARGUMENTS.getName(), GitSourceSchema.BUILD_TIMEOUT,
             GitSourceSchema.SHALLOW_CLONE, GitSourceSchema.SUBMODULES)));
