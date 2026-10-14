@@ -224,6 +224,11 @@ public final class PutOnline {
             InstanceTemplateOperations.ENVIRONMENT_ID.getName())
         .describe(HohenheimMicrocopy.PUT_ONLINE.of("runs_on_card_lead"));
 
+    /** The kind-led flows' "Runs on" card: the host pick alone, since they charge the operator's own quota. */
+    private static final FormSection RUNS_ON_HOST = FormSection.of("runs_on",
+            HohenheimMicrocopy.PUT_ONLINE.of("runs_on_card"), InstanceTemplateOperations.SERVER_ID.getName())
+        .describe(HohenheimMicrocopy.PUT_ONLINE.of("runs_on_card_host_lead"));
+
     private static final FormSpec TEMPLATE_INPUT = FormSpec.builder()
         .add(InstanceTemplateOperations.NAME)
         .add(HOSTNAME)
@@ -296,6 +301,7 @@ public final class PutOnline {
         .add(InstanceModel.KIND)
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.SETTINGS))
         .add(httpsChoice())
+        .section(RUNS_ON_HOST)
         .step(FormStep.of("where", STEP_WHERE, InstanceTemplateOperations.NAME.getName(), HOSTNAME.getName(),
             InstanceTemplateOperations.SERVER_ID.getName(), InstanceModel.KIND.getName())
                 .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_where_lead")))
@@ -324,6 +330,7 @@ public final class PutOnline {
             .emptyReason(context -> InstallMedia.noneReason(null))
             .help(record -> HohenheimMicrocopy.INSTANCE_DEVICE.of("install_media_wizard_help"))
             .build())
+        .section(RUNS_ON_HOST)
         .step(FormStep.of("where", STEP_WHERE, InstanceTemplateOperations.NAME.getName(),
             InstanceTemplateOperations.SERVER_ID.getName(), InstanceModel.KIND.getName())
                 .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_machine_where_lead")))
@@ -337,10 +344,10 @@ public final class PutOnline {
      * A service of one kind: where it runs, its kind's own settings, then its Ports step: the ports as rows and the
      * game address. No address and no HTTPS: it is reached on its ports.
      *
-     * AIDEV-NOTE: the kind's settings keep their own published-ports entry (Options, folded under "Port publishing"):
-     * the settings form is the kind's one schema, the same one the Configuration edits later, and narrowing it per
-     * flow needs a mechanism no form has. Its entries are honoured exactly as the rows are (claimed by the run), and a
-     * row naming a port it already declares is refused (PutOnlineHandlers.servicePorts).
+     * AIDEV-NOTE: the Ports step owns the ports alone. The settings entry declared here is the kind's whole schema;
+     * the handler's input scope (PutOnlineHandlers.workloadServiceScope) swaps it for the same entry omitting the
+     * settings the kind publishes its ports through (InstanceKindHandler.portSettings), and the run writes the rows
+     * into the published ports.
      */
     private static final FormSpec WORKLOAD_SERVICE_INPUT = FormSpec.builder()
         .add(InstanceTemplateOperations.NAME)
@@ -349,6 +356,7 @@ public final class PutOnline {
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.SETTINGS))
         .add(SERVICE_PORTS)
         .add(GAME_ADDRESS)
+        .section(RUNS_ON_HOST)
         .step(FormStep.of("where", STEP_WHERE, InstanceTemplateOperations.NAME.getName(),
             InstanceTemplateOperations.SERVER_ID.getName(), InstanceModel.KIND.getName())
                 .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_service_where_lead")))
@@ -356,7 +364,7 @@ public final class PutOnline {
             .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_settings_lead")))
         .step(FormStep.of(PORTS, STEP_PORTS, PORTS, GAME_ADDRESS.getName())
             .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_service_ports_lead"))
-            .summarizedBy(answers -> kindSummary(answers, PutOnlineReach.PORTS)))
+            .summarizedWithItsOwn(PutOnline::workloadServiceSummary))
         .build();
 
     /** The template's own create (named as its form names it), its address and its HTTPS choice. */
@@ -611,6 +619,43 @@ public final class PutOnline {
     static @NonNull Microcopy portLabel(@NonNull PublishedPort port) {
         PortPurpose purpose = port.purpose();
         return purpose == PortPurpose.OTHER ? Microcopy.literal(port.name()) : purpose.label();
+    }
+
+    /** @return one Ports row as the port it publishes, null while its name or its container port is missing */
+    static @Nullable PublishedPort rowPort(@NonNull Map<String, Object> row) {
+        PortPurpose purpose = PortPurpose.forName(RawValues.nonBlankString(row.get(PORT_PURPOSE.getName())));
+        String name = purpose == PortPurpose.OTHER ? RawValues.nonBlankString(row.get(PORT_NAME.getName()))
+            : purpose.token();
+        Integer container = RawValues.parsedInt(row.get(PORT_CONTAINER.getName()));
+        if (name == null || container == null) {
+            return null;
+        }
+        String protocol = PublishedPort.UDP.equals(row.get(PORT_PROTOCOL.getName())) ? PublishedPort.UDP
+            : PublishedPort.TCP;
+        return new PublishedPort(name.trim(), RawValues.parsedInt(row.get(PORT_HOST.getName())), container, protocol,
+            false);
+    }
+
+    /**
+     * What a kind-led service's Ports step shows: the kind as its card names it, its name and host, then each row
+     * typed on this same step with its host port (asked again as the rows change).
+     */
+    private static @NonNull List<SummaryLine> workloadServiceSummary(@NonNull StepAnswers answers) {
+        List<SummaryLine> lines = kindSummary(answers, PutOnlineReach.PORTS);
+        if (answers.get(PORTS) instanceof List<?> rows) {
+            for (Object row : rows) {
+                PublishedPort port = row instanceof Map<?, ?> map ? rowPort(RawValues.map(map)) : null;
+                if (port == null) {
+                    continue;
+                }
+                String spelled = port.containerPort() + "/" + port.protocol();
+                lines.add(new SummaryLine(portLabel(port), port.hostPort() == null
+                    ? HohenheimMicrocopy.PUT_ONLINE.of("summary_port_row_free").withArg("port", spelled)
+                    : HohenheimMicrocopy.PUT_ONLINE.of("summary_port_row").withArg("port", spelled)
+                        .withArg("host", String.valueOf(port.hostPort()))));
+            }
+        }
+        return lines;
     }
 
     /**

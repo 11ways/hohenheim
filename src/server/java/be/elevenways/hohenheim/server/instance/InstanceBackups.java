@@ -44,6 +44,9 @@ import be.elevenways.hohenheim.server.runtime.ImageIdentity;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
 import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
+import be.elevenways.hohenheim.server.runtime.PortPublication;
+import be.elevenways.hohenheim.ports.PortLedger;
+import be.elevenways.hohenheim.ports.PublishedPort;
 import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.hohenheim.server.util.Sha256;
 import be.elevenways.hohenheim.server.util.UtcStamp;
@@ -480,8 +483,9 @@ public final class InstanceBackups {
      * this controller does not have, which no catalog can translate.
      *
      * @param notRestored one sentence per thing the archive declared and restore skipped
+     * @param movedPorts  each fixed host port the target host already held, now one it picks ("game 30000/tcp")
      */
-    public record Restored(int instanceId, @NonNull List<String> notRestored) {
+    public record Restored(int instanceId, @NonNull List<String> notRestored, @NonNull List<String> movedPorts) {
 
         /** Whether the restored record is everything the archive described. */
         public boolean complete() {
@@ -491,6 +495,49 @@ public final class InstanceBackups {
         /** The losses as one operator-readable line ("" when there are none). */
         public @NonNull String describeLosses() {
             return String.join("; ", this.notRestored);
+        }
+    }
+
+    /**
+     * A copy's restored settings for a host: each fixed host port another owner already claims there turned into one
+     * the host picks itself, every free fixed port kept as it was.
+     *
+     * AIDEV-NOTE: restore-to-new only (plan section 72): beside its original on the same host the copy's first deploy
+     * was refused on the original's numbers. An in-place restore keeps its record's ports, which its own claims hold.
+     * The single-port shape is read only for a kind publishing through it ({@link InstanceKindHandler#portSettings}).
+     *
+     * @param settings the settings to store, a copy when a port moved
+     * @param moved    one "name port/protocol" per port that now takes a free one
+     */
+    private record PortsOnCopy(@NonNull Map<String, Object> settings, @NonNull List<String> moved) {
+
+        /** @return the copy's ports on {@code serverId} */
+        static @NonNull PortsOnCopy of(@NonNull InstanceKindHandler kind, @NonNull Map<String, Object> restored,
+                                       int serverId) {
+            Map<String, Object> settings = new LinkedHashMap<>(restored);
+            List<String> moved = new ArrayList<>();
+            List<PublishedPort> ports = new ArrayList<>();
+            for (PublishedPort port : PublishedPort.of(restored)) {
+                boolean held = port.hostPort() != null && PortLedger.rivalHolder(serverId,
+                    port.loopback() ? PublishedPort.LOOPBACK : "", port.hostPort(), port.protocol(), null, null) != null;
+                ports.add(held ? port.withoutHostPort() : port);
+                if (held) {
+                    moved.add(port.name() + " " + port.hostPort() + "/" + port.protocol());
+                }
+            }
+            if (!moved.isEmpty()) {
+                settings.put(PublishedPort.FIELD, PublishedPort.toSettings(ports));
+            }
+            String hostPort = DockerContainerKind.HOST_PORT.getName();
+            PortPublication single = kind.portSettings().contains(hostPort)
+                ? DockerContainerKind.publicationOf(restored) : null;
+            Integer fixed = single == null ? null : single.declaredHostPort();
+            if (fixed != null && PortLedger.rivalHolder(serverId, single.ledgerBindAddress(), fixed, single.protocol(),
+                    null, null) != null) {
+                settings.remove(hostPort);
+                moved.add(hostPort + " " + fixed + "/" + single.protocol());
+            }
+            return new PortsOnCopy(moved.isEmpty() ? restored : settings, List.copyOf(moved));
         }
     }
 
@@ -650,7 +697,9 @@ public final class InstanceBackups {
                 ? ServerModel.canonicalServerId(serverSpelling)
                 : InstancePlacement.chooseForBucket(InstanceQuota.creationBucket(),
                     InstancePlacement.Workload.imported(restoredKind, settings), null);
-            Microcopy refused = destinationRefusal(serverId, restoredKind, settings, manifest.installMedia());
+            // A fixed host port the target host already holds (the original beside it) becomes one it picks.
+            PortsOnCopy ports = PortsOnCopy.of(restoredKind, settings, serverId);
+            Microcopy refused = destinationRefusal(serverId, restoredKind, ports.settings(), manifest.installMedia());
             if (refused != null) {
                 throw Violations.ofForm(refused);
             }
@@ -692,7 +741,7 @@ public final class InstanceBackups {
             record.set(InstanceModel.NAME, newName != null && !newName.isBlank()
                 ? newName : manifest.instanceName() + "-restored-" + stamp);
             record.set(InstanceModel.KIND, manifest.kind());
-            record.set(InstanceModel.SETTINGS, settings);
+            record.set(InstanceModel.SETTINGS, ports.settings());
             record.set(InstanceModel.SERVER_ID, serverId);
             record.set(InstanceModel.RUNTIME_IMAGE_ID, runtimeImageId);
             record.set(InstanceModel.CRASH_POLICY, profile != null
@@ -706,7 +755,7 @@ public final class InstanceBackups {
             int newId = record.get(InstanceModel.ID);
             try {
                 return landRestore(backup, manifest, opened, staging, profile, application, record, newId,
-                    notRestored);
+                    notRestored, ports.moved());
             } catch (RuntimeException failed) {
                 abandonRestore(newId, failed);
                 throw failed;
@@ -732,7 +781,8 @@ public final class InstanceBackups {
     private @NonNull Restored landRestore(@NonNull Row backup, @NonNull BackupManifest manifest,
                                           BackupArchive.@NonNull Opened opened, @NonNull Path staging,
                                           @Nullable InstanceProfile profile, boolean application, @NonNull Row record,
-                                          int newId, @NonNull List<String> notRestored) {
+                                          int newId, @NonNull List<String> notRestored,
+                                          @NonNull List<String> movedPorts) {
         // The table-backed rows the settings map cannot carry, BEFORE resolve():
         // variable values substitute into the spec's command and environment, so a
         // spec resolved without them is a spec for a different workload. The host volumes
@@ -772,7 +822,7 @@ public final class InstanceBackups {
                     InstanceSnapshots.requireSupport(candidate).restoreVolumes(candidate.spec(),
                         declared, tars);
                 });
-                Restored restored = new Restored(newId, List.copyOf(notRestored));
+                Restored restored = new Restored(newId, List.copyOf(notRestored), movedPorts);
                 recordRestore(newId, backup.get(InstanceBackupModel.ID), restored);
                 return restored;
             } catch (IOException | RuntimeException error) {
@@ -796,7 +846,7 @@ public final class InstanceBackups {
         } catch (IOException error) {
             throw HohenheimViolations.instanceRefusal("instance_restore_failed", record, error);
         }
-        Restored restored = new Restored(newId, List.copyOf(notRestored));
+        Restored restored = new Restored(newId, List.copyOf(notRestored), movedPorts);
         recordRestore(newId, backup.get(InstanceBackupModel.ID), restored);
         Blast.log("BACKUP: restored backup", backup.get(InstanceBackupModel.ID),
             "to NEW instance", newId, restored.complete()
@@ -1454,10 +1504,13 @@ public final class InstanceBackups {
      */
     private static void recordRestore(int instanceId, @Nullable Object backupId,
                                       @NonNull Restored restored) {
+        String moved = restored.movedPorts().isEmpty() ? ""
+            : " -- host ports already held on this host, now picked by it: " + String.join(", ",
+                restored.movedPorts());
         ActivityLog.record(Models.get(InstanceModel.class), instanceId,
-            HohenheimActivityAction.RESTORED_BACKUP, restored.complete()
+            HohenheimActivityAction.RESTORED_BACKUP, (restored.complete()
                 ? "backup #" + backupId
-                : "backup #" + backupId + " -- NOT restored: " + restored.describeLosses());
+                : "backup #" + backupId + " -- NOT restored: " + restored.describeLosses()) + moved);
     }
 
 

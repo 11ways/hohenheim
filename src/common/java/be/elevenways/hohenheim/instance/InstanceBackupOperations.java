@@ -83,9 +83,11 @@ public final class InstanceBackupOperations {
      *
      * @param instanceId the new instance
      * @param missing    what could not be brought back, null when the restore was complete
+     * @param movedPorts the fixed host ports the target host already held, now ones it picks ("game 30000/tcp"), null
+     *                   when every port stayed as it was
      */
     @HawkeyeClass
-    public record Restored(int instanceId, @Nullable String missing) {
+    public record Restored(int instanceId, @Nullable String missing, @Nullable String movedPorts) {
     }
 
     private InstanceBackupOperations() {

@@ -21,8 +21,9 @@
                 <code>{{ endpoint.address }}:{{ endpoint.port }}</code>
                 <pl-copy-button value={% endpoint.address + ":" + endpoint.port %} ariaLabel={% t("copy", scope: "instance_overview") %}></pl-copy-button>
                 {% else %}
-                <code>{{ endpoint.port }}</code>
-                {% if endpoint.note != null %}<span class="hh-endpoint-noaddress" data-endpoint-noaddress="1">{{ endpoint.note }}</span>{% /if %}
+                {#- No bare port: what is missing, and for an operator where to set it. -#}
+                {% if endpoint.note != null %}<span class="hh-endpoint-noaddress" data-endpoint-noaddress="1">{{ endpoint.note }}</span>{% else %}<code>{{ endpoint.port }}</code>{% /if %}
+                {% if endpoint.fixUrl != null %}<a href={% endpoint.fixUrl %} data-endpoint-fix="1">{{ t("set_public_address", scope: "instance_overview") }}</a>{% /if %}
                 {% /if %}
             </pl-table-cell>
             <pl-table-cell>{{ endpoint.protocol }}</pl-table-cell>

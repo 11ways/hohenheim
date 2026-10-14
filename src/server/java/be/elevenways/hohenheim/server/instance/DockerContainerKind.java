@@ -197,6 +197,12 @@ public final class DockerContainerKind implements InstanceKindHandler {
     }
 
     @Override
+    public @NonNull List<String> portSettings() {
+        return List.of(CONTAINER_PORT.getName(), PORT_PROTOCOL.getName(), PORT_EXPOSURE.getName(), HOST_PORT.getName(),
+            PUBLISHED_PORTS.getName());
+    }
+
+    @Override
     public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {
         return DockerInstanceRuntime.onServer(serverName, Egress.OPEN);
     }

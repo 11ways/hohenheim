@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.AttentionSubject;
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimStatsFunctions;
 import be.elevenways.hohenheim.HohenheimWidgets;
 import be.elevenways.hohenheim.instance.InstanceOperations;
@@ -584,14 +585,18 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
                 .doesNotContain("Public endpoint");
 
             // 3. A port it holds on a host that declares no public address: the card is "Ports", and the operator
-            //    reads why the port reaches no further than the host's own network.
+            //    reads what is missing (no bare port) and where to set it: the host's own page.
             PortLedger.claim(ServerModel.localServerId(), null, 25566, "tcp", InstanceModel.MODEL_ID, id,
                 "app journey");
             String ported = adminGet("/admin/instances/" + id + "/page/overview").body();
             assertThat(ported).as("step 3: the held port is listed under Ports")
                 .contains("data-endpoint-port=\"25566\"")
                 .contains(">Ports<")
-                .contains("This host has no public address set");
+                .contains("Port 25566 has no public address yet")
+                .doesNotContain("<code>25566</code>");
+            assertThat(ported).as("step 3: THE ASSERTION -- with a link to where the address is set")
+                .contains("data-endpoint-fix=\"1\"").contains("Set the host's public address")
+                .contains("/admin/" + HohenheimSlugs.SERVERS + "/" + ServerModel.localServerId());
         } finally {
             PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, id);
             HardDeletes.row(Models.get(InstanceModel.class), instance);

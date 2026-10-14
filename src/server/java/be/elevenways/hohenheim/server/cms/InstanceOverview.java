@@ -476,8 +476,11 @@ public final class InstanceOverview {
                 PortLedger.isPreallocated(claim),
                 !address.isBlank() ? null
                     : delegated ? HohenheimMicrocopy.INSTANCE_OVERVIEW.of("no_public_address_delegated")
-                    : HohenheimMicrocopy.INSTANCE_OVERVIEW.of("no_public_address"),
-                purposeOf(named, port, protocol)));
+                    : HohenheimMicrocopy.INSTANCE_OVERVIEW.of("no_public_address").withArg("port", port)
+                        .withArg("host", ServerModel.labelOf(claim.get(PortAllocationModel.SERVER_ID))),
+                purposeOf(named, port, protocol),
+                !address.isBlank() || delegated ? null : CmsRoutes.detail(HohenheimSlugs.ADMIN,
+                    HohenheimSlugs.SERVERS, claim.get(PortAllocationModel.SERVER_ID)).toUrl()));
         }
         return endpoints;
     }

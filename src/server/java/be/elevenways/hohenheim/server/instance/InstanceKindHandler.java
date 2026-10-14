@@ -324,6 +324,14 @@ public interface InstanceKindHandler extends InstanceKindInfo {
     }
 
     /**
+     * The settings this kind publishes its ports through (one port's shape, the named published ports): a flow whose
+     * Ports step publishes the ports owns them, so its settings step asks none of them again.
+     */
+    default @NonNull List<String> portSettings() {
+        return List.of();
+    }
+
+    /**
      * Refuse a candidate host this kind's DEPLOY would refuse anyway, whatever arrives on it (a new workload or one
      * imported whole), before placement can choose it; what only building from an image needs is
      * {@link #requireImageOn}.

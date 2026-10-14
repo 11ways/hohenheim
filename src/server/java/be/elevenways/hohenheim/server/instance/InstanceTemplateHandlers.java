@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.HohenheimFlash;
+import be.elevenways.hohenheim.server.cms.ServerParts;
 import be.elevenways.hohenheim.server.cms.TenantScopes;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.protoblast.common.Blast;
@@ -230,7 +231,7 @@ public final class InstanceTemplateHandlers {
             form.add(replaced.getOrDefault(entry.name(), entry));
         }
         declared.sections().forEach(form::section);
-        declared.steps().forEach(form::step);
+        declared.declaredSteps().forEach(form::step);
         return form.build();
     }
 
@@ -258,12 +259,14 @@ public final class InstanceTemplateHandlers {
         return instanceId;
     }
 
-    /** @return every host as an option, for an operator's host pick (placement still judges the choice) */
+    /**
+     * @return every host as an option, for an operator's host pick (placement still judges the choice), each with the
+     *         Hosts list's facts ({@link ServerParts#hostOption})
+     */
     public static @NonNull List<FieldOption<Integer>> hostOptions() {
         List<FieldOption<Integer>> options = new ArrayList<>();
         for (Row server : Models.get(ServerModel.class).find().all()) {
-            options.add(FieldOption.of(server.get(ServerModel.ID),
-                Microcopy.literal(String.valueOf((Object) server.get(ServerModel.NAME)))));
+            options.add(ServerParts.hostOption(server));
         }
         return options;
     }

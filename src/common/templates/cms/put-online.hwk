@@ -20,6 +20,8 @@
 <pl-page data-hh-put-online>
 {% render "zenitcms:page-header" var:title=title var:lead=lead %}
 {% if document != null %}
+{#- The chosen thing's card, drawn by the wizard under its step indicator, as on the board. -#}
+{% snippet whatCard() %}
 <pl-list variant="card" data-hh-put-online-what>
     <pl-list-item>
         {% if whatIcon != "" %}<pl-icon slot="leading" name={% whatIcon %} data-hh-put-online-what-icon></pl-icon>{% /if %}
@@ -40,7 +42,8 @@
         {% /if %}
     </pl-list-item>
 </pl-list>
-{% render "zenitcms:form/page-action" var:page=document %}
+{% /snippet %}
+{% render "zenitcms:form/page-action" var:page=document var:lead=whatCard %}
 {% else %}
 <pl-stepper totalSteps={% steps.size() %} data-hh-put-online-steps>
     <pl-stepper-indicator totalSteps={% steps.size() %} labels={% steps %}></pl-stepper-indicator>

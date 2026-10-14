@@ -456,6 +456,9 @@ public final class FakeDockerDaemon implements DockerTransport {
         public @NonNull List<PutOnlineReach> putOnlineReaches() { return this.real.putOnlineReaches(); }
 
         @Override
+        public @NonNull List<String> portSettings() { return this.real.portSettings(); }
+
+        @Override
         public boolean supportsVolumes() { return this.real.supportsVolumes(); }
 
         @Override

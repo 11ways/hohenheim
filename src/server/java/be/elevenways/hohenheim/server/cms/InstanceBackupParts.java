@@ -218,6 +218,10 @@ public final class InstanceBackupParts {
                             .withArg("id", outcome.instanceId())
                             .withArg("missing", outcome.missing())
                         : HohenheimMicrocopy.INSTANCE_BACKUP.of("restored_new").withArg("id", outcome.instanceId());
+                    if (outcome.movedPorts() != null) {
+                        told = HohenheimMicrocopy.INSTANCE_BACKUP.of("restored_new_ports_moved").withArg("told", told)
+                            .withArg("ports", outcome.movedPorts());
+                    }
                     CmsActionResultTranslator.stashSuccess(request.request().conduit(), told);
                     return CmsActionResult.redirect(new Uri(CmsRoutes.subpage(request.request().panelSlug(),
                         HohenheimSlugs.INSTANCES, outcome.instanceId(), RecordOverview.SLUG).toUrl()));

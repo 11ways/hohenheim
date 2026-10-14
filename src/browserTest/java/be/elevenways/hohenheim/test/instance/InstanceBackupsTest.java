@@ -1,6 +1,11 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.ports.PortLedger;
+import be.elevenways.hohenheim.ports.PublishedPort;
+import be.elevenways.hohenheim.server.instance.InstanceSnapshots;
+import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.InstanceBackupOperations;
 import be.elevenways.hohenheim.model.BackupTargetModel;
@@ -55,6 +60,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -445,6 +451,73 @@ class InstanceBackupsTest {
         } finally {
             FakeHostVolumes.uninstall();
         }
+    }
+
+    /**
+     * Restore-to-new beside its original: each fixed host port the host already holds becomes one the host picks
+     * itself, a free fixed port stays, and the result and the copy's activity say which ports changed; an in-place
+     * (snapshot) restore keeps the record's ports as they were.
+     */
+    @Test
+    void aCopyBesideItsOriginalGetsAFreeHostPortWhereTheFixedOneIsHeld() {
+        Db.run(datasource, () -> {
+            InstanceService service = new InstanceService();
+            InstanceBackups backups = new InstanceBackups();
+            int instanceId = instanceRecord("ports-original", hostId);
+            Row original = Models.get(InstanceModel.class).findById(instanceId);
+            Map<String, Object> settings = new LinkedHashMap<>(InstanceModel.settingsOf(original));
+            Map<String, String> declared = new LinkedHashMap<>();
+            declared.put("game", "30410:25565/tcp");
+            declared.put("query", "30411:25565/udp");
+            settings.put(PublishedPort.FIELD, declared);
+            original.set(InstanceModel.SETTINGS, settings);
+            Models.get(InstanceModel.class).save(original);
+            // The original holds its game port on this host; the query port's number is free.
+            PortLedger.claim(hostId, "", 30410, PublishedPort.TCP, InstanceModel.MODEL_ID, instanceId, "original");
+            List<Integer> copies = new ArrayList<>();
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 0);
+            try {
+                service.deploy(instanceId);
+
+                // 1. In place, a snapshot restore keeps the record's ports as they were.
+                InstanceSnapshots snapshots = new InstanceSnapshots();
+                snapshots.restore(snapshots.create(instanceId, "ports"));
+                assertThat(PublishedPort.of(InstanceModel.settingsOf(Models.get(InstanceModel.class)
+                        .findById(instanceId))))
+                    .extracting(PublishedPort::spec).as("step 1: an in-place restore keeps both fixed ports")
+                    .containsExactly("30410:25565/tcp", "30411:25565/udp");
+
+                // 2. A copy on the same host: the held game port becomes one the host picks, the free one stays.
+                int backupId = backups.backupNow(instanceId, targetId, target);
+                InstanceBackups.Restored copy = backups.restoreToNew(backupId, "ports-copy", hostId);
+                copies.add(copy.instanceId());
+                assertThat(copy.movedPorts()).as("step 2: THE ASSERTION -- the result names the moved port")
+                    .containsExactly("game 30410/tcp");
+                assertThat(PublishedPort.of(InstanceModel.settingsOf(Models.get(InstanceModel.class)
+                        .findById(copy.instanceId()))))
+                    .extracting(PublishedPort::spec).as("step 2: game on a free port, query as it was")
+                    .containsExactly("25565/tcp", "30411:25565/udp");
+
+                // 3. The copy's activity entry says which ports changed.
+                Row logged = new ActivityModel(Models.get(InstanceModel.class).getResolvedDatasource()).find()
+                    .where(ActivityModel.RECORD_ID.eq(String.valueOf(copy.instanceId())))
+                    .where(ActivityModel.ACTION.eq(HohenheimActivityAction.RESTORED_BACKUP.id().toString()))
+                    .first();
+                assertThat(logged).as("step 3: the restore is recorded on the copy").isNotNull();
+                assertThat((String) logged.get(ActivityModel.DETAIL)).as("step 3: naming the moved port")
+                    .contains("now picked by it: game 30410/tcp");
+
+                // 4. The original keeps its own fixed ports.
+                assertThat(PublishedPort.of(InstanceModel.settingsOf(Models.get(InstanceModel.class)
+                        .findById(instanceId))))
+                    .extracting(PublishedPort::spec).as("step 4: the original is untouched")
+                    .containsExactly("30410:25565/tcp", "30411:25565/udp");
+            } finally {
+                Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 7);
+                copies.forEach(service::destroy);
+                service.destroy(instanceId);
+            }
+        });
     }
 
     /**

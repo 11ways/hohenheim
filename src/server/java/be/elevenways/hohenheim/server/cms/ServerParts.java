@@ -25,6 +25,7 @@ import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.hohenheim.server.options.ServerOptions;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
@@ -102,6 +103,9 @@ public final class ServerParts {
         });
     }
 
+    /** THE glyph of a host: its panel's, and the one a host pick's option wears in its standing's tone. */
+    private static final Icon HOST_ICON = Icon.of("server");
+
     private ServerParts() {}
 
     public static @NonNull PanelResource<Row> admin() {
@@ -118,7 +122,7 @@ public final class ServerParts {
             .record(ServerModel.MODEL_ID))
             .label(HohenheimMicrocopy.SERVER.of("plural")).recordLabel(HohenheimMicrocopy.SERVER.of("singular"))
             .description(HohenheimMicrocopy.SERVER.of("nav_hint"))
-            .navGroup(NavGroup.DEFAULT).navOrder(40).icon(Icon.of("server"))
+            .navGroup(NavGroup.DEFAULT).navOrder(40).icon(HOST_ICON)
             .form(ResourceForm.<Row>of(formSpec()).bindings(bindings).landingTab(RecordOverview.SLUG)
                 .tabLabel(HohenheimMicrocopy.APP_OVERVIEW.of("configuration")).build())
             .list(hostList(tableSpec()))
@@ -228,6 +232,21 @@ public final class ServerParts {
     /** @return a host ledger's megabyte count as a size, the one way the list and the host page say memory */
     static @NonNull String sizeOfMegabytes(int megabytes) {
         return ByteText.human(megabytes * MEBIBYTE);
+    }
+
+    /**
+     * A host as a host pick offers it: its name, then the Hosts list's facts in its option line, the standing's badge
+     * words and the booked memory, read from the same verdict and capacity ledger the list draws; the host glyph wears
+     * the standing's tone, since a select option's tone shows on its glyph alone.
+     */
+    public static @NonNull FieldOption<Integer> hostOption(@NonNull Row server) {
+        StateLineCell state = stateCellOf(server);
+        return FieldOption.of((Integer) server.get(ServerModel.ID),
+                Microcopy.literal(String.valueOf((Object) server.get(ServerModel.NAME))))
+            .withIcon(HOST_ICON.name())
+            .withTone(state.variant())
+            .withDescription(HohenheimMicrocopy.HOST_LIST.of("host_option_facts").withArg("state", state.label())
+                .withArg("memory", memoryCellOf(server).text()));
     }
 
     /** How many apps and managed databases the host runs, counted once per rendered list. */

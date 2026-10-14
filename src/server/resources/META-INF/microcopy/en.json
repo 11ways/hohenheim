@@ -6841,6 +6841,10 @@
     "text": "Backup restored to new instance #{$id}, but not everything came back: {$missing}",
     "scope": "instance_backup"
   },
+  "restored_new_ports_moved": {
+    "text": "{$told}. Its fixed host ports {$ports} were already held on this host, so it got free ones the host picks.",
+    "scope": "instance_backup"
+  },
   "test_connection": [
     {
       "text": "Test connection",
@@ -10926,7 +10930,11 @@
     "scope": "instance_overview"
   },
   "no_public_address": {
-    "text": "This host has no public address set, so only its own network reaches this port.",
+    "text": "Port {$port} has no public address yet: host {$host} declares none, so only its own network reaches it.",
+    "scope": "instance_overview"
+  },
+  "set_public_address": {
+    "text": "Set the host's public address",
     "scope": "instance_overview"
   },
   "no_volumes": {
@@ -16141,6 +16149,7 @@
   "memory_booked": {"text": "{$booked} of {$budget} booked", "scope": "host_list"},
   "memory_unmeasured": {"text": "Not measured yet", "scope": "host_list"},
   "memory_stale": {"text": "Last measurement too old", "scope": "host_list"},
+  "host_option_facts": {"text": "{$state}. Memory: {$memory}.", "scope": "host_list"},
   "runs_nothing": {"text": "Nothing yet", "scope": "host_list"},
   "runs_count": {"text": "{$apps}, {$databases}", "scope": "host_list"},
   "apps_count": {"text": ".match {$count :number}\none {{1 app}}\n* {{{$count} apps}}", "scope": "host_list"},
@@ -17978,11 +17987,14 @@
   "step_ports": {"scope": "put_online", "text": "Ports"},
   "runs_on_card": {"scope": "put_online", "text": "Runs on"},
   "runs_on_card_lead": {"scope": "put_online", "text": "Hohenheim picks the host with room for it, unless you pick one. The project decides whose quota it counts against."},
+  "runs_on_card_host_lead": {"scope": "put_online", "text": "Hohenheim picks the host with room for it, unless you pick one."},
   "step_ports_lead": {"scope": "put_online", "text": "The ports players connect to, published on every address of its host. Leave a port empty and Hohenheim picks a free one."},
   "step_service_where_lead": {"scope": "put_online", "text": "Name it and pick where it runs. It is reached on its own ports, not through an address of the proxy."},
   "service_lead": {"scope": "put_online", "text": "Creates it, publishes its ports and, when you give one, its game address."},
   "game_address_help": {"scope": "put_online", "text": "Optional. A name in a zone Hohenheim manages, such as mc.example.com: it points at this host and gets an SRV record for the game port, so players type only the name."},
   "summary_port": {"scope": "put_online", "text": "{$port} in the container. Its host port: the one you give on this step, or a free one Hohenheim picks."},
+  "summary_port_row": {"scope": "put_online", "text": "{$port} in the container, on host port {$host}."},
+  "summary_port_row_free": {"scope": "put_online", "text": "{$port} in the container, on a free host port Hohenheim picks."},
   "step_service_ports_lead": {"scope": "put_online", "text": "Add each port it listens on: what it is for, its container port and protocol. Leave a host port empty and Hohenheim picks a free one. Each is published on every address of its host."},
   "service_port_purpose": {"scope": "put_online", "text": "For"},
   "service_port_name": {"scope": "put_online", "text": "Name"},

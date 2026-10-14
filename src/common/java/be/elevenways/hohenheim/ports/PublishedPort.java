@@ -110,6 +110,11 @@ public record PublishedPort(@NonNull String name, @Nullable Integer hostPort, in
         return new PublishedPort(this.name, port, this.containerPort, this.protocol, this.loopback);
     }
 
+    /** @return this entry on a host port the ledger picks when its deploy claims it */
+    public @NonNull PublishedPort withoutHostPort() {
+        return new PublishedPort(this.name, null, this.containerPort, this.protocol, this.loopback);
+    }
+
     /** @return the settings map value for these entries, keyed by name */
     public static @NonNull Map<String, String> toSettings(@NonNull List<PublishedPort> ports) {
         Map<String, String> map = new LinkedHashMap<>();

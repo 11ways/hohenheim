@@ -91,6 +91,7 @@ public final class InstanceBackupOperationHandlers {
             () -> restored.set(new InstanceBackups().restoreToNew(call.subject().get(InstanceBackupModel.ID),
                 null, serverId)));
         InstanceBackups.Restored outcome = restored.get();
-        return new Restored(outcome.instanceId(), outcome.complete() ? null : outcome.describeLosses());
+        return new Restored(outcome.instanceId(), outcome.complete() ? null : outcome.describeLosses(),
+            outcome.movedPorts().isEmpty() ? null : String.join(", ", outcome.movedPorts()));
     }
 }

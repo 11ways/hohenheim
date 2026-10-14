@@ -55,6 +55,7 @@ import java.util.ArrayList;
 
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -99,6 +100,7 @@ final class PutOnlineHandlers {
             .authorize(PutOnlineHandlers::admitWorkload)
             .handle(PutOnlineHandlers::putWorkloadOnline);
         OperationHandlers.attach(PutOnline.PUT_WORKLOAD_SERVICE_ONLINE)
+            .inputScope(PutOnlineHandlers::workloadServiceScope)
             .authorize(PutOnlineHandlers::admitWorkloadService)
             .handle(PutOnlineHandlers::putWorkloadServiceOnline);
         OperationHandlers.attach(PutOnline.PUT_MACHINE_ONLINE)
@@ -142,6 +144,22 @@ final class PutOnlineHandlers {
         }
         return new InputScope(InstanceTemplateHandlers.replacing(scope.form(), Map.of(PutOnline.PORTS,
             Nested.of(PutOnline.PORTS).subSpec(ports.build()).build())), scope.serverDefaults());
+    }
+
+    /**
+     * A kind-led service's input: its kind's settings without those its Ports step publishes the ports through
+     * ({@link InstanceKindHandler#portSettings}), so the Ports step's rows are the one place a port is asked.
+     */
+    private static @NonNull InputScope workloadServiceScope(@Nullable Void none, @NonNull FormSpec declared,
+                                                            @Nullable AccessContext access) {
+        Set<String> owned = new LinkedHashSet<>();
+        for (String kind : InstanceKinds.kindsWhere(handler -> handler.putOnlineReaches()
+                .contains(PutOnlineReach.PORTS))) {
+            owned.addAll(InstanceKinds.getHandler(kind).portSettings());
+        }
+        return InputScope.of(InstanceTemplateHandlers.replacing(declared, Map.of(InstanceModel.SETTINGS.getName(),
+            Nested.of(InstanceModel.SETTINGS).schemaFrom(InstanceModel.KIND.getName())
+                .omitting(owned.toArray(String[]::new)).build())));
     }
 
     /** A service template's request checks ({@link #serviceRefusal}), its chosen host ports read per declared port. */
@@ -207,25 +225,15 @@ final class PutOnlineHandlers {
     }
 
     /**
-     * The ports a kind-led service publishes: those its settings already declare, then its Ports step's rows (the
-     * purpose's token names one, or the given name for Other), each mapped to the form path it is refused at.
+     * The ports a kind-led service publishes: its Ports step's rows (the purpose's token names one, or the given name
+     * for Other), each mapped to the form path it is refused at.
      *
-     * @throws DomainRefusal on the offending entry: a published port in the settings that is no port, an Other row
-     *                       without a name, a name given twice (also one the settings declare), a port out of range
+     * @throws DomainRefusal on the offending entry: an Other row without a name, a name given twice, a port out of
+     *                       range
      */
     private static @NonNull Map<PublishedPort, String> servicePorts(PutOnline.@NonNull WorkloadService input) {
         Map<PublishedPort, String> ports = new LinkedHashMap<>();
         Set<String> names = new HashSet<>();
-        String settingsField = InstanceModel.SETTINGS.getName() + "." + PublishedPort.FIELD;
-        try {
-            for (PublishedPort port : PublishedPort.of(input.settings() == null ? Map.of() : input.settings())) {
-                names.add(port.name());
-                ports.put(port, settingsField);
-            }
-        } catch (Violations unspelled) {
-            throw new DomainRefusal(ZenitRefusalReason.INVALID, "a published port is no port", settingsField,
-                unspelled.all().getFirst().message());
-        }
         for (int index = 0; index < input.ports().size(); index++) {
             Map<String, Object> row = input.ports().get(index);
             String at = PutOnline.PORTS + "." + index + ".";
@@ -250,9 +258,7 @@ final class PutOnlineHandlers {
                 throw new DomainRefusal(ZenitRefusalReason.INVALID, "port " + name + " is out of range",
                     at + outOfRange, HohenheimMicrocopy.VIOLATIONS.of("service_port_invalid").withArg("name", name));
             }
-            String protocol = PublishedPort.UDP.equals(row.get(PutOnline.PORT_PROTOCOL.getName()))
-                ? PublishedPort.UDP : PublishedPort.TCP;
-            ports.put(new PublishedPort(name.trim(), host, container, protocol, false),
+            ports.put(Objects.requireNonNull(PutOnline.rowPort(row), "a checked row publishes a port"),
                 at + PutOnline.PORT_HOST.getName());
         }
         return ports;

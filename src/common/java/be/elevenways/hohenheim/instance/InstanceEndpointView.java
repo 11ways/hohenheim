@@ -19,6 +19,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * @param note         why a port without an address reaches only so far, worded for its reader (a tenant reads no
  *                     host internals); null when it has an address
  * @param purpose      what the port is for (Game, Query) when its published-port settings name it; null otherwise
+ * @param fixUrl       where an operator sets the missing public address (the host's page); null with an address or
+ *                     for a tenant
  */
 @HawkeyeClass
 public record InstanceEndpointView(
@@ -29,6 +31,7 @@ public record InstanceEndpointView(
     @NonNull Microcopy state,
     boolean preallocated,
     @Nullable Microcopy note,
-    @Nullable Microcopy purpose
+    @Nullable Microcopy purpose,
+    @Nullable String fixUrl
 ) {
 }

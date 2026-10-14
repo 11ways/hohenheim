@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.app.PutOnlineReach;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -10,6 +11,8 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.ports.PublishedPort;
 import be.elevenways.hohenheim.server.cms.PutOnline;
+import be.elevenways.hohenheim.server.instance.InstanceTemplateHandlers;
+import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.game.GameAddresses;
 import be.elevenways.hohenheim.server.game.GameTemplateSeeder;
@@ -29,6 +32,8 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.validation.Violation;
+import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.zenit.common.edit.FormStep;
 import be.elevenways.zenit.common.edit.SummaryLine;
@@ -433,6 +438,46 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
     }
 
     /**
+     * The container image's Ports step summarizes the rows typed on that same step: what is put online (its card's
+     * words), its name and host, then one line per row with how its host port is chosen. The wizard asks it again
+     * as the rows change, since the step's summary reads its own answers.
+     */
+    @Test
+    void theContainerPortsStepSummaryListsTheRowsTypedOnIt() {
+        AccessContext operator = TenantConduits.operator();
+        List<FormStep> steps = PutOnline.PUT_WORKLOAD_SERVICE_ONLINE.input().form().steps();
+        FormStep ports = steps.stream().filter(step -> step.id().equals(PutOnline.PORTS)).findFirst().orElseThrow();
+        List<String> through = steps.subList(0, steps.indexOf(ports) + 1).stream()
+            .flatMap(step -> step.entryNames().stream()).toList();
+
+        // 1. The step's summary reads its own answers, so the wizard asks it again while rows are typed.
+        assertThat(ports.summaryReadsItself()).as("step 1: the Ports summary reads the Ports step itself").isTrue();
+
+        // 2. Validating through the Ports step answers What, the name, the host, then each typed row.
+        List<SummaryLine> lines = OperationPipeline.validate(OperationRequest.of(PutOnline.PUT_WORKLOAD_SERVICE_ONLINE,
+                CmsPlacementSurface.ADMIN_ACTION).caller(operator).form(imageServiceForm(PREFIX + "image-summary",
+                Map.of(), List.of(portRow("game", "25565", "tcp"), Map.of(PutOnline.PORT_PURPOSE.getName(), "query",
+                    PutOnline.PORT_CONTAINER.getName(), "25566", PutOnline.PORT_PROTOCOL.getName(), "udp",
+                    PutOnline.PORT_HOST.getName(), "30123")), "")),
+            through, ports.summary());
+        assertThat(lines).extracting(line -> line.label().key())
+            .as("step 2: THE ASSERTION -- What, name, host, then the two rows by their purpose")
+            .containsExactly("summary_serves", "summary_name", "summary_runs_on", "purpose_game", "purpose_query");
+
+        // 3. The What line names the card this flow was opened from: the container image on its own ports.
+        assertThat(lines.get(0).value().key()).as("step 3: the What line reads as the ports card")
+            .isEqualTo(PutOnlineReach.PORTS.cardLabel().key());
+
+        // 4. A row without a host port gets a free one; a row with one names it.
+        assertThat(lines.get(3).value().key()).as("step 4: the game row's host port is picked")
+            .isEqualTo("summary_port_row_free");
+        assertThat(String.valueOf(lines.get(3).value().args().get("port"))).isEqualTo("25565/tcp");
+        assertThat(lines.get(4).value().key()).as("step 4: the query row names its host port")
+            .isEqualTo("summary_port_row");
+        assertThat(String.valueOf(lines.get(4).value().args().get("host"))).isEqualTo("30123");
+    }
+
+    /**
      * A container image goes online as a service on its own ports, without a template: the chooser offers it on its
      * ports beside the website card; that wizard asks Where, Options and Ports, never an address or HTTPS; a port
      * name given twice is refused before a run; one run creates the container with a game and a query port, both
@@ -474,11 +519,24 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
             .contains("Instance name");
         assertThat(wizard).as("step 2: a port row's name is for Other only, never suggested on every row")
             .doesNotContain("placeholder=\"metrics\"");
+        assertThat(wizard).as("step 2: THE ASSERTION -- the Ports step owns the ports; Options asks none of them")
+            .doesNotContain("name=\"settings.container_port\"").doesNotContain("settings.published_ports")
+            .doesNotContain("name=\"settings.host_port\"").doesNotContain("name=\"settings.port_exposure\"")
+            .contains("name=\"settings.image\"");
         assertThat(adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE + "?workload=" + kind).body())
-            .as("step 2: the same kind as a website keeps its HTTPS step").contains("data-zf-step=\"https\"");
+            .as("step 2: the same kind as a website keeps its HTTPS step and asks its port in its settings")
+            .contains("data-zf-step=\"https\"").contains("name=\"settings.container_port\"");
+        assertThat(wizard).as("step 2: the kind-led Where step draws the Runs on card too")
+            .contains("Runs on").contains("Hohenheim picks the host with room for it, unless you pick one.");
+        FieldOption<Integer> host = InstanceTemplateHandlers.hostOptions().stream()
+            .filter(option -> Integer.valueOf(hostId).equals(option.value())).findFirst().orElseThrow();
+        assertThat(Objects.requireNonNull(host.description()).key())
+            .as("step 2: a host option carries the Hosts list's facts: its standing and its memory")
+            .isEqualTo("host_option_facts");
+        assertThat(host.tone()).as("step 2: in the standing's badge tone").isNotNull();
 
-        // 3. A port name given twice is refused in the request, on the second row, and nothing is made; so is a row
-        //    naming a port the image's settings already publish.
+        // 3. A port name given twice is refused in the request, on the second row, and nothing is made; settings
+        //    carrying a published port of their own are no settings this flow takes (the Ports step owns them).
         Map<String, Object> twice = imageServiceForm(PREFIX + "image-twice", Map.of(),
             List.of(portRow("game", "25565", "tcp"), portRow("game", "25566", "tcp")), "");
         DomainRefusal refused = catchThrowableOfType(DomainRefusal.class, () -> OperationPipeline.invoke(
@@ -489,11 +547,12 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
         Map<String, Object> declared = imageServiceForm(PREFIX + "image-declared",
             Map.of(PublishedPort.FIELD, Map.of("0", Map.of("key", "game", "value", "25565/tcp"))),
             List.of(portRow("game", "25565", "tcp")), "");
-        DomainRefusal again = catchThrowableOfType(DomainRefusal.class, () -> OperationPipeline.invoke(
+        Violations again = catchThrowableOfType(Violations.class, () -> OperationPipeline.invoke(
             OperationRequest.of(PutOnline.PUT_WORKLOAD_SERVICE_ONLINE, CmsPlacementSurface.ADMIN_ACTION)
                 .caller(operator).form(declared)));
-        assertThat(again).as("step 3: a row naming a port the settings publish is refused").isNotNull();
-        assertThat(again.field()).as("step 3: on that row").isEqualTo(PutOnline.PORTS + ".0.purpose");
+        assertThat((Object) again).as("step 3: settings publishing a port of their own are refused").isNotNull();
+        assertThat(again.all()).extracting(Violation::path).as("step 3: on that setting")
+            .contains(InstanceModel.SETTINGS.getName() + "." + PublishedPort.FIELD);
         assertThat(List.of(String.valueOf(Models.get(InstanceModel.class).find()
                     .where(InstanceModel.NAME.eq(PREFIX + "image-twice")).first()),
                 String.valueOf(Models.get(InstanceModel.class).find()
