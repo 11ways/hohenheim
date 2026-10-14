@@ -55,10 +55,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class MigrationIntegrityTest {
 
     /**
-     * The highest migration version an install that must keep booting has applied (starfleet and daystrom at 012);
+     * The highest migration version an install that must keep booting has applied (starfleet and daystrom at 014);
      * see the class note.
      */
-    private static final String DEPLOYED_THROUGH = "012";
+    private static final String DEPLOYED_THROUGH = "014";
 
     /**
      * The highest migration version shipped by commit 91191333, the build the oldest production install
