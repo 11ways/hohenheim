@@ -85,6 +85,22 @@ public interface InstanceKindHandler extends InstanceKindInfo {
     }
 
     /**
+     * How a record of this kind deploys the git source its settings carry; a release-managed kind builds a release,
+     * any other carries none unless it says so.
+     */
+    default @NonNull GitSourceLane gitSourceLane() {
+        return releaseManaged() ? GitSourceLane.RELEASE : GitSourceLane.NONE;
+    }
+
+    /**
+     * Release settings this kind fixes over whatever its record stores (a builder, a port, a health path), read by
+     * the release engine and the deploy lane alike; empty for a kind that fixes none.
+     */
+    default @NonNull Map<String, Object> releaseSettings() {
+        return Map.of();
+    }
+
+    /**
      * Whether deploying THIS record builds and ships a source of its own (a workspace that names a repository), so
      * its deploy is a code deploy with a history, not a plain start.
      *

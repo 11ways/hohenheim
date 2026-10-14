@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.app.PutOnlineGroup;
 import be.elevenways.hohenheim.app.PutOnlineReach;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
+import be.elevenways.hohenheim.server.instance.GitSourceLane;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
@@ -62,6 +63,8 @@ public abstract class ForwardingKindHandler implements InstanceKindHandler {
     @Override public boolean tenantAuthored() { return this.real.tenantAuthored(); }
     @Override public @NonNull WorkloadIsolation isolation() { return this.real.isolation(); }
     @Override public boolean releaseManaged() { return this.real.releaseManaged(); }
+    @Override public @NonNull GitSourceLane gitSourceLane() { return this.real.gitSourceLane(); }
+    @Override public @NonNull Map<String, Object> releaseSettings() { return this.real.releaseSettings(); }
     @Override public boolean deploysSource(@NonNull Row instance) { return this.real.deploysSource(instance); }
     @Override public boolean generatedOnly() { return this.real.generatedOnly(); }
     @Override public @NonNull Set<String> supportedRuntimes() { return this.real.supportedRuntimes(); }

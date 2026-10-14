@@ -10,7 +10,8 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
-import be.elevenways.hohenheim.server.instance.ApplicationKind;
+import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
+import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
@@ -238,7 +239,7 @@ public final class InstanceAttention {
             return;
         }
         for (Row application : instanceModel.find()
-                .where(InstanceModel.KIND.eq(ApplicationKind.ID.toString()))
+                .where(InstanceModel.KIND.in(InstanceKinds.kindsWhere(InstanceKindHandler::releaseManaged)))
                 .all()) {
             Integer applicationId = application.get(InstanceModel.ID);
             if (applicationId == null) {

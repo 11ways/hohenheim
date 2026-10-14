@@ -22,6 +22,9 @@ import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
+import be.elevenways.hohenheim.server.instance.StaticSiteKind;
+import be.elevenways.hohenheim.source.GitSourceSchema;
+import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.instance.InstanceService;
@@ -570,11 +573,24 @@ public final class ApplicationReleases {
 
     // -- the spec -------------------------------------------------------------
 
+    /**
+     * The record's stored settings under the release settings its kind fixes ({@code InstanceKindHandler
+     * #releaseSettings}): what every deploy lane reads, so a stored value can never override a kind's fixed builder.
+     */
+    public static @NonNull Map<String, Object> withKindFacts(@NonNull Row application) {
+        Map<String, Object> settings = new LinkedHashMap<>(storedSettings(application));
+        InstanceKindHandler kind = InstanceKinds.handlerOf(application);
+        if (kind != null) {
+            settings.putAll(kind.releaseSettings());
+        }
+        return settings;
+    }
+
     /** Resolve source, runtime defaults and variable precedence before computing identity. */
     public static @NonNull Map<String, Object> resolvedSettings(
             @NonNull Row application, @NonNull Map<String, Object> overrides) {
         int applicationId = application.get(InstanceModel.ID);
-        Map<String, Object> settings = new LinkedHashMap<>(storedSettings(application));
+        Map<String, Object> settings = withKindFacts(application);
         if (!overrides.containsKey("build_context") && !overrides.containsKey("artifact_path")
                 && !settings.containsKey("build_context") && !SiteSources.hasRepository(settings)) {
             settings.putAll(ArtifactDeploys.sourceOverrides(applicationId));
@@ -642,7 +658,11 @@ public final class ApplicationReleases {
                     trimmed(settings.get("dockerfile")), tag,
                     // The build sees build arguments, never the workload's secret environment.
                     EnvVars.toMap(settings.get("build_arguments")),
-                    trimmed(settings.get("commit_sha")), null, buildQuotaFor(settings)));
+                    trimmed(settings.get("commit_sha")), null, buildQuotaFor(settings),
+                    new BuildRequest.StaticSite(trimmed(settings.get(StaticSiteKind.BUILD_IMAGE.getName())),
+                        trimmed(settings.get(GitSourceSchema.BUILD_COMMAND)),
+                        trimmed(settings.get(GitSourceSchema.BUILD_DIRECTORY)),
+                        trimmed(settings.get(StaticSiteKind.OUTPUT_DIRECTORY.getName())))));
             } finally {
                 if (artifactContext != null) {
                     RuntimeImages.deleteArtifactContext(artifactContext);

@@ -54,6 +54,9 @@ public interface Builders {
         if (BuildOperationModel.KIND_NIXPACKS.equals(kind)) {
             return new NixpacksBuilder();
         }
+        if (BuildOperationModel.KIND_STATIC.equals(kind)) {
+            return new StaticSiteBuilder();
+        }
         throw new IOException("Unknown builder kind '" + kind + "'");
     }
 }

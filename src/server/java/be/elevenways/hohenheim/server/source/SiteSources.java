@@ -4,8 +4,8 @@ import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.source.GitSourceSchema;
-import be.elevenways.hohenheim.server.instance.ApplicationKind;
-import be.elevenways.hohenheim.server.instance.WorkspaceKind;
+import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
+import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -27,16 +27,12 @@ import java.util.Map;
  */
 public final class SiteSources {
 
-    /** The instance kinds that carry a git source in their settings. */
-    private static final List<String> SOURCED_KINDS =
-        List.of(ApplicationKind.ID.toString(), WorkspaceKind.ID.toString());
-
     private SiteSources() {
     }
 
-    /** @return the instance kinds that carry a git source in their settings */
+    /** @return the instance kinds that carry a git source in their settings, read off each kind's source lane */
     public static @NonNull List<String> sourcedKinds() {
-        return SOURCED_KINDS;
+        return InstanceKinds.kindsWhere(kind -> kind.gitSourceLane().carriesSource());
     }
 
     /**
@@ -57,7 +53,8 @@ public final class SiteSources {
     /** @return the source settings ON an instance row, or null when its kind carries none */
     public static @Nullable Map<String, Object> settingsOfInstance(@Nullable Row instance) {
 
-        if (instance == null || !SOURCED_KINDS.contains(instance.get(InstanceModel.KIND))) {
+        InstanceKindHandler kind = instance == null ? null : InstanceKinds.handlerOf(instance);
+        if (kind == null || !kind.gitSourceLane().carriesSource()) {
             return null;
         }
 

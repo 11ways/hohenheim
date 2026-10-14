@@ -9,7 +9,7 @@ import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.preview.PreviewBranches;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
-import be.elevenways.hohenheim.server.instance.WorkspaceKind;
+import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.hohenheim.source.GitRefNames;
 import be.elevenways.hohenheim.source.GitSourceSchema;
@@ -421,11 +421,9 @@ public class GitWebhookHandler {
         if (application == null) {
             return null;
         }
-        // A source-driven record: one that converges releases, or a workspace that checks
-        // its source out inside itself.
-        String kind = application.get(InstanceModel.KIND);
-        return InstanceKinds.isReleaseManaged(kind) || WorkspaceKind.ID.toString().equals(kind)
-            ? application : null;
+        // A source-driven record: its kind's source lane says it carries one.
+        InstanceKindHandler kind = InstanceKinds.handlerOf(application);
+        return kind != null && kind.gitSourceLane().carriesSource() ? application : null;
     }
 
     /** The head commit a push payload names under {@code after}, or null when it names none. */

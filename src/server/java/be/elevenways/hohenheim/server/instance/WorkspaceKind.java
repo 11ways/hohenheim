@@ -163,6 +163,9 @@ public final class WorkspaceKind implements InstanceKindHandler {
             && SiteSources.hasRepository(RawValues.map(map));
     }
 
+    /** Its source checks out and builds inside its own container, never as a release. */
+    @Override public @NonNull GitSourceLane gitSourceLane() { return GitSourceLane.IN_PLACE; }
+
     @Override public BadgeColor color() { return ColorHue.VIOLET; }
 
     @Override public Schema getSchema() { return SETTINGS_SCHEMA; }

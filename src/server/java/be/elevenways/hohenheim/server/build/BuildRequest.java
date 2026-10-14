@@ -30,6 +30,7 @@ import java.util.Map;
  * @param sourceRef   commit sha or another source identity, recorded on the operation
  * @param registry    optional registry credential, leased for the build's lifetime only
  * @param quota       the CPU/memory/disk/time/PID contract this build runs under
+ * @param site        what a static site build runs and serves; {@link StaticSite#NONE} for every other builder kind
  */
 public record BuildRequest(@NonNull Identifier forModel, int forId,
                            @NonNull String builderKind,
@@ -39,7 +40,17 @@ public record BuildRequest(@NonNull Identifier forModel, int forId,
                            @NonNull Map<String, String> buildArgs,
                            @Nullable String sourceRef,
                            @Nullable RegistryCredential registry,
-                           @NonNull BuildQuota quota) {
+                           @NonNull BuildQuota quota,
+                           @NonNull StaticSite site) {
+
+    /** A request of a builder kind that reads no static site. */
+    public BuildRequest(@NonNull Identifier forModel, int forId, @NonNull String builderKind,
+                        @NonNull Path contextDir, @Nullable String dockerfile, @NonNull String tag,
+                        @NonNull Map<String, String> buildArgs, @Nullable String sourceRef,
+                        @Nullable RegistryCredential registry, @NonNull BuildQuota quota) {
+        this(forModel, forId, builderKind, contextDir, dockerfile, tag, buildArgs, sourceRef, registry, quota,
+            StaticSite.NONE);
+    }
 
     /**
      * Registry auth a build may use for base-image pulls.
@@ -48,4 +59,19 @@ public record BuildRequest(@NonNull Identifier forModel, int forId,
      */
     public record RegistryCredential(@NonNull String registry, @NonNull String username,
                                      @NonNull String password) {}
+
+    /**
+     * What a static site build runs and serves, as its record stores it (unvalidated: the static builder judges it).
+     *
+     * @param buildImage      the image the build command runs in; blank for the pinned default
+     * @param buildCommand    the shell command that produces the output; blank when the repository holds it as is
+     * @param buildDirectory  where the command runs, relative to the repository root; blank for the root
+     * @param outputDirectory the folder served, relative to the repository root; blank for the root
+     */
+    public record StaticSite(@NonNull String buildImage, @NonNull String buildCommand,
+                             @NonNull String buildDirectory, @NonNull String outputDirectory) {
+
+        /** No static site: what every other builder kind carries. */
+        public static final StaticSite NONE = new StaticSite("", "", "", "");
+    }
 }

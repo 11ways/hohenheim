@@ -117,7 +117,7 @@ public final class ApplicationDeploys {
         // cannot differ -- see InstanceService.requireDeployAdmitted.
         InstanceService.requireDeployAdmitted(applicationId);
         Row application = ApplicationReleases.requireApplication(applicationId);
-        Map<String, Object> settings = ApplicationReleases.storedSettings(application);
+        Map<String, Object> settings = ApplicationReleases.withKindFacts(application);
         Map<String, Object> overrides = new LinkedHashMap<>();
         String commitSha = null;
 

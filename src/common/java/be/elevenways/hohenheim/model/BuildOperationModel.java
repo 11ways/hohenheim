@@ -58,6 +58,12 @@ public class BuildOperationModel extends Model {
     public static final String KIND_NIXPACKS = "nixpacks";
 
     /**
+     * A static site: a generated multi-stage Dockerfile runs the site's build command, then serves its output folder
+     * with the pinned static server, through the identical sandbox and record as {@link #KIND_DOCKERFILE}.
+     */
+    public static final String KIND_STATIC = "static_site";
+
+    /**
      * A workspace SOURCE deploy: a checkout and a build run INSIDE the workspace's own
      * container, as its own uid -- no sandbox, no artifact, no image identity. It shares
      * this record because "what did my last deploy do, and what did it print" is one
@@ -89,6 +95,8 @@ public class BuildOperationModel extends Model {
             .label(HohenheimMicrocopy.BUILDER_KIND.of(KIND_DOCKERFILE)).icon("file-code").color(BadgeVariant.INFO))
         .value(KIND_NIXPACKS, v -> v.displayName("Nixpacks")
             .label(HohenheimMicrocopy.BUILDER_KIND.of(KIND_NIXPACKS)).icon("box").color(BadgeVariant.SECONDARY))
+        .value(KIND_STATIC, v -> v.displayName("Static site")
+            .label(HohenheimMicrocopy.BUILDER_KIND.of(KIND_STATIC)).icon("file-lines").color(ColorHue.TEAL))
         .value(KIND_WORKSPACE, v -> v.displayName("Workspace")
             .label(HohenheimMicrocopy.BUILDER_KIND.of(KIND_WORKSPACE)).icon("code").color(ColorHue.VIOLET))
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("builder"))

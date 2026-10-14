@@ -18104,5 +18104,19 @@
   "cert_not_yet_valid": {"scope": "violations", "text": "Certificate {$position} in the chain is not valid before {$date}."},
   "cert_not_covering": {"scope": "violations", "text": "This certificate covers {$names}, not {$hostname}."},
   "cert_pem_required": {"scope": "violations", "text": "Paste the certificate chain."},
-  "key_pem_required": {"scope": "violations", "text": "Paste the private key."}
+  "key_pem_required": {"scope": "violations", "text": "Paste the private key."},
+  "static_site": [
+    {"scope": "instance_kind", "text": "Static site"},
+    {"scope": "instance_kind_description", "text": "A website from a git repository: built on its host, served as plain files"},
+    {"scope": "builder_kind", "text": "Static site"}
+  ],
+  "output_directory": [
+    {"scope": "hohenheim_field", "text": "Output folder"},
+    {"scope": "help", "text": "The folder that is served, relative to the repository root. Leave it empty to serve the root itself."}
+  ],
+  "build_image": [
+    {"scope": "hohenheim_field", "text": "Build image"},
+    {"scope": "help", "text": "The image the build command runs in. Leave it empty for Node.js 22."}
+  ],
+  "static_site_owns_no_container": {"scope": "violations", "text": "A static site never runs a container itself; each deploy generates a release that serves it"}
 }

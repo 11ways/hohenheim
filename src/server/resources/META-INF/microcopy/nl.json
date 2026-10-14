@@ -18104,5 +18104,19 @@
   "cert_not_yet_valid": {"scope": "violations", "text": "Certificaat {$position} in de keten is pas geldig vanaf {$date}."},
   "cert_not_covering": {"scope": "violations", "text": "Dit certificaat dekt {$names}, niet {$hostname}."},
   "cert_pem_required": {"scope": "violations", "text": "Plak de certificaatketen."},
-  "key_pem_required": {"scope": "violations", "text": "Plak de private sleutel."}
+  "key_pem_required": {"scope": "violations", "text": "Plak de private sleutel."},
+  "static_site": [
+    {"scope": "instance_kind", "text": "Statische site"},
+    {"scope": "instance_kind_description", "text": "Een website uit een git-repository: gebouwd op zijn host, geserveerd als gewone bestanden"},
+    {"scope": "builder_kind", "text": "Statische site"}
+  ],
+  "output_directory": [
+    {"scope": "hohenheim_field", "text": "Uitvoermap"},
+    {"scope": "help", "text": "De map die geserveerd wordt, relatief aan de root van de repository. Laat leeg om de root zelf te serveren."}
+  ],
+  "build_image": [
+    {"scope": "hohenheim_field", "text": "Build-image"},
+    {"scope": "help", "text": "De image waarin het build-commando draait. Laat leeg voor Node.js 22."}
+  ],
+  "static_site_owns_no_container": {"scope": "violations", "text": "Een statische site draait zelf nooit een container; elke deploy maakt een release die hem serveert"}
 }

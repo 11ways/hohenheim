@@ -29,8 +29,12 @@ public final class DockerfileBuilder implements Builders {
     /** Where the sandbox pushes the build context; kaniko's own default workdir. */
     static final String CONTEXT_PATH = "/workspace";
 
-    /** Where the finished image tar lands; read back out through the archive API. */
-    static final String ARTIFACT_PATH = CONTEXT_PATH + "/hohenheim-artifact.tar";
+    /**
+     * Where the finished image tar lands; read back out through the archive API. Under {@code /kaniko}, which kaniko
+     * never snapshots or deletes: a multi-stage build wipes the filesystem (the pushed context included) between
+     * stages, so a tar under the context was gone by the time the last stage wrote it.
+     */
+    static final String ARTIFACT_PATH = "/kaniko/hohenheim-artifact.tar";
 
     /** Where a daemonless builder reads registry auth from. */
     static final String DOCKER_CONFIG_PATH = "/kaniko/.docker/config.json";

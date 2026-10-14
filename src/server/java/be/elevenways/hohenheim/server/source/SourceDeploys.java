@@ -4,8 +4,10 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.application.ApplicationDeploys;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
+import be.elevenways.hohenheim.server.instance.GitSourceLane;
+import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
+import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.WorkspaceBuilds;
-import be.elevenways.hohenheim.server.instance.WorkspaceKind;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -34,27 +36,25 @@ public final class SourceDeploys {
     }
 
     /**
-     * Deploys the branch in the background.
-     *
-     * AIDEV-NOTE: which verb depends on WHAT the record is: an application converges a release, a workspace checks
-     * out and builds inside its own container. The branch is on the KIND, not on a name -- a third source-driven kind
-     * wires itself here.
+     * Deploys the branch in the background, on the verb of the record kind's {@link GitSourceLane}.
      *
      * @param pushedSha the commit the push named, which the forge hears about until a checkout lands its own
+     * @throws IllegalArgumentException for a record whose kind carries no git source (fail closed)
      */
     public static void deployInBackground(@NonNull Row instance, @NonNull String branch, @Nullable String pushedSha,
                                           @NonNull DeployTrigger trigger) {
         int instanceId = instance.get(InstanceModel.ID);
+        InstanceKindHandler kind = InstanceKinds.handlerOf(instance);
+        GitSourceLane lane = kind == null ? GitSourceLane.NONE : kind.gitSourceLane();
+        Runnable deploy = switch (lane) {
+            case RELEASE -> () -> ApplicationDeploys.deploy(instanceId, branch, pushedSha, trigger);
+            case IN_PLACE -> () -> new WorkspaceBuilds().deploy(instanceId, branch, pushedSha, trigger);
+            case NONE -> throw new IllegalArgumentException(
+                "Instance " + instanceId + " carries no git source to deploy");
+        };
         if (pushedSha != null) {
             DISPATCHED.put(instanceId, pushedSha);
         }
-        boolean workspace = WorkspaceKind.ID.toString().equals(instance.get(InstanceModel.KIND));
-        HandlerSupport.inBackgroundLogged(trigger.word() + ": deploy of instance " + instanceId, () -> {
-            if (workspace) {
-                new WorkspaceBuilds().deploy(instanceId, branch, pushedSha, trigger);
-            } else {
-                ApplicationDeploys.deploy(instanceId, branch, pushedSha, trigger);
-            }
-        });
+        HandlerSupport.inBackgroundLogged(trigger.word() + ": deploy of instance " + instanceId, deploy);
     }
 }
