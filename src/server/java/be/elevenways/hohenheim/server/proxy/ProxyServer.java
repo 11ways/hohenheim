@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.tls.SniKeyManager;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Backoff;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.setting.SettingDefinition;
 import be.elevenways.zenit.common.session.InMemorySessionStore;
@@ -23,6 +24,7 @@ import io.undertow.server.handlers.encoding.EncodingHandler;
 import io.undertow.server.handlers.encoding.GzipEncodingProvider;
 import io.undertow.server.handlers.encoding.DeflateEncodingProvider;
 import io.undertow.util.Headers;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.SSLContext;
@@ -75,6 +77,9 @@ public class ProxyServer {
     private volatile State httpsState = State.STOPPED;
     private volatile String httpFailureReason;
     private volatile String httpsFailureReason;
+    /* What an operator does about the failure, when its reason has an answer (ListenerBindFailures). */
+    private volatile Microcopy httpFailureWords;
+    private volatile Microcopy httpsFailureWords;
 
     // AIDEV-NOTE: bounded restart state, shared by BOTH listeners. Restarts bound the
     // INTERVAL (exponential backoff, 30s doubling to a 1h ceiling), never the attempt
@@ -149,6 +154,31 @@ public class ProxyServer {
 
     public String getHttpsFailureReason() {
         return httpsFailureReason;
+    }
+
+    /** @return why HTTP is down in the operator's words (what to change, when the reason says), null while it is not */
+    public @Nullable Microcopy getHttpFailure() {
+        return described(httpFailureReason, httpFailureWords);
+    }
+
+    /** @return why HTTPS is down or degraded in the operator's words, null while it is neither */
+    public @Nullable Microcopy getHttpsFailure() {
+        return described(httpsFailureReason, httpsFailureWords);
+    }
+
+    private static @Nullable Microcopy described(@Nullable String reason, @Nullable Microcopy words) {
+        return words != null ? words : reason == null || reason.isBlank() ? null : Microcopy.literal(reason);
+    }
+
+    /** The raw reason and the operator's words always change together; null clears both. */
+    private void recordHttpFailure(@Nullable String reason, @Nullable Microcopy words) {
+        httpFailureReason = reason;
+        httpFailureWords = words;
+    }
+
+    private void recordHttpsFailure(@Nullable String reason, @Nullable Microcopy words) {
+        httpsFailureReason = reason;
+        httpsFailureWords = words;
     }
 
     /**
@@ -235,10 +265,10 @@ public class ProxyServer {
         if (socketMode && !hasTrustedProxyKeys()) {
             httpState = State.FAILED;
             recordHttpRestartFailure();
-            httpFailureReason = "proxy.http_socket_path requires proxy.trusted_proxy_keys: "
+            recordHttpFailure("proxy.http_socket_path requires proxy.trusted_proxy_keys: "
                 + "a Unix-socket client has no IP address, so without an authenticated "
                 + "fronting proxy every request would count as 127.0.0.1 and IP-based "
-                + "controls (bans, access lists, listen_on) would silently stop working";
+                + "controls (bans, access lists, listen_on) would silently stop working", null);
             Blast.log("PROXY HTTP NOT STARTED:", httpFailureReason);
             return;
         }
@@ -274,7 +304,7 @@ public class ProxyServer {
             // and one that became a socket front must not miss it.
             ProxyScheme.setSocketFrontMode(socketMode);
             httpState = State.RUNNING;
-            httpFailureReason = null;
+            recordHttpFailure(null, null);
             noteHttpListenerHealthy();
             Blast.log(socketMode ? "Proxy HTTP listening on Unix socket" : "Proxy HTTP listening on port",
                       socketMode ? httpSocketBridge.getSocketPath() : publicHttpAddress.getPort(),
@@ -283,7 +313,8 @@ public class ProxyServer {
                       dispatcher.getWildcardRouteCount() + " wildcard routes)");
         } catch (Exception e) {
             httpState = State.FAILED;
-            httpFailureReason = e.getMessage();
+            recordHttpFailure(e.getMessage(),
+                ListenerBindFailures.explain(e, httpPort, HohenheimSettings.Proxy.HTTP_PORT));
             recordHttpRestartFailure();
             stopHttpResources();
             Blast.log("PROXY HTTP STARTUP FAILED:", e.getMessage());
@@ -294,7 +325,7 @@ public class ProxyServer {
         if (httpState == State.STOPPED) return;
         stopHttpResources();
         httpState = State.FAILED;
-        httpFailureReason = failure.getMessage();
+        recordHttpFailure(failure.getMessage(), null);
         Blast.log("PROXY HTTP LISTENER FAILED:", failure.getMessage());
     }
 
@@ -360,7 +391,7 @@ public class ProxyServer {
         if (certificateStore.isEmpty() && !dispatcher.hasTlsPassthroughRoutes()) {
             dispatcher.setHttpsAvailable(false);
             httpsState = State.STOPPED;
-            httpsFailureReason = "No certificates loaded";
+            recordHttpsFailure("No certificates loaded", null);
             Blast.log("Proxy HTTPS not started: no certificates available");
             return;
         }
@@ -387,7 +418,7 @@ public class ProxyServer {
 
             dispatcher.setHttpsAvailable(httpsTerminationAddress != null);
             httpsState = State.RUNNING;
-            httpsFailureReason = terminationFailure != null ? terminationFailure.getMessage() : null;
+            recordHttpsFailure(terminationFailure != null ? terminationFailure.getMessage() : null, null);
             if (terminationFailure == null) {
                 noteHttpsListenerHealthy();
             } else {
@@ -401,7 +432,8 @@ public class ProxyServer {
         } catch (Exception e) {
             dispatcher.setHttpsAvailable(false);
             httpsState = State.FAILED;
-            httpsFailureReason = e.getMessage();
+            recordHttpsFailure(e.getMessage(),
+                ListenerBindFailures.explain(e, httpsPort, HohenheimSettings.Proxy.HTTPS_PORT));
             recordHttpsRestartFailure();
             stopHttpsResources();
             Blast.log("PROXY HTTPS STARTUP FAILED on port", httpsPort + ":", e.getMessage());
@@ -434,7 +466,7 @@ public class ProxyServer {
         stopHttpsResources();
         dispatcher.setHttpsAvailable(false);
         httpsState = State.FAILED;
-        httpsFailureReason = failure.getMessage();
+        recordHttpsFailure(failure.getMessage(), null);
         Blast.log("PROXY HTTPS LISTENER FAILED:", failure.getMessage());
     }
 
@@ -458,8 +490,8 @@ public class ProxyServer {
         dispatcher.setHttpsAvailable(false);
         httpState = State.STOPPED;
         httpsState = State.STOPPED;
-        httpFailureReason = null;
-        httpsFailureReason = null;
+        recordHttpFailure(null, null);
+        recordHttpsFailure(null, null);
         // Administrative stop is not a failure: disarm the supervised restart machinery.
         httpRestartAttempts = 0;
         httpNextRestartAttemptAt = 0;
@@ -513,7 +545,7 @@ public class ProxyServer {
             httpDownAlertSent = true;
             Alerts.trySend(NotificationEvents.PROXY_LISTENER_DOWN, "listener#http",
                 HohenheimMicrocopy.ALERT.of("listener_down_subject").withArg("protocol", "HTTP"),
-                HohenheimMicrocopy.ALERT.of("listener_down_body").withArg("reason", reasonOrDash(httpFailureReason)));
+                HohenheimMicrocopy.ALERT.of("listener_down_body").withArg("reason", reasonOrDash(getHttpFailure())));
         }
         boolean httpsDown = httpsState == State.FAILED
             || (httpsState == State.RUNNING && httpsFailureReason != null);
@@ -521,12 +553,12 @@ public class ProxyServer {
             httpsDownAlertSent = true;
             Alerts.trySend(NotificationEvents.PROXY_LISTENER_DOWN, "listener#https",
                 HohenheimMicrocopy.ALERT.of("listener_down_subject").withArg("protocol", "HTTPS"),
-                HohenheimMicrocopy.ALERT.of("listener_down_body").withArg("reason", reasonOrDash(httpsFailureReason)));
+                HohenheimMicrocopy.ALERT.of("listener_down_body").withArg("reason", reasonOrDash(getHttpsFailure())));
         }
     }
 
-    private static String reasonOrDash(String reason) {
-        return reason == null || reason.isBlank() ? "-" : reason;
+    private static Object reasonOrDash(@Nullable Microcopy reason) {
+        return reason == null ? "-" : reason;
     }
 
     private void noteHttpListenerHealthy() {
@@ -603,7 +635,7 @@ public class ProxyServer {
                 stopHttpsResources();
                 dispatcher.setHttpsAvailable(false);
                 httpsState = State.STOPPED;
-                httpsFailureReason = "No certificates or TLS passthrough routes loaded";
+                recordHttpsFailure("No certificates or TLS passthrough routes loaded", null);
                 Blast.log("Proxy HTTPS stopped: no terminating or passthrough routes remain");
             }
             return;
@@ -627,12 +659,12 @@ public class ProxyServer {
             try {
                 httpsTerminationAddress = startHttpsTermination();
                 dispatcher.setHttpsAvailable(true);
-                httpsFailureReason = null;
+                recordHttpsFailure(null, null);
                 noteHttpsListenerHealthy();
                 Blast.log("Proxy HTTPS termination enabled after reload");
             } catch (Exception e) {
                 dispatcher.setHttpsAvailable(false);
-                httpsFailureReason = e.getMessage();
+                recordHttpsFailure(e.getMessage(), null);
                 recordHttpsRestartFailure();
                 Blast.log("PROXY HTTPS TERMINATION START FAILED:", e.getMessage());
                 if (!wantsPassthrough) {
@@ -645,14 +677,14 @@ public class ProxyServer {
             httpsServer.stop();
             httpsServer = null;
             dispatcher.setHttpsAvailable(false);
-            httpsFailureReason = null;
+            recordHttpsFailure(null, null);
             noteHttpsListenerHealthy();
             Blast.log("Proxy HTTPS termination stopped; passthrough remains available");
         } else if (!wantsTermination && httpsFailureReason != null) {
             // Passthrough-only is now the WANTED shape: a lingering termination-failure
             // reason from a deleted certificate would otherwise read as degraded forever
             // and keep the supervisor probing a mode nothing asks for.
-            httpsFailureReason = null;
+            recordHttpsFailure(null, null);
             noteHttpsListenerHealthy();
         }
     }

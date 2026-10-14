@@ -69,14 +69,14 @@ public final class ProxyAttention {
         if (proxy.getHttpState() == ProxyServer.State.FAILED) {
             items.add(item(AttentionSeverity.ERROR, "sitemap",
                 HohenheimMicrocopy.ATTENTION_TITLE.of("proxy_http_listener"),
-                literal(proxy.getHttpFailureReason()),
+                proxy.getHttpFailure(),
                 CmsRoutes.list(ADMIN, SettingsPage.DEFAULT_SLUG),
                 HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_settings")));
         }
         if (proxy.getHttpsState() == ProxyServer.State.FAILED) {
             items.add(item(AttentionSeverity.ERROR, "certificate",
                 HohenheimMicrocopy.ATTENTION_TITLE.of("proxy_https_listener"),
-                literal(proxy.getHttpsFailureReason()),
+                proxy.getHttpsFailure(),
                 CmsRoutes.list(ADMIN, HohenheimSlugs.CERTIFICATES),
                 HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_certificates"))
                 .about(AttentionSubject.httpsTermination(), refusedOverHttp(proxy)));

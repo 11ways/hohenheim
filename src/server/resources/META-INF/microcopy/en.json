@@ -1133,6 +1133,14 @@
     "text": "The managed spam service is enabled but reports state \"{$state}\"",
     "scope": "attention_detail"
   },
+  "listener_port_privileged": {
+    "text": "Port {$port} needs privileges this process does not have. Give Hohenheim's service the CAP_NET_BIND_SERVICE capability, or set {$setting} to a port of 1024 or higher.",
+    "scope": "attention_detail"
+  },
+  "listener_port_in_use": {
+    "text": "Port {$port} is already used by another program. Stop that program, or set {$setting} to a free port.",
+    "scope": "attention_detail"
+  },
   "degraded": [
     {
       "text": "Degraded",

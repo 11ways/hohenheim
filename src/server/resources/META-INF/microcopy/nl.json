@@ -1133,6 +1133,14 @@
     "text": "De beheerde spamservice is ingeschakeld maar meldt status \"{$state}\"",
     "scope": "attention_detail"
   },
+  "listener_port_privileged": {
+    "text": "Poort {$port} vereist rechten die dit proces niet heeft. Geef de service van Hohenheim de capability CAP_NET_BIND_SERVICE, of zet {$setting} op een poort vanaf 1024.",
+    "scope": "attention_detail"
+  },
+  "listener_port_in_use": {
+    "text": "Poort {$port} wordt al gebruikt door een ander programma. Stop dat programma, of zet {$setting} op een vrije poort.",
+    "scope": "attention_detail"
+  },
   "degraded": [
     {
       "text": "Verminderd",

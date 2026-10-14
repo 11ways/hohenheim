@@ -24,9 +24,11 @@ import be.elevenways.zenit.test.support.OutboundFixture;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.security.KeyPair;
@@ -34,6 +36,7 @@ import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -273,6 +276,69 @@ class ProxyListenerSupervisionTest {
                 .as("step 3: recovery resets the HTTP restart bookkeeping").isZero();
         } finally {
             httpProxy.stop();
+        }
+    }
+
+    /**
+     * A listener the kernel refuses says what to change: the dashboard once showed only "Permission denied" for a dev
+     * install on port 80.
+     */
+    @Test
+    @Timeout(60)
+    void aRefusedListenerPortSaysWhatToChange() throws Exception {
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 0);
+        ProxyServer taken = new ProxyServer();
+        ProxyServer privileged = new ProxyServer();
+        try {
+            // 1. A port another program holds: the item names the port and the setting that moves it.
+            int held;
+            try (ServerSocket blocker = new ServerSocket(0)) {
+                held = blocker.getLocalPort();
+                Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, held);
+                taken.start();
+            }
+            assertThat(attentionDetail(taken))
+                .as("step 1: the HTTP item says the port is taken and which setting moves it")
+                .isEqualTo("Port " + held + " is already used by another program. Stop that program, or set"
+                    + " hohenheim.proxy.http_port to a free port.");
+
+            // 2. A privileged port this process may not bind (skipped where the test runs privileged): the item
+            //    names the capability, never the kernel's bare "Permission denied". A stopped proxy never starts
+            //    again, so this is a second one.
+            Assumptions.assumeTrue(refusesPrivilegedBind(), "this process may bind port 80");
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 80);
+            privileged.start();
+            assertThat(attentionDetail(privileged))
+                .as("step 2: the HTTP item says how to allow port 80 or which setting moves it")
+                .isEqualTo("Port 80 needs privileges this process does not have. Give Hohenheim's service the"
+                    + " CAP_NET_BIND_SERVICE capability, or set hohenheim.proxy.http_port to a port of 1024 or higher.");
+        } finally {
+            taken.stop();
+            privileged.stop();
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        }
+    }
+
+    /** @return the shipped English detail of the one dashboard item a failed HTTP listener raises */
+    private static String attentionDetail(ProxyServer failed) {
+        assertThat(failed.getHttpState()).as("the HTTP listener failed").isEqualTo(ProxyServer.State.FAILED);
+        ServerMain.adoptProxyServer(failed);
+        try {
+            List<AttentionItem> items = new ArrayList<>();
+            ProxyAttention.failedProxyListeners(items);
+            assertThat(items).as("one item for the failed HTTP listener").hasSize(1);
+            return ApiSupport.shippedText(Objects.requireNonNull(items.get(0).detail()));
+        } finally {
+            ServerMain.adoptProxyServer(null);
+        }
+    }
+
+    /** @return whether binding port 80 is refused for lack of privilege here (EACCES), as on a dev install */
+    private static boolean refusesPrivilegedBind() {
+        try (ServerSocket probe = new ServerSocket(80)) {
+            return false;
+        } catch (IOException refused) {
+            return String.valueOf(refused.getMessage()).contains("Permission denied");
         }
     }
 
