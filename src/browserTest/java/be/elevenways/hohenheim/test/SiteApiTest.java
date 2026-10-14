@@ -10,6 +10,7 @@ import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ApiKeyService;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.auth.server.ZenitAuth;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -164,7 +165,7 @@ class SiteApiTest extends HohenheimTestBase {
         Row logged = activityOf(proxySiteId, ZenitActivityAction.CREATE.id().toString());
         assertThat(logged).as("step 1: the API create is recorded").isNotNull();
         assertThat((Object) logged.get(ActivityModel.ORIGIN))
-            .as("step 1: an API key stamps the origin column").isEqualTo("api");
+            .as("step 1: an API key stamps the origin column").isEqualTo(ZenitAuth.ORIGIN_API);
         assertThat((Object) logged.get(ActivityModel.DETAIL))
             .as("step 1: the detail names the site, never the origin again")
             .isEqualTo(PREFIX + "proxy");
