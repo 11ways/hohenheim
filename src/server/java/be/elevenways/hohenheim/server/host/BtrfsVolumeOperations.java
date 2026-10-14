@@ -113,9 +113,18 @@ public final class BtrfsVolumeOperations implements VolumeOperations {
         return target;
     }
 
+    /**
+     * Destroys a snapshot, then its instance's folder of the snapshot tree once that holds nothing: a backup's
+     * snapshot is its folder's only content, so its delete otherwise left an empty {@code .snapshots/<id>} behind.
+     */
     @Override
     public void deleteSnapshot(@NonNull String snapshotPath) {
         destroy(snapshotPath);
+        String mirror = PosixPaths.parentOf(snapshotPath);
+        String tree = PosixPaths.parentOf(mirror);
+        if (SNAPSHOT_DIRECTORY.equals(PosixPaths.nameOf(tree))) {
+            pruneOwner(PosixPaths.parentOf(tree) + "/" + PosixPaths.nameOf(mirror));
+        }
     }
 
     @Override

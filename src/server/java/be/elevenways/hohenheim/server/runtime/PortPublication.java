@@ -20,8 +20,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * @param protocol          {@code tcp} or {@code udp} (lowercase)
  * @param publicExposure    true = bind the whole host ({@code 0.0.0.0}); false = loopback
  * @param declaredHostPort  operator-fixed host port, or null to auto-allocate
- * @param preallocatedPort  the host port the deploy claimed BEFORE create; null until
- *                          the pre-allocation step resolved it (or on record-after)
+ * @param preallocatedPort  the host port asked of the daemon: the claim the deploy made BEFORE create, or a
+ *                          record-after publication's last observed number; null lets the kernel pick
  */
 public record PortPublication(int containerPort,
                               @NonNull String protocol,

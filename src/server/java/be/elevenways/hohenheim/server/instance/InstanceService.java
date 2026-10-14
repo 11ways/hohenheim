@@ -405,11 +405,10 @@ public final class InstanceService {
     }
 
     /**
-     * Stop the workload. A confirmed stop IS an observation that the published port is
-     * free (a stopped container binds nothing at the kernel), so the OBSERVED claims are
-     * released verified and a restart records a fresh ephemeral port. Pre-allocated
-     * claims deliberately SURVIVE a stop: the kernel port is free but the NUMBER stays
-     * reserved, which is what keeps the DNS rows pointing at it honest across restarts.
+     * Stop the workload. Every port claim SURVIVES a confirmed stop: a pre-allocated one is the stable number DNS
+     * points at, and an observed (record-after) one is the number the next start asks the daemon for again
+     * ({@link PortPublications#ensureClaimed}), so a restart or a backup's stop and start keeps the instance's ports.
+     * A stopped record is not servable, so nothing routes to the kept number meanwhile.
      *
      * @throws Violations naming the failure; the claims are parked, the status untouched
      */
@@ -448,7 +447,7 @@ public final class InstanceService {
             resolved.runtime().stop(resolved.spec().handle(), 10);
             this.beforeOutcomeWrite.run();
             stampGuarded(resolved, InstanceModel.STATUS_STOPPED);
-            PortLedger.releaseOwnerObserved(InstanceModel.MODEL_ID, instanceId);
+            // The claims stay: see the method's doc. Only a destroy releases them.
             recordPower(instanceId, HohenheimActivityAction.STOPPED, resolved);
         } catch (IOException e) {
             stampGuardedError(resolved, HohenheimActivityAction.WORKLOAD_STOP_FAILED, e.getMessage());

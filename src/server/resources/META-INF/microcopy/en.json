@@ -6651,6 +6651,10 @@
     "text": "{$name} has no backup target yet. Choose where its backups go in its Configuration, under Backups.",
     "scope": "violations"
   },
+  "instance_backup_source_unreproducible": {
+    "text": "{$name} is built from its git repository or a build context, which a backup cannot restore. Back up its data where it lives, or deploy it from an uploaded artifact.",
+    "scope": "violations"
+  },
   "backup_target_choose": {
     "text": "Choose a backup target",
     "scope": "instance"

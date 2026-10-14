@@ -51,7 +51,8 @@ public final class PortPublications {
      * Ensure the ledger state matches the spec's declared publication, BEFORE the
      * container is created: a pre-allocation-shaped publication gets its host port
      * claimed (reusing the owner's existing reservation when the shape still matches),
-     * and reservations the declaration no longer wants are parked for the reconciler.
+     * a record-after publication asks for the number it was last observed on, and
+     * reservations the declaration no longer wants are parked for the reconciler.
      *
      * @return the spec to create the container from (carries the claimed host port)
      * @throws Violations naming the conflict or the exhausted window
@@ -59,16 +60,6 @@ public final class PortPublications {
     static @NonNull InstanceSpec ensureClaimed(InstanceService.@NonNull Resolved resolved,
                                                int instanceId) {
         InstanceSpec spec = resolved.spec();
-        boolean anyPreallocated = false;
-        for (PortPublication publication : spec.publications()) {
-            anyPreallocated |= publication.requiresPreallocation();
-        }
-        if (!anyPreallocated) {
-            // The declaration no longer wants a reservation; end any leftover one the
-            // OBSERVED way (the reconciler deletes each row once it sees the port free).
-            PortLedger.parkPreallocatedClaims(InstanceModel.MODEL_ID, instanceId);
-            return spec;
-        }
         // The reusable-claim scan below matches ONE publication against the owner's
         // existing reservations, so a multi-publication spec resolves them in declaration
         // order and each claim is consumed at most once (two publications of the same
@@ -76,10 +67,13 @@ public final class PortPublications {
         List<PortPublication> claimed = new ArrayList<>();
         Set<Integer> consumed = new HashSet<>();
         List<Row> existing = PortLedger.preallocatedClaimsOf(InstanceModel.MODEL_ID, instanceId);
+        List<Row> observed = new ArrayList<>(PortLedger.claimsOf(InstanceModel.MODEL_ID, instanceId));
+        observed.removeIf(PortLedger::isPreallocated);
+        Set<Integer> remembered = new HashSet<>();
         for (PortPublication publication : spec.publications()) {
             claimed.add(publication.requiresPreallocation()
                 ? claimOne(resolved.serverId(), instanceId, publication, existing, consumed)
-                : publication);
+                : remembered(resolved, publication, observed, remembered));
         }
         // Reservations no publication resolved to end OBSERVED, never silently deleted.
         for (Row claim : existing) {
@@ -89,6 +83,41 @@ public final class PortPublications {
             }
         }
         return spec.withPreallocatedPorts(claimed);
+    }
+
+    /**
+     * A record-after publication asking for the host port its owner was last observed on, so a restart, a backup's
+     * stop and start or a redeploy keeps the number; the kernel picks a new one only when that number is gone.
+     *
+     * AIDEV-NOTE: the observed claim outlives a settled stop (InstanceService.stopNow) for exactly this, and its
+     * number lies in the kernel's ephemeral range, so while the workload is down the daemon may hand it to another
+     * container: a local host probes it first (only when this record holds no live workload, whose own bind would
+     * read as taken), and that other owner's record-after write supersedes the stale row (PortLedger.recordObservedAll).
+     * A remote host has the ledger only; a number taken there fails the start loudly and the failure parks the claim.
+     */
+    private static @NonNull PortPublication remembered(InstanceService.@NonNull Resolved resolved,
+                                                       @NonNull PortPublication publication,
+                                                       @NonNull List<Row> observed, @NonNull Set<Integer> taken) {
+        for (Row claim : observed) {
+            Integer id = claim.get(PortAllocationModel.ID);
+            Integer port = claim.get(PortAllocationModel.PORT);
+            if (id == null || port == null || taken.contains(id) || PortLedger.isReleasing(claim)
+                    || !Objects.equals(claim.get(PortAllocationModel.SERVER_ID), resolved.serverId())
+                    || !publication.protocol().equals(claim.get(PortAllocationModel.PROTOCOL))
+                    || !publication.ledgerBindAddress().equals(claim.get(PortAllocationModel.HOST_IP))) {
+                continue;
+            }
+            taken.add(id);
+            boolean live = InstanceModel.SERVABLE_STATUSES.contains(resolved.row().get(InstanceModel.STATUS));
+            if (!live && isLocalServer(resolved.serverId())
+                    && !PortProbe.isFree(publication.ledgerBindAddress(), port, publication.protocol())) {
+                Blast.log("PORTS: host port", port, "of instance", resolved.row().get(InstanceModel.ID),
+                    "was taken while it was down; the daemon picks a new one");
+                return publication;
+            }
+            return publication.withPreallocatedPort(port);
+        }
+        return publication;
     }
 
     /**

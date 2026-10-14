@@ -113,7 +113,7 @@ class ScheduledBackupAlertTest {
             RecordSchedules schedules = new RecordSchedules(datasource);
 
             // 1. A due schedule with a backup_instance step on an instance whose backup cannot run: it has no backup
-            //    target, so the BACKUP operation is unavailable for it (InstanceBackups.targetRefusal).
+            //    target, so the BACKUP operation is unavailable for it (InstanceBackups.backupRefusal).
             int noTarget = BackupLaneFixture.instanceRecord("alert-no-target", fixture.hostId);
             int failing = schedule(noTarget, "nightly backup", StepFailurePolicy.ABORT, true);
 

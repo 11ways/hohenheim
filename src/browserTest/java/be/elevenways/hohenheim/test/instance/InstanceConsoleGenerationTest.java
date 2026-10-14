@@ -21,6 +21,9 @@ import be.elevenways.protoblast.common.util.BlastLog;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.TestMethodOrder;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -39,6 +42,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Jelle De Loecker
  * @since 0.9.0
  */
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class InstanceConsoleGenerationTest {
 
     private static final String HOST = "console-generation-host";
@@ -121,6 +125,62 @@ class InstanceConsoleGenerationTest {
                     || PortLedger.claimsOf(InstanceModel.MODEL_ID, instanceId).isEmpty());
             assertThat(claims.isQueued(instanceId)).as("step 4: and it is no longer waiting").isFalse();
         });
+    }
+
+    /**
+     * A stop settles its own console exit: the exit policy never queues for the record's claim behind the stop, so a
+     * deploy straight after a stop is never refused as an operation in progress (InstanceLogRetentionLiveTest step 5).
+     */
+    @Test
+    void aStopSettlesItsOwnConsoleExitSoADeployRightAfterItRuns() {
+        Db.run(datasource, () -> {
+            int instanceId = instanceRecord("stop-then-deploy", template("stop-then-deploy", "ready", null));
+            InstanceOperationLock claims = InstanceOperationLock.of(HostLeases.production());
+
+            // 1. Deployed with a console watch, and running once its readiness line arrived.
+            new InstanceService().deploy(instanceId);
+            String handle = FakeNativeDaemons.handleOf(instanceId);
+            FakeNativeDaemons.CONSOLE_STREAMS.get(handle).push("ready\n");
+            Poll.until("step 1: the workload runs", Duration.ofSeconds(10),
+                () -> InstanceModel.STATUS_RUNNING.equals(status(instanceId)));
+
+            // 2. The operator's stop holds the record's claim; the daemon ends the console as the workload exits.
+            claims.exclusive(instanceId, InstanceOperationLock.Contention.REFUSE, () -> {
+                new InstanceService().stop(instanceId);
+                FakeNativeDaemons.CONSOLE_STREAMS.get(handle).endFromDaemon();
+                Poll.never("step 2: the console's exit policy queued behind the stop for the record's claim",
+                    Duration.ofMillis(1500), () -> claims.isQueued(instanceId));
+            });
+            assertThat(status(instanceId)).as("step 2: the stop stamped the outcome itself")
+                .isEqualTo(InstanceModel.STATUS_STOPPED);
+
+            // 3. A deploy straight after the stop is not refused as an operation in progress.
+            new InstanceService().deploy(instanceId);
+            assertThat(status(instanceId)).as("step 3: the deploy after the stop ran")
+                .isEqualTo(InstanceModel.STATUS_STARTING);
+        });
+    }
+
+    /**
+     * The console registries are keyed by the controller-scoped workload name: another controller's record of the
+     * same id (another database, as every test class sharing a JVM has) never reads this one's console. Runs last:
+     * the second fresh datasource closes this class's own.
+     */
+    @Test
+    @Order(Integer.MAX_VALUE)
+    void anotherControllersRecordOfTheSameIdNeverSharesThisOnesConsole() throws Exception {
+        int[] ids = new int[1];
+        Db.run(datasource, () -> {
+            // 1. Controller A's record runs with a console.
+            ids[0] = instanceRecord("scoped-console", template("scoped-console", "ready", null));
+            new InstanceService().deploy(ids[0]);
+            assertThat(InstanceConsoles.peek(ids[0])).as("step 1: A's record has its console").isNotNull();
+        });
+
+        // 2. Controller B (a fresh database) asks for its record of the same id: there is no console of B's.
+        SqlDatasource other = TestDatabases.freshDatasource();
+        Db.run(other, () -> assertThat(InstanceConsoles.peek(ids[0]))
+            .as("step 2: B's record of the same id has no console; it never reads A's").isNull());
     }
 
     private static @Nullable String status(int instanceId) {

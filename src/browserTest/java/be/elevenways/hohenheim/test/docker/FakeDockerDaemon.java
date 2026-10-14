@@ -84,6 +84,8 @@ public final class FakeDockerDaemon implements DockerTransport {
         final int containerPort;
         boolean running;
         int hostPort;
+        /** The host port the spec asked for (a pre-allocated or remembered number), 0 for the kernel's pick. */
+        int requestedPort;
         @Nullable HttpServer responder;
 
         Workload(@NonNull String name, @NonNull Map<String, String> labels,
@@ -257,9 +259,11 @@ public final class FakeDockerDaemon implements DockerTransport {
             }
             int containerPort = spec.publications().isEmpty()
                 ? 0 : spec.publications().get(0).containerPort();
-            FakeDockerDaemon.this.workloads.put(spec.handle(),
-                new Workload(spec.handle(), Map.copyOf(spec.ownerLabels()), spec.image(),
-                    containerPort));
+            Workload created = new Workload(spec.handle(), Map.copyOf(spec.ownerLabels()), spec.image(),
+                containerPort);
+            Integer requested = spec.publications().isEmpty() ? null : spec.publications().get(0).preallocatedPort();
+            created.requestedPort = requested == null ? 0 : requested;
+            FakeDockerDaemon.this.workloads.put(spec.handle(), created);
             // A recreate is what CLEARS the daemon's OOMKilled flag, so a fake that kept
             // it would make the redeploy of a dead workload look like it changed nothing.
             FakeDockerDaemon.this.workloadDead.remove(spec.handle());
@@ -340,7 +344,7 @@ public final class FakeDockerDaemon implements DockerTransport {
     /** A REAL loopback listener, so the engine's health probe is a real HTTP round trip. */
     private void bind(@NonNull Workload workload) throws IOException {
         HttpServer server = HttpServer.create(
-            new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+            new InetSocketAddress(InetAddress.getLoopbackAddress(), workload.requestedPort), 0);
         server.createContext("/", exchange -> {
             int status = this.health.getOrDefault(workload.name, 200);
             byte[] body = ("release of " + workload.name).getBytes(StandardCharsets.UTF_8);

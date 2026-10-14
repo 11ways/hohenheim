@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.cms.InstanceBackupParts;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
+import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
@@ -386,6 +387,53 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
             Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(instanceId))
                 .assign(InstanceModel.BACKUP_TARGET_ID, (Integer) null).updateAll();
             Models.get(BackupTargetModel.class).delete(target.get(BackupTargetModel.ID));
+        }
+    }
+
+    /**
+     * An application built from git (walk-site on starfleet) is offered Back up now disabled, naming why, and asking
+     * anyway is refused by the same rule: its backup lane could never reproduce the release it would restore.
+     */
+    @Test
+    void aGitBuiltApplicationsBackUpNowIsRefusedByTheOfferRuleWithItsReason() {
+        Row target = Models.get(BackupTargetModel.class).createEmptyRow();
+        target.set(BackupTargetModel.NAME, "git-app-destination");
+        target.set(BackupTargetModel.KIND, "hohenheim:filesystem");
+        target.set(BackupTargetModel.SETTINGS, Map.of("path", System.getProperty("java.io.tmpdir")));
+        Models.get(BackupTargetModel.class).save(target);
+        Row app = Models.get(InstanceModel.class).createEmptyRow();
+        app.set(InstanceModel.NAME, "git-built-app");
+        app.set(InstanceModel.KIND, ApplicationKind.ID.toString());
+        app.set(InstanceModel.SETTINGS, Map.of("repository_url", "https://example.invalid/app.git", "branch", "main"));
+        app.set(InstanceModel.STATUS, InstanceModel.STATUS_STOPPED);
+        app.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        app.set(InstanceModel.BACKUP_TARGET_ID, (Integer) target.get(BackupTargetModel.ID));
+        Models.get(InstanceModel.class).save(app);
+        int appId = app.get(InstanceModel.ID);
+
+        // 1. THE rule behind the offer: with a target chosen, the git source is the reason it cannot run.
+        assertThat(InstanceBackups.backupRefusal(Models.get(InstanceModel.class).findById(appId)))
+            .as("step 1: the offer is disabled by the source, not by a missing target").isNotNull()
+            .satisfies(reason -> assertThat(reason.key()).isEqualTo("instance_backup_source_unreproducible"));
+
+        // 2. Asking anyway is refused by the same rule, in words that name the application.
+        Throwable refused = catchThrowable(() -> new InstanceBackups().backupNow(appId));
+        assertThat(refused).as("step 2: refused").isInstanceOf(Violations.class);
+        assertThat(((Violations) refused).all()).as("step 2: by the same reason")
+            .anySatisfy(violation -> {
+                assertThat(violation.message().key()).isEqualTo("instance_backup_source_unreproducible");
+                assertThat(ApiSupport.shippedText(violation.message())).contains("git-built-app");
+            });
+
+        // 3. A plain instance with the same target is offered: the rule is the application's source alone.
+        Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(instanceId))
+            .assign(InstanceModel.BACKUP_TARGET_ID, (Integer) target.get(BackupTargetModel.ID)).updateAll();
+        try {
+            assertThat(InstanceBackups.backupRefusal(Models.get(InstanceModel.class).findById(instanceId)))
+                .as("step 3: a docker container with a target may be backed up").isNull();
+        } finally {
+            Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(instanceId))
+                .assign(InstanceModel.BACKUP_TARGET_ID, (Integer) null).updateAll();
         }
     }
 

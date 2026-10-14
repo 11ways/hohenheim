@@ -123,6 +123,19 @@ class VolumeOperationsTest {
             .as("step 4: taken read-only")
             .contains("btrfs subvolume snapshot -r '" + volume + "'");
 
+        // 4b. DELETING the snapshot also takes its instance's folder of the snapshot tree once it is empty: a backup's
+        //     snapshot left an empty .snapshots/<id> on starfleet. The live instance folder holds the volume, so the
+        //     same prune's rmdir leaves it alone.
+        btrfs.deleteSnapshot(snapshot);
+        assertThat(shell.scripts.get(shell.scripts.size() - 2))
+            .as("step 4b: the snapshot subvolume goes first")
+            .contains("btrfs subvolume delete '" + snapshot + "'");
+        assertThat(shell.last())
+            .as("step 4b: then the emptied snapshot-tree folder of instance 42, through the prune")
+            .contains("rmdir --ignore-fail-on-non-empty '/srv/data/volumes/"
+                + BtrfsVolumeOperations.SNAPSHOT_DIRECTORY + "/42'")
+            .doesNotContain("rm -rf");
+
         // 5. DESTROY deletes the subvolume; only a path that is NOT a subvolume falls back
         //    to rm -rf, so a stray directory is still reclaimed.
         btrfs.destroy(volume);

@@ -117,7 +117,7 @@ public final class InstanceBackups {
         // asks again; the double ask is idempotent and keeps that entry gated too.
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimCapabilities.BACKUPS);
         Row row = requireRow(instanceId);
-        Microcopy noTarget = targetRefusal(row);
+        Microcopy noTarget = backupRefusal(row);
         if (noTarget != null) {
             throw Violations.ofForm(noTarget);
         }
@@ -126,16 +126,30 @@ public final class InstanceBackups {
     }
 
     /**
-     * Why the instance cannot be backed up now, or null when it names a target; the refusal of
-     * {@link #backupNow(int)} and the reason its offer is disabled.
+     * Why the instance cannot be backed up at all, or null when it can: THE rule behind the refusal of
+     * {@link #backupNow} and the reason its offer is disabled.
+     *
+     * AIDEV-NOTE: an application built from git or a build context is refused (decided round R3g): its backup lane
+     * restores a serving release from the captured artifact, and such an application's artifact is a build of a
+     * commit nothing here can reproduce. Backing up only its data volumes would be a new payload, not decided.
      */
-    public static @Nullable Microcopy targetRefusal(@NonNull Row row) {
+    public static @Nullable Microcopy backupRefusal(@NonNull Row row) {
+        String name = String.valueOf((Object) row.get(InstanceModel.NAME));
+        if (sourceUnreproducible(row)) {
+            return HohenheimMicrocopy.VIOLATIONS.of("instance_backup_source_unreproducible").withArg("name", name);
+        }
         if (row.get(InstanceModel.BACKUP_TARGET_ID) != null) {
             return null;
         }
         // The target is the instance's own choice (no installation default), so the refusal says where it is made.
-        return HohenheimMicrocopy.VIOLATIONS.of("instance_backup_target_none")
-            .withArg("name", String.valueOf((Object) row.get(InstanceModel.NAME)));
+        return HohenheimMicrocopy.VIOLATIONS.of("instance_backup_target_none").withArg("name", name);
+    }
+
+    /** Whether the record is an application whose release is built from git or a build context. */
+    private static boolean sourceUnreproducible(@NonNull Row row) {
+        Map<String, Object> settings = RawValues.map(row.get(InstanceModel.SETTINGS));
+        return InstanceKinds.isReleaseManaged(row.get(InstanceModel.KIND))
+            && (SiteSources.hasRepository(settings) || settings.containsKey("build_context"));
     }
 
     /**
@@ -176,12 +190,8 @@ public final class InstanceBackups {
     private int backupApplication(int instanceId, @Nullable Integer targetId,
                                   @NonNull BackupTarget target) {
         Row owner = requireRow(instanceId);
-        Map<String, Object> sourceSettings = RawValues.map(owner.get(InstanceModel.SETTINGS));
-        if (SiteSources.hasRepository(sourceSettings)
-                || sourceSettings.containsKey("build_context")) {
-            throw HohenheimViolations.instanceRefusal("instance_backup_failed", owner,
-                new IOException("Git/build-context application backups cannot reproduce source;"
-                    + " only immutable uploaded artifacts are supported"));
+        if (sourceUnreproducible(owner)) {
+            throw Violations.ofForm(Objects.requireNonNull(backupRefusal(owner)));
         }
         Row serving = ApplicationReleases.ownedServing(instanceId);
         if (serving == null) {

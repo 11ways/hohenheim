@@ -74,6 +74,8 @@ final class InstanceConsoleSession {
     private final long generation;
 
     private volatile boolean stopObserved;
+    private volatile boolean settledByOperation;
+    private final @NonNull String scopeKey;
     private volatile boolean closedByHub;
     private final boolean exclusive;
 
@@ -84,7 +86,7 @@ final class InstanceConsoleSession {
     private @Nullable Runnable readinessAction;
     private boolean readinessMatched;
 
-    InstanceConsoleSession(int instanceId, @NonNull String handle,
+    InstanceConsoleSession(int instanceId, @NonNull String scopeKey, @NonNull String handle,
                            ConsoleStreamSupport.@NonNull Console console,
                            boolean exclusive,
                            @NonNull Resizer resizer,
@@ -94,6 +96,7 @@ final class InstanceConsoleSession {
                            long generation,
                            @NonNull ExitListener exitListener) {
         this.instanceId = instanceId;
+        this.scopeKey = scopeKey;
         this.handle = handle;
         this.generation = generation;
         this.console = console;
@@ -123,6 +126,11 @@ final class InstanceConsoleSession {
 
     int instanceId() {
         return this.instanceId;
+    }
+
+    /** The controller-scoped name of the workload this session watches: THE key of the console registries. */
+    @NonNull String scopeKey() {
+        return this.scopeKey;
     }
 
     @NonNull String handle() {
@@ -407,9 +415,17 @@ final class InstanceConsoleSession {
         return this.stopCommand;
     }
 
-    /** Mark the coming exit as operator-intended (stop/destroy paths). */
-    void markStopExpected() {
+    /**
+     * Mark the coming exit as the work of an operation holding the record's claim (stop, destroy, a move): that
+     * operation stamps the outcome and keeps or releases the ports itself, so the exit policy leaves it alone.
+     */
+    void markSettledByOperation() {
         this.stopObserved = true;
+        this.settledByOperation = true;
+    }
+
+    boolean settledByOperation() {
+        return this.settledByOperation;
     }
 
     boolean stopObserved() {

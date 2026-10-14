@@ -512,8 +512,8 @@ public final class InstanceOverview {
     private record PortState(@NonNull String key, @NonNull Microcopy words) {
 
         /**
-         * @param workloadLive whether the owning record leaves a workload that holds its ports; a pre-allocated claim
-         *                     is the owner's number for life, so only this says whether anything listens on it
+         * @param workloadLive whether the owning record leaves a workload that holds its ports; every claim outlives a
+         *                     stop (the owner's number for life), so only this says whether anything listens on it
          */
         static @NonNull PortState of(@NonNull Row claim, boolean workloadLive) {
             String status = claim.get(PortAllocationModel.STATUS);
@@ -521,7 +521,7 @@ public final class InstanceOverview {
                 return new PortState("port_freeing",
                     HohenheimMicrocopy.INSTANCE_OVERVIEW.of("port_freeing"));
             }
-            if (PortLedger.isPreallocated(claim) && !workloadLive) {
+            if (!workloadLive) {
                 return new PortState("reserved",
                     HohenheimMicrocopy.INSTANCE_OVERVIEW.of("reserved"));
             }

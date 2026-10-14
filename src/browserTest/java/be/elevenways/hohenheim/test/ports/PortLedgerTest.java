@@ -240,6 +240,17 @@ class PortLedgerTest {
                     PortLedger.holderOf(PortLedger.claimKeyOf(localId, "", 8332, "tcp"))))
                 .as("step 3: the rival still holds its tuple").isEqualTo("an older claimant");
 
+            // 3b. Another RECORD's observed row on the tuple is superseded, not reported: the kernel just bound the
+            //     port for this owner, so that row is stale (a stopped instance's remembered number handed on).
+            assertThat(PortLedger.recordObserved(localId, "127.0.0.1", 8334, "tcp",
+                    DatabaseModel.MODEL_ID, 999_001, null)).as("step 3b: another record observed 8334 once").isTrue();
+            assertThat(PortLedger.recordObserved(localId, "127.0.0.1", 8334, "tcp",
+                    DatabaseModel.MODEL_ID, dbId, null))
+                .as("step 3b: the kernel's newer observation is recorded").isTrue();
+            assertThat(PortLedger.isOwnedBy(PortLedger.holderOf(PortLedger.claimKeyOf(localId, "127.0.0.1", 8334,
+                    "tcp")), DatabaseModel.MODEL_ID, dbId))
+                .as("step 3b: and the stale row is gone").isTrue();
+
             // 4. Deleting the owning record through the model's remove hooks PARKS its
             //    claims in releasing (a record delete observes nothing about the port);
             //    the row survives, still blocks rivals, and only an observer frees it.

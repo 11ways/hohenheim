@@ -541,7 +541,7 @@ public final class PortLedger {
         boolean recorded = true;
         for (int port : ports) {
             try {
-                claim(serverId, hostIp, port, protocol, ownerModel, ownerId, note);
+                claimObserved(serverId, hostIp, port, protocol, ownerModel, ownerId, note);
             } catch (PortConflict conflict) {
                 Blast.log("PORTS: observed port", port, "of", ownerModel + " #" + ownerId,
                     "could not be recorded -", conflict.getMessage(),
@@ -550,6 +550,27 @@ public final class PortLedger {
             }
         }
         return recorded;
+    }
+
+    /**
+     * One observed claim, superseding another RECORD's observed row on the same tuple: the kernel just bound the port
+     * for this owner, so that record does not hold it (a stopped workload's remembered number the daemon handed on).
+     * A pre-allocated reservation or an ownerless row is never superseded; it stays the reported conflict.
+     */
+    private static void claimObserved(int serverId, @Nullable Object hostIp, int port, @Nullable Object protocol,
+                                      @NonNull Identifier ownerModel, int ownerId, @Nullable String note) {
+        try {
+            claim(serverId, hostIp, port, protocol, ownerModel, ownerId, note);
+        } catch (PortConflict conflict) {
+            Row stale = conflict.getHolderClaim();
+            if (stale == null || isPreallocated(stale) || stale.get(PortAllocationModel.OWNER_ID) == null) {
+                throw conflict;
+            }
+            Blast.log("PORTS: observed port", port, "of", ownerModel + " #" + ownerId, "supersedes the stale row of",
+                describeHolder(stale));
+            Models.get(PortAllocationModel.class).delete(stale.get(PortAllocationModel.ID));
+            claim(serverId, hostIp, port, protocol, ownerModel, ownerId, note);
+        }
     }
 
     /**

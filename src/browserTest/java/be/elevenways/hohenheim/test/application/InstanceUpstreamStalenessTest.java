@@ -147,8 +147,8 @@ class InstanceUpstreamStalenessTest {
                 assertThat(daemon.isRunning(handle))
                     .as("step 2: because the workload really runs at the daemon").isTrue();
 
-                // 3. A STOP takes the address away again: the claims are released as
-                //    observed and the record stops claiming a workload.
+                // 3. A STOP takes the address away again: the record stops claiming a workload, while the
+                //    instance keeps its number in the ledger for its next start.
                 int portA = first.getPort();
                 service.stop(instanceId);
                 assertThat(handler.current())
@@ -156,6 +156,15 @@ class InstanceUpstreamStalenessTest {
                     .isNull();
                 assertThat(handler.getHealth().name())
                     .as("step 3: and the site says so").isEqualTo("DOWN");
+                assertThat(ledgerPortOf(instanceId))
+                    .as("step 3: but the instance keeps its host port's claim").isEqualTo(portA);
+
+                // 3b. A START after the stop (a restart, a backup's stop and start) asks the daemon for that same
+                //     number: the published host port moved on every restart on starfleet (49199 -> 49207).
+                service.deploy(instanceId);
+                assertThat(handler.current().getPort())
+                    .as("step 3b: the restarted workload kept its host port").isEqualTo(portA);
+                service.stop(instanceId);
 
                 // 4. THE REDEPLOY, and the reason this defect is worse than a 503: the host
                 //    port is EPHEMERAL, so the workload comes back somewhere else. Another

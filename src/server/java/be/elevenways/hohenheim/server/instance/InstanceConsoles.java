@@ -72,17 +72,17 @@ public final class InstanceConsoles {
     /** ... within this window stop the auto-restarts until the next manual deploy. */
     private static final long FLAP_WINDOW_MS = 60_000;
 
-    private static final Map<Integer, InstanceConsoleSession> SESSIONS = new ConcurrentHashMap<>();
+    // AIDEV-NOTE: every console registry is keyed by the workload's controller-scoped handle (key()), never the bare
+    // record id: record #7 of another controller (every test class's fresh database in a shared JVM) is another
+    // workload, so its session, its generation and its crashes are never this one's.
+    private static final Map<String, InstanceConsoleSession> SESSIONS = new ConcurrentHashMap<>();
 
     // AIDEV-NOTE: a session's late callbacks (the readiness timer and match, the exit policy) act only while its
     // generation is current, checked under the record's claim: closeSession bumps it for every replacement or end,
     // including a session the pump already dropped from SESSIONS, so a replaced console can never stamp, release
     // ports for or restart the deployment that replaced it.
-    private static final Map<Integer, Long> GENERATIONS = new ConcurrentHashMap<>();
+    private static final Map<String, Long> GENERATIONS = new ConcurrentHashMap<>();
 
-    // AIDEV-NOTE: keyed by the workload's controller-scoped handle, never the bare record id: record #7 of another
-    // controller (every test class's fresh database in a shared JVM) is another workload, and its crashes must not
-    // trip this one's flap protection.
     private static final Map<String, Deque<Long>> CRASH_LOG = new ConcurrentHashMap<>();
 
     // Test seams: shrink the waits so a live test observes the negative halves.
@@ -328,7 +328,7 @@ public final class InstanceConsoles {
 
     /** Whether {@code session} still watches the instance's current deployment: no closeSession came after it. */
     private static boolean isCurrent(@NonNull InstanceConsoleSession session) {
-        return GENERATIONS.getOrDefault(session.instanceId(), 0L) == session.generation();
+        return GENERATIONS.getOrDefault(session.scopeKey(), 0L) == session.generation();
     }
 
     /**
@@ -342,7 +342,7 @@ public final class InstanceConsoles {
      */
     public static @NonNull InstanceConsoleSession ensureSession(int instanceId) {
         int workloadId = ApplicationReleases.requireWorkloadIdOf(instanceId);
-        InstanceConsoleSession existing = SESSIONS.get(workloadId);
+        InstanceConsoleSession existing = SESSIONS.get(key(workloadId));
         if (existing != null && !existing.isEnded()) {
             return existing;
         }
@@ -498,7 +498,7 @@ public final class InstanceConsoles {
 
     /** The live session of an instance, or null. */
     public static @Nullable InstanceConsoleSession peek(int instanceId) {
-        InstanceConsoleSession session = SESSIONS.get(instanceId);
+        InstanceConsoleSession session = SESSIONS.get(key(instanceId));
         return session != null && !session.isEnded() ? session : null;
     }
 
@@ -541,7 +541,7 @@ public final class InstanceConsoles {
         if (session == null || !session.stdinDelivered() || session.stopCommand() == null) {
             return false;
         }
-        session.markStopExpected();
+        session.markSettledByOperation();
         try {
             session.sendCommand(session.stopCommand());
         } catch (IOException e) {
@@ -576,11 +576,11 @@ public final class InstanceConsoles {
         }
     }
 
-    /** Mark the coming exit operator-intended (stop/destroy); no-op without a session. */
+    /** Mark the coming exit as settled by the operation holding the record's claim (stop, destroy, a move). */
     static void markStopExpected(int instanceId) {
-        InstanceConsoleSession session = SESSIONS.get(instanceId);
+        InstanceConsoleSession session = SESSIONS.get(key(instanceId));
         if (session != null) {
-            session.markStopExpected();
+            session.markSettledByOperation();
         }
     }
 
@@ -607,8 +607,9 @@ public final class InstanceConsoles {
 
     /** Close and forget an instance's session (destroy, redeploy replacement). */
     static void closeSession(int instanceId) {
-        GENERATIONS.merge(instanceId, 1L, Long::sum);
-        InstanceConsoleSession session = SESSIONS.remove(instanceId);
+        String key = key(instanceId);
+        GENERATIONS.merge(key, 1L, Long::sum);
+        InstanceConsoleSession session = SESSIONS.remove(key);
         if (session != null) {
             session.close();
         }
@@ -623,7 +624,7 @@ public final class InstanceConsoles {
     /** Closes and forgets a session nothing needs any more, when its console is exclusive (Incus). */
     private static void releaseIfIdle(@NonNull InstanceConsoleSession session) {
         if (session.releaseIfIdle()) {
-            SESSIONS.remove(session.instanceId(), session);
+            SESSIONS.remove(session.scopeKey(), session);
         }
     }
 
@@ -647,14 +648,15 @@ public final class InstanceConsoles {
         // the variable table itself, and an unreadable table must fail loudly at open
         // rather than silently stream a secret later.
         String handle = resolved.spec().handle();
-        InstanceConsoleSession session = new InstanceConsoleSession(instanceId,
+        String key = key(instanceId);
+        InstanceConsoleSession session = new InstanceConsoleSession(instanceId, key,
             handle, console, support.consoleExclusive(), (cols, rows) -> support.resizeConsole(handle, cols, rows),
             stopCommand, ConsoleRedaction.redactorFor(instanceId),
             InstanceConsoleLogs.sinkFor(instanceId, resolved.spec().handle(), datasource),
-            GENERATIONS.getOrDefault(instanceId, 0L),
+            GENERATIONS.getOrDefault(key, 0L),
             (endedSession, termination, detail) -> handleStreamEnd(endedSession, instanceId,
                 serverId, name, support, leases, datasource, termination, detail));
-        SESSIONS.put(instanceId, session);
+        SESSIONS.put(key, session);
         return session;
     }
 
@@ -673,8 +675,14 @@ public final class InstanceConsoles {
                                         @NonNull String detail) {
         boolean stopObserved = session.stopObserved();
         // Remove only THIS session: a redeploy may already have replaced it.
-        SESSIONS.remove(instanceId, session);
+        SESSIONS.remove(session.scopeKey(), session);
         if (termination == ConsoleStream.Termination.CONSUMER_CLOSED) {
+            return;
+        }
+        if (session.settledByOperation()) {
+            // The stop/destroy that marked this exit holds the record's claim and stamps the outcome itself. Queueing
+            // for that claim here took it right after the operation let go, so a deploy straight after a stop was
+            // refused as an operation in progress. A stop that then failed leaves the outcome to the status reconciler.
             return;
         }
         if (termination == ConsoleStream.Termination.DAEMON_LOST) {
@@ -726,9 +734,9 @@ public final class InstanceConsoles {
             return;
         }
         if (stopObserved) {
-            if (!stampIfAnyRunning(leases, serverId, name, instanceId,
-                InstanceModel.STATUS_STOPPED, "observed stop, exit " + exitCode, null, null)) return;
-            PortLedger.releaseOwnerObserved(InstanceModel.MODEL_ID, instanceId);
+            // A typed stop command settles like an operator stop, keeping the port claims for the next start.
+            stampIfAnyRunning(leases, serverId, name, instanceId,
+                InstanceModel.STATUS_STOPPED, "observed stop, exit " + exitCode, null, null);
             return;
         }
         boolean restart = InstanceModel.CRASH_RESTART
@@ -782,8 +790,7 @@ public final class InstanceConsoles {
      * one threshold instead of two half-full ones. */
     static boolean flapExceeded(int instanceId) {
         long now = Now.millis();
-        Deque<Long> log = CRASH_LOG.computeIfAbsent(ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId),
-            handle -> new ArrayDeque<>());
+        Deque<Long> log = CRASH_LOG.computeIfAbsent(key(instanceId), handle -> new ArrayDeque<>());
         synchronized (log) {
             log.addLast(now);
             while (!log.isEmpty() && now - log.getFirst() > flapWindowMs) {
@@ -797,6 +804,11 @@ public final class InstanceConsoles {
         Alerts.trySend(NotificationEvents.INSTANCE_CRASH_LOOP, Alerts.about(InstanceModel.MODEL_ID, instanceId),
             HohenheimMicrocopy.ALERT.of("crash_loop_subject").withArg("name", name),
             HohenheimMicrocopy.ALERT.of("crash_loop_body").withArg("name", name));
+    }
+
+    /** The controller-scoped name of an instance's workload: THE key of every console registry here. */
+    private static @NonNull String key(int instanceId) {
+        return ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
     }
 
     private static @Nullable String templateValue(@NonNull Row instance,

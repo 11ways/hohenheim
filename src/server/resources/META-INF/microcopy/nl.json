@@ -6651,6 +6651,10 @@
     "text": "{$name} heeft nog geen back-updoel. Kies waar de back-ups heen gaan in de Configuratie, onder Back-ups.",
     "scope": "violations"
   },
+  "instance_backup_source_unreproducible": {
+    "text": "{$name} wordt gebouwd uit zijn git-repository of een build-context, die een back-up niet kan herstellen. Maak een back-up van de data waar die staat, of deploy het vanuit een geuploade artifact.",
+    "scope": "violations"
+  },
   "backup_target_choose": {
     "text": "Kies een back-updoel",
     "scope": "instance"
