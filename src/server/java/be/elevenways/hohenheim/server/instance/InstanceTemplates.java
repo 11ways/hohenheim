@@ -479,8 +479,9 @@ public final class InstanceTemplates {
     }
 
     /**
-     * Why this template's workload cannot be placed on this host when charged to that bucket: THE kind-on-host verdict
-     * ({@link InstancePlacement#kindRefusalOn}) for the template's kind and the settings its create places with.
+     * Why this template's workload cannot be created on this host when charged to that bucket: THE create verdict
+     * ({@link InstancePlacement#createRefusalOn}) for the template's kind and the settings its create places with, so
+     * a host without room for the template's memory (its own, else its kind's default) is refused before the run.
      */
     public static @Nullable Microcopy hostRefusal(@NonNull Row template, int serverId, @NonNull String bucket) {
         String kind = template.get(InstanceTemplateModel.KIND);
@@ -488,7 +489,7 @@ public final class InstanceTemplates {
         if (handler == null) {
             return HohenheimMicrocopy.VIOLATIONS.of("instance_kind_unknown").withArg("kind", String.valueOf(kind));
         }
-        return InstancePlacement.kindRefusalOn(serverId, handler, bucket, copiedSettings(template));
+        return InstancePlacement.createRefusalOn(serverId, handler, bucket, copiedSettings(template));
     }
 
     /** A deep-enough copy of the template's settings map (never the shared instance). */

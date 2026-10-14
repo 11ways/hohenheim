@@ -4249,7 +4249,7 @@
       "scope": "dns_zone"
     },
     {
-      "text": "Delete this site? Its hostnames stop answering and its preview deployments are destroyed; the application it exposes keeps running.",
+      "text": "Delete this site? Its hostnames stop answering and its preview deployments are destroyed. An app it points at is not deleted.",
       "scope": "site"
     },
     {
@@ -12674,7 +12674,11 @@
     "scope": "dns_zone"
   },
   "delete_confirm_hostnames": {
-    "text": "Delete the site {$name}? These hostnames stop answering: {$hostnames}. Its preview deployments are destroyed; the application it exposes keeps running and can be pointed at by another site.",
+    "text": "Delete the site {$name}? These hostnames stop answering: {$hostnames}.",
+    "scope": "site"
+  },
+  "delete_confirm_exposing": {
+    "text": "Delete the site {$name}? These hostnames stop answering: {$hostnames}. Its preview deployments are destroyed; the app {$app} it exposes keeps running and can be pointed at by another site.",
     "scope": "site"
   },
   "toggle_confirm": {
@@ -16166,6 +16170,7 @@
   "memory_unmeasured": {"text": "Not measured yet", "scope": "host_list"},
   "memory_stale": {"text": "Last measurement too old", "scope": "host_list"},
   "host_option_facts": {"text": "{$state}. Memory: {$memory}.", "scope": "host_list"},
+  "host_option_memory": {"text": "Memory: {$memory}", "scope": "host_list"},
   "runs_nothing": {"text": "Nothing yet", "scope": "host_list"},
   "runs_count": {"text": "{$apps}, {$databases}", "scope": "host_list"},
   "apps_count": {"text": ".match {$count :number}\none {{1 app}}\n* {{{$count} apps}}", "scope": "host_list"},

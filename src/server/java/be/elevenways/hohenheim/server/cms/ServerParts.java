@@ -26,6 +26,7 @@ import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.hohenheim.server.options.ServerOptions;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.edit.FieldOption;
+import be.elevenways.zenit.common.edit.OptionMeter;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
@@ -217,16 +218,30 @@ public final class ServerParts {
 
     /** Booked memory against the bookable budget, from the same ledger the host's overview and placement read. */
     static @NonNull HostMemoryCell memoryCellOf(@NonNull Row server) {
-        Integer id = server.get(ServerModel.ID);
-        HostCapacityView capacity = id == null ? null : InstanceCapacity.viewOf(server, id);
-        if (capacity == null || !capacity.measured() || capacity.budgetMb() <= 0) {
+        HostCapacityView capacity = capacityOf(server);
+        if (!measured(capacity)) {
             return new HostMemoryCell(false, 0, HohenheimMicrocopy.HOST_LIST.of(capacity != null && capacity.stale()
                 ? "memory_stale" : "memory_unmeasured"));
         }
         int percent = (int) Math.min(100, Math.round(100.0 * capacity.bookedMb() / capacity.budgetMb()));
-        return new HostMemoryCell(true, percent, HohenheimMicrocopy.HOST_LIST.of("memory_booked")
+        return new HostMemoryCell(true, percent, bookedText(capacity));
+    }
+
+    /** @return the host's capacity ledger, null for a host without an id */
+    private static @Nullable HostCapacityView capacityOf(@NonNull Row server) {
+        Integer id = server.get(ServerModel.ID);
+        return id == null ? null : InstanceCapacity.viewOf(server, id);
+    }
+
+    /** @return whether the ledger carries a measured, positive budget to judge against */
+    private static boolean measured(@Nullable HostCapacityView capacity) {
+        return capacity != null && capacity.measured() && capacity.budgetMb() > 0;
+    }
+
+    private static @NonNull Microcopy bookedText(@NonNull HostCapacityView capacity) {
+        return HohenheimMicrocopy.HOST_LIST.of("memory_booked")
             .withArg("booked", sizeOfMegabytes(capacity.bookedMb()))
-            .withArg("budget", sizeOfMegabytes(capacity.budgetMb())));
+            .withArg("budget", sizeOfMegabytes(capacity.budgetMb()));
     }
 
     /** @return a host ledger's megabyte count as a size, the one way the list and the host page say memory */
@@ -235,18 +250,25 @@ public final class ServerParts {
     }
 
     /**
-     * A host as a host pick offers it: its name, then the Hosts list's facts in its option line, the standing's badge
-     * words and the booked memory, read from the same verdict and capacity ledger the list draws; the host glyph wears
-     * the standing's tone, since a select option's tone shows on its glyph alone.
+     * A host as a host pick offers it: its name, then the Hosts list's facts, read from the same verdict and capacity
+     * ledger the list draws: the standing's badge words as its line and, when measured, its booked memory as the
+     * option's meter (an unmeasured host says so in its line instead); the host glyph wears the standing's tone, since
+     * a select option's tone shows on its glyph alone.
      */
     public static @NonNull FieldOption<Integer> hostOption(@NonNull Row server) {
         StateLineCell state = stateCellOf(server);
-        return FieldOption.of((Integer) server.get(ServerModel.ID),
+        FieldOption<Integer> option = FieldOption.of((Integer) server.get(ServerModel.ID),
                 Microcopy.literal(String.valueOf((Object) server.get(ServerModel.NAME))))
             .withIcon(HOST_ICON.name())
-            .withTone(state.variant())
-            .withDescription(HohenheimMicrocopy.HOST_LIST.of("host_option_facts").withArg("state", state.label())
-                .withArg("memory", memoryCellOf(server).text()));
+            .withTone(state.variant());
+        HostCapacityView capacity = capacityOf(server);
+        if (!measured(capacity)) {
+            return option.withDescription(HohenheimMicrocopy.HOST_LIST.of("host_option_facts")
+                .withArg("state", state.label()).withArg("memory", memoryCellOf(server).text()));
+        }
+        return option.withDescription(state.label()).withMeter(new OptionMeter(capacity.bookedMb(),
+            capacity.budgetMb(), HohenheimMicrocopy.HOST_LIST.of("host_option_memory")
+                .withArg("memory", bookedText(capacity))));
     }
 
     /** How many apps and managed databases the host runs, counted once per rendered list. */

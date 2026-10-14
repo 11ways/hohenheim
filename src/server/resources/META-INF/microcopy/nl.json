@@ -4249,7 +4249,7 @@
       "scope": "dns_zone"
     },
     {
-      "text": "Deze site verwijderen? De hostnamen antwoorden niet langer en de preview-deployments worden vernietigd; de applicatie erachter blijft draaien.",
+      "text": "Deze site verwijderen? De hostnamen antwoorden niet langer en de preview-deployments worden vernietigd. Een app waarnaar ze wijst wordt niet verwijderd.",
       "scope": "site"
     },
     {
@@ -12674,7 +12674,11 @@
     "scope": "dns_zone"
   },
   "delete_confirm_hostnames": {
-    "text": "De site {$name} verwijderen? Deze hostnamen antwoorden niet langer: {$hostnames}. De preview-deployments worden vernietigd; de applicatie erachter blijft draaien en kan door een andere site aangewezen worden.",
+    "text": "De site {$name} verwijderen? Deze hostnamen antwoorden niet langer: {$hostnames}.",
+    "scope": "site"
+  },
+  "delete_confirm_exposing": {
+    "text": "De site {$name} verwijderen? Deze hostnamen antwoorden niet langer: {$hostnames}. De preview-deployments worden vernietigd; de app {$app} erachter blijft draaien en kan door een andere site aangewezen worden.",
     "scope": "site"
   },
   "toggle_confirm": {
@@ -16166,6 +16170,7 @@
   "memory_unmeasured": {"text": "Nog niet gemeten", "scope": "host_list"},
   "memory_stale": {"text": "Laatste meting te oud", "scope": "host_list"},
   "host_option_facts": {"text": "{$state}. Geheugen: {$memory}.", "scope": "host_list"},
+  "host_option_memory": {"text": "Geheugen: {$memory}", "scope": "host_list"},
   "runs_nothing": {"text": "Nog niets", "scope": "host_list"},
   "runs_count": {"text": "{$apps}, {$databases}", "scope": "host_list"},
   "apps_count": {"text": ".match {$count :number}\none {{1 app}}\n* {{{$count} apps}}", "scope": "host_list"},

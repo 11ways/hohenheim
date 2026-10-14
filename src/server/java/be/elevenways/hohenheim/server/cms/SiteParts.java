@@ -10,6 +10,8 @@ import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
+import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
+import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.model.AccessListModel;
@@ -329,10 +331,11 @@ public final class SiteParts {
     }
 
     /**
-     * The delete dialog NAMING the hostnames that stop answering, the whole consequence of a site delete; the
-     * record-less fallback can only say that much.
+     * The delete dialog NAMING the hostnames that stop answering, the whole consequence of a site delete, and the app
+     * the site exposes when its kind exposes one (the kind's {@code requiresInstance} fact): a redirect exposes none, so
+     * its dialog says nothing about an app. The record-less fallback can only say that much.
      *
-     * AIDEV-NOTE: two bodies, never one with an empty list: microcopy args echo verbatim, so an empty hostname list
+     * AIDEV-NOTE: separate bodies, never one with an empty list: microcopy args echo verbatim, so an empty hostname list
      * would render a dangling colon.
      *
      * @param site the site, null for the record-less fallback
@@ -343,9 +346,23 @@ public final class SiteParts {
         if (site == null || hostnames.isEmpty()) {
             return DeleteConfirmation.body(HohenheimMicrocopy.SITE.of("delete_confirm"));
         }
-        return DeleteConfirmation.body(HohenheimMicrocopy.SITE.of("delete_confirm_hostnames")
+        String app = exposedAppOf(site);
+        Microcopy body = HohenheimMicrocopy.SITE.of(app == null ? "delete_confirm_hostnames" : "delete_confirm_exposing")
             .withArg("name", String.valueOf((Object) site.get(SiteModel.NAME)))
-            .withArg("hostnames", hostnames));
+            .withArg("hostnames", hostnames);
+        return DeleteConfirmation.body(app == null ? body : body.withArg("app", app));
+    }
+
+    /**
+     * @return the name of the app this site exposes, null when its kind exposes none (a redirect), the kind is unknown
+     *         or its app no longer resolves, so the dialog never claims an app that is not there
+     */
+    static @Nullable String exposedAppOf(@NonNull Row site) {
+        UpstreamKindHandler kind = UpstreamKindHandlers.getHandler((String) site.get(SiteModel.UPSTREAM_KIND));
+        if (kind == null || !kind.requiresInstance()) {
+            return null;
+        }
+        return DeleteImpact.instanceNameOf(site.get(SiteModel.INSTANCE_ID));
     }
 
     /**

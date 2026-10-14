@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.quota.ChargedDimension;
 import be.elevenways.hohenheim.server.quota.ChargedModel;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -263,18 +264,41 @@ public final class InstanceCapacity {
         if (amountMb <= 0) {
             return;
         }
+        try {
+            Quotas.reserve(bucketOf(serverId), amountMb, limitMbOn(serverId));
+        } catch (QuotaExceeded full) {
+            throw Violations.ofForm(capacityReached(serverId, amountMb, full.getLimit() - full.getUsed()));
+        }
+    }
+
+    /**
+     * Why {@code amountMb} would not fit on this host now, or null when it would: {@link #reserve}'s own question
+     * (its limit, the booked amount, the guard {@code used <= limit - amount}) asked without booking, for a form that
+     * judges a host before the write books it.
+     *
+     * AIDEV-NOTE: the answer can go stale before the write, which stays the arbiter; a host with no usable reading is
+     * never refused here, exactly as {@link #reserve} books it against nothing.
+     */
+    public static @Nullable Microcopy roomRefusal(int serverId, long amountMb) {
+        if (amountMb <= 0) {
+            return null;
+        }
+        long free = limitMbOn(serverId) - bookedMbOn(serverId);
+        return amountMb <= free ? null : capacityReached(serverId, amountMb, free);
+    }
+
+    /** @return the cap {@link #reserve} judges a booking on this host against; unbounded without a usable reading */
+    private static long limitMbOn(int serverId) {
         Row server = Models.get(ServerModel.class).findById(serverId);
         Long budget = server == null ? null : budgetMbOf(server);
-        try {
-            Quotas.reserve(bucketOf(serverId), amountMb,
-                budget == null ? Long.MAX_VALUE
-                    : bookableMbOn(serverId, budget) + pendingReleaseOn(serverId));
-        } catch (QuotaExceeded full) {
-            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("host_capacity_reached")
-                .withArg("name", ServerModel.labelOf(serverId))
-                .withArg("needed", amountMb)
-                .withArg("free", Math.max(0, full.getLimit() - full.getUsed())));
-        }
+        return budget == null ? Long.MAX_VALUE : bookableMbOn(serverId, budget) + pendingReleaseOn(serverId);
+    }
+
+    private static @NonNull Microcopy capacityReached(int serverId, long neededMb, long freeMb) {
+        return HohenheimMicrocopy.VIOLATIONS.of("host_capacity_reached")
+            .withArg("name", ServerModel.labelOf(serverId))
+            .withArg("needed", neededMb)
+            .withArg("free", Math.max(0, freeMb));
     }
 
     /** Per thread: host id -> memory a workload this thread is replacing is about to release. */

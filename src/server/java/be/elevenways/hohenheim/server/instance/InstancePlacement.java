@@ -383,6 +383,24 @@ public final class InstancePlacement {
     }
 
     /**
+     * Why a NEW workload of this kind and settings cannot be created on this host, or null when it can: THE verdict a
+     * create's host pick shows beside each host (the Where step of "Put something online", the instance create form,
+     * a template create), so a full host is refused there and not only in the run.
+     *
+     * AIDEV-NOTE: the kind-on-host verdict ({@link #kindRefusalOn}), then room for the workload's footprint, priced as
+     * the chooser prices it ({@link Workload#footprintMb}) and judged by the write's own booking rule
+     * ({@link InstanceCapacity#roomRefusal}); never a second capacity check. A form that does not know the requested
+     * memory yet passes the settings it has (none: the kind's default footprint; a template's: its own), and the run
+     * judges the final number again when it books.
+     */
+    public static @Nullable Microcopy createRefusalOn(int serverId, @NonNull InstanceKindHandler kind,
+                                                      @Nullable String bucket, @NonNull Map<String, Object> settings) {
+        Microcopy refusal = kindRefusalOn(serverId, kind, bucket, settings);
+        return refusal != null ? refusal
+            : InstanceCapacity.roomRefusal(serverId, Workload.of(kind, settings).footprintMb());
+    }
+
+    /**
      * Whether this host may receive this workload owned by {@code bucket}, as far as
      * ADMISSION is concerned.
      *

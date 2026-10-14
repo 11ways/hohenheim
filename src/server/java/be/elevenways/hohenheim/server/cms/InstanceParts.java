@@ -491,9 +491,10 @@ public final class InstanceParts {
 
     /**
      * THE host pick of a form that names its kind in a {@code kind} entry: every host, each judged by the chosen kind
-     * through the placement verdict ({@link InstancePlacement#kindRefusalOn}) the restore dialog and the migrate page
-     * show, charged to the owner the save would charge (the chosen project, else the chosen environment's, else the
-     * caller's), live as those change and again on submit. Blank stays a choice: placement then picks the host.
+     * through the create verdict ({@link InstancePlacement#createRefusalOn}: the placement gates, then room for the
+     * kind's memory), charged to the owner the save would charge (the chosen project, else the chosen environment's,
+     * else the caller's), live as those change and again on submit. Blank stays a choice: placement then picks the
+     * host.
      */
     static @NonNull Select<Integer> hostPick(@NonNull IntegerField field) {
         return Select.of(field)
@@ -547,7 +548,10 @@ public final class InstanceParts {
         if (handler == null) {
             return HohenheimMicrocopy.VIOLATIONS.of("instance_kind_unknown").withArg("kind", subject.kind());
         }
-        return InstancePlacement.kindRefusalOn(serverId, handler, subject.bucket(), Map.of());
+        // A create's settings come in a later step, so a new workload is priced at its kind's default memory; a
+        // stored record at its own (InstancePlacement.createRefusalOn).
+        return InstancePlacement.createRefusalOn(serverId, handler, subject.bucket(),
+            stored == null ? Map.of() : InstanceModel.settingsOf(stored));
     }
 
     /** @return the stored record the form edits, null on a create */

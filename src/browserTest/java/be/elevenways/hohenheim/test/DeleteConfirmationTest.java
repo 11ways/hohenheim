@@ -160,6 +160,18 @@ class DeleteConfirmationTest {
             assertThat(siteConfirm.body().args().get("name"))
                 .as("step 6: and the site it belongs to").isEqualTo("shop");
 
+            // 6b. A Redirect exposes no app: its dialog follows the kind's own fact and says nothing about one keeping
+            //     on running, naming only the hostnames that stop answering.
+            Row redirect = Models.get(SiteModel.class).findById(site("hop", "hop." + ORIGIN));
+            redirect.set(SiteModel.UPSTREAM_KIND, "hohenheim:redirect");
+            redirect.set(SiteModel.SETTINGS, Map.of("target", "https://example.com"));
+            Models.get(SiteModel.class).save(redirect);
+            ConfirmationSpec hop = sites.forRow(Models.get(SiteModel.class).findById(redirect.get(SiteModel.ID)),
+                request);
+            assertThat(hop.body().key()).as("step 6b: the hostname wording, which names no app")
+                .isEqualTo("delete_confirm_hostnames");
+            assertThat(hop.body().args().get("app")).as("step 6b: no app is named for a redirect").isNull();
+
             // 7. A site with no hostname bound gets the generic body instead of a
             //    sentence naming nothing.
             Row bare = Models.get(SiteModel.class).findById(site("bare", null));
