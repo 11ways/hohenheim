@@ -153,6 +153,10 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
         assertThat(wizard).as("step 2: no HTTPS step and no address")
             .doesNotContain("data-zf-step=\"https\"")
             .doesNotContain("name=\"" + PutOnline.HOSTNAME.getName() + "\"");
+        int portsStep = wizard.indexOf("data-zf-step=\"ports\"");
+        assertThat(wizard.substring(portsStep, wizard.indexOf("name=\"" + PutOnline.PORTS + ".game\"", portsStep)))
+            .as("step 2: the Ports group opening its step draws no legend repeating the step's heading")
+            .doesNotContain("pl-fieldset-legend");
         assertThat(wizard).as("step 2: the Ports step asks the game port's host port and the game address")
             .contains("name=\"" + PutOnline.PORTS + ".game\"")
             .contains("name=\"" + PutOnline.GAME_ADDRESS.getName() + "\"");
