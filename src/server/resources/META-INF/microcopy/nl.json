@@ -6580,7 +6580,7 @@
     "scope": "violations"
   },
   "host_full": {
-    "text": "{$name} is vol: slechts {$free} MB van het geheugenbudget is vrij, minder dan de kleinste nieuwe app nodig heeft ({$smallest} MB)",
+    "text": "{$name} is vol: slechts {$free} MB van het geheugenbudget is vrij, minder dan de kleinste nieuwe app nodig heeft ({$smallest} MB).",
     "scope": "violations"
   },
   "host_prepared_image_missing": {
@@ -18077,5 +18077,24 @@
   "done_certificate": {"scope": "put_online", "text": "Aangevraagd bij Let's Encrypt voor {$address}"},
   "done_live": {"scope": "put_online", "text": "De eerste start is naar zijn host gestuurd"},
   "done_live_waiting": {"scope": "put_online", "text": "Nog niet gestart: de pagina van de app zegt waarop het wacht"},
-  "put_something_else": {"scope": "put_online", "text": "Iets anders online zetten"}
+  "put_something_else": {"scope": "put_online", "text": "Iets anders online zetten"},
+  "step_address_where_lead": {"scope": "put_online", "text": "De naam, het adres dat bezoekers gebruiken, en wat de proxy van Hohenheim daar antwoordt. Er draait niets op een host voor."},
+  "https_wildcard": {"scope": "put_online", "text": "Wildcard (Let's Encrypt)"},
+  "https_wildcard_help": {"scope": "put_online", "text": "Een certificaat voor elke naam onder het bovenliggende domein, bewezen via een DNS-zone die Hohenheim beheert."},
+  "https_existing": {"scope": "put_online", "text": "Een certificaat dat Hohenheim al heeft"},
+  "https_existing_help": {"scope": "put_online", "text": "Gebruikt het certificaat dat dit adres al dekt, ook een wildcardcertificaat."},
+  "https_upload": {"scope": "put_online", "text": "Je eigen certificaat uploaden"},
+  "https_upload_help": {"scope": "put_online", "text": "Plak de certificaatketen en de private sleutel. De sleutel wordt versleuteld bewaard."},
+  "done_certificate_wildcard": {"scope": "put_online", "text": "{$name} aangevraagd bij Let's Encrypt voor {$address}"},
+  "done_certificate_existing": {"scope": "put_online", "text": "{$address} gebruikt het certificaat {$name}"},
+  "done_certificate_uploaded": {"scope": "put_online", "text": "Het geuploade certificaat voor {$address} is bewaard"},
+  "outcome_https_wildcard_apex": {"scope": "put_online", "text": "{$address} heeft geen bovenliggend domein dat een wildcardcertificaat kan dekken. Kies een andere optie."},
+  "outcome_https_existing_none": {"scope": "put_online", "text": "Nog geen werkend certificaat in Hohenheim dekt {$address}. Kies een andere optie."},
+  "cert_key_mismatch": {"scope": "violations", "text": "Deze private sleutel hoort niet bij het eerste certificaat in de keten."},
+  "cert_chain_order": {"scope": "violations", "text": "Certificaat {$position} in de keten is niet uitgegeven door certificaat {$next}: zet het servercertificaat eerst, dan elke uitgever op volgorde."},
+  "cert_expired": {"scope": "violations", "text": "Certificaat {$position} in de keten is verlopen op {$date}."},
+  "cert_not_yet_valid": {"scope": "violations", "text": "Certificaat {$position} in de keten is pas geldig vanaf {$date}."},
+  "cert_not_covering": {"scope": "violations", "text": "Dit certificaat dekt {$names}, niet {$hostname}."},
+  "cert_pem_required": {"scope": "violations", "text": "Plak de certificaatketen."},
+  "key_pem_required": {"scope": "violations", "text": "Plak de private sleutel."}
 }

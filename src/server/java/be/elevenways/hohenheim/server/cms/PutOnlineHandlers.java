@@ -23,9 +23,12 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceTemplateHandlers;
 import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
 import be.elevenways.hohenheim.server.instance.InstanceTemplates;
+import be.elevenways.hohenheim.server.tls.CertificateCoverage;
+import be.elevenways.hohenheim.server.tls.UploadedCertificates;
 import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
 import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -39,6 +42,7 @@ import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.server.operation.OperationCall;
 import be.elevenways.zenit.server.operation.OperationHandlers;
+import be.elevenways.zenit.server.http.HostPattern;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import be.elevenways.zenit.server.operation.InputScope;
@@ -51,8 +55,8 @@ import be.elevenways.hohenheim.ports.PublishedPort;
 import be.elevenways.hohenheim.server.game.GameAddresses;
 import be.elevenways.hohenheim.server.instance.PortPublications;
 import be.elevenways.hohenheim.server.runtime.PortPublication;
+import java.time.Instant;
 import java.util.ArrayList;
-
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -114,14 +118,90 @@ final class PutOnlineHandlers {
     static void init() {
     }
 
-    /** Claiming an address is an operator act; anyone the template admits may put it online without one. */
+    /**
+     * Claiming an address is an operator act; anyone the template admits may put it online without one. An address
+     * given is judged with its HTTPS step ({@link #httpsRefusal}).
+     */
     private static @Nullable DomainRefusal addressAuthority(@NonNull Row template,
             PutOnline.@Nullable FromTemplate input,
                                                            @NonNull AccessContext access) {
-        if (input == null || Texts.trimmedOrNull(input.hostname()) == null || HohenheimAccess.isAdmin(access)) {
+        if (input == null || Texts.trimmedOrNull(input.hostname()) == null) {
             return null;
         }
-        return new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "an address is given by an operator");
+        if (!HohenheimAccess.isAdmin(access)) {
+            return new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "an address is given by an operator");
+        }
+        return httpsRefusal(input.hostname(), input.httpsAnswer(), access);
+    }
+
+    /**
+     * In the request, before a run is recorded: the HTTPS step's answer for an address. An existing certificate must
+     * cover it, a wildcard needs a parent domain, an upload is judged whole ({@link UploadedCertificates#check}) and
+     * the access list must be one the caller may attach. Nothing is judged without an address.
+     */
+    private static @Nullable DomainRefusal httpsRefusal(@Nullable String address, PutOnline.@NonNull HttpsAnswer answer,
+                                                        @NonNull AccessContext access) {
+        String hostname = Texts.trimmedOrNull(address);
+        if (hostname == null) {
+            return null;
+        }
+        Integer list = answer.accessListId();
+        if (list != null && !HohenheimAccess.canUseAccessList(access, list)) {
+            return new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "access list " + list + " is not usable",
+                SiteModel.ACCESS_LIST_ID.getName(), HohenheimMicrocopy.VIOLATIONS.of("tenant_access_list_not_usable"));
+        }
+        HttpsChoice choice = answer.choice();
+        if (choice == null) {
+            return null;
+        }
+        return switch (choice) {
+            case AUTOMATIC, LATER -> null;
+            case WILDCARD -> wildcardOf(hostname) != null ? null
+                : new DomainRefusal(ZenitRefusalReason.INVALID, "no parent domain under " + hostname,
+                    PutOnline.HTTPS.getName(), message("https_wildcard_apex").withArg("address", hostname));
+            case EXISTING -> usableCovering(hostname) != null ? null
+                : new DomainRefusal(ZenitRefusalReason.INVALID, "no certificate covers " + hostname,
+                    PutOnline.HTTPS.getName(), message("https_existing_none").withArg("address", hostname));
+            case UPLOAD -> {
+                try {
+                    UploadedCertificates.check(answer.certificatePem(), revealed(answer.privateKeyPem()), hostname);
+                    yield null;
+                } catch (Violations refused) {
+                    yield refusedAs("certificate", refused);
+                }
+            }
+        };
+    }
+
+    /**
+     * @return the one-label wildcard covering the address and its siblings (zenit's {@link HostPattern} grammar), the
+     *         address itself when it already is one, null when it has no parent domain below a public suffix
+     */
+    static @Nullable String wildcardOf(@NonNull String hostname) {
+        HostPattern given = HostPattern.tryParse(hostname);
+        if (given == null) {
+            return null;
+        }
+        if (given.base() != null) {
+            return given.text();
+        }
+        int dot = hostname.indexOf('.');
+        String parent = dot < 0 ? "" : hostname.substring(dot + 1);
+        return parent.indexOf('.') < 0 ? null : HostPattern.oneLabelUnder(parent, null).text();
+    }
+
+    /** @return the active, unexpired certificate Hohenheim holds that covers the address, null when none does */
+    private static @Nullable Row usableCovering(@NonNull String hostname) {
+        Row covering = CertificateCoverage.coveringCertificate(hostname);
+        if (covering == null || !CertificateModel.STATUS_ACTIVE.equals(covering.get(CertificateModel.STATUS))) {
+            return null;
+        }
+        Instant expires = covering.get(CertificateModel.EXPIRES_ON);
+        return expires == null || expires.isAfter(Now.instant()) ? covering : null;
+    }
+
+    private static @Nullable String revealed(@Nullable Secret secret) {
+        return secret == null ? null : secret.reveal();
     }
 
     /**
@@ -288,14 +368,15 @@ final class PutOnlineHandlers {
             return new DomainRefusal(ZenitRefusalReason.INVALID, "kind " + input.upstream_kind() + " is no app",
                 SiteModel.UPSTREAM_KIND.getName(), message("kind_not_offered"));
         }
-        return null;
+        return httpsRefusal(input.hostname(), input.httpsAnswer(), access);
     }
 
     /** In the request, before a run is recorded: an operator, and a kind that is put online from its own settings. */
     private static @Nullable DomainRefusal admitWorkload(@Nullable Void none, PutOnline.@Nullable Workload input,
                                                          @NonNull AccessContext access) {
-        return admitKind(access, input == null ? null : input.kind(), input != null
+        DomainRefusal refusal = admitKind(access, input == null ? null : input.kind(), input != null
             && !PutOnline.offeredWith(input.kind(), PutOnlineReach.WEBSITE));
+        return refusal != null || input == null ? refusal : httpsRefusal(input.hostname(), input.httpsAnswer(), access);
     }
 
     /**
@@ -358,7 +439,7 @@ final class PutOnlineHandlers {
         // 2. Its install step, when the template declares one.
         installStep(call, template, instanceId);
 
-        return goLive(call, instance, input.hostname(), input.https());
+        return goLive(call, instance, input.hostname(), input.httpsAnswer());
     }
 
     /**
@@ -473,7 +554,7 @@ final class PutOnlineHandlers {
     private static @NonNull Integer putWorkloadOnline(@NonNull OperationCall<Void, PutOnline.Workload> call) {
         PutOnline.Workload input = Objects.requireNonNull(call.input(), "put online has its input");
         Row instance = createOfKind(call, input.name(), input.serverId(), input.kind(), input.settings(), null);
-        return goLive(call, instance, input.hostname(), input.https());
+        return goLive(call, instance, input.hostname(), input.httpsAnswer());
     }
 
     /**
@@ -567,16 +648,17 @@ final class PutOnlineHandlers {
      * @return the app's id
      */
     private static @NonNull Integer goLive(@NonNull OperationCall<?, ?> call, @NonNull Row instance,
-                                           @Nullable String address, @Nullable String https) {
+                                           @Nullable String address, PutOnline.@NonNull HttpsAnswer https) {
         int instanceId = instance.get(InstanceModel.ID);
         String hostname = Texts.trimmedOrNull(address);
         Microcopy note = null;
         if (hostname != null) {
             String name = String.valueOf((Object) instance.get(InstanceModel.NAME));
-            createWebsite(name, hostname, InstanceUpstreamKind.ID.toString(), instanceId, Map.of());
+            createWebsite(name, hostname, InstanceUpstreamKind.ID.toString(), instanceId, Map.of(),
+                https.accessListId());
             call.reportStepDone(done("website").withArg("address", hostname));
             note = certificate(hostname, https, call.subjectAccess());
-            certificateStep(call, note, hostname);
+            certificateStep(call, note, hostname, https);
         } else {
             call.reportStepSkipped();
             call.reportStepSkipped();
@@ -614,30 +696,43 @@ final class PutOnlineHandlers {
         PutOnline.Address input = Objects.requireNonNull(call.input(), "put online has its input");
         String hostname = Objects.requireNonNull(Texts.trimmedOrNull(input.hostname()), "admitted with an address");
         int siteId = createWebsite(input.name(), hostname, Objects.requireNonNull(input.upstream_kind()), null,
-            input.settings() == null ? Map.of() : input.settings());
+            input.settings() == null ? Map.of() : input.settings(), input.httpsAnswer().accessListId());
         call.attachSubject(SiteOperations.SITE, Objects.requireNonNull(Models.get(SiteModel.class).findById(siteId)));
         call.reportStepDone(done("website").withArg("address", hostname));
-        Microcopy note = certificate(hostname, input.https(), call.subjectAccess());
+        Microcopy note = certificate(hostname, input.httpsAnswer(), call.subjectAccess());
         call.reportOutcome(note != null ? note : message("live").withArg("address", hostname));
-        certificateStep(call, note, hostname);
+        certificateStep(call, note, hostname, input.httpsAnswer());
         return siteId;
     }
 
-    /** The certificate step: done when the order went out, skipped when HTTPS waits ({@code note} says why). */
+    /**
+     * The certificate step: done when HTTPS was set up, its line saying how (ordered, the wildcard ordered, the
+     * certificate already held, the upload stored); skipped when HTTPS waits ({@code note} says why).
+     */
     private static void certificateStep(@NonNull OperationCall<?, ?> call, @Nullable Microcopy note,
-                                        @NonNull String hostname) {
-        if (note == null) {
-            call.reportStepDone(done("certificate").withArg("address", hostname));
-        } else {
+                                        @NonNull String hostname, PutOnline.@NonNull HttpsAnswer https) {
+        HttpsChoice choice = https.choice();
+        Microcopy line = choice == null ? null : choice.doneLine();
+        if (note != null || line == null) {
             call.reportStepSkipped();
+            return;
         }
+        String wildcard = wildcardOf(hostname);
+        Row covering = usableCovering(hostname);
+        String name = switch (choice) {
+            case WILDCARD -> wildcard == null ? hostname : wildcard;
+            case EXISTING -> covering == null ? hostname : String.valueOf((Object) covering.get(CertificateModel.NICE_NAME));
+            case AUTOMATIC, UPLOAD, LATER -> hostname;
+        };
+        call.reportStepDone(line.withArg("address", hostname).withArg("name", name));
     }
 
     /** The site and its first address, atomically: a refused address (a claimed name) rolls the site back. */
     private static int createWebsite(@Nullable String name, @NonNull String hostname, @NonNull String upstreamKind,
-                                     @Nullable Integer instanceId, @NonNull Map<String, Object> settings) {
+                                     @Nullable Integer instanceId, @NonNull Map<String, Object> settings,
+                                     @Nullable Integer accessListId) {
         SiteWrites.CreateInput create = new SiteWrites.CreateInput(name, hostname, upstreamKind, instanceId, settings,
-            null, true, null, null, null);
+            null, true, null, null, accessListId);
         int[] siteId = new int[1];
         try {
             Models.get(SiteModel.class).getResolvedDatasource()
@@ -672,23 +767,44 @@ final class PutOnlineHandlers {
     }
 
     /**
-     * Orders the address's certificate when asked, through the certificate operation's own order (its reach pre-check
-     * and refusals included).
+     * Sets the address's HTTPS up as its step chose: an order through the certificate operation's own order (its
+     * reach pre-check and refusals included), HTTP-01 for the address or DNS-01 for its wildcard; the certificate
+     * already held; or the upload, stored through the certificate form's own create (its key encrypted at rest).
      *
-     * @return what is left to do, or null when HTTPS is set up (or was not asked for)
+     * @return what is left to do, or null when HTTPS is set up
      */
-    private static @Nullable Microcopy certificate(@NonNull String hostname, @Nullable String https,
+    private static @Nullable Microcopy certificate(@NonNull String hostname, PutOnline.@NonNull HttpsAnswer answer,
                                                    @NonNull AccessContext access) {
-        if (!PutOnline.HTTPS_AUTOMATIC.equals(https)) {
+        HttpsChoice choice = answer.choice();
+        if (choice == null) {
             return message("https_later_note").withArg("address", hostname);
         }
-        Microcopy unavailable = CertificateOperationHandlers.letsEncryptUnavailable();
-        if (unavailable != null) {
+        if (choice.ordersFromLetsEncrypt() && CertificateOperationHandlers.letsEncryptUnavailable() != null) {
             return message("https_off_note").withArg("address", hostname);
         }
         try {
-            CertificateOperationHandlers.order(new CertificateOperations.Order(List.of(hostname), null, null,
-                CertificateModel.CHALLENGE_HTTP, null), access, null);
+            switch (choice) {
+                case AUTOMATIC -> CertificateOperationHandlers.order(new CertificateOperations.Order(
+                    List.of(hostname), null, null, CertificateModel.CHALLENGE_HTTP, null), access, null);
+                case WILDCARD -> CertificateOperationHandlers.order(new CertificateOperations.Order(
+                    List.of(Objects.requireNonNull(wildcardOf(hostname), "admitted with a parent domain")), null, null,
+                    CertificateModel.CHALLENGE_DNS, CertificateModel.DNS_PUBLISHER_INTERNAL), access, null);
+                case EXISTING -> {
+                    if (usableCovering(hostname) == null) {
+                        return message("https_refused_note").withArg("address", hostname);
+                    }
+                }
+                case UPLOAD -> {
+                    Map<String, Object> upload = new LinkedHashMap<>();
+                    upload.put(CertificateModel.NICE_NAME.getName(), hostname);
+                    upload.put(CertificateModel.CERTIFICATE_PEM.getName(), answer.certificatePem());
+                    upload.put(CertificateModel.PRIVATE_KEY_PEM.getName(), revealed(answer.privateKeyPem()));
+                    CertificateParts.create(upload);
+                }
+                case LATER -> {
+                    return message("https_later_note").withArg("address", hostname);
+                }
+            }
             return null;
         } catch (Violations refused) {
             Blast.log("PUT_ONLINE: certificate for", hostname, "refused:", refused.getMessage());

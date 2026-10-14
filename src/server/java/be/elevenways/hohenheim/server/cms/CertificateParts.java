@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.hohenheim.server.tls.CertificateStore;
 import be.elevenways.hohenheim.server.tls.CertificateExpiry;
 import be.elevenways.hohenheim.server.tls.AcmeService;
+import be.elevenways.hohenheim.server.tls.UploadedCertificates;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -56,13 +57,9 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.ui.Timezones;
 import be.elevenways.zenit.common.validation.Violations;
-import org.bouncycastle.openssl.PEMParser;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.io.ByteArrayInputStream;
-import java.io.StringReader;
-import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -537,17 +534,19 @@ public final class CertificateParts {
     }
 
     /**
-     * All three parts must be present and parseable, submitted or stored.
+     * All three parts must be present and parseable, submitted or stored; a submitted certificate or key is judged in
+     * full ({@link UploadedCertificates#check}: key match, chain order, validity).
      *
      * AIDEV-NOTE: each read takes the STORED value when the write does not carry the key.
      * The inline cell lane hands updateRow a map holding EXACTLY ONE entry, so demanding
      * all three off that map refused every partial write with "cert_fields_required" --
      * about a certificate body that was sitting in the row all along. Re-parsing the
      * stored PEMs on an unrelated edit is deliberate: they are the record's whole point,
-     * and a row that cannot parse must not be saved further.
+     * and a row that cannot parse must not be saved further. Only a NEW body is judged in full: an expired Let's
+     * Encrypt row must stay editable (its auto-renew switch is how it is repaired).
      *
      * @param existing the stored certificate, or null on a create
-     * @return the certificate's leaf (the first in the PEM), null when the PEM holds none
+     * @return the certificate's leaf (the first in the PEM)
      */
     private static @Nullable X509Certificate validatePems(@NonNull Map<String, Object> coerced,
                                                           @Nullable Row existing) {
@@ -557,22 +556,11 @@ public final class CertificateParts {
         if (name.isEmpty() || certPem.isEmpty() || keyPem.isEmpty()) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("cert_fields_required"));
         }
-        X509Certificate leaf;
-        try {
-            CertificateFactory cf = CertificateFactory.getInstance("X.509");
-            var certificates = cf.generateCertificates(new ByteArrayInputStream(certPem.getBytes()));
-            leaf = certificates.isEmpty() ? null : (X509Certificate) certificates.iterator().next();
-        } catch (Exception e) {
-            throw Violations.ofField("certificate_pem", null,
-                HohenheimMicrocopy.VIOLATIONS.of("cert_pem_invalid").withArg("detail", e.getMessage()));
+        if (existing == null || coerced.containsKey(CertificateModel.CERTIFICATE_PEM.getName())
+                || coerced.containsKey(CertificateModel.PRIVATE_KEY_PEM.getName())) {
+            return UploadedCertificates.check(certPem, keyPem, null).leaf();
         }
-        try {
-            new PEMParser(new StringReader(keyPem)).readObject();
-        } catch (Exception e) {
-            throw Violations.ofField("private_key_pem", null,
-                HohenheimMicrocopy.VIOLATIONS.of("key_pem_invalid").withArg("detail", e.getMessage()));
-        }
-        return leaf;
+        return UploadedCertificates.leafOf(certPem);
     }
 
 

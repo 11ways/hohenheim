@@ -6,6 +6,8 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.app.PutOnlineGroup;
 import be.elevenways.hohenheim.app.PutOnlineReach;
+import be.elevenways.hohenheim.model.AccessListModel;
+import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
 import be.elevenways.hohenheim.instance.InstanceOperations;
@@ -32,7 +34,9 @@ import be.elevenways.zenit.common.edit.FormStep;
 import be.elevenways.zenit.common.edit.Nested;
 import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.Select;
+import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.edit.StepAnswers;
+import be.elevenways.zenit.common.edit.StepSummary;
 import be.elevenways.zenit.common.edit.SummaryLine;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
@@ -45,12 +49,14 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.Secret;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.forms.common.edit.ItemList;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -81,10 +87,10 @@ import java.util.function.Function;
 public final class PutOnline {
 
     /** The HTTPS choice: a Let's Encrypt certificate ordered once the address exists. */
-    public static final String HTTPS_AUTOMATIC = "automatic";
+    public static final String HTTPS_AUTOMATIC = HttpsChoice.AUTOMATIC.token();
 
     /** The HTTPS choice: no order now; the address answers over HTTP until a certificate is added. */
-    public static final String HTTPS_LATER = "later";
+    public static final String HTTPS_LATER = HttpsChoice.LATER.token();
 
     /** The address visitors type. Named like the site create's first hostname, so route refusals path on it. */
     public static final StringField HOSTNAME = StringField.builder(SiteDomainModel.HOSTNAME.getName())
@@ -102,6 +108,14 @@ public final class PutOnline {
 
     public static final StringField HTTPS = StringField.builder("https")
         .label(HohenheimMicrocopy.PUT_ONLINE.of("certificate")).build();
+
+    /**
+     * The access list the new website follows, from the lists Hohenheim already has (their IP/CIDR rules and HTTP
+     * basic auth users live on the list); empty for an address everyone reaches.
+     */
+    static final RelationPick ACCESS_LIST = RelationPick.of(SiteModel.ACCESS_LIST_ID, AccessListModel.MODEL_ID)
+        .creatable(false)
+        .build();
 
     /** The host ports a service's declared ports are published on, one entry per declared port (per template). */
     public static final String PORTS = "ports";
@@ -242,6 +256,11 @@ public final class PutOnline {
         .add(InstanceTemplateOperations.ENVIRONMENT_ID)
         .add(Nested.of(InstanceTemplateOperations.VARIABLES).subSpec(FormSpec.builder().build()).build())
         .add(httpsChoice())
+        .add(CertificateModel.CERTIFICATE_PEM)
+        .add(CertificateModel.PRIVATE_KEY_PEM)
+        .add(ACCESS_LIST)
+        .showWhen(CertificateModel.CERTIFICATE_PEM.getName(), HTTPS.getName(), uploadTokens())
+        .showWhen(CertificateModel.PRIVATE_KEY_PEM.getName(), HTTPS.getName(), uploadTokens())
         .section(RUNS_ON)
         .step(FormStep.of("where", STEP_WHERE, InstanceTemplateOperations.NAME.getName(), HOSTNAME.getName(),
             InstanceTemplateOperations.SERVER_ID.getName(), InstanceTemplateOperations.PROJECT_ID.getName(),
@@ -250,9 +269,7 @@ public final class PutOnline {
         .step(new FormStep(InstanceTemplateOperations.VARIABLES, STEP_OPTIONS,
             HohenheimMicrocopy.PUT_ONLINE.of("step_options_lead"),
             List.of(InstanceTemplateOperations.VARIABLES)))
-        .step(FormStep.of("https", STEP_HTTPS, HTTPS.getName())
-            .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_https_lead"))
-            .summarizedBy(PutOnline::templateSummary))
+        .step(httpsStep(PutOnline::templateSummary))
         .build();
 
     /**
@@ -291,12 +308,17 @@ public final class PutOnline {
             .build())
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteModel.SETTINGS))
         .add(httpsChoice())
+        .add(CertificateModel.CERTIFICATE_PEM)
+        .add(CertificateModel.PRIVATE_KEY_PEM)
+        .add(ACCESS_LIST)
+        .showWhen(CertificateModel.CERTIFICATE_PEM.getName(), HTTPS.getName(), uploadTokens())
+        .showWhen(CertificateModel.PRIVATE_KEY_PEM.getName(), HTTPS.getName(), uploadTokens())
+        // Served by Hohenheim's own proxy: no host is asked and no "Runs on" card is drawn, so its lead never says
+        // where it runs (the upstream kind's requiresInstance fact is what routes a kind to this flow).
         .step(FormStep.of("where", STEP_WHERE, SiteModel.NAME.getName(), ADDRESS_HOSTNAME.getName(),
             SiteModel.UPSTREAM_KIND.getName(), SiteModel.SETTINGS.getName())
-                .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_where_lead")))
-        .step(FormStep.of("https", STEP_HTTPS, HTTPS.getName())
-            .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_https_lead"))
-            .summarizedBy(PutOnline::addressSummary))
+                .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_address_where_lead")))
+        .step(httpsStep(PutOnline::addressSummary))
         .build();
 
     private static final FormSpec WORKLOAD_INPUT = FormSpec.builder()
@@ -306,15 +328,18 @@ public final class PutOnline {
         .add(InstanceModel.KIND)
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.SETTINGS))
         .add(httpsChoice())
+        .add(CertificateModel.CERTIFICATE_PEM)
+        .add(CertificateModel.PRIVATE_KEY_PEM)
+        .add(ACCESS_LIST)
+        .showWhen(CertificateModel.CERTIFICATE_PEM.getName(), HTTPS.getName(), uploadTokens())
+        .showWhen(CertificateModel.PRIVATE_KEY_PEM.getName(), HTTPS.getName(), uploadTokens())
         .section(RUNS_ON_HOST)
         .step(FormStep.of("where", STEP_WHERE, InstanceTemplateOperations.NAME.getName(), HOSTNAME.getName(),
             InstanceTemplateOperations.SERVER_ID.getName(), InstanceModel.KIND.getName())
                 .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_where_lead")))
         .step(FormStep.of("settings", STEP_OPTIONS, InstanceModel.SETTINGS.getName())
             .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_settings_lead")))
-        .step(FormStep.of("https", STEP_HTTPS, HTTPS.getName())
-            .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_https_lead"))
-            .summarizedBy(PutOnline::workloadSummary))
+        .step(httpsStep(PutOnline::workloadSummary))
         .build();
 
     /**
@@ -372,15 +397,38 @@ public final class PutOnline {
             .summarizedWithItsOwn(PutOnline::workloadServiceSummary))
         .build();
 
-    /** The template's own create (named as its form names it), its address and its HTTPS choice. */
+    /**
+     * What the HTTPS step answered: the certificate choice, an uploaded chain and key, and the access list.
+     *
+     * @param choice        null for a value the vocabulary does not know (the select refuses it first)
+     * @param privateKeyPem a secret, never spelled in a log, a receipt or the run
+     */
+    public record HttpsAnswer(@Nullable HttpsChoice choice, @Nullable String certificatePem,
+                              @Nullable Secret privateKeyPem, @Nullable Integer accessListId) {
+    }
+
+    /**
+     * The template's own create (named as its form names it), its address, its HTTPS choice and access list.
+     *
+     * @param certificate_pem the HTTPS step's entries are spelled as their form fields, which the boot check holds
+     *                        every record component to
+     */
     public record FromTemplate(@Nullable String name, @Nullable String hostname, @Nullable Integer serverId,
                                @Nullable Integer projectId, @Nullable Integer environmentId,
-                               @NonNull Map<String, Object> variables, @Nullable String https) {
+                               @NonNull Map<String, Object> variables, @Nullable String https,
+                               @Nullable String certificate_pem, @Nullable Secret private_key_pem,
+                               @Nullable Integer access_list_id) {
 
         /** @return the template create funnel's own input */
         public InstanceTemplateOperations.@NonNull CreateFromTemplate create() {
             return new InstanceTemplateOperations.CreateFromTemplate(this.name, this.serverId, this.projectId,
                 this.environmentId, this.variables);
+        }
+
+        /** @return what its HTTPS step answered */
+        public @NonNull HttpsAnswer httpsAnswer() {
+            return new HttpsAnswer(HttpsChoice.ofToken(this.https), this.certificate_pem, this.private_key_pem,
+                this.access_list_id);
         }
     }
 
@@ -402,12 +450,28 @@ public final class PutOnline {
 
     /** An address that needs no workload: what it serves (the site's upstream kind and settings) and its HTTPS. */
     public record Address(@Nullable String name, @Nullable String hostname, @Nullable String upstream_kind,
-                          @Nullable Map<String, Object> settings, @Nullable String https) {
+                          @Nullable Map<String, Object> settings, @Nullable String https,
+                          @Nullable String certificate_pem, @Nullable Secret private_key_pem,
+                          @Nullable Integer access_list_id) {
+
+        /** @return what its HTTPS step answered */
+        public @NonNull HttpsAnswer httpsAnswer() {
+            return new HttpsAnswer(HttpsChoice.ofToken(this.https), this.certificate_pem, this.private_key_pem,
+                this.access_list_id);
+        }
     }
 
     /** A workload of one kind: its name, host (null: placement picks), settings, address and HTTPS choice. */
     public record Workload(@Nullable String name, @Nullable String hostname, @Nullable Integer serverId,
-                           @Nullable String kind, @Nullable Map<String, Object> settings, @Nullable String https) {
+                           @Nullable String kind, @Nullable Map<String, Object> settings, @Nullable String https,
+                           @Nullable String certificate_pem, @Nullable Secret private_key_pem,
+                           @Nullable Integer access_list_id) {
+
+        /** @return what its HTTPS step answered */
+        public @NonNull HttpsAnswer httpsAnswer() {
+            return new HttpsAnswer(HttpsChoice.ofToken(this.https), this.certificate_pem, this.private_key_pem,
+                this.access_list_id);
+        }
     }
 
     /** A machine of one kind: its name, host (null: placement picks), settings and, for an empty VM, its ISO. */
@@ -440,7 +504,9 @@ public final class PutOnline {
                 values.get(InstanceTemplateOperations.SERVER_ID), values.get(InstanceTemplateOperations.PROJECT_ID),
                 values.get(InstanceTemplateOperations.ENVIRONMENT_ID),
                 InstanceTemplateOperations.variables(values.get(InstanceTemplateOperations.VARIABLES)),
-                values.get(HTTPS))))
+                values.get(HTTPS), values.get(CertificateModel.CERTIFICATE_PEM),
+                secretOf(values.get(CertificateModel.PRIVATE_KEY_PEM.getName())),
+                values.get(SiteModel.ACCESS_LIST_ID))))
             .result(Integer.class)
             .rateLimit(HohenheimEndpoints.INSTANCE_CREATE_LIMIT)
             .facts(OperationFact.REACHES_OUTSIDE)
@@ -480,7 +546,10 @@ public final class PutOnline {
             .gate(OperationGate.open())
             .input(OperationInput.of(ADDRESS_INPUT, Address.class, values -> new Address(values.get(SiteModel.NAME),
                 values.get(HOSTNAME), values.get(SiteModel.UPSTREAM_KIND),
-                RawValues.mapOrNull(values.get(SiteModel.SETTINGS.getName())), values.get(HTTPS))))
+                RawValues.mapOrNull(values.get(SiteModel.SETTINGS.getName())), values.get(HTTPS),
+                values.get(CertificateModel.CERTIFICATE_PEM),
+                secretOf(values.get(CertificateModel.PRIVATE_KEY_PEM.getName())),
+                values.get(SiteModel.ACCESS_LIST_ID))))
             .result(Integer.class)
             .facts(OperationFact.REACHES_OUTSIDE)
             .command(CmsCommands.EXTERNAL)
@@ -499,7 +568,9 @@ public final class PutOnline {
                 values.get(InstanceTemplateOperations.NAME), values.get(HOSTNAME),
                 values.get(InstanceTemplateOperations.SERVER_ID),
                 values.get(InstanceModel.KIND), RawValues.mapOrNull(values.get(InstanceModel.SETTINGS.getName())),
-                values.get(HTTPS))))
+                values.get(HTTPS), values.get(CertificateModel.CERTIFICATE_PEM),
+                secretOf(values.get(CertificateModel.PRIVATE_KEY_PEM.getName())),
+                values.get(SiteModel.ACCESS_LIST_ID))))
             .result(Integer.class)
             .rateLimit(HohenheimEndpoints.INSTANCE_CREATE_LIMIT)
             .facts(OperationFact.REACHES_OUTSIDE)
@@ -818,16 +889,36 @@ public final class PutOnline {
         return InstanceParts.hostPick(InstanceTemplateOperations.SERVER_ID);
     }
 
+    /** The HTTPS step's cards, one per {@link HttpsChoice}, in the vocabulary's order. */
     private static @NonNull Select<String> httpsChoice() {
+        List<FieldOption<String>> options = new ArrayList<>();
+        for (HttpsChoice choice : HttpsChoice.values()) {
+            options.add(FieldOption.of(choice.token(), choice.label()).withDescription(choice.help()));
+        }
         return Select.of(HTTPS)
-            .options(OptionSource.of(
-                FieldOption.of(HTTPS_AUTOMATIC, HohenheimMicrocopy.PUT_ONLINE.of("https_automatic"))
-                    .withDescription(HohenheimMicrocopy.PUT_ONLINE.of("https_automatic_help")),
-                FieldOption.of(HTTPS_LATER, HohenheimMicrocopy.PUT_ONLINE.of("https_later"))
-                    .withDescription(HohenheimMicrocopy.PUT_ONLINE.of("https_later_help"))))
+            .options(OptionSource.of(options))
             .presentation(Select.Presentation.CARDS)
             .clearable(false)
             .build();
+    }
+
+    /** @return the tokens of the choices that ask for an uploaded chain and key */
+    private static @NonNull String @NonNull [] uploadTokens() {
+        return Arrays.stream(HttpsChoice.values()).filter(HttpsChoice::takesUpload)
+            .map(HttpsChoice::token).toArray(String[]::new);
+    }
+
+    /** The HTTPS step every address flow ends with: the certificate choice, an upload, the access list. */
+    private static @NonNull FormStep httpsStep(@NonNull StepSummary summary) {
+        return FormStep.of("https", STEP_HTTPS, HTTPS.getName(), CertificateModel.CERTIFICATE_PEM.getName(),
+                CertificateModel.PRIVATE_KEY_PEM.getName(), SiteModel.ACCESS_LIST_ID.getName())
+            .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_https_lead"))
+            .summarizedBy(summary);
+    }
+
+    /** @return a secret entry's coerced value, null when none was given */
+    private static @Nullable Secret secretOf(@Nullable Object value) {
+        return value instanceof Secret secret ? secret : null;
     }
 
     /** @return one option per port purpose, in the vocabulary's order */

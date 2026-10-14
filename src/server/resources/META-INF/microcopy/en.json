@@ -6580,7 +6580,7 @@
     "scope": "violations"
   },
   "host_full": {
-    "text": "{$name} is full: only {$free} MB of its memory budget is free, less than the smallest new app needs ({$smallest} MB)",
+    "text": "{$name} is full: only {$free} MB of its memory budget is free, less than the smallest new app needs ({$smallest} MB).",
     "scope": "violations"
   },
   "host_prepared_image_missing": {
@@ -18077,5 +18077,24 @@
   "done_certificate": {"scope": "put_online", "text": "Ordered from Let's Encrypt for {$address}"},
   "done_live": {"scope": "put_online", "text": "Its first start went out to its host"},
   "done_live_waiting": {"scope": "put_online", "text": "Not started yet: the app's page says what it waits for"},
-  "put_something_else": {"scope": "put_online", "text": "Put something else online"}
+  "put_something_else": {"scope": "put_online", "text": "Put something else online"},
+  "step_address_where_lead": {"scope": "put_online", "text": "Its name, the address visitors use, and what Hohenheim's proxy answers there. Nothing runs on a host for it."},
+  "https_wildcard": {"scope": "put_online", "text": "Wildcard (Let's Encrypt)"},
+  "https_wildcard_help": {"scope": "put_online", "text": "One certificate for every name under the parent domain, proven through a DNS zone Hohenheim manages."},
+  "https_existing": {"scope": "put_online", "text": "A certificate Hohenheim has"},
+  "https_existing_help": {"scope": "put_online", "text": "Uses the certificate that already covers this address, a wildcard one included."},
+  "https_upload": {"scope": "put_online", "text": "Upload your own"},
+  "https_upload_help": {"scope": "put_online", "text": "Paste the certificate chain and its private key. The key is stored encrypted."},
+  "done_certificate_wildcard": {"scope": "put_online", "text": "Ordered {$name} from Let's Encrypt for {$address}"},
+  "done_certificate_existing": {"scope": "put_online", "text": "Serves {$address} with the certificate {$name}"},
+  "done_certificate_uploaded": {"scope": "put_online", "text": "Stored the uploaded certificate for {$address}"},
+  "outcome_https_wildcard_apex": {"scope": "put_online", "text": "{$address} has no parent domain for a wildcard certificate to cover. Choose another option."},
+  "outcome_https_existing_none": {"scope": "put_online", "text": "No working certificate in Hohenheim covers {$address} yet. Choose another option."},
+  "cert_key_mismatch": {"scope": "violations", "text": "This private key does not belong to the first certificate in the chain."},
+  "cert_chain_order": {"scope": "violations", "text": "Certificate {$position} in the chain is not issued by certificate {$next}: put the server certificate first, then each issuer in order."},
+  "cert_expired": {"scope": "violations", "text": "Certificate {$position} in the chain expired on {$date}."},
+  "cert_not_yet_valid": {"scope": "violations", "text": "Certificate {$position} in the chain is not valid before {$date}."},
+  "cert_not_covering": {"scope": "violations", "text": "This certificate covers {$names}, not {$hostname}."},
+  "cert_pem_required": {"scope": "violations", "text": "Paste the certificate chain."},
+  "key_pem_required": {"scope": "violations", "text": "Paste the private key."}
 }

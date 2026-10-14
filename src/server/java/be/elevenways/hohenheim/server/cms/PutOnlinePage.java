@@ -372,14 +372,15 @@ public final class PutOnlinePage extends PanelPage {
     }
 
     /**
-     * The template form's own fixed entries ({@link InstanceFromTemplatePage#fixed}), plus the address and its HTTPS
-     * for everyone but an operator, since claiming an address is an operator act.
+     * The template form's own fixed entries ({@link InstanceFromTemplatePage#fixed}), plus the address, its HTTPS and
+     * its access list for everyone but an operator, since claiming an address is an operator act.
      */
     private static @NonNull Map<String, @Nullable Object> fixed(@NonNull AccessContext access) {
         Map<String, @Nullable Object> fixed = new LinkedHashMap<>(InstanceFromTemplatePage.fixed(access));
         if (!HohenheimAccess.isAdmin(access)) {
             fixed.put(PutOnline.HOSTNAME.getName(), null);
             fixed.put(PutOnline.HTTPS.getName(), PutOnline.HTTPS_LATER);
+            fixed.put(SiteModel.ACCESS_LIST_ID.getName(), null);
         }
         return fixed;
     }
