@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import com.microsoft.playwright.TimeoutError;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
@@ -17,10 +18,27 @@ import static org.assertj.core.api.Assertions.*;
 class NavigationTest extends HohenheimTestBase {
 
     private void waitForHeading(String expected) {
-        page.waitForCondition(() -> {
-            var el = page.querySelector("h1");
-            return el != null && el.textContent().contains(expected);
-        });
+        try {
+            page.waitForCondition(() -> {
+                var el = page.querySelector("h1");
+                return el != null && el.textContent().contains(expected);
+            });
+        } catch (TimeoutError e) {
+            fail("no h1 read '" + expected + "' at " + page.url() + "; the h1s read "
+                + page.locator("h1").allTextContents(), e);
+        }
+    }
+
+    /** Waits for a cluster member's landing: the cluster's name as the h1 and the member as the active tab. */
+    private void waitForClusterPage(String cluster, String member) {
+        waitForHeading(cluster);
+        var activeTab = page.locator("[data-cms-cluster-tabs] [aria-current='page']").first();
+        try {
+            page.waitForCondition(() -> activeTab.count() > 0 && activeTab.textContent().contains(member));
+        } catch (TimeoutError e) {
+            fail("no active cluster tab read '" + member + "' at " + page.url() + "; the active tabs read "
+                + page.locator("[data-cms-cluster-tabs] [aria-current='page']").allTextContents(), e);
+        }
     }
 
     @Test
@@ -46,14 +64,15 @@ class NavigationTest extends HohenheimTestBase {
             .isLessThan(sidebar.y + sidebar.height);
 
         // Soft nav into a cluster: the Domains entry lands on its first member, Addresses, whose page heads with
-        // the cluster's tabs; a tab soft-navigates to a sibling member. The URL, the heading and the shell survive.
+        // the cluster's name and tabs (the member is the active tab, not a second h1); a tab soft-navigates to a
+        // sibling member. The URL, the heading and the shell survive.
         page.locator("pl-app-sidebar a[href='/admin/" + HohenheimSlugs.Cluster.DOMAIN_NAMES + "']").click();
-        waitForHeading("Addresses");
+        waitForClusterPage("Domains", "Addresses");
         assertThat(page.url()).endsWith("/admin/domains");
         page.locator("[data-cms-cluster-tabs] a[href='/admin/certificates']").first().click();
-        waitForHeading("Certificates");
+        waitForClusterPage("Domains", "Certificates");
         assertThat(page.url()).endsWith("/admin/certificates");
-        assertThat(page.locator("h1").first().textContent()).contains("Certificates");
+        assertThat(page.locator("h1").count()).as("one h1 on a cluster member's landing").isEqualTo(1);
         assertThat(page.locator(".cms-brand").textContent()).contains("Hohenheim");
         // The eight sidebar entries, each a link.
         assertThat(page.locator("pl-app-sidebar a").count()).isGreaterThanOrEqualTo(8);
@@ -80,8 +99,8 @@ class NavigationTest extends HohenheimTestBase {
 
         // The browser back button restores the previous soft-navigated page.
         page.goBack();
-        waitForHeading("Certificates");
-        assertThat(page.locator("h1").first().textContent()).contains("Certificates");
+        waitForClusterPage("Domains", "Certificates");
+        assertThat(page.url()).endsWith("/admin/certificates");
 
         navigateToApp("/admin/settings");
         waitForHydration();

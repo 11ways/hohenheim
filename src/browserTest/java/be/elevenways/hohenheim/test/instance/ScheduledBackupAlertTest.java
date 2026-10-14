@@ -113,20 +113,20 @@ class ScheduledBackupAlertTest {
             RecordSchedules schedules = new RecordSchedules(datasource);
 
             // 1. A due schedule with a backup_instance step on an instance whose backup cannot run: it has no backup
-            //    target, so the service refuses it.
+            //    target, so the BACKUP operation is unavailable for it (InstanceBackups.targetRefusal).
             int noTarget = BackupLaneFixture.instanceRecord("alert-no-target", fixture.hostId);
             int failing = schedule(noTarget, "nightly backup", StepFailurePolicy.ABORT, true);
 
-            // 2. The framework sweep runs it on its own thread and the step ends failed.
+            // 2. The framework sweep runs it on its own thread and the step ends refused: nothing was attempted.
             schedules.runDue(null);
             assertThat(RecordSchedules.awaitRunningSteps(Duration.ofSeconds(30))).as("step 2: the step ended")
                 .isTrue();
             Row run = latestRun(failing);
             assertThat(run).as("step 2: the sweep opened a run").isNotNull();
-            assertThat(run.get(RecordScheduleRunModel.STATUS)).as("step 2: the run aborted on the failed backup")
+            assertThat(run.get(RecordScheduleRunModel.STATUS)).as("step 2: the run aborted on the refused backup")
                 .isEqualTo(RunStatus.ABORTED.storageKey());
-            assertThat(RecordScheduleRuns.steps(run).get(0).status()).as("step 2: the backup step failed")
-                .isEqualTo(StepStatus.FAILED);
+            assertThat(RecordScheduleRuns.steps(run).get(0).status()).as("step 2: the backup step was refused")
+                .isEqualTo(StepStatus.REFUSED);
 
             // 3. The operator's alert channel received the instance backup failure.
             assertThat(BODIES).as("step 3: one alert reached the channel").hasSize(1);
@@ -136,8 +136,9 @@ class ScheduledBackupAlertTest {
 
             // 4. A controller dies after the backup step ran and before it recorded an outcome: under RETRY the
             //    reaper marks it UNKNOWN (a backup is not safe to repeat), and the alert says the outcome is unknown.
+            //    The instance HAS a target, so the step is offered and runs; only the outcome goes unrecorded.
             BODIES.clear();
-            int crashing = schedule(noTarget, "crashing backup", StepFailurePolicy.RETRY, false);
+            int crashing = schedule(withTarget("alert-crashing"), "crashing backup", StepFailurePolicy.RETRY, false);
             RecordSchedules.setBetweenStepHookForTest(() -> {
                 throw new IllegalStateException("controller died");
             });
@@ -157,17 +158,22 @@ class ScheduledBackupAlertTest {
 
             // 5. A backup that succeeds alerts nothing.
             BODIES.clear();
-            int healthy = BackupLaneFixture.instanceRecord("alert-healthy", fixture.hostId);
-            new InstanceService().deploy(healthy);
-            Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(healthy))
-                .assign(InstanceModel.BACKUP_TARGET_ID, fixture.targetId)
-                .updateAll();
-            int succeeding = schedule(healthy, "healthy backup", StepFailurePolicy.ABORT, false);
+            int succeeding = schedule(withTarget("alert-healthy"), "healthy backup", StepFailurePolicy.ABORT, false);
             Row healthyRun = schedules.runNow(succeeding);
             assertThat(healthyRun.get(RecordScheduleRunModel.STATUS)).as("step 5: the backup chain completed")
                 .isEqualTo(RunStatus.COMPLETED.storageKey());
             assertThat(BODIES).as("step 5: and alerted nobody").isEmpty();
         });
+    }
+
+    /** @return a deployed instance of the fixture's kind whose backups go to the fixture's target */
+    private static int withTarget(String name) {
+        int instance = BackupLaneFixture.instanceRecord(name, fixture.hostId);
+        new InstanceService().deploy(instance);
+        Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(instance))
+            .assign(InstanceModel.BACKUP_TARGET_ID, fixture.targetId)
+            .updateAll();
+        return instance;
     }
 
     /**

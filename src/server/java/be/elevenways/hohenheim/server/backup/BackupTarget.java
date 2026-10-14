@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.backup;
 
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -64,6 +65,24 @@ public interface BackupTarget {
      */
     @NonNull List<String> list(@NonNull String prefix) throws IOException;
 
-    /** Remove the committed artifact AND any staging debris for {@code key}; absent is success. */
+    /**
+     * Remove the committed artifact AND any staging debris for {@code key}; absent is success. Then every folder
+     * left empty in the key's namespace (its first path segment, an instance backup's controller token) goes, that
+     * folder included, never the target's base: an earlier version's empty folders there too.
+     *
+     * AIDEV-NOTE: race-safe only together with {@link #store}: a folder is removed only while empty (rmdir), and a
+     * store recreates its folder until its staging name is open in it ({@link #CREATE_ATTEMPTS}), after which the
+     * folder is no longer empty. A store therefore never fails on a folder a concurrent delete just pruned. Only the
+     * key's own namespace is swept: another controller's folders on a shared target are not this one's to judge.
+     */
     void delete(@NonNull String key) throws IOException;
+
+    /** How often a store recreates its folder when a concurrent delete pruned it before the staging name opened. */
+    int CREATE_ATTEMPTS = 5;
+
+    /** @return the key's first path segment, the folder a delete sweeps; null for a key at the base */
+    static @Nullable String namespaceOf(@NonNull String key) {
+        int slash = key.indexOf('/');
+        return slash > 0 ? key.substring(0, slash) : null;
+    }
 }

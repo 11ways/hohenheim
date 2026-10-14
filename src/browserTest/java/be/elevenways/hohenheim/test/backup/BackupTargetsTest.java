@@ -201,6 +201,24 @@ class BackupTargetsTest {
             assertThat(run(() -> target.exists("instance-9/b.hib")))
                 .as("step 3: and the target reports the artifact present").isTrue();
 
+            // 3b. Deleting a namespace's last artifact removes the folders it leaves empty there (an earlier
+            //     version's leftover included), never the base, and the next store recreates its folder (the remote
+            //     half of FilesystemBackupTargetTest's folder journey).
+            run(() -> {
+                Files.createDirectories(remoteBase.resolve("instance-9/leftover"));
+                target.delete("instance-9/b.hib");
+                return null;
+            });
+            assertThat(Files.exists(remoteBase.resolve("instance-9")))
+                .as("step 3b: the emptied namespace is gone, its leftover folder with it").isFalse();
+            assertThat(Files.isDirectory(remoteBase)).as("step 3b: the base stays").isTrue();
+            run(() -> {
+                target.store("instance-9/b.hib", file);
+                return null;
+            });
+            assertThat(Files.exists(remoteBase.resolve("instance-9/b.hib")))
+                .as("step 3b: a store recreates the folder").isTrue();
+
             // 4. The argv this lane runs on is the inventoried-host argv: strict checking
             //    against Hohenheim's OWN store and never the OS user's ~/.ssh. The target
             //    builds no argv of its own, so there is no second place to check.

@@ -31,6 +31,7 @@ row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= c
 tab overview at=0 landing=true view=true
 tab history at=1 landing=false view=false
 control DETAIL%20instance_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=true options= binding=source:hohenheim.instance,rules:,siblings:,resolver:,clearable:true,creatable:false
+control DETAIL%20remote_key at=1 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
 
 case admin.instance-backups.operator.failed admin instance-backups operator v2
 admission - verdict=admitted
@@ -48,6 +49,7 @@ row zenit:delete at=0 verb=invoke band=destructive style=DESTRUCTIVE disabled= c
 tab overview at=0 landing=true view=true
 tab history at=1 landing=false view=false
 control DETAIL%20instance_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=true options= binding=source:hohenheim.instance,rules:,siblings:,resolver:,clearable:true,creatable:false
+control DETAIL%20remote_key at=1 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
 
 case admin.instance-backups.operator.sel admin instance-backups operator v2
 admission - verdict=admitted
@@ -89,4 +91,5 @@ column created_at at=6 shown=true hidden=false sortable=false filterable=false c
 row zenit:delete at=0 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 tab overview at=0 landing=true view=true
 control DETAIL%20instance_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=true options= binding=source:hohenheim.instance,rules:,siblings:,resolver:,clearable:true,creatable:false
+control DETAIL%20remote_key at=1 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
 

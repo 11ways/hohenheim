@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.hohenheim.HohenheimActivityAction;
@@ -79,7 +80,10 @@ public final class InstanceConsoles {
     // ports for or restart the deployment that replaced it.
     private static final Map<Integer, Long> GENERATIONS = new ConcurrentHashMap<>();
 
-    private static final Map<Integer, Deque<Long>> CRASH_LOG = new ConcurrentHashMap<>();
+    // AIDEV-NOTE: keyed by the workload's controller-scoped handle, never the bare record id: record #7 of another
+    // controller (every test class's fresh database in a shared JVM) is another workload, and its crashes must not
+    // trip this one's flap protection.
+    private static final Map<String, Deque<Long>> CRASH_LOG = new ConcurrentHashMap<>();
 
     // Test seams: shrink the waits so a live test observes the negative halves.
     private static volatile long readinessTimeoutMs = READINESS_TIMEOUT_MS;
@@ -778,7 +782,8 @@ public final class InstanceConsoles {
      * one threshold instead of two half-full ones. */
     static boolean flapExceeded(int instanceId) {
         long now = Now.millis();
-        Deque<Long> log = CRASH_LOG.computeIfAbsent(instanceId, id -> new ArrayDeque<>());
+        Deque<Long> log = CRASH_LOG.computeIfAbsent(ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId),
+            handle -> new ArrayDeque<>());
         synchronized (log) {
             log.addLast(now);
             while (!log.isEmpty() && now - log.getFirst() > flapWindowMs) {

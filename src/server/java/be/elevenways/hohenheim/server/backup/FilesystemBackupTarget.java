@@ -5,13 +5,17 @@ import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
+import java.nio.file.FileAlreadyExistsException;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -48,11 +52,9 @@ public final class FilesystemBackupTarget implements BackupTarget {
     public void store(@NonNull String key, @NonNull Path file) throws IOException {
         Path committed = resolve(key);
         Path staging = stagingOf(committed);
-        Files.createDirectories(committed.getParent());
         try {
             try (InputStream in = Files.newInputStream(file);
-                 OutputStream out = Files.newOutputStream(staging,
-                     StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
+                 OutputStream out = openStaging(staging)) {
                 copyBounded(in, out);
             }
             DurableFiles.forceFile(staging);
@@ -66,6 +68,23 @@ public final class FilesystemBackupTarget implements BackupTarget {
                 // best effort; the suffix marks it as never-committed either way
             }
             throw error;
+        }
+    }
+
+    /** Opens the staging name, recreating its folder while a concurrent {@link #delete} prunes it in between. */
+    private static @NonNull OutputStream openStaging(@NonNull Path staging) throws IOException {
+        for (int attempt = 1; ; attempt++) {
+            try {
+                Files.createDirectories(staging.getParent());
+                return Files.newOutputStream(staging,
+                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            } catch (NoSuchFileException | FileAlreadyExistsException pruned) {
+                // NoSuchFile: the folder went before the open; FileAlreadyExists: createDirectories found it, then
+                // saw it gone when it checked that it is a directory.
+                if (attempt >= CREATE_ATTEMPTS) {
+                    throw pruned;
+                }
+            }
         }
     }
 
@@ -114,6 +133,29 @@ public final class FilesystemBackupTarget implements BackupTarget {
         Path committed = resolve(key);
         Files.deleteIfExists(committed);
         Files.deleteIfExists(stagingOf(committed));
+        String namespace = BackupTarget.namespaceOf(key);
+        if (namespace == null) {
+            return;
+        }
+        Path top = resolve(namespace);
+        if (top.equals(this.root.normalize()) || !Files.isDirectory(top)) {
+            return;
+        }
+        List<Path> folders;
+        try (Stream<Path> walk = Files.walk(top)) {
+            folders = walk.filter(Files::isDirectory).sorted(Comparator.comparingInt(Path::getNameCount).reversed())
+                .toList();
+        } catch (IOException | UncheckedIOException walkRaced) {
+            return;   // a concurrent delete pruned part of it first; that delete swept it
+        }
+        // Deepest first, so a folder emptied by its children goes too; Files.delete removes only an empty folder.
+        for (Path folder : folders) {
+            try {
+                Files.delete(folder);
+            } catch (IOException kept) {
+                // not empty, or already pruned by a concurrent delete
+            }
+        }
     }
 
     /** Resolve a key under root, refusing traversal out of it. */

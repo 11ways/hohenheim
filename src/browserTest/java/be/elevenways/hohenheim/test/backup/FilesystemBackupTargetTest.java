@@ -9,6 +9,12 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -60,5 +66,72 @@ class FilesystemBackupTargetTest {
         Throwable escape = catchThrowable(() -> target.store("../escape.hib", file));
         assertThat(escape).as("step 5: traversal keys are refused")
             .isInstanceOf(IOException.class).hasMessageContaining("escapes");
+    }
+
+    /**
+     * A delete takes the folders its key's namespace is left with empty (an instance's last backup used to leave
+     * {@code <controller>/instance-N} behind), and a store that races such a delete recreates its folder.
+     */
+    @Test
+    void aDeleteLeavesNoEmptyFolderAndAStoreRecreatesIt() throws Exception {
+        Path root = tmp.resolve("store");
+        BackupTarget target = new FilesystemBackupTarget(root);
+        Path file = tmp.resolve("payload.bin");
+        Files.write(file, "artifact-bytes".getBytes(StandardCharsets.UTF_8));
+
+        // 1. Two artifacts in one instance folder: deleting one keeps the folder.
+        target.store("owner/instance-1/a.hib", file);
+        target.store("owner/instance-1/b.hib", file);
+        target.delete("owner/instance-1/a.hib");
+        assertThat(Files.isDirectory(root.resolve("owner/instance-1")))
+            .as("step 1: a folder that still holds an artifact stays").isTrue();
+
+        // 2. Deleting the last one removes the instance folder and the owner folder it emptied, never the base.
+        target.delete("owner/instance-1/b.hib");
+        assertThat(Files.exists(root.resolve("owner/instance-1")))
+            .as("step 2: the emptied instance folder is gone").isFalse();
+        assertThat(Files.exists(root.resolve("owner")))
+            .as("step 2: and the owner folder it emptied").isFalse();
+        assertThat(Files.isDirectory(root)).as("step 2: the base stays").isTrue();
+
+        // 3. A delete of an absent key is still success and still leaves the base.
+        target.delete("owner/instance-1/b.hib");
+        assertThat(Files.isDirectory(root)).as("step 3: an absent key's delete keeps the base").isTrue();
+
+        // 3b. An earlier version's empty folder in the namespace goes with the next delete there; another
+        //     namespace's (another controller's) empty folder is not this delete's to judge.
+        Files.createDirectories(root.resolve("owner/instance-19"));
+        Files.createDirectories(root.resolve("other/instance-1"));
+        target.store("owner/instance-3/c.hib", file);
+        target.delete("owner/instance-3/c.hib");
+        assertThat(Files.exists(root.resolve("owner")))
+            .as("step 3b: the namespace's leftover folder went with the delete").isFalse();
+        assertThat(Files.isDirectory(root.resolve("other/instance-1")))
+            .as("step 3b: another namespace's folder stays").isTrue();
+
+        // 4. Stores and deletes racing in one folder: every store lands, though each delete may take the folder.
+        int rounds = 200;
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            List<Future<?>> lanes = new ArrayList<>();
+            for (String lane : List.of("x", "y")) {
+                lanes.add(pool.submit(() -> {
+                    for (int round = 0; round < rounds; round++) {
+                        String key = "owner/instance-2/" + lane + "-" + round + ".hib";
+                        target.store(key, file);
+                        assertThat(target.exists(key)).as("step 4: " + key + " landed").isTrue();
+                        target.delete(key);
+                    }
+                    return null;
+                }));
+            }
+            for (Future<?> lane : lanes) {
+                lane.get(60, TimeUnit.SECONDS);
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+        assertThat(Files.exists(root.resolve("owner")))
+            .as("step 4: the last delete left no empty folder").isFalse();
     }
 }

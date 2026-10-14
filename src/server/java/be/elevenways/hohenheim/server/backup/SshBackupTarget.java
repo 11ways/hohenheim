@@ -133,8 +133,12 @@ public final class SshBackupTarget implements BackupTarget {
         String committed = remotePath(key);
         String staging = committed + STAGING_SUFFIX;
         String directory = PosixPaths.parentOf(committed);
+        // The folder is (re)created until the staging name is open in it: a concurrent delete may prune it in between
+        // (BackupTarget.delete), and once the staging name exists it is no longer empty, so it stays.
+        String open = "mkdir -p " + HostShell.quote(directory) + " && : > " + HostShell.quote(staging);
         try (InputStream in = Files.newInputStream(file)) {
-            run("mkdir -p " + HostShell.quote(directory) + " && cat > " + HostShell.quote(staging), in, null);
+            run("n=1; until " + open + "; do [ \"$n\" -lt " + CREATE_ATTEMPTS + " ] || exit 1; n=$((n+1)); done"
+                + " && cat > " + HostShell.quote(staging), in, null);
         } catch (IOException error) {
             bestEffort("rm -f " + HostShell.quote(staging));
             throw error;
@@ -227,7 +231,17 @@ public final class SshBackupTarget implements BackupTarget {
     @Override
     public void delete(@NonNull String key) throws IOException {
         String committed = remotePath(key);
-        run("rm -f " + HostShell.quote(committed) + " " + HostShell.quote(committed + STAGING_SUFFIX), null, null);
+        String remove = "rm -f " + HostShell.quote(committed) + " " + HostShell.quote(committed + STAGING_SUFFIX);
+        String namespace = BackupTarget.namespaceOf(key);
+        if (namespace == null) {
+            run(remove, null, null);
+            return;
+        }
+        // find -empty -delete and rmdir remove only an empty folder (depth first, so a parent emptied by its
+        // children goes too); a folder still holding something stays, quietly.
+        String top = HostShell.quote(remotePath(namespace));
+        run(remove + " && { { find " + top + " -mindepth 1 -depth -type d -empty -delete; rmdir " + top
+            + "; } 2>/dev/null || true; }", null, null);
     }
 
     // -- plumbing -------------------------------------------------------------
@@ -260,7 +274,8 @@ public final class SshBackupTarget implements BackupTarget {
     private byte @NonNull [] runStreaming(@NonNull String remoteCommand,
                                           @Nullable InputStream stdin,
                                           @Nullable OutputStream stdout) throws IOException {
-        List<String> argv = HostKeys.sshArgv(destination(), List.of(remoteCommand));
+        // A POSIX sh runs every command, whatever the destination user's login shell is (the same wrap as HostShell).
+        List<String> argv = HostKeys.sshArgv(destination(), List.of("sh", "-c", HostShell.quote(remoteCommand)));
         return exchange(argv, stdin, stdout, remoteCommand);
     }
 
