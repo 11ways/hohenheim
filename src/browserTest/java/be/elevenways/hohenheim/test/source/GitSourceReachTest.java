@@ -163,6 +163,48 @@ class GitSourceReachTest extends HohenheimTestBase {
     }
 
     /**
+     * A source switched to another branch deploys that branch: a shallow clone only tracks the branch it was made
+     * for, so a fetch of the new one alone left no {@code origin/<branch>} to reset to.
+     */
+    @Test
+    void aCheckoutFollowsItsSourceToAnotherBranchJourney() throws Exception {
+        Path upstream = Files.createTempDirectory("hohenheim-branch-upstream");
+        git(upstream, "init", "-q", "-b", "main");
+        git(upstream, "config", "user.email", "test@example.com");
+        git(upstream, "config", "user.name", "Test");
+        Files.writeString(upstream.resolve("index.html"), "main");
+        git(upstream, "add", ".");
+        git(upstream, "commit", "-q", "-m", "main");
+        git(upstream, "checkout", "-q", "-b", "change-the-title");
+        Files.writeString(upstream.resolve("index.html"), "changed");
+        git(upstream, "commit", "-q", "-am", "changed");
+
+        // file:// keeps the clone shallow and single-branch, as a remote URL is.
+        Map<String, Object> settings = new LinkedHashMap<>();
+        settings.put("repository_url", "file://" + upstream);
+        settings.put("branch", "main");
+        int applicationId = application("branch-app", settings);
+        File checkout = Files.createTempDirectory("hohenheim-branch-checkouts").resolve("app").toFile();
+
+        // 1. The first deploy clones the declared branch.
+        GitCheckout.materialize(InstanceModel.MODEL_ID, applicationId, "main", settings, checkout);
+        assertThat(Files.readString(checkout.toPath().resolve("index.html")))
+            .as("step 1: the main branch is checked out").isEqualTo("main");
+
+        // 2. THE DEFECT: the source moves to another branch; the next deploy reuses the checkout and must land on it.
+        settings.put("branch", "change-the-title");
+        GitCheckout.materialize(InstanceModel.MODEL_ID, applicationId, "change-the-title", settings, checkout);
+        assertThat(Files.readString(checkout.toPath().resolve("index.html")))
+            .as("step 2: the new branch is checked out").isEqualTo("changed");
+
+        // 3. And back: the branch it started on still resolves.
+        settings.put("branch", "main");
+        GitCheckout.materialize(InstanceModel.MODEL_ID, applicationId, "main", settings, checkout);
+        assertThat(Files.readString(checkout.toPath().resolve("index.html")))
+            .as("step 3: main is checked out again").isEqualTo("main");
+    }
+
+    /**
      * A tenant-owned provider's API calls reach public addresses only; the same base URL on
      * an operator-owned provider keeps working.
      */

@@ -156,10 +156,13 @@ public class GitRepository {
      *
      * AIDEV-NOTE: {@code reset} takes no {@code --} here on purpose: after the commit it
      * would start a PATHSPEC. The branch is validated not to start with {@code -}, so
-     * {@code origin/<branch>} can never read as an option.
+     * {@code origin/<branch>} can never read as an option. The fetch names its refspec: a
+     * shallow clone tracks only the branch it was made for, so a source switched to another
+     * branch left no {@code origin/<branch>} behind a bare {@code fetch origin <branch>}.
      */
     public GitResult fetchAndReset(File directory) throws InterruptedException {
-        GitResult fetch = remote(git("fetch", "--", "origin", branch), directory);
+        GitResult fetch = remote(git("fetch", "--", "origin",
+            "+refs/heads/" + branch + ":refs/remotes/origin/" + branch), directory);
         if (!fetch.success()) return fetch;
 
         return execute(git("reset", "--hard", "origin/" + branch), directory, null);
