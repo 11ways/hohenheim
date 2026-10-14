@@ -15321,6 +15321,10 @@
     "text": "Online op {$address}. HTTPS volgt zodra het certificaat is uitgereikt; daarvoor moet {$address} naar deze server wijzen.",
     "scope": "put_online"
   },
+  "outcome_live_https": {
+    "text": "Online op {$address} via HTTPS.",
+    "scope": "put_online"
+  },
   "outcome_running": {
     "text": "Aangemaakt en gestart.",
     "scope": "put_online"

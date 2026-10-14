@@ -490,7 +490,7 @@ final class PutOnlineHandlers {
         installStep(call, template, instanceId);
         publishPorts(call, instance, chosenPorts(template, input.ports()));
         gameAddressStep(call, instanceId, input.game_address());
-        firstStart(call, instanceId, null, null);
+        firstStart(call, instanceId, null, null, null);
         return instanceId;
     }
 
@@ -575,7 +575,7 @@ final class PutOnlineHandlers {
         int instanceId = instance.get(InstanceModel.ID);
         publishPorts(call, instance, ports);
         gameAddressStep(call, instanceId, input.game_address());
-        firstStart(call, instanceId, null, null);
+        firstStart(call, instanceId, null, null, null);
         return instanceId;
     }
 
@@ -602,7 +602,7 @@ final class PutOnlineHandlers {
             // with the ISO in its drive, booted before the root disk.
             new InstanceDevices().attachInstallMedia(instanceId, media);
         }
-        firstStart(call, instanceId, null, null);
+        firstStart(call, instanceId, null, null, null);
         return instanceId;
     }
 
@@ -668,7 +668,7 @@ final class PutOnlineHandlers {
             call.reportStepSkipped();
             call.reportStepSkipped();
         }
-        firstStart(call, instanceId, note, hostname);
+        firstStart(call, instanceId, note, hostname, https.choice());
         return instanceId;
     }
 
@@ -678,7 +678,7 @@ final class PutOnlineHandlers {
      * an order that went out still waits for its certificate, so {@code note} says what follows.
      */
     private static void firstStart(@NonNull OperationCall<?, ?> call, int instanceId, @Nullable Microcopy note,
-                                   @Nullable String hostname) {
+                                   @Nullable String hostname, @Nullable HttpsChoice choice) {
         try {
             new InstanceService().deploy(instanceId, DeployTrigger.MANUAL);
         } catch (Violations | DomainRefusal notStarted) {
@@ -687,8 +687,8 @@ final class PutOnlineHandlers {
             call.reportStepUndone(done("live_waiting"));
             return;
         }
-        call.reportOutcome(note != null ? note : message(hostname == null ? "running" : "live")
-            .withArg("address", hostname == null ? "" : hostname));
+        call.reportOutcome(note != null ? note : hostname == null ? message("running")
+            : liveOutcome(hostname, choice));
         call.reportStepDone(done("live"));
     }
 
@@ -708,9 +708,18 @@ final class PutOnlineHandlers {
         Microcopy note = SiteModel.terminatesTls(input.upstream_kind())
             ? certificate(hostname, input.httpsAnswer(), call.subjectAccess())
             : message("https_passthrough_note").withArg("address", hostname);
-        call.reportOutcome(note != null ? note : message("live").withArg("address", hostname));
+        call.reportOutcome(note != null ? note : liveOutcome(hostname, input.httpsAnswer().choice()));
         certificateStep(call, note, hostname, input.httpsAnswer());
         return siteId;
+    }
+
+    /**
+     * The outcome of an address whose HTTPS was set up: one Let's Encrypt still issues waits on the address pointing
+     * here; a certificate already held or uploaded answers now.
+     */
+    private static @NonNull Microcopy liveOutcome(@NonNull String hostname, @Nullable HttpsChoice choice) {
+        boolean ordered = choice == null || choice.ordersFromLetsEncrypt();
+        return message(ordered ? "live" : "live_https").withArg("address", hostname);
     }
 
     /**

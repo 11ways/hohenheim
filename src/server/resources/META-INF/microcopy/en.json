@@ -15321,6 +15321,10 @@
     "text": "Live at {$address}. HTTPS follows once the certificate is issued, which needs {$address} to point here.",
     "scope": "put_online"
   },
+  "outcome_live_https": {
+    "text": "Live at {$address} over HTTPS.",
+    "scope": "put_online"
+  },
   "outcome_running": {
     "text": "Created and started.",
     "scope": "put_online"

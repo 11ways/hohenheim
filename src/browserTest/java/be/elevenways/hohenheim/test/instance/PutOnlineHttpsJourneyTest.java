@@ -129,6 +129,9 @@ class PutOnlineHttpsJourneyTest extends HohenheimTestBase {
         assertThat(List.of(certificateLine.key(), String.valueOf(certificateLine.args().get("name"))))
             .as("step 3: the certificate step names the wildcard it serves with")
             .containsExactly("done_certificate_existing", "r3b wildcard");
+        assertThat(Objects.requireNonNull(served.outcome()).key())
+            .as("step 3: its outcome says HTTPS answers now, never that a certificate is still to be issued")
+            .isEqualTo("outcome_live_https");
 
         // 4. An upload is judged whole before anything exists, each fault on its field and in its words.
         KeyPair caKeys = keys();
@@ -161,6 +164,9 @@ class PutOnlineHttpsJourneyTest extends HohenheimTestBase {
             .isEqualTo(OperationRunStatus.SUCCEEDED);
         assertThat(Objects.requireNonNull(uploaded.stepDetail(1)).key()).as("step 5: the upload was stored")
             .isEqualTo("done_certificate_uploaded");
+        assertThat(Objects.requireNonNull(uploaded.outcome()).key())
+            .as("step 5: its outcome says HTTPS answers now, never that a certificate is still to be issued")
+            .isEqualTo("outcome_live_https");
         Row stored = Models.get(CertificateModel.class).find()
             .where(CertificateModel.NICE_NAME.eq("up." + DOMAIN)).first();
         assertThat(stored).as("step 5: the certificate row exists").isNotNull();
