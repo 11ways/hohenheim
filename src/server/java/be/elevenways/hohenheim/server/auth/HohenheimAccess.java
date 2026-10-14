@@ -511,15 +511,6 @@ public final class HohenheimAccess {
         return CapabilityScopes.grantedRecordIds(ctx, model, capability);
     }
 
-    /**
-     * Drop the WHOLE request memo of capability scopes, because this request changed the grants.
-     *
-     * @see CapabilityScopes#forgetCapabilityScopes
-     */
-    public static void forgetCapabilityScopes(@NonNull AccessContext ctx) {
-        CapabilityScopes.forgetCapabilityScopes(ctx);
-    }
-
     /** The principal-only face of {@link #capabilityScope(AccessContext, Identifier, String)}. */
     @NonNull
     public static RecordCapabilityScope capabilityScope(@NonNull Principal principal,

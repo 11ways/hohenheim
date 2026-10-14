@@ -247,9 +247,9 @@ final class CapabilityScopes {
      * TenantDomainDnsScopeTest's query budget is what catches the regression when a new
      * per-row predicate reaches for the un-memoized face.
      *
-     * The memo's staleness rule applies: a grant written earlier in THIS request is not
-     * seen unless {@link #forgetCapabilityScopes} was called, which is correct for a
-     * render and is why creation funnels ({@link RecordOwners#grantCreatorManage}) drop it.
+     * The memo's staleness rule applies: a grant written earlier in THIS request is not seen
+     * until the memo is dropped, which is correct for a render; zenit-cms drops it itself after a
+     * create or update writes, before it re-reads the written row in the caller's scope.
      */
     static boolean reachesRecord(@NonNull AccessContext ctx, @NonNull Identifier model,
                                  @Nullable Integer recordId, @NonNull String capability) {
@@ -290,23 +290,6 @@ final class CapabilityScopes {
                                                   @NonNull Identifier model,
                                                   @NonNull String capability) {
         return intIds(capabilityScope(ctx, model, capability).recordIds());
-    }
-
-    /**
-     * Drop the WHOLE request memo of capability scopes (every model and capability),
-     * because THIS request just changed the grants it caches.
-     *
-     * AIDEV-NOTE: the memo is deliberately "grants written mid-request stay
-     * next-request-effective" -- correct for an operator editing somebody else's grants,
-     * and WRONG for a creation funnel that plants the creator's own manage grant, because
-     * the very next thing that happens is zenit-cms verifying the new row against the
-     * caller's scope predicate. Without this the scoped create refuses itself with
-     * {@code out_of_scope} and rolls back a perfectly legitimate allocation. Call it from
-     * the funnel that planted the grant, never speculatively;
-     * {@link RecordOwners#grantCreatorManage} already does.
-     */
-    static void forgetCapabilityScopes(@NonNull AccessContext ctx) {
-        ctx.forgetCapabilityScopes();
     }
 
     /**

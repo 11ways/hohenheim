@@ -96,29 +96,27 @@ class OwnerSubjectsTest extends HohenheimTestBase {
     }
 
     @Test
-    void theCreatorGrantFunnelPlantsTheCreationOwnerAndDropsTheStaleMemo() {
+    void theCreatorGrantFunnelPlantsTheCreationOwner() {
         int creator = user("owner-subjects-creator@hohenheim.local", "Creator");
         int created = site("owner-subjects-created");
         AccessContext ctx = AccessContext.of(TenantConduits.stubFor(
             new UserPrincipal(creator, "Creator")));
 
-        // 1. Before the grant the request memo answers "not yours" (and caches it).
-        assertThat(HohenheimAccess.reachesRecord(ctx, SiteModel.MODEL_ID, created,
-            HohenheimCapabilities.MANAGE)).as("step 1: nothing planted yet").isFalse();
-
-        // 2. The funnel plants manage for exactly the creation owner...
+        // 1. The funnel plants manage for exactly the creation owner. It leaves the request's capability memo alone:
+        //    the CMS write lanes re-ask the caller's scope after their own write.
         HohenheimAccess.grantCreatorManage(SiteModel.MODEL_ID, created, ctx);
         assertThat(HohenheimAccess.manageSubjectsOf(created))
-            .as("step 2: the creation owner owns the record")
+            .as("step 1: the creation owner owns the record")
             .isEqualTo(Set.of(GrantSubjects.userToken(creator)));
 
-        // 3. ...and drops the memo, so the SAME request now sees its own grant.
-        assertThat(HohenheimAccess.reachesRecord(ctx, SiteModel.MODEL_ID, created,
-            HohenheimCapabilities.MANAGE)).as("step 3: the stale memo was dropped").isTrue();
+        // 2. The creator reaches its record through the walk.
+        AccessContext next = AccessContext.of(TenantConduits.stubFor(new UserPrincipal(creator, "Creator")));
+        assertThat(HohenheimAccess.reachesRecord(next, SiteModel.MODEL_ID, created,
+            HohenheimCapabilities.MANAGE)).as("step 2: the creator manages its record").isTrue();
 
-        // 4. The compensation removes exactly that grant again.
+        // 3. The compensation removes exactly that grant again.
         HohenheimAccess.revokeCreatorManage(SiteModel.MODEL_ID, created, ctx);
         assertThat(HohenheimAccess.manageSubjectsOf(created))
-            .as("step 4: the compensated create owns nothing").isEmpty();
+            .as("step 3: the compensated create owns nothing").isEmpty();
     }
 }

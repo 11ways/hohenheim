@@ -250,24 +250,19 @@ final class RecordOwners {
 
     /**
      * Hand the creation owner ({@link #creationOwnerSubjects}) {@link HohenheimCapabilities#MANAGE}
-     * on a record it just created, then drop the request memo the grant just made stale.
-     * Operator and system creates plant nothing: an empty subject set IS operator ownership,
-     * and a grant there would make one admin's record look tenant-held to sameOwner.
+     * on a record it just created. Operator and system creates plant nothing: an empty subject set IS operator
+     * ownership, and a grant there would make one admin's record look tenant-held to sameOwner.
      *
      * AIDEV-NOTE: THE one planting loop. Four hand-rolled copies (instances, databases, git
-     * providers, access lists) each cut the token with indexOf(':') and only two of them
-     * remembered to drop the memo -- without that, zenit-cms verifying the created row
-     * against the caller's own scope predicate makes a legitimate create refuse ITSELF
-     * with out_of_scope. It MUST name the same subjects the quota charged at create.
+     * providers, access lists) each cut the token with indexOf(':'). zenit-cms re-asks the caller's scope after its
+     * own write, so the created row is never refused as out of scope over the request's memo. It MUST name the same
+     * subjects the quota charged at create.
      */
     static void grantCreatorManage(@NonNull Identifier model, @NonNull Object recordId,
                                    @Nullable AccessContext ctx) {
         for (String token : creationOwnerSubjects(ctx)) {
             GrantSubjects.Subject subject = GrantSubjects.require(token);
             RecordGrants.grant(subject.type(), subject.id(), model, recordId, MANAGE, true);
-        }
-        if (ctx != null) {
-            CapabilityScopes.forgetCapabilityScopes(ctx);
         }
     }
 
@@ -283,9 +278,6 @@ final class RecordOwners {
         for (String token : creationOwnerSubjects(ctx)) {
             GrantSubjects.Subject subject = GrantSubjects.require(token);
             RecordGrants.revoke(subject.type(), subject.id(), model, recordId, MANAGE);
-        }
-        if (ctx != null) {
-            CapabilityScopes.forgetCapabilityScopes(ctx);
         }
     }
 }
