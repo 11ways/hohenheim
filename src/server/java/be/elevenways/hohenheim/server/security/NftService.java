@@ -33,10 +33,10 @@ import java.util.function.BooleanSupplier;
  * {@link WorkloadNetworkPolicy} is the throwing, read-back-verifying applier; it shares
  * the {@link NftRunner} seam and nothing else.
  *
- * AIDEV-NOTE: commands run as ROOT via {@code sudo -n -- nft ...},
- * deliberately NOT through SystemUsers.execution (which exists to DROP
- * privilege and refuses uid 0). nft only works as root; the sudoers rule on
- * the VPS already allows it. On nft 0.9.x (Debian 11) {@code add table/chain/set}
+ * AIDEV-NOTE: commands run as ROOT through {@link NftRunner.Sudo} (the privileged helper's
+ * nft verbs, confined to {@code inet hohenheim_*} tables), deliberately NOT through
+ * SystemUsers.execution (which exists to DROP privilege and refuses uid 0). nft only works
+ * as root. On nft 0.9.x (Debian 11) {@code add table/chain/set}
  * are idempotent for identical definitions, but {@code add rule} APPENDS, so
  * setup flushes the owned chain before re-adding the rules.
  */

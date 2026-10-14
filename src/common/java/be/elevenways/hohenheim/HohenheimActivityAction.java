@@ -78,6 +78,8 @@ public enum HohenheimActivityAction implements ActivityAction {
     // filter.
     RECONCILED("reconciled", ActivityVisibility.INTERNAL),
     BACKUP("backup"),
+    /** A backup attempt that stored nothing; the detail is the failure's own reason. */
+    BACKUP_FAILED("backup_failed"),
     SNAPSHOT("snapshot"),
     SHELL_OPEN("shell_open"),
     SHELL_CLOSE("shell_close"),

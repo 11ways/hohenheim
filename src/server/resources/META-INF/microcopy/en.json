@@ -906,10 +906,22 @@
       "scope": "attention_title"
     }
   ],
-  "backup_failed": {
-    "text": "Backup failed",
-    "scope": "notification_event"
-  },
+  "backup_failed": [
+    {
+      "text": "Backup failed",
+      "scope": "notification_event"
+    },
+    {
+      "text": "Backup failed",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "The backup of {$subject} failed",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
   "process_crash_loop": {
     "text": "Process crash loop",
     "scope": "notification_event"

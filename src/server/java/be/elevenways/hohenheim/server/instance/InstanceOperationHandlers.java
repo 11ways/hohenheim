@@ -98,6 +98,7 @@ public final class InstanceOperationHandlers {
             .handle(InstanceOperationHandlers::restart);
         OperationHandlers.attach(InstanceOperations.BACKUP).source(SUBJECTS)
                 .applies(InstanceOperationHandlers::authored)
+                .availability((row, access) -> InstanceBackups.targetRefusal(row))
             .handle(InstanceOperationHandlers::backup);
         OperationHandlers.attach(InstanceOperations.SNAPSHOT).source(SUBJECTS)
                 .applies(InstanceOperationHandlers::authored)

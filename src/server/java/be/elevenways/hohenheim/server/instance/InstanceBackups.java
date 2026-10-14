@@ -117,36 +117,55 @@ public final class InstanceBackups {
         // asks again; the double ask is idempotent and keeps that entry gated too.
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimCapabilities.BACKUPS);
         Row row = requireRow(instanceId);
-        Integer targetId = row.get(InstanceModel.BACKUP_TARGET_ID);
-        if (targetId == null) {
-            // The target is the instance's own choice (no installation default), so the refusal says where it is made.
-            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("instance_backup_target_none")
-                .withArg("name", String.valueOf((Object) row.get(InstanceModel.NAME))));
+        Microcopy noTarget = targetRefusal(row);
+        if (noTarget != null) {
+            throw Violations.ofForm(noTarget);
         }
+        Integer targetId = row.get(InstanceModel.BACKUP_TARGET_ID);
         return backupNow(instanceId, targetId, BackupTargetKinds.targetFor(targetId));
+    }
+
+    /**
+     * Why the instance cannot be backed up now, or null when it names a target; the refusal of
+     * {@link #backupNow(int)} and the reason its offer is disabled.
+     */
+    public static @Nullable Microcopy targetRefusal(@NonNull Row row) {
+        if (row.get(InstanceModel.BACKUP_TARGET_ID) != null) {
+            return null;
+        }
+        // The target is the instance's own choice (no installation default), so the refusal says where it is made.
+        return HohenheimMicrocopy.VIOLATIONS.of("instance_backup_target_none")
+            .withArg("name", String.valueOf((Object) row.get(InstanceModel.NAME)));
     }
 
     /**
      * Explicit-target variant (tests, future re-target flows).
      *
-     * AIDEV-NOTE: the backup's activity row is written HERE, once, on success, whichever surface asked (the API,
-     * the admin, a schedule step); no surface writes one of its own.
+     * AIDEV-NOTE: the backup's activity row is written HERE, once, whichever surface asked (the API, the admin, a
+     * schedule step); no surface writes one of its own. A failed attempt writes one too, carrying the failure's own
+     * reason: a scheduled backup that fails has no toast, so the log is where an operator reads why.
      */
     public int backupNow(int instanceId, @Nullable Integer targetId, @NonNull BackupTarget target) {
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimCapabilities.BACKUPS);
         Row owner = requireRow(instanceId);
         int backupId;
-        if (InstanceKinds.isReleaseManaged(owner.get(InstanceModel.KIND))) {
-            // QUEUED behind a running deploy, as the converge lock it replaces did: the
-            // serving release a backup captures must be the one a finished converge left.
-            backupId = this.instances.operations().exclusive(instanceId,
-                InstanceOperationLock.Contention.QUEUE,
-                () -> backupApplication(instanceId, targetId, target));
-        } else {
-            backupId = this.instances.operations().exclusive(instanceId,
-                InstanceOperationLock.Contention.REFUSE,
-                () -> backupResolved(instanceId, targetId, target, requireRow(instanceId),
-                    this.instances.resolve(instanceId), false));
+        try {
+            if (InstanceKinds.isReleaseManaged(owner.get(InstanceModel.KIND))) {
+                // QUEUED behind a running deploy, as the converge lock it replaces did: the
+                // serving release a backup captures must be the one a finished converge left.
+                backupId = this.instances.operations().exclusive(instanceId,
+                    InstanceOperationLock.Contention.QUEUE,
+                    () -> backupApplication(instanceId, targetId, target));
+            } else {
+                backupId = this.instances.operations().exclusive(instanceId,
+                    InstanceOperationLock.Contention.REFUSE,
+                    () -> backupResolved(instanceId, targetId, target, requireRow(instanceId),
+                        this.instances.resolve(instanceId), false));
+            }
+        } catch (RuntimeException failed) {
+            ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.BACKUP_FAILED,
+                HohenheimViolations.reasonOf(failed));
+            throw failed;
         }
         ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.BACKUP,
             "backup #" + backupId);
@@ -309,7 +328,18 @@ public final class InstanceBackups {
             } finally {
                 try {
                     if (stopped) {
-                        TenantWrites.inAuthorizedOperation(() -> this.instances.deploy(runtimeId));
+                        // AIDEV-NOTE: the RUNTIME the capture stopped comes back as it was, never a new
+                        // build of it. deploy() folds a source-deploying workspace into WorkspaceBuilds
+                        // (checkout + build + restart), so a workspace whose current source does not
+                        // build could never be backed up; deployWorkload starts the last built image.
+                        // An application's serving release keeps its own converge (deploy).
+                        TenantWrites.inAuthorizedOperation(() -> {
+                            if (application) {
+                                this.instances.deploy(runtimeId);
+                            } else {
+                                this.instances.deployWorkload(runtimeId);
+                            }
+                        });
                     }
                 } catch (RuntimeException restartFailed) {
                     FileTrees.deleteQuietly(staging);
@@ -319,18 +349,21 @@ public final class InstanceBackups {
                             InstanceOperationGuard.startFailureOf(restartFailed), restartFailed.getMessage());
                     }
                     failedRow(instanceId, targetId, null,
-                        "Backup failed: prior serving workload could not be restarted");
+                        "The workload could not be started again after the capture: "
+                            + HohenheimViolations.reasonOf(restartFailed));
                     if (captureFailure != null) {
                         restartFailed.addSuppressed(captureFailure);
                     }
                     throw HohenheimViolations.instanceRefusal("instance_backup_failed", owner,
-                        new IOException("Prior serving workload could not be restarted"
+                        new IOException("The workload could not be started again after the capture ("
+                            + HohenheimViolations.reasonOf(restartFailed) + ")"
                             + (captureFailure != null ? "; volume capture also failed" : ""),
                             restartFailed));
                 }
                 if (captureFailure != null) {
                     FileTrees.deleteQuietly(staging);
-                    failedRow(instanceId, targetId, null, "Volume capture failed");
+                    failedRow(instanceId, targetId, null,
+                        "Volume capture failed: " + HohenheimViolations.reasonOf(captureFailure));
                 }
             }
         }

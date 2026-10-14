@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.docker;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
@@ -31,6 +32,7 @@ import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -148,10 +150,21 @@ class ApplicationBackupRecoveryTest {
                     runtime.failStart = true;
                     assertThat(catchThrowable(() -> backups.backupNow(appId, null, target))).isNotNull();
                     assertThat(daemon.isRunning(servingHandle)).isFalse();
+                    String restartPrefix = "The workload could not be started again after the capture: ";
                     assertThat(Models.get(InstanceBackupModel.class).find()
-                        .where(InstanceBackupModel.INSTANCE_ID.eq(appId))
-                        .where(InstanceBackupModel.ERROR.eq(
-                            "Backup failed: prior serving workload could not be restarted")).count()).isEqualTo(1);
+                        .where(InstanceBackupModel.INSTANCE_ID.eq(appId)).all().stream()
+                        .map(row -> String.valueOf((Object) row.get(InstanceBackupModel.ERROR)))
+                        .filter(error -> error.startsWith(restartPrefix)
+                            && error.length() > restartPrefix.length()))
+                        .as("the failed row names the restart's own reason")
+                        .hasSize(1);
+                    assertThat(new ActivityModel(Models.get(InstanceModel.class).getResolvedDatasource()).find()
+                        .where(ActivityModel.RECORD_ID.eq(String.valueOf(appId)))
+                        .where(ActivityModel.ACTION.eq(HohenheimActivityAction.BACKUP_FAILED.id().toString()))
+                        .all().stream()
+                        .map(row -> String.valueOf((Object) row.get(ActivityModel.DETAIL))))
+                        .as("the activity log names the failure with its reason")
+                        .anyMatch(detail -> detail.contains("could not be started again after the capture ("));
                     runtime.failStart = false;
                     ApplicationReleases.inScopeUnchecked(appId, () -> new InstanceService().deploy(servingId));
                     Row backup = Models.get(InstanceBackupModel.class).findById(backupId);

@@ -101,13 +101,14 @@ Options:
   --dry-run                 print the plan, execute nothing
   --help                    this text
 
-Root surface: the service user gets NO unrestricted root binary. nft (proxy and
-firewall roles) is granted as-is; every volume and Spamservice ownership operation
-goes through /usr/local/libexec/hohenheim/hohenheim-helper, which confines its
-arguments to the volume root and the managed Spamservice directory, and is the only
-file the hohenheim-helper sudoers line names. The firewall role also creates the
-dedicated 'spamservice' account and the grant to launch the managed Spamservice as it.
-A re-run replaces the pre-helper hohenheim-volumes grant with the narrow one.
+Root surface: the service user gets NO unrestricted root binary. Every nftables
+(proxy and firewall roles), volume and Spamservice ownership operation goes through
+/usr/local/libexec/hohenheim/hohenheim-helper, which confines nft to rulesets on
+stdin inside Hohenheim's own inet hohenheim_* tables and its other verbs' arguments
+to the volume root and the managed Spamservice directory, and is the only file the
+hohenheim-helper sudoers line names. The firewall role also creates the dedicated
+'spamservice' account and the grant to launch the managed Spamservice as it.
+A re-run replaces the pre-helper hohenheim-volumes and hohenheim-nft grants.
 Every sudoers file is validated with visudo -cf BEFORE it is installed.
 
 The first administrator is created through the panel's /setup page after the
@@ -359,7 +360,11 @@ fi
 # --- 7. sudoers grants and the privileged helper ---------------------------
 
 step "Sudoers grants"
-NFT_BIN="$(command -v nft || printf '/usr/sbin/nft')"
+NEED_NFT="no"
+if [ "$role_firewall" = "true" ] || [ "$role_proxy" = "true" ]; then
+    # NftService (bans) and the workload network policies run under these roles.
+    NEED_NFT="yes"
+fi
 # Installs one sudoers drop-in. The body is VALIDATED in a dot-named temp file (sudo
 # ignores any name carrying a dot, so it is never live) and only a file visudo accepted
 # is renamed into place, root-owned 0440: a syntax error can never break sudo host-wide.
@@ -398,14 +403,7 @@ if [ "$role_firewall" = "true" ]; then
     NEED_SPAMSERVICE="yes"
 fi
 
-if [ "$role_firewall" = "true" ] || [ "$role_proxy" = "true" ]; then
-    write_sudoers hohenheim-nft "$SERVICE_USER ALL=(root) NOPASSWD: $NFT_BIN
-"
-else
-    skip "no nft grant needed for these roles"
-fi
-
-# The helper script: THE root surface of the volume and Spamservice lanes (the Java side
+# The helper script: THE root surface of the volume, Spamservice and nftables lanes (the Java side
 # is be.elevenways.hohenheim.server.host.PrivilegedHelper; PrivilegedHelperDriftTest binds
 # the path, the verbs and the uid floor below to it).
 HELPER_BODY="$(cat <<'HELPER'
@@ -444,7 +442,15 @@ usage() {
     printf '       hohenheim-helper volume-read <snapshot>\n' >&2
     printf '       hohenheim-helper volume-write <path> <uid|keep>\n' >&2
     printf '       hohenheim-helper spamservice-own <path>\n' >&2
+    printf '       hohenheim-helper nft-apply < ruleset\n' >&2
+    printf '       hohenheim-helper nft-list table inet <table> | chain inet <table> <chain> | table bridge incus\n' >&2
     exit 64
+}
+
+# Refuses an nft table outside Hohenheim's own namespace.
+nft_table() {
+    local plain='^hohenheim_[a-z0-9_]{1,64}$'
+    [[ "$1" =~ $plain ]] || refuse "'$1' is not a hohenheim_* table"
 }
 
 # Sets BELOW to PATH relative to ROOT when it is ROOT/<c1>/.../<cN>, MIN <= N <= MAX,
@@ -661,6 +667,58 @@ case "$verb" in
         enter "$SPAMSERVICE_ROOT" "$rel"
         chown -h "$owner_uid:$owner_gid" .
         ;;
+    nft-apply)
+        # One command per line, refused WHOLE before nft reads any of it: add, flush or
+        # delete of a table, chain, set, rule or element in an inet hohenheim_* table. No
+        # quote, comment, include, define or variable fits the character set, and a ';' is
+        # allowed only inside braces, so no line carries a second command.
+        [ $# -eq 0 ] || refuse "nft-apply reads its ruleset from stdin only"
+        ruleset="$(head -c 1048577)"
+        [ "${#ruleset}" -le 1048576 ] || refuse "the ruleset is larger than 1 MiB"
+        charset='^[-A-Za-z0-9 _.,:/@{};]*$'
+        count=0
+        while IFS= read -r line; do
+            [ -n "${line// /}" ] || continue
+            [[ "$line" =~ $charset ]] || refuse "a ruleset line carries a character outside [-A-Za-z0-9 _.,:/@{};]"
+            read -r command object family table _ <<< "$line"
+            case "$command $object" in
+                "add table"|"add chain"|"add set"|"add rule"|"add element") ;;
+                "flush table"|"flush chain"|"flush set") ;;
+                "delete table"|"delete chain"|"delete set"|"delete element") ;;
+                *) refuse "'$command $object' is not a command the helper applies" ;;
+            esac
+            [ "$family" = inet ] || refuse "'$family' is not the inet family"
+            nft_table "$table"
+            depth=0
+            for ((i = 0; i < ${#line}; i++)); do
+                case "${line:i:1}" in
+                    '{') depth=$((depth + 1)) ;;
+                    '}')
+                        depth=$((depth - 1))
+                        [ "$depth" -ge 0 ] || refuse "unbalanced braces"
+                        ;;
+                    ';') [ "$depth" -gt 0 ] || refuse "a ';' outside braces starts a second command" ;;
+                esac
+            done
+            [ "$depth" -eq 0 ] || refuse "unbalanced braces"
+            count=$((count + 1))
+        done <<< "$ruleset"
+        [ "$count" -gt 0 ] || refuse "an empty ruleset"
+        printf '%s\n' "$ruleset" | nft -f -
+        ;;
+    nft-list)
+        chain_name='^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$'
+        case "$#:${1:-}:${2:-}" in
+            3:table:inet) nft_table "$3" ;;
+            4:chain:inet)
+                nft_table "$3"
+                [[ "$4" =~ $chain_name ]] || refuse "'$4' is not a plain chain name"
+                ;;
+            3:table:bridge) [ "$3" = incus ] || refuse "the bridge family lists only Incus's own table" ;;
+            *) usage ;;
+        esac
+        nft list "$@"
+        ;;
     *)
         usage
         ;;
@@ -672,7 +730,7 @@ HELPER_BODY="${HELPER_BODY//@SPAMSERVICE_ROOT@/$SPAMSERVICE_ROOT}"
 HELPER_BODY="${HELPER_BODY//@SPAMSERVICE_USER@/$SPAMSERVICE_USER}
 "
 
-if [ "$NEED_VOLUMES" = "yes" ] || [ "$NEED_SPAMSERVICE" = "yes" ]; then
+if [ "$NEED_VOLUMES" = "yes" ] || [ "$NEED_SPAMSERVICE" = "yes" ] || [ "$NEED_NFT" = "yes" ]; then
     # Grant first, helper second: the controller switches to the helper the moment the
     # file is executable, so the narrow grant must already be live by then.
     write_sudoers hohenheim-helper "$SERVICE_USER ALL=(root) NOPASSWD: $HELPER_PATH
@@ -691,15 +749,18 @@ else
     skip "no privileged helper needed for these roles"
 fi
 
-# The pre-helper grant (btrfs, chown, chmod, mkdir, rm with ANY argument) was root for
-# anyone who could run a command as the service user. It is removed on every run, after
-# the helper above is in place.
-if [ -f /etc/sudoers.d/hohenheim-volumes ]; then
-    info "removing the unrestricted pre-helper grant /etc/sudoers.d/hohenheim-volumes"
-    run rm -f /etc/sudoers.d/hohenheim-volumes
-else
-    skip "no pre-helper volume grant present"
-fi
+# The pre-helper grants (btrfs, chown, chmod, mkdir, rm with ANY argument; nft with ANY
+# argument, whose -f <file> read any file as root) were root for anyone who could run a
+# command as the service user. They are removed on every run, after the helper above is in
+# place, so the controller's switch to the helper's verbs never meets a missing grant.
+for old_grant in hohenheim-volumes hohenheim-nft; do
+    if [ -f "/etc/sudoers.d/$old_grant" ]; then
+        info "removing the unrestricted pre-helper grant /etc/sudoers.d/$old_grant"
+        run rm -f "/etc/sudoers.d/$old_grant"
+    else
+        skip "no pre-helper $old_grant grant present"
+    fi
+done
 
 # The managed Spamservice runs as its own unprivileged account: SystemUsers launches it
 # with sudo -n --preserve-env -u #uid -g #gid -- /usr/bin/prlimit ..., which needs this

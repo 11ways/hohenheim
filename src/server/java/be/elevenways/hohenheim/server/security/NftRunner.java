@@ -2,6 +2,8 @@ package be.elevenways.hohenheim.server.security;
 
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostKeys;
+import be.elevenways.hohenheim.server.host.HostShell;
+import be.elevenways.hohenheim.server.host.PrivilegedHelper;
 import be.elevenways.protoblast.server.process.ProcessOutcome;
 import be.elevenways.protoblast.server.process.Subprocess;
 import be.elevenways.protoblast.server.process.Termination;
@@ -82,10 +84,16 @@ public interface NftRunner {
             return new NftRunner() {
                 @Override
                 public @NonNull Result run(@NonNull List<String> args, @Nullable String stdin) {
-                    List<String> argv = new ArrayList<>(HostKeys.sshArgv(server,
-                        List.of("sudo", "-n", "--", "nft")));
-                    argv.addAll(args);
-                    return Result.of(argv, stdin, SSH_TIMEOUT_SECONDS);
+                    HelperCall call = HelperCall.of(args, stdin);
+                    StringBuilder legacy = new StringBuilder("sudo -n -- nft");
+                    for (String arg : args) {
+                        legacy.append(' ').append(HostShell.quote(arg));
+                    }
+                    // ONE remote argument: ssh hands it to the remote shell as written.
+                    String remote = PrivilegedHelper.snippet(call.verb(), legacy.toString(),
+                        call.args().toArray(String[]::new));
+                    return Result.of(HostKeys.sshArgv(server, List.of(remote)),
+                        call.stdin(), SSH_TIMEOUT_SECONDS);
                 }
 
                 @Override
@@ -95,6 +103,38 @@ public interface NftRunner {
             };
         }
         return new Sudo();
+    }
+
+    /**
+     * One nft invocation as the privileged helper takes it: a ruleset on stdin for
+     * {@code nft-apply}, or the listed object for {@code nft-list}.
+     *
+     * AIDEV-NOTE: an argv command ({@code add element inet t s { ... }}) becomes ONE stdin
+     * line joined by spaces, which is exactly what nft itself does with its argv before it
+     * parses it, so the command means the same; the helper then judges every command in one
+     * grammar instead of two.
+     *
+     * @param stdin the ruleset {@code nft -f -} reads, only with that argv
+     */
+    record HelperCall(PrivilegedHelper.@NonNull Verb verb, @NonNull List<String> args,
+                      @Nullable String stdin) {
+
+        static @NonNull HelperCall of(@NonNull List<String> nftArgs, @Nullable String stdin) {
+            if (nftArgs.equals(List.of("-f", "-"))) {
+                return new HelperCall(PrivilegedHelper.Verb.NFT_APPLY, List.of(),
+                    stdin == null ? "" : stdin);
+            }
+            if (stdin != null) {
+                throw new IllegalArgumentException("stdin is read only by 'nft -f -', not by "
+                    + String.join(" ", nftArgs));
+            }
+            if (!nftArgs.isEmpty() && nftArgs.getFirst().equals("list")) {
+                return new HelperCall(PrivilegedHelper.Verb.NFT_LIST,
+                    List.copyOf(nftArgs.subList(1, nftArgs.size())), null);
+            }
+            return new HelperCall(PrivilegedHelper.Verb.NFT_APPLY, List.of(),
+                String.join(" ", nftArgs) + '\n');
+        }
     }
 
     record Result(int exitCode, @NonNull String stdout, @NonNull String stderr) {
@@ -142,9 +182,10 @@ public interface NftRunner {
     }
 
     /**
-     * Executes {@code sudo -n -- nft <args>} as root. This is the ONE root-command seam in
-     * the app; site processes keep going through SystemUsers (which refuses root by design
-     * and must stay that way).
+     * Executes nft as root through the privileged helper's nft verbs, or through the legacy
+     * {@code sudo -n -- nft <args>} grant on a host whose helper does not answer them yet. This
+     * is the ONE root-command seam of nftables; site processes keep going through SystemUsers
+     * (which refuses root by design and must stay that way).
      */
     final class Sudo implements NftRunner {
 
@@ -152,6 +193,11 @@ public interface NftRunner {
 
         @Override
         public @NonNull Result run(@NonNull List<String> nftArgs, @Nullable String stdin) {
+            HelperCall call = HelperCall.of(nftArgs, stdin);
+            if (PrivilegedHelper.answersLocally(call.verb())) {
+                return Result.of(PrivilegedHelper.argv(call.verb(),
+                    call.args().toArray(String[]::new)), call.stdin(), COMMAND_TIMEOUT_SECONDS);
+            }
             List<String> argv = new ArrayList<>(List.of("/usr/bin/sudo", "-n", "--", "nft"));
             argv.addAll(nftArgs);
             return Result.of(argv, stdin, COMMAND_TIMEOUT_SECONDS);

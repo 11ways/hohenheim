@@ -906,10 +906,22 @@
       "scope": "attention_title"
     }
   ],
-  "backup_failed": {
-    "text": "Back-up mislukt",
-    "scope": "notification_event"
-  },
+  "backup_failed": [
+    {
+      "text": "Back-up mislukt",
+      "scope": "notification_event"
+    },
+    {
+      "text": "Back-up mislukt",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "De back-up van {$subject} is mislukt",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
   "process_crash_loop": {
     "text": "Proces blijft crashen",
     "scope": "notification_event"

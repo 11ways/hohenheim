@@ -71,10 +71,13 @@ class PrivilegedHelperDriftTest {
             .as("step 4: the installer's spamservice account is the manager's")
             .contains("SPAMSERVICE_USER=\"" + SpamserviceManager.DEDICATED_SYSTEM_USER + "\"");
 
-        // 5. The unrestricted pre-helper grant is never written again.
+        // 5. The unrestricted pre-helper grants are never written again.
         assertThat(script)
             .as("step 5: no bare chown/chmod/rm/mkdir/btrfs grant survives")
             .doesNotContain("NOPASSWD: /usr/bin/btrfs")
-            .doesNotContain("NOPASSWD: /usr/bin/chown");
+            .doesNotContain("NOPASSWD: /usr/bin/chown")
+            .as("step 5: nor a bare nft grant")
+            .doesNotContain("NOPASSWD: $NFT_BIN")
+            .doesNotContain("write_sudoers hohenheim-nft");
     }
 }

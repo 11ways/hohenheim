@@ -214,32 +214,34 @@ class VolumeOperationsTest {
         VolumeOperations btrfs = VolumeOperations.forBackend(VolumeBackend.BTRFS, shell);
         String volume = "/srv/data/volumes/42/home";
         String helper = HostShell.quote(PrivilegedHelper.PATH);
-        String probe = "if [ -x " + helper + " ]; then sudo -n " + helper + " ";
+        Function<String, String> probe = verb -> "if [ -x " + helper
+            + " ] && grep -qxF '    " + verb + ")' " + helper + "; then sudo -n " + helper + " ";
 
-        // 1. own: the helper verb with the path and uid as separate quoted arguments, the
-        //    legacy chown only in the else branch.
+        // 1. own: the helper verb with the path and uid as separate quoted arguments when the
+        //    installed helper answers that verb, the legacy chown only in the else branch.
         btrfs.own(volume, 100042);
         assertThat(shell.last())
-            .as("step 1: own calls the helper's volume-own verb when it is installed")
-            .startsWith(probe + "volume-own '" + volume + "' '100042'; else ")
+            .as("step 1: own calls the helper's volume-own verb when the helper answers it")
+            .startsWith(probe.apply("volume-own") + "volume-own '" + volume + "' '100042'; else ")
             .contains("sudo -n chown 100042:100042 '" + volume + "'");
 
         // 2. Every other operation names its own verb the same way.
         btrfs.create(volume);
         assertThat(shell.last()).as("step 2: create")
-            .startsWith(probe + "volume-create '" + volume + "'; else ");
+            .startsWith(probe.apply("volume-create") + "volume-create '" + volume + "'; else ");
         btrfs.setQuota(volume, 1024L);
         assertThat(shell.last()).as("step 2: quota carries the limit")
-            .startsWith(probe + "volume-quota '" + volume + "' '1024'; else ");
+            .startsWith(probe.apply("volume-quota") + "volume-quota '" + volume + "' '1024'; else ");
         String snapshot = btrfs.snapshot(volume, "pre");
         assertThat(shell.last()).as("step 2: snapshot carries its target")
-            .startsWith(probe + "volume-snapshot '" + volume + "' '" + snapshot + "'; else ");
+            .startsWith(probe.apply("volume-snapshot") + "volume-snapshot '" + volume + "' '" + snapshot
+                + "'; else ");
         btrfs.destroy(volume);
         assertThat(shell.last()).as("step 2: destroy")
-            .startsWith(probe + "volume-destroy '" + volume + "'; else ");
+            .startsWith(probe.apply("volume-destroy") + "volume-destroy '" + volume + "'; else ");
         btrfs.usage(volume);
         assertThat(shell.last()).as("step 2: usage")
-            .startsWith(probe + "volume-usage '" + volume + "'; else ");
+            .startsWith(probe.apply("volume-usage") + "volume-usage '" + volume + "'; else ");
 
         // 3. A root shell needs neither: no helper, no sudo.
         FakeShell root = FakeShell.succeeding();

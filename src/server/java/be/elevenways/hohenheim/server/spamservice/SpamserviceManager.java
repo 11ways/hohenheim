@@ -891,7 +891,7 @@ public final class SpamserviceManager {
         // followed by an unbounded waitFor held the lifecycle thread forever behind a sudo
         // that hung, and no later start, stop or restart could run.
         ProcessOutcome result = SystemUsers.withEnvironment(
-                Subprocess.of(PrivilegedHelper.installedLocally()
+                Subprocess.of(PrivilegedHelper.answersLocally(PrivilegedHelper.Verb.SPAMSERVICE_OWN)
                     ? helperOwnershipCommand(path) : ownershipCommand(path, runAs)),
                 SystemUsers.safeEnvironment(System.getProperty("user.home")))
             .mergeStderr()

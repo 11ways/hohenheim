@@ -186,7 +186,7 @@ final class InstanceActions {
             .build();
     }
 
-    /** Export to the configured backup target (refuses, named, when none is set). */
+    /** Export to the configured backup target; offered dead, with the operation's own reason, while none is set. */
     private static @NonNull PanelAction<Row> backupAction() {
         return PanelAction.<Row, Integer>places(InstanceOperations.BACKUP, ActionPlacement.ROW,
                 (request, result) -> CmsActionResult.refreshWithToast(HohenheimMicrocopy.INSTANCE.of("backup_done")
