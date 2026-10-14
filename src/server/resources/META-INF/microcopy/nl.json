@@ -6572,7 +6572,7 @@
     "scope": "violations"
   },
   "host_capacity_reached": {
-    "text": "Host '{$name}' heeft geen ruimte voor deze workload: er is {$needed} MB nodig en slechts {$free} MB van het geheugenbudget is vrij. Kies een kleinere geheugenlimiet, maak een workload vrij of laat een extra host toe",
+    "text": "Host '{$name}' heeft geen ruimte voor deze workload: er is {$needed} MB nodig en slechts {$free} MB van het geheugenbudget is vrij. Kies een kleinere geheugenlimiet, maak een workload vrij of laat een extra host toe.",
     "scope": "violations"
   },
   "host_capacity_unproven": {

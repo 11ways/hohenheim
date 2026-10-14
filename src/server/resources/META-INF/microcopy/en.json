@@ -6572,7 +6572,7 @@
     "scope": "violations"
   },
   "host_capacity_reached": {
-    "text": "Host '{$name}' has no room for this workload: it needs {$needed} MB and only {$free} MB of its memory budget is free. Choose a smaller memory limit, free a workload, or admit another host",
+    "text": "Host '{$name}' has no room for this workload: it needs {$needed} MB and only {$free} MB of its memory budget is free. Choose a smaller memory limit, free a workload, or admit another host.",
     "scope": "violations"
   },
   "host_capacity_unproven": {
