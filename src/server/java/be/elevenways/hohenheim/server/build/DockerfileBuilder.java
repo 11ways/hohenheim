@@ -26,14 +26,14 @@ import java.util.Map;
  */
 public final class DockerfileBuilder implements Builders {
 
-    /** Where the sandbox pushes the build context; kaniko's own default workdir. */
-    static final String CONTEXT_PATH = "/workspace";
-
     /**
-     * Where the finished image tar lands; read back out through the archive API. Under {@code /kaniko}, which kaniko
-     * never snapshots or deletes: a multi-stage build wipes the filesystem (the pushed context included) between
-     * stages, so a tar under the context was gone by the time the last stage wrote it.
+     * Where the sandbox pushes the build context: kaniko's own directory for a fetched context. Under {@code /kaniko},
+     * which kaniko never snapshots or deletes: a multi-stage build wipes the rest of the filesystem between stages, so
+     * a context under its default {@code /workspace} was gone when a later stage copied from it.
      */
+    static final String CONTEXT_PATH = "/kaniko/buildcontext";
+
+    /** Where the finished image tar lands, read back out through the archive API; under {@code /kaniko} as well. */
     static final String ARTIFACT_PATH = "/kaniko/hohenheim-artifact.tar";
 
     /** Where a daemonless builder reads registry auth from. */

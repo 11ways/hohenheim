@@ -238,6 +238,34 @@ class SandboxedBuildLiveTest {
     }
 
     /**
+     * A multi-stage Dockerfile whose last stage copies from the build context: kaniko wipes its filesystem between
+     * stages, so a context it does not keep is gone by the time the last stage reads it.
+     */
+    @Test
+    void aLastStageCopiesFromTheBuildContext() {
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
+        LiveLane.require(LiveLane.Need.NETNS, netns != null,
+            "no private netns: the sandbox refuses to build unprotected");
+        DockerClient docker = new DockerClient();
+        LiveLane.requireImage(docker, TestImages.ALPINE);
+
+        Db.run(datasource, () -> {
+            HostFixtures.admitLocal();
+
+            // 1. Two stages: the last copies a file out of the first AND a file out of the context.
+            SandboxedBuilds.Result built = build(docker, OWNER_ID, "stages", fromAlpine("""
+                RUN echo first > /first.txt
+                FROM %s
+                COPY --from=0 /first.txt /first.txt
+                COPY Dockerfile /from-context.txt
+                """.formatted(TestImages.ALPINE)), Map.of(), 240_000);
+            assertThat(built.succeeded()).as("step 1: the last stage read the context (%s)", tail(logOf(built)))
+                .isTrue();
+        });
+    }
+
+    /**
      * The end-to-end site journey: a git-sourced Docker site builds in the sandbox,
      * deploys the artifact BY DIGEST, keeps its runtime secret out of the build, and
      * keeps running the built artifact when someone moves the tag underneath it.

@@ -481,9 +481,10 @@ public final class BuildSandbox {
         return spec;
     }
 
+    /** Creating, as a phase does: the context directory under {@code /kaniko} is not in the builder image. */
     private void pushContext(@NonNull String handle, @NonNull BuildPlan plan,
                              @NonNull Path contextDir) throws IOException {
-        this.docker.putArchiveFromDirectory(handle, plan.contextPath(), contextDir, Tar.Ownerships.SOURCE_TREE);
+        this.docker.putArchiveCreating(handle, plan.contextPath(), contextDir, null, Tar.Ownerships.SOURCE_TREE);
     }
 
     private void stageFiles(@NonNull String handle, @NonNull BuildPlan plan) throws IOException {
