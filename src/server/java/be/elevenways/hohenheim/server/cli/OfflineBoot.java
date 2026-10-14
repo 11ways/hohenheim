@@ -13,7 +13,8 @@ import java.util.function.Consumer;
 
 /**
  * Hohenheim's dispatch of the framework break-glass lane: settings, then the datasource,
- * then {@link OfflineCommands}, then exit -- never an HTTP boot.
+ * then {@link OfflineCommands}, then exit -- never an HTTP boot. A command that needs no
+ * host ({@code --build-info}) runs without either.
  *
  * AIDEV-NOTE: this call is the whole reason the lane exists on this host. Until 2026-08-13
  * NO application in the workspace dispatched {@code OfflineCommands.runIfRequested}, so
@@ -84,17 +85,17 @@ public final class OfflineBoot {
             return true;
         }
 
+        return OfflineCommands.runIfRequested(args, out, OfflineBoot::prepareHost);
+    }
+
+    /** Settings, grant declarations and the datasource, for a command that needs the host; closed after it. */
+    private static OfflineCommands.@NonNull PreparedHost prepareHost() {
         HohenheimSettingsBoot.load();
         // Registry writes only, and the same ones the migration lane does: a command that
         // touches a grant-aware model must see the same liveness declarations a boot would.
         HohenheimAccess.declareGrantableModels();
         HohenheimDatabase.openDatasource();
-
-        try {
-            return OfflineCommands.runIfRequested(args, out);
-        } finally {
-            HohenheimDatabase.closeDatasource();
-        }
+        return HohenheimDatabase::closeDatasource;
     }
 
     private static boolean namesAnOption(String[] args) {

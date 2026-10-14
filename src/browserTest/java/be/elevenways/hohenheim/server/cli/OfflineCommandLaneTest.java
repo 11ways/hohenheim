@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cli;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.hohenheim.test.ApiSupport;
@@ -15,6 +16,7 @@ import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.server.ServerZenitRuntime;
+import be.elevenways.zenit.server.cli.BuildInfoCommand;
 import be.elevenways.zenit.server.cli.EncryptionKeySurveyCommand;
 import be.elevenways.zenit.server.cli.HistorySecretSurveyCommand;
 import be.elevenways.zenit.server.cli.HostConsole;
@@ -25,6 +27,7 @@ import be.elevenways.zenit.server.cli.ReencryptSecretsCommand;
 import be.elevenways.zenit.server.cli.RetireEncryptionKeyCommand;
 import be.elevenways.zenit.server.cli.RotateEncryptionKeyCommand;
 import be.elevenways.zenit.server.setting.ServerSettings;
+import org.assertj.core.api.SoftAssertions;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -326,6 +329,36 @@ class OfflineCommandLaneTest {
             .as("step 4: the live ledger is untouched")
             .isEqualTo(liveLedger);
         Files.deleteIfExists(copy);
+    }
+
+    /**
+     * zd_deploy runs {@code --build-info} in the dev checkout, whose settings and database a build-info query must
+     * never read: the lane loaded that checkout's settings (settings/host-network.dry included) and opened its
+     * database before any command ran.
+     */
+    @Test
+    void buildInfoReadsTheJarAloneNeverTheHostsSettingsOrDatabase() {
+        Datasource before = Datasources.getDefault();
+        List<String> out = new ArrayList<>();
+        // The settings chain loads once per JVM, so the host's settings boot is observed by its role snapshot,
+        // which every load captures again.
+        HohenheimRoles.resetForTesting();
+        try {
+            // 1. It answers with the stamps.
+            assertThat(OfflineBoot.runIfRequested(new String[] {BuildInfoCommand.FLAG}, out::add))
+                .as("step 1: --build-info claims the run").isTrue();
+            assertThat(out).as("step 1: the stamps were printed").isNotEmpty();
+
+            // 2. Neither the host's settings boot nor its database was asked for.
+            SoftAssertions.assertSoftly(softly -> {
+                softly.assertThat(HohenheimRoles.isCaptured())
+                    .as("step 2: the host's settings boot never ran").isFalse();
+                softly.assertThat(Datasources.getDefault())
+                    .as("step 2: no datasource was opened").isSameAs(before);
+            });
+        } finally {
+            HohenheimRoles.capture();
+        }
     }
 
     /** One integer scalar straight off a sqlite file, outside any pool. */
