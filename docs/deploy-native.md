@@ -2,7 +2,8 @@
 
 Hohenheim's primary deployment shape is running ON the host it manages: one
 machine, Incus over the local unix socket, Docker over the local socket,
-nftables written locally through `sudo nft`. The remote (ssh/https) lane is a
+nftables written locally through the privileged helper's `nft-apply` verb. The
+remote (ssh/https) lane is a
 DIFFERENT deployment shape and is documented by the live tests
 (`LiveIncusHost`, `LiveRemoteHost`).
 
@@ -43,7 +44,13 @@ regression is catchable without a VM.
 
 What each step does, in order:
 
-1. **Host preflight** -- reads `/etc/os-release`, warns on a non-Debian host.
+1. **Host preflight** -- reads `/etc/os-release`, warns on a non-Debian host,
+   and decides once which packages the package steps will install. On a Debian
+   release past its long-term support (older than 12; Debian 11 bullseye is
+   archived, its security pool answers 404 for the packages its indexes still
+   name) it REFUSES before changing anything when it would have to install a
+   package, naming them; a host that already has every package runs on with a
+   warning. It never repoints apt at archive.debian.org for you.
 2. **Base packages** -- `curl gnupg sqlite3 unzip nftables sudo dnsutils` plus
    `ca-certificates`, decided per COMMAND (`dig`, not the transitional
    `dnsutils` package name, which would reinstall on every run).
@@ -62,16 +69,20 @@ What each step does, in order:
 6. **Layout** -- `settings/ data/ public/ logs/ tmp/` plus
    `/var/log/hohenheim`, `0750` and owned by the service user; the prefix is
    `0711` and `settings/` is `0700`.
-7. **Sudoers and the privileged helper** -- `/etc/sudoers.d/hohenheim-nft` (the
-   nft binary resolved on this host) for the proxy/firewall roles. For the
+7. **Sudoers and the privileged helper** -- for the proxy/firewall roles, the
    instances role, `--volume-root-size` or the firewall role: the helper
    `/usr/local/libexec/hohenheim/hohenheim-helper` (root:root 0755) and
-   `/etc/sudoers.d/hohenheim-helper`, which grants that ONE file. For the
+   `/etc/sudoers.d/hohenheim-helper`, which grants that ONE file. nft runs
+   through its `nft-apply` (ruleset on stdin, confined to `inet hohenheim_*`
+   tables) and `nft-list` verbs; there is no bare `nft` grant. For the
    firewall role: the unprivileged `spamservice` account and
    `/etc/sudoers.d/hohenheim-spamservice` (run-as `spamservice`, `SETENV`,
    `/usr/bin/prlimit` only), which is what the managed Spamservice is launched
-   through. The pre-helper `/etc/sudoers.d/hohenheim-volumes` grant is REMOVED
-   on every run. Every grant is validated with `visudo -cf` in a dot-named temp
+   through. The pre-helper `/etc/sudoers.d/hohenheim-volumes` and
+   `/etc/sudoers.d/hohenheim-nft` grants are REMOVED on every run, once the
+   helper is in place (deploy the jar first: a controller whose installed
+   helper lacks a verb falls back to the legacy grant for that verb). Every
+   grant is validated with `visudo -cf` in a dot-named temp
    file (sudo ignores it) and only renamed into place, 0440, once it parsed, so
    a bad grant can never break sudo on the host. Every other file the script
    writes is also staged beside its target and renamed in with its final mode,
@@ -211,16 +222,14 @@ box with no sites yet.
     useradd --system --create-home --home-dir /opt/hohenheim \
         --shell /usr/bin/nologin hohenheim
     usermod -aG docker,incus-admin hohenheim       # both daemon sockets
-    printf 'hohenheim ALL=(root) NOPASSWD: /usr/bin/nft\n' \
-        > /etc/sudoers.d/hohenheim-nft
-    chmod 440 /etc/sudoers.d/hohenheim-nft
-    visudo -cf /etc/sudoers.d/hohenheim-nft
 
-`NftRunner.Sudo` invokes `/usr/bin/sudo -n -- nft`. A host that places
-WORKSPACES or APPLICATIONS (a btrfs volume root), or runs the firewall role's
-managed Spamservice, needs the privileged helper, because that work is root by
-nature -- chown to the workspace's foreign uid, qgroup limits, subvolume snapshot
-and delete all refuse to an ordinary user. Do NOT hand-write it: take the helper
+Do NOT grant `nft` itself: as root, `nft -f <file>` reads any file and loads
+any ruleset. A host with nftables enforcement (the proxy or firewall role), one
+that places WORKSPACES or APPLICATIONS (a btrfs volume root), or one that runs
+the firewall role's managed Spamservice needs the privileged helper, because
+that work is root by nature -- nft rulesets, chown to the workspace's foreign
+uid, qgroup limits, subvolume snapshot and delete all refuse to an ordinary
+user. Do NOT hand-write it: take the helper
 out of `tools/install-host.sh` (run the installer, or copy the `HELPER_BODY`
 heredoc with its three `@...@` roots filled in) to
 `/usr/local/libexec/hohenheim/hohenheim-helper`, root:root 0755, and grant that
@@ -232,6 +241,7 @@ one file:
     visudo -cf /etc/sudoers.d/.hohenheim-helper.new \
         && mv /etc/sudoers.d/.hohenheim-helper.new /etc/sudoers.d/hohenheim-helper
 
+`NftRunner.Sudo` (each nft call mapped onto the `nft-apply` or `nft-list` verb),
 `BtrfsVolumeOperations` and `SpamserviceManager` call it through
 `PrivilegedHelper` whenever the shell is not root (`HostShell.elevated`). The
 helper confines every path to the volume root (or the managed Spamservice
@@ -358,7 +368,7 @@ verify that line before anything else.
 
 1. `http://host:3000/` -> `/setup` creates the superuser.
 2. Servers page: the implicit `local` Docker host row already exists.
-   Preflight it (probe container + real nft add/list/delete through sudo),
+   Preflight it (probe container + real nft add/list/delete through the privileged helper),
    Admit it, and set its posture (`shared_container` for hostile containers).
    The local row's identity (name/target/mode/runtime) is immutable; posture
    and public addresses are the operator-editable columns.

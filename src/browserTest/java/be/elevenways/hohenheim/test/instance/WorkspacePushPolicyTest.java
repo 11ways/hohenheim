@@ -4,11 +4,9 @@ import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.WorkspaceBuilds;
-import be.elevenways.hohenheim.server.instance.WorkspaceKind;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -21,9 +19,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -249,28 +245,6 @@ class WorkspacePushPolicyTest {
 
     /** A source-declaring workspace on the fixture host, with no port to publish. */
     private static int workspace(String name) {
-        RuntimeImageModel images = Models.get(RuntimeImageModel.class);
-        Row image = images.findByName("push-policy-image");
-        if (image == null) {
-            image = images.createEmptyRow();
-            image.set(RuntimeImageModel.NAME, "push-policy-image");
-            image.set(RuntimeImageModel.INCUS_IMAGE, "hohenheim/node-22");
-            image.set(RuntimeImageModel.DOCKER_IMAGE, "hohenheim/node-22:1");
-            image.set(RuntimeImageModel.DEFAULT_COMMAND, "npm start");
-            image.set(RuntimeImageModel.BUILD_CONTEXT, "images/node-22");
-            image.set(RuntimeImageModel.ENABLED, true);
-            images.save(image);
-        }
-        Map<String, Object> settings = new LinkedHashMap<>();
-        settings.put("repository_url", "https://git.example.test/team/app.git");
-        settings.put("branch", "main");
-        Row row = Models.get(InstanceModel.class).createEmptyRow();
-        row.set(InstanceModel.NAME, name);
-        row.set(InstanceModel.KIND, WorkspaceKind.ID.toString());
-        row.set(InstanceModel.SETTINGS, settings);
-        row.set(InstanceModel.SERVER_ID, hostId);
-        row.set(InstanceModel.RUNTIME_IMAGE_ID, image.get(RuntimeImageModel.ID));
-        Models.get(InstanceModel.class).save(row);
-        return row.get(InstanceModel.ID);
+        return FakeWorkspaceDaemon.sourceWorkspace(name, hostId, null);
     }
 }

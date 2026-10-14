@@ -204,56 +204,6 @@ info "roles: proxy=$role_proxy dns=$role_dns firewall=$role_firewall stacks=$rol
 
 # --- 1. host preflight ------------------------------------------------------
 
-step "Host preflight"
-if [ -r /etc/os-release ]; then
-    . /etc/os-release
-    info "os: ${PRETTY_NAME:-unknown}"
-    CODENAME="${VERSION_CODENAME:-bookworm}"
-    if [ "${ID:-}" != "debian" ]; then
-        info "WARNING: this installer targets Debian; '${ID:-unknown}' is untested"
-    fi
-else
-    CODENAME="bookworm"
-    info "WARNING: no /etc/os-release; assuming Debian $CODENAME"
-fi
-command -v systemctl >/dev/null 2>&1 || info "WARNING: no systemctl found; the unit will not start"
-
-# Reports the codename an apt repository actually publishes, falling back to
-# bookworm when a fresh Debian release has no suite there yet.
-repo_codename() {
-    local base="$1" want="$2"
-    if curl -fsI "$base/dists/$want/Release" >/dev/null 2>&1; then
-        printf '%s' "$want"
-    else
-        printf 'bookworm'
-    fi
-}
-
-# --- 2. base packages -------------------------------------------------------
-
-step "Base packages"
-# Each entry is package:command -- the COMMAND decides, because a package name can
-# be transitional (dnsutils became bind9-dnsutils) and would reinstall on every run.
-BASE_PACKAGES="curl:curl gnupg:gpg sqlite3:sqlite3 unzip:unzip nftables:nft sudo:sudo dnsutils:dig"
-missing=""
-for entry in $BASE_PACKAGES; do
-    pkg="${entry%%:*}"
-    cmd="${entry##*:}"
-    command -v "$cmd" >/dev/null 2>&1 || missing="$missing $pkg"
-done
-dpkg -s ca-certificates >/dev/null 2>&1 || missing="$missing ca-certificates"
-if [ -n "$missing" ]; then
-    info "installing:$missing"
-    run apt-get update -qq
-    run apt-get install -y -qq $missing
-else
-    skip "all base packages present"
-fi
-
-# --- 3. Java runtime --------------------------------------------------------
-
-step "Java $JAVA_MAJOR runtime"
-
 # Prints the first java binary whose feature version is at least JAVA_MAJOR.
 find_java() {
     local candidate version
@@ -272,7 +222,92 @@ find_java() {
     return 1
 }
 
+step "Host preflight"
+OS_ID="unknown"
+OS_MAJOR=""
+if [ -r /etc/os-release ]; then
+    . /etc/os-release
+    info "os: ${PRETTY_NAME:-unknown}"
+    CODENAME="${VERSION_CODENAME:-bookworm}"
+    OS_ID="${ID:-unknown}"
+    OS_MAJOR="${VERSION_ID:-}"; OS_MAJOR="${OS_MAJOR%%.*}"
+    if [ "$OS_ID" != "debian" ]; then
+        info "WARNING: this installer targets Debian; '$OS_ID' is untested"
+    fi
+else
+    CODENAME="bookworm"
+    info "WARNING: no /etc/os-release; assuming Debian $CODENAME"
+fi
+command -v systemctl >/dev/null 2>&1 || info "WARNING: no systemctl found; the unit will not start"
+
+# Every package the package steps below install, decided ONCE here: the archived-release
+# refusal reads the same answers the steps act on.
+# Each base entry is package:command -- the COMMAND decides, because a package name can
+# be transitional (dnsutils became bind9-dnsutils) and would reinstall on every run.
+BASE_PACKAGES="curl:curl gnupg:gpg sqlite3:sqlite3 unzip:unzip nftables:nft sudo:sudo dnsutils:dig"
+BASE_MISSING=""
+for entry in $BASE_PACKAGES; do
+    pkg="${entry%%:*}"
+    cmd="${entry##*:}"
+    command -v "$cmd" >/dev/null 2>&1 || BASE_MISSING="$BASE_MISSING $pkg"
+done
+dpkg -s ca-certificates >/dev/null 2>&1 || BASE_MISSING="$BASE_MISSING ca-certificates"
 JAVA_BIN="$(find_java || true)"
+DOCKER_MISSING="no"
+if [ "$WITH_DOCKER" = "yes" ] && ! command -v docker >/dev/null 2>&1; then
+    DOCKER_MISSING="yes"
+fi
+BTRFS_MISSING="no"
+if [ -n "$VOLUME_ROOT_GB" ] && ! dpkg -s btrfs-progs >/dev/null 2>&1; then
+    BTRFS_MISSING="yes"
+fi
+TO_INSTALL="$BASE_MISSING"
+[ -n "$JAVA_BIN" ] || TO_INSTALL="$TO_INSTALL temurin-$JAVA_MAJOR-jre"
+[ "$DOCKER_MISSING" = "no" ] || TO_INSTALL="$TO_INSTALL docker-ce"
+[ "$BTRFS_MISSING" = "no" ] || TO_INSTALL="$TO_INSTALL btrfs-progs"
+
+# AIDEV-NOTE: a Debian release past its long-term support is ARCHIVED: its indexes still
+# load, but the security pool no longer serves the packages they name, so an apt-get
+# install fails halfway through a run (seen on starfleet, Debian 11, 2026-10-14: gnupg
+# 404). The installer never rewrites the host's apt sources to archive.debian.org: that
+# silently puts a host on a release without security updates. It refuses, before any
+# change, when it would have to install something; a host whose packages are all
+# present runs on with a warning. Raise DEBIAN_OLDEST_SUPPORTED when Debian 12's LTS
+# ends (2028-06-30).
+DEBIAN_OLDEST_SUPPORTED="12"
+if [ "$OS_ID" = "debian" ] && [ -n "$OS_MAJOR" ] && [ "$OS_MAJOR" -lt "$DEBIAN_OLDEST_SUPPORTED" ] 2>/dev/null; then
+    if [ -n "$TO_INSTALL" ]; then
+        fail "Debian $OS_MAJOR ($CODENAME) is past its long-term support and archived: its security pool no longer serves the packages apt would fetch, so installing$TO_INSTALL would fail halfway. Nothing was changed. Upgrade the host to Debian $DEBIAN_OLDEST_SUPPORTED or later and re-run, or install$TO_INSTALL yourself and re-run."
+    fi
+    info "WARNING: Debian $OS_MAJOR ($CODENAME) is past its long-term support and gets no security updates; every package this installer needs is present, so it installs none. Upgrade the host to Debian $DEBIAN_OLDEST_SUPPORTED or later."
+fi
+
+# Reports the codename an apt repository actually publishes, falling back to
+# bookworm when a fresh Debian release has no suite there yet.
+repo_codename() {
+    local base="$1" want="$2"
+    if curl -fsI "$base/dists/$want/Release" >/dev/null 2>&1; then
+        printf '%s' "$want"
+    else
+        printf 'bookworm'
+    fi
+}
+
+# --- 2. base packages -------------------------------------------------------
+
+step "Base packages"
+if [ -n "$BASE_MISSING" ]; then
+    info "installing:$BASE_MISSING"
+    run apt-get update -qq
+    run apt-get install -y -qq $BASE_MISSING
+else
+    skip "all base packages present"
+fi
+
+# --- 3. Java runtime --------------------------------------------------------
+
+step "Java $JAVA_MAJOR runtime"
+
 if [ -n "$JAVA_BIN" ]; then
     skip "java $JAVA_MAJOR+ already present at $JAVA_BIN"
 else
@@ -299,7 +334,7 @@ info "java: $JAVA_BIN"
 step "Docker engine"
 if [ "$WITH_DOCKER" != "yes" ]; then
     skip "not requested by any role"
-elif command -v docker >/dev/null 2>&1; then
+elif [ "$DOCKER_MISSING" = "no" ]; then
     skip "docker already installed"
 else
     DOCKER_BASE="https://download.docker.com/linux/debian"
@@ -787,7 +822,7 @@ VOLUME_MOUNT="$VOLUME_ROOT_DIR"
 if [ -z "$VOLUME_ROOT_GB" ]; then
     skip "--volume-root-size not given"
 else
-    if dpkg -s btrfs-progs >/dev/null 2>&1; then
+    if [ "$BTRFS_MISSING" = "no" ]; then
         skip "btrfs-progs present"
     else
         run apt-get install -y -qq btrfs-progs

@@ -1,23 +1,34 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.app.PutOnlineGroup;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
+import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.WorkspaceKind;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.ExecSupport;
+import be.elevenways.hohenheim.server.runtime.ImageIdentity;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
+import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
+import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.ui.BadgeColor;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,7 +49,7 @@ import java.util.Set;
  * ({@link #remove}) or unanswerable ({@link #setUnreachable}) -- the last one being the
  * distinction the trigger policy turns on.
  */
-final class FakeWorkspaceDaemon implements InstanceRuntime, ExecSupport {
+final class FakeWorkspaceDaemon implements InstanceRuntime, ExecSupport, VolumeSnapshotSupport {
 
     /** Handles the fake daemon knows about, and whether each is running. */
     private final Map<String, Boolean> workloads = new LinkedHashMap<>();
@@ -71,6 +82,12 @@ final class FakeWorkspaceDaemon implements InstanceRuntime, ExecSupport {
      */
     String execOutput = "hohenheim-commit:" + COMMIT + "\n";
 
+    /** The exit code every exec that is not the checkout script answers with (the build command's). */
+    int buildExitCode;
+
+    /** Every start fails, as a daemon that cannot bring the container back does. */
+    boolean failStart;
+
     private boolean unreachable;
 
     /** Install this daemon behind the real workspace kind's identifier. */
@@ -83,6 +100,40 @@ final class FakeWorkspaceDaemon implements InstanceRuntime, ExecSupport {
     /** Put the real kind back, so a later class in this JVM gets the production handler. */
     static void uninstall() {
         InstanceKinds.replace(new WorkspaceKind());
+    }
+
+    /**
+     * A source-declaring workspace on {@code hostId}, with no port to publish.
+     *
+     * @param buildCommand the declared build command, or null for none
+     */
+    static int sourceWorkspace(@NonNull String name, int hostId, @Nullable String buildCommand) {
+        RuntimeImageModel images = Models.get(RuntimeImageModel.class);
+        Row image = images.findByName("push-policy-image");
+        if (image == null) {
+            image = images.createEmptyRow();
+            image.set(RuntimeImageModel.NAME, "push-policy-image");
+            image.set(RuntimeImageModel.INCUS_IMAGE, "hohenheim/node-22");
+            image.set(RuntimeImageModel.DOCKER_IMAGE, "hohenheim/node-22:1");
+            image.set(RuntimeImageModel.DEFAULT_COMMAND, "npm start");
+            image.set(RuntimeImageModel.BUILD_CONTEXT, "images/node-22");
+            image.set(RuntimeImageModel.ENABLED, true);
+            images.save(image);
+        }
+        Map<String, Object> settings = new LinkedHashMap<>();
+        settings.put("repository_url", "https://git.example.test/team/app.git");
+        settings.put("branch", "main");
+        if (buildCommand != null) {
+            settings.put(GitSourceSchema.BUILD_COMMAND, buildCommand);
+        }
+        Row row = Models.get(InstanceModel.class).createEmptyRow();
+        row.set(InstanceModel.NAME, name);
+        row.set(InstanceModel.KIND, WorkspaceKind.ID.toString());
+        row.set(InstanceModel.SETTINGS, settings);
+        row.set(InstanceModel.SERVER_ID, hostId);
+        row.set(InstanceModel.RUNTIME_IMAGE_ID, image.get(RuntimeImageModel.ID));
+        Models.get(InstanceModel.class).save(row);
+        return row.get(InstanceModel.ID);
     }
 
     /** The daemon answers nothing at all: UNREACHABLE, never ABSENT. */
@@ -124,6 +175,9 @@ final class FakeWorkspaceDaemon implements InstanceRuntime, ExecSupport {
     @Override
     public void start(@NonNull String handle) throws IOException {
         requireReachable();
+        if (this.failStart) {
+            throw new IOException("scripted start failure");
+        }
         this.workloads.put(handle, true);
     }
 
@@ -167,7 +221,43 @@ final class FakeWorkspaceDaemon implements InstanceRuntime, ExecSupport {
         requireReachable();
         this.execs.add(command.get(command.size() - 1));
         this.execOptions.add(options);
-        return new ExecSupport.ExecOutcome(0, this.execOutput);
+        // The checkout script is the one that prints the commit marker; anything else is the build command.
+        boolean checkout = command.get(command.size() - 1).contains("hohenheim-commit:");
+        return new ExecSupport.ExecOutcome(checkout ? 0 : this.buildExitCode,
+            checkout ? this.execOutput : "build output\n");
+    }
+
+    /** A workspace declares no named volumes, so a capture only proves it ran while the workload was stopped. */
+    @Override
+    public @NonNull List<CapturedVolume> captureVolumes(@NonNull InstanceSpec spec,
+                                                        @NonNull Map<String, String> logicalVolumes,
+                                                        @NonNull Path directory,
+                                                        long maxBytesPerVolume) throws IOException {
+        if (status(spec.handle()).running()) {
+            throw new IOException("capture attempted while the workload runs");
+        }
+        if (!logicalVolumes.isEmpty()) {
+            throw new IOException("the fake workspace daemon does not model volume bytes");
+        }
+        this.events.add("capture:" + spec.handle());
+        return List.of();
+    }
+
+    @Override
+    public void restoreVolumes(@NonNull InstanceSpec spec, @NonNull Map<String, String> logicalVolumes,
+                               @NonNull Map<String, Path> tars) throws IOException {
+        throw new IOException("the fake workspace daemon does not restore volumes");
+    }
+
+    @Override
+    public void removeVolumesForRestore(@NonNull InstanceSpec spec, @NonNull Map<String, String> logicalVolumes,
+                                        @NonNull Collection<String> names) throws IOException {
+        throw new IOException("the fake workspace daemon does not remove volumes");
+    }
+
+    @Override
+    public @NonNull ImageIdentity imageIdentity(@NonNull InstanceSpec spec) {
+        return new ImageIdentity(spec.image(), "sha256:" + "b".repeat(64));
     }
 
     /** The real workspace kind, delegating everything but its runtime and host prep. */
@@ -191,6 +281,10 @@ final class FakeWorkspaceDaemon implements InstanceRuntime, ExecSupport {
             return this.real.supportedRuntimes();
         }
         @Override public boolean supportsVolumes() { return this.real.supportsVolumes(); }
+        // The deploy fold and the put-online group are the kind's own decisions, never the daemon's: without them
+        // InstanceService.deploy of a repository workspace skipped WorkspaceBuilds and proved nothing about it.
+        @Override public boolean deploysSource(@NonNull Row instance) { return this.real.deploysSource(instance); }
+        @Override public PutOnlineGroup putOnlineGroup() { return this.real.putOnlineGroup(); }
         @Override public boolean usesRuntimeImage() { return this.real.usesRuntimeImage(); }
         @Override public boolean requiresRuntimeImage() {
             return this.real.requiresRuntimeImage();

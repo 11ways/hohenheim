@@ -8,6 +8,8 @@ import be.elevenways.hohenheim.test.live.LiveNamespaces;
 import be.elevenways.zenit.auth.server.ZenitAuth;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
+import be.elevenways.zenit.common.orm.datasource.Datasource;
+import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.orm.backup.SnapshotCapableDatasource;
@@ -80,6 +82,13 @@ public final class TestDatabases {
         }
 
         SqlDatasource outgoing = HohenheimDatabase.datasource();
+        // AIDEV-NOTE: a class whose subject is migrating binds its own database as the default by hand and leaves
+        // it bound; the default registry refuses a second binding (no silent last-wins), so this shared-JVM reset
+        // point releases it before the product's re-init, which supersedes only the datasource it opened itself.
+        Datasource bound = Datasources.getDefault();
+        if (bound != null && bound != outgoing) {
+            Datasources.unregister(Datasources.DEFAULT, bound);
+        }
 
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
         HohenheimDatabase.init();
@@ -126,7 +135,6 @@ public final class TestDatabases {
         HohenheimTestRuntime.ensureBooted();
         if (alreadyBooted) {
             // Runtime boot is process-wide, but its SEED stage belongs to each new database.
-            TaskRuntime.registerModels(datasource);
             Seeds.runDiscovered();
         }
         return datasource;
@@ -161,12 +169,10 @@ public final class TestDatabases {
      * opened its own file (an upgrade fixture) instead of a fresh copy.
      *
      * AIDEV-NOTE: without it such a class passes only as the first in its JVM: zenit-auth kept answering from the
-     * database of the class before. The task models are registered on it too (the service stays stopped, as after
-     * every swap), so the class reads its own task rows.
+     * database of the class before.
      */
     public static synchronized void adoptCurrentDatabase() {
         rebindDatasourceBoundServices();
-        TaskRuntime.registerModels(HohenheimDatabase.datasource());
     }
 
     /**
@@ -192,6 +198,10 @@ public final class TestDatabases {
     private static void rebindDatasourceBoundServices() {
         ZenitAuth.initForTests(HohenheimDatabase.datasource());
         TaskRuntime.stop();
+        // Stopping takes the task models back; a booted host always has them registered before MODULES (a panel's
+        // source walk resolves every entry's model, the task schedules' included), so they come back on the new
+        // database, the service still stopped.
+        TaskRuntime.registerModels(HohenheimDatabase.datasource());
     }
 
     /**

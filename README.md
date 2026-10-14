@@ -135,28 +135,36 @@ with `bind()`, nothing else. Option 1 supersedes it.
 ## Root grants
 
 Hohenheim runs as an unprivileged service user and reaches for root through
-`sudo -n` in exactly three places. `tools/install-host.sh` writes the matching
+`sudo -n` in exactly two places: the privileged helper (nftables and the volume
+root) and the managed spamservice child. `tools/install-host.sh` writes the matching
 sudoers files and validates each with `visudo -cf`; the grants are narrow, not
 the blanket `NOPASSWD: ALL` earlier versions of this document described.
 
-- **nftables** (`proxy` or `firewall` role). `NftRunner` executes
-  `sudo -n -- nft ...`; that is the one root-command seam of the ban enforcer.
+- **nftables** (`proxy` or `firewall` role). `NftRunner` goes through the
+  privileged helper's `nft-apply` verb (a ruleset on stdin, refused whole
+  unless every line adds, flushes or deletes something inside an
+  `inet hohenheim_*` table) and its `nft-list` verb (one of those tables or a
+  chain in it, plus Incus's own `bridge incus` table, read-only). There is no
+  bare `nft` grant: `nft -f <file>` as root reads any file and loads any
+  ruleset. A re-run of the installer removes the pre-helper
+  `/etc/sudoers.d/hohenheim-nft` once the helper is in place; until then a
+  controller whose installed helper lacks the verbs falls back to
+  `sudo -n -- nft` per verb, so deploy the new jar first and re-run the
+  installer second.
+
+- **Volume root** (`instances` role, `--volume-root-size`, or the firewall role's
+  managed Spamservice directory). Btrfs subvolume and quota operations and the
+  ownership fixes that go with them run as the same helper's volume verbs,
+  each confined to the volume root (or the Spamservice directory) the installer
+  baked into it. The helper is the only file the root grant names:
 
   ```
-  # /etc/sudoers.d/hohenheim-nft
-  hohenheim ALL=(root) NOPASSWD: /usr/sbin/nft
+  # /etc/sudoers.d/hohenheim-helper
+  hohenheim ALL=(root) NOPASSWD: /usr/local/libexec/hohenheim/hohenheim-helper
   ```
 
-  The installer substitutes whatever `command -v nft` reports, falling back to
-  `/usr/sbin/nft`.
-
-- **Volume root** (`instances` role, or `--volume-root-size`). Btrfs subvolume
-  and quota operations plus the ownership fixes that go with them:
-
-  ```
-  # /etc/sudoers.d/hohenheim-volumes
-  hohenheim ALL=(root) NOPASSWD: /usr/bin/btrfs, /usr/bin/chown, /usr/bin/chmod, /usr/bin/mkdir, /usr/bin/rm
-  ```
+  The pre-helper `/etc/sudoers.d/hohenheim-volumes` grant is removed by the
+  installer like the nft one.
 
 - **The managed spamservice child.** This is the only process Hohenheim still
   spawns under a different unix uid, and the setsid + `sudo --preserve-env -u
@@ -739,9 +747,9 @@ SSH (22) and DNS (53) can never become collateral. Timed bans use per-element
 timeouts, so the kernel expires them on its own; the bans table stays the
 source of truth and is resynced into the kernel at boot.
 
-**Sudoers requirement.** nftables enforcement shells `sudo -n -- nft ...` as
-root, so the Hohenheim user needs passwordless sudo for `nft`
-(`/etc/sudoers.d/hohenheim-nft`, see [Root grants](#root-grants)). All
+**Sudoers requirement.** nftables enforcement applies and lists its rulesets
+through the privileged helper's `nft-apply` and `nft-list` verbs as root
+(`/etc/sudoers.d/hohenheim-helper`, see [Root grants](#root-grants)). All
 nft failures are logged, never fatal: dev machines without sudo/nft run fine
 with `nftables_enabled` off (the default).
 
@@ -853,8 +861,8 @@ Tune:
 ### Keep `NoNewPrivileges` in mind
 
 If you enable `NoNewPrivileges=true` systemd will block `sudo` from raising
-privileges. That breaks the `nft` and btrfs grants and the managed spamservice
-child's uid drop. Leave it `false`.
+privileges. That breaks the helper grant (nft and volumes) and the managed
+spamservice child's uid drop. Leave it `false`.
 
 ## Troubleshooting
 

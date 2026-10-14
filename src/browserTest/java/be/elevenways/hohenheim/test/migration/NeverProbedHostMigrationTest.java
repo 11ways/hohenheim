@@ -58,11 +58,15 @@ class NeverProbedHostMigrationTest {
         assertThat(backendOf(datasource, neverProbed))
             .as("step 2: before the upgrade a never-probed host stores none").isEqualTo("none");
 
-        // 3. The upgrade under integrity=fail applies M012 alone: M011 is unchanged, so nothing is refused.
+        // 3. The upgrade under integrity=fail applies Hohenheim's migrations after 011 (M012 first) and nothing else:
+        //    M011 is unchanged, so nothing is refused.
         withIntegrityMode("fail", () -> {
             MigrationRunnerResult upgrade = new MigrationRunner(datasource).migrate();
             assertThat(upgrade.isSuccess()).as("step 3: the upgrade from 011 under integrity=fail succeeds").isTrue();
-            assertThat(upgrade.getAppliedCount()).as("step 3: it applies exactly M012").isEqualTo(1);
+            int after011 = datasource.rawQuery("SELECT version FROM zenit_migrations"
+                + " WHERE stream = 'be.elevenways.hohenheim' AND version > '011'").size();
+            assertThat(upgrade.getAppliedCount()).as("step 3: it applies exactly the Hohenheim migrations after 011")
+                .isEqualTo(after011);
         });
         assertThat(datasource.rawQuery("SELECT name FROM zenit_migrations WHERE stream = 'be.elevenways.hohenheim'"
                 + " AND version = '012'"))
