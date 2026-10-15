@@ -190,6 +190,12 @@ public final class VmKind implements InstanceKindHandler {
         return PublishedPort.declaredIn(settings) ? PutOnlineReach.PORTS : PutOnlineReach.NONE;
     }
 
+    /** Put online as a machine reached on its console, or as a service reached on the ports it publishes. */
+    @Override
+    public @NonNull List<PutOnlineReach> putOnlineReaches() {
+        return List.of(PutOnlineReach.NONE, PutOnlineReach.PORTS);
+    }
+
     @Override
     public @NonNull List<String> portSettings() {
         return List.of(PUBLISHED_PORTS.getName());

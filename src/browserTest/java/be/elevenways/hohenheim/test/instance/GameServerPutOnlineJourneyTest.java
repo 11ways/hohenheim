@@ -641,6 +641,120 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
             .isEqualTo(published.get(0).hostPort());
     }
 
+    /**
+     * A virtual machine goes online as a service on its own ports, a first-class choice beside the machine card: its
+     * wizard asks Where, Options and the shared Ports step; one run creates it, claims its game port, realizes it as
+     * a NAT proxy device of the Incus daemon and gives it its game address; its Overview says where players connect.
+     */
+    @Test
+    void aVirtualMachineGoesOnlineOnItsOwnPorts() throws Exception {
+        AccessContext operator = TenantConduits.operator();
+        String kind = "hohenheim:vm";
+
+        // 1. The chooser offers the virtual machine a second way, on its own ports; the machine card keeps its flow.
+        String chooser = adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE).body();
+        assertThat(chooser).as("step 1: a card for the virtual machine on its own ports")
+            .contains("instance:" + kind + "@ports");
+        assertThat(adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE + "?choice=instance:" + kind + "@ports").headers()
+                .firstValue("location").orElse(""))
+            .as("step 1: the ports card opens the machine's wizard reached on its ports")
+            .contains("workload=hohenheim%3Avm").contains("reach=ports");
+        assertThat(adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE + "?choice=instance:" + kind).headers()
+                .firstValue("location").orElse(""))
+            .as("step 1: the machine card still opens the machine wizard").doesNotContain("reach=");
+
+        // 2. The ports wizard is the shared one: Where, the machine's settings without its ports, then Ports with the
+        //    game address; no address and no HTTPS.
+        String wizard = adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE + "?workload=" + kind + "&reach=ports").body();
+        assertThat(wizard).as("step 2: where, options and ports")
+            .contains("data-zf-step=\"where\"").contains("data-zf-step=\"settings\"")
+            .contains("data-zf-step=\"ports\"").contains("name=\"" + PutOnline.GAME_ADDRESS.getName() + "\"");
+        assertThat(wizard).as("step 2: no HTTPS step and no address")
+            .doesNotContain("data-zf-step=\"https\"")
+            .doesNotContain("name=\"" + PutOnline.HOSTNAME.getName() + "\"");
+        assertThat(wizard).as("step 2: the Ports step owns the ports; Options asks the machine's own settings")
+            .doesNotContain("settings.published_ports").contains("name=\"settings.image\"");
+
+        try (FakeIncusSocket incus = FakeIncusSocket.start()) {
+            int vmHost = HostFixtures.admittedIncusHost(PREFIX + "vm-host");
+            Row host = Models.get(ServerModel.class).findById(vmHost);
+            host.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
+            host.set(ServerModel.INCUS_URL, incus.url());
+            host.set(ServerModel.PUBLIC_IPV4, HOST_IPV4);
+            Models.get(ServerModel.class).save(host);
+            Integer vmId = null;
+            try {
+                // 3. One run with a game port and a game address: app, ports and game address done, and started.
+                String gameAddress = "vm." + ORIGIN;
+                Map<String, Object> form = new LinkedHashMap<>();
+                form.put(InstanceModel.NAME.getName(), PREFIX + "vm-service");
+                form.put("serverId", vmHost);
+                form.put(InstanceModel.KIND.getName(), kind);
+                form.put(InstanceModel.SETTINGS.getName(), new LinkedHashMap<>(Map.of("image",
+                    "images:alpine/3.22/cloud", PublishedPort.SRV_SERVICE, "minecraft")));
+                form.put(PutOnline.PORTS, List.of(portRow("game", "25565", "tcp")));
+                form.put(PutOnline.GAME_ADDRESS.getName(), gameAddress);
+                OperationRun run = PutOnlineJourneyTest.ended(PutOnlineJourneyTest.runOf(OperationPipeline.invoke(
+                        OperationRequest.of(PutOnline.PUT_WORKLOAD_SERVICE_ONLINE, CmsPlacementSurface.ADMIN_ACTION)
+                            .caller(operator).form(form))),
+                    operator, "step 3");
+                Row vm = Models.get(InstanceModel.class).find()
+                    .where(InstanceModel.NAME.eq(PREFIX + "vm-service")).first();
+                assertThat(vm).as("step 3: the machine exists (%s)", run.outcome()).isNotNull();
+                vmId = vm.get(InstanceModel.ID);
+                assertThat(run.status()).as("step 3: the run succeeded (%s)", run.outcome())
+                    .isEqualTo(OperationRunStatus.SUCCEEDED);
+                // Its first start meets the driver's kernel-truth check, which reads the local nft for the guest's
+                // live tap; this daemon is hermetic and names none, so the start is left undone here
+                // (IncusPublishedPortsLiveTest starts one on a real host).
+                assertThat(List.of(run.skipped(1), run.skipped(2)))
+                    .as("step 3: its ports and its game address were done (%s)", run.outcome())
+                    .containsExactly(false, false);
+
+                // 4. The ledger holds the game port publicly on the Incus host, and the settings name it.
+                List<PublishedPort> published = PublishedPort.of(InstanceModel.settingsOf(
+                    Models.get(InstanceModel.class).findById(vmId)));
+                assertThat(published).extracting(PublishedPort::name).as("step 4: the game port is published")
+                    .containsExactly("game");
+                int hostPort = Objects.requireNonNull(published.getFirst().hostPort());
+                assertThat(PortLedger.claimsOf(InstanceModel.MODEL_ID, vmId)).as("step 4: claimed publicly on its host")
+                    .anySatisfy(claim -> {
+                        assertThat((Integer) claim.get(PortAllocationModel.PORT)).isEqualTo(hostPort);
+                        assertThat((String) claim.get(PortAllocationModel.HOST_IP)).isEmpty();
+                        assertThat((Integer) claim.get(PortAllocationModel.SERVER_ID)).isEqualTo(vmHost);
+                    });
+
+                // 5. THE ASSERTION: the Incus daemon holds the machine with a NAT proxy device forwarding that host
+                //    port to the guest's game port.
+                assertThat(incus.daemon.instances.values()).as("step 5: the machine has its game port's proxy")
+                    .anySatisfy(instance -> {
+                        Map<?, ?> proxy = (Map<?, ?>) ((Map<?, ?>) instance.get("devices")).get("hohport-tcp-25565");
+                        assertThat(proxy).isNotNull();
+                        assertThat(proxy.get("type")).isEqualTo("proxy");
+                        assertThat(proxy.get("nat")).isEqualTo("true");
+                        assertThat(proxy.get("listen")).isEqualTo("tcp:0.0.0.0:" + hostPort);
+                    });
+
+                // 6. Its game address has an SRV record on the game port, and its Overview says where to connect.
+                Row srv = zoneRecord("_minecraft._tcp.vm", DnsRecordModel.TYPE_SRV);
+                assertThat(srv).as("step 6: an SRV record for the game address exists").isNotNull();
+                assertThat(DnsRecordModel.portOf(srv)).as("step 6: on the game port").isEqualTo(hostPort);
+                String overview = adminGet("/admin/instances/" + vmId + "/page/overview").body();
+                assertThat(overview).as("step 6: a Connect to card names the game address")
+                    .contains("Connect to").contains("Players connect to " + gameAddress + ", or to a port below.");
+                assertThat(overview).as("step 6: its row is the game port at the host's address")
+                    .contains("data-endpoint-port=\"" + hostPort + "\"").contains(HOST_IPV4 + ":" + hostPort);
+            } finally {
+                if (vmId != null) {
+                    GameAddresses.set(vmId, null);
+                    PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, vmId);
+                    InstanceRowCleanup.delete(vmId);
+                }
+                HardDeletes.byId(Models.get(ServerModel.class), vmHost);
+            }
+        }
+    }
+
     /** A container template that publishes no ports of its own is a website: its wizard asks an address and HTTPS. */
     @Test
     void aContainerTemplateWithoutPublishedPortsKeepsTheWebsiteSteps() throws Exception {
