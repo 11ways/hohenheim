@@ -140,13 +140,16 @@ public final class InstanceOverview {
         // Only where it holds a port is its Connect to card drawn: no card is drawn for an app
         // reached through its addresses alone, where "holds no port claim" was ledger words about nothing.
         if (!ports.isEmpty()) {
-            // A service is reached on its ports: the card says where to connect, and names the game address first.
+            // A service is reached on its ports: the card says where to connect, and names the game address first;
+            // its lead speaks to players only when one of its ports is theirs (PortPurpose.reachedByPlayers).
             boolean service = reach.asksPorts();
             String gameAddress = instance.get(InstanceModel.GAME_ADDRESS);
             main.add(portsCard(HohenheimMicrocopy.INSTANCE_OVERVIEW.of(service ? "connect" : "endpoint"),
                 service && gameAddress != null
                     ? HohenheimMicrocopy.INSTANCE_OVERVIEW.of("connect_name").withArg("address", gameAddress)
-                    : HohenheimMicrocopy.INSTANCE_OVERVIEW.of(service ? "connect_hint" : "endpoint_hint"), ports));
+                    : service ? PortPurpose.connectLead(namedPorts(settingsOf(instance)).stream()
+                        .map(PublishedPort::purpose).toList())
+                    : HohenheimMicrocopy.INSTANCE_OVERVIEW.of("endpoint_hint"), ports));
         }
         // Memory, CPU, disk. A running workload's memory and CPU are LIVE: the gauges' element holds the stats hub's
         // feed while this page is open (seeded from what the hub holds now), never a stream opened by this render.

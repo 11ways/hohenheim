@@ -12721,6 +12721,10 @@
     "text": ".match {$count :number}\none {{Delete the stream {$name}? This port stops forwarding and is freed for another use: {$ports}. The address it forwards to is not touched.}}\n* {{Delete the stream {$name}? These ports stop forwarding and are freed for another use: {$ports}. The address it forwards to is not touched.}}",
     "scope": "site"
   },
+  "delete_confirm_incus_trust": {
+    "text": "Delete this host? Only its entry here is removed: the machine and everything running on it are untouched, and Hohenheim simply stops managing them. Its Incus stops trusting this controller: the trust entry with fingerprint {$fingerprint} is removed there. If the host cannot be reached then, that entry stays; remove it on the host with: incus config trust remove {$fingerprint}",
+    "scope": "server"
+  },
   "disable_confirm_ports": {
     "text": ".match {$count :number}\none {{Stop forwarding {$name}? This port stops forwarding immediately: {$ports}. Nothing is deleted and the port stays reserved for it, so enabling it again restores forwarding.}}\n* {{Stop forwarding {$name}? These ports stop forwarding immediately: {$ports}. Nothing is deleted and the ports stay reserved for it, so enabling it again restores forwarding.}}",
     "scope": "site"
@@ -18123,6 +18127,7 @@
   "purpose_other": {"scope": "port_purpose", "text": "Other"},
   "connect": {"scope": "instance_overview", "text": "Connect to"},
   "connect_hint": {"scope": "instance_overview", "text": "Players and clients connect to these ports of its host."},
+  "connect_hint_clients": {"scope": "instance_overview", "text": "Clients connect to these ports of its host."},
   "connect_name": {"scope": "instance_overview", "text": "Players connect to {$address}, or to a port below."},
   "port_for": {"scope": "instance_overview", "text": "For"},
   "published_ports": [

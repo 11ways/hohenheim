@@ -12721,6 +12721,10 @@
     "text": ".match {$count :number}\none {{De stream {$name} verwijderen? Deze poort stuurt niet langer door en komt vrij voor ander gebruik: {$ports}. Het adres waarnaar hij doorstuurt, blijft onaangeroerd.}}\n* {{De stream {$name} verwijderen? Deze poorten sturen niet langer door en komen vrij voor ander gebruik: {$ports}. Het adres waarnaar hij doorstuurt, blijft onaangeroerd.}}",
     "scope": "site"
   },
+  "delete_confirm_incus_trust": {
+    "text": "Deze host verwijderen? Alleen de vermelding hier verdwijnt: de machine en alles wat erop draait, blijven onaangeroerd, en Hohenheim beheert ze gewoon niet langer. Zijn Incus vertrouwt deze controller niet langer: de vertrouwensregel met vingerafdruk {$fingerprint} wordt daar verwijderd. Is de host dan onbereikbaar, dan blijft die regel staan; verwijder hem op de host met: incus config trust remove {$fingerprint}",
+    "scope": "server"
+  },
   "disable_confirm_ports": {
     "text": ".match {$count :number}\none {{De stream {$name} niet langer laten doorsturen? Deze poort stuurt meteen niet meer door: {$ports}. Er wordt niets verwijderd en de poort blijft voor hem gereserveerd, dus opnieuw inschakelen herstelt het doorsturen.}}\n* {{De stream {$name} niet langer laten doorsturen? Deze poorten sturen meteen niet meer door: {$ports}. Er wordt niets verwijderd en de poorten blijven voor hem gereserveerd, dus opnieuw inschakelen herstelt het doorsturen.}}",
     "scope": "site"
@@ -18123,6 +18127,7 @@
   "purpose_other": {"scope": "port_purpose", "text": "Andere"},
   "connect": {"scope": "instance_overview", "text": "Verbinden met"},
   "connect_hint": {"scope": "instance_overview", "text": "Spelers en clients verbinden met deze poorten van zijn host."},
+  "connect_hint_clients": {"scope": "instance_overview", "text": "Clients verbinden met deze poorten van zijn host."},
   "connect_name": {"scope": "instance_overview", "text": "Spelers verbinden met {$address}, of met een poort hieronder."},
   "port_for": {"scope": "instance_overview", "text": "Voor"},
   "published_ports": [

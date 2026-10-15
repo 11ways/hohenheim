@@ -5,6 +5,8 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.Collection;
+
 /**
  * What a published port is for, read off the name a template gives it (the Pterodactyl allocation's role).
  *
@@ -60,5 +62,19 @@ public enum PortPurpose {
             case GAME -> true;
             case QUERY, RCON, VOICE, OTHER -> false;
         };
+    }
+
+    /** Whether players' game clients connect to this port: the game itself, its server-list query, its voice. */
+    public boolean reachedByPlayers() {
+        return switch (this) {
+            case GAME, QUERY, VOICE -> true;
+            case RCON, OTHER -> false;
+        };
+    }
+
+    /** @return the Connect to card's lead for ports of these purposes: the players' words only when one is theirs */
+    public static @NonNull Microcopy connectLead(@NonNull Collection<PortPurpose> purposes) {
+        return HohenheimMicrocopy.INSTANCE_OVERVIEW.of(purposes.stream().anyMatch(PortPurpose::reachedByPlayers)
+            ? "connect_hint" : "connect_hint_clients");
     }
 }

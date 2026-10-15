@@ -14,6 +14,8 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.validation.Violations;
 import java.time.Duration;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
+import be.elevenways.zenit.common.orm.model.Models;
 
 import java.io.IOException;
 import java.security.cert.X509Certificate;
@@ -146,4 +148,72 @@ public final class IncusTrust {
         Blast.slog("hohenheim.host.incus_enrolled", Map.of("server", name));
     }
 
+    // -- giving the trust back ------------------------------------------------
+
+    /**
+     * The fingerprint of the trust entry this controller holds on the host's daemon: its own client certificate's,
+     * or null for a host that holds none (a unix-socket daemon, or no identity minted yet).
+     */
+    public static @Nullable String ownEntryOf(@NonNull Row server) {
+        if (!ServerModel.isIncus(server) || !IncusEndpoint.of(server).https()) {
+            return null;
+        }
+        String certificate = server.get(HostTrustSlot.INCUS_TLS.clientPublic());
+        return certificate == null || certificate.isBlank() ? null : fingerprintOf(certificate);
+    }
+
+    /**
+     * Remove exactly one trust entry, the controller's own, from the daemon; an entry already gone is no error.
+     *
+     * @return true when the daemon held it and removed it, false when it held none
+     * @throws IOException when the daemon could not be asked or refused
+     */
+    public static boolean releaseOwnEntry(@NonNull IncusClient client, @NonNull String fingerprint)
+            throws IOException {
+        try {
+            client.deleteCertificate(fingerprint);
+            return true;
+        } catch (IncusClient.ApiException e) {
+            if (e.isNotFound()) {
+                return false;
+            }
+            throw e;
+        }
+    }
+
+    /**
+     * Give the controller's trust entry back once the host's removal commits: the row holds the identity the daemon
+     * knows, so the client is built now and spent after the commit.
+     *
+     * AIDEV-NOTE: never a reason to refuse the removal. A host that cannot be reached keeps the entry, which the
+     * delete dialog names with the command that removes it (ServerParts.deleteBody), and the failure is logged.
+     */
+    public static void releaseAfterRemoval(@NonNull Row server) {
+        String fingerprint = ownEntryOf(server);
+        if (fingerprint == null) {
+            return;
+        }
+        String name = String.valueOf((Object) server.get(ServerModel.NAME));
+        IncusClient client;
+        try {
+            client = IncusClients.forServer(server);
+        } catch (RuntimeException unusable) {
+            trustLeft(name, fingerprint, unusable);
+            return;
+        }
+        Models.get(ServerModel.class).getResolvedDatasource().afterCommit(() -> {
+            try {
+                boolean removed = releaseOwnEntry(client, fingerprint);
+                Blast.slog("hohenheim.host.incus_trust_released", Map.of("server", name,
+                    "fingerprint", fingerprint, "removed", removed));
+            } catch (IOException | RuntimeException unreachable) {
+                trustLeft(name, fingerprint, unreachable);
+            }
+        });
+    }
+
+    private static void trustLeft(@NonNull String name, @NonNull String fingerprint, @NonNull Exception cause) {
+        Blast.slog("hohenheim.host.incus_trust_left", Map.of("server", name, "fingerprint", fingerprint,
+            "detail", String.valueOf(cause.getMessage())));
+    }
 }

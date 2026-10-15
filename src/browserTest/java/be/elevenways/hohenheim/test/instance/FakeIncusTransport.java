@@ -53,6 +53,9 @@ final class FakeIncusTransport implements IncusTransport {
 
     Map<String, Object> lastCreateBody;
     boolean execAttempted;
+
+    /** The daemon's trust store: fingerprint to entry name. */
+    final Map<String, String> certificates = new LinkedHashMap<>();
     private int operationCounter;
 
     @Override
@@ -61,6 +64,10 @@ final class FakeIncusTransport implements IncusTransport {
         String path = pathAndQuery.contains("?")
             ? pathAndQuery.substring(0, pathAndQuery.indexOf('?')) : pathAndQuery;
 
+        if ("DELETE".equals(method) && path.startsWith("/1.0/certificates/")) {
+            return this.certificates.remove(path.substring("/1.0/certificates/".length())) == null
+                ? notFound("Certificate not found") : sync(Map.of());
+        }
         if ("GET".equals(method) && path.equals("/1.0/profiles/default")) {
             Map<String, Object> eth0 = new LinkedHashMap<>();
             eth0.put("type", "nic");

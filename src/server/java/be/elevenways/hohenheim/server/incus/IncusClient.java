@@ -114,6 +114,11 @@ public class IncusClient {
             DEFAULT_TIMEOUT_MS);
     }
 
+    /** Remove one trust store entry by its full fingerprint; 404 surfaces as {@link ApiException#isNotFound}. */
+    public void deleteCertificate(@NonNull String fingerprint) throws IOException {
+        syncPayload("DELETE", "/1.0/certificates/" + fingerprint, null, DEFAULT_TIMEOUT_MS);
+    }
+
     /** All storage pools (recursed). */
     public @NonNull List<Map<String, Object>> storagePools() throws IOException {
         return recursed("/1.0/storage-pools");

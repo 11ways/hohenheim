@@ -30,6 +30,8 @@ import be.elevenways.zenit.common.edit.OptionMeter;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.hohenheim.server.incus.IncusTrust;
+import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
@@ -98,6 +100,7 @@ public final class ServerParts {
         .result(Integer.class).facts(OperationFact.DESTRUCTIVE).command(CmsCommands.TRANSACTIONAL).register();
     static {
         OperationHandlers.attach(DELETE).availability((row, access) -> DeleteImpact.serverInUse(row)).handle(call -> {
+            IncusTrust.releaseAfterRemoval(call.subject());
             Models.get(ServerModel.class).delete(call.subject());
             ServerOptions.refresh();
             return 1;
@@ -108,6 +111,17 @@ public final class ServerParts {
     private static final Icon HOST_ICON = Icon.of("server");
 
     private ServerParts() {}
+
+    /**
+     * The delete dialog of one host: an Incus host's names the trust entry this controller holds on its daemon, which
+     * the removal gives back (IncusTrust.releaseAfterRemoval), and the command that removes it by hand when the host
+     * cannot be reached then.
+     */
+    public static @NonNull ConfirmationSpec deleteBody(@NonNull Row host) {
+        String fingerprint = IncusTrust.ownEntryOf(host);
+        return DeleteConfirmation.body(fingerprint == null ? HohenheimMicrocopy.SERVER.of("delete_confirm")
+            : HohenheimMicrocopy.SERVER.of("delete_confirm_incus_trust").withArg("fingerprint", fingerprint));
+    }
 
     public static @NonNull PanelResource<Row> admin() {
         List<PanelAction<Row>> actions = new ArrayList<>(ServerTrustActions.placed());
@@ -133,8 +147,9 @@ public final class ServerParts {
                 .update(call -> { ServerInventoryWrites.update(call.record(), call.values()); return null; })
                 .delete(DELETE).scopeVerifiedBeforeWrite().ownsWriteEnvelope(ResourceVerb.CREATE,
                         ResourceVerb.UPDATE).build())
-            .deleteConfirmation(DeleteConfirmation.of(
-                DeleteConfirmation.body(HohenheimMicrocopy.SERVER.of("delete_confirm"))))
+            .deleteConfirmation(DeleteConfirmation.<Row>of(DeleteConfirmation.body(
+                    HohenheimMicrocopy.SERVER.of("delete_confirm")))
+                .forRow((host, request) -> deleteBody(host)))
             .actions(actions)
             .tabs(ResourceTabs.<Row>of(List.of(RecordOverview.<Row>fields(RecordOverview.SLUG,
                 HohenheimMicrocopy.SERVER.of("overview"))
