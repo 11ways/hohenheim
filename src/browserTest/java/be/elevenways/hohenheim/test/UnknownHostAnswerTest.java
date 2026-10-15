@@ -2,12 +2,15 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSources;
+import be.elevenways.hohenheim.server.HohenheimRetiredNames;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.site.UnknownHostAnswer;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.server.setting.DryFileSource;
+import be.elevenways.zenit.server.setting.RetiredName;
 import be.elevenways.zenit.server.setting.SettingsEditor;
 import be.elevenways.zenit.server.setting.SettingAccess;
 import be.elevenways.zenit.test.support.TestAccessContexts;
@@ -15,9 +18,12 @@ import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -55,7 +61,7 @@ class UnknownHostAnswerTest {
         upstreams.clear();
         // The answer first: clearing a target the standing answer needs is refused.
         answer(UnknownHostAnswer.NOT_FOUND);
-        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.FALLBACK_ADDRESS, "");
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.UNKNOWN_HOSTS_FORWARD, "");
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.UNKNOWN_HOSTS_REDIRECT, "");
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.UNKNOWN_HOSTS_SITE, "");
     }
@@ -83,14 +89,15 @@ class UnknownHostAnswerTest {
 
         // 2. Forward: the request is proxied to the fallback address (the Node original's "everything else to
         //    Apache"), never redirected to it.
-        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.FALLBACK_ADDRESS, "http://127.0.0.1:" + backendPort);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.UNKNOWN_HOSTS_FORWARD,
+            "http://127.0.0.1:" + backendPort);
         answer(UnknownHostAnswer.FORWARD);
         String forwarded = rawRequest(port, UNKNOWN, "/x");
         assertThat(forwarded).as("step 2: the fallback backend answers").startsWith("HTTP/1.1 200")
             .contains("fallback-backend");
 
         // 3. A fallback that is not an http(s) address cannot be forwarded to: the 404 page.
-        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.FALLBACK_ADDRESS, "localhost:8080");
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.UNKNOWN_HOSTS_FORWARD, "localhost:8080");
         assertThat(rawRequest(port, UNKNOWN, "/x")).as("step 3: an unusable address fails closed")
             .startsWith("HTTP/1.1 404");
 
@@ -143,11 +150,11 @@ class UnknownHostAnswerTest {
         AccessContext admin = TestAccessContexts.withPermissions(HohenheimSources.ADMIN_ACCESS.value());
 
         // 1. The system tier changes it inside the application; it is no longer refused to everyone as host-only.
-        assertThat(SettingAccess.writeRefusal(HohenheimSettings.Proxy.FALLBACK_ADDRESS, system))
+        assertThat(SettingAccess.writeRefusal(HohenheimSettings.Proxy.UNKNOWN_HOSTS_FORWARD, system))
             .as("step 1: the system tier may change the fallback address").isNull();
 
         // 2. An ordinary admin may not: forwarding reaches any address this host can, an operator's power.
-        assertThat(SettingAccess.writeRefusal(HohenheimSettings.Proxy.FALLBACK_ADDRESS, admin))
+        assertThat(SettingAccess.writeRefusal(HohenheimSettings.Proxy.UNKNOWN_HOSTS_FORWARD, admin))
             .as("step 2: an ordinary admin may not").isEqualTo(SettingsEditor.RejectionKind.NOT_PERMITTED);
 
         // 3. The answer itself, its redirect URL and its site are the ordinary admin's, as npmplus's default site is.
@@ -157,12 +164,51 @@ class UnknownHostAnswerTest {
             .as("step 3: and so is its site").isNull();
 
         // 4. Only an absolute http(s) address is stored; a bare host:port is refused, a blank value unsets it.
-        assertThat(HohenheimSettings.Proxy.FALLBACK_ADDRESS.coerce("http://127.0.0.1:8080").accepted())
+        assertThat(HohenheimSettings.Proxy.UNKNOWN_HOSTS_FORWARD.coerce("http://127.0.0.1:8080").accepted())
             .as("step 4: an http address is accepted").isTrue();
-        assertThat(HohenheimSettings.Proxy.FALLBACK_ADDRESS.coerce("localhost:8080").accepted())
+        assertThat(HohenheimSettings.Proxy.UNKNOWN_HOSTS_FORWARD.coerce("localhost:8080").accepted())
             .as("step 4: a bare host:port is refused").isFalse();
-        assertThat(HohenheimSettings.Proxy.FALLBACK_ADDRESS.coerce("").accepted())
+        assertThat(HohenheimSettings.Proxy.UNKNOWN_HOSTS_FORWARD.coerce("").accepted())
             .as("step 4: blank unsets it").isTrue();
+    }
+
+    /**
+     * Before the answer existed, a settings file's fallback address alone forwarded unknown hosts; boot moves that key
+     * to the forward answer's target and writes the forward answer beside it, once, so such an install keeps
+     * forwarding.
+     */
+    @Test
+    void anInstallWhoseFileSetTheFallbackAddressKeepsForwarding(@TempDir Path dir) throws Exception {
+        Path local = dir.resolve("local.dry");
+
+        // 1. The old key alone: moved to the forward target, and the answer written is forward.
+        Files.writeString(local, "{\"hohenheim\":{\"proxy\":{\"fallback_address\":\"http://127.0.0.1:8081\"}}}");
+        assertThat(RetiredName.moveIn(local, HohenheimRetiredNames.RETIRED)).as("step 1: the old key moved")
+            .containsExactly("hohenheim.proxy.fallback_address");
+        Map<?, ?> proxy = proxyGroupOf(local);
+        assertThat(proxy).as("step 1: the target under its new key and the forward answer, the old key gone")
+            .isEqualTo(Map.of("unknown_hosts_forward", "http://127.0.0.1:8081",
+                "unknown_hosts", UnknownHostAnswer.FORWARD.storageKey()));
+        assertThat(UnknownHostAnswer.fromKeyOrDefault((String) proxy.get("unknown_hosts")).target())
+            .as("step 1: the answer forwards to the moved address")
+            .isEqualTo(HohenheimSettings.Proxy.UNKNOWN_HOSTS_FORWARD);
+
+        // 2. An answer the file already chose is kept.
+        Files.writeString(local, "{\"hohenheim\":{\"proxy\":{\"fallback_address\":\"http://127.0.0.1:8081\","
+            + "\"unknown_hosts\":\"not_found\"}}}");
+        RetiredName.moveIn(local, HohenheimRetiredNames.RETIRED);
+        assertThat(proxyGroupOf(local).get("unknown_hosts")).as("step 2: the chosen answer stays")
+            .isEqualTo(UnknownHostAnswer.NOT_FOUND.storageKey());
+
+        // 3. A file naming the target under its new key and no answer (set in Settings) keeps the 404 page.
+        Files.writeString(local, "{\"hohenheim\":{\"proxy\":{\"unknown_hosts_forward\":\"http://127.0.0.1:8081\"}}}");
+        assertThat(RetiredName.moveIn(local, HohenheimRetiredNames.RETIRED)).as("step 3: nothing to move").isEmpty();
+        assertThat(proxyGroupOf(local)).as("step 3: no answer was written")
+            .isEqualTo(Map.of("unknown_hosts_forward", "http://127.0.0.1:8081"));
+    }
+
+    private static Map<?, ?> proxyGroupOf(Path local) {
+        return (Map<?, ?>) ((Map<?, ?>) new DryFileSource(local).snapshot().get("hohenheim")).get("proxy");
     }
 
     private static void answer(UnknownHostAnswer answer) {

@@ -86,7 +86,7 @@ public enum UnknownHostAnswer implements StoredEnum {
     public @Nullable SettingDefinition<String> target() {
         return switch (this) {
             case NOT_FOUND, DROP -> null;
-            case FORWARD -> HohenheimSettings.Proxy.FALLBACK_ADDRESS;
+            case FORWARD -> HohenheimSettings.Proxy.UNKNOWN_HOSTS_FORWARD;
             case REDIRECT -> HohenheimSettings.Proxy.UNKNOWN_HOSTS_REDIRECT;
             case SITE -> HohenheimSettings.Proxy.UNKNOWN_HOSTS_SITE;
         };

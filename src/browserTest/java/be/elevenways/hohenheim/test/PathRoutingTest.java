@@ -51,7 +51,7 @@ class PathRoutingTest {
         }
         upstreams.clear();
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.UNKNOWN_HOSTS, UnknownHostAnswer.NOT_FOUND.storageKey());
-        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.FALLBACK_ADDRESS, "");
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.UNKNOWN_HOSTS_FORWARD, "");
     }
 
     /** Upstream that answers with the given tag and records the path it received. */
@@ -109,7 +109,7 @@ class PathRoutingTest {
     void knownHostnameWithoutMatchingPathIs404NotFallback() throws Exception {
         resetDatabase();
         int fallbackPort = startUpstream("fallback-upstream", null);
-        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.FALLBACK_ADDRESS,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.UNKNOWN_HOSTS_FORWARD,
             "http://127.0.0.1:" + fallbackPort);
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.UNKNOWN_HOSTS, UnknownHostAnswer.FORWARD.storageKey());
 

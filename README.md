@@ -325,12 +325,13 @@ that wrapper):
         "https_port": 443,                 // public HTTPS
         "force_https": true,               // redirect HTTP to HTTPS globally
         // What a hostname no site serves gets (also in Settings): not_found (the 404 page),
-        // forward (proxied to fallback_address), redirect (to unknown_hosts_redirect),
+        // forward (proxied to unknown_hosts_forward), redirect (to unknown_hosts_redirect),
         // site (served by the site whose slug is unknown_hosts_site) or drop (no response).
+        // An older file's fallback_address is moved to unknown_hosts_forward at boot, with
+        // unknown_hosts: forward written beside it unless the file sets an answer.
         "unknown_hosts": "forward",
-        "fallback_address": "http://localhost:8081",  // where forward sends them
+        "unknown_hosts_forward": "http://localhost:8081",  // where forward sends them
         "ipv6_address": "",                // optional extra listener
-        "first_port": 4748,                // first port handed to managed child processes
         "trusted_proxy_keys": [],           // secret X-Hohenheim-Key values accepted from HTTP proxies
         "proxy_protocol_trusted_sources": [], // literal IP/CIDR peers allowed to send inbound PROXY v2
         "connection_prologue_timeout_seconds": 5,

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.site.UnknownHostAnswer;
 import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
 import be.elevenways.zenit.notifications.NotificationSettings;
 import be.elevenways.zenit.server.setting.RetiredConfiguration;
@@ -26,13 +27,16 @@ public final class HohenheimRetiredNames {
     /**
      * The old notifications settings file and environment prefix this host loaded by hand, and Hohenheim's own: each
      * file is adopted into settings/local.dry under its group (notifications.*, hohenheim.*), each prefix refused
-     * naming its ZENIT__ spelling.
+     * naming its ZENIT__ spelling. The fallback address became the forward answer's target, and its presence meant
+     * that answer, which its move writes where the file chose none.
      */
     public static final List<RetiredName> RETIRED = RetiredConfiguration.declare(
         RetiredName.adoptedFile("settings/comms.dry", NotificationSettings.ROOT),
         RetiredName.variablePrefix("COMMS", NotificationSettings.ROOT),
         RetiredName.adoptedFile("settings/hohenheim.dry", HohenheimSettings.HOHENHEIM),
-        RetiredName.variablePrefix("HOHENHEIM", HohenheimSettings.HOHENHEIM));
+        RetiredName.variablePrefix("HOHENHEIM", HohenheimSettings.HOHENHEIM),
+        RetiredName.movedSetting("hohenheim.proxy.fallback_address", HohenheimSettings.Proxy.UNKNOWN_HOSTS_FORWARD)
+            .implying(HohenheimSettings.Proxy.UNKNOWN_HOSTS, UnknownHostAnswer.FORWARD.storageKey()));
 
     private HohenheimRetiredNames() {
     }

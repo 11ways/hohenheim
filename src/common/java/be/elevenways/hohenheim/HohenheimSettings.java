@@ -176,9 +176,11 @@ public class HohenheimSettings {
 
         // AIDEV-NOTE: host-only until the unknown-host answer: an operator may already point an address site at any
         // loopback or LAN backend (TenantWrites.PROXY_UPSTREAM_BASE), so forwarding unknown names there is the same
-        // power, kept on the operator-trusted ADMIN_SYSTEM tier. A value a host file already holds keeps loading.
-        public static final SettingDefinition<String> FALLBACK_ADDRESS = GROUP.buildSetting("fallback_address",
-                String.class)
+        // power, kept on the operator-trusted ADMIN_SYSTEM tier. It was proxy.fallback_address, whose mere presence
+        // forwarded unknown hosts; HohenheimRetiredNames moves that key here and writes unknown_hosts: forward beside
+        // it, once, so such an install keeps forwarding (a key that kept its name would imply it on every boot).
+        public static final SettingDefinition<String> UNKNOWN_HOSTS_FORWARD = GROUP
+            .buildSetting("unknown_hosts_forward", String.class)
             .writePermission(HohenheimSources.ADMIN_SYSTEM)
             .coercer(Proxy::coerceHttpUrl)
             .description("Address requests for an unknown hostname are forwarded to, when the answer is Forward")
@@ -201,7 +203,7 @@ public class HohenheimSettings {
         /** The chosen answer has its target: an address to forward to, a URL to redirect to or a site to serve. */
         public static final SettingsRule UNKNOWN_HOSTS_TARGET =
             SettingsRule.named("hohenheim_proxy_unknown_hosts_target")
-                .reads(UNKNOWN_HOSTS, FALLBACK_ADDRESS, UNKNOWN_HOSTS_REDIRECT, UNKNOWN_HOSTS_SITE)
+                .reads(UNKNOWN_HOSTS, UNKNOWN_HOSTS_FORWARD, UNKNOWN_HOSTS_REDIRECT, UNKNOWN_HOSTS_SITE)
                 .check(proposed -> {
                     UnknownHostAnswer answer = UnknownHostAnswer.fromKeyOrDefault(proposed.get(UNKNOWN_HOSTS));
                     SettingDefinition<String> target = answer.target();
