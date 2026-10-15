@@ -148,8 +148,12 @@ public final class SiteParts {
                 .tabLabel(HohenheimMicrocopy.APP_OVERVIEW.of("configuration"))
                 .lead(SiteParts::lead)
                 // The instance pick shows only for the instance kind (SiteWrites.ADMIN_FORM's showWhen); switching a
-                // site away from that kind clears its link instead of leaving it unreachable.
-                .bindings(List.of())
+                // site away from that kind clears its link instead of leaving it unreachable. A site whose reach no
+                // sign-in can gate (a stream) is offered no auth provider pick: its save refuses one.
+                .bindings(List.of(ResourceFieldBinding.of(SiteModel.AUTH_PROVIDER_ID.getName(),
+                    FieldAccess.customRecordAware((access, record) -> record instanceof Row site
+                        && !reachOf(site).gatedBySignIn() ? FieldAccess.Decision.HIDDEN
+                        : FieldAccess.Decision.EDITABLE))))
                 // The create stages both without a form entry; a revision restore must still own them.
                 .restorableOutsideForm(Set.of(SiteModel.SLUG.getName(), SiteModel.STATUS.getName()))
                 .createDefaults(SiteParts::createDefaults)
@@ -286,10 +290,11 @@ public final class SiteParts {
             // A deleted site lands in the Trash, from where it is restored (the model's save, so every site write
             // hook runs and the quota re-books the slot) or deleted for good.
             .trash()
-            .computed(Objects.requireNonNull(table.column(HOSTNAMES_COLUMN)), (row, request) -> hostnamesCellOf(row))
+            .computed(Objects.requireNonNull(table.column(HOSTNAMES_COLUMN)), (row, request) -> addressCellOf(row))
             .computed(Objects.requireNonNull(table.column(UPSTREAM_COLUMN)), (row, request) -> upstreamCellOf(row))
-            .computed(Objects.requireNonNull(table.column(TLS_COLUMN)),
-                (row, request) -> StateLineCell.of(tlsOf(row), null))
+            // A site answering on no address (a stream) has no HTTPS state: its cell stays blank.
+            .computed(Objects.requireNonNull(table.column(TLS_COLUMN)), (row, request) -> reachOf(row).asksAddress()
+                ? StateLineCell.of(tlsOf(row), null) : null)
             .build();
     }
 
@@ -343,7 +348,7 @@ public final class SiteParts {
      */
     private static @NonNull ConfirmationSpec deleteBody(@Nullable Row site) {
         return DeleteConfirmation.body(site == null ? HohenheimMicrocopy.SITE.of("delete_confirm")
-            : siteBody(site, "delete_confirm", "delete_confirm_hostnames", "delete_confirm_exposing",
+            : siteBody(site, "delete_confirm_no_hostnames", "delete_confirm_hostnames", "delete_confirm_exposing",
                 "delete_confirm_ports"));
     }
 
@@ -355,7 +360,8 @@ public final class SiteParts {
      * dialog claims an app a redirect never had or hostnames a stream never had.
      *
      * AIDEV-NOTE: separate bodies, never one with an empty list: microcopy args echo verbatim, so an empty hostname or
-     * port list would render a dangling colon (a stream whose settings name no port gets {@code none}).
+     * port list would render a dangling colon (a stream whose settings name no port gets {@code none}). Each list
+     * body carries its {@code count}, so one hostname or port reads in the singular.
      *
      * @param exposing the app-naming body, null when the dialog words every kind alike
      */
@@ -364,18 +370,19 @@ public final class SiteParts {
         String name = String.valueOf((Object) site.get(SiteModel.NAME));
         return switch (reachOf(site)) {
             case PORTS -> {
-                String forwarded = DeleteImpact.join(portsOf(site));
+                List<String> forwarded = portsOf(site);
                 yield forwarded.isEmpty() ? HohenheimMicrocopy.SITE.of(none).withArg("name", name)
-                    : HohenheimMicrocopy.SITE.of(ports).withArg("name", name).withArg("ports", forwarded);
+                    : HohenheimMicrocopy.SITE.of(ports).withArg("name", name)
+                        .withArg("ports", DeleteImpact.join(forwarded)).withArg("count", forwarded.size());
             }
             case WEBSITE, NONE -> {
-                String bound = DeleteImpact.join(DeleteImpact.hostnamesOfSite(site.get(SiteModel.ID)));
+                List<String> bound = DeleteImpact.hostnamesOfSite(site.get(SiteModel.ID));
                 if (bound.isEmpty()) {
                     yield HohenheimMicrocopy.SITE.of(none).withArg("name", name);
                 }
                 String app = exposing == null ? null : exposedAppOf(site);
                 Microcopy body = HohenheimMicrocopy.SITE.of(app == null ? hostnames : exposing).withArg("name", name)
-                    .withArg("hostnames", bound);
+                    .withArg("hostnames", DeleteImpact.join(bound)).withArg("count", bound.size());
                 yield app == null ? body : body.withArg("app", app);
             }
         };
@@ -444,8 +451,21 @@ public final class SiteParts {
         return Models.get(SiteDomainModel.class).findBySiteId(site.get(SiteModel.ID));
     }
 
-    static @NonNull SiteHostnamesCell hostnamesCellOf(@NonNull Row site) {
-        return hostnamesCellOf(domainsOf(site));
+    /** The list's address cell: a site's hostnames, or the ports a site reached on its own ports forwards. */
+    static @NonNull SiteHostnamesCell addressCellOf(@NonNull Row site) {
+        return addressCellOf(site, reachOf(site).asksAddress() ? domainsOf(site) : List.of());
+    }
+
+    /** {@link #addressCellOf(Row)} over the site's hostnames already read. */
+    static @NonNull SiteHostnamesCell addressCellOf(@NonNull Row site, @NonNull List<Row> domains) {
+        return switch (reachOf(site)) {
+            case PORTS -> {
+                List<String> ports = portsOf(site);
+                yield ports.isEmpty() ? new SiteHostnamesCell(null, 0)
+                    : new SiteHostnamesCell(ports.getFirst(), ports.size() - 1);
+            }
+            case WEBSITE, NONE -> hostnamesCellOf(domains);
+        };
     }
 
     /** The first of these names plus how many more there are. */

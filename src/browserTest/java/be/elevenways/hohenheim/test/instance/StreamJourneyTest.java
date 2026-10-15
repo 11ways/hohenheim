@@ -159,14 +159,25 @@ class StreamJourneyTest extends HohenheimTestBase {
         String overview = adminGet("/admin/sites/" + siteId + "/page/overview").body();
         assertThat(overview).as("step 3b: THE ASSERTION, the overview says where clients connect")
             .contains("Connect to").contains(String.valueOf(publicPort)).contains("Forwards port " + publicPort);
-        assertThat(overview).as("step 3b: and nothing a website has")
-            .doesNotContain("No address yet").doesNotContain("Protect a path").doesNotContain("Add address");
+        assertThat(overview).as("step 3b: and nothing a website has, its More menu offering no address either")
+            .doesNotContain("No address yet").doesNotContain("Protect a path").doesNotContain("Add address")
+            .doesNotContain("Add an address");
 
-        // 3c. Its edit form's access-list pick says what the wizard's said: a stream applies address rules only.
+        // 3c. Its edit form speaks of a stream: the access-list pick says what the wizard's said (address rules
+        //     only), the Enabled switch what switching off a stream stops, and no sign-in provider is offered, as its
+        //     save refuses one.
         String form = adminGet("/admin/sites/" + siteId).body();
         assertThat(form).as("step 3c: THE ASSERTION, the site form's access-list help is the stream's")
             .contains("name=\"access_list_id\"").contains("only its address rules apply to a stream")
             .doesNotContain("addresses, passwords, sign-in");
+        assertThat(form).as("step 3c: its Enabled help is the stream's, never the website's offline page")
+            .contains("the stream forwards nothing").doesNotContain("requests get the offline page");
+        assertThat(form).as("step 3c: no auth provider pick").doesNotContain("name=\"auth_provider_id\"");
+
+        // 3d. The Sites list shows the stream's port where a website shows its hostnames, and no HTTPS state.
+        String list = adminGet("/admin/sites?q=r4a-ssh").body();
+        assertThat(list).as("step 3d: its port in the address cell").contains(publicPort + "/tcp");
+        assertThat(list).as("step 3d: no missing address, no HTTPS state").doesNotContain("No address");
 
         // 4. A second stream on the same port is refused in the run, naming the holder; nothing is created.
         OperationRun clash = run(stream("clash", publicPort, "tcp", null), operator);

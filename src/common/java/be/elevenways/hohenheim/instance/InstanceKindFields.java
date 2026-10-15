@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.instance;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.ports.PublishedPort;
 import be.elevenways.zenit.common.edit.submit.SubmittedValueCoercion;
 import be.elevenways.zenit.common.orm.field.DoubleField;
@@ -73,11 +74,19 @@ public final class InstanceKindFields {
             .help(HohenheimMicrocopy.HELP.of("console_kind")).build();
     }
 
-    /** The ports a workload publishes on its host, by name ({@link PublishedPort} reads and writes the values). */
+    /** The ports a container publishes on its host, by name ({@link PublishedPort} reads and writes the values). */
     public static @NonNull StringMapField publishedPorts() {
+        return publishedPorts(HohenheimMicrocopy.HELP.of("published_ports"));
+    }
+
+    /** {@link #publishedPorts()} of a workload of this isolation, its help saying where the ports listen in its words. */
+    public static @NonNull StringMapField publishedPorts(@NonNull WorkloadIsolation isolation) {
+        return publishedPorts(HohenheimMicrocopy.HELP.of("published_ports").withFilter("workload", isolation.token()));
+    }
+
+    private static @NonNull StringMapField publishedPorts(@NonNull Microcopy help) {
         return StringMapField.builder(PublishedPort.FIELD)
-            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("published_ports"))
-            .help(HohenheimMicrocopy.HELP.of("published_ports")).build();
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("published_ports")).help(help).build();
     }
 
     /** The SRV service a game address publishes for the game port, such as {@code minecraft}. */

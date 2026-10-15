@@ -136,12 +136,16 @@ public final class VmKind implements InstanceKindHandler {
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("guest_agent"))
             .help(HohenheimMicrocopy.HELP.of("guest_agent")).build());
 
+    /** What contains a guest: its own kernel behind the hypervisor, the fact {@link #isolation()} answers. */
+    private static final WorkloadIsolation ISOLATION = WorkloadIsolation.VIRTUAL_MACHINE;
+
     /**
      * The ports the guest publishes on every address of its host, by name: each is a NAT proxy of the host forwarding
      * to the guest's eth0, pinned to a static address of the bridge for it (IncusPublishedPorts). A VM hidden behind
      * the isolating bridge is reached from outside through exactly these.
      */
-    public static final StringMapField PUBLISHED_PORTS = SETTINGS_SCHEMA.addField(InstanceKindFields.publishedPorts());
+    public static final StringMapField PUBLISHED_PORTS = SETTINGS_SCHEMA.addField(
+        InstanceKindFields.publishedPorts(ISOLATION));
 
     public static final StringField SRV_SERVICE = SETTINGS_SCHEMA.addField(InstanceKindFields.srvService());
 
@@ -211,7 +215,7 @@ public final class VmKind implements InstanceKindHandler {
      * against a hostile root tenant on shared iron".
      */
     @Override
-    public @NonNull WorkloadIsolation isolation() { return WorkloadIsolation.VIRTUAL_MACHINE; }
+    public @NonNull WorkloadIsolation isolation() { return ISOLATION; }
 
     @Override
     public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {

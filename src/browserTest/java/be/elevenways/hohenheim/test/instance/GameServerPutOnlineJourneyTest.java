@@ -11,6 +11,9 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.ports.PublishedPort;
 import be.elevenways.hohenheim.server.cms.PutOnline;
+import be.elevenways.hohenheim.instance.WorkloadIsolation;
+import be.elevenways.hohenheim.server.instance.VmKind;
+import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
 import be.elevenways.hohenheim.server.instance.InstanceTemplateHandlers;
 import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
@@ -488,6 +491,10 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
         assertThat(lines.get(4).value().key()).as("step 4: the query row names its host port")
             .isEqualTo("summary_port_row");
         assertThat(String.valueOf(lines.get(4).value().args().get("host"))).isEqualTo("30123");
+
+        // 5. A row says where its port listens in the kind's own words: the container's, from its isolation fact.
+        assertThat(lines.get(3).value().filters().asMap().get("workload"))
+            .as("step 5: the row is worded for a container").isEqualTo(WorkloadIsolation.SHARED_KERNEL.token());
     }
 
     /**
@@ -674,6 +681,11 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
             .doesNotContain("name=\"" + PutOnline.HOSTNAME.getName() + "\"");
         assertThat(wizard).as("step 2: the Ports step owns the ports; Options asks the machine's own settings")
             .doesNotContain("settings.published_ports").contains("name=\"settings.image\"");
+        assertThat(wizard).as("step 2: the Ports step's lead never calls the guest's port a container port")
+            .contains("what it is for, the port and its protocol").doesNotContain("its container port");
+        assertThat(VmKind.PUBLISHED_PORTS.getAttribute(FieldAttributes.HELP).filters().asMap().get("workload"))
+            .as("step 2: its Configuration's ports help is worded for a virtual machine")
+            .isEqualTo(WorkloadIsolation.VIRTUAL_MACHINE.token());
 
         try (FakeIncusSocket incus = FakeIncusSocket.start()) {
             int vmHost = HostFixtures.admittedIncusHost(PREFIX + "vm-host");
@@ -684,7 +696,6 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
             Models.get(ServerModel.class).save(host);
             Integer vmId = null;
             try {
-                // 3. One run with a game port and a game address: app, ports and game address done, and started.
                 String gameAddress = "vm." + ORIGIN;
                 Map<String, Object> form = new LinkedHashMap<>();
                 form.put(InstanceModel.NAME.getName(), PREFIX + "vm-service");
@@ -694,6 +705,22 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
                     "images:alpine/3.22/cloud", PublishedPort.SRV_SERVICE, "minecraft")));
                 form.put(PutOnline.PORTS, List.of(portRow("game", "25565", "tcp")));
                 form.put(PutOnline.GAME_ADDRESS.getName(), gameAddress);
+
+                // 2b. THE ASSERTION: its Ports step's summary says where the game port listens in the machine's own
+                //     words, from its kind's isolation fact.
+                List<FormStep> steps = PutOnline.PUT_WORKLOAD_SERVICE_ONLINE.input().form().steps();
+                FormStep ports = steps.stream().filter(step -> step.id().equals(PutOnline.PORTS)).findFirst()
+                    .orElseThrow();
+                List<SummaryLine> summary = OperationPipeline.validate(OperationRequest.of(
+                        PutOnline.PUT_WORKLOAD_SERVICE_ONLINE, CmsPlacementSurface.ADMIN_ACTION).caller(operator)
+                        .form(form),
+                    steps.subList(0, steps.indexOf(ports) + 1).stream().flatMap(step -> step.entryNames().stream())
+                        .toList(), ports.summary());
+                assertThat(summary.getLast().value().filters().asMap().get("workload"))
+                    .as("step 2b: the game row is worded for a virtual machine")
+                    .isEqualTo(WorkloadIsolation.VIRTUAL_MACHINE.token());
+
+                // 3. One run with a game port and a game address: app, ports and game address done, and started.
                 OperationRun run = PutOnlineJourneyTest.ended(PutOnlineJourneyTest.runOf(OperationPipeline.invoke(
                         OperationRequest.of(PutOnline.PUT_WORKLOAD_SERVICE_ONLINE, CmsPlacementSurface.ADMIN_ACTION)
                             .caller(operator).form(form))),

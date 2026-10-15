@@ -12706,23 +12706,27 @@
     "scope": "dns_zone"
   },
   "delete_confirm_hostnames": {
-    "text": "Delete the site {$name}? These hostnames stop answering: {$hostnames}.",
+    "text": ".match {$count :number}\none {{Delete the site {$name}? This hostname stops answering: {$hostnames}.}}\n* {{Delete the site {$name}? These hostnames stop answering: {$hostnames}.}}",
     "scope": "site"
   },
   "delete_confirm_exposing": {
-    "text": "Delete the site {$name}? These hostnames stop answering: {$hostnames}. Its preview deployments are destroyed; the app {$app} it exposes keeps running and can be pointed at by another site.",
+    "text": ".match {$count :number}\none {{Delete the site {$name}? This hostname stops answering: {$hostnames}. Its preview deployments are destroyed; the app {$app} it exposes keeps running and can be pointed at by another site.}}\n* {{Delete the site {$name}? These hostnames stop answering: {$hostnames}. Its preview deployments are destroyed; the app {$app} it exposes keeps running and can be pointed at by another site.}}",
+    "scope": "site"
+  },
+  "delete_confirm_no_hostnames": {
+    "text": "Delete the site {$name}? It has no hostnames, so nothing stops answering.",
     "scope": "site"
   },
   "delete_confirm_ports": {
-    "text": "Delete the stream {$name}? These ports stop forwarding and are freed for another use: {$ports}. The address it forwards to is not touched.",
+    "text": ".match {$count :number}\none {{Delete the stream {$name}? This port stops forwarding and is freed for another use: {$ports}. The address it forwards to is not touched.}}\n* {{Delete the stream {$name}? These ports stop forwarding and are freed for another use: {$ports}. The address it forwards to is not touched.}}",
     "scope": "site"
   },
   "disable_confirm_ports": {
-    "text": "Stop forwarding {$name}? These ports stop forwarding immediately: {$ports}. Nothing is deleted and the ports stay reserved for it, so enabling it again restores forwarding.",
+    "text": ".match {$count :number}\none {{Stop forwarding {$name}? This port stops forwarding immediately: {$ports}. Nothing is deleted and the port stays reserved for it, so enabling it again restores forwarding.}}\n* {{Stop forwarding {$name}? These ports stop forwarding immediately: {$ports}. Nothing is deleted and the ports stay reserved for it, so enabling it again restores forwarding.}}",
     "scope": "site"
   },
   "enable_confirm_ports": {
-    "text": "Start forwarding {$name}? These ports begin forwarding here: {$ports}.",
+    "text": ".match {$count :number}\none {{Start forwarding {$name}? This port begins forwarding here: {$ports}.}}\n* {{Start forwarding {$name}? These ports begin forwarding here: {$ports}.}}",
     "scope": "site"
   },
   "toggle_confirm": {
@@ -12730,11 +12734,11 @@
     "scope": "site"
   },
   "disable_confirm": {
-    "text": "Stop serving {$name}? These hostnames stop answering immediately: {$hostnames}. Nothing is deleted, and enabling the site again restores routing.",
+    "text": ".match {$count :number}\none {{Stop serving {$name}? This hostname stops answering immediately: {$hostnames}. Nothing is deleted, and enabling the site again restores routing.}}\n* {{Stop serving {$name}? These hostnames stop answering immediately: {$hostnames}. Nothing is deleted, and enabling the site again restores routing.}}",
     "scope": "site"
   },
   "disable_confirm_exposing": {
-    "text": "Stop serving {$name}? These hostnames stop answering immediately: {$hostnames}. Nothing is deleted: the app {$app} behind it keeps running, and enabling the site again restores routing.",
+    "text": ".match {$count :number}\none {{Stop serving {$name}? This hostname stops answering immediately: {$hostnames}. Nothing is deleted: the app {$app} behind it keeps running, and enabling the site again restores routing.}}\n* {{Stop serving {$name}? These hostnames stop answering immediately: {$hostnames}. Nothing is deleted: the app {$app} behind it keeps running, and enabling the site again restores routing.}}",
     "scope": "site"
   },
   "disable_confirm_no_hostnames": {
@@ -12742,7 +12746,7 @@
     "scope": "site"
   },
   "enable_confirm": {
-    "text": "Start serving {$name}? These hostnames begin answering here: {$hostnames}.",
+    "text": ".match {$count :number}\none {{Start serving {$name}? This hostname begins answering here: {$hostnames}.}}\n* {{Start serving {$name}? These hostnames begin answering here: {$hostnames}.}}",
     "scope": "site"
   },
   "enable_confirm_no_hostnames": {
@@ -18078,13 +18082,19 @@
   "service_lead": {"scope": "put_online", "text": "Creates it, publishes its ports and, when you give one, its game address."},
   "game_address_help": {"scope": "put_online", "text": "Optional. A name in a zone Hohenheim manages, such as mc.example.com: it points at this host and gets an SRV record for the game port, so players type only the name."},
   "summary_port": {"scope": "put_online", "text": "{$port} in the container. Its host port: the one you give on this step, or a free one Hohenheim picks."},
-  "summary_port_row": {"scope": "put_online", "text": "{$port} in the container, on host port {$host}."},
-  "summary_port_row_free": {"scope": "put_online", "text": "{$port} in the container, on a free host port Hohenheim picks."},
-  "step_service_ports_lead": {"scope": "put_online", "text": "Add each port it listens on: what it is for, its container port and protocol. Leave a host port empty and Hohenheim picks a free one. Each is published on every address of its host."},
+  "summary_port_row": [
+    {"scope": "put_online", "text": "{$port} in the container, on host port {$host}."},
+    {"scope": "put_online", "workload": "virtual_machine", "text": "{$port} in the virtual machine, on host port {$host}."}
+  ],
+  "summary_port_row_free": [
+    {"scope": "put_online", "text": "{$port} in the container, on a free host port Hohenheim picks."},
+    {"scope": "put_online", "workload": "virtual_machine", "text": "{$port} in the virtual machine, on a free host port Hohenheim picks."}
+  ],
+  "step_service_ports_lead": {"scope": "put_online", "text": "Add each port it listens on: what it is for, the port and its protocol. Leave a host port empty and Hohenheim picks a free one. Each is published on every address of its host."},
   "service_port_purpose": {"scope": "put_online", "text": "For"},
   "service_port_name": {"scope": "put_online", "text": "Name"},
   "service_port_name_help": {"scope": "put_online", "text": "Only for Other: the name this port is published under, such as metrics."},
-  "service_port_container": {"scope": "put_online", "text": "Container port"},
+  "service_port_container": {"scope": "put_online", "text": "Port"},
   "service_port_protocol": {"scope": "put_online", "text": "Protocol"},
   "service_port_tcp": {"scope": "put_online", "text": "TCP"},
   "service_port_udp": {"scope": "put_online", "text": "UDP"},
@@ -18113,7 +18123,8 @@
   "port_for": {"scope": "instance_overview", "text": "For"},
   "published_ports": [
     {"scope": "hohenheim_field", "text": "Published ports"},
-    {"scope": "help", "text": "Ports published on every address of the host, by name: game, query, rcon or voice, then [host port:]container port/protocol, such as 25565/tcp. An empty host port is picked when it starts."}
+    {"scope": "help", "text": "Ports published on every address of the host, by name: game, query, rcon or voice, then [host port:]container port/protocol, such as 25565/tcp. An empty host port is picked when it starts."},
+    {"scope": "help", "workload": "virtual_machine", "text": "Ports published on every address of the host, by name: game, query, rcon or voice, then [host port:]port in the virtual machine/protocol, such as 25565/tcp. An empty host port is picked when it starts."}
   ],
   "srv_service": [
     {"scope": "hohenheim_field", "text": "SRV service"},
@@ -18189,6 +18200,7 @@
   ],
   "stream_connect_timeout": {"scope": "help", "text": "Maximum seconds to open a TCP connection to the forwarded address."},
   "stream_access_list": {"scope": "help", "text": "Optional: only its address rules apply to a stream, so clients from a denied network are dropped. A password or a sign-in cannot be asked on a raw port."},
+  "stream_enabled": {"scope": "help", "text": "Switched off, the stream forwards nothing; its ports stay reserved for it, so switching it on again restores forwarding."},
   "stream_protocol_tcp": {"scope": "port_protocol", "text": "TCP"},
   "stream_protocol_udp": {"scope": "port_protocol", "text": "UDP"},
   "stream_protocol_both": {"scope": "port_protocol", "text": "TCP and UDP"},

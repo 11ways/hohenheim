@@ -64,6 +64,22 @@ public enum PutOnlineReach {
         };
     }
 
+    /** @return the help under a site's Enabled switch: what switching off a site reached this way stops */
+    public @NonNull Microcopy enabledHelp() {
+        return switch (this) {
+            case WEBSITE, NONE -> HohenheimMicrocopy.HELP.of("enabled");
+            case PORTS -> HohenheimMicrocopy.HELP.of("stream_enabled");
+        };
+    }
+
+    /** Whether a sign-in provider can gate it: only a website's requests can be asked to sign in, never a raw port. */
+    public boolean gatedBySignIn() {
+        return switch (this) {
+            case WEBSITE -> true;
+            case PORTS, NONE -> false;
+        };
+    }
+
     /** @return the reach as a route names it */
     public @NonNull String token() {
         return switch (this) {

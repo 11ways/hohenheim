@@ -12706,23 +12706,27 @@
     "scope": "dns_zone"
   },
   "delete_confirm_hostnames": {
-    "text": "De site {$name} verwijderen? Deze hostnamen antwoorden niet langer: {$hostnames}.",
+    "text": ".match {$count :number}\none {{De site {$name} verwijderen? Deze hostnaam antwoordt niet langer: {$hostnames}.}}\n* {{De site {$name} verwijderen? Deze hostnamen antwoorden niet langer: {$hostnames}.}}",
     "scope": "site"
   },
   "delete_confirm_exposing": {
-    "text": "De site {$name} verwijderen? Deze hostnamen antwoorden niet langer: {$hostnames}. De preview-deployments worden vernietigd; de app {$app} erachter blijft draaien en kan door een andere site aangewezen worden.",
+    "text": ".match {$count :number}\none {{De site {$name} verwijderen? Deze hostnaam antwoordt niet langer: {$hostnames}. De preview-deployments worden vernietigd; de app {$app} erachter blijft draaien en kan door een andere site aangewezen worden.}}\n* {{De site {$name} verwijderen? Deze hostnamen antwoorden niet langer: {$hostnames}. De preview-deployments worden vernietigd; de app {$app} erachter blijft draaien en kan door een andere site aangewezen worden.}}",
+    "scope": "site"
+  },
+  "delete_confirm_no_hostnames": {
+    "text": "De site {$name} verwijderen? Ze heeft geen hostnamen, dus er stopt niets met antwoorden.",
     "scope": "site"
   },
   "delete_confirm_ports": {
-    "text": "De stream {$name} verwijderen? Deze poorten sturen niet langer door en komen vrij voor ander gebruik: {$ports}. Het adres waarnaar hij doorstuurt, blijft onaangeroerd.",
+    "text": ".match {$count :number}\none {{De stream {$name} verwijderen? Deze poort stuurt niet langer door en komt vrij voor ander gebruik: {$ports}. Het adres waarnaar hij doorstuurt, blijft onaangeroerd.}}\n* {{De stream {$name} verwijderen? Deze poorten sturen niet langer door en komen vrij voor ander gebruik: {$ports}. Het adres waarnaar hij doorstuurt, blijft onaangeroerd.}}",
     "scope": "site"
   },
   "disable_confirm_ports": {
-    "text": "{$name} niet langer laten doorsturen? Deze poorten sturen meteen niet meer door: {$ports}. Er wordt niets verwijderd en de poorten blijven voor hem gereserveerd, dus opnieuw inschakelen herstelt het doorsturen.",
+    "text": ".match {$count :number}\none {{De stream {$name} niet langer laten doorsturen? Deze poort stuurt meteen niet meer door: {$ports}. Er wordt niets verwijderd en de poort blijft voor hem gereserveerd, dus opnieuw inschakelen herstelt het doorsturen.}}\n* {{De stream {$name} niet langer laten doorsturen? Deze poorten sturen meteen niet meer door: {$ports}. Er wordt niets verwijderd en de poorten blijven voor hem gereserveerd, dus opnieuw inschakelen herstelt het doorsturen.}}",
     "scope": "site"
   },
   "enable_confirm_ports": {
-    "text": "{$name} laten doorsturen? Deze poorten beginnen hier door te sturen: {$ports}.",
+    "text": ".match {$count :number}\none {{De stream {$name} laten doorsturen? Deze poort begint hier door te sturen: {$ports}.}}\n* {{De stream {$name} laten doorsturen? Deze poorten beginnen hier door te sturen: {$ports}.}}",
     "scope": "site"
   },
   "toggle_confirm": {
@@ -12730,11 +12734,11 @@
     "scope": "site"
   },
   "disable_confirm": {
-    "text": "{$name} uitschakelen? Deze hostnamen antwoorden meteen niet meer: {$hostnames}. Er wordt niets verwijderd en opnieuw inschakelen herstelt de routering.",
+    "text": ".match {$count :number}\none {{De site {$name} uitschakelen? Deze hostnaam antwoordt meteen niet meer: {$hostnames}. Er wordt niets verwijderd en opnieuw inschakelen herstelt de routering.}}\n* {{De site {$name} uitschakelen? Deze hostnamen antwoorden meteen niet meer: {$hostnames}. Er wordt niets verwijderd en opnieuw inschakelen herstelt de routering.}}",
     "scope": "site"
   },
   "disable_confirm_exposing": {
-    "text": "{$name} uitschakelen? Deze hostnamen antwoorden meteen niet meer: {$hostnames}. Er wordt niets verwijderd: de app {$app} erachter blijft draaien en opnieuw inschakelen herstelt de routering.",
+    "text": ".match {$count :number}\none {{De site {$name} uitschakelen? Deze hostnaam antwoordt meteen niet meer: {$hostnames}. Er wordt niets verwijderd: de app {$app} erachter blijft draaien en opnieuw inschakelen herstelt de routering.}}\n* {{De site {$name} uitschakelen? Deze hostnamen antwoorden meteen niet meer: {$hostnames}. Er wordt niets verwijderd: de app {$app} erachter blijft draaien en opnieuw inschakelen herstelt de routering.}}",
     "scope": "site"
   },
   "disable_confirm_no_hostnames": {
@@ -12742,7 +12746,7 @@
     "scope": "site"
   },
   "enable_confirm": {
-    "text": "{$name} inschakelen? Deze hostnamen beginnen hier te antwoorden: {$hostnames}.",
+    "text": ".match {$count :number}\none {{De site {$name} inschakelen? Deze hostnaam begint hier te antwoorden: {$hostnames}.}}\n* {{De site {$name} inschakelen? Deze hostnamen beginnen hier te antwoorden: {$hostnames}.}}",
     "scope": "site"
   },
   "enable_confirm_no_hostnames": {
@@ -18078,13 +18082,19 @@
   "service_lead": {"scope": "put_online", "text": "Maakt het aan, publiceert zijn poorten en, als je er een geeft, zijn speladres."},
   "game_address_help": {"scope": "put_online", "text": "Optioneel. Een naam in een zone die Hohenheim beheert, zoals mc.example.com: die wijst naar deze host en krijgt een SRV-record voor de spelpoort, zodat spelers alleen de naam typen."},
   "summary_port": {"scope": "put_online", "text": "{$port} in de container. Zijn hostpoort: die je in deze stap geeft, of een vrije die Hohenheim kiest."},
-  "summary_port_row": {"scope": "put_online", "text": "{$port} in de container, op hostpoort {$host}."},
-  "summary_port_row_free": {"scope": "put_online", "text": "{$port} in de container, op een vrije hostpoort die Hohenheim kiest."},
-  "step_service_ports_lead": {"scope": "put_online", "text": "Voeg elke poort toe waarop het luistert: waarvoor ze dient, haar containerpoort en protocol. Laat een hostpoort leeg en Hohenheim kiest een vrije. Elke poort wordt gepubliceerd op elk adres van de host."},
+  "summary_port_row": [
+    {"scope": "put_online", "text": "{$port} in de container, op hostpoort {$host}."},
+    {"scope": "put_online", "workload": "virtual_machine", "text": "{$port} in de virtuele machine, op hostpoort {$host}."}
+  ],
+  "summary_port_row_free": [
+    {"scope": "put_online", "text": "{$port} in de container, op een vrije hostpoort die Hohenheim kiest."},
+    {"scope": "put_online", "workload": "virtual_machine", "text": "{$port} in de virtuele machine, op een vrije hostpoort die Hohenheim kiest."}
+  ],
+  "step_service_ports_lead": {"scope": "put_online", "text": "Voeg elke poort toe waarop het luistert: waarvoor ze dient, de poort en haar protocol. Laat een hostpoort leeg en Hohenheim kiest een vrije. Elke poort wordt gepubliceerd op elk adres van de host."},
   "service_port_purpose": {"scope": "put_online", "text": "Voor"},
   "service_port_name": {"scope": "put_online", "text": "Naam"},
   "service_port_name_help": {"scope": "put_online", "text": "Alleen voor Andere: de naam waaronder deze poort gepubliceerd wordt, zoals metrics."},
-  "service_port_container": {"scope": "put_online", "text": "Containerpoort"},
+  "service_port_container": {"scope": "put_online", "text": "Poort"},
   "service_port_protocol": {"scope": "put_online", "text": "Protocol"},
   "service_port_tcp": {"scope": "put_online", "text": "TCP"},
   "service_port_udp": {"scope": "put_online", "text": "UDP"},
@@ -18113,7 +18123,8 @@
   "port_for": {"scope": "instance_overview", "text": "Voor"},
   "published_ports": [
     {"scope": "hohenheim_field", "text": "Gepubliceerde poorten"},
-    {"scope": "help", "text": "Poorten gepubliceerd op elk adres van de host, per naam: game, query, rcon of voice, dan [hostpoort:]containerpoort/protocol, zoals 25565/tcp. Een lege hostpoort wordt gekozen bij het starten."}
+    {"scope": "help", "text": "Poorten gepubliceerd op elk adres van de host, per naam: game, query, rcon of voice, dan [hostpoort:]containerpoort/protocol, zoals 25565/tcp. Een lege hostpoort wordt gekozen bij het starten."},
+    {"scope": "help", "workload": "virtual_machine", "text": "Poorten gepubliceerd op elk adres van de host, per naam: game, query, rcon of voice, dan [hostpoort:]poort in de virtuele machine/protocol, zoals 25565/tcp. Een lege hostpoort wordt gekozen bij het starten."}
   ],
   "srv_service": [
     {"scope": "hohenheim_field", "text": "SRV-dienst"},
@@ -18189,6 +18200,7 @@
   ],
   "stream_connect_timeout": {"scope": "help", "text": "Maximaal aantal seconden om een TCP-verbinding met het doorgestuurde adres te openen."},
   "stream_access_list": {"scope": "help", "text": "Optioneel: op een stream gelden alleen de adresregels, dus clients uit een geweigerd netwerk worden geweigerd. Een wachtwoord of aanmelding kan op een kale poort niet gevraagd worden."},
+  "stream_enabled": {"scope": "help", "text": "Uitgeschakeld stuurt de stream niets door; zijn poorten blijven voor hem gereserveerd, dus opnieuw inschakelen herstelt het doorsturen."},
   "stream_protocol_tcp": {"scope": "port_protocol", "text": "TCP"},
   "stream_protocol_udp": {"scope": "port_protocol", "text": "UDP"},
   "stream_protocol_both": {"scope": "port_protocol", "text": "TCP en UDP"},

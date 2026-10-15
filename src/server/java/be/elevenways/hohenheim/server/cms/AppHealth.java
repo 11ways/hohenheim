@@ -742,9 +742,9 @@ final class AppHealth {
             SiteParts.tlsPassthrough(site)) != null;
     }
 
-    /** Whether the Add an address fix applies to this one site. */
+    /** Whether the Add an address fix applies to this one site: one reached by address that answers on none. */
     static boolean needsAddress(@NonNull Row site) {
-        return SiteParts.domainsOf(site).isEmpty();
+        return SiteParts.reachOf(site).asksAddress() && SiteParts.domainsOf(site).isEmpty();
     }
 
     /** Whether the Change its configuration fix applies: the running proxy turns every visitor of this site away. */

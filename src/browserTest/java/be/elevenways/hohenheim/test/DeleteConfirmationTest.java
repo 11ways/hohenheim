@@ -176,6 +176,11 @@ class DeleteConfirmationTest {
                 .isEqualTo("shop." + ORIGIN);
             assertThat(siteConfirm.body().args().get("name"))
                 .as("step 6: and the site it belongs to").isEqualTo("shop");
+            assertThat(siteConfirm.body().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
+                .as("step 6: THE ASSERTION, its one hostname reads in the singular")
+                .contains("This hostname stops answering").doesNotContain("These hostnames");
+            assertThat(siteConfirm.body().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
+                .as("step 6: and in Dutch").contains("Deze hostnaam antwoordt").doesNotContain("hostnamen");
 
             // 6b. A Redirect exposes no app: its dialog follows the kind's own fact and says nothing about one keeping
             //     on running, naming only the hostnames that stop answering.
@@ -193,12 +198,17 @@ class DeleteConfirmationTest {
                 .contains("hop." + ORIGIN)
                 .doesNotContain("app").doesNotContain("application").doesNotContain("keeps running");
 
-            // 7. A site with no hostname bound gets the generic body instead of a
-            //    sentence naming nothing.
+            // 7. A website with no hostname bound says so, naming it, instead of claiming hostnames and previews.
             Row bare = Models.get(SiteModel.class).findById(site("bare", null));
-            assertThat(sites.forRow(bare, request).body().key())
-                .as("step 7: a hostname-less site keeps the generic wording")
-                .isEqualTo("delete_confirm");
+            ConfirmationSpec bareConfirm = sites.forRow(bare, request);
+            assertThat(bareConfirm.body().key())
+                .as("step 7: THE ASSERTION, a hostname-less site gets the no-hostname wording")
+                .isEqualTo("delete_confirm_no_hostnames");
+            assertThat(bareConfirm.body().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
+                .as("step 7: naming the site and nothing it does not have").contains("bare")
+                .doesNotContain("preview");
+            assertThat(bareConfirm.body().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
+                .as("step 7: and in Dutch").contains("bare").contains("geen hostnamen");
 
             // 7b. A stream has no hostnames and no previews: THE ASSERTION, its dialog names the ports that stop
             //     forwarding and are freed, in both languages, and nothing a website has.
@@ -217,6 +227,18 @@ class DeleteConfirmationTest {
             assertThat(relay.body().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
                 .as("step 7b: and in Dutch").contains("poorten").contains("47123/udp")
                 .doesNotContain("hostnamen").doesNotContain("preview");
+
+            // 7c. A stream on one port names it in the singular, in both languages.
+            stream.set(SiteModel.SETTINGS, Map.of("listen_port", 47123, "protocol", "tcp",
+                "forward_host", "10.0.0.20", "forward_port", 22));
+            Models.get(SiteModel.class).save(stream);
+            ConfirmationSpec onePort = sites.forRow(Models.get(SiteModel.class).findById(stream.get(SiteModel.ID)),
+                request);
+            assertThat(onePort.body().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
+                .as("step 7c: THE ASSERTION, one port reads in the singular").contains("This port stops forwarding")
+                .contains("47123/tcp").doesNotContain("These ports");
+            assertThat(onePort.body().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
+                .as("step 7c: and in Dutch").contains("Deze poort stuurt").doesNotContain("poorten");
 
             // 8. The certificate dialog names the domains whose HTTPS stops working.
             DeleteConfirmation<Row> certificates = CertificateParts.admin().deleteConfirmation();

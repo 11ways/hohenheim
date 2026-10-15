@@ -20,6 +20,7 @@ import be.elevenways.zenit.common.edit.FieldFormEntryDefaults;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSection;
 import be.elevenways.zenit.common.edit.FormSpec;
+import be.elevenways.zenit.common.edit.Plain;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.operation.Operation;
@@ -70,6 +71,13 @@ public final class SiteWrites {
         .build();
 
     /**
+     * The Enabled switch, its help the edited site's reach's: switching off a stream stops its forwarding, it serves
+     * no offline page.
+     */
+    static final Plain ENABLED = Plain.of(SiteModel.ENABLED)
+        .withHelp(record -> record instanceof Row site ? SiteParts.reachOf(site).enabledHelp() : null);
+
+    /**
      * The operator's site form: choice cards decide the upstream kind, the per-kind settings switch under it without a
      * round trip, and the instance pick only wakes up for the {@code instance} kind, narrowed to instances the routing
      * tier can actually serve.
@@ -98,7 +106,7 @@ public final class SiteWrites {
         // Operator-only: the /manage form omits it, and TenantWrites freezes the column for every tenant write
         // whatever a form offers.
         .add(SiteModel.TRUSTED_UPSTREAM)
-        .add(SiteModel.ENABLED)
+        .add(ENABLED)
         .add(SiteModel.DESCRIPTION)
         // Both are SECURITY declarations shared across sites: minting one from inside a site form is how a
         // half-configured provider or an empty allow-list goes live.
@@ -127,7 +135,7 @@ public final class SiteWrites {
     /** The delegated form: only non-execution metadata is editable on /manage. */
     public static final FormSpec MANAGE_FORM = FormSpec.builder()
         .add(SiteModel.NAME)
-        .add(SiteModel.ENABLED)
+        .add(ENABLED)
         .add(SiteModel.DESCRIPTION)
         .build();
 

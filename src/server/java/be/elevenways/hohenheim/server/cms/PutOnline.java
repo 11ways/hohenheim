@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
 import be.elevenways.hohenheim.instance.InstanceOperations;
+import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.server.instance.InstallMedia;
 import be.elevenways.hohenheim.ports.PortPurpose;
 import be.elevenways.hohenheim.ports.PublishedPort;
@@ -822,10 +823,13 @@ public final class PutOnline {
 
     /**
      * What a kind-led service's Ports step shows: the kind as its card names it, its name and host, then each row
-     * typed on this same step with its host port (asked again as the rows change).
+     * typed on this same step with its host port (asked again as the rows change). A row says where its port listens
+     * in the kind's own words: the container, or the virtual machine (the kind's isolation fact).
      */
     private static @NonNull List<SummaryLine> workloadServiceSummary(@NonNull StepAnswers answers) {
         List<SummaryLine> lines = kindSummary(answers, PutOnlineReach.PORTS);
+        InstanceKindHandler handler = InstanceKinds.getHandler(answers.text(InstanceModel.KIND.getName()));
+        String workload = (handler == null ? WorkloadIsolation.SHARED_KERNEL : handler.isolation()).token();
         if (answers.get(PORTS) instanceof List<?> rows) {
             for (Object row : rows) {
                 PublishedPort port = row instanceof Map<?, ?> map ? rowPort(RawValues.map(map)) : null;
@@ -833,10 +837,11 @@ public final class PutOnline {
                     continue;
                 }
                 String spelled = port.containerPort() + "/" + port.protocol();
-                lines.add(new SummaryLine(portLabel(port), port.hostPort() == null
+                Microcopy words = port.hostPort() == null
                     ? HohenheimMicrocopy.PUT_ONLINE.of("summary_port_row_free").withArg("port", spelled)
                     : HohenheimMicrocopy.PUT_ONLINE.of("summary_port_row").withArg("port", spelled)
-                        .withArg("host", String.valueOf(port.hostPort()))));
+                        .withArg("host", String.valueOf(port.hostPort()));
+                lines.add(new SummaryLine(portLabel(port), words.withFilter("workload", workload)));
             }
         }
         return lines;

@@ -226,7 +226,7 @@ final class AppDirectory {
         for (Row site : websites) {
             int id = site.get(SiteModel.ID);
             List<Row> names = domains.getOrDefault(id, List.of());
-            SiteHostnamesCell address = SiteParts.hostnamesCellOf(names);
+            SiteHostnamesCell address = SiteParts.addressCellOf(site, names);
             apps.add(new App(Source.WEBSITE.token() + "-" + id, Source.WEBSITE, id,
                 String.valueOf((Object) site.get(SiteModel.NAME)), words.say(SiteParts.upstreamLabel(site)),
                 address, address.primary(), websiteHost(site, servedBy),
