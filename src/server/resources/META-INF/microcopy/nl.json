@@ -18035,6 +18035,10 @@
     "scope": "instance_overview",
     "text": "Het bereikt het internet via de host, achter de isolatieregel van Hohenheim. Niets buiten de host kan het rechtstreeks bereiken."
   },
+  "network_mode_hidden_ports_detail": {
+    "scope": "instance_overview",
+    "text": "Het bereikt het internet via de host, achter de isolatieregel van Hohenheim. Van buiten de host bereiken alleen de gepubliceerde poorten het."
+  },
   "network_addresses": {
     "scope": "instance_overview",
     "text": "Adressen"

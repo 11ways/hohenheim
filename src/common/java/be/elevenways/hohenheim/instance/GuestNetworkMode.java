@@ -26,10 +26,14 @@ public enum GuestNetworkMode {
         };
     }
 
-    /** @return what the mode means for who can reach the machine */
-    public @NonNull Microcopy description() {
+    /**
+     * @param publishesPorts whether the machine holds published ports, which the outside reaches through its host
+     * @return what the mode means for who can reach the machine
+     */
+    public @NonNull Microcopy description(boolean publishesPorts) {
         return switch (this) {
-            case HIDDEN -> HohenheimMicrocopy.INSTANCE_OVERVIEW.of("network_mode_hidden_detail");
+            case HIDDEN -> HohenheimMicrocopy.INSTANCE_OVERVIEW.of(publishesPorts
+                ? "network_mode_hidden_ports_detail" : "network_mode_hidden_detail");
         };
     }
 }

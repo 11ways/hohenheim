@@ -123,6 +123,8 @@ public final class InstanceOverview {
         // the column exists for). A machine no site can serve is reached on its own network instead: its Network card
         // says how it is connected and the addresses its guest holds. Both read the kind's and its driver's facts.
         List<WidgetInstance> main = new ArrayList<>();
+        // The ports it answers on directly: the Network card says the outside reaches it on them.
+        List<InstanceEndpointView> ports = endpointsOf(instanceId, delegated);
         InstanceKindHandler kind = InstanceKinds.handlerOf(instance);
         PutOnlineReach reach = InstanceKinds.reachOf(instance);
         if (kind != null && reach.asksAddress()) {
@@ -133,11 +135,10 @@ public final class InstanceOverview {
                 main.add(protection);
             }
         } else if (InstanceKinds.offers(instance, WorkloadLane.GUEST_ADDRESSES)) {
-            main.add(InstanceNetwork.card(instance, locales, resolver));
+            main.add(InstanceNetwork.card(instance, !ports.isEmpty(), locales, resolver));
         }
-        // The ports it answers on directly, only where it holds one: no card is drawn for an app
+        // Only where it holds a port is its Connect to card drawn: no card is drawn for an app
         // reached through its addresses alone, where "holds no port claim" was ledger words about nothing.
-        List<InstanceEndpointView> ports = endpointsOf(instanceId, delegated);
         if (!ports.isEmpty()) {
             // A service is reached on its ports: the card says where to connect, and names the game address first.
             boolean service = reach.asksPorts();

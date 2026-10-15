@@ -18035,6 +18035,10 @@
     "scope": "instance_overview",
     "text": "It reaches the internet through its host, behind Hohenheim's isolation rule. Nothing outside its host can reach it directly."
   },
+  "network_mode_hidden_ports_detail": {
+    "scope": "instance_overview",
+    "text": "It reaches the internet through its host, behind Hohenheim's isolation rule. From outside its host, only its published ports reach it."
+  },
   "network_addresses": {
     "scope": "instance_overview",
     "text": "Addresses"

@@ -42,14 +42,18 @@ final class InstanceNetwork {
     private InstanceNetwork() {
     }
 
-    /** The card for one machine. */
-    static @NonNull WidgetInstance card(@NonNull Row instance, @NonNull LocaleChain locales,
+    /**
+     * The card for one machine.
+     *
+     * @param publishesPorts whether it holds published ports, so the outside does reach it on those
+     */
+    static @NonNull WidgetInstance card(@NonNull Row instance, boolean publishesPorts, @NonNull LocaleChain locales,
                                         @Nullable MessageResolver resolver) {
         List<WidgetFact> facts = new ArrayList<>();
         GuestNetworkMode mode = modeOf(instance);
         facts.add(WidgetFact.of(text("network_mode", locales, resolver), mode.label().resolve(locales, resolver)));
         facts.add(WidgetFact.of(text("network_reach", locales, resolver),
-            mode.description().resolve(locales, resolver)));
+            mode.description(publishesPorts).resolve(locales, resolver)));
         facts.addAll(addressFacts(instance, locales, resolver));
         return CardWidget.of(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("network"),
             new WidgetTree(List.of(new WidgetInstance(FactListWidget.ID, Map.of()).withData(facts))));

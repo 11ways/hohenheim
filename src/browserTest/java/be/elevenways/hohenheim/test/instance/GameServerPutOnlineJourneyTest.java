@@ -771,6 +771,9 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
                     .contains("Connect to").contains("Players connect to " + gameAddress + ", or to a port below.");
                 assertThat(overview).as("step 6: its row is the game port at the host's address")
                     .contains("data-endpoint-port=\"" + hostPort + "\"").contains(HOST_IPV4 + ":" + hostPort);
+                assertThat(overview).as("step 6b: its Network card admits the published ports reach it from outside")
+                    .contains("From outside its host, only its published ports reach it.")
+                    .doesNotContain("Nothing outside its host can reach it directly.");
             } finally {
                 if (vmId != null) {
                     GameAddresses.set(vmId, null);
