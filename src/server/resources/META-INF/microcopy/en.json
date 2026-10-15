@@ -3147,7 +3147,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "What this hostname resolves to: static files, a redirect, an address, an instance you manage, ...",
+      "text": "What this site serves or forwards: static files, a redirect, an address, an instance you manage, a TCP/UDP stream, ...",
       "scope": "help"
     }
   ],

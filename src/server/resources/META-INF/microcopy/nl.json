@@ -3147,7 +3147,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Waar deze hostnaam naartoe leidt: statische bestanden, een omleiding, een adres, een instantie die je beheert, ...",
+      "text": "Wat deze site serveert of doorstuurt: statische bestanden, een omleiding, een adres, een instantie die je beheert, een TCP/UDP-stream, ...",
       "scope": "help"
     }
   ],

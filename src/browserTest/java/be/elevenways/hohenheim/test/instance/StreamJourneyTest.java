@@ -173,6 +173,8 @@ class StreamJourneyTest extends HohenheimTestBase {
         assertThat(form).as("step 3c: its Enabled help is the stream's, never the website's offline page")
             .contains("the stream forwards nothing").doesNotContain("requests get the offline page");
         assertThat(form).as("step 3c: no auth provider pick").doesNotContain("name=\"auth_provider_id\"");
+        assertThat(form).as("step 3c: its Upstream help names no hostname, which a stream has not")
+            .contains("What this site serves or forwards").doesNotContain("What this hostname resolves to");
 
         // 3d. The Sites list shows the stream's port where a website shows its hostnames, and no HTTPS state.
         String list = adminGet("/admin/sites?q=r4a-ssh").body();
