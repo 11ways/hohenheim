@@ -3,6 +3,7 @@
    bespoke overview template, minus the per-lane button rows -- every ceremony is one of
    the resource's own row actions and now renders once, in the record_actions band, where
    its confirmation and per-record capability gate travel with it. #}
+{% bundle with WidgetDisplayFunctions %}
 {% declare widget: WidgetInstance %}
 {% declare data: List<TrustLaneView> = null %}
 

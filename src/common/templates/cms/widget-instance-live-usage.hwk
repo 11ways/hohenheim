@@ -1,5 +1,6 @@
 {# A running instance's live memory and CPU, inside the overview's Resources card (InstanceOverview). The element owns
    the live stats link while the overview is open; this widget only hands it the seed and the two gauges. #}
+{% bundle with WidgetDisplayFunctions %}
 {% declare widget: WidgetInstance %}
 {% declare data: InstanceLiveUsageView = null %}
 

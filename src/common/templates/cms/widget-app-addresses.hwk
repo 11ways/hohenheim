@@ -1,6 +1,7 @@
 {#- An app's addresses, each with whether HTTPS works for it (never whether it is "forced": a forced name without a
     working certificate is the one red state). The framework card around it (AppOverview) carries the title and the
     Add address link. -#}
+{% bundle with WidgetDisplayFunctions %}
 {% declare widget: WidgetInstance %}
 {% declare data: List<AppAddress> = null %}
 {% if data != null and data %}

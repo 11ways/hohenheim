@@ -1,5 +1,6 @@
 {# Everything this host carries -- the same three populations that block cordon, drain
    and delete. Moved verbatim from the old bespoke overview template. #}
+{% bundle with WidgetDisplayFunctions %}
 {% declare widget: WidgetInstance %}
 {% declare data: List<WorkloadView> = null %}
 

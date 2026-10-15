@@ -2,6 +2,7 @@
    advice that never blocks (each with what did not pass first, what it found in words, its own stamp and how to fix
    it), and the measured facts in words with their units. The overall verdict sits in the header's action slot, apart
    from the "Last preflight" line. No live probe happens here -- this reads what the last check wrote. #}
+{% bundle with WidgetDisplayFunctions %}
 {% declare widget: WidgetInstance %}
 {% declare data: HostPreflightReportView = null %}
 

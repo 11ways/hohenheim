@@ -6,6 +6,7 @@
    root says what it holds back (heldBack); the dashboard folded those items.
    A note is a further line under the detail (a second fact, or the technical
    words after the worded ones). #}
+{% bundle with WidgetDisplayFunctions %}
 {% declare widget: WidgetInstance %}
 {% declare data: List<AttentionItem> %}
 

@@ -2,6 +2,7 @@
     relative time -- never a fully-resolved sentence. Quarantine wins and is LOUD.
     The dot, the wording and its emphasis are FACTS on HostState, so no state can render
     green (or quiet) by falling through a branch this template forgot. -#}
+{% bundle with HostStatusCell %}
 {% declare value: HostStatusCell %}
 {% if value != null %}
 <span class="hh-host-state" data-host-state={% value.stateToken %}>

@@ -4,6 +4,7 @@
    pressing Deploy would do. An open step whose condition an attention item states
    presents that item (its words, its one action), and the band leaves it out.
    The dashboard omits the whole band once every step is done. #}
+{% bundle with WidgetDisplayFunctions %}
 {% declare widget: WidgetInstance %}
 {% declare data: List<OnboardingStep> %}
 

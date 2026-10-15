@@ -19,5 +19,9 @@
 # 2026-10-12: the framework work since 2026-10-08 (archived referents, relation pick narrowing and inline create,
 # registries, Pace) plus this round's named create dialogs and inline page-action form: raw 7829863 -> 8065767,
 # gzip 1862955 -> 1956546 (the breach that set this was 443 bytes over). Standard 5 percent headroom.
-cms.js.raw=8469055 measured=8065767
-cms.js.gzip=2054373 measured=1956546
+# 2026-10-15 (BX-3): raw 8065767 -> 7830036 (-235731), gzip 1956546 -> 1942018. The 14 cms/widget-* displays name
+# WidgetDisplayFunctions and cms/cell/host-status HostStatusCell instead of linking unconditionally (both stay: their
+# drawers are in this bundle). The drop is the framework's: thread parts, the sheet and test-only templates link only
+# beside a drawer, and zenit-comms' inbox gave way to zenit-notifications' since the 10-12 baseline.
+cms.js.raw=8221538 measured=7830036
+cms.js.gzip=2039119 measured=1942018

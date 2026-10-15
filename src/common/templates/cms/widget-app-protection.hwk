@@ -1,6 +1,7 @@
 {#- An app's protected paths. A path whose protection admits everyone is said as OPEN, never drawn as protected: that
     green lock over an open door is the lie this card exists to stop telling. The framework card around it
     (AppOverview) carries the title and the Protect a path link. -#}
+{% bundle with WidgetDisplayFunctions %}
 {% declare widget: WidgetInstance %}
 {% declare data: List<AppProtection> = null %}
 <pl-list variant="default" data-app-card="protection">

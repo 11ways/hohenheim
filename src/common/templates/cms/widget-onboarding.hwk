@@ -1,3 +1,4 @@
+{% bundle with WidgetDisplayFunctions %}
 {% declare widget: WidgetInstance %}
 {% declare data: Map = null %}
 {#- The fresh install's lead: nothing is online yet, so the ways onward are "Put something

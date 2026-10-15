@@ -1,6 +1,7 @@
 {#- The /manage landing's usage card: each listed budget, how much of the operator's cap
     this tenant holds with its bar, or "No limit" where the operator set none (TenantUsage). Its lead and
     closing line name the installation's operator when one is declared (CmsSupport.operatorWords). -#}
+{% bundle with WidgetDisplayFunctions %}
 {% declare widget: WidgetInstance %}
 {% declare data: TenantUsageCard = null %}
 {% if data != null and data.lines %}

@@ -3,6 +3,7 @@
     a problem HTTPS does not explain (AppSummary.verdict), read from the one App directory the Apps list reads. The glyph is the same
     verdict (and the same HealthCellState) the Apps list's health cell draws; the heading is the placement's own
     (AppsBand). -#}
+{% bundle with WidgetDisplayFunctions %}
 {% declare widget: WidgetInstance %}
 {% declare data: AppsBand = null %}
 {% if data != null and data.apps %}

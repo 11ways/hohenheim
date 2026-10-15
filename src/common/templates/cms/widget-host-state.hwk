@@ -2,6 +2,7 @@
    relative time. NOT a badge -- pl-badge would drop the dot's verdict and the timestamp,
    which is the half an operator actually reads -- so it stays the same cell the host
    list renders, moved here verbatim. #}
+{% bundle with WidgetDisplayFunctions %}
 {% declare widget: WidgetInstance %}
 {% declare data: HostStatusCell = null %}
 

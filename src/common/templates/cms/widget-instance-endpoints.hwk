@@ -1,6 +1,7 @@
 {# Every port claim this instance holds, joined to its host's declared address. The framework card around it
    (InstanceOverview) carries the title and the hint and is drawn only while a port is held; this widget is the
    table only. #}
+{% bundle with WidgetDisplayFunctions %}
 {% declare widget: WidgetInstance %}
 {% declare data: List<InstanceEndpointView> = null %}
 
