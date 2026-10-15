@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.server.auth.SiteAuthGate;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -24,6 +25,8 @@ final class RouteTable {
     final Set<SiteRequestHandler> ownedHandlers;
     final Set<SiteAuthGate> ownedGates;
     final List<RoutingProblem> problems;
+    /** Each site's own exact-name routes by its slug, longest path first; previews are never among them. */
+    final Map<String, List<RouteEntry>> exactBySite;
     final ConcurrentHashMap<String, CachedRegexMatches> regexMatchCache = new ConcurrentHashMap<>();
     final ConcurrentHashMap<String, Long> negativeCache = new ConcurrentHashMap<>();
     final AtomicInteger users = new AtomicInteger();
@@ -33,7 +36,7 @@ final class RouteTable {
     RouteTable(Map<String, List<RouteEntry>> exact, List<WildcardRoute> wildcard,
                List<RegexRoute> regex, TlsPassthroughRoutes.Snapshot tlsRoutes,
                Set<SiteRequestHandler> ownedHandlers, Set<SiteAuthGate> ownedGates,
-               List<RoutingProblem> problems) {
+               List<RoutingProblem> problems, Map<String, List<RouteEntry>> exactBySite) {
         this.exactRoutes = exact;
         this.wildcardRoutes = wildcard;
         this.regexRoutes = regex;
@@ -41,12 +44,31 @@ final class RouteTable {
         this.ownedHandlers = ownedHandlers;
         this.ownedGates = ownedGates;
         this.problems = List.copyOf(problems);
+        this.exactBySite = exactBySite;
     }
 
     /** A generation that routes nothing, for boot and shutdown. */
     static RouteTable empty() {
         return new RouteTable(Map.of(), List.of(), List.of(), TlsPassthroughRoutes.emptySnapshot(),
-            Set.of(), Set.of(), List.of());
+            Set.of(), Set.of(), List.of(), Map.of());
+    }
+
+    /**
+     * The route the site {@code slug} answers this path with on this listener, through one of its own exact names.
+     *
+     * @return null when the site serves no exact name here (unknown, disabled, only patterns, or not this listener)
+     */
+    @Nullable RouteEntry siteRoute(@Nullable String slug, @Nullable String listenerIp, String path) {
+        List<RouteEntry> own = slug == null ? null : this.exactBySite.get(slug);
+        if (own == null) {
+            return null;
+        }
+        for (RouteEntry entry : own) {
+            if (entry.acceptsListener(listenerIp) && entry.matchesPath(path)) {
+                return entry;
+            }
+        }
+        return null;
     }
 
     /**

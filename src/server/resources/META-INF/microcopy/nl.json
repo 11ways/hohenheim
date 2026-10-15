@@ -8082,6 +8082,10 @@
     {
       "text": "Verzoeken doorsturen naar een andere URL",
       "scope": "upstream_kind_description"
+    },
+    {
+      "text": "Doorverwijzen naar een URL",
+      "scope": "unknown_host_answer"
     }
   ],
   "hohenheim_databases_create": {
@@ -14298,6 +14302,10 @@
     "text": "Bewaar images minstens 1 uur",
     "scope": "violations"
   },
+  "setting_unknown_hosts_target": {
+    "text": "Geef het gekozen antwoord voor onbekende hostnamen zijn adres, URL of site",
+    "scope": "violations"
+  },
   "setting_nixpacks_release_version": {
     "text": "Gebruik een numerieke Nixpacks-releaseversie in major.minor.patch-vorm, zoals 1.41.0",
     "scope": "violations"
@@ -14433,7 +14441,7 @@
   "settings.hohenheim.proxy.connection_prologue_timeout_seconds.label": "Time-out voor de verbindingsaanloop",
   "settings.hohenheim.proxy.connection_prologue_timeout_seconds.help": "Maximale tijd die een publieke verbinding krijgt om te sturen wat Hohenheim leest voor het routeren: een optionele PROXY v2-header en, op de HTTPS-poort, de TLS ClientHello.",
   "settings.hohenheim.proxy.fallback_address.label": "Terugvaladres",
-  "settings.hohenheim.proxy.fallback_address.help": "Adres waar Hohenheim de verzoeken naartoe stuurt die bij geen enkele site horen, bijvoorbeeld http://localhost:8080.",
+  "settings.hohenheim.proxy.fallback_address.help": "Adres waar Hohenheim de verzoeken voor een onbekende hostnaam naartoe doorstuurt wanneer het antwoord voor onbekende hostnamen Doorsturen is, bijvoorbeeld http://localhost:8080.",
   "settings.hohenheim.proxy.force_https.label": "HTTPS afdwingen",
   "settings.hohenheim.proxy.force_https.help": "Stuurt bezoekers naar HTTPS op elk adres met een werkend certificaat.",
   "settings.hohenheim.proxy.http_port.label": "HTTP-poort",
@@ -14458,6 +14466,44 @@
   "settings.hohenheim.proxy.trusted_proxy_keys.help": "X-Hohenheim-Key-waarden die van vertrouwde upstream-HTTP-proxy's aanvaard worden.",
   "settings.hohenheim.proxy.unreachable_message.label": "Melding voor een onbereikbare upstream",
   "settings.hohenheim.proxy.unreachable_message.help": "Foutmelding voor onbereikbare upstreams; laat leeg voor de vertaalde standaardtekst, want een waarde hier krijgt elke bezoeker in elke taal te zien.",
+  "settings.hohenheim.proxy.unknown_hosts.label": "Onbekende hostnamen",
+  "settings.hohenheim.proxy.unknown_hosts.help": "Wat de proxy antwoordt voor een hostnaam die geen enkele site bedient. Via HTTPS krijgt een naam die geen van je certificaten dekt geen certificaat en wordt de verbinding gesloten, wat je hier ook kiest.",
+  "settings.hohenheim.proxy.unknown_hosts_redirect.label": "Onbekende hostnamen doorverwijzen naar",
+  "settings.hohenheim.proxy.unknown_hosts_redirect.help": "URL waarnaar een onbekende hostnaam doorverwezen wordt wanneer het antwoord voor onbekende hostnamen Doorverwijzen is.",
+  "settings.hohenheim.proxy.unknown_hosts_site.label": "Site voor onbekende hostnamen",
+  "settings.hohenheim.proxy.unknown_hosts_site.help": "Site die een onbekende hostnaam bedient wanneer het antwoord voor onbekende hostnamen Een van je sites is; ze antwoordt via haar eigen route, dus haar toegangslijst en aanmelding gelden.",
+  "not_found": {
+    "scope": "unknown_host_answer",
+    "text": "De 404-pagina"
+  },
+  "not_found_detail": {
+    "scope": "unknown_host_answer",
+    "text": "De niet-gevonden-pagina van Hohenheim, met je eigen melding als je er een instelde."
+  },
+  "forward": {
+    "scope": "unknown_host_answer",
+    "text": "Doorsturen naar een adres"
+  },
+  "forward_detail": {
+    "scope": "unknown_host_answer",
+    "text": "Hohenheim geeft het verzoek door aan het terugvaladres, bijvoorbeeld een webserver op deze host."
+  },
+  "redirect_detail": {
+    "scope": "unknown_host_answer",
+    "text": "Bezoekers worden met een tijdelijke doorverwijzing naar een URL gestuurd."
+  },
+  "site_detail": {
+    "scope": "unknown_host_answer",
+    "text": "Een van je sites antwoordt, via haar eigen route."
+  },
+  "drop": {
+    "scope": "unknown_host_answer",
+    "text": "Geen antwoord"
+  },
+  "drop_detail": {
+    "scope": "unknown_host_answer",
+    "text": "De verbinding wordt zonder antwoord gesloten, zodat scanners niets te weten komen."
+  },
   "settings.hohenheim.proxy_auth.persistent_ttl_seconds.label": "Duur van aangemeld blijven",
   "settings.hohenheim.proxy_auth.persistent_ttl_seconds.help": "Levensduur in seconden van een blijvende proxy-auth-cookie om aangemeld te blijven.",
   "settings.hohenheim.proxy_auth.session_ttl_seconds.label": "Sessieduur",
@@ -17952,10 +17998,16 @@
     "text": "Systeemgebruiker",
     "scope": "hohenheim_field"
   },
-  "site": {
-    "text": "Site",
-    "scope": "hohenheim_field"
-  },
+  "site": [
+    {
+      "text": "Site",
+      "scope": "hohenheim_field"
+    },
+    {
+      "text": "Een van je sites",
+      "scope": "unknown_host_answer"
+    }
+  ],
   "stack": {
     "text": "Stack",
     "scope": "hohenheim_field"

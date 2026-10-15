@@ -324,7 +324,11 @@ that wrapper):
         "http_port":  80,                  // public HTTP
         "https_port": 443,                 // public HTTPS
         "force_https": true,               // redirect HTTP to HTTPS globally
-        "fallback_address": "http://localhost:8081",  // tried when no site matches
+        // What a hostname no site serves gets (also in Settings): not_found (the 404 page),
+        // forward (proxied to fallback_address), redirect (to unknown_hosts_redirect),
+        // site (served by the site whose slug is unknown_hosts_site) or drop (no response).
+        "unknown_hosts": "forward",
+        "fallback_address": "http://localhost:8081",  // where forward sends them
         "ipv6_address": "",                // optional extra listener
         "first_port": 4748,                // first port handed to managed child processes
         "trusted_proxy_keys": [],           // secret X-Hohenheim-Key values accepted from HTTP proxies

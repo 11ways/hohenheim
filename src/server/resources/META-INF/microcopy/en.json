@@ -8082,6 +8082,10 @@
     {
       "text": "Redirect requests to another URL",
       "scope": "upstream_kind_description"
+    },
+    {
+      "text": "Redirect to a URL",
+      "scope": "unknown_host_answer"
     }
   ],
   "hohenheim_databases_create": {
@@ -14298,6 +14302,10 @@
     "text": "Keep images for at least 1 hour",
     "scope": "violations"
   },
+  "setting_unknown_hosts_target": {
+    "text": "Give the chosen answer for unknown hostnames its address, URL or site",
+    "scope": "violations"
+  },
   "setting_nixpacks_release_version": {
     "text": "Use a numeric Nixpacks release version in major.minor.patch form, such as 1.41.0",
     "scope": "violations"
@@ -14433,7 +14441,7 @@
   "settings.hohenheim.proxy.connection_prologue_timeout_seconds.label": "Connection prologue timeout",
   "settings.hohenheim.proxy.connection_prologue_timeout_seconds.help": "Maximum time a public connection may take to send what Hohenheim reads before routing it: an optional PROXY v2 header and, on the HTTPS port, the TLS ClientHello.",
   "settings.hohenheim.proxy.fallback_address.label": "Fallback address",
-  "settings.hohenheim.proxy.fallback_address.help": "Address Hohenheim forwards requests matching no site to, for example http://localhost:8080.",
+  "settings.hohenheim.proxy.fallback_address.help": "Address requests for an unknown hostname are forwarded to when the answer for unknown hostnames is Forward, for example http://localhost:8080.",
   "settings.hohenheim.proxy.force_https.label": "Force HTTPS",
   "settings.hohenheim.proxy.force_https.help": "Sends visitors to HTTPS on every address with a working certificate.",
   "settings.hohenheim.proxy.http_port.label": "HTTP port",
@@ -14458,6 +14466,44 @@
   "settings.hohenheim.proxy.trusted_proxy_keys.help": "X-Hohenheim-Key values accepted from trusted upstream HTTP proxies.",
   "settings.hohenheim.proxy.unreachable_message.label": "Unreachable message",
   "settings.hohenheim.proxy.unreachable_message.help": "Error message for unreachable upstreams; leave it blank for the localized default, because a value here is shown to every visitor in every language.",
+  "settings.hohenheim.proxy.unknown_hosts.label": "Unknown hostnames",
+  "settings.hohenheim.proxy.unknown_hosts.help": "What the proxy answers for a hostname no site serves. Over HTTPS a name none of your certificates covers gets no certificate and its connection is closed, whatever you choose here.",
+  "settings.hohenheim.proxy.unknown_hosts_redirect.label": "Redirect unknown hostnames to",
+  "settings.hohenheim.proxy.unknown_hosts_redirect.help": "URL an unknown hostname is redirected to when the answer for unknown hostnames is Redirect.",
+  "settings.hohenheim.proxy.unknown_hosts_site.label": "Site for unknown hostnames",
+  "settings.hohenheim.proxy.unknown_hosts_site.help": "Site an unknown hostname is served when the answer for unknown hostnames is One of your sites; it answers through its own route, so its access list and sign-in apply.",
+  "not_found": {
+    "scope": "unknown_host_answer",
+    "text": "The 404 page"
+  },
+  "not_found_detail": {
+    "scope": "unknown_host_answer",
+    "text": "Hohenheim's not-found page, with your not-found message when you set one."
+  },
+  "forward_detail": {
+    "scope": "unknown_host_answer",
+    "text": "Hohenheim passes the request on to the fallback address, for example a web server on this host."
+  },
+  "redirect_detail": {
+    "scope": "unknown_host_answer",
+    "text": "Visitors are sent on to one URL with a temporary redirect."
+  },
+  "site_detail": {
+    "scope": "unknown_host_answer",
+    "text": "One of your sites answers, through its own route."
+  },
+  "forward": {
+    "scope": "unknown_host_answer",
+    "text": "Forward to an address"
+  },
+  "drop": {
+    "scope": "unknown_host_answer",
+    "text": "No response"
+  },
+  "drop_detail": {
+    "scope": "unknown_host_answer",
+    "text": "The connection is closed without an answer, so scanners learn nothing."
+  },
   "settings.hohenheim.proxy_auth.persistent_ttl_seconds.label": "Remember-me lifetime",
   "settings.hohenheim.proxy_auth.persistent_ttl_seconds.help": "Lifetime in seconds of a persistent proxy-auth (remember-me) cookie.",
   "settings.hohenheim.proxy_auth.session_ttl_seconds.label": "Session lifetime",
@@ -17952,10 +17998,16 @@
     "text": "System user",
     "scope": "hohenheim_field"
   },
-  "site": {
-    "text": "Site",
-    "scope": "hohenheim_field"
-  },
+  "site": [
+    {
+      "text": "Site",
+      "scope": "hohenheim_field"
+    },
+    {
+      "text": "One of your sites",
+      "scope": "unknown_host_answer"
+    }
+  ],
   "stack": {
     "text": "Stack",
     "scope": "hohenheim_field"

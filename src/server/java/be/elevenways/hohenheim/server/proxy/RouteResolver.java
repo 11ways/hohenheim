@@ -243,7 +243,8 @@ final class RouteResolver {
         return List.copyOf(result);
     }
 
-    private static String extractListenerAddress(HttpServerExchange exchange) {
+    /** @return the local address the request arrived on, as listener-bound routes compare it; null when unknown */
+    static String extractListenerAddress(HttpServerExchange exchange) {
         InetSocketAddress address = exchange.getDestinationAddress();
         if (address == null) {
             address = exchange.getConnection().getLocalAddress(InetSocketAddress.class);

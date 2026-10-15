@@ -12,7 +12,6 @@ import be.elevenways.hohenheim.server.security.ThreatScorer;
 import be.elevenways.hohenheim.server.sitetype.ProbeableUpstream;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
-import be.elevenways.hohenheim.server.sitetype.UpstreamTarget;
 import be.elevenways.hohenheim.server.source.GitWebhookHandler;
 import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.hohenheim.server.tls.CertificateStore;
@@ -39,13 +38,10 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.net.UnknownHostException;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
@@ -147,8 +143,8 @@ public class SiteDispatcher implements HttpHandler {
     // One probe round at a time: a round of slow upstreams must not pile up behind the next tick.
     private final AtomicBoolean probing = new AtomicBoolean();
 
-    // The proxy route for unmatched hostnames, keyed by the fallback address it was built from.
-    private volatile @Nullable FallbackRoute fallbackRoute;
+    // What a hostname no site serves gets: proxy.unknown_hosts.
+    private final UnknownHostRoutes unknownHosts = new UnknownHostRoutes();
 
     /** @param certificates the proxy's certificate store, whose loaded names the global force waits for */
     public SiteDispatcher(AcmeService acmeService, SessionStore proxySessionStore, CertificateStore certificates) {
@@ -390,21 +386,20 @@ public class SiteDispatcher implements HttpHandler {
             }
         }
 
-        // --- Default fallback ---
+        // --- A hostname no site serves: the operator's unknown-host answer ---
+        boolean unknownHost = false;
         if (entry == null) {
             if (resolution.hostnameKnown()) {
                 // The hostname IS configured, no path matched: a real 404,
-                // never the catch-all fallback redirect.
+                // never the unknown-host answer.
                 ErrorPages.send404(exchange, hostname);
                 return;
             }
-            // AIDEV-NOTE: the fallback address is PROXIED to, as the Node original did ("send everything else
-            // to the Apache on localhost:8080"); a 302 sent browsers to an address only this host can reach.
-            entry = fallbackRoute(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.FALLBACK_ADDRESS));
+            entry = unknownHosts.answer(exchange, generation, hostname, path.canonical());
             if (entry == null) {
-                ErrorPages.send404(exchange, hostname);
                 return;
             }
+            unknownHost = true;
         }
 
         // --- Force SSL: redirect while HTTPS termination is up, REFUSE while it is not. ---
@@ -414,8 +409,8 @@ public class SiteDispatcher implements HttpHandler {
         // silently served cleartext with the checkbox still reading enabled. The ACME HTTP-01
         // path is answered BEFORE this gate, so a Let's Encrypt bootstrap or renewal still
         // completes while the site refuses -- the refusal self-heals. The global force_https
-        // setting rides the same gate for MATCHED routes only: an unmatched hostname has no
-        // content to protect and keeps its 404/fallback.
+        // setting rides the same gate for routes only: an unknown hostname answered by one of
+        // the operator's sites takes that site's route and so its gate (redirected to its own name).
         // AIDEV-NOTE: the global setting waits for a working certificate on an exact name (RouteEntry.globalForce):
         // forcing a name no certificate covers sent every visitor of a new domain to an error page. "Working" is what
         // this proxy's certificate store loaded (CertificateCoverage.workingNames), the rule every HTTPS display
@@ -423,7 +418,8 @@ public class SiteDispatcher implements HttpHandler {
         // HTTP. An address's own force_ssl is untouched by this and keeps failing closed.
         if (forcesHttps(entry) && !ProxyScheme.isEffectivelyHttps(exchange)) {
             if (httpsAvailable) {
-                redirectToHttps(exchange, hostname);
+                // A site answering an unknown name goes to HTTPS on its OWN name: the unknown one has no certificate.
+                redirectToHttps(exchange, unknownHost ? entry.hostPattern : hostname, !unknownHost);
             } else {
                 ErrorPages.sendHttpsRequired(exchange, hostname);
             }
@@ -627,46 +623,6 @@ public class SiteDispatcher implements HttpHandler {
         }, entry.requestDelayMs);
     }
 
-    /**
-     * The route unmatched hostnames take: a plain proxy to the fallback address, rebuilt only when the setting changes.
-     *
-     * @return null when no usable http(s) address is configured
-     */
-    private @Nullable RouteEntry fallbackRoute(@Nullable String address) {
-        FallbackRoute cached = this.fallbackRoute;
-        if (cached != null && Objects.equals(cached.address(), address)) {
-            return cached.entry();
-        }
-        RouteEntry entry = null;
-        URI upstream = fallbackUpstream(address);
-        if (upstream != null) {
-            UpstreamTarget target = new UpstreamTarget(upstream, false);
-            entry = new RouteEntry((exchange, forwarder) -> forwarder.forwardTo(target), "fallback address", null,
-                null, List.of(), null, null, null, false);
-        } else if (address != null && !address.isBlank()) {
-            Blast.log("SiteDispatcher: the fallback address is not an http(s) address, unmatched hosts get a 404:",
-                address);
-        }
-        this.fallbackRoute = new FallbackRoute(address, entry);
-        return entry;
-    }
-
-    /** @return the fallback address as an upstream origin, or null when it is not an absolute http(s) address */
-    static @Nullable URI fallbackUpstream(@Nullable String address) {
-        if (address == null || address.isBlank()) return null;
-        try {
-            URI parsed = new URI(address.trim());
-            String scheme = parsed.getScheme() != null ? parsed.getScheme().toLowerCase(Locale.ROOT) : null;
-            if (!"http".equals(scheme) && !"https".equals(scheme) || parsed.getHost() == null) return null;
-            int port = DefaultPorts.effective(scheme, parsed.getPort());
-            return new URI(scheme, null, parsed.getHost(), port, "/", null, null);
-        } catch (URISyntaxException e) {
-            return null;
-        }
-    }
-
-    private record FallbackRoute(@Nullable String address, @Nullable RouteEntry entry) {}
-
     public void setHttpsAvailable(boolean httpsAvailable) {
         this.httpsAvailable = httpsAvailable;
     }
@@ -739,12 +695,16 @@ public class SiteDispatcher implements HttpHandler {
         return this.proxySessionStore;
     }
 
-    private void redirectToHttps(HttpServerExchange exchange, String hostname) {
+    /**
+     * @param fromHostHeader whether the request's own Host header names the target (keeping its spelling), rather
+     *                       than {@code hostname}
+     */
+    private void redirectToHttps(HttpServerExchange exchange, String hostname, boolean fromHostHeader) {
         String hostHeader = exchange.getRequestHeaders().getFirst(HOST);
         String authority = hostname;
         int httpsPort = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.HTTPS_PORT);
 
-        if (hostHeader != null && !hostHeader.isBlank()) {
+        if (fromHostHeader && hostHeader != null && !hostHeader.isBlank()) {
             authority = hostHeader.replaceFirst(":\\d+$", "");
         }
 

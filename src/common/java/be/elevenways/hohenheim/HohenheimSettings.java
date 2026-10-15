@@ -13,6 +13,10 @@ import be.elevenways.zenit.common.validation.PathKind;
 import be.elevenways.zenit.common.validation.PrivateNetworkOptIn;
 import be.elevenways.zenit.common.validation.PrivateNetworkOptIn.Consumer;
 import be.elevenways.hohenheim.model.BackupTargetModel;
+import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.site.UnknownHostAnswer;
+import be.elevenways.zenit.common.edit.Select;
+import be.elevenways.zenit.common.validation.UrlPolicy;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.net.IpLiterals;
 import be.elevenways.hohenheim.net.LegacyIpSpellings;
@@ -158,11 +162,66 @@ public class HohenheimSettings {
             .restartRequired()
             .build();
 
+        /**
+         * What the proxy answers for a hostname no site serves (npmplus's "default site"); each answer names the
+         * setting holding its target ({@link UnknownHostAnswer#target}).
+         */
+        public static final SettingDefinition<String> UNKNOWN_HOSTS = GROUP.buildSetting("unknown_hosts",
+                String.class)
+            .defaultValue(UnknownHostAnswer.NOT_FOUND.storageKey())
+            .choices(UnknownHostAnswer.values())
+            .presentation(Select.Presentation.CARDS)
+            .description("What the proxy answers for a hostname no site serves")
+            .build();
+
+        // AIDEV-NOTE: host-only until the unknown-host answer: an operator may already point an address site at any
+        // loopback or LAN backend (TenantWrites.PROXY_UPSTREAM_BASE), so forwarding unknown names there is the same
+        // power, kept on the operator-trusted ADMIN_SYSTEM tier. A value a host file already holds keeps loading.
         public static final SettingDefinition<String> FALLBACK_ADDRESS = GROUP.buildSetting("fallback_address",
                 String.class)
-            .hostOnly()
-            .description("Address for requests that match no site")
+            .writePermission(HohenheimSources.ADMIN_SYSTEM)
+            .coercer(Proxy::coerceHttpUrl)
+            .description("Address requests for an unknown hostname are forwarded to, when the answer is Forward")
             .build();
+
+        public static final SettingDefinition<String> UNKNOWN_HOSTS_REDIRECT = GROUP
+            .buildSetting("unknown_hosts_redirect", String.class)
+            .coercer(Proxy::coerceHttpUrl)
+            .description("URL an unknown hostname is redirected to, when the answer is Redirect")
+            .build();
+
+        public static final SettingDefinition<String> UNKNOWN_HOSTS_SITE = GROUP
+            .buildSetting("unknown_hosts_site", String.class)
+            // A pick over the sites the editor may read; a slug no site carries is refused, and a stored slug whose
+            // site is gone shows as invalid (the proxy then answers the 404 page).
+            .references(SiteModel.MODEL_ID, SiteModel.SLUG)
+            .description("Site an unknown hostname is served, when the answer is One of your sites")
+            .build();
+
+        /** The chosen answer has its target: an address to forward to, a URL to redirect to or a site to serve. */
+        public static final SettingsRule UNKNOWN_HOSTS_TARGET =
+            SettingsRule.named("hohenheim_proxy_unknown_hosts_target")
+                .reads(UNKNOWN_HOSTS, FALLBACK_ADDRESS, UNKNOWN_HOSTS_REDIRECT, UNKNOWN_HOSTS_SITE)
+                .check(proposed -> {
+                    UnknownHostAnswer answer = UnknownHostAnswer.fromKeyOrDefault(proposed.get(UNKNOWN_HOSTS));
+                    SettingDefinition<String> target = answer.target();
+                    String value = target == null ? null : proposed.get(target);
+                    return target == null || (value != null && !value.isBlank()) ? null
+                        : "proxy.unknown_hosts is " + answer.storageKey() + " but proxy." + target.getName()
+                            + " is empty";
+                })
+                .says(HohenheimMicrocopy.VIOLATIONS.of("setting_unknown_hosts_target"))
+                .addTo(Zenit.SETTINGS_VALUES);
+
+        /** A blank value (unset), or an absolute http(s) URL with a host and no credentials. */
+        private static SettingDefinition.CoercionResult<String> coerceHttpUrl(Object raw) {
+            if (!(raw instanceof String text)) {
+                return SettingDefinition.CoercionResult.rejected();
+            }
+            String trimmed = text.trim();
+            return trimmed.isEmpty() || UrlPolicy.DEFAULT.test(trimmed)
+                ? SettingDefinition.CoercionResult.accepted(trimmed) : SettingDefinition.CoercionResult.rejected();
+        }
 
         public static final SettingDefinition<Boolean> FORCE_HTTPS = GROUP.buildSetting("force_https", Boolean.class)
             .defaultValue(true)

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.site.UnknownHostAnswer;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -49,6 +50,7 @@ class PathRoutingTest {
             upstream.stop(0);
         }
         upstreams.clear();
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.UNKNOWN_HOSTS, UnknownHostAnswer.NOT_FOUND.storageKey());
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.FALLBACK_ADDRESS, "");
     }
 
@@ -109,6 +111,7 @@ class PathRoutingTest {
         int fallbackPort = startUpstream("fallback-upstream", null);
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.FALLBACK_ADDRESS,
             "http://127.0.0.1:" + fallbackPort);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.UNKNOWN_HOSTS, UnknownHostAnswer.FORWARD.storageKey());
 
         int apiPort = startUpstream("api-upstream", null);
         Row apiSite = setupSite("hohenheim:address", "Api Only Site", "api-only-site",
@@ -121,20 +124,14 @@ class PathRoutingTest {
         // Path matches: proxied.
         assertThat(rawRequest(port, "apionly.test", "/api/x")).contains("api-upstream");
 
-        // Known hostname, wrong path: a real 404, never the catch-all fallback.
+        // Known hostname, wrong path: a real 404, never the unknown-host answer.
         String miss = rawRequest(port, "apionly.test", "/nope");
         assertThat(miss).contains("404");
         assertThat(miss).doesNotContain("fallback-upstream");
 
-        // Unknown hostname is PROXIED to the fallback address, as the Node original did; a 302
-        // sent the browser to an address only this host can reach.
-        String unknown = rawRequest(port, "unknown.test", "/nope");
-        assertThat(unknown).as("an unknown hostname reaches the fallback upstream").contains("fallback-upstream");
-        assertThat(unknown).as("never a redirect to the fallback address").doesNotContain("302");
-
-        // A fallback that is not an http(s) address leaves unknown hostnames on the 404.
-        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.FALLBACK_ADDRESS, "localhost:8080");
-        assertThat(rawRequest(port, "unknown.test", "/nope")).contains("404");
+        // Unknown hostname takes the unknown-host answer, here a forward to the fallback address.
+        assertThat(rawRequest(port, "unknown.test", "/nope")).as("an unknown hostname reaches the fallback upstream")
+            .contains("fallback-upstream");
     }
 
     @Test

@@ -75,6 +75,8 @@ final class RouteTableBuilder {
     private final Set<SiteRequestHandler> ownedHandlers = Collections.newSetFromMap(new IdentityHashMap<>());
     private final Set<SiteAuthGate> ownedGates = Collections.newSetFromMap(new IdentityHashMap<>());
     private final List<RoutingProblem> problems = new ArrayList<>();
+    // Each site's own exact-name routes by its slug (previews excluded), for the unknown-host SITE answer.
+    private final Map<String, List<RouteEntry>> exactBySite = new HashMap<>();
 
     // RouteClaims.keyOf -> owning site; duplicates are refused loudly with deterministic
     // first-wins (sites load in name order).
@@ -187,8 +189,15 @@ final class RouteTableBuilder {
         Blast.log("SiteDispatcher: loaded", frozenExact.size(), "exact routes,",
             this.wildcard.size(), "wildcard routes,", this.regex.size(), "regex routes",
             this.problems.isEmpty() ? "" : "(" + this.problems.size() + " routing problems)");
+        Map<String, List<RouteEntry>> frozenBySite = new HashMap<>();
+        for (Map.Entry<String, List<RouteEntry>> own : this.exactBySite.entrySet()) {
+            List<RouteEntry> sorted = new ArrayList<>(own.getValue());
+            sorted.sort((a, b) -> Integer.compare(b.pathLength(), a.pathLength()));
+            frozenBySite.put(own.getKey(), List.copyOf(sorted));
+        }
         return new RouteTable(Map.copyOf(frozenExact), List.copyOf(this.wildcard),
-            List.copyOf(this.regex), tlsSnapshot, this.ownedHandlers, this.ownedGates, this.problems);
+            List.copyOf(this.regex), tlsSnapshot, this.ownedHandlers, this.ownedGates, this.problems,
+            Map.copyOf(frozenBySite));
     }
 
     /** Build one site's handler, gates and guards and add each of its domains to its tier. */
@@ -269,8 +278,8 @@ final class RouteTableBuilder {
 
         boolean siteRouteAdded = false;
         for (Row domain : domains) {
-            siteRouteAdded |= addDomain(domain, siteId, siteName, requestHandler, accessTree,
-                pathGuards, settings, authGate, siteGate.providerName(), inputs.certifiedNames());
+            siteRouteAdded |= addDomain(domain, siteId, siteName, site.get(SiteModel.SLUG), requestHandler,
+                accessTree, pathGuards, settings, authGate, siteGate.providerName(), inputs.certifiedNames());
         }
         if (!siteRouteAdded) {
             releaseUnused(requestHandler, authGate, treeGates);
@@ -358,7 +367,7 @@ final class RouteTableBuilder {
     }
 
     /** Add one domain row to its tier; false when it contributed no route. */
-    private boolean addDomain(Row domain, Integer siteId, String siteName,
+    private boolean addDomain(Row domain, Integer siteId, String siteName, @Nullable String siteSlug,
                               SiteRequestHandler requestHandler, @Nullable AccessRuleTree accessTree,
                               List<RouteEntry.PathGuard> pathGuards, Map<String, Object> settings,
                               @Nullable SiteAuthGate authGate, @Nullable String authProviderName,
@@ -434,8 +443,12 @@ final class RouteTableBuilder {
                 }
                 this.wildcard.add(new WildcardRoute(pattern, entry));
             }
-            default -> this.exact.computeIfAbsent(hostname.toLowerCase(Locale.ROOT), k -> new ArrayList<>())
-                .add(entry);
+            default -> {
+                this.exact.computeIfAbsent(hostname.toLowerCase(Locale.ROOT), k -> new ArrayList<>()).add(entry);
+                if (siteSlug != null && domainHandler == requestHandler) {
+                    this.exactBySite.computeIfAbsent(siteSlug, k -> new ArrayList<>()).add(entry);
+                }
+            }
         }
         return true;
     }
