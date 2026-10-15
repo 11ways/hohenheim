@@ -193,7 +193,11 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         Row serving = ApplicationReleases.ownedServing(instanceId);
         Row kept = ReleaseEngine.newestRetired(instanceId);
         vars.put("isDeploying", inFlight);
-        vars.put("canRollback", !inFlight && kept != null && serving != null);
+        // A kept release of the live release's own commit is no way back (a redeploy of one commit leaves one): going
+        // "back" would deploy the very commit that serves now, so the band says so instead of offering it.
+        boolean keptSameCommit = kept != null && serving != null && sameCommit(kept, serving);
+        vars.put("canRollback", !inFlight && kept != null && serving != null && !keptSameCommit);
+        vars.put("keptSameCommit", keptSameCommit);
         vars.put("currentCommit", serving == null ? "" : commitOf(serving));
         vars.put("keptCommit", kept == null ? "" : commitOf(kept));
         Instant liveSince = serving == null ? null : serving.get(InstanceModel.CREATED_AT);
@@ -336,6 +340,13 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
 
     private static @NonNull String commitOf(@NonNull Row release) {
         return shortSha(ApplicationReleases.storedSettings(release).get("commit_sha"));
+    }
+
+    /** @return whether two releases name one and the same commit; a release naming none matches nothing */
+    private static boolean sameCommit(@NonNull Row left, @NonNull Row right) {
+        String commit = Objects.toString(ApplicationReleases.storedSettings(left).get("commit_sha"), "").trim();
+        return !commit.isEmpty()
+            && commit.equals(Objects.toString(ApplicationReleases.storedSettings(right).get("commit_sha"), "").trim());
     }
 
     /**

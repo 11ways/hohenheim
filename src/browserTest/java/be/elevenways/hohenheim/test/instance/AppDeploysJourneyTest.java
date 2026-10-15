@@ -49,6 +49,7 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
     private static final String LIVE_RELEASE_STEPS = "appdeploys live release steps: health ok";
 
     private static Integer applicationId;
+    private static Integer keptId;
     private static final List<Integer> releaseIds = new ArrayList<>();
     private static final List<Integer> operationIds = new ArrayList<>();
     private static final List<Integer> buildIds = new ArrayList<>();
@@ -73,6 +74,7 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
 
         int live = release("live", LIVE_SHA, InstanceModel.ROLE_SERVING);
         int kept = release("kept", KEPT_SHA, InstanceModel.ROLE_RETIRED);
+        keptId = kept;
         int replaced = release("replaced", REPLACED_SHA, null);
 
         operation(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), replaced, null, Instant
@@ -199,6 +201,16 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
         return "/admin/instances/" + applicationId + "/page/" + HohenheimSlugs.Tab.DEPLOYMENTS;
     }
 
+    /** Point a stored release at another commit, as a redeploy of one commit leaves its kept release. */
+    private static void commitOf(int releaseId, String sha) throws Exception {
+        GeneratedRows.as(new GeneratedRows.Attribution(ApplicationReleases.SOURCE,
+            InstanceModel.MODEL_ID.toString(), applicationId), () -> {
+            Row row = Models.get(InstanceModel.class).findById(releaseId);
+            row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "alpine", "commit_sha", sha)));
+            Models.get(InstanceModel.class).save(row);
+        });
+    }
+
     @Test
     void theDeploysTabLeadsWithTheLiveReleaseAndTellsWhatEachPushDid() throws Exception {
         // 1. The tab renders for the operator and sits right after the overview in the record's strip.
@@ -218,7 +230,22 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
             .as("step 2: and the release kept for rollback").contains("The previous release, bbbb2222, is kept");
         assertThat(body.split("data-hh-rollback", -1).length - 1)
             .as("step 2: exactly one rollback control is drawn").isEqualTo(1);
-        assertThat(body).as("step 2: and it goes back to the kept release").contains("Roll back to bbbb2222");
+        assertThat(body).as("step 2: and it names the kept release it goes back to")
+            .contains("Roll back to release bbbb2222");
+
+        // 2b. A kept release that runs the live release's own commit is no way back: the band says so and offers no
+        //     rollback, since going "back" would deploy the very commit that serves now.
+        commitOf(keptId, LIVE_SHA);
+        try {
+            String same = adminGet(pageUrl()).body();
+            assertThat(same).as("step 2b: no rollback control is drawn").doesNotContain("data-hh-rollback")
+                .as("step 2b: and the band says why")
+                .contains("The previous release runs the same commit, aaaa1111, so there is nothing earlier to go"
+                    + " back to.")
+                .doesNotContain("Roll back to");
+        } finally {
+            commitOf(keptId, KEPT_SHA);
+        }
 
         // 3. The history marks every succeeded release by where it stands now, read from the instances' roles.
         assertThat(markedRow(body, "live")).as("step 3: the live release row").contains("aaaa1111").contains(">Live<");

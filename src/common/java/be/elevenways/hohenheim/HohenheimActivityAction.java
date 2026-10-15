@@ -91,8 +91,8 @@ public enum HohenheimActivityAction implements ActivityAction {
 
     // What stamped a workload ERROR, each recorded beside the status by InstanceOperationGuard.stampError; its
     // sentence is the dashboard's crash detail, so the item says what happened instead of guessing a crash.
-    WORKLOAD_EXITED("workload_exited", ErrorCause.EXIT_CODE),
-    WORKLOAD_CRASH_LOOPED("workload_crash_looped", ErrorCause.PLAIN),
+    WORKLOAD_EXITED("workload_exited", ErrorCause.EXIT_CODE, RestartWithheld.BY_POLICY),
+    WORKLOAD_CRASH_LOOPED("workload_crash_looped", ErrorCause.PLAIN, RestartWithheld.BY_CRASH_LOOP),
     WORKLOAD_START_FAILED("workload_start_failed", ErrorCause.MESSAGE, ErrorPhase.START),
     WORKLOAD_ISOLATION_REFUSED("workload_isolation_refused", ErrorCause.HOST_ISOLATION, ErrorPhase.START),
     WORKLOAD_NEVER_READY("workload_never_ready", ErrorCause.PLAIN),
@@ -152,6 +152,22 @@ public enum HohenheimActivityAction implements ActivityAction {
         START
     }
 
+    /** Why no automatic restart followed the stop a cause verb records. */
+    public enum RestartWithheld {
+
+        /** No restart was in question (a start or a restore failed), or one was tried and its refusal is the cause. */
+        NONE,
+
+        /**
+         * Its crash policy asked for none: both restart lanes (the console watch, the reconciler) record the verb only
+         * under a policy other than restart.
+         */
+        BY_POLICY,
+
+        /** Crash-loop protection held further restarts back. */
+        BY_CRASH_LOOP
+    }
+
     /** Whether one session writes many rows of a verb, so a batch of it reads in its own words. */
     public enum Grouping {
 
@@ -168,35 +184,49 @@ public enum HohenheimActivityAction implements ActivityAction {
     private final @NonNull Grouping grouping;
     private final @NonNull ErrorPhase errorPhase;
     private final @NonNull ActivityVisibility visibility;
+    private final @NonNull RestartWithheld restartWithheld;
 
     HohenheimActivityAction(@NonNull String value) {
-        this(value, ErrorCause.NONE, ErrorPhase.RUNNING, Grouping.SINGLE, ActivityVisibility.LISTED);
+        this(value, ErrorCause.NONE, ErrorPhase.RUNNING, Grouping.SINGLE, ActivityVisibility.LISTED,
+            RestartWithheld.NONE);
     }
 
     HohenheimActivityAction(@NonNull String value, @NonNull ErrorCause errorCause) {
-        this(value, errorCause, ErrorPhase.RUNNING, Grouping.SINGLE, ActivityVisibility.LISTED);
+        this(value, errorCause, ErrorPhase.RUNNING, Grouping.SINGLE, ActivityVisibility.LISTED, RestartWithheld.NONE);
+    }
+
+    HohenheimActivityAction(@NonNull String value, @NonNull ErrorCause errorCause,
+                            @NonNull RestartWithheld restartWithheld) {
+        this(value, errorCause, ErrorPhase.RUNNING, Grouping.SINGLE, ActivityVisibility.LISTED, restartWithheld);
     }
 
     HohenheimActivityAction(@NonNull String value, @NonNull ErrorCause errorCause, @NonNull ErrorPhase errorPhase) {
-        this(value, errorCause, errorPhase, Grouping.SINGLE, ActivityVisibility.LISTED);
+        this(value, errorCause, errorPhase, Grouping.SINGLE, ActivityVisibility.LISTED, RestartWithheld.NONE);
     }
 
     HohenheimActivityAction(@NonNull String value, @NonNull Grouping grouping) {
-        this(value, ErrorCause.NONE, ErrorPhase.RUNNING, grouping, ActivityVisibility.LISTED);
+        this(value, ErrorCause.NONE, ErrorPhase.RUNNING, grouping, ActivityVisibility.LISTED, RestartWithheld.NONE);
     }
 
     HohenheimActivityAction(@NonNull String value, @NonNull ActivityVisibility visibility) {
-        this(value, ErrorCause.NONE, ErrorPhase.RUNNING, Grouping.SINGLE, visibility);
+        this(value, ErrorCause.NONE, ErrorPhase.RUNNING, Grouping.SINGLE, visibility, RestartWithheld.NONE);
     }
 
     HohenheimActivityAction(@NonNull String value, @NonNull ErrorCause errorCause, @NonNull ErrorPhase errorPhase,
-                            @NonNull Grouping grouping, @NonNull ActivityVisibility visibility) {
+                            @NonNull Grouping grouping, @NonNull ActivityVisibility visibility,
+                            @NonNull RestartWithheld restartWithheld) {
         this.value = value;
         this.id = HohenheimIds.id(value);
         this.errorCause = errorCause;
         this.errorPhase = errorPhase;
         this.grouping = grouping;
         this.visibility = visibility;
+        this.restartWithheld = restartWithheld;
+    }
+
+    /** @return why no automatic restart followed the stop this cause verb records */
+    public @NonNull RestartWithheld restartWithheld() {
+        return this.restartWithheld;
     }
 
     /** @return when this cause verb's error came; RUNNING for a verb that is no cause */

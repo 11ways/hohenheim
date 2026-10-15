@@ -15869,6 +15869,10 @@
     "text": "Er is nog geen vorige release bewaard.",
     "scope": "deployments"
   },
+  "live_kept_same_commit": {
+    "text": "De vorige release draait dezelfde commit, {$commit}, dus er is niets eerders om naar terug te gaan.",
+    "scope": "deployments"
+  },
   "live_workspace_no_rollback": {
     "text": "Een workspace rolt uit in zijn eigen bestanden, dus er is geen eerdere release om naar terug te gaan.",
     "scope": "deployments"
@@ -15882,7 +15886,7 @@
     "scope": "deployments"
   },
   "rollback_to": {
-    "text": "Terugrollen naar {$commit}",
+    "text": "Terug naar release {$commit}",
     "scope": "deployments"
   },
   "history_description": {
@@ -17226,6 +17230,30 @@
   },
   "error_cause_unknown": {
     "text": "Voor deze fout is geen oorzaak vastgelegd; de console-uitvoer kan zeggen wat er gebeurde",
+    "scope": "attention_detail"
+  },
+  "error_stopped_on": {
+    "text": "{$cause} op {$date}. {$why}",
+    "scope": "attention_detail"
+  },
+  "error_stopped_why": {
+    "text": "{$cause}. {$why}",
+    "scope": "attention_detail"
+  },
+  "error_found_stopped": {
+    "text": "{$subject} stopte zonder dat iemand erom vroeg en werd niet herstart",
+    "scope": "attention_detail"
+  },
+  "restart_withheld_then": {
+    "text": "Het crashbeleid herstartte het toen niet; nu wel. Herstart het om het terug te brengen.",
+    "scope": "attention_detail"
+  },
+  "restart_withheld_policy": {
+    "text": "Het crashbeleid herstart het niet: herstart het om het terug te brengen, of zet het crashbeleid op {$restart}.",
+    "scope": "attention_detail"
+  },
+  "restart_withheld_crash_loop": {
+    "text": "De crashlusbeveiliging hield verdere herstarts tegen: zoek uit waarom het stopt en deploy of herstart het daarna.",
     "scope": "attention_detail"
   },
   "apps_use_it": {

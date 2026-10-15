@@ -15869,6 +15869,10 @@
     "text": "No previous release is kept yet.",
     "scope": "deployments"
   },
+  "live_kept_same_commit": {
+    "text": "The previous release runs the same commit, {$commit}, so there is nothing earlier to go back to.",
+    "scope": "deployments"
+  },
   "live_workspace_no_rollback": {
     "text": "A workspace deploys into its own files, so there is no earlier release to go back to.",
     "scope": "deployments"
@@ -15882,7 +15886,7 @@
     "scope": "deployments"
   },
   "rollback_to": {
-    "text": "Roll back to {$commit}",
+    "text": "Roll back to release {$commit}",
     "scope": "deployments"
   },
   "history_description": {
@@ -17226,6 +17230,30 @@
   },
   "error_cause_unknown": {
     "text": "No cause was recorded for this error; its console output may say what happened",
+    "scope": "attention_detail"
+  },
+  "error_stopped_on": {
+    "text": "{$cause} on {$date}. {$why}",
+    "scope": "attention_detail"
+  },
+  "error_stopped_why": {
+    "text": "{$cause}. {$why}",
+    "scope": "attention_detail"
+  },
+  "error_found_stopped": {
+    "text": "{$subject} stopped without a stop anyone asked for and was not restarted",
+    "scope": "attention_detail"
+  },
+  "restart_withheld_then": {
+    "text": "Its crash policy did not restart it then; it does now. Restart it to bring it back.",
+    "scope": "attention_detail"
+  },
+  "restart_withheld_policy": {
+    "text": "Its crash policy does not restart it: restart it to bring it back, or set its crash policy to {$restart}.",
+    "scope": "attention_detail"
+  },
+  "restart_withheld_crash_loop": {
+    "text": "Crash-loop protection held back further restarts: find what makes it exit, then deploy or restart it.",
     "scope": "attention_detail"
   },
   "apps_use_it": {

@@ -48,6 +48,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -553,6 +555,71 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
                 cleanup.get(i).run();
             }
         }
+    }
+
+    /**
+     * devbox on Daystrom: it died with its host's reboot while its crash policy was None, and its overview read only
+     * "No cause was recorded". An errored workload's overview now says when it stopped, why nothing restarted it and
+     * what to do, from the facts its record and activity hold.
+     */
+    @Test
+    void anErroredWorkloadSaysWhenItStoppedWhyNothingRestartedItAndWhatToDo() throws Exception {
+        Row instance = instance("app-journey-errored");
+        int id = instance.get(InstanceModel.ID);
+        String today = DateTimeFormatter.ISO_LOCAL_DATE.format(Now.instant().atZone(ZoneOffset.UTC));
+        String page = "/admin/instances/" + id + "/page/overview";
+        HostFixtures.LocalHostState localBefore = HostFixtures.captureLocal();
+        try {
+            // The local host runs apps: a host refusing the start would be the verdict instead.
+            HostFixtures.makeLocalPlaceable(16L * 1024);
+
+            // 1. devbox as it stands: the reconciler corrected it to error before causes were recorded, with no crash
+            //    loop in its note, so its crash policy did not restart it then; a data step set Restart since.
+            policy(id, InstanceModel.CRASH_RESTART);
+            ActivityLog.record(Models.get(InstanceModel.class), id, HohenheimActivityAction.RECONCILED,
+                "running -> error (died without an observed stop; the daemon reports the workload absent)");
+            status(id, InstanceModel.STATUS_ERROR);
+            assertThat(adminGet(page).body()).as("step 1: when it stopped, why nothing restarted it, what to do")
+                .contains("app-journey-errored stopped without a stop anyone asked for and was not restarted on "
+                    + today + ". Its crash policy did not restart it then; it does now. Restart it to bring it back.")
+                .doesNotContain("No cause was recorded for this error");
+
+            // 2. The same correction with crash-loop protection in its note: that is why nothing restarted it.
+            ActivityLog.record(Models.get(InstanceModel.class), id, HohenheimActivityAction.RECONCILED,
+                "running -> error (died without an observed stop; the daemon reports the workload absent;"
+                    + " crash loop, automatic restarts suspended)");
+            assertThat(adminGet(page).body()).as("step 2: crash-loop protection held it back")
+                .contains("Crash-loop protection held back further restarts: find what makes it exit, then deploy"
+                    + " or restart it.");
+
+            // 3. A recorded exit (the cause every stop now records) while its policy is still None: the policy is why,
+            //    and setting it to restart is named beside starting it.
+            policy(id, InstanceModel.CRASH_NONE);
+            ActivityLog.record(Models.get(InstanceModel.class), id, HohenheimActivityAction.WORKLOAD_EXITED, "137");
+            assertThat(adminGet(page).body()).as("step 3: the recorded exit, its code and the policy")
+                .contains("app-journey-errored exited unexpectedly and was not restarted (exit code 137) on " + today
+                    + ". Its crash policy does not restart it: restart it to bring it back, or set its crash policy"
+                    + " to Restart on crash.");
+
+            // 4. A recorded crash loop says the protection held it back, whatever its policy says now.
+            policy(id, InstanceModel.CRASH_RESTART);
+            ActivityLog.record(Models.get(InstanceModel.class), id, HohenheimActivityAction.WORKLOAD_CRASH_LOOPED,
+                null);
+            assertThat(adminGet(page).body()).as("step 4: a recorded crash loop")
+                .contains("on " + today + ". Crash-loop protection held back further restarts");
+
+            // 5. No automatic restart came of reading it: the record is still in error.
+            assertThat(String.valueOf((Object) Models.get(InstanceModel.class).findById(id).get(InstanceModel.STATUS)))
+                .as("step 5: nothing restarted it").isEqualTo(InstanceModel.STATUS_ERROR);
+        } finally {
+            HardDeletes.row(Models.get(InstanceModel.class), instance);
+            localBefore.restore();
+        }
+    }
+
+    private static void policy(int instanceId, String policy) {
+        Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(instanceId))
+            .assign(InstanceModel.CRASH_POLICY, policy).bypassBehaviours().updateAll();
     }
 
     @Test
