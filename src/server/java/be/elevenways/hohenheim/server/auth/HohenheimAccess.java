@@ -444,6 +444,20 @@ public final class HohenheimAccess {
     }
 
     /**
+     * THE address read policy; see {@link CapabilityScopes#readableDomainScope}.
+     *
+     * @return null for an unconstrained scope, else a criteria
+     */
+    public static @Nullable Criteria readableDomainScope(@NonNull AccessContext ctx) {
+        return CapabilityScopes.readableDomainScope(ctx);
+    }
+
+    /** NAV-ONLY: whether the context may read any address; see {@link CapabilityScopes#readsAnyAddress}. */
+    public static boolean readsAnyAddress(@NonNull AccessContext ctx) {
+        return CapabilityScopes.readsAnyAddress(ctx);
+    }
+
+    /**
      * The walk's tri-state answer translated into a criteria; see {@link CapabilityScopes#grantScope}.
      *
      * @param model the model being SCOPED, not necessarily the one the capability is held on

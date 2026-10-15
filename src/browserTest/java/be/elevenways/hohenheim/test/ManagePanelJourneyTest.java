@@ -27,6 +27,7 @@ import be.elevenways.zenit.cms.common.panel.PanelNav;
 import be.elevenways.zenit.cms.common.render.panel.PanelNavStates;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.ResourceVerb;
 import be.elevenways.zenit.cms.server.panel.PartsForms;
 import be.elevenways.zenit.cms.server.panel.PartsLists;
@@ -84,6 +85,7 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
     private int siteId;
     private int domainId;
     private String tenant;
+    private String tenantCsrf;
     private Integer previousCountCap;
 
     @BeforeEach
@@ -118,7 +120,9 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
         this.domainId = domain.get(SiteDomainModel.ID);
         RecordGrants.grant(GrantSubjectType.USER, this.tenantId, InstanceModel.MODEL_ID, this.appId,
             HohenheimCapabilities.VIEW, true);
-        this.tenant = sessionFor(this.tenantId).token();
+        TestSession session = sessionFor(this.tenantId);
+        this.tenant = session.token();
+        this.tenantCsrf = session.csrf();
         this.previousCountCap = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Quota.MAX_INSTANCES_PER_OWNER);
     }
 
@@ -190,16 +194,34 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
             .as("step 6: no power door without POWER")
             .doesNotContain("hohenheim.restart_instance");
 
-        // 6b. The address of the operator's site serving the app is shown, but never as a door the tenant would be
-        //     refused: no Add address, no Protect a path, no link to the domain.
+        // 6b. The address of the operator's site serving the app is READ wherever the tenant looks for it: on the
+        //     overview, and in the Domains cluster, which now leads with Addresses (a tenant who may view an app may
+        //     read the addresses of the sites serving it). Editing stays the site's: no door into the site, no Add
+        //     address, no delete on the row, and a submitted edit changes nothing.
         assertThat(viewer)
-            .as("step 6b: the app's address is read")
+            .as("step 6b: the app's address is read on the overview")
             .contains("tenant-survival.example.test");
         assertThat(viewer)
-            .as("step 6b: no door into the site or the domain the tenant holds no grant on")
+            .as("step 6b: no door into the site the tenant holds no grant on")
             .doesNotContain("/manage/sites/" + this.siteId + "/page/domains")
-            .doesNotContain("/manage/sites/" + this.siteId + "/page/protected-paths")
-            .doesNotContain("/manage/domains/" + this.domainId);
+            .doesNotContain("/manage/sites/" + this.siteId + "/page/protected-paths");
+        assertThat(domainsTabs())
+            .as("step 6b: the Domains cluster leads with Addresses")
+            .first().isEqualTo(HohenheimSlugs.DOMAINS);
+        String addresses = page(CmsRoutes.list(HohenheimSlugs.MANAGE, HohenheimSlugs.DOMAINS).toUrl());
+        assertThat(addresses)
+            .as("step 6b: the Addresses list reads the app's address")
+            .contains("tenant-survival.example.test");
+        assertThat(addresses)
+            .as("step 6b: no Add address and no delete for an address of a site the tenant does not manage")
+            .doesNotContain(CmsRoutes.create(HohenheimSlugs.MANAGE, HohenheimSlugs.DOMAINS).toUrl())
+            .doesNotContain(CmsRoutes.delete(HohenheimSlugs.MANAGE, HohenheimSlugs.DOMAINS, this.domainId).toUrl());
+        httpPostForm(CmsRoutes.updateSubmit(HohenheimSlugs.MANAGE, HohenheimSlugs.DOMAINS, this.domainId).toUrl(),
+            "hostname=taken-over.example.test", this.tenant, this.tenantCsrf);
+        assertThat((String) Objects.requireNonNull(Models.get(SiteDomainModel.class).findById(this.domainId))
+                .get(SiteDomainModel.HOSTNAME))
+            .as("step 6b: a submitted edit of the address changes nothing")
+            .isEqualTo("tenant-survival.example.test");
         assertThat(adminGet("/admin/instances/" + this.appId + "/page/overview").body())
             .as("step 6b: the operator, who may open the site, keeps the doors")
             .contains("/admin/sites/" + this.siteId + "/page/domains")

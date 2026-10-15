@@ -429,12 +429,14 @@ public final class SiteParts {
 
     /**
      * Writing a row under a site (a domain, a protected path) demands {@code manage} on that site, and so does a create
-     * under it (its tab's add link, the create form, the submit).
+     * under it (its tab's add link, the create form, the submit); a create from the list itself is offered only while
+     * the caller manages any site to put the row under.
      *
      * AIDEV-NOTE: reachesRecord, never canManageSite: this runs once per RENDERED ROW, and the per-record walk would
      * be a grant-store round trip per row on a page whose own scope criteria already asked the same question
      * set-wise. The write pipeline's {@code TenantWrites} freeze stays the gate; this decides the affordance, so a
-     * view-only delegate is never shown a control that can only refuse.
+     * view-only delegate is never shown a control that can only refuse. The list's create asks MANAGE, never the
+     * list's own read scope: a tenant who only views an app reads its addresses and is offered no Add address.
      *
      * @param siteId the child model's site column
      */
@@ -442,6 +444,7 @@ public final class SiteParts {
         return ResourceAuthority.<Row>builder()
             .write(null, (row, access) -> HohenheimAccess.reachesRecord(access, SiteModel.MODEL_ID, row.get(siteId),
                 HohenheimCapabilities.MANAGE))
+            .create(null, HohenheimAccess::managesAnySite)
             .createUnder((site, access) -> site instanceof Integer id
                 && HohenheimAccess.reachesRecord(access, SiteModel.MODEL_ID, id, HohenheimCapabilities.MANAGE))
             .build();

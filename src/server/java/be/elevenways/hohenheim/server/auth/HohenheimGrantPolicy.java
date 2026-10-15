@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
+import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
@@ -81,14 +82,39 @@ final class HohenheimGrantPolicy {
                 .label(HohenheimMicrocopy.CAPABILITY.of("manage"))
                 .describe(HohenheimMicrocopy.CAPABILITY.of("manage_site_description"))
                 .elevated()
-                .asDelegable());
+                .asDelegable(),
+            // Reading the site's addresses: implied by manage, and carried from the app the site serves below.
+            KnownCapability.of(VIEW)
+                .label(HohenheimMicrocopy.CAPABILITY.of("view"))
+                .describe(HohenheimMicrocopy.CAPABILITY.of("view_site_description"))
+                .impliedBy(MANAGE));
+        // AIDEV-NOTE: the site row IS the link row tying it to the one app it serves (sites.instance_id), so the
+        // many-parent hop is declared over the site model itself: whoever may VIEW the app may VIEW the site, and
+        // nothing else flows. A single-parent derivedFrom would carry the instance's WHOLE vocabulary, handing site
+        // manage to every app manager (decision 2026-10-15: reading an app's addresses, never editing them).
         RecordCapabilityRules.declare(SiteModel.MODEL_ID,
             RecordCapabilityRules.create()
                 .gate(ManagePanel.ACCESS)
                 .admin(HohenheimPanel.ACCESS)
                 // Every-site authority without the admin permission; see SITES_MANAGE_ALL for
                 // why this line belongs on THIS model and on no other one here.
-                .typeLevel(SITES_MANAGE_ALL));
+                .typeLevel(SITES_MANAGE_ALL)
+                .derivedFromAny(SiteModel.MODEL_ID, SiteModel.ID, SiteModel.INSTANCE_ID, InstanceModel.MODEL_ID,
+                    VIEW));
+
+        // Addresses: still NO grant surface of their own (never declared grantable), so their one capability is
+        // VIEW, held through the parent site and nothing else. It is the model's VISIBILITY capability: the /manage
+        // Addresses list (TenantScopes.DOMAINS), an operation's concealment and the activity feed read it, while
+        // every write still asks manage on the site (SiteParts.childAuthority, TenantWrites).
+        KnownCapabilities.register(SiteDomainModel.MODEL_ID,
+            KnownCapability.of(VIEW)
+                .label(HohenheimMicrocopy.CAPABILITY.of("view"))
+                .describe(HohenheimMicrocopy.CAPABILITY.of("view_description")));
+        RecordCapabilityRules.declare(SiteDomainModel.MODEL_ID,
+            RecordCapabilityRules.create().visibility(VIEW)
+                .gate(ManagePanel.ACCESS)
+                .admin(HohenheimPanel.ACCESS)
+                .derivedFrom(SiteModel.MODEL_ID, SiteDomainModel.SITE_ID));
 
         // AIDEV-NOTE: DnsZoneModel, DnsPeerModel and DnsZonePeerModel declare NO vocabulary
         // and are NOT grantable, PERMANENTLY and by decision.

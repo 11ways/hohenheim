@@ -17599,6 +17599,10 @@
     "text": "bekijken en gebruiken voor zijn namen",
     "scope": "capability"
   },
+  "view_site_description": {
+    "text": "de adressen bekijken waarop hij antwoordt, niets wijzigen",
+    "scope": "capability"
+  },
   "certificate_expiring": {
     "text": "Het certificaat {$name} {$expiry}",
     "scope": "attention_title"

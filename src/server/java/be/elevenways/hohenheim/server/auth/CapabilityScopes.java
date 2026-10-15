@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -24,6 +25,7 @@ import java.util.Set;
 import java.util.function.Function;
 
 import static be.elevenways.hohenheim.HohenheimCapabilities.MANAGE;
+import static be.elevenways.hohenheim.HohenheimCapabilities.VIEW;
 
 /**
  * The set-wise face of the capability walk (tri-state scopes, their request memo and the scope
@@ -165,6 +167,31 @@ final class CapabilityScopes {
                                                @NonNull Model model,
                                                @NonNull Function<Set<Integer>, Criteria> forManagedIds) {
         return grantScope(ctx, model, SiteModel.MODEL_ID, MANAGE, forManagedIds);
+    }
+
+    /**
+     * THE address read policy: the domains whose site the context may VIEW (it manages the site, or views the app
+     * the site serves), asked as the address model's declared visibility capability.
+     *
+     * AIDEV-NOTE: a criteria, never the set-wise scope. The walk's set-wise face confirms owned and granted
+     * candidates only, so an address reached through its site's app hop would never enumerate there; the criteria
+     * carries both parent hops. Writes never read this: they ask manage on the site.
+     *
+     * @return null for an unconstrained scope, else a criteria
+     */
+    static @Nullable Criteria readableDomainScope(@NonNull AccessContext ctx) {
+        if (capabilityScope(ctx, SiteDomainModel.MODEL_ID, VIEW).isAll()) {
+            return null;
+        }
+        return ctx.capabilityCriteria(SiteDomainModel.MODEL_ID, VIEW, SiteDomainModel.ID);
+    }
+
+    /**
+     * NAV-ONLY: whether the context may read any address, answered by the two roots of {@link #readableDomainScope}
+     * (a viewable site, an app a site may serve) without a row query.
+     */
+    static boolean readsAnyAddress(@NonNull AccessContext ctx) {
+        return reachesAny(ctx, SiteModel.MODEL_ID, VIEW) || reachesAny(ctx, InstanceModel.MODEL_ID, VIEW);
     }
 
     /**

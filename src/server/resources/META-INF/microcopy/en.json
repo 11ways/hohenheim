@@ -17599,6 +17599,10 @@
     "text": "see it and use it for its names",
     "scope": "capability"
   },
+  "view_site_description": {
+    "text": "see the addresses it answers on, change nothing",
+    "scope": "capability"
+  },
   "certificate_expiring": {
     "text": "The certificate {$name} {$expiry}",
     "scope": "attention_title"

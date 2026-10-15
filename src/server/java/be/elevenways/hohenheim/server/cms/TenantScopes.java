@@ -77,8 +77,18 @@ public final class TenantScopes {
      */
     public static final RowScope SITES = RowScope.perPrincipal(TenantScopes::siteAccess);
 
-    /** Domains of live sites; tenants only those of the sites they manage. */
-    public static final RowScope DOMAINS = DomainParts.ROWS.andPerPrincipal(
+    /**
+     * Domains of live sites a principal may READ: those of the sites it manages, and those of the sites serving an
+     * app it may view (the address model's declared visibility, {@link HohenheimAccess#readableDomainScope}). The
+     * /manage Addresses list.
+     */
+    public static final RowScope DOMAINS = DomainParts.ROWS.andPerPrincipal(HohenheimAccess::readableDomainScope);
+
+    /**
+     * Domains of live sites a principal may USE: only those of the sites it manages. The model's reference policy
+     * (pickers, a game domain's address): a tenant reading an app's address never attaches it.
+     */
+    public static final RowScope MANAGED_DOMAINS = DomainParts.ROWS.andPerPrincipal(
         ctx -> HohenheimAccess.managedSiteScope(ctx, Models.get(SiteDomainModel.class),
             SiteDomainModel.SITE_ID::in));
 

@@ -48,6 +48,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  * offered product-tier GENERATED instances the /manage list hid, and the domain source listed
  * the domains of soft-deleted sites. This compares the two READS row for row, for a tenant
  * and for an operator, over every model the panel projects through both faces.
+ *
+ * AIDEV-NOTE: a model whose list READS wider than its pickers may USE declares that as a correspondence here
+ * ({@link Projection#picking}): the picker then reads exactly the declared scope, and never a row the list hides.
+ * Addresses are the one such model (decision 2026-10-15): the list reads what the tenant may view, the picker offers
+ * only the addresses of the sites it manages.
  */
 class ManageScopeParityTest extends HohenheimTestBase {
 
@@ -59,6 +64,7 @@ class ManageScopeParityTest extends HohenheimTestBase {
     private static int deletedSiteDomainId;
     private static int liveSiteDomainId;
     private static int servingSiteId;
+    private static int servedDomainId;
 
     @BeforeAll
     static void seed() {
@@ -92,7 +98,7 @@ class ManageScopeParityTest extends HohenheimTestBase {
         serving.set(SiteModel.SETTINGS, Map.of());
         serving.set(SiteModel.INSTANCE_ID, authoredInstanceId);
         sites.save(serving);
-        domain(servingSiteId, PREFIX + "served.parity.test");
+        servedDomainId = domain(servingSiteId, PREFIX + "served.parity.test");
     }
 
     @Test
@@ -117,7 +123,7 @@ class ManageScopeParityTest extends HohenheimTestBase {
 
         // 2. The domain pair, as the operator (whose walk is unconstrained, so only the
         //    scope's BASE can drop a row): a soft-deleted site's domain is in neither read.
-        Projection domains = Projection.of(DomainParts.manage());
+        Projection domains = Projection.of(DomainParts.manage()).picking(TenantScopes.MANAGED_DOMAINS);
         assertThat(resourceIds(domains, operator))
             .as("step 2: the /manage domain list hides a soft-deleted site's domain")
             .contains(liveSiteDomainId)
@@ -127,10 +133,21 @@ class ManageScopeParityTest extends HohenheimTestBase {
             .contains(liveSiteDomainId)
             .doesNotContain(deletedSiteDomainId);
 
-        // 3. Every model the panel projects through BOTH a list and a source: the two reads
-        //    are the same set, for the tenant and for the operator.
-        List<Projection> paired = List.of(Projection.of(SiteParts.manage()),
-            Projection.of(DomainParts.manage()),
+        // 2b. The address pair, as the tenant: the list reads the address of the site serving the app it views, the
+        //     picker offers only the address of the site it manages.
+        assertThat(resourceIds(domains, tenant))
+            .as("step 2b: the tenant's Addresses list reads its app's address and its own site's")
+            .contains(liveSiteDomainId, servedDomainId)
+            .doesNotContain(deletedSiteDomainId);
+        assertThat(sourceIds(domains, tenant))
+            .as("step 2b: the address picker offers only the address of the site the tenant manages")
+            .contains(liveSiteDomainId)
+            .doesNotContain(servedDomainId, deletedSiteDomainId);
+
+        // 3. Every model the panel projects through BOTH a list and a source: the source reads the declared picker
+        //    scope (the list's own unless a correspondence says otherwise) and never a row the list hides, for the
+        //    tenant and for the operator.
+        List<Projection> paired = List.of(Projection.of(SiteParts.manage()), domains,
             Projection.of(InstanceParts.manage()), Projection.of(CertificateParts.manage()),
             Projection.of(ProtectedPathParts.manage()), Projection.of(ManageDnsRecordParts.manage()),
             Projection.of(InstanceTemplateParts.manage()), Projection.of(InstanceScheduleParts.manage()),
@@ -139,10 +156,14 @@ class ManageScopeParityTest extends HohenheimTestBase {
             Projection.of(InstanceAttachmentParts.databasesManage()), Projection.of(PreviewParts.manage()));
         for (Projection resource : paired) {
             for (AccessContext ctx : List.of(tenant, operator)) {
-                assertThat(sourceIds(resource, ctx))
-                    .as("step 3: %s and its record source read the same rows for %s",
+                Set<Object> offered = sourceIds(resource, ctx);
+                assertThat(offered)
+                    .as("step 3: %s's record source reads its declared picker scope for %s",
                         resource.id(), ctx.principalId())
-                    .isEqualTo(resourceIds(resource, ctx));
+                    .isEqualTo(scopedIds(resource.model(), resource.picker(), ctx));
+                assertThat(resourceIds(resource, ctx))
+                    .as("step 3: %s's list holds every row its picker offers for %s", resource.id(), ctx.principalId())
+                    .containsAll(offered);
             }
         }
 
@@ -175,12 +196,21 @@ class ManageScopeParityTest extends HohenheimTestBase {
             .doesNotContain(servingSiteId);
     }
 
-    /** A /manage list's declared row scope and the entry whose admission guards that read. */
-    private record Projection(Identifier id, Model model, RowScope scope, PanelResource<Row> entry) {
+    /**
+     * A /manage list's declared row scope, the entry whose admission guards that read, and the scope its pickers
+     * read: the list's own unless {@link #picking} declares the narrower one.
+     */
+    private record Projection(Identifier id, Model model, RowScope scope, PanelResource<Row> entry, RowScope picker) {
 
         static Projection of(PanelResource<Row> resource) {
+            RowScope scope = Objects.requireNonNull(resource.rowScope());
             return new Projection(resource.id(), Models.get(Objects.requireNonNull(resource.subject().modelId())),
-                Objects.requireNonNull(resource.rowScope()), resource);
+                scope, resource, scope);
+        }
+
+        /** @return this projection whose pickers read {@code narrower}, a declared correspondence */
+        Projection picking(RowScope narrower) {
+            return new Projection(this.id, this.model, this.scope, this.entry, narrower);
         }
     }
 
@@ -188,12 +218,17 @@ class ManageScopeParityTest extends HohenheimTestBase {
     private static Set<Object> resourceIds(Projection resource, AccessContext ctx) {
         Panel panel = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.MANAGE));
         assertThat(panel.admits(resource.entry(), ctx)).as("%s must not deny outright", resource.id()).isTrue();
-        Criteria criteria = resource.scope().criteria(ctx);
-        QueryBuilder<Row> query = resource.model().find();
+        return scopedIds(resource.model(), resource.scope(), ctx);
+    }
+
+    /** The ids {@code scope} lets this context read of {@code model}. */
+    private static Set<Object> scopedIds(Model model, RowScope scope, AccessContext ctx) {
+        Criteria criteria = scope.criteria(ctx);
+        QueryBuilder<Row> query = model.find();
         if (criteria != null) {
             query.where(criteria);
         }
-        return idsOf(resource.model(), query.all());
+        return idsOf(model, query.all());
     }
 
     /** The ids the model's registered default source serves this context. */

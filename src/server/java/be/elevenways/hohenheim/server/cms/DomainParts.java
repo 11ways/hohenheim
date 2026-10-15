@@ -171,11 +171,11 @@ public final class DomainParts {
             .build();
     }
 
-    /** @return the /manage twin: the domains of the sites the caller manages, through the delegated form */
+    /** @return the /manage twin: the addresses the caller may read, edited only under a site it manages */
     public static @NonNull PanelResource<Row> manage() {
-        // A Domains cluster member, shown while the tenant manages a site.
+        // A Domains cluster member, shown while the tenant may read an address.
         return ManageTwin.listed(entry(ManageTwin.id("site_domain")), TenantScopes.DOMAINS, ResourceTabs.none(),
-                ManagePanel::hasManageScope)
+                HohenheimAccess::readsAnyAddress)
             .form(form(manageFormSpec()))
             .build();
     }

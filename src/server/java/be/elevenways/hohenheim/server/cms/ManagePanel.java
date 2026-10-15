@@ -255,9 +255,13 @@ public final class ManagePanel extends Panel {
         // child row is a second authority that can disagree with the first.
         // AIDEV-NOTE: the base now carries the live-site filter the /manage list always
         // applied: a domain of a soft-deleted site is no longer offered by a picker either.
+        // AIDEV-NOTE: the model's REFERENCE policy is the MANAGED scope, while the /manage Addresses list reads the
+        // wider read scope (TenantScopes.DOMAINS): a tenant who may view an app reads its addresses there, and a
+        // picker never offers one the tenant could not attach -- the access-list two-scope shape.
         RecordSourceRegistry.INSTANCE.override(RecordSource.of(SiteDomainModel.class)
             .search(SiteDomainModel.HOSTNAME)
-            .scopedBy(TenantScopes.DOMAINS)
+            .scopedBy(TenantScopes.MANAGED_DOMAINS)
+            .referencePolicy()
             .build());
 
         // Access lists: the model's REFERENCE policy. The pickers (a site's list, a protected
@@ -419,18 +423,6 @@ public final class ManagePanel extends Panel {
             .title()
             .scopedBy(TenantScopes.INSTANCE_DATABASES)
             .build());
-    }
-
-    /**
-     * NAV-ONLY scope probe shared by the /manage peers: whether the walk reaches ANY site.
-     *
-     * AIDEV-NOTE: no {@code isAdmin} disjunct anymore -- the walk's own admin-bypass row
-     * already answers ALL for one, and the type-level row answers ALL for an every-site
-     * holder that a hand-written admin check would have missed. Cheap per render thanks to
-     * the conduit-scoped scope memo, and free for an admin (a whole-model row runs no query).
-     */
-    static boolean hasManageScope(@NonNull AccessContext ctx) {
-        return HohenheimAccess.managesAnySite(ctx);
     }
 
     /**
