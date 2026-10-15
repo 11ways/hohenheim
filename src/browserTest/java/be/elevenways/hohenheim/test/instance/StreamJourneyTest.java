@@ -45,13 +45,13 @@ import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
-import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -179,8 +179,7 @@ class StreamJourneyTest extends HohenheimTestBase {
 
         // 3d. The Sites list shows the stream's port where a website shows its hostnames, and no HTTPS state. The
         //     list narrows by a ?q= expression; a bare word is no expression and would list every site.
-        String list = adminGet("/admin/sites?q=" + URLEncoder.encode("name = \"r4a-ssh\"", StandardCharsets.UTF_8))
-            .body();
+        String list = adminGet("/admin/sites" + listQuery("name = \"r4a-ssh\"")).body();
         assertThat(list).as("step 3d: the list holds the stream").contains("r4a-ssh");
         assertThat(list).as("step 3d: its port in the address cell").contains(publicPort + "/tcp");
         assertThat(list).as("step 3d: no missing address, no HTTPS state").doesNotContain("No address");
@@ -266,10 +265,17 @@ class StreamJourneyTest extends HohenheimTestBase {
         assertThat(again.status()).as("step 8: the freed port is claimed again (%s)", again.outcome())
             .isEqualTo(OperationRunStatus.SUCCEEDED);
         assertThat(udpRoundTrip(publicPort, "again")).as("step 8: and forwards").isEqualTo("again");
+        Row againSite = siteNamed("r4a-again");
         OperationPipeline.invoke(OperationRequest.of(SiteWrites.DELETE, CmsPlacementSurface.ADMIN_ACTION)
-            .caller(operator).subjects(List.of(siteNamed("r4a-again"))));
+            .caller(operator).subjects(List.of(againSite)));
+        // The ledger is shared with every class of this JVM (DeleteConfirmationTest's "relay" stream keeps its claim),
+        // so the journey's own streams are named, plus any claim whose site is gone: a refused run's leftover.
+        Set<Object> streams = Set.of(siteId, againSite.get(SiteModel.ID));
         assertThat(Models.get(PortAllocationModel.class).find()
-                .where(PortAllocationModel.OWNER_MODEL.eq(SiteModel.MODEL_ID.toString())).all())
+                .where(PortAllocationModel.OWNER_MODEL.eq(SiteModel.MODEL_ID.toString())).all().stream()
+                .map(held -> held.get(PortAllocationModel.OWNER_ID))
+                .filter(owner -> streams.contains(owner) || Models.get(SiteModel.class).findById(owner) == null)
+                .toList())
             .as("step 8: no stream holds a port any more").isEmpty();
     }
 

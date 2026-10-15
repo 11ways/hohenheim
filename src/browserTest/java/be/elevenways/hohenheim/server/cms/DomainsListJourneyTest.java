@@ -113,7 +113,7 @@ class DomainsListJourneyTest extends HohenheimTestBase {
 
             // 3. The list renders both answers per row, and offers "Get a certificate" for the uncovered name (that a
             //    covered name is never offered one is AdminPagesTest's, through the action's own visibility).
-            HttpResponse<String> page = adminGet("/admin/domains?q=" + suffix);
+            HttpResponse<String> page = adminGet("/admin/domains" + listQuery("hostname contains \"" + suffix + "\""));
             assertThat(page.statusCode()).as("step 3: the Addresses list renders").isEqualTo(200);
             String html = page.body();
             assertThat(html).as("step 3: a points-here cell for the name that points here")
@@ -175,7 +175,8 @@ class DomainsListJourneyTest extends HohenheimTestBase {
                 .containsPattern(Pattern.compile("data-cms-create[^>]*>.{0,1000}?Add address", Pattern.DOTALL));
 
             // 6. A certificate's names read as a list, a space after each comma, though stored comma-joined.
-            String certificates = adminGet("/admin/certificates?q=" + suffix).body();
+            String certificates = adminGet("/admin/certificates" + listQuery("nice_name contains \"" + suffix + "\""))
+                .body();
             assertThat(certificates).as("step 6: the covered names, separated as words")
                 .contains(covered + ", www." + covered);
 
@@ -202,7 +203,7 @@ class DomainsListJourneyTest extends HohenheimTestBase {
                 assertThat(DomainParts.httpsDetail(coveredRow, CertCoverage.ERROR, stored)
                         .resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
                     .as("step 8: in Dutch too").contains("de proxy kan het niet aanbieden");
-                String served = adminGet("/admin/domains?q=" + suffix).body();
+                String served = adminGet("/admin/domains" + listQuery("hostname contains \"" + suffix + "\"")).body();
                 assertThat(served).as("step 8: the list says so beside the badge")
                     .contains("A certificate is stored for this name, but the proxy cannot serve it")
                     .doesNotContain("data-state=\"" + CertCoverage.ACTIVE.token() + "\"");
@@ -246,7 +247,8 @@ class DomainsListJourneyTest extends HohenheimTestBase {
             assertThat(checked.statusCode()).as("step 10: the check runs").isLessThan(400);
             assertThat(DomainParts.reachCell(movedRow, HostnameReach.LOOKUP_WAIT_MS).state())
                 .as("step 10: checked again, it points here").isEqualTo("points_here");
-            assertThat(adminGet("/admin/domains?q=" + suffix).body()).as("step 10: the rows offer it")
+            assertThat(adminGet("/admin/domains" + listQuery("hostname contains \"" + suffix + "\"")).body())
+                .as("step 10: the rows offer it")
                 .contains("check_address_reach");
 
             // 11. With no public address declared, a name resolving to an address this machine holds points here

@@ -111,7 +111,7 @@ class CertificatesJourneyTest extends HohenheimTestBase {
         Models.get(CertificateModel.class).save(upload);
         assertThat(CertificateParts.stateCell(upload).detail().key()).as("step 1: an upload never renews itself")
             .isEqualTo("state_expiring_upload_detail");
-        assertThat(adminGet("/admin/certificates?q=upload-" + suffix).body())
+        assertThat(adminGet("/admin/certificates" + listQuery("nice_name = \"upload-" + suffix + "\"")).body())
             .as("step 1: its provider reads as an upload in words").containsPattern(">\\s*Uploaded\\s*<");
 
         // 2. An order not issued yet and an expired certificate say so.
@@ -124,7 +124,7 @@ class CertificatesJourneyTest extends HohenheimTestBase {
         Row expired = certificate("expired-" + suffix, CertificateModel.STATUS_ACTIVE, 0, -3,
             CertificateModel.CHALLENGE_HTTP, null);
         assertThat(CertificateParts.stateCell(expired).state()).as("step 2: expired").isEqualTo("expired");
-        assertThat(adminGet("/admin/certificates?q=issuing-" + suffix).body())
+        assertThat(adminGet("/admin/certificates" + listQuery("nice_name = \"issuing-" + suffix + "\"")).body())
             .as("step 2: an order not issued yet has no expiry, and its cell says why")
             .contains("None - not issued yet");
 
@@ -156,7 +156,7 @@ class CertificatesJourneyTest extends HohenheimTestBase {
             assertThat(unloaded.label().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
                 .as("step 3: in words").isEqualTo("Failed to load");
             assertThat(unloaded.variant()).as("step 3: a destructive state").isEqualTo(BadgeVariant.DESTRUCTIVE);
-            assertThat(adminGet("/admin/certificates?q=works-" + suffix).body())
+            assertThat(adminGet("/admin/certificates" + listQuery("nice_name = \"works-" + suffix + "\"")).body())
                 .as("step 3: the list says so").contains("data-state=\"not_loaded\"");
         } finally {
             ServerMain.adoptProxyServer(previous);
@@ -165,7 +165,7 @@ class CertificatesJourneyTest extends HohenheimTestBase {
 
         // 4. The list shows every certificate with its state, and the header offers the two ways to get
         //    one: "Get a certificate" (Let's Encrypt) beside "Upload a certificate", no generic "New certificate".
-        String page = adminGet("/admin/certificates?q=" + suffix).body();
+        String page = adminGet("/admin/certificates" + listQuery("nice_name contains \"" + suffix + "\"")).body();
         assertThat(page).as("step 4: expiring").contains("data-state=\"expiring\"")
             .as("step 4: not issued yet").contains("data-state=\"issuing\"")
             .as("step 4: expired").contains("data-state=\"expired\"")

@@ -474,12 +474,16 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
         app.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);
         Models.get(InstanceModel.class).save(app);
 
-        // 2. Its Configuration (the record's form) saves an unrelated change: the build timeout, a plain field of the
-        //    source section every git source offers (an application's form offers no build command since c6f9d973,
-        //    and its branch is a provider pick, no plain input).
+        // 2. Its Configuration (the record's form) saves an unrelated change: the build timeout, a number in the
+        //    folded "build" section (an application's form offers no build command since c6f9d973, and its branch is
+        //    a provider pick, no plain input). A person unfolds the section first; the control is a pl-number-input,
+        //    whose own input carries no name.
         navigateToApp("/admin/instances/" + app.get(InstanceModel.ID));
         waitForHydration();
-        type("input[name='settings.build_timeout']", "1200");
+        click(SETTINGS + " pl-card[data-section='build'] pl-collapsible-trigger >> nth=0");
+        String timeout = SETTINGS + " pl-number-input[name='settings.build_timeout'] input";
+        type(timeout, "1200");
+        page.locator(timeout).blur();
         page.evaluate("document.querySelector('form.cms-form-layout').requestSubmit()");
         page.waitForCondition(() -> "1200".equals(String.valueOf(settingsOf("cf-stored-source")
             .get(GitSourceSchema.BUILD_TIMEOUT))));

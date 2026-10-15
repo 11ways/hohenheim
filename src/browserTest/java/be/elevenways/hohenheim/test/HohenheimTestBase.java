@@ -326,6 +326,11 @@ public abstract class HohenheimTestBase extends ZenitBrowserTestBase {
         return httpGet(path, sessionToken);
     }
 
+    /** The {@code ?q=} part narrowing a list to a rule expression; a bare word is no expression and narrows nothing. */
+    protected static String listQuery(String rule) {
+        return "?q=" + URLEncoder.encode(rule, StandardCharsets.UTF_8);
+    }
+
     /** A urlencoded POST as the harness admin, CSRF token included. */
     protected HttpResponse<String> adminPostForm(String path, String body) throws Exception {
         return httpPostForm(path, body, sessionToken, csrfToken);

@@ -113,7 +113,7 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
                 .doesNotContain("href=\"http://broken.app-journey.test");
 
             // 3. The list draws the same verdicts: one producer, so the glyph and the band never disagree.
-            String list = adminGet("/admin/sites?q=app-journey").body();
+            String list = adminGet("/admin/sites" + listQuery("name contains \"app-journey\"")).body();
             assertThat(list).as("step 3: the healthy site's row carries the OK glyph")
                 .contains("data-cms-health=\"ok\"");
             assertThat(list).as("step 3: the broken one's the broken glyph")
@@ -165,7 +165,7 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
                 .contains("/admin/servers/" + serverId + "/page/overview");
 
             // 4. The instances list draws the same verdict.
-            String list = adminGet("/admin/instances?q=app-journey-workload").body();
+            String list = adminGet("/admin/instances" + listQuery("name = \"app-journey-workload\"")).body();
             assertThat(list).as("step 4: the row carries the attention glyph")
                 .contains("data-cms-health=\"attention\"");
         } finally {
@@ -287,7 +287,7 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
                 .contains("data-cms-record-health=\"broken\"")
                 .contains("Visitors get an error page")
                 .doesNotContain("Live at");
-            assertThat(adminGet("/admin/instances?q=app-journey-served").body())
+            assertThat(adminGet("/admin/instances" + listQuery("name = \"app-journey-served\"")).body())
                 .as("step 4: and its list row carries the broken glyph").contains("data-cms-health=\"broken\"");
 
             // 5. The workload's band carries the site's two fixes: getting a certificate on the
@@ -347,7 +347,7 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
             assertThat(adminGet(overview(site)).body()).as("step 1: the verdict names what visitors get")
                 .contains("Visitors get an error page")
                 .doesNotContain("Live at");
-            assertThat(adminGet("/admin/sites?q=app-journey-refused").body())
+            assertThat(adminGet("/admin/sites" + listQuery("name = \"app-journey-refused\"")).body())
                 .as("step 1: and the list row agrees").contains("data-cms-health=\"broken\"");
 
             // 2. The upstream comes up: the next probe finds it answering and the app is live again.
