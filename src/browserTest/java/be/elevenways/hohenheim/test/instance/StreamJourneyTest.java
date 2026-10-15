@@ -211,8 +211,7 @@ class StreamJourneyTest extends HohenheimTestBase {
         try (ServerSocket squatter = new ServerSocket()) {
             squatter.bind(new InetSocketAddress("0.0.0.0", publicPort));
             switchOn(siteId, true);
-            List<AttentionItem> failing = new ArrayList<>();
-            ProxyAttention.failedProxyListeners(failing);
+            List<AttentionItem> failing = streamItems();
             assertThat(failing).as("step 7b: one item, an error").hasSize(1)
                 .allSatisfy(item -> assertThat(item.severity()).isEqualTo(AttentionSeverity.ERROR));
             AttentionItem item = failing.getFirst();
@@ -228,9 +227,7 @@ class StreamJourneyTest extends HohenheimTestBase {
                 .contains("is already held by");
         }
         proxy.superviseListeners();
-        List<AttentionItem> healed = new ArrayList<>();
-        ProxyAttention.failedProxyListeners(healed);
-        assertThat(healed).as("step 7b: the freed port is opened by the supervisor and the item goes").isEmpty();
+        assertThat(streamItems()).as("step 7b: the freed port is opened by the supervisor and the item goes").isEmpty();
         assertThat(tcpRoundTrip(publicPort, "back")).as("step 7b: and it forwards again").isEqualTo("back");
 
         // 8. Delete: the port closes and both claims go, so the port can be claimed again at once.
@@ -251,6 +248,16 @@ class StreamJourneyTest extends HohenheimTestBase {
         assertThat(Models.get(PortAllocationModel.class).find()
                 .where(PortAllocationModel.OWNER_MODEL.eq(SiteModel.MODEL_ID.toString())).all())
             .as("step 8: no stream holds a port any more").isEmpty();
+    }
+
+    /**
+     * The failing proxy listeners that are streams; an HTTPS listener another class left failing in this shared JVM
+     * (a privileged port it could not bind) is not this journey's.
+     */
+    private static List<AttentionItem> streamItems() {
+        List<AttentionItem> failing = new ArrayList<>();
+        ProxyAttention.failedProxyListeners(failing);
+        return failing.stream().filter(item -> item.title().key().equals("stream_not_forwarding")).toList();
     }
 
     private static Map<String, Object> stream(String name, int publicPort, String protocol, Integer accessList) {
