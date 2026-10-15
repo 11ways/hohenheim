@@ -190,6 +190,25 @@ class LocalNetworkGuestTest extends HohenheimTestBase {
             assertThat(devicesOf(lanDestination, turned.handle()).get(IncusNetworkPolicy.NIC))
                 .as("step 6: the hidden export lands as a LAN guest")
                 .isEqualTo(Map.of("type", "nic", "nictype", "macvlan", "parent", "eno1"));
+
+            // 7. The mirror: an export taken while the guest was on the local network (eth0 macvlan on ens18),
+            //    restored into a record now HIDDEN on a host with no LAN parent at all. The import itself resets eth0
+            //    to the isolated shape: the daemon refuses a parent it lacks and an ACL beside a nictype.
+            Files.writeString(exported, Json.stringify(daemon.instances.get(machine.handle())));
+            FakeIncusTransport hiddenDestination = new FakeIncusTransport();
+            InstanceSpec rehidden = InstanceSpec.builder(PREFIX + "rehidden", "debian/12/cloud",
+                    ResourceLimits.none(), new ContainerHardening.Profile("fake", List.of()),
+                    OwnerLabels.of(InstanceModel.MODEL_ID, 4712)).build();
+            runtime(hiddenDestination, null).importBackup(rehidden, exported, Map.of(), true);
+            Map<?, ?> rehiddenNic = (Map<?, ?>) devicesOf(hiddenDestination, rehidden.handle())
+                .get(IncusNetworkPolicy.NIC);
+            assertThat(rehiddenNic.keySet().stream().map(String::valueOf).toList())
+                .as("step 7: the LAN export lands isolated, on no host interface")
+                .doesNotContain("nictype", "parent");
+            assertThat(rehiddenNic.get("network")).as("step 7: eth0 is back on the managed bridge")
+                .isEqualTo("incusbr0");
+            assertThat(rehiddenNic.get(IncusNetworkPolicy.ACLS_KEY)).as("step 7: and carries the isolation ACL")
+                .isEqualTo(IncusNetworkPolicy.aclName());
         } finally {
             Files.deleteIfExists(exported);
         }

@@ -367,28 +367,35 @@ public final class IncusInstanceRuntime
     }
 
     /**
-     * The eth0 keys an import of {@code spec} overrides on this daemon: an address of this bridge when it publishes
-     * ports, else none, since the exported pin names the SOURCE's subnet and the daemon refuses an import whose NIC
-     * address lies outside its own; a guest on the local network takes THIS host's parent and its NIC type, since the
-     * export names the source's, and unsets every isolating key an export from a hidden guest still carries.
+     * The eth0 keys an import of {@code spec} overrides on this daemon, symmetric per mode: the export names the
+     * SOURCE's NIC shape, and the daemon validates eth0 against THIS host as it lands. A guest on the local network
+     * takes this host's parent and NIC type and unsets every isolating key ({@link IncusNetworkPolicy#ISOLATION_KEYS});
+     * a hidden guest takes the isolated NIC on this host's managed network (network and ACL keys) and unsets the LAN
+     * keys ({@link IncusLanParent#LAN_KEYS}), plus an address of this bridge when it publishes ports, else none,
+     * since an exported pin names the source's subnet.
      */
     @NonNull Map<String, String> importedNic(@NonNull InstanceSpec spec) throws IOException {
+        // An empty value unsets the key (measured for ipv4.address).
+        Map<String, String> nic = new LinkedHashMap<>();
+        Map<String, Object> device;
         if (!spec.networkMode().carriesIsolationAcl()) {
             requireNothingPublished(spec);
-            IncusLanParent.Lan lan = lan(spec);
-            Map<String, String> nic = new LinkedHashMap<>();
-            nic.put("nictype", lan.nicType().token());
-            nic.put("parent", lan.parent());
-            // An empty value unsets the key (measured for ipv4.address); the daemon validates eth0 as it lands.
-            for (String isolating : IncusNetworkPolicy.ISOLATION_KEYS) {
-                nic.put(isolating, "");
-            }
+            IncusNetworkPolicy.ISOLATION_KEYS.forEach(key -> nic.put(key, ""));
             nic.put(IncusPublishedPorts.ADDRESS_KEY, "");
-            return nic;
+            device = lan(spec).device(spec.networkLimitMbit());
+        } else {
+            IncusLanParent.LAN_KEYS.forEach(key -> nic.put(key, ""));
+            String network = IncusDefinitions.managedNetworkName(this.incus);
+            device = this.policy.nicDevice(network, this.egress, spec.networkLimitMbit());
+            nic.putAll(IncusPublishedPorts.importedNic(spec.publications().isEmpty() ? null
+                : IncusPublishedPorts.guestAddress(this.incus, network, spec.handle(), null)));
         }
-        return IncusPublishedPorts.importedNic(spec.publications().isEmpty() ? null
-            : IncusPublishedPorts.guestAddress(this.incus, IncusDefinitions.managedNetworkName(this.incus),
-                spec.handle(), null));
+        device.forEach((key, value) -> {
+            if (!"type".equals(key)) {
+                nic.put(key, String.valueOf(value));
+            }
+        });
+        return nic;
     }
 
     /** @throws IOException when this host declares no LAN parent, or the daemon does not admit it */

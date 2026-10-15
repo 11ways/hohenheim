@@ -6,6 +6,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -23,6 +24,18 @@ import java.util.Map;
  * @since  0.10.0
  */
 public final class IncusLanParent {
+
+    /** The NIC device key naming how it joins its parent. */
+    public static final String NICTYPE_KEY = "nictype";
+
+    /** The NIC device key naming the host interface it joins. */
+    public static final String PARENT_KEY = "parent";
+
+    /**
+     * Every key a LAN guest's NIC carries that an isolated NIC on a managed network must not: what an import of a
+     * hidden guest unsets, the mirror of {@link IncusNetworkPolicy#ISOLATION_KEYS}.
+     */
+    public static final List<String> LAN_KEYS = List.of(NICTYPE_KEY, PARENT_KEY);
 
     /** The NIC types a LAN guest's main NIC can take, each derived from the parent's reported type. */
     public enum NicType {
@@ -86,8 +99,8 @@ public final class IncusLanParent {
         public @NonNull Map<String, Object> device(@Nullable Integer limitMbit) throws IOException {
             Map<String, Object> device = new LinkedHashMap<>();
             device.put("type", "nic");
-            device.put("nictype", this.nicType.token());
-            device.put("parent", this.parent);
+            device.put(NICTYPE_KEY, this.nicType.token());
+            device.put(PARENT_KEY, this.parent);
             if (limitMbit != null && limitMbit > 0) {
                 if (!this.nicType.carriesLimits()) {
                     throw new IOException("REFUSED to cap the bandwidth of a guest on the local network through '"
@@ -154,7 +167,7 @@ public final class IncusLanParent {
      */
     public static boolean isLanNic(@Nullable Object device) {
         return device instanceof Map<?, ?> nic && "nic".equals(nic.get("type"))
-            && NicType.ofToken(nic.get("nictype")) != null && nic.get("parent") instanceof String parent
+            && NicType.ofToken(nic.get(NICTYPE_KEY)) != null && nic.get(PARENT_KEY) instanceof String parent
             && !parent.isBlank() && IncusNetworkPolicy.ISOLATION_KEYS.stream().noneMatch(nic::containsKey);
     }
 }
