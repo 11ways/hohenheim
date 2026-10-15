@@ -393,6 +393,60 @@ class InstanceStatusReconcileTest {
         });
     }
 
+    /**
+     * The host-reboot case for {@code crash_policy restart}: while the host is down the sweep cannot ask and moves
+     * nothing, and once it answers again the workload the reboot stopped is corrected and redeployed, never left
+     * in {@code error}. Devbox (2026-09-27) stayed down because its policy was {@code none} at the time.
+     */
+    @Test
+    void aRestartPolicyWorkloadComesBackOnceItsRebootedHostAnswersAgain() {
+        Db.run(datasource, () -> {
+            InstanceStatusReconciler reconciler = new InstanceStatusReconciler();
+            int id = BackupLaneFixture.instanceRecord("reconcile-reboot", hostId);
+            Models.get(InstanceModel.class).find()
+                .where(InstanceModel.ID.eq(id))
+                .assign(InstanceModel.CRASH_POLICY, InstanceModel.CRASH_RESTART)
+                .updateAll();
+            new InstanceService().deploy(id);
+            String handle = FakeNativeDaemons.handleOf(id);
+
+            // 1. The host goes down: the reboot stops the workload, and the daemon cannot be asked meanwhile. The
+            //    sweep moves nothing and restarts nothing.
+            FakeNativeDaemons.daemonOf(hostId).get(handle).running = false;
+            FakeNativeDaemons.UNREACHABLE_HANDLES.add(handle);
+            try {
+                assertThat(reconciler.reconcile(id).verdict())
+                    .as("step 1: a host that is down is not asked")
+                    .isEqualTo(Verdict.COULD_NOT_ASK);
+                assertThat(statusOf(id))
+                    .as("step 1: and the record still claims running")
+                    .isEqualTo(InstanceModel.STATUS_RUNNING);
+            } finally {
+                FakeNativeDaemons.UNREACHABLE_HANDLES.remove(handle);
+            }
+
+            // 2. The host is back and its daemon reports the workload stopped: the sweep corrects the record and the
+            //    restart policy redeploys it.
+            InstanceStatusReconciler.Outcome back = reconciler.reconcile(id);
+            assertThat(back.verdict())
+                .as("step 2: the answering host's stopped workload is corrected")
+                .isEqualTo(Verdict.CORRECTED);
+            assertThat(back.observed())
+                .as("step 2: on the daemon's own answer")
+                .isEqualTo(ContainerState.STOPPED);
+            awaitStatus(id, InstanceModel.STATUS_RUNNING,
+                "step 2: crash policy restart brings the workload back after the reboot");
+            assertThat(FakeNativeDaemons.daemonOf(hostId).get(handle).running)
+                .as("step 2: the daemon runs the workload again")
+                .isTrue();
+
+            // 3. The restart is no crash: no exit cause is recorded, so nothing reads it as an error.
+            assertThat(activity(id, HohenheimActivityAction.WORKLOAD_EXITED.id().toString()))
+                .as("step 3: a restarted workload records no exit cause")
+                .isEmpty();
+        });
+    }
+
     /** Bounded wait for an async redeploy (or an error settle) to stamp the column. */
     private static void awaitStatus(int instanceId, String expected, String what) {
         Poll.until(what + " (status " + expected + ")", Duration.ofSeconds(15),
