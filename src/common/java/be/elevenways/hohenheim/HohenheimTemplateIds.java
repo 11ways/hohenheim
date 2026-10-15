@@ -4,11 +4,11 @@ import be.elevenways.protoblast.common.registry.Identifier;
 
 /**
  * Canonical Hawkeye template identifiers Hohenheim's Java code renders.
-
+ *
  * AIDEV-NOTE: template ids keep the project token and dashed paths (hawkeye:template is an ANY registry), so they are
- * spelled with Identifier.of here, the one class the literal-namespace guard exempts for them; list-cell renderers are
- * strings because a column names its renderer as one.
-
+ * spelled with Identifier.of here, the one class the literal-namespace guard exempts for them. Every id is a literal
+ * constant: a bundle links a template when a class it reaches, or the server serving it, reads its constant.
+ *
  * @author Jelle De Loecker
  * @since  0.1.0
  */
@@ -69,14 +69,14 @@ public final class HohenheimTemplateIds {
     public static final Identifier WIDGET_STAT = Identifier.of("hohenheim", "cms/widget-stat");
     public static final Identifier WIDGET_TENANT_USAGE = Identifier.of("hohenheim", "cms/widget-tenant-usage");
 
-    // List-cell partials; a column names one through its String renderer.
-    public static final String CELL_STATE_LINE = "hohenheim:cms/cell/state-line";
-    public static final String CELL_HOST_STATUS = "hohenheim:cms/cell/host-status";
-    public static final String CELL_HOST_MEMORY = "hohenheim:cms/cell/host-memory";
-    public static final String CELL_MANAGED_BY = "hohenheim:cms/cell/managed-by";
-    public static final String CELL_INSTALL_STATE = "hohenheim:cms/cell/install-state";
-    public static final String CELL_SITE_HOSTNAMES = "hohenheim:cms/cell/site-hostnames";
-    public static final String CELL_SITE_UPSTREAM = "hohenheim:cms/cell/site-upstream";
+    // List-cell partials; a column names one through its renderer.
+    public static final Identifier CELL_STATE_LINE = Identifier.of("hohenheim", "cms/cell/state-line");
+    public static final Identifier CELL_HOST_STATUS = Identifier.of("hohenheim", "cms/cell/host-status");
+    public static final Identifier CELL_HOST_MEMORY = Identifier.of("hohenheim", "cms/cell/host-memory");
+    public static final Identifier CELL_MANAGED_BY = Identifier.of("hohenheim", "cms/cell/managed-by");
+    public static final Identifier CELL_INSTALL_STATE = Identifier.of("hohenheim", "cms/cell/install-state");
+    public static final Identifier CELL_SITE_HOSTNAMES = Identifier.of("hohenheim", "cms/cell/site-hostnames");
+    public static final Identifier CELL_SITE_UPSTREAM = Identifier.of("hohenheim", "cms/cell/site-upstream");
 
     private HohenheimTemplateIds() {
     }

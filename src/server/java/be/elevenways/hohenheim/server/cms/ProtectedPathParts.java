@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.render.table.EnumBadgeState;
+import be.elevenways.zenit.cms.common.render.CmsTemplateIds;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceForm;
@@ -18,7 +19,6 @@ import be.elevenways.zenit.cms.common.resource.ResourceReads;
 import be.elevenways.zenit.cms.common.resource.ResourceTabs;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
-import be.elevenways.zenit.cms.server.render.table.TableStateTranslator;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
@@ -76,7 +76,7 @@ public final class ProtectedPathParts {
                 .relation(RelationPick.of(ProtectedPathModel.ACCESS_LIST_ID, AccessListModel.MODEL_ID).build())
                 .build())
             .column(ColumnSpec.virtual(PROTECTION_COLUMN, HohenheimMicrocopy.PROTECTED_PATH.of("protection"))
-                .renderer(TableStateTranslator.ENUM_BADGE_RENDERER).build())
+                .renderer(CmsTemplateIds.CELL_ENUM_BADGE).build())
             .column(ColumnSpec.fromField(ProtectedPathModel.SITE_ID)
                 .label(FieldLabels.labelForRelation(ProtectedPathModel.SITE_ID))
                 .relation(RelationPick.of(ProtectedPathModel.SITE_ID, SiteModel.MODEL_ID).build())

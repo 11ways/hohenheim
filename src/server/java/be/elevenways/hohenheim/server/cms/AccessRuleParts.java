@@ -14,6 +14,7 @@ import be.elevenways.zenit.cms.common.CmsMicrocopy;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.PanelAction;
+import be.elevenways.zenit.cms.common.render.CmsTemplateIds;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceAuthority;
@@ -27,7 +28,6 @@ import be.elevenways.zenit.cms.common.resource.RowSave;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.cms.server.panel.PanelTreeOrderActions;
-import be.elevenways.zenit.cms.server.render.table.TableStateTranslator;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSpec;
@@ -152,7 +152,7 @@ public final class AccessRuleParts {
             // The SAME on/off pill the Rules tab shows: a boolean cell would say Yes/No, which is not the word the
             // toggle or the tab uses for the same fact.
             .column(ColumnSpec.virtual(AccessRuleModel.ENABLED.getName(), FieldLabels.labelFor(AccessRuleModel.ENABLED))
-                .renderer(TableStateTranslator.ENUM_BADGE_RENDERER).build())
+                .renderer(CmsTemplateIds.CELL_ENUM_BADGE).build())
             .build();
         FormSpec form = FormSpec.builder()
             .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(AccessRuleModel.TYPE))
