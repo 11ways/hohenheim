@@ -231,6 +231,8 @@ control CREATE%20settings[hohenheim:vm]/settings.network_limit_mbit at=5 kind=ze
 control CREATE%20settings[hohenheim:vm]/settings.image_origin at=6 kind=zenitforms:form/select input=select required=false readonly=false options=catalog,prepared,install_media binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:vm]/settings.secure_boot at=7 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:vm]/settings.guest_agent at=8 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:vm]/settings.published_ports at=9 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:vm]/settings.srv_service at=10 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:workspace]/settings.repository_url at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:workspace]/settings.provider_id at=1 kind=zenitforms:form/select input=number required=false readonly=false options= binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:workspace]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id,resolver:be.elevenways.hohenheim.source.GitRepositoryResolver#35e141c07927,clearable:true,free:true
@@ -577,6 +579,8 @@ control CREATE%20settings[hohenheim:vm]/settings.network_limit_mbit at=5 kind=ze
 control CREATE%20settings[hohenheim:vm]/settings.image_origin at=6 kind=zenitforms:form/select input=select required=false readonly=false options=catalog,prepared,install_media binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:vm]/settings.secure_boot at=7 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:vm]/settings.guest_agent at=8 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:vm]/settings.published_ports at=9 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:vm]/settings.srv_service at=10 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:workspace]/settings.repository_url at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:workspace]/settings.provider_id at=1 kind=zenitforms:form/select input=number required=false readonly=false options= binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:workspace]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id,resolver:be.elevenways.hohenheim.source.GitRepositoryResolver#35e141c07927,clearable:true,free:true
@@ -723,6 +727,8 @@ control EDIT%20settings[hohenheim:vm]/settings.network_limit_mbit at=5 kind=zeni
 control EDIT%20settings[hohenheim:vm]/settings.image_origin at=6 kind=zenitforms:form/select input=select required=false readonly=false options=catalog,prepared,install_media binding=searchable:false,clearable:true,presentation:DEFAULT
 control EDIT%20settings[hohenheim:vm]/settings.secure_boot at=7 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:vm]/settings.guest_agent at=8 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20settings[hohenheim:vm]/settings.published_ports at=9 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
+control EDIT%20settings[hohenheim:vm]/settings.srv_service at=10 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:workspace]/settings.repository_url at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:workspace]/settings.provider_id at=1 kind=zenitforms:form/select input=number required=false readonly=false options= binding=searchable:false,clearable:true,presentation:DEFAULT
 control EDIT%20settings[hohenheim:workspace]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id,resolver:be.elevenways.hohenheim.source.GitRepositoryResolver#35e141c07927,clearable:true,free:true
@@ -894,6 +900,8 @@ control CREATE%20settings[hohenheim:vm]/settings.network_limit_mbit at=5 kind=ze
 control CREATE%20settings[hohenheim:vm]/settings.image_origin at=6 kind=zenitforms:form/select input=select required=false readonly=false options=catalog,prepared,install_media binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:vm]/settings.secure_boot at=7 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:vm]/settings.guest_agent at=8 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:vm]/settings.published_ports at=9 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:vm]/settings.srv_service at=10 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:workspace]/settings.repository_url at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:workspace]/settings.provider_id at=1 kind=zenitforms:form/select input=number required=false readonly=false options= binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:workspace]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id,resolver:be.elevenways.hohenheim.source.GitRepositoryResolver#35e141c07927,clearable:true,free:true
@@ -1040,6 +1048,8 @@ control EDIT%20settings[hohenheim:vm]/settings.network_limit_mbit at=5 kind=zeni
 control EDIT%20settings[hohenheim:vm]/settings.image_origin at=6 kind=zenitforms:form/select input=select required=false readonly=false options=catalog,prepared,install_media binding=searchable:false,clearable:true,presentation:DEFAULT
 control EDIT%20settings[hohenheim:vm]/settings.secure_boot at=7 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:vm]/settings.guest_agent at=8 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20settings[hohenheim:vm]/settings.published_ports at=9 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
+control EDIT%20settings[hohenheim:vm]/settings.srv_service at=10 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:workspace]/settings.repository_url at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:workspace]/settings.provider_id at=1 kind=zenitforms:form/select input=number required=false readonly=false options= binding=searchable:false,clearable:true,presentation:DEFAULT
 control EDIT%20settings[hohenheim:workspace]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id,resolver:be.elevenways.hohenheim.source.GitRepositoryResolver#35e141c07927,clearable:true,free:true
@@ -1683,6 +1693,8 @@ control CREATE%20settings[hohenheim:vm]/settings.network_limit_mbit at=5 kind=ze
 control CREATE%20settings[hohenheim:vm]/settings.image_origin at=6 kind=zenitforms:form/select input=select required=false readonly=false options=catalog,prepared,install_media binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:vm]/settings.secure_boot at=7 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:vm]/settings.guest_agent at=8 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:vm]/settings.published_ports at=9 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:vm]/settings.srv_service at=10 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:workspace]/settings.repository_url at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:workspace]/settings.provider_id at=1 kind=zenitforms:form/select input=number required=false readonly=false options= binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:workspace]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id,resolver:be.elevenways.hohenheim.source.GitRepositoryResolver#35e141c07927,clearable:true,free:true

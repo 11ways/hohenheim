@@ -51,19 +51,32 @@ class InstanceSettingsSectionTest {
         assertThat(GitPickerFormEntries.LOADED).isTrue();
     }
 
-    /** The names a schema renders OUTSIDE every section, in render order. */
+    /**
+     * The names a schema renders OUTSIDE every section, in render order; a field no view offers renders nowhere, so it
+     * is in no run (GitSourceSchema.Offer keeps such fields declared).
+     */
     private static List<String> visibleRun(Schema schema) {
         List<String> sectioned = new ArrayList<>();
         for (FormSection section : schema.getSections()) {
             sectioned.addAll(section.entryNames());
         }
+        FormSpec derived = FieldFormEntryRegistry.INSTANCE.deriveSpec(schema);
         List<String> visible = new ArrayList<>();
         for (Field<?, ?> field : schema.getFields().values()) {
-            if (!sectioned.contains(field.getName())) {
+            if (!sectioned.contains(field.getName()) && offeredInSomeView(derived, field.getName())) {
                 visible.add(field.getName());
             }
         }
         return visible;
+    }
+
+    private static boolean offeredInSomeView(FormSpec derived, String name) {
+        for (EditView view : EditView.values()) {
+            if (derived.forView(view).findEntry(name) != null) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static List<String> sectionMembers(Schema schema, String id) {
@@ -111,9 +124,10 @@ class InstanceSettingsSectionTest {
             .containsExactly("auto_deploy", "poll_interval", "webhook_secret",
                 "previews_enabled", "preview_branches", "preview_environment_variables");
 
-        // 3. An application's Configuration reads: an open source-and-build section
-        //    (where the code comes from, what it builds into, deploy-on-push and previews), the variables per lane
-        //    open beside it, and only what has a working default folded.
+        // 3. An application's Configuration reads: an open source section (where the code comes from, what it builds
+        //    into, deploy-on-push and previews), the variables per lane open beside it, and only what has a working
+        //    default folded. Its release builds a Dockerfile or a buildpack, so no build command, build folder or
+        //    build-only environment is in any section (GitSourceSchema.Offer: declared, offered in no view).
         assertThat(visibleRun(ApplicationKind.SETTINGS_SCHEMA))
             .as("step 3: every application field belongs to a named section").isEmpty();
         assertThat(ApplicationKind.SETTINGS_SCHEMA.getSections()).extracting(FormSection::id)
@@ -124,14 +138,12 @@ class InstanceSettingsSectionTest {
             .as("step 3: the two decisions are open, the rest folded")
             .containsExactly(false, false, true, true, true);
         assertThat(sectionMembers(ApplicationKind.SETTINGS_SCHEMA, HohenheimFormSections.SOURCE))
-            .as("step 3: the source section carries the repository, the build, the artifact and deploy-on-push")
-            .containsExactly("repository_url", "provider_id", "repository", "branch", "builder", "build_command",
-                "build_directory", "image", "tag", "container_port", "auto_deploy", "previews_enabled",
-                "preview_branches");
+            .as("step 3: the source section carries the repository, the builder, the artifact and deploy-on-push")
+            .containsExactly("repository_url", "provider_id", "repository", "branch", "builder", "image", "tag",
+                "container_port", "auto_deploy", "previews_enabled", "preview_branches");
         assertThat(sectionMembers(ApplicationKind.SETTINGS_SCHEMA, HohenheimFormSections.VARIABLES))
-            .as("step 3: the variables per lane: running, building, previews only")
-            .containsExactly("environment_variables", "build_environment_variables",
-                "preview_environment_variables");
+            .as("step 3: the variables per lane: running, previews only")
+            .containsExactly("environment_variables", "preview_environment_variables");
         assertThat(sectionMembers(ApplicationKind.SETTINGS_SCHEMA, HohenheimFormSections.DEPLOYMENT))
             .as("step 3: and the deployment fold keeps the webhook secret, the release gate and retention")
             .containsExactly("webhook_secret", "poll_interval", "health_path", "keep_releases");
