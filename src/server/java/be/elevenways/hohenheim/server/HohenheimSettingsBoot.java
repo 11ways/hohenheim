@@ -39,8 +39,8 @@ public final class HohenheimSettingsBoot {
      * Hohenheim's defaults for FRAMEWORK settings it depends on, applied only where nothing
      * set the key yet.
      *
-     * AIDEV-NOTE: activity pruning is zenit's own ActivityPruneTask reading
-     * activity.retention_days, whose framework default is 0 (keep forever). Hohenheim kept
+     * AIDEV-NOTE: activity pruning is zenit's own HistoryPruneTask, whose installation default
+     * for activity is HORIZON(activity.retention_days), and that default is 0 (keep forever). Hohenheim kept
      * 90 days through a task of its own (CleanOldActivity, deleted 2026-09-23), so the
      * behaviour must not change on upgrade: this seeds 90. It runs BEFORE the framework
      * chain loads at boot ({@link #load}), so settings/local.dry or

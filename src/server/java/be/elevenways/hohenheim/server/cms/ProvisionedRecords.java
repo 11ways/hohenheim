@@ -56,19 +56,6 @@ public final class ProvisionedRecords {
     }
 
     /**
-     * Editable on the CREATE form, readonly once the record exists.
-     *
-     * AIDEV-NOTE: record-AWARE rather than {@code alwaysReadonly()}, and the difference is the
-     * whole create form: a readonly binding applies to both views, so freezing these with it
-     * would leave an operator unable to type a name.
-     */
-    static @NonNull ResourceFieldBinding frozenAfterCreate(@NonNull Field<?, ?> field) {
-        return ResourceFieldBinding.of(field.getName(),
-            FieldAccess.customRecordAware((ctx, record) ->
-                record == null ? FieldAccess.Decision.EDITABLE : FieldAccess.Decision.READONLY));
-    }
-
-    /**
      * The failure reason, shown ONLY on a record that carries one: the create form (null record)
      * and a healthy record never render an empty failure box. Presentation per record, so the
      * list still sorts and filters by it (the cross-record answer is declared).

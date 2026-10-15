@@ -477,16 +477,16 @@ public final class DatabaseParts {
         // STATUS is service-owned even on create.
         return List.of(
             ResourceFieldBinding.of(DatabaseModel.STATUS.getName(), FieldAccess.alwaysReadonly()),
-            ProvisionedRecords.frozenAfterCreate(DatabaseModel.NAME),
-            ProvisionedRecords.frozenAfterCreate(DatabaseModel.ENGINE),
-            ProvisionedRecords.frozenAfterCreate(DatabaseModel.DB_NAME),
-            ProvisionedRecords.frozenAfterCreate(DatabaseModel.DB_USER),
-            ProvisionedRecords.frozenAfterCreate(DatabaseModel.DB_PASSWORD),
-            ProvisionedRecords.frozenAfterCreate(DatabaseModel.IMAGE),
-            ProvisionedRecords.frozenAfterCreate(DatabaseModel.EPHEMERAL),
-            ProvisionedRecords.frozenAfterCreate(DatabaseModel.SERVER_ID),
-            ProvisionedRecords.frozenAfterCreate(DatabaseModel.PLACEMENT),
-            ProvisionedRecords.frozenAfterCreate(DatabaseModel.ENGINE_ID),
+            ResourceFieldBinding.frozenAfterCreate(DatabaseModel.NAME.getName()),
+            ResourceFieldBinding.frozenAfterCreate(DatabaseModel.ENGINE.getName()),
+            ResourceFieldBinding.frozenAfterCreate(DatabaseModel.DB_NAME.getName()),
+            ResourceFieldBinding.frozenAfterCreate(DatabaseModel.DB_USER.getName()),
+            ResourceFieldBinding.frozenAfterCreate(DatabaseModel.DB_PASSWORD.getName()),
+            ResourceFieldBinding.frozenAfterCreate(DatabaseModel.IMAGE.getName()),
+            ResourceFieldBinding.frozenAfterCreate(DatabaseModel.EPHEMERAL.getName()),
+            ResourceFieldBinding.frozenAfterCreate(DatabaseModel.SERVER_ID.getName()),
+            ResourceFieldBinding.frozenAfterCreate(DatabaseModel.PLACEMENT.getName()),
+            ResourceFieldBinding.frozenAfterCreate(DatabaseModel.ENGINE_ID.getName()),
             // A shared record has no ceilings of its own: the container is the ENGINE's and is booked once, at the
             // engine's cap. Hiding them is the honest shape; the form notice names where they live.
             hiddenWhenShared(DatabaseModel.MEMORY_LIMIT_MB),
@@ -909,12 +909,12 @@ public final class DatabaseParts {
     private static @NonNull List<ResourceFieldBinding> engineBindings() {
         return List.of(
             ResourceFieldBinding.of(DatabaseEngineModel.STATUS.getName(), FieldAccess.alwaysReadonly()),
-            ProvisionedRecords.frozenAfterCreate(DatabaseEngineModel.NAME),
-            ProvisionedRecords.frozenAfterCreate(DatabaseEngineModel.ENGINE),
-            ProvisionedRecords.frozenAfterCreate(DatabaseEngineModel.IMAGE),
-            ProvisionedRecords.frozenAfterCreate(DatabaseEngineModel.SERVER_ID),
-            ProvisionedRecords.frozenAfterCreate(DatabaseEngineModel.ROOT_USER),
-            ProvisionedRecords.frozenAfterCreate(DatabaseEngineModel.ROOT_PASSWORD),
+            ResourceFieldBinding.frozenAfterCreate(DatabaseEngineModel.NAME.getName()),
+            ResourceFieldBinding.frozenAfterCreate(DatabaseEngineModel.ENGINE.getName()),
+            ResourceFieldBinding.frozenAfterCreate(DatabaseEngineModel.IMAGE.getName()),
+            ResourceFieldBinding.frozenAfterCreate(DatabaseEngineModel.SERVER_ID.getName()),
+            ResourceFieldBinding.frozenAfterCreate(DatabaseEngineModel.ROOT_USER.getName()),
+            ResourceFieldBinding.frozenAfterCreate(DatabaseEngineModel.ROOT_PASSWORD.getName()),
             // Shown ONLY on a record that carries one.
             ProvisionedRecords.failureReasonWhenSet(DatabaseEngineModel.FAILURE_REASON));
     }
