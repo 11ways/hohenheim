@@ -24,6 +24,7 @@ import io.undertow.server.handlers.encoding.EncodingHandler;
 import io.undertow.server.handlers.encoding.GzipEncodingProvider;
 import io.undertow.server.handlers.encoding.DeflateEncodingProvider;
 import io.undertow.util.Headers;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import javax.net.ssl.KeyManager;
@@ -33,7 +34,9 @@ import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 
@@ -98,6 +101,9 @@ public class ProxyServer {
     private volatile int httpRestartAttempts;
     private volatile long httpNextRestartAttemptAt;
     private volatile int httpsRestartAttempts;
+    private volatile long streamNextRetryAt;
+    // The stream sites whose listener-down alert went out for the current outage; the supervisor thread's only.
+    private final Set<Integer> streamDownAlerted = new HashSet<>();
     private volatile long httpsNextRestartAttemptAt;
     private volatile boolean httpDownAlertSent;
     private volatile boolean httpsDownAlertSent;
@@ -229,6 +235,16 @@ public class ProxyServer {
     /** @return the public UDP address a stream site listens on, null when it listens on none */
     public @Nullable InetSocketAddress getStreamUdpAddress(int siteId) {
         return streams.udpAddress(siteId);
+    }
+
+    /** @return the stream ports this proxy could not open, each in the operator's words */
+    public @NonNull List<StreamBindFailure> getStreamFailures() {
+        return streams.failures();
+    }
+
+    /** @return why a stream site's port is not open, null when it is or the site is no stream */
+    public @Nullable StreamBindFailure getStreamFailure(int siteId) {
+        return streams.failureOf(siteId);
     }
 
     /** Whether force-SSL routes can currently be answered with a redirect instead of a 503. */
@@ -553,6 +569,33 @@ public class ProxyServer {
             }
         }
         maybeAlertListenerDown();
+        superviseStreams();
+    }
+
+    /**
+     * Tries the stream ports that could not be opened again, on the listeners' backoff, and alerts once per outage for
+     * each one still failing after a retry.
+     */
+    private void superviseStreams() {
+        List<StreamBindFailure> failed = streams.failures();
+        long now = clock.getAsLong();
+        if (!failed.isEmpty() && now >= streamNextRetryAt) {
+            streams.reconcile();
+            failed = streams.failures();
+            int attempts = failed.stream().mapToInt(StreamBindFailure::attempts).max().orElse(0);
+            streamNextRetryAt = attempts == 0 ? 0 : now + RESTART.delayAfter(attempts).toMillis();
+        }
+        Set<Integer> failing = new HashSet<>();
+        for (StreamBindFailure failure : failed) {
+            failing.add(failure.siteId());
+            if (failure.attempts() >= 2 && streamDownAlerted.add(failure.siteId())) {
+                Alerts.trySend(NotificationEvents.PROXY_LISTENER_DOWN, "stream#" + failure.siteId(),
+                    HohenheimMicrocopy.ALERT.of("stream_down_subject").withArg("name", failure.name())
+                        .withArg("port", String.valueOf(failure.port())),
+                    HohenheimMicrocopy.ALERT.of("listener_down_body").withArg("reason", failure.words()));
+            }
+        }
+        streamDownAlerted.retainAll(failing);
     }
 
     /** Fires the listener-down alert ONCE per outage, only after a supervised retry also failed. */

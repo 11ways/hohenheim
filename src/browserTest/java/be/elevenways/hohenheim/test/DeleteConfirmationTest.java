@@ -101,6 +101,21 @@ class DeleteConfirmationTest {
                 .as("step 1: typing the origin is what arms the button")
                 .isEqualTo(ORIGIN);
 
+            // 1c. The rendered count follows the plural, in both languages: a zone of one record says "one stored
+            //     record", never "1 stored records".
+            assertThat(named.body().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
+                .as("step 1c: two records read as a plural").contains("Its 2 stored records go with it");
+            int singleId = zone("one-" + ORIGIN);
+            record(singleId, "www");
+            Row single = Models.get(DnsZoneModel.class).findById(singleId);
+            ConfirmationSpec one = zones.deleteConfirmationFor(single);
+            assertThat(one.body().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
+                .as("step 1c: one record reads as one").contains("Its one stored record goes with it")
+                .doesNotContain("records");
+            assertThat(one.body().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
+                .as("step 1c: and in Dutch").contains("Het ene opgeslagen record verdwijnt mee")
+                .doesNotContain("records");
+
             // 2. The record-LESS dialog can only speak about the type, which is exactly
             //    why the record-aware hook exists -- and it arms no typed confirmation,
             //    because there is no origin to type.

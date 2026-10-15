@@ -22,6 +22,7 @@ import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.proxy.RoutingProblem;
+import be.elevenways.hohenheim.server.proxy.StreamBindFailure;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.hohenheim.instance.InstanceOperations;
@@ -261,7 +262,7 @@ final class AppHealth {
                     ? Verdict.serving(RecordHealth.ok(HohenheimMicrocopy.APP_HEALTH.of("stream_forwarding")
                         .withArg("port", port)))
                     : Verdict.notServing(RecordHealth.broken(Headline.NOT_FORWARDING.copy())
-                        .detail(HohenheimMicrocopy.APP_HEALTH.of("not_forwarding_detail").withArg("port", port))
+                        .detail(notForwardingDetail(site, port))
                         .fixedBy(SiteActions.CHANGE_CONFIGURATION));
             }
             case WEBSITE, NONE -> {
@@ -361,6 +362,15 @@ final class AppHealth {
         }
         return (!protocol.forwardsTcp() || proxy.getStreamTcpAddress(siteId) != null)
             && (!protocol.forwardsUdp() || proxy.getStreamUdpAddress(siteId) != null);
+    }
+
+    /** @return why a stream site does not forward: the proxy's own bind refusal when it has one */
+    private static @NonNull Microcopy notForwardingDetail(@NonNull Row site, @Nullable Object port) {
+        ProxyServer proxy = ServerMain.getProxyServer();
+        Integer siteId = site.get(SiteModel.ID);
+        StreamBindFailure failure = proxy == null || siteId == null ? null : proxy.getStreamFailure(siteId);
+        return failure != null ? failure.words()
+            : HohenheimMicrocopy.APP_HEALTH.of("not_forwarding_detail").withArg("port", port);
     }
 
     /**

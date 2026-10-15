@@ -119,10 +119,22 @@ public final class PutOnline {
      * The access list the new website follows, from the lists Hohenheim already has (their IP/CIDR rules and HTTP
      * basic auth users live on the list); empty for an address everyone reaches.
      */
-    static final RelationPick ACCESS_LIST = RelationPick.of(SiteModel.ACCESS_LIST_ID, AccessListModel.MODEL_ID)
-        .creatable(false)
-        .emptyReason(context -> HohenheimMicrocopy.PUT_ONLINE.of("access_list_none"))
-        .build();
+    static final RelationPick ACCESS_LIST = accessListPick(SiteModel.ACCESS_LIST_ID);
+
+    /**
+     * A stream's access list: the same site column, its help saying what a raw port can apply (address rules only,
+     * as {@code SitePortClaims.credentialRefusal} enforces).
+     */
+    static final RelationPick STREAM_ACCESS_LIST = accessListPick(IntegerField.builder()
+        .name(SiteModel.ACCESS_LIST_ID.getName()).label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("access_list"))
+        .help(HohenheimMicrocopy.HELP.of("stream_access_list")).build());
+
+    private static @NonNull RelationPick accessListPick(@NonNull IntegerField field) {
+        return RelationPick.of(field, AccessListModel.MODEL_ID)
+            .creatable(false)
+            .emptyReason(context -> HohenheimMicrocopy.PUT_ONLINE.of("access_list_none"))
+            .build();
+    }
 
     /** The host ports a service's declared ports are published on, one entry per declared port (per template). */
     public static final String PORTS = "ports";
@@ -347,7 +359,7 @@ public final class PutOnline {
         .add(StreamUpstreamKind.FORWARD_PORT)
         .add(StreamUpstreamKind.LISTEN_PORT)
         .add(StreamUpstreamKind.PROTOCOL)
-        .add(ACCESS_LIST)
+        .add(STREAM_ACCESS_LIST)
         .step(FormStep.of("where", STEP_WHERE, SiteModel.NAME.getName(), StreamUpstreamKind.FORWARD_HOST.getName(),
             StreamUpstreamKind.FORWARD_PORT.getName())
                 .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_stream_where_lead")))

@@ -1141,6 +1141,26 @@
     "text": "Poort {$port} wordt al gebruikt door een ander programma. Stop dat programma, of zet {$setting} op een vrije poort.",
     "scope": "attention_detail"
   },
+  "stream_port_in_use": {
+    "text": "Poort {$port}/{$protocol} van de stream {$name} is al bezet door {$holder}, dus er wordt niets doorgestuurd. Stop dat programma of zet het op een andere poort, of geef de stream een andere publieke poort op zijn pagina.",
+    "scope": "attention_detail"
+  },
+  "stream_port_privileged": {
+    "text": "Poort {$port}/{$protocol} van de stream {$name} vraagt rechten die dit proces niet heeft. Geef de dienst van Hohenheim de capability CAP_NET_BIND_SERVICE, of geef de stream een publieke poort van 1024 of hoger op zijn pagina.",
+    "scope": "attention_detail"
+  },
+  "stream_port_failed": {
+    "text": "Poort {$port}/{$protocol} van de stream {$name} kon niet geopend worden: {$reason}. Geef de stream een andere publieke poort op zijn pagina als dit blijft mislukken.",
+    "scope": "attention_detail"
+  },
+  "stream_port_holder_user": {
+    "text": "een programma dat draait als {$user}",
+    "scope": "attention_detail"
+  },
+  "stream_port_holder_unknown": {
+    "text": "een ander programma op deze host",
+    "scope": "attention_detail"
+  },
   "degraded": [
     {
       "text": "Verminderd",
@@ -10358,6 +10378,10 @@
     "text": "De HTTPS-listener van de proxy is uitgevallen",
     "scope": "attention_title"
   },
+  "stream_not_forwarding": {
+    "text": "Stream {$name} stuurt poort {$port} niet door",
+    "scope": "attention_title"
+  },
   "proxy_https_degraded": {
     "text": "HTTPS-terminatie is verstoord",
     "scope": "attention_title"
@@ -12595,7 +12619,7 @@
       "scope": "access_list"
     },
     {
-      "text": "De zone {$origin} verwijderen? De {$records} opgeslagen records verdwijnen mee en deze server antwoordt niet langer voor die naam.",
+      "text": ".match {$records :number}\none {{De zone {$origin} verwijderen? Het ene opgeslagen record verdwijnt mee en deze server antwoordt niet langer voor die naam.}}\n* {{De zone {$origin} verwijderen? De {$records} opgeslagen records verdwijnen mee en deze server antwoordt niet langer voor die naam.}}",
       "scope": "dns_zone"
     },
     {
@@ -12662,15 +12686,15 @@
     "scope": "server"
   },
   "delete_confirm_dependents": {
-    "text": "De zone {$origin} verwijderen? De {$records} opgeslagen records verdwijnen mee en deze server antwoordt niet langer voor die naam. Deze sites en certificaten resolven erin en verliezen hun DNS: {$dependents}.",
+    "text": ".match {$records :number}\none {{De zone {$origin} verwijderen? Het ene opgeslagen record verdwijnt mee en deze server antwoordt niet langer voor die naam. Deze sites en certificaten resolven erin en verliezen hun DNS: {$dependents}.}}\n* {{De zone {$origin} verwijderen? De {$records} opgeslagen records verdwijnen mee en deze server antwoordt niet langer voor die naam. Deze sites en certificaten resolven erin en verliezen hun DNS: {$dependents}.}}",
     "scope": "dns_zone"
   },
   "delete_confirm_admin": {
-    "text": "De zone {$origin} verwijderen? De {$records} opgeslagen records verdwijnen mee en deze server antwoordt niet langer voor die naam. Deze zone antwoordt voor {$host}, de hostnaam waarop je dit beheerpaneel bereikt: verwijderen kan je buitensluiten.",
+    "text": ".match {$records :number}\none {{De zone {$origin} verwijderen? Het ene opgeslagen record verdwijnt mee en deze server antwoordt niet langer voor die naam. Deze zone antwoordt voor {$host}, de hostnaam waarop je dit beheerpaneel bereikt: verwijderen kan je buitensluiten.}}\n* {{De zone {$origin} verwijderen? De {$records} opgeslagen records verdwijnen mee en deze server antwoordt niet langer voor die naam. Deze zone antwoordt voor {$host}, de hostnaam waarop je dit beheerpaneel bereikt: verwijderen kan je buitensluiten.}}",
     "scope": "dns_zone"
   },
   "delete_confirm_admin_dependents": {
-    "text": "De zone {$origin} verwijderen? De {$records} opgeslagen records verdwijnen mee en deze server antwoordt niet langer voor die naam. Deze sites en certificaten resolven erin en verliezen hun DNS: {$dependents}. Deze zone antwoordt voor {$host}, de hostnaam waarop je dit beheerpaneel bereikt: verwijderen kan je buitensluiten.",
+    "text": ".match {$records :number}\none {{De zone {$origin} verwijderen? Het ene opgeslagen record verdwijnt mee en deze server antwoordt niet langer voor die naam. Deze sites en certificaten resolven erin en verliezen hun DNS: {$dependents}. Deze zone antwoordt voor {$host}, de hostnaam waarop je dit beheerpaneel bereikt: verwijderen kan je buitensluiten.}}\n* {{De zone {$origin} verwijderen? De {$records} opgeslagen records verdwijnen mee en deze server antwoordt niet langer voor die naam. Deze sites en certificaten resolven erin en verliezen hun DNS: {$dependents}. Deze zone antwoordt voor {$host}, de hostnaam waarop je dit beheerpaneel bereikt: verwijderen kan je buitensluiten.}}",
     "scope": "dns_zone"
   },
   "import_confirm": {
@@ -17242,6 +17266,10 @@
     "text": "Hohenheim antwoordt niet meer op {$protocol}",
     "scope": "alert"
   },
+  "stream_down_subject": {
+    "text": "Hohenheim stuurt poort {$port} van {$name} niet meer door",
+    "scope": "alert"
+  },
   "listener_down_body": {
     "text": "De listener stopte en opnieuw starten mislukte: {$reason}",
     "scope": "alert"
@@ -18144,6 +18172,7 @@
     {"scope": "help", "text": "De poort op dat adres."}
   ],
   "stream_connect_timeout": {"scope": "help", "text": "Maximaal aantal seconden om een TCP-verbinding met het doorgestuurde adres te openen."},
+  "stream_access_list": {"scope": "help", "text": "Optioneel: op een stream gelden alleen de adresregels, dus clients uit een geweigerd netwerk worden geweigerd. Een wachtwoord of aanmelding kan op een kale poort niet gevraagd worden."},
   "stream_protocol_tcp": {"scope": "port_protocol", "text": "TCP"},
   "stream_protocol_udp": {"scope": "port_protocol", "text": "UDP"},
   "stream_protocol_both": {"scope": "port_protocol", "text": "TCP en UDP"},

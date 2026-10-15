@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.AttentionItem;
+import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
@@ -8,6 +10,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.hohenheim.server.cms.ProxyAttention;
 import be.elevenways.hohenheim.server.cms.PutOnline;
 import be.elevenways.hohenheim.server.cms.SiteWrites;
 import be.elevenways.hohenheim.server.proxy.ProxyReloadHooks;
@@ -15,7 +18,9 @@ import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.operation.OperationRunStatus;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -41,6 +46,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -130,6 +136,8 @@ class StreamJourneyTest extends HohenheimTestBase {
         assertThat(wizard).as("step 1: the ports step asks the public port, the protocol and the access list")
             .contains("name=\"listen_port\"").contains("name=\"protocol\"").contains("name=\"access_list_id\"")
             .contains("name=\"forward_host\"").doesNotContain("name=\"hostname\"");
+        assertThat(wizard).as("step 1: its access-list help speaks of address rules only, as a stream applies them")
+            .contains("only its address rules apply to a stream").doesNotContain("addresses, passwords, sign-in");
 
         // 2. One run claims the public port on the proxy's host and forwards it.
         OperationRun live = run(stream("ssh", publicPort, "tcp", null), operator);
@@ -194,6 +202,37 @@ class StreamJourneyTest extends HohenheimTestBase {
         assertThat(List.of(first.fieldName(), first.message().key())).as("step 7: on the pick, in the same words")
             .containsExactly(SiteModel.ACCESS_LIST_ID.getName(), "stream_access_list_credentials");
 
+        // 7b. Another program took the port while the stream was switched off: switched on again, the proxy cannot
+        //     open it. THE ASSERTION: the dashboard raises it as an error naming the port, who holds it and what to
+        //     do, and the site's verdict gives the same words; once the port is free, the supervisor opens it and the
+        //     item goes.
+        edit(site, publicPort, "tcp", null);
+        switchOn(siteId, false);
+        try (ServerSocket squatter = new ServerSocket()) {
+            squatter.bind(new InetSocketAddress("0.0.0.0", publicPort));
+            switchOn(siteId, true);
+            List<AttentionItem> failing = new ArrayList<>();
+            ProxyAttention.failedProxyListeners(failing);
+            assertThat(failing).as("step 7b: one item, an error").hasSize(1)
+                .allSatisfy(item -> assertThat(item.severity()).isEqualTo(AttentionSeverity.ERROR));
+            AttentionItem item = failing.getFirst();
+            assertThat(item.title().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
+                .as("step 7b: titled by the stream and its port").contains("r4a-ssh").contains(String.valueOf(publicPort));
+            String words = Objects.requireNonNull(item.detail()).resolve(LocaleChain.ofTags("en"),
+                Zenit.getMessageResolver());
+            assertThat(words).as("step 7b: which port, who holds it and what to do")
+                .contains("Port " + publicPort + "/tcp").contains("is already held by a program running as")
+                .contains("give the stream another public port");
+            assertThat(adminGet("/admin/sites/" + siteId + "/page/overview").body())
+                .as("step 7b: the site's verdict says the same").contains("Not forwarding")
+                .contains("is already held by");
+        }
+        proxy.superviseListeners();
+        List<AttentionItem> healed = new ArrayList<>();
+        ProxyAttention.failedProxyListeners(healed);
+        assertThat(healed).as("step 7b: the freed port is opened by the supervisor and the item goes").isEmpty();
+        assertThat(tcpRoundTrip(publicPort, "back")).as("step 7b: and it forwards again").isEqualTo("back");
+
         // 8. Delete: the port closes and both claims go, so the port can be claimed again at once.
         OperationPipeline.invoke(OperationRequest.of(SiteWrites.DELETE, CmsPlacementSurface.ADMIN_ACTION)
             .caller(operator).subjects(List.of(Models.get(SiteModel.class).findById(siteId))));
@@ -244,6 +283,13 @@ class StreamJourneyTest extends HohenheimTestBase {
         OperationPipeline.invoke(OperationRequest.of(SiteWrites.UPDATE, CmsPlacementSurface.ADMIN_ACTION)
             .caller(TenantConduits.operator())
             .subjects(List.of(Models.get(SiteModel.class).findById(site.get(SiteModel.ID)))).form(form));
+    }
+
+    /** Switches a stream on or off with a plain save, as the enable switch does. */
+    private static void switchOn(int siteId, boolean enabled) {
+        Row stored = Models.get(SiteModel.class).findById(siteId);
+        stored.set(SiteModel.ENABLED, enabled);
+        Models.get(SiteModel.class).save(stored);
     }
 
     private static OperationRequest request(Map<String, Object> form) {

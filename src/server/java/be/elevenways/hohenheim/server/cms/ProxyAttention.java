@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.proxy.RoutingProblem;
 import be.elevenways.hohenheim.server.proxy.SiteDispatcher;
+import be.elevenways.hohenheim.server.proxy.StreamBindFailure;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
@@ -89,6 +90,16 @@ public final class ProxyAttention {
                 CmsRoutes.list(ADMIN, HohenheimSlugs.CERTIFICATES),
                 HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_certificates"))
                 .about(AttentionSubject.httpsTermination(), refusedOverHttp(proxy)));
+        }
+        // A stream port the proxy could not open forwards nothing: which port, who holds it and what to do.
+        for (StreamBindFailure failure : proxy.getStreamFailures()) {
+            String name = AppDirectory.nameOfSite(failure.siteId(), failure.name());
+            items.add(item(AttentionSeverity.ERROR, "sitemap",
+                HohenheimMicrocopy.ATTENTION_TITLE.of("stream_not_forwarding").withArg("name", name)
+                    .withArg("port", String.valueOf(failure.port())),
+                failure.words(),
+                SiteParts.recordRoute(ADMIN, failure.siteId()),
+                HohenheimMicrocopy.ATTENTION_ACTION.of("act_fix_on").withArg("name", name)));
         }
     }
 

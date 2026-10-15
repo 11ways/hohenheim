@@ -1141,6 +1141,26 @@
     "text": "Port {$port} is already used by another program. Stop that program, or set {$setting} to a free port.",
     "scope": "attention_detail"
   },
+  "stream_port_in_use": {
+    "text": "Port {$port}/{$protocol} of the stream {$name} is already held by {$holder}, so nothing is forwarded. Stop that program or move it to another port, or give the stream another public port on its page.",
+    "scope": "attention_detail"
+  },
+  "stream_port_privileged": {
+    "text": "Port {$port}/{$protocol} of the stream {$name} needs privileges this process does not have. Give Hohenheim's service the CAP_NET_BIND_SERVICE capability, or give the stream a public port of 1024 or higher on its page.",
+    "scope": "attention_detail"
+  },
+  "stream_port_failed": {
+    "text": "Port {$port}/{$protocol} of the stream {$name} could not be opened: {$reason}. Give the stream another public port on its page if this keeps failing.",
+    "scope": "attention_detail"
+  },
+  "stream_port_holder_user": {
+    "text": "a program running as {$user}",
+    "scope": "attention_detail"
+  },
+  "stream_port_holder_unknown": {
+    "text": "another program on this host",
+    "scope": "attention_detail"
+  },
   "degraded": [
     {
       "text": "Degraded",
@@ -10358,6 +10378,10 @@
     "text": "Proxy HTTPS listener is down",
     "scope": "attention_title"
   },
+  "stream_not_forwarding": {
+    "text": "Stream {$name} does not forward port {$port}",
+    "scope": "attention_title"
+  },
   "proxy_https_degraded": {
     "text": "HTTPS termination is degraded",
     "scope": "attention_title"
@@ -12595,7 +12619,7 @@
       "scope": "access_list"
     },
     {
-      "text": "Delete the zone {$origin}? Its {$records} stored records go with it and this server stops answering for that name.",
+      "text": ".match {$records :number}\none {{Delete the zone {$origin}? Its one stored record goes with it and this server stops answering for that name.}}\n* {{Delete the zone {$origin}? Its {$records} stored records go with it and this server stops answering for that name.}}",
       "scope": "dns_zone"
     },
     {
@@ -12662,15 +12686,15 @@
     "scope": "server"
   },
   "delete_confirm_dependents": {
-    "text": "Delete the zone {$origin}? Its {$records} stored records go with it and this server stops answering for that name. These sites and certificates resolve inside it and lose their DNS: {$dependents}.",
+    "text": ".match {$records :number}\none {{Delete the zone {$origin}? Its one stored record goes with it and this server stops answering for that name. These sites and certificates resolve inside it and lose their DNS: {$dependents}.}}\n* {{Delete the zone {$origin}? Its {$records} stored records go with it and this server stops answering for that name. These sites and certificates resolve inside it and lose their DNS: {$dependents}.}}",
     "scope": "dns_zone"
   },
   "delete_confirm_admin": {
-    "text": "Delete the zone {$origin}? Its {$records} stored records go with it and this server stops answering for that name. This zone answers for {$host}, the hostname you are reaching this admin panel at: deleting it can lock you out.",
+    "text": ".match {$records :number}\none {{Delete the zone {$origin}? Its one stored record goes with it and this server stops answering for that name. This zone answers for {$host}, the hostname you are reaching this admin panel at: deleting it can lock you out.}}\n* {{Delete the zone {$origin}? Its {$records} stored records go with it and this server stops answering for that name. This zone answers for {$host}, the hostname you are reaching this admin panel at: deleting it can lock you out.}}",
     "scope": "dns_zone"
   },
   "delete_confirm_admin_dependents": {
-    "text": "Delete the zone {$origin}? Its {$records} stored records go with it and this server stops answering for that name. These sites and certificates resolve inside it and lose their DNS: {$dependents}. This zone answers for {$host}, the hostname you are reaching this admin panel at: deleting it can lock you out.",
+    "text": ".match {$records :number}\none {{Delete the zone {$origin}? Its one stored record goes with it and this server stops answering for that name. These sites and certificates resolve inside it and lose their DNS: {$dependents}. This zone answers for {$host}, the hostname you are reaching this admin panel at: deleting it can lock you out.}}\n* {{Delete the zone {$origin}? Its {$records} stored records go with it and this server stops answering for that name. These sites and certificates resolve inside it and lose their DNS: {$dependents}. This zone answers for {$host}, the hostname you are reaching this admin panel at: deleting it can lock you out.}}",
     "scope": "dns_zone"
   },
   "import_confirm": {
@@ -17242,6 +17266,10 @@
     "text": "Hohenheim no longer answers on {$protocol}",
     "scope": "alert"
   },
+  "stream_down_subject": {
+    "text": "Hohenheim no longer forwards port {$port} of {$name}",
+    "scope": "alert"
+  },
   "listener_down_body": {
     "text": "Its listener stopped and starting it again failed: {$reason}",
     "scope": "alert"
@@ -18144,6 +18172,7 @@
     {"scope": "help", "text": "The port at that address."}
   ],
   "stream_connect_timeout": {"scope": "help", "text": "Maximum seconds to open a TCP connection to the forwarded address."},
+  "stream_access_list": {"scope": "help", "text": "Optional: only its address rules apply to a stream, so clients from a denied network are dropped. A password or a sign-in cannot be asked on a raw port."},
   "stream_protocol_tcp": {"scope": "port_protocol", "text": "TCP"},
   "stream_protocol_udp": {"scope": "port_protocol", "text": "UDP"},
   "stream_protocol_both": {"scope": "port_protocol", "text": "TCP and UDP"},

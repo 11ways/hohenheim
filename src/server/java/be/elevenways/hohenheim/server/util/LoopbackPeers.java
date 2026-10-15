@@ -37,6 +37,12 @@ public final class LoopbackPeers {
     /** The ESTABLISHED state code in the kernel's socket tables. */
     private static final String ESTABLISHED = "01";
 
+    /** The LISTEN state code of the kernel's TCP tables. */
+    public static final String LISTEN = "0A";
+
+    /** The state a bound, unconnected UDP socket reads as in the kernel's UDP tables (TCP_CLOSE). */
+    public static final String UDP_BOUND = "07";
+
     private LoopbackPeers() {
     }
 
@@ -137,6 +143,62 @@ public final class LoopbackPeers {
         } catch (IOException | RuntimeException unreadable) {
             return null;
         }
+    }
+
+    /**
+     * The uid owning the socket listening on a local port of this host, any address: who holds a port this process
+     * could not bind.
+     *
+     * @param udp whether the port is a UDP one (bound sockets of the UDP tables) rather than a TCP listener
+     * @return the owning uid, or null when none is found or the rows disagree
+     */
+    public static @Nullable Integer listenerOwnerOf(int port, boolean udp) {
+        Integer owner = null;
+        List<Path> tables = udp ? List.of(Path.of("/proc/net/udp"), Path.of("/proc/net/udp6")) : TABLES;
+        for (Path table : tables) {
+            Integer found;
+            try (BufferedReader reader = Files.newBufferedReader(table, StandardCharsets.US_ASCII)) {
+                found = listenerOwnerIn(reader.lines()::iterator, port, udp ? UDP_BOUND : LISTEN);
+            } catch (IOException | RuntimeException unreadable) {
+                continue;
+            }
+            if (found == null) {
+                continue;
+            }
+            if (owner != null && !owner.equals(found)) {
+                return null;
+            }
+            owner = found;
+        }
+        return owner;
+    }
+
+    /**
+     * The uid in one socket table whose row listens on this local port in this state.
+     *
+     * @return the uid, or null when no row or disagreeing rows match
+     */
+    public static @Nullable Integer listenerOwnerIn(@NonNull Iterable<String> lines, int port, @NonNull String state) {
+        String wantedLocal = ":" + hexPort(port);
+        Integer owner = null;
+        for (String line : lines) {
+            String[] columns = line.trim().split("\\s+");
+            if (columns.length < 8 || !columns[0].endsWith(":")
+                    || !columns[1].toUpperCase(Locale.ROOT).endsWith(wantedLocal) || !state.equals(columns[3])) {
+                continue;
+            }
+            int uid;
+            try {
+                uid = Integer.parseInt(columns[7]);
+            } catch (NumberFormatException malformed) {
+                return null;
+            }
+            if (owner != null && owner != uid) {
+                return null;
+            }
+            owner = uid;
+        }
+        return owner;
     }
 
     private static String hexPort(int port) {
