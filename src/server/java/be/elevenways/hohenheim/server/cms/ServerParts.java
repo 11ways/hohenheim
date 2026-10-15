@@ -167,7 +167,7 @@ public final class ServerParts {
             .add(ServerModel.NAME).add(FieldFormEntryRegistry.INSTANCE.deriveEntry(ServerModel.RUNTIME))
             .add(ServerModel.SSH_TARGET).add(ServerModel.INCUS_URL).add(INCUS_TRUST_TOKEN)
             .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(ServerModel.POSTURE))
-            .add(ServerModel.PUBLIC_IPV4).add(ServerModel.PUBLIC_IPV6);
+            .add(ServerModel.PUBLIC_IPV4).add(ServerModel.PUBLIC_IPV6).add(ServerModel.LAN_PARENT);
         // What enrolling grants depends on the runtime chosen. One notice per runtime, each shown only under its own,
         // because a Computed is resolved once on the server and never again when the runtime changes in the browser.
         for (String runtime : ServerModel.RUNTIME.getValues().keySet()) {
@@ -178,8 +178,10 @@ public final class ServerParts {
                     .dependsOn(ServerModel.RUNTIME.getName()).build())
                 .showWhen(notice.getName(), ServerModel.RUNTIME.getName(), runtime);
         }
+        // Only an Incus host puts a machine on its local network.
+        form.showWhen(ServerModel.LAN_PARENT.getName(), ServerModel.RUNTIME.getName(), ServerModel.RUNTIME_INCUS);
         return form.section(FormSection.advanced(ServerModel.PUBLIC_IPV4.getName(),
-                ServerModel.PUBLIC_IPV6.getName())).build();
+                ServerModel.PUBLIC_IPV6.getName(), ServerModel.LAN_PARENT.getName())).build();
     }
 
     /**

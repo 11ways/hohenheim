@@ -65,6 +65,7 @@ final class ServerInventoryWrites {
             Models.get(ServerModel.class).getResolvedDatasource().withTransaction(tx -> {
                 apply(row, values, ServerModel.PUBLIC_IPV4);
                 apply(row, values, ServerModel.PUBLIC_IPV6);
+                apply(row, values, ServerModel.LAN_PARENT);
                 if (values.get(ServerModel.POSTURE.getName()) instanceof String posture) row.set(
                         ServerModel.POSTURE, posture);
                 Models.get(ServerModel.class).save(row);
@@ -83,7 +84,7 @@ final class ServerInventoryWrites {
 
     private static void assign(Row row, Map<String, Object> values) {
         for (Field<String, ?> field : List.of(ServerModel.NAME, ServerModel.SSH_TARGET,
-                ServerModel.PUBLIC_IPV4, ServerModel.PUBLIC_IPV6)) apply(row, values, field);
+                ServerModel.PUBLIC_IPV4, ServerModel.PUBLIC_IPV6, ServerModel.LAN_PARENT)) apply(row, values, field);
         if (values.get(ServerModel.RUNTIME.getName()) instanceof String runtime) row.set(ServerModel.RUNTIME, runtime);
         if (values.get(ServerModel.POSTURE.getName()) instanceof String posture) row.set(ServerModel.POSTURE, posture);
         if (values.containsKey(ServerModel.INCUS_URL.getName())) {

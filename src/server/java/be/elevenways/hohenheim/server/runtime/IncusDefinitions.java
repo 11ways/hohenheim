@@ -59,6 +59,12 @@ final class IncusDefinitions {
             config.put("security.privileged", "true");
         }
         applyRunUser(spec, config);
+        stampNetworkMode(spec, config);
+    }
+
+    /** Stamp the guest's declared network mode, which the kernel verifier reads off the daemon (MODE_KEY). */
+    static void stampNetworkMode(@NonNull InstanceSpec spec, @NonNull Map<String, Object> config) {
+        config.put(IncusNetworkPolicy.MODE_KEY, spec.networkMode().token());
     }
 
     /**

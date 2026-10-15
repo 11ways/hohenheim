@@ -231,6 +231,11 @@ class InstanceOverviewTest extends HohenheimTestBase {
         int localHost = ServerModel.localServerId();
         PortLedger.claim(localHost, null, 25565, "tcp", InstanceModel.MODEL_ID, id,
             "overview test");
+        // A held claim reads In use only while its workload runs (a stopped one's reads Reserved, see
+        // aPreallocatedPortReadsInUseWhileItsWorkloadRuns), so this journey's workload runs.
+        Row running = Models.get(InstanceModel.class).findById(id);
+        running.set(InstanceModel.STATUS, InstanceModel.STATUS_RUNNING);
+        Models.get(InstanceModel.class).save(running);
         try {
             // 1. THE DEFECT: pre-fix the ledger's claim appeared on no instance surface.
             HttpResponse<String> page = adminGet(overviewUrl());
@@ -271,6 +276,9 @@ class InstanceOverviewTest extends HohenheimTestBase {
             }
         } finally {
             PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, id);
+            Row stopped = Models.get(InstanceModel.class).findById(id);
+            stopped.set(InstanceModel.STATUS, InstanceModel.STATUS_STOPPED);
+            Models.get(InstanceModel.class).save(stopped);
         }
 
         // 4. With the claim gone the page draws no Ports card at all (an app reached through its

@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.regex.Pattern;
 
 import static be.elevenways.hohenheim.RawValues.trimmed;
 
@@ -464,6 +465,20 @@ public class ServerModel extends Model {
             .help(HohenheimMicrocopy.HELP.of("public_ipv6"))
             .build());
 
+    /**
+     * The host interface its virtual machines may join "on the local network" through (an existing bridge or the
+     * physical uplink); null offers no such mode. Declared by the operator and admitted by the host's preflight
+     * check (IncusLanParent): Hohenheim never creates or edits a host bridge.
+     */
+    public static final StringField LAN_PARENT = SCHEMA.addField(
+        StringField.builder().name("lan_parent").nullable(true)
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("lan_parent"))
+            .help(HohenheimMicrocopy.HELP.of("lan_parent"))
+            .build());
+
+    /** A Linux interface name: at most 15 characters, none of them a slash or whitespace. */
+    private static final Pattern INTERFACE_NAME = Pattern.compile("^[A-Za-z0-9][A-Za-z0-9_.:-]{0,14}$");
+
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 
@@ -505,6 +520,11 @@ public class ServerModel extends Model {
                 throw Violations.ofField(PUBLIC_IPV6.getName(), v6,
                     HohenheimMicrocopy.VIOLATIONS.of("server_address_invalid")
                         .withArg("address", v6));
+            }
+            String parent = normalizeAddress(row, LAN_PARENT);
+            if (parent != null && !INTERFACE_NAME.matcher(parent).matches()) {
+                throw Violations.ofField(LAN_PARENT.getName(), parent,
+                    HohenheimMicrocopy.VIOLATIONS.of("lan_parent_invalid").withArg("name", parent));
             }
         });
         SCHEMA.addBeforeValidateHook(ServerModel::clearAcknowledgementOnPostureChange);

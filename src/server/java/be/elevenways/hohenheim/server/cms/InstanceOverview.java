@@ -135,7 +135,7 @@ public final class InstanceOverview {
                 main.add(protection);
             }
         } else if (InstanceKinds.offers(instance, WorkloadLane.GUEST_ADDRESSES)) {
-            main.add(InstanceNetwork.card(instance, !ports.isEmpty(), locales, resolver));
+            main.addAll(InstanceNetwork.cards(instance, !ports.isEmpty(), locales, resolver));
         }
         // Only where it holds a port is its Connect to card drawn: no card is drawn for an app
         // reached through its addresses alone, where "holds no port claim" was ledger words about nothing.

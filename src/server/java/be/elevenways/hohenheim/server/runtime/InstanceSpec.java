@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.runtime;
 
 import be.elevenways.zenit.common.text.Texts;
+import be.elevenways.hohenheim.instance.GuestNetworkMode;
 import be.elevenways.hohenheim.instance.ImageOrigin;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.ControllerScope;
@@ -98,6 +99,9 @@ import java.util.Map;
  *                      renders. False is the plain pipe console. A driver that has no
  *                      pseudo-terminal to give refuses BY NAME rather than attaching a
  *                      pipe and calling it a terminal.
+ * @param networkMode   how the guest's main NIC is attached: hidden behind its host's isolating bridge, or on the
+ *                      host's local network through its admitted {@code lan_parent}; a driver without that mode
+ *                      refuses it by name
  */
 public record InstanceSpec(@NonNull String handle,
                            @NonNull String image,
@@ -121,7 +125,8 @@ public record InstanceSpec(@NonNull String handle,
                            @Nullable Integer runUser,
                            boolean tty,
                            @Nullable String workdir,
-                           @Nullable String home) {
+                           @Nullable String home,
+                           @NonNull GuestNetworkMode networkMode) {
 
     /**
      * Every collection component is defensively copied, so a caller that keeps mutating the
@@ -213,6 +218,7 @@ public record InstanceSpec(@NonNull String handle,
         private boolean tty;
         private @Nullable String workdir;
         private @Nullable String home;
+        private @NonNull GuestNetworkMode networkMode = GuestNetworkMode.HIDDEN;
 
         private Builder(@NonNull String handle, @NonNull String image,
                         @NonNull ResourceLimits limits,
@@ -326,13 +332,19 @@ public record InstanceSpec(@NonNull String handle,
             return this;
         }
 
+        /** How the guest's main NIC is attached; HIDDEN unless a machine kind declares otherwise. */
+        public @NonNull Builder networkMode(@NonNull GuestNetworkMode networkMode) {
+            this.networkMode = networkMode;
+            return this;
+        }
+
         public @NonNull InstanceSpec build() {
             return new InstanceSpec(this.handle, this.image, this.command, this.env,
                 this.volumes, this.binds, this.publications, this.limits, this.hardening,
                 this.ownerLabels, this.cloudInitUserData, this.imageFingerprint,
                 this.imageOrigin, this.secureBoot, this.guestAgent, this.tmpfs,
                 this.healthCheck, this.rootDiskGb, this.networkLimitMbit, this.runUser,
-                this.tty, this.workdir, this.home);
+                this.tty, this.workdir, this.home, this.networkMode);
         }
     }
 
@@ -362,7 +374,7 @@ public record InstanceSpec(@NonNull String handle,
             this.binds, List.copyOf(claimed), this.limits, this.hardening,
             this.ownerLabels, this.cloudInitUserData, this.imageFingerprint, this.imageOrigin,
             this.secureBoot, this.guestAgent, this.tmpfs, this.healthCheck, this.rootDiskGb,
-            this.networkLimitMbit, this.runUser, this.tty, this.workdir, this.home);
+            this.networkLimitMbit, this.runUser, this.tty, this.workdir, this.home, this.networkMode);
     }
 
     /** A copy carrying the record's pinned resolved image identity. */
@@ -371,7 +383,7 @@ public record InstanceSpec(@NonNull String handle,
             this.binds, this.publications, this.limits, this.hardening, this.ownerLabels,
             this.cloudInitUserData, fingerprint, this.imageOrigin, this.secureBoot,
             this.guestAgent, this.tmpfs, this.healthCheck, this.rootDiskGb,
-            this.networkLimitMbit, this.runUser, this.tty, this.workdir, this.home);
+            this.networkLimitMbit, this.runUser, this.tty, this.workdir, this.home, this.networkMode);
     }
 
     private static @NonNull List<PortPublication> listOf(@Nullable PortPublication one) {

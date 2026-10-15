@@ -76,7 +76,13 @@ public enum PreflightFinding {
     NETWORKS_UNLISTED,
     ACL_ENFORCEABLE,
     ACL_NOT_READ_BACK,
-    ACL_REFUSED;
+    ACL_REFUSED,
+    LAN_PARENT_ADMITTED,
+    LAN_PARENT_ABSENT,
+    LAN_PARENT_MANAGED,
+    LAN_PARENT_UNSUPPORTED,
+    LAN_PARENT_DOWN,
+    LAN_PARENT_UNREADABLE;
 
     /** The stored check entry's key holding the finding's token. */
     public static final String TOKEN_KEY = "finding";

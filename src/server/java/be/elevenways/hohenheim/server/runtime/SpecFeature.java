@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.runtime;
 
 import org.checkerframework.checker.nullness.qual.NonNull;
 import be.elevenways.hohenheim.instance.ImageOrigin;
+import be.elevenways.hohenheim.instance.GuestNetworkMode;
 
 import java.io.IOException;
 import java.util.EnumSet;
@@ -106,7 +107,13 @@ public enum SpecFeature {
         spec -> spec.runUser() != null,
         spec -> "run user " + spec.runUser(),
         "a driver that cannot map a uid would leave every file root-owned while the surface"
-            + " claims otherwise");
+            + " claims otherwise"),
+
+    /** A guest on its host's local network instead of hidden behind its host's isolating bridge. */
+    LOCAL_NETWORK(
+        spec -> spec.networkMode() != GuestNetworkMode.HIDDEN,
+        spec -> "a guest on its host's local network",
+        "joining the host's local network through its lan_parent is an incus virtual-machine capability");
 
     private final @NonNull Predicate<InstanceSpec> requested;
     private final @NonNull Function<InstanceSpec, String> what;

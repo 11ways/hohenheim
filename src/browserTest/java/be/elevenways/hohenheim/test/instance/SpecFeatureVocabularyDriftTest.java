@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.incus.IncusWebSocket;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.HealthCheck;
 import be.elevenways.hohenheim.instance.ImageOrigin;
+import be.elevenways.hohenheim.instance.GuestNetworkMode;
 import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
@@ -64,6 +65,7 @@ class SpecFeatureVocabularyDriftTest {
             case HEALTH_CHECK -> base().healthCheck(new HealthCheck("true", 10, 5, 3, 0));
             case WORKDIR -> base().workdir("/srv");
             case RUN_USER -> base().runUser(200_009);
+            case LOCAL_NETWORK -> base().networkMode(GuestNetworkMode.LOCAL_NETWORK);
         }).build();
     }
 

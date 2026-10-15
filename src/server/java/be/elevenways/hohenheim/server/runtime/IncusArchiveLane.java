@@ -212,6 +212,7 @@ final class IncusArchiveLane {
         // bridge is kept, and every proxy connects to it (the export's proxies still name the source's address).
         this.incus.editInstance(spec.handle(), (config, devices) -> {
             reidentify.apply(config, devices);
+            IncusDefinitions.stampNetworkMode(spec, config);
             this.runtime.applyNetworkDevices(spec, devices);
         });
         this.runtime.verifyIsolated(spec);

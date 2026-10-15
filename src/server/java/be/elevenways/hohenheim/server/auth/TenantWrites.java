@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.auth;
 
+import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.instance.GuestNetworkMode;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
@@ -964,6 +966,7 @@ public final class TenantWrites {
         // Trashed included, for the reason checkSiteWrite gives.
         Row stored = StoredRows.byId(model, idValue);
         if (stored == null) {
+            refuseOperatorNetworkMode(row);
             return;
         }
 
@@ -976,6 +979,21 @@ public final class TenantWrites {
         refuseFrozenColumns(model, row, stored, INSTANCE_TENANT_WRITABLE, INSTANCE_DERIVED);
 
         checkInstanceSettingsWrite(row, stored);
+    }
+
+    /**
+     * A tenant's create may not choose an operator-only network mode (a guest on the host's local network); an
+     * update cannot reach it either, since every settings member outside the image keys is frozen to a tenant.
+     *
+     * @throws Violations {@code vm_network_mode_operator} on {@code settings.network_mode}
+     */
+    private static void refuseOperatorNetworkMode(@NonNull Row row) {
+        Map<String, Object> settings = RawValues.map(row.get(InstanceModel.SETTINGS.getName()));
+        GuestNetworkMode mode = GuestNetworkMode.of(settings);
+        if (mode.operatorOnly()) {
+            throw Violations.ofField(InstanceModel.SETTINGS.getName() + "." + GuestNetworkMode.SETTING,
+                mode.token(), HohenheimMicrocopy.VIOLATIONS.of("vm_network_mode_operator"));
+        }
     }
 
     /**

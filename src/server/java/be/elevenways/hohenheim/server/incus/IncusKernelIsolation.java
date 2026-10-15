@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.incus;
 
 import be.elevenways.hohenheim.model.HostTrustSlot;
+import be.elevenways.hohenheim.instance.GuestNetworkMode;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.security.NftRunner;
@@ -221,7 +222,12 @@ public final class IncusKernelIsolation {
                 + " cannot read the daemon host's nftables. Running the controller's own nft"
                 + " here would verify the wrong kernel.");
         }
-        List<String> taps = liveTaps(handle);
+        Map<String, Object> instance = this.incus.instance(handle);
+        if (isolatedNics(instance).isEmpty() && onLocalNetwork(instance)) {
+            // A guest whose only NIC is on the local network carries no tap the isolation rules belong on.
+            return new Divergence(handle, List.of(), List.of());
+        }
+        List<String> taps = liveTaps(instance);
         if (taps.isEmpty()) {
             throw new NoLiveInterface("REFUSED to report on '" + handle + "': the daemon names"
                 + " no live host interface for any of its NICs, so there is nothing to check"
@@ -306,13 +312,14 @@ public final class IncusKernelIsolation {
         // this toggle is re-read and kept, never reverted by a stale body.
         this.incus.editInstance(handle, (config, devices) -> {
             int toggled = 0;
+            List<String> isolated = isolatedNics(Map.of("config", config, "devices", devices));
             for (Map.Entry<String, Object> entry : devices.entrySet()) {
                 if (!(entry.getValue() instanceof Map<?, ?> device)) {
                     continue;
                 }
                 Map<String, Object> copy = new LinkedHashMap<>();
                 device.forEach((key, value) -> copy.put(String.valueOf(key), value));
-                if ("nic".equals(String.valueOf(copy.get("type")))) {
+                if (isolated.contains(entry.getKey())) {
                     // Present -> absent -> present: either direction is a real config change
                     // to the daemon and neither changes a single generated rule.
                     if (copy.remove(REAPPLY_KEY) == null) {
@@ -329,20 +336,43 @@ public final class IncusKernelIsolation {
         });
     }
 
-    /** The host interface names the daemon currently has bound to this workload's NICs. */
-    private @NonNull List<String> liveTaps(@NonNull String handle) throws IOException {
-        Map<String, Object> instance = this.incus.instance(handle);
+    /**
+     * The NIC devices the isolation rules must be found for: every one, except the main NIC of a guest whose stamped
+     * mode carries no ACL and which reads back as the LAN NIC the driver writes (both must hold, so a stamp alone
+     * never exempts a NIC still on the bridge).
+     */
+    static @NonNull List<String> isolatedNics(@NonNull Map<?, ?> instance) {
         List<String> names = new ArrayList<>();
-        if (!(instance.get("devices") instanceof Map<?, ?> devices)
-                || !(instance.get("config") instanceof Map<?, ?> config)) {
+        if (!(instance.get("devices") instanceof Map<?, ?> devices)) {
             return names;
         }
         for (Map.Entry<?, ?> entry : devices.entrySet()) {
-            if (!(entry.getValue() instanceof Map<?, ?> device)
-                    || !"nic".equals(String.valueOf(device.get("type")))) {
-                continue;
+            String name = String.valueOf(entry.getKey());
+            if (entry.getValue() instanceof Map<?, ?> device && "nic".equals(String.valueOf(device.get("type")))
+                    && !(IncusNetworkPolicy.NIC.equals(name) && onLocalNetwork(instance))) {
+                names.add(name);
             }
-            Object host = config.get("volatile." + entry.getKey() + ".host_name");
+        }
+        return names;
+    }
+
+    /** @return whether the stamped mode carries no ACL AND the main NIC reads back as the LAN NIC */
+    private static boolean onLocalNetwork(@NonNull Map<?, ?> instance) {
+        Object stamped = instance.get("config") instanceof Map<?, ?> config
+            ? config.get(IncusNetworkPolicy.MODE_KEY) : null;
+        return !GuestNetworkMode.fromToken(stamped).carriesIsolationAcl()
+            && instance.get("devices") instanceof Map<?, ?> devices
+            && IncusLanParent.isLanNic(devices.get(IncusNetworkPolicy.NIC));
+    }
+
+    /** The host interface names the daemon currently has bound to this workload's isolated NICs. */
+    private static @NonNull List<String> liveTaps(@NonNull Map<String, Object> instance) {
+        List<String> names = new ArrayList<>();
+        if (!(instance.get("config") instanceof Map<?, ?> config)) {
+            return names;
+        }
+        for (String nic : isolatedNics(instance)) {
+            Object host = config.get("volatile." + nic + ".host_name");
             if (host instanceof String name && !name.isBlank()) {
                 names.add(name);
             }

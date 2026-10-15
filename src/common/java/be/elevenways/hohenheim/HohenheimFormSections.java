@@ -39,6 +39,9 @@ public final class HohenheimFormSections {
     /** Guest-side configuration of a virtual machine. */
     public static final String GUEST = "guest";
 
+    /** How a virtual machine's guest is attached to the network: hidden behind its host, or on its local network. */
+    public static final String NETWORK = "network";
+
     /** The health probe and its cadence. */
     public static final String HEALTH = "health";
 

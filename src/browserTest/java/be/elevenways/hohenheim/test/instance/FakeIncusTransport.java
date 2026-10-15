@@ -29,6 +29,8 @@ final class FakeIncusTransport implements IncusTransport {
 
     final Map<String, Object> aclStore = new LinkedHashMap<>();
     final Map<String, Object> networkStore = new LinkedHashMap<>();
+    /** Each host interface's live {@code state} (up or down), as {@code GET /1.0/networks/<name>/state} reports it. */
+    final Map<String, String> networkStates = new LinkedHashMap<>();
     final Map<String, String> imageAliases = new LinkedHashMap<>();
     final Map<String, Map<String, Object>> instances = new LinkedHashMap<>();
 
@@ -130,6 +132,11 @@ final class FakeIncusTransport implements IncusTransport {
         }
         if ("GET".equals(method) && path.equals("/1.0/networks")) {
             return sync(withUsedBy(this.networkStore, false));
+        }
+        if ("GET".equals(method) && path.startsWith("/1.0/networks/") && path.endsWith("/state")) {
+            String name = path.substring("/1.0/networks/".length(), path.length() - "/state".length());
+            String state = this.networkStates.get(name);
+            return state == null ? notFound("Network not found") : sync(Map.of("state", state));
         }
         if ("GET".equals(method) && path.startsWith("/1.0/networks/")) {
             String name = path.substring("/1.0/networks/".length());
@@ -406,6 +413,26 @@ final class FakeIncusTransport implements IncusTransport {
                 return error(400, "Failed creating instance record: Failed initializing instance: Invalid devices:"
                     + " Device validation failed for \"" + device.getKey() + "\": Failed to load network \""
                     + network + "\" for project \"default\": Network not found");
+            }
+            if (network != null && nic.get("nictype") != null) {
+                return error(400, "Failed creating instance record: Failed initializing instance: Invalid devices:"
+                    + " Device validation failed for \"" + device.getKey() + "\": Cannot use \"nictype\" property in"
+                    + " conjunction with \"network\" property");
+            }
+            if (nic.get("nictype") != null) {
+                for (String key : nic.keySet()) {
+                    if (key.startsWith("security.acls")) {
+                        return error(400, "Failed creating instance record: Failed initializing instance: Invalid"
+                            + " devices: Device validation failed for \"" + device.getKey() + "\": Invalid device"
+                            + " option \"" + key + "\"");
+                    }
+                }
+            }
+            // A NIC on a host interface (nictype + parent) names one THIS host has, or the daemon refuses it.
+            if (nic.get("parent") instanceof String parent && !this.networkStore.containsKey(parent)) {
+                return error(400, "Failed creating instance record: Failed initializing instance: Invalid devices:"
+                    + " Device validation failed for \"" + device.getKey() + "\": Parent device \"" + parent
+                    + "\" doesn't exist");
             }
             if (nic.get("security.acls") instanceof String acl && !this.aclStore.containsKey(acl)) {
                 return error(400, "Failed creating instance record: Network ACL \"" + acl + "\" does not exist");

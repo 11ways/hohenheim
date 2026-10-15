@@ -7944,6 +7944,20 @@
       "scope": "help"
     }
   ],
+  "lan_parent": [
+    {
+      "text": "Interface naar het lokale netwerk",
+      "scope": "hohenheim_field"
+    },
+    {
+      "text": "De interface van de host waarmee een virtuele machine op het lokale netwerk komt: een bestaande bridge (de machine en deze host bereiken elkaar) of de fysieke uplink, zoals ens18 (macvlan: de machine kan deze host niet bereiken, en deze host haar niet). Hohenheim maakt of wijzigt nooit een bridge. Laat leeg om geen lokaal netwerk aan te bieden.",
+      "scope": "help"
+    }
+  ],
+  "lan_parent_invalid": {
+    "text": "'{$name}' is geen naam van een netwerkinterface",
+    "scope": "violations"
+  },
   "server_address_invalid": {
     "text": "'{$address}' is geen geldig IP-adres; geef het adres zelf op, nooit een hostnaam",
     "scope": "violations"
@@ -8237,6 +8251,10 @@
     {
       "scope": "instance_overview",
       "text": "Netwerk"
+    },
+    {
+      "scope": "form_section",
+      "text": "Netwerk"
     }
   ],
   "network_description": {
@@ -8347,6 +8365,22 @@
   },
   "vm_port_loopback": {
     "text": "Poort {$name} publiceert alleen op loopback, maar een virtuele machine publiceert haar poorten op elk adres van haar host",
+    "scope": "violations"
+  },
+  "vm_lan_ports": {
+    "text": "Een machine op het lokale netwerk is bereikbaar op haar eigen adres en publiceert dus geen poorten via haar host. Verwijder de gepubliceerde poorten, of houd haar verborgen achter de host.",
+    "scope": "violations"
+  },
+  "vm_lan_no_parent": {
+    "text": "Host {$name} heeft geen interface naar het lokale netwerk en kan dus geen machine op het lokale netwerk zetten",
+    "scope": "violations"
+  },
+  "vm_lan_parent_unusable": {
+    "text": "Host {$name} kan geen machine op het lokale netwerk zetten via {$parent}; de hostcontrole zegt waarom",
+    "scope": "violations"
+  },
+  "vm_network_mode_operator": {
+    "text": "Alleen een beheerder kan een machine op het lokale netwerk zetten",
     "scope": "violations"
   },
   "database_container": [
@@ -14881,6 +14915,10 @@
     "text": "Gebruik een door Incus beheerd bridge-netwerk, dat netwerk-ACL's ondersteunt.",
     "scope": "server_overview"
   },
+  "fix_lan_parent": {
+    "text": "Geef een bestaande bridge of uplink van deze host op die Incus niet beheert en die actief is, of maak de interface naar het lokale netwerk leeg.",
+    "scope": "server_overview"
+  },
   "fix_kernel_isolation_lane": {
     "text": "Deze host geeft containers geen eigen, geisoleerde kernelbaan. Schakel die in, of draai workloads van klanten in virtuele machines.",
     "scope": "server_overview"
@@ -16363,6 +16401,10 @@
     "text": "Netwerkregels (ACL's)",
     "scope": "host_check"
   },
+  "check_lan_parent": {
+    "text": "Interface naar het lokale netwerk",
+    "scope": "host_check"
+  },
   "check_kernel_isolation_lane": {
     "text": "Afgeschermde kernel voor tenants",
     "scope": "host_check"
@@ -16766,6 +16808,30 @@
   },
   "finding_acl_refused": {
     "text": "Er kon geen netwerktoegangslijst worden gemaakt, dus tenants kunnen niet gescheiden blijven: {$error}",
+    "scope": "host_check"
+  },
+  "finding_lan_parent_admitted": {
+    "text": "{$parent} kan worden gebruikt; machines op het lokale netwerk krijgen een {$nictype}-interface",
+    "scope": "host_check"
+  },
+  "finding_lan_parent_absent": {
+    "text": "Deze host heeft geen interface met de naam {$parent}",
+    "scope": "host_check"
+  },
+  "finding_lan_parent_managed": {
+    "text": "{$parent} is een netwerk dat Incus beheert, niet het lokale netwerk",
+    "scope": "host_check"
+  },
+  "finding_lan_parent_unsupported": {
+    "text": "{$parent} is een {$type}-interface, waar een machine niet op kan",
+    "scope": "host_check"
+  },
+  "finding_lan_parent_down": {
+    "text": "{$parent} is niet actief (status {$state})",
+    "scope": "host_check"
+  },
+  "finding_lan_parent_unreadable": {
+    "text": "{$parent} kon niet worden gecontroleerd: {$error}",
     "scope": "host_check"
   },
   "fact_docker_version": {
@@ -18023,10 +18089,20 @@
     "scope": "put_online",
     "text": "{$actor} maakte {$subject} aan"
   },
-  "network_mode": {
-    "scope": "instance_overview",
-    "text": "Verbinding"
-  },
+  "network_mode": [
+    {
+      "scope": "instance_overview",
+      "text": "Verbinding"
+    },
+    {
+      "scope": "hohenheim_field",
+      "text": "Netwerk"
+    },
+    {
+      "scope": "help",
+      "text": "Verborgen achter de host (het bereikt het internet, en van buiten de host bereiken alleen de gepubliceerde poorten het), of op het lokale netwerk zoals een Proxmox-VM: het krijgt een adres van dat netwerk en alles daarop bereikt de machine. Alleen op een host met een interface naar het lokale netwerk; via een fysieke uplink (macvlan) kan de machine de eigen host niet bereiken."
+    }
+  ],
   "network_reach": {
     "scope": "instance_overview",
     "text": "Wie erbij kan"
@@ -18042,6 +18118,18 @@
   "network_mode_hidden_ports_detail": {
     "scope": "instance_overview",
     "text": "Het bereikt het internet via de host, achter de isolatieregel van Hohenheim. Van buiten de host bereiken alleen de gepubliceerde poorten het."
+  },
+  "network_mode_local_network": {
+    "scope": "instance_overview",
+    "text": "Op het lokale netwerk"
+  },
+  "network_mode_local_network_detail": {
+    "scope": "instance_overview",
+    "text": "Het staat op het lokale netwerk van de host met een eigen adres: alles op dat netwerk bereikt het rechtstreeks. Via een macvlan-uplink kan het de eigen host niet bereiken."
+  },
+  "connect_lan": {
+    "scope": "instance_overview",
+    "text": "Het adres op het lokale netwerk"
   },
   "network_addresses": {
     "scope": "instance_overview",

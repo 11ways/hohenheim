@@ -7944,6 +7944,20 @@
       "scope": "help"
     }
   ],
+  "lan_parent": [
+    {
+      "text": "Local network interface",
+      "scope": "hohenheim_field"
+    },
+    {
+      "text": "The host interface a virtual machine joins when it is put on the local network: an existing bridge (the machine and this host reach each other) or the physical uplink, such as ens18 (macvlan: the machine cannot reach this host, and this host cannot reach it). Hohenheim never creates or changes a bridge. Leave blank to offer no local network.",
+      "scope": "help"
+    }
+  ],
+  "lan_parent_invalid": {
+    "text": "'{$name}' is not a network interface name",
+    "scope": "violations"
+  },
   "server_address_invalid": {
     "text": "'{$address}' is not a valid IP literal; declare the address itself, never a hostname",
     "scope": "violations"
@@ -8237,6 +8251,10 @@
     {
       "scope": "instance_overview",
       "text": "Network"
+    },
+    {
+      "scope": "form_section",
+      "text": "Network"
     }
   ],
   "network_description": {
@@ -8357,6 +8375,22 @@
   },
   "vm_port_loopback": {
     "text": "Port {$name} publishes on loopback only, but a virtual machine publishes its ports on every address of its host",
+    "scope": "violations"
+  },
+  "vm_lan_ports": {
+    "text": "A machine on the local network is reached on its own address, so it publishes no ports through its host. Remove its published ports, or keep it hidden behind its host.",
+    "scope": "violations"
+  },
+  "vm_lan_no_parent": {
+    "text": "Host {$name} declares no local network interface, so it cannot put a machine on the local network",
+    "scope": "violations"
+  },
+  "vm_lan_parent_unusable": {
+    "text": "Host {$name} cannot put a machine on the local network through {$parent}; its host check says why",
+    "scope": "violations"
+  },
+  "vm_network_mode_operator": {
+    "text": "Only an operator can put a machine on the local network",
     "scope": "violations"
   },
   "database_engine_unknown": {
@@ -14881,6 +14915,10 @@
     "text": "Use an Incus-managed bridge network, which supports network ACLs.",
     "scope": "server_overview"
   },
+  "fix_lan_parent": {
+    "text": "Name an existing bridge or uplink of this host that Incus does not manage and that is up, or clear the local network interface.",
+    "scope": "server_overview"
+  },
   "fix_kernel_isolation_lane": {
     "text": "This host gives containers no isolated kernel lane. Enable it, or run tenant workloads in virtual machines.",
     "scope": "server_overview"
@@ -16363,6 +16401,10 @@
     "text": "Network rules (ACLs)",
     "scope": "host_check"
   },
+  "check_lan_parent": {
+    "text": "Local network interface",
+    "scope": "host_check"
+  },
   "check_kernel_isolation_lane": {
     "text": "Isolated kernel for tenants",
     "scope": "host_check"
@@ -16766,6 +16808,30 @@
   },
   "finding_acl_refused": {
     "text": "No network access list could be made, so tenants cannot be kept apart: {$error}",
+    "scope": "host_check"
+  },
+  "finding_lan_parent_admitted": {
+    "text": "{$parent} can be joined; machines on the local network get a {$nictype} interface",
+    "scope": "host_check"
+  },
+  "finding_lan_parent_absent": {
+    "text": "This host has no interface named {$parent}",
+    "scope": "host_check"
+  },
+  "finding_lan_parent_managed": {
+    "text": "{$parent} is a network Incus manages, not the local network",
+    "scope": "host_check"
+  },
+  "finding_lan_parent_unsupported": {
+    "text": "{$parent} is a {$type} interface, which a machine cannot join",
+    "scope": "host_check"
+  },
+  "finding_lan_parent_down": {
+    "text": "{$parent} is not up (state {$state})",
+    "scope": "host_check"
+  },
+  "finding_lan_parent_unreadable": {
+    "text": "{$parent} could not be checked: {$error}",
     "scope": "host_check"
   },
   "fact_docker_version": {
@@ -18023,10 +18089,20 @@
     "scope": "put_online",
     "text": "{$actor} created {$subject}"
   },
-  "network_mode": {
-    "scope": "instance_overview",
-    "text": "Connection"
-  },
+  "network_mode": [
+    {
+      "scope": "instance_overview",
+      "text": "Connection"
+    },
+    {
+      "scope": "hohenheim_field",
+      "text": "Network"
+    },
+    {
+      "scope": "help",
+      "text": "Hidden behind its host (it reaches the internet, and from outside its host only its published ports reach it), or on the local network like a Proxmox VM: it takes an address from that network and anything on it reaches the machine. Only on a host with a local network interface; through a physical uplink (macvlan) the machine cannot reach its own host."
+    }
+  ],
   "network_reach": {
     "scope": "instance_overview",
     "text": "Who reaches it"
@@ -18042,6 +18118,18 @@
   "network_mode_hidden_ports_detail": {
     "scope": "instance_overview",
     "text": "It reaches the internet through its host, behind Hohenheim's isolation rule. From outside its host, only its published ports reach it."
+  },
+  "network_mode_local_network": {
+    "scope": "instance_overview",
+    "text": "On the local network"
+  },
+  "network_mode_local_network_detail": {
+    "scope": "instance_overview",
+    "text": "It is on its host's local network with an address of its own: anything on that network reaches it directly. Through a macvlan uplink it cannot reach its own host."
+  },
+  "connect_lan": {
+    "scope": "instance_overview",
+    "text": "Its address on the local network"
   },
   "network_addresses": {
     "scope": "instance_overview",

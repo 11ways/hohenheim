@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
 import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
 import be.elevenways.hohenheim.server.incus.IncusClients;
+import be.elevenways.hohenheim.server.incus.IncusLanParent;
 import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
 import be.elevenways.hohenheim.server.security.NftRunner;
 import be.elevenways.protoblast.common.time.Now;
@@ -71,13 +72,16 @@ public final class IncusPreflight {
     public static final List<String> POSTURE_SENSITIVE_CHECKS =
         List.of(KERNEL_LANE_CHECK, USERNS_CHECK, SECCOMP_CHECK);
 
+    /** The advisory check that admits the host's declared {@code lan_parent}; stored only when one is declared. */
+    public static final String LAN_PARENT_CHECK = "lan_parent";
+
     /**
      * Every check name the Incus battery can ever store; the Incus twin of
      * {@link HostPreflight#DOCKER_BATTERY}, and a full run drops any stored entry outside it.
      */
     public static final Set<String> BATTERY = Set.of("daemon", "resources", "trusted",
         "driver_lxc", "storage_pool", "managed_network", "network_acl",
-        KERNEL_LANE_CHECK, USERNS_CHECK, SECCOMP_CHECK, "lsm");
+        KERNEL_LANE_CHECK, USERNS_CHECK, SECCOMP_CHECK, "lsm", LAN_PARENT_CHECK);
 
     /**
      * Whether {@code checkName}'s required-ness on this host is decided by the posture
@@ -114,7 +118,7 @@ public final class IncusPreflight {
         HostPreflight.Report report;
         try {
             IncusClient client = IncusClients.forServer(server);
-            report = withContainerKernelChecks(server, run(client), client);
+            report = withLanParentCheck(server, withContainerKernelChecks(server, run(client), client), client);
         } catch (HostKeys.HostTrustException refusal) {
             // Same stance as the ssh lane: an unpinned host cannot be probed at all,
             // and that refusal IS the stored verdict.
@@ -126,6 +130,34 @@ public final class IncusPreflight {
         report = withKernelLaneCheck(server, report);
         HostPreflight.store(String.valueOf((Object) server.get(ServerModel.NAME)), report, BATTERY);
         return report;
+    }
+
+    /**
+     * Admit the host's declared {@code lan_parent} ({@link IncusLanParent#admit}, the rule placement and the driver
+     * ask), as an ADVISORY check: a host whose parent cannot be joined still runs every hidden workload, it only offers
+     * no machine on the local network.
+     */
+    private static HostPreflight.@NonNull Report withLanParentCheck(
+            @NonNull Row server, HostPreflight.@NonNull Report report, @NonNull IncusClient client) {
+        String parent = server.get(ServerModel.LAN_PARENT);
+        if (parent == null || parent.isBlank()) {
+            return report;
+        }
+        HostPreflight.Check check;
+        try {
+            IncusLanParent.Lan lan = IncusLanParent.admit(client, parent);
+            check = HostPreflight.Check.of(LAN_PARENT_CHECK, HostPreflight.STATUS_PASS, false,
+                PreflightFinding.LAN_PARENT_ADMITTED.with("parent", parent, "nictype", lan.nicType().token()));
+        } catch (IncusLanParent.Unusable unusable) {
+            check = HostPreflight.Check.of(LAN_PARENT_CHECK, HostPreflight.STATUS_FAIL, false, unusable.found());
+        } catch (IOException unreadable) {
+            check = HostPreflight.Check.of(LAN_PARENT_CHECK, HostPreflight.STATUS_FAIL, false,
+                PreflightFinding.LAN_PARENT_UNREADABLE.with("parent", parent, "error", unreadable.getMessage()));
+        }
+        List<HostPreflight.Check> checks = new ArrayList<>(report.checks());
+        checks.add(check);
+        return new HostPreflight.Report(List.copyOf(checks), report.facts(), report.passed(), report.at(),
+            report.daemonFailure());
     }
 
     /**

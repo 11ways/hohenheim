@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
 import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
 import be.elevenways.hohenheim.server.incus.IncusReaper;
+import be.elevenways.hohenheim.server.incus.IncusLanParent;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -76,6 +77,7 @@ public final class IncusInstanceRuntime
     private final @NonNull Egress egress;
     private final @NonNull IncusWorkloadType type;
     private final @Nullable String serverName;
+    private final @Nullable String lanParent;
     private final @NonNull IncusDeviceLane devices;
     private final @NonNull IncusGuestLane guest;
     private final @NonNull IncusArchiveLane archive;
@@ -103,11 +105,22 @@ public final class IncusInstanceRuntime
     public IncusInstanceRuntime(@NonNull IncusClient incus, @NonNull Egress egress,
                                 @NonNull IncusWorkloadType type,
                                 @Nullable String serverName) {
+        this(incus, egress, type, serverName, null);
+    }
+
+    /**
+     * @param lanParent the host's declared {@code lan_parent}, the interface a guest on the local network joins
+     *                  ({@link IncusLanParent#admit}); null makes such a guest refuse by name
+     */
+    public IncusInstanceRuntime(@NonNull IncusClient incus, @NonNull Egress egress,
+                                @NonNull IncusWorkloadType type,
+                                @Nullable String serverName, @Nullable String lanParent) {
         this.incus = incus;
         this.policy = new IncusNetworkPolicy(incus);
         this.egress = egress;
         this.type = type;
         this.serverName = serverName;
+        this.lanParent = lanParent;
         this.devices = new IncusDeviceLane(this, incus, this.policy, egress, type);
         this.guest = new IncusGuestLane(this, incus, type);
         this.archive = new IncusArchiveLane(this, incus, this.policy, egress);
@@ -165,7 +178,7 @@ public final class IncusInstanceRuntime
      */
     public static final Set<SpecFeature> FEATURES = Collections.unmodifiableSet(EnumSet.of(
         SpecFeature.CLOUD_INIT, SpecFeature.ROOT_DISK_SIZE, SpecFeature.BANDWIDTH_LIMIT,
-        SpecFeature.PREPARED_IMAGE, SpecFeature.INSTALL_MEDIA, SpecFeature.RUN_USER));
+        SpecFeature.PREPARED_IMAGE, SpecFeature.INSTALL_MEDIA, SpecFeature.RUN_USER, SpecFeature.LOCAL_NETWORK));
 
     @Override
     public @NonNull String create(@NonNull InstanceSpec spec) throws IOException {
@@ -292,11 +305,6 @@ public final class IncusInstanceRuntime
         this.devices.resizeRootDisk(spec, sizeGb);
     }
 
-    /** Read one instance back and require EVERY NIC to carry the isolation just written. */
-    private void verifyIsolated(@NonNull String handle) throws IOException {
-        this.policy.verifyAllNics(handle, this.incus.instance(handle), this.egress);
-    }
-
     /**
      * Isolation AND the declared bandwidth ceiling, read back from the same instance
      * document -- one GET, so the rate check costs nothing on top of the ACL check.
@@ -308,7 +316,7 @@ public final class IncusInstanceRuntime
      */
     void verifyIsolated(@NonNull InstanceSpec spec) throws IOException {
         Map<String, Object> instance = this.incus.instance(spec.handle());
-        this.policy.verifyAllNics(spec.handle(), instance, this.egress);
+        this.policy.verifyAllNics(spec.handle(), instance, this.egress, spec.networkMode());
         this.policy.verifyBandwidth(spec.handle(), instance, spec.networkLimitMbit());
     }
 
@@ -331,7 +339,8 @@ public final class IncusInstanceRuntime
 
     /**
      * Put the driver-owned network devices of {@code spec} into {@code devices}: the isolating eth0, pinned to a
-     * static guest address when the spec publishes ports, and one NAT proxy per publication.
+     * static guest address when the spec publishes ports, and one NAT proxy per publication; for a guest on the
+     * local network, eth0 joins the host's admitted {@code lan_parent} instead, and nothing is published.
      *
      * AIDEV-NOTE: eth0 is written WHOLESALE (that is what repairs a dropped ACL), so the pinned address must be part
      * of this map or the next converge erases it; the address the NIC already carries is kept, so a redeploy never
@@ -340,6 +349,12 @@ public final class IncusInstanceRuntime
      * @param devices the definition's devices, eth0 as the daemon holds it when there is one
      */
     void applyNetworkDevices(@NonNull InstanceSpec spec, @NonNull Map<String, Object> devices) throws IOException {
+        if (!spec.networkMode().carriesIsolationAcl()) {
+            requireNothingPublished(spec);
+            devices.put(IncusNetworkPolicy.NIC, lan(spec).device(spec.networkLimitMbit()));
+            IncusPublishedPorts.apply(spec, null, devices);
+            return;
+        }
         String network = IncusDefinitions.managedNetworkName(this.incus);
         Map<String, Object> nic = this.policy.nicDevice(network, this.egress, spec.networkLimitMbit());
         String guest = spec.publications().isEmpty() ? null
@@ -354,12 +369,43 @@ public final class IncusInstanceRuntime
     /**
      * The eth0 keys an import of {@code spec} overrides on this daemon: an address of this bridge when it publishes
      * ports, else none, since the exported pin names the SOURCE's subnet and the daemon refuses an import whose NIC
-     * address lies outside its own.
+     * address lies outside its own; a guest on the local network takes THIS host's parent and its NIC type, since the
+     * export names the source's, and unsets every isolating key an export from a hidden guest still carries.
      */
     @NonNull Map<String, String> importedNic(@NonNull InstanceSpec spec) throws IOException {
+        if (!spec.networkMode().carriesIsolationAcl()) {
+            requireNothingPublished(spec);
+            IncusLanParent.Lan lan = lan(spec);
+            Map<String, String> nic = new LinkedHashMap<>();
+            nic.put("nictype", lan.nicType().token());
+            nic.put("parent", lan.parent());
+            // An empty value unsets the key (measured for ipv4.address); the daemon validates eth0 as it lands.
+            for (String isolating : IncusNetworkPolicy.ISOLATION_KEYS) {
+                nic.put(isolating, "");
+            }
+            nic.put(IncusPublishedPorts.ADDRESS_KEY, "");
+            return nic;
+        }
         return IncusPublishedPorts.importedNic(spec.publications().isEmpty() ? null
             : IncusPublishedPorts.guestAddress(this.incus, IncusDefinitions.managedNetworkName(this.incus),
                 spec.handle(), null));
+    }
+
+    /** @throws IOException when this host declares no LAN parent, or the daemon does not admit it */
+    private IncusLanParent.@NonNull Lan lan(@NonNull InstanceSpec spec) throws IOException {
+        if (this.lanParent == null || this.lanParent.isBlank()) {
+            throw new IOException("REFUSED to put '" + spec.handle() + "' on the local network: its host "
+                + (this.serverName == null ? "" : "'" + this.serverName + "' ") + "declares no lan_parent.");
+        }
+        return IncusLanParent.admit(this.incus, this.lanParent);
+    }
+
+    /** @throws IOException when a guest whose mode publishes no ports declares some */
+    private static void requireNothingPublished(@NonNull InstanceSpec spec) throws IOException {
+        if (!spec.networkMode().publishesPorts() && !spec.publications().isEmpty()) {
+            throw new IOException("REFUSED to publish ports of '" + spec.handle() + "': a guest on the local"
+                + " network is reached on its own address, never through ports of its host.");
+        }
     }
 
     /**
@@ -633,8 +679,9 @@ public final class IncusInstanceRuntime
                 || !(state.get("network") instanceof Map<?, ?> network)) {
             return List.of();
         }
-        Map<?, ?> devices = this.incus.instance(handle, timeoutMs).get("expanded_devices") instanceof Map<?, ?> map
-            ? map : Map.of();
+        Map<String, Object> definition = this.incus.instance(handle, timeoutMs);
+        Map<?, ?> devices = definition.get("expanded_devices") instanceof Map<?, ?> map ? map : Map.of();
+        Map<?, ?> config = definition.get("expanded_config") instanceof Map<?, ?> map ? map : Map.of();
         List<GuestInterface> interfaces = new ArrayList<>();
         for (Map.Entry<?, ?> entry : network.entrySet()) {
             if (!(entry.getValue() instanceof Map<?, ?> iface) || "loopback".equals(iface.get("type"))) {
@@ -650,11 +697,35 @@ public final class IncusInstanceRuntime
                 }
             }
             String name = String.valueOf(entry.getKey());
-            Object attached = devices.get(name) instanceof Map<?, ?> nic ? nic.get("network") : null;
+            String device = deviceOf(name, iface.get("hwaddr"), devices, config);
+            Object nic = device == null ? null : devices.get(device);
+            // A NIC on a managed network names it; a NIC on the local network names its host parent.
+            Object attached = nic instanceof Map<?, ?> map
+                ? (map.get("network") != null ? map.get("network") : map.get("parent")) : null;
             interfaces.add(new GuestInterface(name, attached == null ? "" : String.valueOf(attached),
-                List.copyOf(addresses)));
+                List.copyOf(addresses), IncusNetworkPolicy.NIC.equals(device)));
         }
         return List.copyOf(interfaces);
+    }
+
+    /**
+     * The instance device behind one guest interface: the device of that name (a container's guest names follow its
+     * devices), else the NIC whose MAC the daemon recorded for it (a VM's guest names its own, e.g. enp5s0).
+     */
+    private static @Nullable String deviceOf(@NonNull String guestName, @Nullable Object hwaddr,
+                                             @NonNull Map<?, ?> devices, @NonNull Map<?, ?> config) {
+        if (devices.get(guestName) instanceof Map<?, ?>) {
+            return guestName;
+        }
+        if (!(hwaddr instanceof String mac) || mac.isBlank()) {
+            return null;
+        }
+        for (Object device : devices.keySet()) {
+            if (mac.equalsIgnoreCase(String.valueOf(config.get("volatile." + device + ".hwaddr")))) {
+                return String.valueOf(device);
+            }
+        }
+        return null;
     }
 
     // -- ConsoleStreamSupport -------------------------------------------------

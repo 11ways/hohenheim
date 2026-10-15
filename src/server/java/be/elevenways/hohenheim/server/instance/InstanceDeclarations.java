@@ -1,6 +1,9 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.instance.GuestNetworkMode;
+import be.elevenways.hohenheim.ports.PublishedPort;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.StoredRows;
@@ -14,6 +17,8 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+
+import java.util.Map;
 
 import static be.elevenways.hohenheim.RawValues.trimmed;
 
@@ -80,6 +85,8 @@ public final class InstanceDeclarations {
         Violations refused = new Violations();
         collect(refused, () -> requireRuntimeImage(row, stored));
         collect(refused, () -> requireUsableRepository(row));
+        collect(refused, () -> requirePortsTheModePublishes(
+            RawValues.map(row.afterWrite(InstanceModel.SETTINGS, stored))));
         if (stored != null) {
             // The form offers exactly InstanceKinds.kindChangesOf; this is the write's half of the same answer.
             collect(refused, () -> InstanceKinds.requireKindChange(stored,
@@ -116,6 +123,17 @@ public final class InstanceDeclarations {
         if (row.afterWrite(InstanceModel.RUNTIME_IMAGE_ID, stored) == null) {
             throw Violations.ofField(InstanceModel.RUNTIME_IMAGE_ID.getName(), null,
                 HohenheimMicrocopy.VIOLATIONS.of("runtime_image_required"));
+        }
+    }
+
+    /**
+     * A guest whose network mode publishes no ports (one on the local network, reached on its own address) declares
+     * none; VmKind.publicationsOf asks the same rule at deploy.
+     */
+    static void requirePortsTheModePublishes(@NonNull Map<String, Object> settings) {
+        if (!GuestNetworkMode.of(settings).publishesPorts() && PublishedPort.declaredIn(settings)) {
+            throw Violations.ofField(InstanceModel.SETTINGS.getName() + "." + PublishedPort.FIELD,
+                settings.get(PublishedPort.FIELD), HohenheimMicrocopy.VIOLATIONS.of("vm_lan_ports"));
         }
     }
 

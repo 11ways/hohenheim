@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.incus;
 
+import be.elevenways.hohenheim.instance.GuestNetworkMode;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.security.TenantNetworkRanges;
@@ -56,6 +57,29 @@ public final class IncusNetworkPolicy {
 
     /** The NIC every managed system container attaches (the default profile's device). */
     public static final String NIC = "eth0";
+
+    /** The NIC device key naming the network ACLs it carries. */
+    public static final String ACLS_KEY = "security.acls";
+
+    /** The NIC device key holding what its ACLs do with an inbound packet no rule names. */
+    public static final String ACL_INGRESS_ACTION_KEY = "security.acls.default.ingress.action";
+
+    /** The NIC device key holding what its ACLs do with an outbound packet no rule names. */
+    public static final String ACL_EGRESS_ACTION_KEY = "security.acls.default.egress.action";
+
+    /**
+     * Every key an isolating NIC carries that a NIC outside every managed network (a LAN guest's) must not: what
+     * {@link IncusLanParent#isLanNic} requires absent and what an import onto the local network unsets.
+     */
+    public static final List<String> ISOLATION_KEYS = List.of("network", ACLS_KEY, ACL_INGRESS_ACTION_KEY,
+        ACL_EGRESS_ACTION_KEY, IncusKernelIsolation.REAPPLY_KEY);
+
+    /**
+     * The instance config key the driver stamps the guest's declared {@link GuestNetworkMode} under (re-asserted on
+     * every converge, as every {@code user.} key is), so the kernel verifier knows which NIC is not meant to carry the
+     * isolation rules without a controller row.
+     */
+    public static final String MODE_KEY = "user.hohenheim.network_mode";
 
     /**
      * The managed bridge EXTRA NICs attach to. The daemon refuses a second NIC on the
@@ -177,12 +201,12 @@ public final class IncusNetworkPolicy {
         Map<String, Object> device = new LinkedHashMap<>();
         device.put("type", "nic");
         device.put("network", inheritedNetwork);
-        device.put("security.acls", aclName());
+        device.put(ACLS_KEY, aclName());
         // The DEFAULT actions decide what a packet not named by a rule does. Ingress stays
         // allow (an inbound connection's reply leg is handled by the reject rules being
         // egress-only). Egress is allow for OPEN (the internet), drop for NONE.
-        device.put("security.acls.default.ingress.action", "allow");
-        device.put("security.acls.default.egress.action",
+        device.put(ACL_INGRESS_ACTION_KEY, "allow");
+        device.put(ACL_EGRESS_ACTION_KEY,
             egress == Egress.NONE ? "drop" : "allow");
         if (limitMbit != null && limitMbit > 0) {
             device.put("limits.ingress", rate(limitMbit));
@@ -250,13 +274,13 @@ public final class IncusNetworkPolicy {
                 + " carries no isolation config, so the container would share the bridge with"
                 + " every other tenant. The daemon did not apply the device override.");
         }
-        if (!aclName().equals(String.valueOf(nic.get("security.acls")))) {
+        if (!aclName().equals(String.valueOf(nic.get(ACLS_KEY)))) {
             throw new IOException("REFUSED to run '" + handle + "': its '" + NIC + "' device"
                 + " does not reference the '" + aclName() + "' ACL (security.acls="
-                + nic.get("security.acls") + "). The isolation the deploy verified is gone.");
+                + nic.get(ACLS_KEY) + "). The isolation the deploy verified is gone.");
         }
         String wantAction = egress == Egress.NONE ? "drop" : "allow";
-        String gotAction = String.valueOf(nic.get("security.acls.default.egress.action"));
+        String gotAction = String.valueOf(nic.get(ACL_EGRESS_ACTION_KEY));
         if (!wantAction.equals(gotAction)) {
             throw new IOException("REFUSED to run '" + handle + "': its declared egress ("
                 + egress + " => " + wantAction + ") is not what the daemon carries ("
@@ -319,11 +343,24 @@ public final class IncusNetworkPolicy {
      * isolation ACL and the declared egress action -- an extra NIC must never be a
      * hole in the boundary the primary one enforces.
      *
+     * AIDEV-NOTE: the ONE exemption is the main NIC of a mode that carries no ACL ({@link
+     * GuestNetworkMode#carriesIsolationAcl}): a guest on the local network sits outside every managed network, where
+     * no ACL can apply. That NIC must then read back as exactly the LAN NIC the driver writes
+     * ({@link IncusLanParent#isLanNic}); every extra NIC is judged as before.
+     *
+     * @param mode the guest's declared network mode
      * @throws IOException naming the first NIC that is not isolated
      */
     public void verifyAllNics(@NonNull String handle, @NonNull Map<String, Object> instance,
-                              @NonNull Egress egress) throws IOException {
-        verifyInstance(handle, instance, egress);
+                              @NonNull Egress egress, @NonNull GuestNetworkMode mode) throws IOException {
+        if (mode.carriesIsolationAcl()) {
+            verifyInstance(handle, instance, egress);
+        } else if (!(instance.get("devices") instanceof Map<?, ?> declared)
+                || !IncusLanParent.isLanNic(declared.get(NIC))) {
+            throw new IOException("REFUSED to run '" + handle + "': it is declared on the local network, but its '"
+                + NIC + "' device does not read back as a LAN NIC (a nictype and a parent, no managed network,"
+                + " no ACL). The daemon did not apply the device.");
+        }
         if (!(instance.get("devices") instanceof Map<?, ?> devices)) {
             return;
         }
@@ -333,14 +370,14 @@ public final class IncusNetworkPolicy {
                     || !"nic".equals(String.valueOf(device.get("type")))) {
                 continue;
             }
-            if (!aclName().equals(String.valueOf(device.get("security.acls")))) {
+            if (!aclName().equals(String.valueOf(device.get(ACLS_KEY)))) {
                 throw new IOException("REFUSED to run '" + handle + "': its extra NIC '"
                     + name + "' does not reference the '" + aclName() + "' ACL"
-                    + " (security.acls=" + device.get("security.acls") + "). An extra NIC"
+                    + " (" + ACLS_KEY + "=" + device.get(ACLS_KEY) + "). An extra NIC"
                     + " without the isolation ACL is a hole in the tenant boundary.");
             }
             String wantAction = egress == Egress.NONE ? "drop" : "allow";
-            String gotAction = String.valueOf(device.get("security.acls.default.egress.action"));
+            String gotAction = String.valueOf(device.get(ACL_EGRESS_ACTION_KEY));
             if (!wantAction.equals(gotAction)) {
                 throw new IOException("REFUSED to run '" + handle + "': extra NIC '" + name
                     + "' declares egress " + wantAction + " but the daemon carries "

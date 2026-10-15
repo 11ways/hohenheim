@@ -32,7 +32,12 @@ import be.elevenways.zenit.common.ui.BadgeColor;
 import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.hohenheim.instance.GuestNetworkMode;
+import be.elevenways.hohenheim.server.incus.IncusLanParent;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -149,6 +154,13 @@ public final class VmKind implements InstanceKindHandler {
 
     public static final StringField SRV_SERVICE = SETTINGS_SCHEMA.addField(InstanceKindFields.srvService());
 
+    /**
+     * Hidden behind its host (the default) or on its host's local network, the Proxmox shape. Operator-only: the
+     * delegated panel offers no settings form, a tenant's settings write is frozen (TenantWrites) and a tenant's
+     * create that chooses it is refused there by name.
+     */
+    public static final EnumField NETWORK_MODE = SETTINGS_SCHEMA.addField(GuestNetworkMode.field());
+
     // A VM is SIZED when it is created, so memory, cores and disk stay visible -- this is
     // the one kind where the ceilings ARE the decision. What folds is the guest half:
     // a first-boot cloud-config nobody pastes while creating, and two image declarations
@@ -156,6 +168,8 @@ public final class VmKind implements InstanceKindHandler {
     static {
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.GUEST,
             List.of(CLOUD_INIT.getName(), SECURE_BOOT.getName(), GUEST_AGENT.getName())));
+        SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.NETWORK,
+            List.of(NETWORK_MODE.getName())));
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.PORTS,
             List.of(PUBLISHED_PORTS.getName(), SRV_SERVICE.getName())));
     }
@@ -200,9 +214,10 @@ public final class VmKind implements InstanceKindHandler {
         return List.of(PutOnlineReach.NONE, PutOnlineReach.PORTS);
     }
 
+    /** The published ports, and the network mode that decides whether ports publish at all (a ports flow's is hidden). */
     @Override
     public @NonNull List<String> portSettings() {
-        return List.of(PUBLISHED_PORTS.getName());
+        return List.of(PUBLISHED_PORTS.getName(), NETWORK_MODE.getName());
     }
 
     /** IncusInstanceRuntime implements ImagePublishSupport (incus publish). */
@@ -224,7 +239,7 @@ public final class VmKind implements InstanceKindHandler {
         // The server NAME travels so the driver can read the DAEMON HOST's kernel, not
         // the controller's -- kernel truth and daemon config are independent facts here.
         return new IncusInstanceRuntime(new ServerService().incusClientFor(serverName),
-            Egress.OPEN, IncusWorkloadType.VIRTUAL_MACHINE, serverName);
+            Egress.OPEN, IncusWorkloadType.VIRTUAL_MACHINE, serverName, lanParentOf(serverName));
     }
 
     @Override
@@ -241,14 +256,46 @@ public final class VmKind implements InstanceKindHandler {
             .secureBoot(secureBoot)
             .guestAgent(guestAgent)
             .publications(publicationsOf(settings))
+            .networkMode(GuestNetworkMode.of(settings))
             .build();
     }
 
     /**
+     * Refuse a host that cannot put a guest on its local network when the settings ask for it: one with no
+     * {@code lan_parent}, or one whose daemon does not admit it (IncusLanParent.admit, the rule the driver applies).
+     */
+    @Override
+    public void requirePlaceableOn(@NonNull String serverName, @NonNull Map<String, Object> settings) {
+        InstanceKindHandler.super.requirePlaceableOn(serverName, settings);
+        if (GuestNetworkMode.of(settings).carriesIsolationAcl()) {
+            return;
+        }
+        String parent = lanParentOf(serverName);
+        if (parent == null) {
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("vm_lan_no_parent").withArg("name", serverName));
+        }
+        try {
+            IncusLanParent.admit(new ServerService().incusClientFor(serverName), parent);
+        } catch (IOException | RuntimeException unusable) {
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("vm_lan_parent_unusable")
+                .withArg("name", serverName).withArg("parent", parent));
+        }
+    }
+
+    /** @return the host's declared LAN parent, or null when it declares none */
+    private static @Nullable String lanParentOf(@NonNull String serverName) {
+        Row server = Models.get(ServerModel.class).findByName(serverName);
+        String parent = server == null ? null : server.get(ServerModel.LAN_PARENT);
+        return parent == null || parent.isBlank() ? null : parent.trim();
+    }
+
+    /**
      * @return every published port as a public publication
-     * @throws Violations naming a port declared on loopback: a VM's ports are NAT proxies on every host address
+     * @throws Violations naming a port declared on loopback, a VM's ports being NAT proxies on every host address, or
+     *                    any port of a guest whose network mode publishes none
      */
     static @NonNull List<PortPublication> publicationsOf(@NonNull Map<String, Object> settings) {
+        InstanceDeclarations.requirePortsTheModePublishes(settings);
         List<PortPublication> publications = new ArrayList<>();
         for (PublishedPort port : PublishedPort.of(settings)) {
             if (port.loopback()) {

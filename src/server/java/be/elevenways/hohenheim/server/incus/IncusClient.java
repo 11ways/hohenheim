@@ -696,6 +696,16 @@ public class IncusClient {
     }
 
     /**
+     * One host interface's live state ({@code state} up or down, its addresses), managed or not; null when the daemon
+     * knows no such interface.
+     *
+     * @throws IOException on any daemon error other than 404
+     */
+    public @Nullable Map<String, Object> networkState(@NonNull String name) throws IOException {
+        return metadataOrNull("/1.0/networks/" + name + "/state");
+    }
+
+    /**
      * Every address one managed network hands out: dnsmasq's dynamic leases, the static NIC addresses of every instance
      * on it (stopped ones included, measured on Incus 7.3) and its gateway, each with its {@code type}.
      */

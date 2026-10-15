@@ -719,6 +719,29 @@ class InstancePlacementTest {
             "/fixture/volumes", "fixture: " + backend.token()));
     }
 
+    /**
+     * A machine on the local network places only on a host that declares a LAN parent; the kind's refusal is what
+     * placement, restore-to-host and migration all ask (InstancePlacement.kindRefusalOn).
+     */
+    @Test
+    void aMachineOnTheLocalNetworkPlacesOnlyOnAHostDeclaringALanParent() {
+        Db.run(datasource, () -> {
+            int incus = incusHost("lan-none", 8192L, HostPreflight.STATUS_PASS);
+            InstanceKindHandler vm = InstanceKinds.getHandler("hohenheim:vm");
+            String name = ServerModel.nameOf(incus);
+
+            // 1. POSITIVE ANCHOR: a hidden machine is placeable there.
+            assertThat(catchThrowable(() -> vm.requirePlaceableOn(name, Map.of("network_mode", "hidden"))))
+                .as("step 1: a hidden machine places on any Incus host").isNull();
+
+            // 2. One on the local network is refused by name: the host declares no LAN parent.
+            assertThat(keyOf(catchThrowable(() ->
+                    vm.requirePlaceableOn(name, Map.of("network_mode", "local_network")))))
+                .as("step 2: no lan_parent, no machine on the local network")
+                .isEqualTo("vm_lan_no_parent");
+        });
+    }
+
     @Test
     void aVmIsolatedHostRefusesAContainerWorkloadAndStillTakesAVirtualMachine() {
         Db.run(datasource, () -> {
