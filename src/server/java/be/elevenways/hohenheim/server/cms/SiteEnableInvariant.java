@@ -35,18 +35,18 @@ public final class SiteEnableInvariant {
     /**
      * Install THE enable invariant on the SiteModel write pipeline so every writer
      * of a live transition passes through exactly one check: the admin form, the
-     * toggle action, the delegated /manage save, the generic revision-restore
-     * endpoint, seeds, and any future writer.
+     * toggle action, the delegated /manage save, core's revision restore and trash
+     * recovery, an Undo, seeds, and any future writer.
      *
      * AIDEV-NOTE: this MUST live in the write pipeline, never in the resource layer.
-     * The framework's RESTORE_REVISION endpoint is registered for EVERY revisionable
-     * RowResource -- callable even when the resource hides its revision subpage --
-     * and it restores a snapshot via RevisionableBehaviour.restore -> model.save
-     * DIRECTLY, running no resource-layer hook. A delegated tenant could restore a
-     * formerly-enabled revision after another site took the hostname and silently
-     * seize the route (SiteDispatcher resolves first-wins). A before-write hook is
-     * the one seam every save funnels through. Do NOT move this back into updateRow
-     * / the enable operation as a per-path check -- that is the very bypass this closes.
+     * Core's history operations (HistoryOperations.restore and .recover, placed on the
+     * CMS history tab, and the Undo's content inverse) set a record back to a snapshot via
+     * RevisionableBehaviour.restore -> model.save DIRECTLY, running no resource-layer
+     * hook. A delegated tenant could restore a formerly-enabled revision after another
+     * site took the hostname and silently seize the route (SiteDispatcher resolves
+     * first-wins). A before-write hook is the one seam every save funnels through. Do
+     * NOT move this back into updateRow / the enable operation as a per-path check --
+     * that is the very bypass this closes.
      */
     public static synchronized void install() {
         if (installed) {

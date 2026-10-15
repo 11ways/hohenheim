@@ -11,13 +11,18 @@ import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.resource.ResourceHistory;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.behaviour.RevisionableBehaviour;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.operation.HistoryOperations;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
 
@@ -33,16 +38,25 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Route-ownership guard: the framework's generic revision-restore
- * endpoint bypasses the resource-layer enable checks, so a delegated tenant could
- * restore a formerly-enabled snapshot after another site took the hostname and
- * seize the route. The enable invariant now lives in the SiteModel write pipeline,
- * which restore's model.save funnels through. This walks the exact attack through
- * the real /manage and /admin restore routes and proves the seizure is refused.
+ * Route-ownership guard: core's revision restore bypasses the resource-layer enable checks, so a delegated tenant
+ * could restore a formerly-enabled snapshot after another site took the hostname and seize the route. The enable
+ * invariant lives in the SiteModel write pipeline, which restore's model.save funnels through. This walks the exact
+ * attack through the real /manage and /admin restore (the history tab's placed restore, posted through each
+ * surface's invoke route) and proves the seizure is refused.
  */
 class RevisionRestoreTakeoverTest extends HohenheimTestBase {
 
     private static final String CONTESTED_HOST = "restore-takeover.example.com";
+
+    /**
+     * @return the history tab's restore of the site to {@code revision}, posted through the {@code panel}'s sites
+     *         invoke route, as the tab's Restore button posts it
+     */
+    private static String restoreUrl(String panel, int siteId, int revision) {
+        return CmsRoutes.invoke(panel, "sites", HistoryOperations.restore(SubjectType.record(SiteModel.MODEL_ID)).id())
+            .toUrl() + "?" + CmsEndpoints.SUBJECT_PARAM.getName() + "=" + siteId + "&" + CmsEndpoints.TAB_PARAM.getName()
+            + "=" + ResourceHistory.TAB_SLUG + "&" + CmsEndpoints.ITEM_PARAM.getName() + "=" + revision;
+    }
 
     /** Persist an active site of the static type; enabled per the flag. */
     private static Row site(String name, String slug, boolean enabled) {
@@ -150,12 +164,11 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
             //    replay A's enabled snapshot. It must be REFUSED, not a 500 -- A stays
             //    disabled and the hostname keeps its single owner (B).
             HttpResponse<String> manageRestore = httpPostForm(
-                "/manage/sites/" + aId + "/revision/" + enabledRevA + "/restore",
+                restoreUrl("manage", aId, enabledRevA),
                 confirmed(""), operatorSession.token(), operatorCsrf);
             // 404, not a redirect: ManageSiteResource.subpages() deliberately omits the
-            // revision history, and the revision ROUTES are now bound to that
-            // declaration (they used to consult the model's behaviour alone and served
-            // the delegated tenant regardless). That is a STRICTLY stronger refusal
+            // revision history, so its sites offer no restore action and the invoke route
+            // answers a withheld action with 404. That is a STRICTLY stronger refusal
             // than the write-pipeline one this test originally pinned -- the request
             // never reaches the model. The invariant itself is still proven at step 6
             // through /admin, which does offer the subpage.
@@ -170,7 +183,7 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
 
             // 6. /admin reaches the same generic endpoint; it is refused identically.
             HttpResponse<String> adminRestore = httpPostForm(
-                "/admin/sites/" + aId + "/revision/" + enabledRevA + "/restore",
+                restoreUrl("admin", aId, enabledRevA),
                 confirmed(""), sessionToken, csrfToken);
             assertThat(adminRestore.statusCode())
                 .as("the /admin restore is refused, never a server error")
@@ -208,7 +221,7 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
             //     quarantine the way an administrator does, so step 8's positive control
             //     still proves what it claims.
             HttpResponse<String> quarantinedRestore = httpPostForm(
-                "/admin/sites/" + aId + "/revision/" + enabledRevA + "/restore",
+                restoreUrl("admin", aId, enabledRevA),
                 confirmed(""), sessionToken, csrfToken);
             assertThat(quarantinedRestore.statusCode())
                 .as("the quarantined restore is refused, never a server error")
@@ -218,7 +231,7 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
             Models.get(ReleasedRouteClaimModel.class).find().delete();
 
             HttpResponse<String> cleanRestore = httpPostForm(
-                "/admin/sites/" + aId + "/revision/" + enabledRevA + "/restore",
+                restoreUrl("admin", aId, enabledRevA),
                 confirmed(""), sessionToken, csrfToken);
             assertThat(cleanRestore.statusCode())
                 .as("with the conflict gone the restore goes through")
@@ -337,7 +350,7 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
 
             // 4. THE ATTACK: an ordinary manage grant replays the pre-gate revision.
             HttpResponse<String> attack = httpPostForm(
-                "/manage/sites/" + siteId + "/revision/" + ungatedRevision + "/restore",
+                restoreUrl("manage", siteId, ungatedRevision),
                 confirmed(""), tenantSession.token(), tenantCsrf);
 
             // 5. The SERVED effect first, because that is what the attack is FOR: the
@@ -366,7 +379,7 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
             //    both columns -- still succeeds, and the effect is real. So step 5
             //    refused for the declared reason, not because restore stopped working.
             HttpResponse<String> adminRestore = httpPostForm(
-                "/admin/sites/" + siteId + "/revision/" + ungatedRevision + "/restore",
+                restoreUrl("admin", siteId, ungatedRevision),
                 confirmed(""), sessionToken, csrfToken);
             assertThat(adminRestore.statusCode())
                 .as("step 7: the admin restore goes through")
