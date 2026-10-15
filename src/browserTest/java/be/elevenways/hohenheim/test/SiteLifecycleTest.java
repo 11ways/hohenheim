@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.AccessListModel;
+import be.elevenways.zenit.common.flash.FlashNotice;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -144,9 +145,13 @@ class SiteLifecycleTest extends HohenheimTestBase {
         assertThat((Object) after.get(SiteModel.DELETED_AT)).isNotNull();
 
         // The success toast rides the SESSION the browser shares, so pop it (proving the
-        // outcome was reported) before asserting on the next render's content.
-        assertThat(popFlash(response)).as("the delete reports itself as a toast").isNotNull()
-            .extracting(flash -> flash.message().key()).isEqualTo("deleted");
+        // outcome was reported) before asserting on the next render's content. Sites offer a
+        // trash, so the toast says the site moved there, in words in every shipped language.
+        FlashNotice toast = popFlash(response);
+        assertThat(toast).as("the delete reports itself as a toast").isNotNull()
+            .extracting(flash -> flash.message().key()).isEqualTo("moved_to_trash");
+        assertThat(toastText(toast, "en")).as("the toast says it in English").endsWith("has been moved to the trash.");
+        assertThat(toastText(toast, "nl")).as("and in Dutch").endsWith("is naar de prullenbak verplaatst.");
 
         // One list render proves both the live site is listed and the soft-deleted one is
         // hidden. The live anchor is this journey's own redirect site, so the assertion

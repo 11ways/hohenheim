@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.zenit.common.flash.FlashNotice;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -88,9 +89,15 @@ class SiteCrudTest extends HohenheimTestBase {
             .isNotNull();
 
         // The success toast rides the SESSION the browser shares, so pop it (proving the
-        // outcome was reported) before asserting on the next render's content.
-        assertThat(popFlash(response)).as("the delete reports itself as a toast").isNotNull()
-            .extracting(flash -> flash.message().key()).isEqualTo("deleted");
+        // outcome was reported) before asserting on the next render's content. Sites offer a
+        // trash, so the toast says the site moved there, in words in every shipped language.
+        FlashNotice toast = popFlash(response);
+        assertThat(toast).as("the delete reports itself as a toast").isNotNull()
+            .extracting(flash -> flash.message().key()).isEqualTo("moved_to_trash");
+        assertThat(toastText(toast, "en")).as("the toast names the site and the trash in English")
+            .contains("Crud Test Site").contains("has been moved to the trash.");
+        assertThat(toastText(toast, "nl")).as("and in Dutch")
+            .contains("Crud Test Site").contains("is naar de prullenbak verplaatst.");
 
         // Soft-deleted sites disappear from the list.
         navigateToApp("/admin/sites");

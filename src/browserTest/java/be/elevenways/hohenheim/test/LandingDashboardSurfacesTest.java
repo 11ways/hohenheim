@@ -28,6 +28,7 @@ import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.security.AccountabilityOrigin;
 import be.elevenways.zenit.common.security.SystemPrincipal;
+import be.elevenways.plumage.icon.IconRegistry;
 import be.elevenways.protoblast.common.time.Now;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -61,8 +62,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * redirect, the title, the dashboard nav links and the widget surface, with markup ids, digits, UUIDs and CSRF values
  * masked and every tag's attributes in name order (HTML attribute order means nothing): the data under the widgets
  * is not this conversion's subject. The declared differences are the surface address (a legacy peer answered to its
- * slug address, a PanelDashboard only to its id token, no slug alias) and the /manage landing's surface, which
- * was redrawn on purpose ({@link #redrawn}).
+ * slug address, a PanelDashboard only to its id token, no slug alias), the /manage landing's surface, which
+ * was redrawn on purpose ({@link #redrawn}), and plumage's mark on a directional glyph ({@link #markDirectional}).
  *
  * AIDEV-NOTE: the fixture decides the operator's checklist and tiles. Its only site has no address and so serves
  * nobody: "Put your first app online" stays TODO with its Open link and the Apps tile reads "1 with a problem". Its
@@ -97,6 +98,7 @@ class LandingDashboardSurfacesTest extends HohenheimTestBase {
     private static final Pattern ATTRIBUTE = Pattern.compile("[^\\s=>\"]+(?:=\"[^\"]*\")?");
     private static final Pattern MANAGE_LANDING = Pattern.compile("case [a-z]+ /manage/dashboard\\b");
     private static final Pattern SURFACE_LINE = Pattern.compile("(?m)^  surface .*$");
+    private static final Pattern ICON_TAG = Pattern.compile("<pl-icon ([^>]*\\bname=\"([^\"]+)\"[^>]*)>");
 
     private static TestSession tenant;
     private static TestSession outsider;
@@ -227,7 +229,23 @@ class LandingDashboardSurfacesTest extends HohenheimTestBase {
                 "surface=\"" + normalize(dashboardToken(panelSlug)) + "\"");
         }
         assertThat(redrawn(cases(current))).as("step 3: every audience's landing dashboards are the stored ones")
-            .containsExactlyElementsOf(redrawn(cases(sortAttributes(stored))));
+            .containsExactlyElementsOf(redrawn(cases(sortAttributes(markDirectional(stored)))));
+    }
+
+    /**
+     * The declared difference plumage made after the capture: a glyph drawn for a left-to-right reading
+     * ({@link IconRegistry#isDirectional}) carries {@code data-directional}, the mark its mirror rule reads.
+     */
+    private static @NonNull String markDirectional(@NonNull String stored) {
+        Matcher icon = ICON_TAG.matcher(stored);
+        StringBuilder marked = new StringBuilder();
+        while (icon.find()) {
+            String tag = IconRegistry.isDirectional(icon.group(2)) && !icon.group(1).contains("data-directional")
+                ? "<pl-icon data-directional=\"\" " + icon.group(1) + ">" : icon.group();
+            icon.appendReplacement(marked, Matcher.quoteReplacement(tag));
+        }
+        icon.appendTail(marked);
+        return marked.toString();
     }
 
     /**

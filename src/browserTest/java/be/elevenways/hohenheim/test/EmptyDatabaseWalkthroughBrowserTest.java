@@ -92,6 +92,7 @@ class EmptyDatabaseWalkthroughBrowserTest extends HawkeyeBrowserTestBase {
             HohenheimEndpoints.init();
             HohenheimChannels.init();
             HohenheimAccess.declareGrantableModels();
+            TestDatabases.releaseHandBoundDefault();
             HohenheimDatabase.init();
             Zenit.SETTINGS_VALUES.setValue(AuthSettings.CMS_AUTO_PANEL, false);
             ServerMain.installAuthBaselines();

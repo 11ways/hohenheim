@@ -82,13 +82,7 @@ public final class TestDatabases {
         }
 
         SqlDatasource outgoing = HohenheimDatabase.datasource();
-        // AIDEV-NOTE: a class whose subject is migrating binds its own database as the default by hand and leaves
-        // it bound; the default registry refuses a second binding (no silent last-wins), so this shared-JVM reset
-        // point releases it before the product's re-init, which supersedes only the datasource it opened itself.
-        Datasource bound = Datasources.getDefault();
-        if (bound != null && bound != outgoing) {
-            Datasources.unregister(Datasources.DEFAULT, bound);
-        }
+        releaseHandBoundDefault();
 
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
         HohenheimDatabase.init();
@@ -106,6 +100,22 @@ public final class TestDatabases {
         }
 
         return db;
+    }
+
+    /**
+     * Release a default datasource some class bound by hand and left bound, so the product's next open can bind its
+     * own; the datasource {@code HohenheimDatabase} opened itself stays, its re-init supersedes it.
+     *
+     * AIDEV-NOTE: a class whose subject is migrating binds its own database as the default by hand and leaves it
+     * bound; the default registry refuses a second binding (no silent last-wins). Every shared-JVM reset point, and
+     * every class that opens the product's database itself (an upgrade fixture, an empty-database boot), calls this
+     * first: skipping it fails that class only when a hand-binding class ran before it in the same fork.
+     */
+    public static synchronized void releaseHandBoundDefault() {
+        Datasource bound = Datasources.getDefault();
+        if (bound != null && bound != HohenheimDatabase.datasource()) {
+            Datasources.unregister(Datasources.DEFAULT, bound);
+        }
     }
 
     /**

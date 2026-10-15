@@ -9,6 +9,7 @@ import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.SchemaField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.migration.FrozenModel;
+import be.elevenways.zenit.common.orm.migration.MigrationResult;
 import be.elevenways.zenit.common.orm.migration.MigrationRunnerResult;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
@@ -55,11 +56,15 @@ class StackPublishedPortsMigrationTest {
         int container = instance(datasource, "hohenheim:docker_container",
             Map.of("image", "alpine", "ports", List.of(port(22, 2222, "tcp", ""))));
 
-        // 2. The upgrade under integrity=fail applies M014 alone.
+        // 2. The upgrade to M014 under integrity=fail applies M014 alone. It is bounded to 014 so a later migration
+        //    neither changes what this step applies nor touches the rows the next steps read.
         withIntegrityMode("fail", () -> {
-            MigrationRunnerResult upgrade = new MigrationRunner(datasource).migrate();
+            MigrationRunnerResult upgrade = new MigrationRunner(datasource,
+                InstallsAt.discoveredThrough(datasource.getDatasourceIdentifier(), "014")).migrate();
             assertThat(upgrade.isSuccess()).as("step 2: the upgrade from 013 succeeds").isTrue();
-            assertThat(upgrade.getAppliedCount()).as("step 2: it applies exactly M014").isEqualTo(1);
+            assertThat(upgrade.getResults().stream().filter(MigrationResult::isApplied)
+                .map(MigrationResult::getVersion).toList()).as("step 2: it applies exactly M014")
+                .containsExactly("014");
         });
 
         // 3. The service's ports are its published ports, named and spelled as the stack's lowering writes them, the

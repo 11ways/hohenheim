@@ -105,7 +105,7 @@ class DnsZoneImportReadOnlyTest extends HohenheimTestBase {
 
         ZonesUnderSites(Map<Integer, Integer> siteOfZone) {
             super(Identifier.of("hohenheim_test", "zones_under_sites"), "zones-under-sites",
-                Microcopy.of("zones_under_sites"), TestPermissions.declared("hohenheim_test.zones_under_sites"));
+                Microcopy.literal("Zones under sites"), TestPermissions.declared("hohenheim_test.zones_under_sites"));
             // Only the parent's identity and archive state matter here, not the admin's forms and tabs.
             PanelResource<Row> owner = PanelResource.builder(
                     Identifier.of("hohenheim_test", "zone_owners"), HohenheimSlugs.SITES,

@@ -110,11 +110,11 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
         //    one-sentence description; the generated kinds are simply not offered.
         var cards = page.locator(
             "pl-choice-group[name='kind'] pl-choice-card[data-value^='hohenheim:']");
-        assertThat(cards.count()).as("step 1: the five authorable kinds are cards")
-            .isEqualTo(5);
+        assertThat(cards.count()).as("step 1: the six authorable kinds are cards")
+            .isEqualTo(6);
         String cardsText = cards.allTextContents().toString();
         assertThat(cardsText).as("step 1: every card explains itself")
-            .contains("persistent dev box", "health-gated releases", "container image");
+            .contains("persistent dev box", "health-gated releases", "container image", "served as plain files");
         assertThat(cardsText).as("step 1: generated kinds are not offered")
             .doesNotContain("Release", "Database container", "Stack service");
 
@@ -474,12 +474,15 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
         app.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);
         Models.get(InstanceModel.class).save(app);
 
-        // 2. Its Configuration (the record's form) saves an unrelated change.
+        // 2. Its Configuration (the record's form) saves an unrelated change: the build timeout, a plain field of the
+        //    source section every git source offers (an application's form offers no build command since c6f9d973,
+        //    and its branch is a provider pick, no plain input).
         navigateToApp("/admin/instances/" + app.get(InstanceModel.ID));
         waitForHydration();
-        type("input[name='settings.build_command']", "npm run build");
+        type("input[name='settings.build_timeout']", "1200");
         page.evaluate("document.querySelector('form.cms-form-layout').requestSubmit()");
-        page.waitForCondition(() -> "npm run build".equals(settingsOf("cf-stored-source").get("build_command")));
+        page.waitForCondition(() -> "1200".equals(String.valueOf(settingsOf("cf-stored-source")
+            .get(GitSourceSchema.BUILD_TIMEOUT))));
 
         // 3. The form seeded the stored false, not the new default, so the save kept the source off.
         assertThat(GitSourceSchema.autoDeploys(settingsOf("cf-stored-source")))

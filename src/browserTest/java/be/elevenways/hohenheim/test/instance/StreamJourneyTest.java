@@ -45,6 +45,7 @@ import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -176,8 +177,11 @@ class StreamJourneyTest extends HohenheimTestBase {
         assertThat(form).as("step 3c: its Upstream help names no hostname, which a stream has not")
             .contains("What this site serves or forwards").doesNotContain("What this hostname resolves to");
 
-        // 3d. The Sites list shows the stream's port where a website shows its hostnames, and no HTTPS state.
-        String list = adminGet("/admin/sites?q=r4a-ssh").body();
+        // 3d. The Sites list shows the stream's port where a website shows its hostnames, and no HTTPS state. The
+        //     list narrows by a ?q= expression; a bare word is no expression and would list every site.
+        String list = adminGet("/admin/sites?q=" + URLEncoder.encode("name = \"r4a-ssh\"", StandardCharsets.UTF_8))
+            .body();
+        assertThat(list).as("step 3d: the list holds the stream").contains("r4a-ssh");
         assertThat(list).as("step 3d: its port in the address cell").contains(publicPort + "/tcp");
         assertThat(list).as("step 3d: no missing address, no HTTPS state").doesNotContain("No address");
 

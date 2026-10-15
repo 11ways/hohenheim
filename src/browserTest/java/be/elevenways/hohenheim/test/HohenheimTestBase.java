@@ -31,6 +31,8 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import be.elevenways.zenit.common.session.SessionToken;
 import be.elevenways.zenit.common.flash.FlashNotice;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import be.elevenways.zenit.test.support.FlashHandoff;
 import be.elevenways.zenit.test.support.RateLimitExemption;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -158,6 +160,11 @@ public abstract class HohenheimTestBase extends ZenitBrowserTestBase {
             return null;
         }
         return FlashHandoff.take(session, answer.headers().firstValue("Location").orElse(null));
+    }
+
+    /** @return the toast's words in {@code languageTag}, resolved from the shipped catalogs the shell reads */
+    protected static @NonNull String toastText(@NonNull FlashNotice notice, @NonNull String languageTag) {
+        return notice.message().resolve(LocaleChain.ofTags(languageTag), new ShippedCatalogs()::resolveSource);
     }
 
     /** @return the redirect's Location without its flash handoff token, or "" without a Location */

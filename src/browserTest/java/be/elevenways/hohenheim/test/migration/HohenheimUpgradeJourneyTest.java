@@ -223,7 +223,7 @@ class HohenheimUpgradeJourneyTest {
         Path rehearsalDatabase = dir.resolve("unreplayable-history.db");
         Files.copy(database, rehearsalDatabase);
         String rehearsalUrl = "jdbc:sqlite:" + rehearsalDatabase.toAbsolutePath();
-        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.PATH, rehearsalDatabase.toAbsolutePath().toString());
+        TestDatabases.releaseHandBoundDefault();
         var rehearsal = HohenheimDatabase.openDatasource();
         Models.get(SiteModel.class);
         var withoutCreationSource = MigrationRunner.discoverMigrations(rehearsal.getDatasourceIdentifier()).stream()
