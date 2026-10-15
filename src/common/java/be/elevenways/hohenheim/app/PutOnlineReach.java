@@ -53,6 +53,17 @@ public enum PutOnlineReach {
         };
     }
 
+    /**
+     * @return the help under the access list a site reached this way follows: a site on its own ports (a stream) is
+     *         forwarded unread, so only the list's address rules apply to it
+     */
+    public @NonNull Microcopy accessListHelp() {
+        return switch (this) {
+            case WEBSITE, NONE -> HohenheimMicrocopy.HELP.of("access_list");
+            case PORTS -> HohenheimMicrocopy.HELP.of("stream_access_list");
+        };
+    }
+
     /** @return the reach as a route names it */
     public @NonNull String token() {
         return switch (this) {

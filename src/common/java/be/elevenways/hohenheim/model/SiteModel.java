@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.app.PutOnlineReach;
 import be.elevenways.hohenheim.upstream.UpstreamKindInfo;
 import be.elevenways.hohenheim.upstream.UpstreamKinds;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -117,7 +118,7 @@ public class SiteModel extends Model {
         .build());
     public static final IntegerField ACCESS_LIST_ID = SCHEMA.addField(IntegerField.builder().name("access_list_id")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("access_list"))
-        .help(HohenheimMicrocopy.HELP.of("access_list"))
+        .help(PutOnlineReach.WEBSITE.accessListHelp())
         .build());
     public static final IntegerField AUTH_PROVIDER_ID = SCHEMA.addField(IntegerField.builder().name("auth_provider_id")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("auth_provider"))

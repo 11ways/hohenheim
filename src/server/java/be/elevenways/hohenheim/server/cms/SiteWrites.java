@@ -104,8 +104,11 @@ public final class SiteWrites {
         // half-configured provider or an empty allow-list goes live.
         .add(RelationPick.of(SiteModel.AUTH_PROVIDER_ID, SiteAuthProviderModel.MODEL_ID)
             .creatable(false).build())
+        // The help is the edited site's reach's: a stream applies a list's address rules only.
         .add(RelationPick.of(SiteModel.ACCESS_LIST_ID, AccessListModel.MODEL_ID)
-            .creatable(false).build())
+            .creatable(false)
+            .help(record -> record instanceof Row site ? SiteParts.reachOf(site).accessListHelp() : null)
+            .build())
         // Creating a site is deciding a name, what it serves and whether it is on. The prose and the two shared
         // security declarations are edits a site receives later, so they fold -- still in the DOM, still posted,
         // and forced open by a refusal.

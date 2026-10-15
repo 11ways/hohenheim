@@ -215,8 +215,9 @@ final class SiteActions {
     /** The switch dialog's body over one site, in the direction the click goes ({@link SiteParts#siteBody}). */
     private static @NonNull Microcopy toggleBody(boolean disabling, @NonNull Row site) {
         return disabling
-            ? SiteParts.siteBody(site, "disable_confirm_no_hostnames", "disable_confirm", "disable_confirm_exposing")
-            : SiteParts.siteBody(site, "enable_confirm_no_hostnames", "enable_confirm", null);
+            ? SiteParts.siteBody(site, "disable_confirm_no_hostnames", "disable_confirm", "disable_confirm_exposing",
+                "disable_confirm_ports")
+            : SiteParts.siteBody(site, "enable_confirm_no_hostnames", "enable_confirm", null, "enable_confirm_ports");
     }
 
     /** The record-creating clone; the form opens on {@link #freeCloneName}, and the copy's page is where it lands. */

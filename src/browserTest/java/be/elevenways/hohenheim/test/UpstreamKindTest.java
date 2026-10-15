@@ -47,16 +47,16 @@ class UpstreamKindTest extends HohenheimTestBase {
         navigateToApp("/admin/sites/new");
         waitForHydration();
 
-        // 1. The offer is exactly the six upstreams a hostname can resolve to, drawn as
-        //    CHOICE CARDS (icon + label + one-sentence description) instead of a dropdown.
+        // 1. The offer is exactly the six upstreams a hostname can resolve to plus the TCP/UDP stream (a public port of
+        //    its own), drawn as CHOICE CARDS (icon + label + one-sentence description) instead of a dropdown.
         //    A stale workload kind reappearing here is what this count catches.
         var cards = page.locator(
             "pl-choice-group[name='upstream_kind'] pl-choice-card[data-value^='hohenheim:']");
-        assertThat(cards.count()).as("step 1: six upstream kinds are offered").isEqualTo(6);
+        assertThat(cards.count()).as("step 1: seven upstream kinds are offered").isEqualTo(7);
 
         String allText = cards.allTextContents().toString();
         assertThat(allText).as("step 1: every member is named").contains("Proxy to an address", "Static files",
-            "Redirect", "Instance", "Dev namespace", "TLS passthrough");
+            "Redirect", "Instance", "Dev namespace", "TLS passthrough", "TCP/UDP stream");
         assertThat(allText).as("step 1: every card explains itself in a sentence")
             .contains("Serve static files", "Redirect requests", "Forward requests");
         assertThat(allText).as("step 1: no workload kind survives in the upstream list")

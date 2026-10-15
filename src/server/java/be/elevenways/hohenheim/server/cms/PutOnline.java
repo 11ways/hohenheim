@@ -122,12 +122,12 @@ public final class PutOnline {
     static final RelationPick ACCESS_LIST = accessListPick(SiteModel.ACCESS_LIST_ID);
 
     /**
-     * A stream's access list: the same site column, its help saying what a raw port can apply (address rules only,
-     * as {@code SitePortClaims.credentialRefusal} enforces).
+     * A stream's access list: the same site column, its help the reach's ({@link PutOnlineReach#accessListHelp}):
+     * address rules only, as {@code SitePortClaims.credentialRefusal} enforces.
      */
     static final RelationPick STREAM_ACCESS_LIST = accessListPick(IntegerField.builder()
         .name(SiteModel.ACCESS_LIST_ID.getName()).label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("access_list"))
-        .help(HohenheimMicrocopy.HELP.of("stream_access_list")).build());
+        .help(PutOnlineReach.PORTS.accessListHelp()).build());
 
     private static @NonNull RelationPick accessListPick(@NonNull IntegerField field) {
         return RelationPick.of(field, AccessListModel.MODEL_ID)

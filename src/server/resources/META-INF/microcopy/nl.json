@@ -12713,6 +12713,18 @@
     "text": "De site {$name} verwijderen? Deze hostnamen antwoorden niet langer: {$hostnames}. De preview-deployments worden vernietigd; de app {$app} erachter blijft draaien en kan door een andere site aangewezen worden.",
     "scope": "site"
   },
+  "delete_confirm_ports": {
+    "text": "De stream {$name} verwijderen? Deze poorten sturen niet langer door en komen vrij voor ander gebruik: {$ports}. Het adres waarnaar hij doorstuurt, blijft onaangeroerd.",
+    "scope": "site"
+  },
+  "disable_confirm_ports": {
+    "text": "{$name} niet langer laten doorsturen? Deze poorten sturen meteen niet meer door: {$ports}. Er wordt niets verwijderd en de poorten blijven voor hem gereserveerd, dus opnieuw inschakelen herstelt het doorsturen.",
+    "scope": "site"
+  },
+  "enable_confirm_ports": {
+    "text": "{$name} laten doorsturen? Deze poorten beginnen hier door te sturen: {$ports}.",
+    "scope": "site"
+  },
   "toggle_confirm": {
     "text": "Wijzigen of deze site verkeer bedient?",
     "scope": "site"

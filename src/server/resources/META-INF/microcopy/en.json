@@ -12713,6 +12713,18 @@
     "text": "Delete the site {$name}? These hostnames stop answering: {$hostnames}. Its preview deployments are destroyed; the app {$app} it exposes keeps running and can be pointed at by another site.",
     "scope": "site"
   },
+  "delete_confirm_ports": {
+    "text": "Delete the stream {$name}? These ports stop forwarding and are freed for another use: {$ports}. The address it forwards to is not touched.",
+    "scope": "site"
+  },
+  "disable_confirm_ports": {
+    "text": "Stop forwarding {$name}? These ports stop forwarding immediately: {$ports}. Nothing is deleted and the ports stay reserved for it, so enabling it again restores forwarding.",
+    "scope": "site"
+  },
+  "enable_confirm_ports": {
+    "text": "Start forwarding {$name}? These ports begin forwarding here: {$ports}.",
+    "scope": "site"
+  },
   "toggle_confirm": {
     "text": "Change whether this site serves traffic?",
     "scope": "site"

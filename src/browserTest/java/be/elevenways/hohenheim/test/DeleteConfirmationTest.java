@@ -200,6 +200,24 @@ class DeleteConfirmationTest {
                 .as("step 7: a hostname-less site keeps the generic wording")
                 .isEqualTo("delete_confirm");
 
+            // 7b. A stream has no hostnames and no previews: THE ASSERTION, its dialog names the ports that stop
+            //     forwarding and are freed, in both languages, and nothing a website has.
+            Row stream = Models.get(SiteModel.class).findById(site("relay", null));
+            stream.set(SiteModel.UPSTREAM_KIND, "hohenheim:stream");
+            stream.set(SiteModel.SETTINGS, Map.of("listen_port", 47123, "protocol", "both",
+                "forward_host", "10.0.0.20", "forward_port", 22));
+            Models.get(SiteModel.class).save(stream);
+            ConfirmationSpec relay = sites.forRow(Models.get(SiteModel.class).findById(stream.get(SiteModel.ID)),
+                request);
+            assertThat(relay.body().key()).as("step 7b: the stream's own wording").isEqualTo("delete_confirm_ports");
+            assertThat(relay.body().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
+                .as("step 7b: naming the stream and both its ports")
+                .contains("relay").contains("47123/tcp").contains("47123/udp")
+                .doesNotContain("hostname").doesNotContain("preview");
+            assertThat(relay.body().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
+                .as("step 7b: and in Dutch").contains("poorten").contains("47123/udp")
+                .doesNotContain("hostnamen").doesNotContain("preview");
+
             // 8. The certificate dialog names the domains whose HTTPS stops working.
             DeleteConfirmation<Row> certificates = CertificateParts.admin().deleteConfirmation();
             Row wildcard = Models.get(CertificateModel.class).find()

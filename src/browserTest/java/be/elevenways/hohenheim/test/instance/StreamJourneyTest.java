@@ -162,6 +162,12 @@ class StreamJourneyTest extends HohenheimTestBase {
         assertThat(overview).as("step 3b: and nothing a website has")
             .doesNotContain("No address yet").doesNotContain("Protect a path").doesNotContain("Add address");
 
+        // 3c. Its edit form's access-list pick says what the wizard's said: a stream applies address rules only.
+        String form = adminGet("/admin/sites/" + siteId).body();
+        assertThat(form).as("step 3c: THE ASSERTION, the site form's access-list help is the stream's")
+            .contains("name=\"access_list_id\"").contains("only its address rules apply to a stream")
+            .doesNotContain("addresses, passwords, sign-in");
+
         // 4. A second stream on the same port is refused in the run, naming the holder; nothing is created.
         OperationRun clash = run(stream("clash", publicPort, "tcp", null), operator);
         assertThat(clash.status()).as("step 4: the clash is refused").isEqualTo(OperationRunStatus.REFUSED);

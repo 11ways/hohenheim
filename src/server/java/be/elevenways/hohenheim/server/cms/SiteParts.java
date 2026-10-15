@@ -335,37 +335,57 @@ public final class SiteParts {
     }
 
     /**
-     * The delete dialog NAMING the hostnames that stop answering, the whole consequence of a site delete, and the app
-     * the site exposes when it exposes one ({@link #siteBody}). The record-less fallback can only say that much.
+     * The delete dialog NAMING what stops answering, the whole consequence of a site delete: its hostnames, the app it
+     * exposes when it exposes one, or a stream's ports ({@link #siteBody}). The record-less fallback can only say the
+     * generic part.
      *
      * @param site the site, null for the record-less fallback
      */
     private static @NonNull ConfirmationSpec deleteBody(@Nullable Row site) {
         return DeleteConfirmation.body(site == null ? HohenheimMicrocopy.SITE.of("delete_confirm")
-            : siteBody(site, "delete_confirm", "delete_confirm_hostnames", "delete_confirm_exposing"));
+            : siteBody(site, "delete_confirm", "delete_confirm_hostnames", "delete_confirm_exposing",
+                "delete_confirm_ports"));
     }
 
     /**
-     * THE body rule of the site dialogs (delete, switch off, switch on): {@code none} when no hostname is bound,
-     * {@code exposing} naming the app when the site exposes one ({@link #exposedAppOf}), else {@code hostnames}; each
-     * with the site's name, the latter two with its hostnames, so no dialog claims an app a redirect never had.
+     * THE body rule of the site dialogs (delete, switch off, switch on), read from the site's reach: a site reached on
+     * its own ports ({@link PutOnlineReach#PORTS}, a stream) has no hostnames and no previews, so {@code ports} names
+     * the ports it forwards; any other gets {@code none} when no hostname is bound, {@code exposing} naming the app
+     * when the site exposes one ({@link #exposedAppOf}), else {@code hostnames}. Each carries the site's name, so no
+     * dialog claims an app a redirect never had or hostnames a stream never had.
      *
-     * AIDEV-NOTE: separate bodies, never one with an empty list: microcopy args echo verbatim, so an empty hostname list
-     * would render a dangling colon.
+     * AIDEV-NOTE: separate bodies, never one with an empty list: microcopy args echo verbatim, so an empty hostname or
+     * port list would render a dangling colon (a stream whose settings name no port gets {@code none}).
      *
      * @param exposing the app-naming body, null when the dialog words every kind alike
      */
     static @NonNull Microcopy siteBody(@NonNull Row site, @NonNull String none, @NonNull String hostnames,
-                                       @Nullable String exposing) {
+                                       @Nullable String exposing, @NonNull String ports) {
         String name = String.valueOf((Object) site.get(SiteModel.NAME));
-        String bound = DeleteImpact.join(DeleteImpact.hostnamesOfSite(site.get(SiteModel.ID)));
-        if (bound.isEmpty()) {
-            return HohenheimMicrocopy.SITE.of(none).withArg("name", name);
-        }
-        String app = exposing == null ? null : exposedAppOf(site);
-        Microcopy body = HohenheimMicrocopy.SITE.of(app == null ? hostnames : exposing).withArg("name", name)
-            .withArg("hostnames", bound);
-        return app == null ? body : body.withArg("app", app);
+        return switch (reachOf(site)) {
+            case PORTS -> {
+                String forwarded = DeleteImpact.join(portsOf(site));
+                yield forwarded.isEmpty() ? HohenheimMicrocopy.SITE.of(none).withArg("name", name)
+                    : HohenheimMicrocopy.SITE.of(ports).withArg("name", name).withArg("ports", forwarded);
+            }
+            case WEBSITE, NONE -> {
+                String bound = DeleteImpact.join(DeleteImpact.hostnamesOfSite(site.get(SiteModel.ID)));
+                if (bound.isEmpty()) {
+                    yield HohenheimMicrocopy.SITE.of(none).withArg("name", name);
+                }
+                String app = exposing == null ? null : exposedAppOf(site);
+                Microcopy body = HohenheimMicrocopy.SITE.of(app == null ? hostnames : exposing).withArg("name", name)
+                    .withArg("hostnames", bound);
+                yield app == null ? body : body.withArg("app", app);
+            }
+        };
+    }
+
+    /** @return the public ports a site listens on itself ({@code port/protocol}), its kind's fact; empty for a website */
+    private static @NonNull List<String> portsOf(@NonNull Row site) {
+        UpstreamKindInfo info = kindOf(site);
+        return info == null ? List.of() : info.proxyPorts(RawValues.map(site.get(SiteModel.SETTINGS))).stream()
+            .map(port -> port.hostPort() + "/" + port.protocol()).toList();
     }
 
     /**
@@ -518,10 +538,15 @@ public final class SiteParts {
 
     /** @return how a site is reached, its kind's fact; a website for a kind this build does not know */
     static @NonNull PutOnlineReach reachOf(@Nullable Row site) {
+        UpstreamKindInfo info = kindOf(site);
+        return info == null ? PutOnlineReach.WEBSITE : info.putOnlineReach();
+    }
+
+    /** @return a site's kind, null for a kind this build does not know */
+    private static @Nullable UpstreamKindInfo kindOf(@Nullable Row site) {
         Identifier kind = site == null ? null : Identifier.tryParse(String.valueOf((Object) site.get(
             SiteModel.UPSTREAM_KIND)));
-        UpstreamKindInfo info = kind == null ? null : UpstreamKinds.REGISTRY.get(kind);
-        return info == null ? PutOnlineReach.WEBSITE : info.putOnlineReach();
+        return kind == null ? null : UpstreamKinds.REGISTRY.get(kind);
     }
 
     /**
