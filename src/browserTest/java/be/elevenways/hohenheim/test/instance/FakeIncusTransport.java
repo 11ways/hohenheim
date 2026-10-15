@@ -44,6 +44,13 @@ final class FakeIncusTransport implements IncusTransport {
     /** The default pool's total size; a restore's capacity probe reads it (the pool reports nothing used). */
     volatile long poolTotalBytes = 100L * 1024 * 1024 * 1024;
 
+    /** The default profile's bridge and its subnet, as `incus network show incusbr0` reports it. */
+    static final String BRIDGE = "incusbr0";
+    volatile String bridgeAddress = "10.120.5.1/24";
+
+    /** Dynamic dnsmasq leases of the bridge (address and hostname); static ones derive from the instances' NICs. */
+    final List<Map<String, Object>> dynamicLeases = new ArrayList<>();
+
     Map<String, Object> lastCreateBody;
     boolean execAttempted;
     private int operationCounter;
@@ -107,6 +114,13 @@ final class FakeIncusTransport implements IncusTransport {
         // ensureExtraNetwork read-back-verifies -- so the fake answers with a plausible
         // assignment rather than echoing the empty config it was sent, which would fail
         // the verification on the FAKE instead of on anything the driver did.
+        if ("GET".equals(method) && path.equals("/1.0/networks/" + BRIDGE + "/leases")) {
+            return sync(leases());
+        }
+        if ("GET".equals(method) && path.equals("/1.0/networks/" + BRIDGE)) {
+            return sync(Map.of("name", BRIDGE, "managed", true, "type", "bridge",
+                "config", Map.of("ipv4.address", this.bridgeAddress, "ipv4.nat", "true")));
+        }
         if ("GET".equals(method) && path.equals("/1.0/networks")) {
             return sync(withUsedBy(this.networkStore, false));
         }
@@ -191,7 +205,12 @@ final class FakeIncusTransport implements IncusTransport {
             return async();
         }
         if ("PUT".equals(method) && path.endsWith("/state")) {
-            return async();
+            // The daemon's start-time check of a NAT proxy (measured on Incus 7.3): its connect address must be one of
+            // the instance's static IPv4 addresses, which an import never validates.
+            Map<String, Object> body = parse(jsonBody);
+            String name = path.substring("/1.0/instances/".length(), path.length() - "/state".length());
+            String refused = "start".equals(body.get("action")) ? natRefusal(this.instances.get(name)) : null;
+            return refused == null ? async() : error(400, refused);
         }
         if ("DELETE".equals(method) && path.startsWith("/1.0/instances/")
                 && path.indexOf('/', "/1.0/instances/".length()) < 0) {
@@ -357,8 +376,17 @@ final class FakeIncusTransport implements IncusTransport {
             for (String entry : overrides.split(" ")) {
                 String[] parts = entry.split(",", 2);
                 String[] keyValue = parts[1].split("=", 2);
-                ((Map<String, Object>) devices.computeIfAbsent(parts[0], absent -> new LinkedHashMap<>()))
-                    .put(keyValue[0], keyValue[1]);
+                // The daemon refuses an override of a device the export does not carry (measured: "Invalid device
+                // type"), and an empty value unsets the key.
+                Map<String, Object> device = (Map<String, Object>) devices.get(parts[0]);
+                if (device == null) {
+                    return error(400, "Failed importing backup: Failed creating instance record: Invalid device type \"\"");
+                }
+                if (keyValue[1].isEmpty()) {
+                    device.remove(keyValue[0]);
+                } else {
+                    device.put(keyValue[0], keyValue[1]);
+                }
             }
         }
         for (Map.Entry<String, Object> device : devices.entrySet()) {
@@ -375,12 +403,59 @@ final class FakeIncusTransport implements IncusTransport {
             if (nic.get("security.acls") instanceof String acl && !this.aclStore.containsKey(acl)) {
                 return error(400, "Failed creating instance record: Network ACL \"" + acl + "\" does not exist");
             }
+            if (BRIDGE.equals(network) && nic.get("ipv4.address") instanceof String address
+                    && !inBridgeSubnet(address)) {
+                return error(400, "Failed creating instance record: Failed initializing instance: Invalid devices:"
+                    + " Device validation failed for \"" + device.getKey() + "\": Device IP address \"" + address
+                    + "\" not within network \"" + BRIDGE + "\" subnet");
+            }
         }
         String name = headers.get("X-Incus-Name");
         definition.put("name", name);
         definition.put("devices", devices);
         this.instances.put(name, definition);
         return async();
+    }
+
+    /** The bridge's leases as the daemon lists them: its gateway, every NIC's static address, the dynamic ones. */
+    private List<Map<String, Object>> leases() {
+        List<Map<String, Object>> leases = new ArrayList<>();
+        leases.add(Map.of("address", this.bridgeAddress.substring(0, this.bridgeAddress.indexOf('/')),
+            "hostname", BRIDGE + ".gw", "type", "gateway"));
+        this.instances.forEach((name, instance) -> {
+            if (instance.get("devices") instanceof Map<?, ?> devices && devices.get("eth0") instanceof Map<?, ?> nic
+                    && nic.get("ipv4.address") instanceof String address) {
+                leases.add(Map.of("address", address, "hostname", name, "type", "static"));
+            }
+        });
+        leases.addAll(this.dynamicLeases);
+        return leases;
+    }
+
+    /** Whether an address lies in the bridge's /24 (the only prefix this fake hands out). */
+    private boolean inBridgeSubnet(String address) {
+        String gateway = this.bridgeAddress.substring(0, this.bridgeAddress.indexOf('/'));
+        return address.substring(0, address.lastIndexOf('.')).equals(gateway.substring(0, gateway.lastIndexOf('.')));
+    }
+
+    /** The refusal a start meets for a NAT proxy connecting anywhere but the instance's static address, or null. */
+    private static String natRefusal(Map<String, Object> instance) {
+        if (instance == null || !(instance.get("devices") instanceof Map<?, ?> devices)) {
+            return null;
+        }
+        Object pinned = devices.get("eth0") instanceof Map<?, ?> nic ? nic.get("ipv4.address") : null;
+        for (Map.Entry<?, ?> entry : devices.entrySet()) {
+            if (entry.getValue() instanceof Map<?, ?> device && "proxy".equals(device.get("type"))
+                    && "true".equals(device.get("nat"))) {
+                String connect = String.valueOf(device.get("connect"));
+                String host = connect.substring(connect.indexOf(':') + 1, connect.lastIndexOf(':'));
+                if (!host.equals(pinned)) {
+                    return "Failed to start device \"" + entry.getKey() + "\": Connect IP \"" + host
+                        + "\" must be one of the instance's static IPv4 addresses";
+                }
+            }
+        }
+        return null;
     }
 
     @Override

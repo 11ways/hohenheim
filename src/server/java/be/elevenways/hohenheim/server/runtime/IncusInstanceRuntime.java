@@ -182,8 +182,6 @@ public final class IncusInstanceRuntime
         // on it -- an Incus host whose ACL support does not really enforce refuses here,
         // never at the point where a tenant container is already running unisolated.
         ensureSharedObjects(false);
-        Map<String, Object> nic = this.policy.nicDevice(
-            IncusDefinitions.managedNetworkName(this.incus), this.egress, spec.networkLimitMbit());
 
         // AIDEV-NOTE: converge, never replace. A system container's persistent state
         // IS its rootfs, so the Docker driver's replace-on-create semantic would be
@@ -203,7 +201,7 @@ public final class IncusInstanceRuntime
                     + " declares " + this.type.apiType() + ". Destroy the workload"
                     + " explicitly before changing its flavour.");
             }
-            converge(spec, nic);
+            converge(spec);
             verifyIsolated(spec);
             // A root-size change on an EXISTING workload is never folded into the
             // converge PUT: a running grow is accepted and not performed (see
@@ -257,9 +255,9 @@ public final class IncusInstanceRuntime
         definition.put("source", source);
         definition.put("config", config);
         // The isolating NIC override is in the CREATE body: there is no instant at which
-        // an instance of ours exists on the bridge without it.
+        // an instance of ours exists on the bridge without it. So are its published ports' proxies.
         Map<String, Object> devices = new LinkedHashMap<>();
-        devices.put(IncusNetworkPolicy.NIC, nic);
+        applyNetworkDevices(spec, devices);
         // The root quota rides the CREATE body too: the daemon sizes the volume while it
         // makes it, so the workload never exists at an unquotaed size. (A VM whose
         // declared size is under the image's own volume is refused by the daemon here,
@@ -318,8 +316,7 @@ public final class IncusInstanceRuntime
     public static final String WORKSPACE_INIT = "/sbin/hohenheim-init";
 
     /** Rewrite the managed config of an existing OWNED instance; the rootfs is untouched. */
-    private void converge(@NonNull InstanceSpec spec, @NonNull Map<String, Object> nic)
-            throws IOException {
+    private void converge(@NonNull InstanceSpec spec) throws IOException {
         this.incus.editInstance(spec.handle(), (config, devices) -> {
             // volatile.* and image.* keys ride along unchanged (read-modify-write, the
             // CLI's own shape); only the managed keys are recomputed, so a value REMOVED
@@ -328,8 +325,41 @@ public final class IncusInstanceRuntime
             IncusDefinitions.applyManagedConfig(spec, this.type, config);
             // The isolating NIC override is (re)written every converge: a reboot or an
             // operator edit that dropped it is repaired here, not silently tolerated.
-            devices.put(IncusNetworkPolicy.NIC, nic);
+            applyNetworkDevices(spec, devices);
         });
+    }
+
+    /**
+     * Put the driver-owned network devices of {@code spec} into {@code devices}: the isolating eth0, pinned to a
+     * static guest address when the spec publishes ports, and one NAT proxy per publication.
+     *
+     * AIDEV-NOTE: eth0 is written WHOLESALE (that is what repairs a dropped ACL), so the pinned address must be part
+     * of this map or the next converge erases it; the address the NIC already carries is kept, so a redeploy never
+     * moves it. See {@link IncusPublishedPorts} for why NAT mode needs the pin.
+     *
+     * @param devices the definition's devices, eth0 as the daemon holds it when there is one
+     */
+    void applyNetworkDevices(@NonNull InstanceSpec spec, @NonNull Map<String, Object> devices) throws IOException {
+        String network = IncusDefinitions.managedNetworkName(this.incus);
+        Map<String, Object> nic = this.policy.nicDevice(network, this.egress, spec.networkLimitMbit());
+        String guest = spec.publications().isEmpty() ? null
+            : IncusPublishedPorts.guestAddress(this.incus, network, spec.handle(), devices.get(IncusNetworkPolicy.NIC));
+        if (guest != null) {
+            nic.put(IncusPublishedPorts.ADDRESS_KEY, guest);
+        }
+        devices.put(IncusNetworkPolicy.NIC, nic);
+        IncusPublishedPorts.apply(spec, guest, devices);
+    }
+
+    /**
+     * The eth0 keys an import of {@code spec} overrides on this daemon: an address of this bridge when it publishes
+     * ports, else none, since the exported pin names the SOURCE's subnet and the daemon refuses an import whose NIC
+     * address lies outside its own.
+     */
+    @NonNull Map<String, String> importedNic(@NonNull InstanceSpec spec) throws IOException {
+        return IncusPublishedPorts.importedNic(spec.publications().isEmpty() ? null
+            : IncusPublishedPorts.guestAddress(this.incus, IncusDefinitions.managedNetworkName(this.incus),
+                spec.handle(), null));
     }
 
     /**
@@ -476,10 +506,19 @@ public final class IncusInstanceRuntime
             return new InstanceStatus(ContainerState.UNREACHABLE, null);
         }
         boolean running = "Running".equalsIgnoreCase(String.valueOf(state.get("status")));
-        // No published port: an Incus container is an addressable system, not a
-        // port-mapped process (proxy devices are a later mechanism).
+        // A published port is a NAT proxy device, which forwards only while the workload runs.
         return new InstanceStatus(running ? ContainerState.RUNNING : ContainerState.STOPPED,
-            null, null, running ? liveness(handle) : WorkloadLiveness.UNKNOWN);
+            running ? publishedPorts(handle) : List.of(), running ? liveness(handle) : WorkloadLiveness.UNKNOWN);
+    }
+
+    /** The ports the instance's proxy devices publish, or none when its definition cannot be read. */
+    private @NonNull List<InstanceStatus.PublishedPort> publishedPorts(@NonNull String handle) {
+        try {
+            return IncusPublishedPorts.publishedOf(this.incus.instance(handle));
+        } catch (IOException unreadable) {
+            // Reported as nothing published: the deploy's verification then refuses by name.
+            return List.of();
+        }
     }
 
     /** The cgroup-v2 file that carries the kill counter, as the instance itself sees it. */

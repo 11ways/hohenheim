@@ -8355,6 +8355,10 @@
     "text": "Port {$name} publishes on {$address}, which is neither the whole host nor loopback",
     "scope": "violations"
   },
+  "vm_port_loopback": {
+    "text": "Port {$name} publishes on loopback only, but a virtual machine publishes its ports on every address of its host",
+    "scope": "violations"
+  },
   "database_engine_unknown": {
     "text": "Unknown database engine {$engine}",
     "scope": "violations"

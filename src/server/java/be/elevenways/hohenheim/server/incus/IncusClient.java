@@ -690,6 +690,14 @@ public class IncusClient {
         return metadataOrNull("/1.0/networks/" + name);
     }
 
+    /**
+     * Every address one managed network hands out: dnsmasq's dynamic leases, the static NIC addresses of every instance
+     * on it (stopped ones included, measured on Incus 7.3) and its gateway, each with its {@code type}.
+     */
+    public @NonNull List<Map<String, Object>> networkLeases(@NonNull String name) throws IOException {
+        return recursed("/1.0/networks/" + name + "/leases");
+    }
+
     /** Create a managed network ({@code POST /1.0/networks}; empty config = auto subnets). */
     public void createNetwork(@NonNull Map<String, Object> definition) throws IOException {
         syncPayload("POST", "/1.0/networks", Json.stringify(definition), DEFAULT_TIMEOUT_MS);

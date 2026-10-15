@@ -42,6 +42,7 @@ import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
 import be.elevenways.hohenheim.server.orm.RecordStamp;
 import be.elevenways.hohenheim.server.runtime.ImageIdentity;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
+import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
 import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
 import be.elevenways.hohenheim.server.runtime.PortPublication;
@@ -923,8 +924,12 @@ public final class InstanceBackups {
             manifest.disks().forEach(disk -> diskSizes.put(disk.device(), disk.sizeGb()));
             InstanceDevices.recordRestoredDisks(newId, diskSizes);
             Map<String, Path> disks = BackupArchive.extractDisks(opened, staging.resolve("disks"));
+            // The ports are claimed on this host before the workload lands, so its proxies forward the numbers the
+            // record now holds; the deploy that starts it reuses these claims.
+            InstanceSpec spec = resolved.spec().withPreallocatedPorts(
+                PortPublications.reserve(newId, resolved.serverId(), resolved.spec().publications()));
             InstanceDevices.recordImportedDevices(newId,
-                nativeSupport.importBackup(resolved.spec(), export, disks, manifest.mayCarryExtraNics()));
+                nativeSupport.importBackup(spec, export, disks, manifest.mayCarryExtraNics()));
         } else {
             VolumeSnapshotSupport support = InstanceSnapshots.requireSupport(resolved);
             Map<String, String> volumes = InstanceSnapshots.logicalVolumes(resolved);

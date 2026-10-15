@@ -4,6 +4,10 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.app.PutOnlineGroup;
+import be.elevenways.hohenheim.app.PutOnlineReach;
+import be.elevenways.hohenheim.ports.PublishedPort;
+import be.elevenways.hohenheim.server.runtime.PortPublication;
+import be.elevenways.zenit.common.orm.field.StringMapField;
 import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
@@ -31,6 +35,7 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.Map;
@@ -131,13 +136,24 @@ public final class VmKind implements InstanceKindHandler {
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("guest_agent"))
             .help(HohenheimMicrocopy.HELP.of("guest_agent")).build());
 
+    /**
+     * The ports the guest publishes on every address of its host, by name: each is a NAT proxy of the host forwarding
+     * to the guest's eth0, pinned to a static address of the bridge for it (IncusPublishedPorts). A VM hidden behind
+     * the isolating bridge is reached from outside through exactly these.
+     */
+    public static final StringMapField PUBLISHED_PORTS = SETTINGS_SCHEMA.addField(InstanceKindFields.publishedPorts());
+
+    public static final StringField SRV_SERVICE = SETTINGS_SCHEMA.addField(InstanceKindFields.srvService());
+
     // A VM is SIZED when it is created, so memory, cores and disk stay visible -- this is
     // the one kind where the ceilings ARE the decision. What folds is the guest half:
     // a first-boot cloud-config nobody pastes while creating, and two image declarations
-    // whose defaults suit every catalog image.
+    // whose defaults suit every catalog image; and the ports, which "Put something online" asks.
     static {
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.GUEST,
             List.of(CLOUD_INIT.getName(), SECURE_BOOT.getName(), GUEST_AGENT.getName())));
+        SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.PORTS,
+            List.of(PUBLISHED_PORTS.getName(), SRV_SERVICE.getName())));
     }
 
     @Override
@@ -167,6 +183,17 @@ public final class VmKind implements InstanceKindHandler {
     /** The one kind with firmware to boot an ISO: the driver's ensureCdrom is VM-only. */
     @Override
     public boolean supportsInstallMedia() { return true; }
+
+    /** A VM that publishes ports is a service reached on them; any other is a machine reached on its console. */
+    @Override
+    public @NonNull PutOnlineReach reachOf(@NonNull Map<String, Object> settings) {
+        return PublishedPort.declaredIn(settings) ? PutOnlineReach.PORTS : PutOnlineReach.NONE;
+    }
+
+    @Override
+    public @NonNull List<String> portSettings() {
+        return List.of(PUBLISHED_PORTS.getName());
+    }
 
     /** IncusInstanceRuntime implements ImagePublishSupport (incus publish). */
     @Override
@@ -198,13 +225,29 @@ public final class VmKind implements InstanceKindHandler {
         boolean guestAgent = RawValues.isOn(settings, GUEST_AGENT);
         // No command override (a VM boots its own kernel), no env (nothing injects
         // into a guest's init -- cloud-init is the provisioning lane), no named
-        // volumes (attached disks are instance_devices rows), no port publication
-        // (a VM is an addressable system) -- each absence is structural.
+        // volumes (attached disks are instance_devices rows) -- each absence is structural.
         return IncusSpecs.spec(instanceId, settings, defaultFootprintMb(settings), VM)
             .cloudInitUserData(cloudInit)
             .secureBoot(secureBoot)
             .guestAgent(guestAgent)
+            .publications(publicationsOf(settings))
             .build();
+    }
+
+    /**
+     * @return every published port as a public publication
+     * @throws Violations naming a port declared on loopback: a VM's ports are NAT proxies on every host address
+     */
+    static @NonNull List<PortPublication> publicationsOf(@NonNull Map<String, Object> settings) {
+        List<PortPublication> publications = new ArrayList<>();
+        for (PublishedPort port : PublishedPort.of(settings)) {
+            if (port.loopback()) {
+                throw Violations.ofField("settings." + PublishedPort.FIELD, port.spec(),
+                    HohenheimMicrocopy.VIOLATIONS.of("vm_port_loopback").withArg("name", port.name()));
+            }
+            publications.add(PortPublication.of(port));
+        }
+        return publications;
     }
 
     /**

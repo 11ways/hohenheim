@@ -208,14 +208,14 @@ final class IncusArchiveLane {
         // already converged the ACL, so this call writes nothing and is the read-back
         // VERIFICATION that the daemon still carries every tenant-range reject.
         this.policy.ensureIsolationAcl();
-        Map<String, Object> nic = this.policy.nicDevice(
-            IncusDefinitions.managedNetworkName(this.incus), this.egress, spec.networkLimitMbit());
+        // eth0 and the proxies are rewritten as a converge writes them: the pin the import override placed on this
+        // bridge is kept, and every proxy connects to it (the export's proxies still name the source's address).
         this.incus.editInstance(spec.handle(), (config, devices) -> {
             reidentify.apply(config, devices);
-            devices.put(IncusNetworkPolicy.NIC, nic);
+            this.runtime.applyNetworkDevices(spec, devices);
         });
         this.runtime.verifyIsolated(spec);
-        // Read off the SAME definition the import landed (the edits above touch config and eth0 only).
+        // Read off the SAME definition the import landed (the edits above touch config and network devices only).
         return IncusDeviceLane.importedDevices(existing);
     }
 
@@ -247,6 +247,10 @@ final class IncusArchiveLane {
                 attribute(spec, pool, volume);
                 repoint.put(disk.getKey(), Map.of("pool", pool, "source", volume));
             }
+            // eth0's pinned address is the one key the daemon validates against THIS host at import (its bridge
+            // subnet); a proxy's connect is checked only at start, and an override naming a device the export does
+            // not carry refuses the whole import, so the proxies are rewritten after it instead.
+            repoint.put(IncusNetworkPolicy.NIC, this.runtime.importedNic(spec));
             IncusDefinitions.bindDevices(spec).forEach((device, definition) -> {
                 if (definition instanceof Map<?, ?> bind && bind.get("source") instanceof String source) {
                     repoint.put(device, Map.of("source", source));

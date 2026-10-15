@@ -8345,6 +8345,10 @@
     "text": "Poort {$name} publiceert op {$address}, dat noch de hele host noch loopback is",
     "scope": "violations"
   },
+  "vm_port_loopback": {
+    "text": "Poort {$name} publiceert alleen op loopback, maar een virtuele machine publiceert haar poorten op elk adres van haar host",
+    "scope": "violations"
+  },
   "database_container": [
     {
       "text": "Databasecontainer",
