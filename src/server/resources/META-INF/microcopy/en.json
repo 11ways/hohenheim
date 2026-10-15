@@ -14441,7 +14441,7 @@
   "settings.hohenheim.proxy.connection_prologue_timeout_seconds.label": "Connection prologue timeout",
   "settings.hohenheim.proxy.connection_prologue_timeout_seconds.help": "Maximum time a public connection may take to send what Hohenheim reads before routing it: an optional PROXY v2 header and, on the HTTPS port, the TLS ClientHello.",
   "settings.hohenheim.proxy.fallback_address.label": "Fallback address",
-  "settings.hohenheim.proxy.fallback_address.help": "Address requests for an unknown hostname are forwarded to when the answer for unknown hostnames is Forward, for example http://localhost:8080.",
+  "settings.hohenheim.proxy.fallback_address.help": "Address an unknown hostname is passed on to when Unknown hostnames is set to Forward to an address, for example http://localhost:8080.",
   "settings.hohenheim.proxy.force_https.label": "Force HTTPS",
   "settings.hohenheim.proxy.force_https.help": "Sends visitors to HTTPS on every address with a working certificate.",
   "settings.hohenheim.proxy.http_port.label": "HTTP port",
@@ -14469,9 +14469,9 @@
   "settings.hohenheim.proxy.unknown_hosts.label": "Unknown hostnames",
   "settings.hohenheim.proxy.unknown_hosts.help": "What the proxy answers for a hostname no site serves. Over HTTPS a name none of your certificates covers gets no certificate and its connection is closed, whatever you choose here.",
   "settings.hohenheim.proxy.unknown_hosts_redirect.label": "Redirect unknown hostnames to",
-  "settings.hohenheim.proxy.unknown_hosts_redirect.help": "URL an unknown hostname is redirected to when the answer for unknown hostnames is Redirect.",
+  "settings.hohenheim.proxy.unknown_hosts_redirect.help": "URL an unknown hostname is redirected to when Unknown hostnames is set to Redirect to a URL.",
   "settings.hohenheim.proxy.unknown_hosts_site.label": "Site for unknown hostnames",
-  "settings.hohenheim.proxy.unknown_hosts_site.help": "Site an unknown hostname is served when the answer for unknown hostnames is One of your sites; it answers through its own route, so its access list and sign-in apply.",
+  "settings.hohenheim.proxy.unknown_hosts_site.help": "Site that answers an unknown hostname when Unknown hostnames is set to One of your sites. It answers through one of its own addresses, so its access list and sign-in apply.",
   "not_found": {
     "scope": "unknown_host_answer",
     "text": "The 404 page"
@@ -14490,7 +14490,7 @@
   },
   "site_detail": {
     "scope": "unknown_host_answer",
-    "text": "One of your sites answers, through its own route."
+    "text": "A site you pick answers instead, with its own access list and sign-in."
   },
   "forward": {
     "scope": "unknown_host_answer",

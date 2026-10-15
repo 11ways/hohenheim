@@ -14441,7 +14441,7 @@
   "settings.hohenheim.proxy.connection_prologue_timeout_seconds.label": "Time-out voor de verbindingsaanloop",
   "settings.hohenheim.proxy.connection_prologue_timeout_seconds.help": "Maximale tijd die een publieke verbinding krijgt om te sturen wat Hohenheim leest voor het routeren: een optionele PROXY v2-header en, op de HTTPS-poort, de TLS ClientHello.",
   "settings.hohenheim.proxy.fallback_address.label": "Terugvaladres",
-  "settings.hohenheim.proxy.fallback_address.help": "Adres waar Hohenheim de verzoeken voor een onbekende hostnaam naartoe doorstuurt wanneer het antwoord voor onbekende hostnamen Doorsturen is, bijvoorbeeld http://localhost:8080.",
+  "settings.hohenheim.proxy.fallback_address.help": "Adres waaraan een onbekende hostnaam doorgegeven wordt wanneer Onbekende hostnamen op Doorsturen naar een adres staat, bijvoorbeeld http://localhost:8080.",
   "settings.hohenheim.proxy.force_https.label": "HTTPS afdwingen",
   "settings.hohenheim.proxy.force_https.help": "Stuurt bezoekers naar HTTPS op elk adres met een werkend certificaat.",
   "settings.hohenheim.proxy.http_port.label": "HTTP-poort",
@@ -14469,9 +14469,9 @@
   "settings.hohenheim.proxy.unknown_hosts.label": "Onbekende hostnamen",
   "settings.hohenheim.proxy.unknown_hosts.help": "Wat de proxy antwoordt voor een hostnaam die geen enkele site bedient. Via HTTPS krijgt een naam die geen van je certificaten dekt geen certificaat en wordt de verbinding gesloten, wat je hier ook kiest.",
   "settings.hohenheim.proxy.unknown_hosts_redirect.label": "Onbekende hostnamen doorverwijzen naar",
-  "settings.hohenheim.proxy.unknown_hosts_redirect.help": "URL waarnaar een onbekende hostnaam doorverwezen wordt wanneer het antwoord voor onbekende hostnamen Doorverwijzen is.",
+  "settings.hohenheim.proxy.unknown_hosts_redirect.help": "URL waarnaar een onbekende hostnaam doorverwezen wordt wanneer Onbekende hostnamen op Doorverwijzen naar een URL staat.",
   "settings.hohenheim.proxy.unknown_hosts_site.label": "Site voor onbekende hostnamen",
-  "settings.hohenheim.proxy.unknown_hosts_site.help": "Site die een onbekende hostnaam bedient wanneer het antwoord voor onbekende hostnamen Een van je sites is; ze antwoordt via haar eigen route, dus haar toegangslijst en aanmelding gelden.",
+  "settings.hohenheim.proxy.unknown_hosts_site.help": "Site die een onbekende hostnaam beantwoordt wanneer Onbekende hostnamen op Een van je sites staat. Ze antwoordt via een van haar eigen adressen, dus haar toegangslijst en aanmelding gelden.",
   "not_found": {
     "scope": "unknown_host_answer",
     "text": "De 404-pagina"
@@ -14494,7 +14494,7 @@
   },
   "site_detail": {
     "scope": "unknown_host_answer",
-    "text": "Een van je sites antwoordt, via haar eigen route."
+    "text": "Een site die je kiest antwoordt in de plaats, met haar eigen toegangslijst en aanmelding."
   },
   "drop": {
     "scope": "unknown_host_answer",
