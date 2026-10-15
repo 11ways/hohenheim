@@ -26,6 +26,8 @@ import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.hohenheim.site.SiteTls;
 import be.elevenways.hohenheim.site.SiteUpstreamCell;
 import be.elevenways.hohenheim.upstream.UpstreamKinds;
+import be.elevenways.hohenheim.upstream.UpstreamKindInfo;
+import be.elevenways.hohenheim.app.PutOnlineReach;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.typed.CoreTypes;
@@ -116,7 +118,9 @@ public final class SiteParts {
      */
     public static final ChildList<Row> DOMAINS = ChildList.<Row>sections(DOMAINS_TAB,
             HohenheimMicrocopy.APP_OVERVIEW.of("addresses"), HohenheimSlugs.DOMAINS)
-        .hide(HohenheimSlugs.DOMAINS, DomainParts.APP_COLUMN);
+        .hide(HohenheimSlugs.DOMAINS, DomainParts.APP_COLUMN)
+        // A stream is reached on its own port, never at an address: it has no Addresses tab.
+        .visibleWhen((site, access) -> reachOf(site).asksAddress());
 
     /**
      * The Protection tab, in the overview card's word: the framework's child list over the panel's protected-path entry
@@ -125,7 +129,7 @@ public final class SiteParts {
      */
     public static final ChildList<Row> PROTECTED_PATHS = ChildList.<Row>of(HohenheimSlugs.PROTECTED_PATHS)
         .label(HohenheimMicrocopy.APP_OVERVIEW.of("protection"))
-        .visibleWhen((site, access) -> !tlsPassthrough(site));
+        .visibleWhen((site, access) -> servesHttp(site));
 
     private SiteParts() {
     }
@@ -510,5 +514,24 @@ public final class SiteParts {
 
     static boolean tlsPassthrough(@Nullable Row site) {
         return site != null && SiteModel.UPSTREAM_TLS_PASSTHROUGH.equals(site.get(SiteModel.UPSTREAM_KIND));
+    }
+
+    /** @return how a site is reached, its kind's fact; a website for a kind this build does not know */
+    static @NonNull PutOnlineReach reachOf(@Nullable Row site) {
+        Identifier kind = site == null ? null : Identifier.tryParse(String.valueOf((Object) site.get(
+            SiteModel.UPSTREAM_KIND)));
+        UpstreamKindInfo info = kind == null ? null : UpstreamKinds.REGISTRY.get(kind);
+        return info == null ? PutOnlineReach.WEBSITE : info.putOnlineReach();
+    }
+
+    /**
+     * Whether the proxy decodes HTTP for a site, so it has paths to protect: a TLS passthrough site is handed on by
+     * name and a stream on a port of its own, both unread.
+     */
+    static boolean servesHttp(@Nullable Row site) {
+        return switch (reachOf(site)) {
+            case WEBSITE -> !tlsPassthrough(site);
+            case PORTS, NONE -> false;
+        };
     }
 }

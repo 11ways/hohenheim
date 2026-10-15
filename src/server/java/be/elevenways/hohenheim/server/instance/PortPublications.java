@@ -323,14 +323,24 @@ public final class PortPublications {
      * ({@link PortHolders#describedTo}); the full diagnostic goes to the log otherwise.
      */
     private static Violations conflictRefusal(int port, @Nullable Row holderClaim, @NonNull String diagnostic) {
+        return conflictRefusal("settings.host_port", port, holderClaim, diagnostic);
+    }
+
+    /**
+     * {@link #conflictRefusal(int, Row, String)} on the field that names the port.
+     *
+     * @param field the field the port was given in ({@code settings.listen_port} for a stream)
+     */
+    public static @NonNull Violations conflictRefusal(@NonNull String field, int port, @Nullable Row holderClaim,
+                                                      @NonNull String diagnostic) {
         String holder = holderClaim == null ? null : PortHolders.describedTo(holderClaim);
         if (holder == null) {
             Blast.log("PORTS: host port", port, "is held by", diagnostic,
                 "- refused without naming it to a caller who may not read that owner");
-            return Violations.ofField("settings.host_port", port,
+            return Violations.ofField(field, port,
                 HohenheimMicrocopy.VIOLATIONS.of("port_conflict_unnamed").withArg("port", port));
         }
-        return Violations.ofField("settings.host_port", port,
+        return Violations.ofField(field, port,
             HohenheimMicrocopy.VIOLATIONS.of("port_conflict")
                 .withArg("port", port)
                 .withArg("holder", holder));

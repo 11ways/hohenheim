@@ -12,6 +12,9 @@ import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.ports.StreamProtocol;
+import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
@@ -250,6 +253,21 @@ final class AppHealth {
             return Verdict.notServing(RecordHealth.attention(Headline.SWITCHED_OFF.copy())
                 .detail(HohenheimMicrocopy.APP_HEALTH.of("switched_off_detail")).fixedBy(SiteOperations.ENABLE.id()));
         }
+        switch (SiteParts.reachOf(site)) {
+            case PORTS -> {
+                // A stream is reached on a public port of its own, never at an address: forwarding is its health.
+                Object port = RawValues.map(site.get(SiteModel.SETTINGS)).get("listen_port");
+                return forwarding(site)
+                    ? Verdict.serving(RecordHealth.ok(HohenheimMicrocopy.APP_HEALTH.of("stream_forwarding")
+                        .withArg("port", port)))
+                    : Verdict.notServing(RecordHealth.broken(Headline.NOT_FORWARDING.copy())
+                        .detail(HohenheimMicrocopy.APP_HEALTH.of("not_forwarding_detail").withArg("port", port))
+                        .fixedBy(SiteActions.CHANGE_CONFIGURATION));
+            }
+            case WEBSITE, NONE -> {
+                // reached at its addresses, judged below
+            }
+        }
         List<Row> domains = facts.domains.getOrDefault(siteId, List.of());
         if (domains.isEmpty()) {
             return Verdict.notServing(RecordHealth.attention(Headline.NO_ADDRESS.copy())
@@ -327,6 +345,22 @@ final class AppHealth {
             }
         }
         return Verdict.serving(RecordHealth.ok(liveWords(domains, facts.working, passthrough)));
+    }
+
+    /**
+     * Whether this process's proxy listens on every transport of a stream site's public port; false where the port
+     * could not be bound, or no proxy runs here.
+     */
+    static boolean forwarding(@NonNull Row site) {
+        ProxyServer proxy = ServerMain.getProxyServer();
+        StreamProtocol protocol = StreamProtocol.ofToken(RawValues.map(site.get(SiteModel.SETTINGS))
+            .getOrDefault(StreamProtocol.SETTING, StreamProtocol.TCP.token()));
+        Integer siteId = site.get(SiteModel.ID);
+        if (proxy == null || protocol == null || siteId == null) {
+            return false;
+        }
+        return (!protocol.forwardsTcp() || proxy.getStreamTcpAddress(siteId) != null)
+            && (!protocol.forwardsUdp() || proxy.getStreamUdpAddress(siteId) != null);
     }
 
     /**
@@ -824,6 +858,7 @@ final class AppHealth {
         ROUTED_IN_PART("routed_in_part"),
         DEGRADED("degraded"),
         HTTPS_NOT_WORKING("https_not_working"),
+        NOT_FORWARDING("not_forwarding"),
         INSTALL_FAILED("install_failed"),
         CANNOT_START("cannot_start"),
         NOT_RUNNING("not_running"),

@@ -12591,7 +12591,7 @@
   },
   "delete_confirm_named": [
     {
-      "text": "De toegangslijst {$name} verwijderen? De {$rules} regels verdwijnen mee. Er wordt op dit moment niets door bewaakt.",
+      "text": ".match {$rules :number}\none {{De toegangslijst {$name} verwijderen? De ene regel verdwijnt mee. Er wordt op dit moment niets door bewaakt.}}\n* {{De toegangslijst {$name} verwijderen? De {$rules} regels verdwijnen mee. Er wordt op dit moment niets door bewaakt.}}",
       "scope": "access_list"
     },
     {
@@ -12616,7 +12616,7 @@
     "scope": "dns_peer"
   },
   "delete_confirm_gating": {
-    "text": "De toegangslijst {$name} verwijderen? De {$rules} regels verdwijnen mee, en deze worden niet langer bewaakt -- hun verkeer wordt vanaf dat moment ongecontroleerd doorgelaten: {$gated}.",
+    "text": ".match {$rules :number}\none {{De toegangslijst {$name} verwijderen? De ene regel verdwijnt mee, en deze worden niet langer bewaakt -- hun verkeer wordt vanaf dat moment ongecontroleerd doorgelaten: {$gated}.}}\n* {{De toegangslijst {$name} verwijderen? De {$rules} regels verdwijnen mee, en deze worden niet langer bewaakt -- hun verkeer wordt vanaf dat moment ongecontroleerd doorgelaten: {$gated}.}}",
     "scope": "access_list"
   },
   "delete_local": {
@@ -18122,5 +18122,46 @@
     {"scope": "hohenheim_field", "text": "Build-image"},
     {"scope": "help", "text": "De image waarin het build-commando draait. Laat leeg voor Node.js 22."}
   ],
-  "static_site_owns_no_container": {"scope": "violations", "text": "Een statische site draait zelf nooit een container; elke deploy maakt een release die hem serveert"}
+  "static_site_owns_no_container": {"scope": "violations", "text": "Een statische site draait zelf nooit een container; elke deploy maakt een release die hem serveert"},
+  "stream": [
+    {"scope": "upstream_kind", "text": "TCP/UDP-stream"},
+    {"scope": "upstream_kind_description", "text": "Stuur een publieke poort van deze proxy ongelezen door naar een adres en poort: SSH, een database, een gameserver"}
+  ],
+  "listen_port": [
+    {"scope": "hohenheim_field", "text": "Publieke poort"},
+    {"scope": "help", "text": "De poort waarmee clients verbinden, op de host waarop deze proxy draait. Geen andere app, stream of programma mag hem gebruiken."}
+  ],
+  "stream_protocol": [
+    {"scope": "hohenheim_field", "text": "Protocol"},
+    {"scope": "help", "text": "Wat er op de publieke poort wordt doorgestuurd: verbindingen (TCP), datagrammen (UDP) of beide."}
+  ],
+  "stream_forward_host": [
+    {"scope": "hohenheim_field", "text": "Doorsturen naar adres"},
+    {"scope": "help", "text": "De hostnaam of het IP-adres waarnaar de stream doorstuurt: de host van de gepubliceerde poort van een app, een machine, of elk adres dat deze proxy bereikt."}
+  ],
+  "stream_forward_port": [
+    {"scope": "hohenheim_field", "text": "Doorsturen naar poort"},
+    {"scope": "help", "text": "De poort op dat adres."}
+  ],
+  "stream_connect_timeout": {"scope": "help", "text": "Maximaal aantal seconden om een TCP-verbinding met het doorgestuurde adres te openen."},
+  "stream_protocol_tcp": {"scope": "port_protocol", "text": "TCP"},
+  "stream_protocol_udp": {"scope": "port_protocol", "text": "UDP"},
+  "stream_protocol_both": {"scope": "port_protocol", "text": "TCP en UDP"},
+  "stream_lead": {"scope": "put_online", "text": "Claimt een publieke poort op de host van deze proxy en stuurt wat daar binnenkomt ongelezen door naar een adres dat je opgeeft."},
+  "step_stream_where_lead": {"scope": "put_online", "text": "De naam en het adres en de poort waarnaar hij doorstuurt. Er draait niets op een host voor."},
+  "step_stream_ports_lead": {"scope": "put_online", "text": "De publieke poort waarmee clients verbinden en wat hij doorstuurt. Een toegangslijst geldt alleen op adres: een stream kan niet om een wachtwoord vragen."},
+  "run_stream_port": {"scope": "put_online", "text": "Zijn publieke poort claimen"},
+  "run_stream_forward": {"scope": "put_online", "text": "Hem doorsturen"},
+  "done_stream_port": {"scope": "put_online", "text": "Publieke poort {$port} geclaimd"},
+  "done_stream_forward": {"scope": "put_online", "text": "Poort {$port} stuurt door naar {$target}"},
+  "outcome_stream_live": {"scope": "put_online", "text": "Poort {$port} van de host van deze proxy stuurt nu door naar {$target}."},
+  "stream_no_http_auth": {"scope": "violations", "text": "Een TCP/UDP-stream wordt ongelezen doorgestuurd en kan dus niemand naar een login sturen. Verwijder de loginprovider."},
+  "stream_access_list_credentials": {"scope": "violations", "text": "Deze toegangslijst vraagt om een wachtwoord of een login, wat een TCP/UDP-stream niet kan. Kies een lijst met alleen adresregels."},
+  "not_forwarding": [
+    {"scope": "app_health", "text": "Stuurt niet door"},
+    {"scope": "attention_title", "text": "{$name} stuurt zijn poort niet door"}
+  ],
+  "not_forwarding_detail": {"scope": "app_health", "text": "Poort {$port} kon niet worden geopend op de host van deze proxy: een ander programma gebruikt hem misschien, of deze installatie draait de proxy niet."},
+  "stream_forwarding": {"scope": "app_health", "text": "Stuurt poort {$port} door"},
+  "stream_connect_hint": {"scope": "app_overview", "text": "Clients verbinden met deze poort van de host van de proxy; die stuurt wat binnenkomt door naar {$target}."}
 }

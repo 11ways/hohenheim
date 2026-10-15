@@ -138,6 +138,16 @@ public final class AccessRuleTree {
     }
 
     /**
+     * Evaluate the tree for one raw TCP connection or UDP client, which carries no credential: a basic-auth or
+     * provider leaf FAILS for it (nothing could ever be asked), so only the address rules can admit it.
+     *
+     * @param clientAddress the connecting address's raw bytes
+     */
+    public boolean admitsConnection(byte @NonNull [] clientAddress) {
+        return this.root.evaluate(new Evaluation(null, clientAddress)).allowed();
+    }
+
+    /**
      * Compile the stored rows of one access list into a tree.
      *
      * @param satisfy the LIST's satisfy column: the implicit root group's mode
@@ -391,8 +401,8 @@ public final class AccessRuleTree {
         }
     }
 
-    /** Per-request state shared by every node of one evaluation. */
-    private record Evaluation(@NonNull HttpServerExchange exchange, byte @Nullable [] clientAddress) {
+    /** Per-request state shared by every node of one evaluation; a raw connection has no exchange. */
+    private record Evaluation(@Nullable HttpServerExchange exchange, byte @Nullable [] clientAddress) {
     }
 
     private sealed interface Node
@@ -524,6 +534,10 @@ public final class AccessRuleTree {
                 return new Result(Verdict.FAIL, null);
             }
             HttpServerExchange exchange = evaluation.exchange();
+            if (exchange == null) {
+                // A raw stream carries no Authorization header and none can be asked for.
+                return new Result(Verdict.FAIL, null);
+            }
             String header = exchange.getRequestHeaders().getFirst(Headers.AUTHORIZATION);
             BasicCredentials.Presented presented = BasicCredentials.parse(header);
             if (presented == null) {
@@ -584,6 +598,10 @@ public final class AccessRuleTree {
 
         @Override
         public @NonNull Result evaluate(@NonNull Evaluation evaluation) {
+            if (evaluation.exchange() == null) {
+                // A raw stream carries no session and cannot be sent to a login.
+                return new Result(Verdict.FAIL, null);
+            }
             boolean accepted = this.gate instanceof SessionAuthority authority
                 && ProxySessionSupport.acceptedSession(evaluation.exchange(), this.store, this.siteId,
                     authority) != null;

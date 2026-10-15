@@ -21,6 +21,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.tls.HostnameReach;
+import be.elevenways.hohenheim.server.upstream.kinds.StreamUpstreamKind;
 import be.elevenways.hohenheim.upstream.UpstreamKindInfo;
 import be.elevenways.hohenheim.upstream.UpstreamKinds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -57,6 +58,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -168,6 +170,13 @@ public final class PutOnline {
     private static final OperationSteps ADDRESS_STEPS = OperationSteps.of(
         OperationSteps.step("website", HohenheimMicrocopy.PUT_ONLINE.of("run_website")),
         OperationSteps.step("certificate", HohenheimMicrocopy.PUT_ONLINE.of("run_certificate")))
+        .inJourneyAfterItsForm(BEFORE_FORM, STEP_LIVE)
+        .titled(titleFrom(SiteModel.NAME.getName()));
+
+    /** The run's steps for a TCP/UDP stream: its public port, then its forward. */
+    private static final OperationSteps STREAM_STEPS = OperationSteps.of(
+        OperationSteps.step("port", HohenheimMicrocopy.PUT_ONLINE.of("run_stream_port")),
+        OperationSteps.step("forward", HohenheimMicrocopy.PUT_ONLINE.of("run_stream_forward")))
         .inJourneyAfterItsForm(BEFORE_FORM, STEP_LIVE)
         .titled(titleFrom(SiteModel.NAME.getName()));
 
@@ -307,7 +316,8 @@ public final class PutOnline {
         .add(ADDRESS_HOSTNAME)
         .add(Select.of(SiteModel.UPSTREAM_KIND)
             .options(OptionSource.dynamic(context -> FieldFormEntryDefaults.enumOptionSource(SiteModel.UPSTREAM_KIND)
-                .resolve(context).stream().filter(option -> offeredAsApp(option.value())).toList()))
+                .resolve(context).stream().filter(option -> offeredAsApp(option.value())
+                    && addressReachOf(option.value()) == PutOnlineReach.WEBSITE).toList()))
             .presentation(Select.Presentation.CARDS)
             .clearable(false)
             .build())
@@ -324,6 +334,26 @@ public final class PutOnline {
             SiteModel.UPSTREAM_KIND.getName(), SiteModel.SETTINGS.getName())
                 .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_address_where_lead")))
         .step(httpsStep(PutOnline::addressSummary))
+        .build();
+
+    /**
+     * A TCP/UDP stream (npmplus's streams): what it forwards to, then its Ports step: the public port on the proxy's
+     * host, its protocol and the access list. No address and no HTTPS: it is reached on its port, and nothing runs on
+     * a host for it.
+     */
+    private static final FormSpec STREAM_INPUT = FormSpec.builder()
+        .add(SiteModel.NAME)
+        .add(StreamUpstreamKind.FORWARD_HOST)
+        .add(StreamUpstreamKind.FORWARD_PORT)
+        .add(StreamUpstreamKind.LISTEN_PORT)
+        .add(StreamUpstreamKind.PROTOCOL)
+        .add(ACCESS_LIST)
+        .step(FormStep.of("where", STEP_WHERE, SiteModel.NAME.getName(), StreamUpstreamKind.FORWARD_HOST.getName(),
+            StreamUpstreamKind.FORWARD_PORT.getName())
+                .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_stream_where_lead")))
+        .step(FormStep.of(PORTS, STEP_PORTS, StreamUpstreamKind.LISTEN_PORT.getName(),
+            StreamUpstreamKind.PROTOCOL.getName(), SiteModel.ACCESS_LIST_ID.getName())
+                .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_stream_ports_lead")))
         .build();
 
     private static final FormSpec WORKLOAD_INPUT = FormSpec.builder()
@@ -466,6 +496,25 @@ public final class PutOnline {
         }
     }
 
+    /**
+     * A TCP/UDP stream: its name, its upstream, its public port and protocol, and its access list.
+     *
+     * @param forward_host spelled as its form field, which the boot check holds every record component to
+     */
+    public record Stream(@Nullable String name, @Nullable String forward_host, @Nullable Integer forward_port,
+                         @Nullable Integer listen_port, @Nullable String protocol, @Nullable Integer access_list_id) {
+
+        /** @return the stream site's settings */
+        public @NonNull Map<String, Object> settings() {
+            Map<String, Object> settings = new LinkedHashMap<>();
+            settings.put(StreamUpstreamKind.LISTEN_PORT.getName(), this.listen_port);
+            settings.put(StreamUpstreamKind.PROTOCOL.getName(), this.protocol);
+            settings.put(StreamUpstreamKind.FORWARD_HOST.getName(), this.forward_host);
+            settings.put(StreamUpstreamKind.FORWARD_PORT.getName(), this.forward_port);
+            return settings;
+        }
+    }
+
     /** A workload of one kind: its name, host (null: placement picks), settings, address and HTTPS choice. */
     public record Workload(@Nullable String name, @Nullable String hostname, @Nullable Integer serverId,
                            @Nullable String kind, @Nullable Map<String, Object> settings, @Nullable String https,
@@ -561,6 +610,24 @@ public final class PutOnline {
             .background(ADDRESS_STEPS)
             .register();
 
+    /** Puts one TCP/UDP stream online: its public port claimed, then forwarded by the proxy. */
+    public static final Operation<Void, Stream, Integer> PUT_STREAM_ONLINE =
+        Operation.declare(HohenheimIds.id("put_stream_online"))
+            .label(HohenheimMicrocopy.PUT_ONLINE.of("put_online"))
+            .happened(HohenheimMicrocopy.PUT_ONLINE.of("happened"))
+            .icon(Icon.of("rocket"))
+            .noSubject()
+            .gate(OperationGate.open())
+            .input(OperationInput.of(STREAM_INPUT, Stream.class, values -> new Stream(values.get(SiteModel.NAME),
+                values.get(StreamUpstreamKind.FORWARD_HOST), values.get(StreamUpstreamKind.FORWARD_PORT),
+                values.get(StreamUpstreamKind.LISTEN_PORT), values.get(StreamUpstreamKind.PROTOCOL),
+                values.get(SiteModel.ACCESS_LIST_ID))))
+            .result(Integer.class)
+            .facts(OperationFact.REACHES_OUTSIDE)
+            .command(CmsCommands.EXTERNAL)
+            .background(STREAM_STEPS)
+            .register();
+
     /** Puts one workload online from its kind's own settings: the app, its website, its certificate, its start. */
     public static final Operation<Void, Workload, Integer> PUT_WORKLOAD_ONLINE =
         Operation.declare(HohenheimIds.id("put_workload_online"))
@@ -641,7 +708,7 @@ public final class PutOnline {
     static @NonNull List<Microcopy> sharedSteps() {
         List<Microcopy> shared = null;
         for (Operation<?, ?, ?> flow : List.of(PUT_ONLINE, PUT_SERVICE_ONLINE, PUT_ADDRESS_ONLINE, PUT_WORKLOAD_ONLINE,
-                PUT_WORKLOAD_SERVICE_ONLINE, PUT_MACHINE_ONLINE)) {
+                PUT_WORKLOAD_SERVICE_ONLINE, PUT_MACHINE_ONLINE, PUT_STREAM_ONLINE)) {
             List<Microcopy> journey = new ArrayList<>(BEFORE_FORM);
             flow.input().form().declaredSteps().forEach(step -> journey.add(step.label()));
             if (shared == null) {
@@ -669,6 +736,13 @@ public final class PutOnline {
         Identifier id = kind == null ? null : Identifier.tryParse(kind);
         UpstreamKindInfo info = id == null ? null : UpstreamKinds.REGISTRY.get(id);
         return info != null && info.offeredAsApp();
+    }
+
+    /** @return how an address of the upstream kind with this stored id is reached, null for a kind not known */
+    static @Nullable PutOnlineReach addressReachOf(@Nullable String kind) {
+        Identifier id = kind == null ? null : Identifier.tryParse(kind);
+        UpstreamKindInfo info = id == null ? null : UpstreamKinds.REGISTRY.get(id);
+        return info == null ? null : info.putOnlineReach();
     }
 
     /**

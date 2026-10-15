@@ -71,6 +71,8 @@ public final class PublicTcpListener implements AutoCloseable {
     private final Predicate<String> bannedIpCheck;
     private final Consumer<IOException> listenerFailureHandler;
     private final Semaphore connectionSlots;
+    /* False for a stream's port: nothing is read before the relay, since a server-first protocol sends nothing. */
+    private final boolean readsPrologue;
     private final Semaphore pendingPrologues;
     private final Set<Socket> activeSockets = ConcurrentHashMap.newKeySet();
     private final ExecutorService connections = Executors.newThreadPerTaskExecutor(
@@ -92,6 +94,26 @@ public final class PublicTcpListener implements AutoCloseable {
                              ConnectionIdentities connectionIdentities, Predicate<String> bannedIpCheck,
                              int maxConnections, int maxPendingPrologues,
                              Consumer<IOException> listenerFailureHandler) {
+        this(bindAddress, port, prologueTimeoutMillis, router, trustedProxySources, connectionIdentities,
+            bannedIpCheck, maxConnections, maxPendingPrologues, listenerFailureHandler, true);
+    }
+
+    /**
+     * A TCP/UDP stream's public port: every connection goes to the router at once, without waiting for a PROXY v2
+     * prologue (SSH, SMTP and databases speak first from the server, so their clients send nothing to wait for).
+     */
+    static PublicTcpListener forStream(String bindAddress, int port, ConnectionRouter router, int maxConnections,
+                                       Consumer<IOException> listenerFailureHandler) {
+        // The router reads nothing; the deadline only bounds a router that would (DNS is the connect's own budget).
+        return new PublicTcpListener(bindAddress, port, 10_000, router, List::of, new ConnectionIdentities(),
+            ip -> false, maxConnections, maxConnections, listenerFailureHandler, false);
+    }
+
+    private PublicTcpListener(String bindAddress, int port, int prologueTimeoutMillis,
+                              ConnectionRouter router, Supplier<List<String>> trustedProxySources,
+                              ConnectionIdentities connectionIdentities, Predicate<String> bannedIpCheck,
+                              int maxConnections, int maxPendingPrologues,
+                              Consumer<IOException> listenerFailureHandler, boolean readsPrologue) {
         if (prologueTimeoutMillis < 1) {
             throw new IllegalArgumentException("Prologue timeout must be positive");
         }
@@ -111,6 +133,7 @@ public final class PublicTcpListener implements AutoCloseable {
         this.listenerFailureHandler = listenerFailureHandler;
         this.connectionSlots = new Semaphore(maxConnections);
         this.pendingPrologues = new Semaphore(maxPendingPrologues);
+        this.readsPrologue = readsPrologue;
     }
 
     /** Test seam: replaces the server socket the next {@link #start()} binds. */
@@ -210,7 +233,8 @@ public final class PublicTcpListener implements AutoCloseable {
             InetSocketAddress originalSource = peer;
             InetSocketAddress originalDestination = internetAddress(
                 client.getLocalSocketAddress(), "listener destination");
-            Optional<ProxyProtocolV2.Header> ingress = ProxyProtocolV2.readOptional(input);
+            Optional<ProxyProtocolV2.Header> ingress = this.readsPrologue
+                ? ProxyProtocolV2.readOptional(input) : Optional.empty();
             if (ingress.isPresent()) {
                 if (!IpLiterals.matchesList(peer.getAddress().getAddress(), trustedProxySources.get())) {
                     throw new IOException("untrusted source sent a PROXY protocol header");

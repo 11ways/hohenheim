@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.StackFileModel;
 import be.elevenways.hohenheim.model.InstanceTemplateFileModel;
 import be.elevenways.hohenheim.server.instance.TemplateDeclarationGuards;
+import be.elevenways.hohenheim.server.ports.SitePortClaims;
 import be.elevenways.hohenheim.server.cms.SiteDomainRouteInvariant;
 import be.elevenways.hohenheim.server.cms.SiteEnableInvariant;
 import be.elevenways.hohenheim.server.auth.OperatorTrustedWrites;
@@ -99,6 +100,9 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // carries no HTTP gate -- AFTER TenantWrites so a tenant writing one of those frozen
         // operator columns is refused as frozen, not by the shape rule.
         SiteModel.installUpstreamInvariants();
+        // A site listening on a public port of its own (a TCP/UDP stream) claims it in the port ledger in the same
+        // save, and carries no login gate -- AFTER TenantWrites for the same reason.
+        SitePortClaims.install();
         // A dyndns credential dies with its record, on every delete lane -- AFTER
         // TenantWrites so an unauthorized record delete refuses first.
         DynamicDnsService.installCredentialCascade();

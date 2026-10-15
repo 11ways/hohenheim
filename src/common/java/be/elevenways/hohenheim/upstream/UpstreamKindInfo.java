@@ -3,8 +3,13 @@ package be.elevenways.hohenheim.upstream;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.WordedKind;
 import be.elevenways.hohenheim.app.PutOnlineGroup;
+import be.elevenways.hohenheim.app.PutOnlineReach;
+import be.elevenways.hohenheim.ports.PublishedPort;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+
+import java.util.List;
+import java.util.Map;
 
 /**
  * Common upstream-kind metadata. Lives in src/common so the admin UI (client) can
@@ -49,5 +54,24 @@ public interface UpstreamKindInfo extends WordedKind {
     /** The "Put something online" group this kind is offered under; null when it is not {@link #offeredAsApp}. */
     default @Nullable PutOnlineGroup putOnlineGroup() {
         return this.offeredAsApp() ? PutOnlineGroup.ADDRESS : null;
+    }
+
+    /**
+     * How a site of this kind is reached from outside, which decides the steps "Put something online" asks: a website
+     * an address and HTTPS, a stream the public port it listens on.
+     */
+    default @NonNull PutOnlineReach putOnlineReach() {
+        return PutOnlineReach.WEBSITE;
+    }
+
+    /**
+     * The public ports a site of this kind listens on itself, on the proxy's own host, read from its settings: each
+     * is claimed in the port ledger like any workload's published port. A website listens on the proxy's shared
+     * HTTP and HTTPS ports and claims none.
+     *
+     * @return the ports, the host port being the public one; empty when its settings name none yet
+     */
+    default @NonNull List<PublishedPort> proxyPorts(@NonNull Map<String, Object> settings) {
+        return List.of();
     }
 }

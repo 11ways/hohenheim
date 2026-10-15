@@ -103,9 +103,10 @@ public final class SiteOperationHandlers {
             .authorize(reachesSite())
             .patchBase((site, access) -> manageInput(Objects.requireNonNull(site, "an edit has its site")))
             .handle(call -> updateDelegated(call));
-        // A passthrough site never sees a path (TLS is not terminated here), so it has nothing to protect.
+        // A passthrough site never sees a path (TLS is not terminated here) and a stream is relayed unread on a port
+        // of its own, so neither has anything to protect.
         OperationHandlers.attach(ProtectPath.OPERATION)
-            .applies(site -> live(site) && !SiteParts.tlsPassthrough(site))
+            .applies(site -> live(site) && SiteParts.servesHttp(site))
             .authorize(reachesSite())
             .handle(call -> protectPath(call.subject(), Objects.requireNonNull(call.input(), "protecting has input"),
                 call.access()));

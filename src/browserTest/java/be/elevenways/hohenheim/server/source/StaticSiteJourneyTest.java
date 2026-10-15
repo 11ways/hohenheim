@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.source;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.OperationStatus;
@@ -177,6 +178,8 @@ class StaticSiteJourneyTest extends HohenheimTestBase {
         Row serving = servingAt(first, "step 4");
         String firstImage = String.valueOf(ApplicationReleases.storedSettings(serving).get("image"));
         assertThat(firstImage).as("step 4: the release runs a digest-pinned build").startsWith("sha256:");
+        assertThat(String.valueOf(RawValues.map(docker.inspectImage(firstImage).get("Config")).get("User")))
+            .as("step 4: the built image serves as an unprivileged user, never root").isEqualTo("65534:65534");
         int port = ProxyTestSupport.httpPort(proxy);
         assertThat(ProxyTestSupport.rawRequest(port, HOSTNAME, "/"))
             .as("step 4: the proxy serves the built page").contains("200").contains(MARK + "-one");

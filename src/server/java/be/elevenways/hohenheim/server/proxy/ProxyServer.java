@@ -63,6 +63,9 @@ public class ProxyServer {
     // In-memory by default; a DbSessionStore (backed by site_sessions) is a drop-in here.
     private final SessionStore proxySessionStore;
 
+    /* The TCP/UDP streams' own public ports, kept in step with the sites at every route load. */
+    private final StreamRelays streams;
+
     private Undertow httpServer;
     private Undertow httpsServer;
     private final List<PublicTcpListener> httpFrontListeners = new ArrayList<>();
@@ -109,6 +112,7 @@ public class ProxyServer {
         long sessionTtl = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.ProxyAuth.SESSION_TTL_SECONDS);
         this.proxySessionStore = new InMemorySessionStore(sessionTtl);
         this.dispatcher = new SiteDispatcher(acmeService, proxySessionStore, certificateStore);
+        this.streams = new StreamRelays(proxySessionStore);
 
         // Wrap dispatcher with gzip/deflate compression. gRPC exchanges bypass the
         // encoding layer entirely: gRPC does its own message compression and a
@@ -214,6 +218,17 @@ public class ProxyServer {
         if (ForceSslLatch.fire(certificateStore) > 0) {
             dispatcher.reloadRoutes();
         }
+        streams.reconcile();
+    }
+
+    /** @return the public TCP address a stream site listens on, null when it listens on none */
+    public @Nullable InetSocketAddress getStreamTcpAddress(int siteId) {
+        return streams.tcpAddress(siteId);
+    }
+
+    /** @return the public UDP address a stream site listens on, null when it listens on none */
+    public @Nullable InetSocketAddress getStreamUdpAddress(int siteId) {
+        return streams.udpAddress(siteId);
     }
 
     /** Whether force-SSL routes can currently be answered with a redirect instead of a 503. */
@@ -486,6 +501,7 @@ public class ProxyServer {
         stopHttpResources();
         stopHttpsResources();
         dispatcher.shutdown();
+        streams.closeAll();
         proxySessionStore.deleteExpired();
         dispatcher.setHttpsAvailable(false);
         httpState = State.STOPPED;

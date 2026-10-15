@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.NetworkInterface;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
@@ -84,6 +85,24 @@ final class BackendConnector {
         }
         if (lastFailure != null) throw lastFailure;
         throw new SocketTimeoutException("TLS passthrough connection deadline exceeded");
+    }
+
+    /**
+     * The one address a UDP stream sends a client's datagrams to, vetted and resolved as a TCP backend is; a stream
+     * never sends to its own public port.
+     *
+     * @throws IOException when the target is refused, cannot be resolved in time or is the stream's own port
+     */
+    static InetSocketAddress datagramTarget(String host, int port, int timeoutMillis, int ownPort,
+                                            boolean publicOnly) throws IOException {
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+        for (InetAddress address : IpLiterals.parse(host) != null
+                ? addresses(host, publicOnly) : awaitAddresses(host, publicOnly, deadline)) {
+            if (!isLocalListener(address, port, ownPort)) {
+                return new InetSocketAddress(address, port);
+            }
+        }
+        throw new IOException("stream target " + host + ":" + port + " is the stream's own public port");
     }
 
     /**

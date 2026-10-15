@@ -15,6 +15,7 @@ import be.elevenways.hohenheim.server.preview.PreviewDomains;
 import be.elevenways.hohenheim.server.preview.PreviewRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.FaultedSiteHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
+import be.elevenways.hohenheim.server.sitetype.StreamProvider;
 import be.elevenways.hohenheim.server.sitetype.TlsPassthroughProvider;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.hohenheim.server.tls.CertificateStore;
@@ -202,7 +203,8 @@ final class RouteTableBuilder {
             problem(siteId, siteName, RoutingProblem.Reason.UNKNOWN_KIND, siteTypeStr);
             return;
         }
-        if (typeHandler instanceof TlsPassthroughProvider) {
+        // Neither is served over HTTP: passthrough routes by SNI, a stream listens on a port of its own (StreamRelays).
+        if (typeHandler instanceof TlsPassthroughProvider || typeHandler instanceof StreamProvider) {
             return;
         }
 

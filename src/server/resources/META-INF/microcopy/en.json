@@ -12591,7 +12591,7 @@
   },
   "delete_confirm_named": [
     {
-      "text": "Delete the access list {$name}? Its {$rules} rules go with it. Nothing is gated by it right now.",
+      "text": ".match {$rules :number}\none {{Delete the access list {$name}? Its one rule goes with it. Nothing is gated by it right now.}}\n* {{Delete the access list {$name}? Its {$rules} rules go with it. Nothing is gated by it right now.}}",
       "scope": "access_list"
     },
     {
@@ -12616,7 +12616,7 @@
     "scope": "dns_peer"
   },
   "delete_confirm_gating": {
-    "text": "Delete the access list {$name}? Its {$rules} rules go with it, and these stop being gated -- their traffic is let through unchecked from that moment on: {$gated}.",
+    "text": ".match {$rules :number}\none {{Delete the access list {$name}? Its one rule goes with it, and these stop being gated -- their traffic is let through unchecked from that moment on: {$gated}.}}\n* {{Delete the access list {$name}? Its {$rules} rules go with it, and these stop being gated -- their traffic is let through unchecked from that moment on: {$gated}.}}",
     "scope": "access_list"
   },
   "delete_local": {
@@ -18122,5 +18122,46 @@
     {"scope": "hohenheim_field", "text": "Build image"},
     {"scope": "help", "text": "The image the build command runs in. Leave it empty for Node.js 22."}
   ],
-  "static_site_owns_no_container": {"scope": "violations", "text": "A static site never runs a container itself; each deploy generates a release that serves it"}
+  "static_site_owns_no_container": {"scope": "violations", "text": "A static site never runs a container itself; each deploy generates a release that serves it"},
+  "stream": [
+    {"scope": "upstream_kind", "text": "TCP/UDP stream"},
+    {"scope": "upstream_kind_description", "text": "Forward a public port of this proxy to an address and port, unread: SSH, a database, a game server"}
+  ],
+  "listen_port": [
+    {"scope": "hohenheim_field", "text": "Public port"},
+    {"scope": "help", "text": "The port clients connect to, on the host this proxy runs on. No other app, stream or program may use it."}
+  ],
+  "stream_protocol": [
+    {"scope": "hohenheim_field", "text": "Protocol"},
+    {"scope": "help", "text": "What is forwarded on the public port: connections (TCP), datagrams (UDP) or both."}
+  ],
+  "stream_forward_host": [
+    {"scope": "hohenheim_field", "text": "Forward to address"},
+    {"scope": "help", "text": "The host name or IP address the stream forwards to: the host of an app's published port, a machine, or any address this proxy can reach."}
+  ],
+  "stream_forward_port": [
+    {"scope": "hohenheim_field", "text": "Forward to port"},
+    {"scope": "help", "text": "The port at that address."}
+  ],
+  "stream_connect_timeout": {"scope": "help", "text": "Maximum seconds to open a TCP connection to the forwarded address."},
+  "stream_protocol_tcp": {"scope": "port_protocol", "text": "TCP"},
+  "stream_protocol_udp": {"scope": "port_protocol", "text": "UDP"},
+  "stream_protocol_both": {"scope": "port_protocol", "text": "TCP and UDP"},
+  "stream_lead": {"scope": "put_online", "text": "Claims a public port on this proxy's host and forwards what arrives there, unread, to an address you give."},
+  "step_stream_where_lead": {"scope": "put_online", "text": "Its name and the address and port it forwards to. Nothing runs on a host for it."},
+  "step_stream_ports_lead": {"scope": "put_online", "text": "The public port clients connect to and what it forwards. An access list applies by address only: a stream cannot ask for a password."},
+  "run_stream_port": {"scope": "put_online", "text": "Claim its public port"},
+  "run_stream_forward": {"scope": "put_online", "text": "Forward it"},
+  "done_stream_port": {"scope": "put_online", "text": "Claimed public port {$port}"},
+  "done_stream_forward": {"scope": "put_online", "text": "Port {$port} forwards to {$target}"},
+  "outcome_stream_live": {"scope": "put_online", "text": "Port {$port} of this proxy's host now forwards to {$target}."},
+  "stream_no_http_auth": {"scope": "violations", "text": "A TCP/UDP stream is forwarded unread, so it cannot send anyone to a login. Remove the login provider."},
+  "stream_access_list_credentials": {"scope": "violations", "text": "This access list asks for a password or a login, which a TCP/UDP stream cannot do. Pick a list with address rules only."},
+  "not_forwarding": [
+    {"scope": "app_health", "text": "Not forwarding"},
+    {"scope": "attention_title", "text": "{$name} is not forwarding its port"}
+  ],
+  "not_forwarding_detail": {"scope": "app_health", "text": "Port {$port} could not be opened on this proxy's host: another program may hold it, or this install does not run the proxy."},
+  "stream_forwarding": {"scope": "app_health", "text": "Forwards port {$port}"},
+  "stream_connect_hint": {"scope": "app_overview", "text": "Clients connect to this port of the proxy's host; it forwards what arrives to {$target}."}
 }

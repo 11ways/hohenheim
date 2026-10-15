@@ -26,6 +26,8 @@ import be.elevenways.hohenheim.server.instance.InstanceTemplates;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.hohenheim.server.tls.UploadedCertificates;
 import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
+import be.elevenways.hohenheim.server.upstream.kinds.StreamUpstreamKind;
+import be.elevenways.hohenheim.server.ports.SitePortClaims;
 import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
@@ -110,6 +112,9 @@ final class PutOnlineHandlers {
         OperationHandlers.attach(PutOnline.PUT_MACHINE_ONLINE)
             .authorize(PutOnlineHandlers::admitMachine)
             .handle(PutOnlineHandlers::putMachineOnline);
+        OperationHandlers.attach(PutOnline.PUT_STREAM_ONLINE)
+            .authorize(PutOnlineHandlers::admitStream)
+            .handle(PutOnlineHandlers::putStreamOnline);
     }
 
     private PutOnlineHandlers() {
@@ -364,7 +369,9 @@ final class PutOnlineHandlers {
             return new DomainRefusal(ZenitRefusalReason.INVALID, "no address given", PutOnline.HOSTNAME.getName(),
                 message("address_required"));
         }
-        if (!PutOnline.offeredAsApp(input.upstream_kind())) {
+        // A kind reached on a port of its own (a stream) has its own flow; this one gives an address and HTTPS.
+        if (!PutOnline.offeredAsApp(input.upstream_kind())
+                || PutOnline.addressReachOf(input.upstream_kind()) != PutOnlineReach.WEBSITE) {
             return new DomainRefusal(ZenitRefusalReason.INVALID, "kind " + input.upstream_kind() + " is no app",
                 SiteModel.UPSTREAM_KIND.getName(), message("kind_not_offered"));
         }
@@ -374,6 +381,22 @@ final class PutOnlineHandlers {
             return refusedAs("access list", gated);
         }
         return httpsRefusal(input.hostname(), input.httpsAnswer(), access);
+    }
+
+    /**
+     * In the request, before a run is recorded: an operator, and an access list a raw stream can apply. The port's
+     * claim is the site save's own (SitePortClaims), refused there in the run's words when another owner holds it.
+     */
+    private static @Nullable DomainRefusal admitStream(@Nullable Void none, PutOnline.@Nullable Stream input,
+                                                       @NonNull AccessContext access) {
+        if (!HohenheimAccess.isAdmin(access)) {
+            return new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "putting a stream online is an operator act");
+        }
+        if (input == null) {
+            return null;
+        }
+        Violations gated = SitePortClaims.credentialRefusal(null, input.access_list_id());
+        return gated == null ? null : refusedAs("access list", gated);
     }
 
     /** In the request, before a run is recorded: an operator, and a kind that is put online from its own settings. */
@@ -714,6 +737,26 @@ final class PutOnlineHandlers {
     }
 
     /**
+     * Port, forward: the stream site's save claims its public port (refused when another owner holds it), and the
+     * proxy's reload after the save's commit starts forwarding it.
+     *
+     * @return the new site's id
+     */
+    private static @NonNull Integer putStreamOnline(@NonNull OperationCall<Void, PutOnline.Stream> call) {
+        PutOnline.Stream input = Objects.requireNonNull(call.input(), "put online has its input");
+        int siteId = createWebsite(input.name(), null, StreamUpstreamKind.ID.toString(), null, input.settings(),
+            input.access_list_id());
+        Row site = Objects.requireNonNull(Models.get(SiteModel.class).findById(siteId));
+        call.attachSubject(SiteOperations.SITE, site);
+        String port = input.listen_port() + "/" + input.protocol();
+        String target = input.forward_host() + ":" + input.forward_port();
+        call.reportStepDone(done("stream_port").withArg("port", port));
+        call.reportStepDone(done("stream_forward").withArg("port", port).withArg("target", target));
+        call.reportOutcome(message("stream_live").withArg("port", port).withArg("target", target));
+        return siteId;
+    }
+
+    /**
      * The outcome of an address whose HTTPS was set up: one Let's Encrypt still issues waits on the address pointing
      * here; a certificate already held or uploaded answers now.
      */
@@ -744,8 +787,11 @@ final class PutOnlineHandlers {
         call.reportStepDone(line.withArg("address", hostname).withArg("name", name));
     }
 
-    /** The site and its first address, atomically: a refused address (a claimed name) rolls the site back. */
-    private static int createWebsite(@Nullable String name, @NonNull String hostname, @NonNull String upstreamKind,
+    /**
+     * The site and its first address, atomically: a refused address (a claimed name) rolls the site back. A stream has
+     * no address; its refused port rolls it back the same way.
+     */
+    private static int createWebsite(@Nullable String name, @Nullable String hostname, @NonNull String upstreamKind,
                                      @Nullable Integer instanceId, @NonNull Map<String, Object> settings,
                                      @Nullable Integer accessListId) {
         SiteWrites.CreateInput create = new SiteWrites.CreateInput(name, hostname, upstreamKind, instanceId, settings,

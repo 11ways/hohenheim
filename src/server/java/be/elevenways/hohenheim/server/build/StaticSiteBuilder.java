@@ -78,6 +78,9 @@ public final class StaticSiteBuilder implements Builders {
         return new DockerfileBuilder().plan(derived, buildId, log, sandbox);
     }
 
+    /** The unprivileged user (nobody:nogroup) the serving stage runs as. */
+    static final String SERVING_USER = "65534:65534";
+
     /**
      * @return the Dockerfile serving {@code output}, built first when the site names a build command
      * @throws IOException naming the value that cannot go into a Dockerfile
@@ -105,6 +108,9 @@ public final class StaticSiteBuilder implements Builders {
             .append("ENV SERVER_PORT=").append(PORT).append(" SERVER_ROOT=/public SERVER_HEALTH=true")
             .append(" SERVER_IGNORE_HIDDEN_FILES=true\n")
             .append(copy)
+            // Served as nobody: the server only reads the copied files and listens above 1024, so it never needs
+            // root, and a shell into it is an unprivileged one.
+            .append("USER ").append(SERVING_USER).append("\n")
             .toString();
     }
 

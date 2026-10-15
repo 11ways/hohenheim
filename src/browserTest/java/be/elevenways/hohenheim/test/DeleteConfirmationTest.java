@@ -285,6 +285,19 @@ class DeleteConfirmationTest {
                 .as("step 1: naming the list").isEqualTo("Office");
             assertThat(unused.body().args().get("rules"))
                 .as("step 1: and the rules that go with it").isEqualTo(2L);
+            assertThat(unused.body().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
+                .as("step 1: two rules are counted in the plural").contains("Its 2 rules go with it");
+
+            // 1b. One rule is counted in the singular, in both languages (never "Its 1 rules").
+            int single = accessList("Single");
+            rule(single);
+            ConfirmationSpec one = lists.forRow(Models.get(AccessListModel.class).findById(single), request);
+            assertThat(one.body().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
+                .as("step 1b: one rule reads in the singular").contains("Its one rule goes with it")
+                .doesNotContain("1 rules");
+            assertThat(one.body().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
+                .as("step 1b: and in Dutch").contains("De ene regel verdwijnt mee")
+                .doesNotContain("1 regels");
 
             // 2. Once a site and a protected path name the list, the dialog names THEM --
             //    this is the dangerous direction: their gate does not break, it opens.

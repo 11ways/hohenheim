@@ -42,6 +42,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * "Put something online": first what, then the wizard for it, then its run page.
@@ -95,6 +96,13 @@ public final class PutOnlinePage extends PanelPage {
         .offersAnotherRun(PUT_SOMETHING_ELSE, PutOnlinePage::chooser)
         .build();
 
+    /** A TCP/UDP stream: a public port of its own on the proxy's host, forwarded to an address; nothing runs for it. */
+    public static final PanelAction<Object> STREAM = PanelAction.<Object, Integer>placesRun(
+            PutOnline.PUT_STREAM_ONLINE, ActionPlacement.PAGE)
+        .confirmation(ConfirmationSpec.generic(HohenheimMicrocopy.PUT_ONLINE.of("finish"), false))
+        .offersAnotherRun(PUT_SOMETHING_ELSE, PutOnlinePage::chooser)
+        .build();
+
     /** A workload of one kind, put online from that kind's own settings with its address and certificate. */
     public static final PanelAction<Object> WORKLOAD = PanelAction.<Object, Integer>placesRun(
             PutOnline.PUT_WORKLOAD_ONLINE, ActionPlacement.PAGE)
@@ -141,7 +149,7 @@ public final class PutOnlinePage extends PanelPage {
     @SuppressWarnings({"unchecked", "rawtypes"})
     public @NonNull List<PanelAction<Row>> actions() {
         return List.of(FROM_TEMPLATE, FROM_SERVICE_TEMPLATE, (PanelAction) ADDRESS, (PanelAction) WORKLOAD,
-            (PanelAction) WORKLOAD_SERVICE, (PanelAction) MACHINE);
+            (PanelAction) WORKLOAD_SERVICE, (PanelAction) MACHINE, (PanelAction) STREAM);
     }
 
     /** @return the chooser, where putting something else online starts */
@@ -176,12 +184,18 @@ public final class PutOnlinePage extends PanelPage {
                 vars.put("whatDescription", description == null ? "" : String.valueOf(description));
                 vars.put("versions", otherVersions(request, chosen));
             }
-        } else if (kind != null && PutOnline.offeredAsApp(kind) && HohenheimAccess.isAdmin(request.access())) {
-            PageActions.Opened opened = PageActions.open(request, this, ADDRESS.id(),
-                Map.of(SiteModel.UPSTREAM_KIND.getName(), kind));
+        } else if (kind != null && addressAction(kind) != null && HohenheimAccess.isAdmin(request.access())) {
+            PanelAction<Object> addressAction = Objects.requireNonNull(addressAction(kind));
+            // The chooser already answered what an address serves; a stream's flow is that kind's alone.
+            PageActions.Opened opened = addressAction == ADDRESS
+                ? PageActions.open(request, this, ADDRESS.id(), Map.of(SiteModel.UPSTREAM_KIND.getName(), kind))
+                : PageActions.open(request, this, addressAction.id());
             if (opened instanceof PageActions.Form form) {
                 UpstreamKindInfo info = UpstreamKinds.REGISTRY.get(Identifier.tryParse(kind));
                 vars.put("document", form.state().withJourney(BEFORE_WIZARD, AFTER_WIZARD));
+                if (addressAction == STREAM) {
+                    vars.put("lead", HohenheimMicrocopy.PUT_ONLINE.of("stream_lead"));
+                }
                 vars.put("whatIcon", info == null ? "globe" : info.getIcon().name());
                 vars.put("what", info == null ? kind : resolve(info.getLabel(), request));
                 vars.put("whatDescription", info == null ? "" : resolve(info.getDescription(), request));
@@ -315,6 +329,19 @@ public final class PutOnlinePage extends PanelPage {
         }
         List<PutOnlineReach> reaches = PutOnline.reachesOf(kind);
         return reaches.isEmpty() ? null : reaches.getFirst();
+    }
+
+    /** @return the flow an address of the upstream kind with this stored id is put online by, null when none is */
+    private static @Nullable PanelAction<Object> addressAction(@NonNull String kind) {
+        PutOnlineReach reach = PutOnline.offeredAsApp(kind) ? PutOnline.addressReachOf(kind) : null;
+        if (reach == null) {
+            return null;
+        }
+        return switch (reach) {
+            case WEBSITE -> ADDRESS;
+            case PORTS -> STREAM;
+            case NONE -> null;
+        };
     }
 
     /**

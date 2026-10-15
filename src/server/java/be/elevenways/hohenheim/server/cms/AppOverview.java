@@ -53,6 +53,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import be.elevenways.hohenheim.RawValues;
 import java.util.Set;
 
 /**
@@ -84,8 +85,18 @@ final class AppOverview {
         Conduit conduit = access.conduit();
         boolean delegated = CmsSupport.isDelegatedPanel(conduit);
         List<WidgetInstance> main = new ArrayList<>();
-        main.add(addresses(List.of(site), access));
-        addIfPresent(main, protection(List.of(site), access));
+        // A stream is reached on a public port of its own: where clients connect, never addresses or paths.
+        if (SiteParts.reachOf(site).asksAddress()) {
+            main.add(addresses(List.of(site), access));
+            addIfPresent(main, protection(List.of(site), access));
+        } else {
+            Map<String, Object> settings = RawValues.map(site.get(SiteModel.SETTINGS));
+            main.add(InstanceOverview.portsCard(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("connect"),
+                HohenheimMicrocopy.APP_OVERVIEW.of("stream_connect_hint")
+                    .withArg("target", settings.get("forward_host") + ":" + settings.get("forward_port")),
+                InstanceOverview.endpointsOf(SiteModel.MODEL_ID, site.get(SiteModel.ID), List.of(),
+                    AppHealth.forwarding(site), delegated)));
+        }
 
         List<WidgetInstance> side = new ArrayList<>();
         side.add(details(siteFacts(site, access)));
@@ -183,7 +194,7 @@ final class AppOverview {
         MessageResolver resolver = conduit.getMessageResolver();
         List<Row> served = new ArrayList<>();
         for (Row site : sites) {
-            if (!SiteParts.tlsPassthrough(site)) {
+            if (SiteParts.servesHttp(site)) {
                 served.add(site);
             }
         }

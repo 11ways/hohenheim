@@ -22,6 +22,7 @@ import be.elevenways.hohenheim.model.InstanceStatus;
 import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
@@ -141,13 +142,10 @@ public final class InstanceOverview {
             // A service is reached on its ports: the card says where to connect, and names the game address first.
             boolean service = reach.asksPorts();
             String gameAddress = instance.get(InstanceModel.GAME_ADDRESS);
-            main.add(new WidgetInstance(CardWidget.ID, Map.of(
-                    "title", HohenheimMicrocopy.INSTANCE_OVERVIEW.of(service ? "connect" : "endpoint"),
-                    "lead", service && gameAddress != null
-                        ? HohenheimMicrocopy.INSTANCE_OVERVIEW.of("connect_name").withArg("address", gameAddress)
-                        : HohenheimMicrocopy.INSTANCE_OVERVIEW.of(service ? "connect_hint" : "endpoint_hint")),
-                new WidgetTree(List.of(new WidgetInstance(HohenheimWidgets.INSTANCE_ENDPOINTS.id(), Map.of())
-                    .withData(ports)))));
+            main.add(portsCard(HohenheimMicrocopy.INSTANCE_OVERVIEW.of(service ? "connect" : "endpoint"),
+                service && gameAddress != null
+                    ? HohenheimMicrocopy.INSTANCE_OVERVIEW.of("connect_name").withArg("address", gameAddress)
+                    : HohenheimMicrocopy.INSTANCE_OVERVIEW.of(service ? "connect_hint" : "endpoint_hint"), ports));
         }
         // Memory, CPU, disk. A running workload's memory and CPU are LIVE: the gauges' element holds the stats hub's
         // feed while this page is open (seeded from what the hub holds now), never a stream opened by this render.
@@ -454,12 +452,32 @@ public final class InstanceOverview {
      *                  internals
      */
     static @NonNull List<InstanceEndpointView> endpointsOf(int instanceId, boolean delegated) {
-        List<InstanceEndpointView> endpoints = new ArrayList<>();
         Row instance = Models.get(InstanceModel.class).findById(instanceId);
         List<PublishedPort> named = instance == null ? List.of() : namedPorts(settingsOf(instance));
         InstanceStatus status = instance == null ? null : InstanceStatus.forToken(instance.get(InstanceModel.STATUS));
-        boolean workloadLive = status != null && status.servable();
-        for (Row claim : PortLedger.claimsOf(InstanceModel.MODEL_ID, instanceId)) {
+        return endpointsOf(InstanceModel.MODEL_ID, instanceId, named, status != null && status.servable(), delegated);
+    }
+
+    /** The card listing where clients connect: each port an owner holds, its protocol, purpose and state. */
+    static @NonNull WidgetInstance portsCard(@NonNull Microcopy title, @NonNull Microcopy lead,
+                                             @NonNull List<InstanceEndpointView> ports) {
+        return new WidgetInstance(CardWidget.ID, Map.of("title", title, "lead", lead),
+            new WidgetTree(List.of(new WidgetInstance(HohenheimWidgets.INSTANCE_ENDPOINTS.id(), Map.of())
+                .withData(ports))));
+    }
+
+    /**
+     * Every port one owner holds in the ledger, as the Connect to card lists it: a workload's published ports, a
+     * stream's public port.
+     *
+     * @param live whether what holds them serves right now, which tells In use from Reserved
+     */
+    static @NonNull List<InstanceEndpointView> endpointsOf(@NonNull Identifier ownerModel, int ownerId,
+                                                           @NonNull List<PublishedPort> named, boolean live,
+                                                           boolean delegated) {
+        List<InstanceEndpointView> endpoints = new ArrayList<>();
+        boolean workloadLive = live;
+        for (Row claim : PortLedger.claimsOf(ownerModel, ownerId)) {
             Integer port = claim.get(PortAllocationModel.PORT);
             if (port == null) {
                 continue;
