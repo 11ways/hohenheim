@@ -15889,6 +15889,18 @@
     "text": "Terug naar release {$commit}",
     "scope": "deployments"
   },
+  "forward_to": {
+    "text": "Vooruit naar release {$commit}",
+    "scope": "deployments"
+  },
+  "forward_confirm": {
+    "text": "Vooruit naar release {$commit}? De live release stopt met serveren.",
+    "scope": "deployments"
+  },
+  "live_kept_newer": {
+    "text": "De nieuwere release, {$commit}, blijft bewaard zodat je er in één stap naartoe kunt.",
+    "scope": "deployments"
+  },
   "history_description": {
     "text": "Elke uitrol bouwt een nieuwe release naast de live versie; bezoekers schakelen pas over als die antwoordt. Eén vorige release blijft bewaard om terug te rollen.",
     "scope": "deployments"

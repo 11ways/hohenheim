@@ -187,20 +187,22 @@ class DomainEditTest extends HohenheimTestBase {
         assertThat(page.content()).as("the form carries the hostname").contains(f.hostname());
         assertThat(page.locator("form").count()).as("the record page renders a form").isGreaterThan(0);
 
-        // The child record page breadcrumbs back to the owning site's Domains
-        // tab, and record titles render as literal text -- never as microcopy
-        // keys (user data must not enter the translation pipeline).
+        // An address is a Domains entry, whatever app owns it: its record page trails from the Domains item the
+        // sidebar marks, then the Addresses list, never through the owning app. Record titles render as literal
+        // text -- never as microcopy keys (user data must not enter the translation pipeline).
         var crumbs = page.locator(".cms-breadcrumbs");
         assertThat(crumbs.count()).as("one breadcrumb trail").isEqualTo(1);
-        assertThat(crumbs.textContent()).as("naming the owning site").contains(f.siteName());
-        assertThat(crumbs.textContent()).as("and the domain itself").contains(f.hostname());
-        assertThat(page.locator(".cms-breadcrumbs a[href='/admin/sites/" + f.siteId()
-            + "/page/domains']").count()).as("linking back to the site's Domains tab").isEqualTo(1);
+        assertThat(crumbs.textContent()).as("never through the owning app").doesNotContain(f.siteName());
+        assertThat(crumbs.textContent()).as("ending at the address itself").contains(f.hostname());
+        assertThat(page.locator(".cms-breadcrumbs a").first().getAttribute("href"))
+            .as("the first crumb is the Domains item the sidebar marks").isEqualTo("/admin/domain-names");
+        assertThat(page.locator(".cms-breadcrumbs a[href='/admin/domains']").count())
+            .as("then the Addresses list").isEqualTo(1);
         assertThat(page.locator(Microcopy.WRAPPER_TAG).count())
             .as("the microcopy wrapper selector matches the page before checking that record titles are literal")
             .isGreaterThan(0);
-        assertThat(page.locator(".cms-breadcrumbs " + Microcopy.WRAPPER_TAG + "[key='" + f.siteName() + "']").count())
-            .as("the site name is literal text, never a microcopy key").isEqualTo(0);
+        assertThat(page.locator(".cms-breadcrumbs " + Microcopy.WRAPPER_TAG + "[key='" + f.hostname() + "']").count())
+            .as("the address is literal text, never a microcopy key").isEqualTo(0);
     }
 
     @Test

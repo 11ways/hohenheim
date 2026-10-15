@@ -198,6 +198,10 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         boolean keptSameCommit = kept != null && serving != null && sameCommit(kept, serving);
         vars.put("canRollback", !inFlight && kept != null && serving != null && !keptSameCommit);
         vars.put("keptSameCommit", keptSameCommit);
+        // The engine orders releases by their instance id (newestRetired): after a rollback the kept release is the
+        // newer one, so the one step goes forward to it, never "back".
+        vars.put("keptNewer", kept != null && serving != null
+            && kept.get(InstanceModel.ID).intValue() > serving.get(InstanceModel.ID).intValue());
         vars.put("currentCommit", serving == null ? "" : commitOf(serving));
         vars.put("keptCommit", kept == null ? "" : commitOf(kept));
         Instant liveSince = serving == null ? null : serving.get(InstanceModel.CREATED_AT);

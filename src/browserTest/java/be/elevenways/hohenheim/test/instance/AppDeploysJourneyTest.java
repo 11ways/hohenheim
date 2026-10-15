@@ -50,6 +50,7 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
 
     private static Integer applicationId;
     private static Integer keptId;
+    private static Integer liveId;
     private static final List<Integer> releaseIds = new ArrayList<>();
     private static final List<Integer> operationIds = new ArrayList<>();
     private static final List<Integer> buildIds = new ArrayList<>();
@@ -72,10 +73,12 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
         Models.get(InstanceModel.class).save(app);
         applicationId = app.get(InstanceModel.ID);
 
-        int live = release("live", LIVE_SHA, InstanceModel.ROLE_SERVING);
+        // Created in release order, as the engine creates them: its ids are the releases' own sequence.
+        int replaced = release("replaced", REPLACED_SHA, null);
         int kept = release("kept", KEPT_SHA, InstanceModel.ROLE_RETIRED);
         keptId = kept;
-        int replaced = release("replaced", REPLACED_SHA, null);
+        int live = release("live", LIVE_SHA, InstanceModel.ROLE_SERVING);
+        liveId = live;
 
         operation(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), replaced, null, Instant
             .parse("2026-09-01T08:00:00Z"), null);
@@ -211,6 +214,16 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
         });
     }
 
+    /** Give a stored release another runtime role, as a rollback swaps the live and the kept one. */
+    private static void roleOf(int releaseId, String role) throws Exception {
+        GeneratedRows.as(new GeneratedRows.Attribution(ApplicationReleases.SOURCE,
+            InstanceModel.MODEL_ID.toString(), applicationId), () -> {
+            Row row = Models.get(InstanceModel.class).findById(releaseId);
+            row.set(InstanceModel.RUNTIME_ROLE, role);
+            Models.get(InstanceModel.class).save(row);
+        });
+    }
+
     @Test
     void theDeploysTabLeadsWithTheLiveReleaseAndTellsWhatEachPushDid() throws Exception {
         // 1. The tab renders for the operator and sits right after the overview in the record's strip.
@@ -245,6 +258,33 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
                 .doesNotContain("Roll back to");
         } finally {
             commitOf(keptId, KEPT_SHA);
+        }
+
+        // 2c. After a rollback the kept release is the NEWER one, by the releases' own order: the one step goes
+        //     forward to it, in the button, the confirm dialog and the band.
+        roleOf(liveId, InstanceModel.ROLE_RETIRED);
+        roleOf(keptId, InstanceModel.ROLE_SERVING);
+        try {
+            String forward = adminGet(pageUrl()).body();
+            assertThat(forward).as("step 2c: the band names the older commit as live")
+                .contains("Live: commit bbbb2222 from main")
+                .as("step 2c: the button goes forward to the kept release").contains("Go forward to release aaaa1111")
+                .as("step 2c: the band says the newer release is kept")
+                .contains("The newer release, aaaa1111, is kept so you can go forward to it in one step.")
+                .doesNotContain("Roll back to release");
+            // The confirm dialog is the shell's (use:CmsConfirm.destructive), drawn once the page hydrates.
+            navigateToApp(pageUrl());
+            waitForHydration();
+            click("[data-hh-rollback]");
+            assertIsVisible(".pl-alertdialog-modal[data-open]", "step 2c: the button asks first");
+            assertThat(this.page.locator(".pl-alertdialog-modal[data-open]").textContent())
+                .as("step 2c: and the dialog goes forward too")
+                .contains("Go forward to release aaaa1111? The live release stops serving.")
+                .doesNotContain("Go back to release");
+            click("[data-cms-confirm-cancel]");
+        } finally {
+            roleOf(keptId, InstanceModel.ROLE_RETIRED);
+            roleOf(liveId, InstanceModel.ROLE_SERVING);
         }
 
         // 3. The history marks every succeeded release by where it stands now, read from the instances' roles.

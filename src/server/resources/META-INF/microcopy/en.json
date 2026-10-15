@@ -15889,6 +15889,18 @@
     "text": "Roll back to release {$commit}",
     "scope": "deployments"
   },
+  "forward_to": {
+    "text": "Go forward to release {$commit}",
+    "scope": "deployments"
+  },
+  "forward_confirm": {
+    "text": "Go forward to release {$commit}? The live release stops serving.",
+    "scope": "deployments"
+  },
+  "live_kept_newer": {
+    "text": "The newer release, {$commit}, is kept so you can go forward to it in one step.",
+    "scope": "deployments"
+  },
   "history_description": {
     "text": "Every deploy builds a new release next to the live one; visitors move over only once it answers. One previous release is kept for rollback.",
     "scope": "deployments"
