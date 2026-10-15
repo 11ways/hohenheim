@@ -110,13 +110,16 @@ public enum GuestNetworkMode {
         return fromToken(settings.get(SETTING));
     }
 
-    /** @return the settings field over this vocabulary, HIDDEN by default */
+    /**
+     * @return the settings field over this vocabulary, HIDDEN by default; its picker offers no clear (an empty mode
+     *         would read as HIDDEN while showing nothing), yet a settings write without it stays valid
+     */
     public static @NonNull EnumField field() {
         EnumField.Builder builder = EnumField.builder(SETTING);
         for (GuestNetworkMode mode : values()) {
             builder.value(mode.token, value -> value.label(mode.label()));
         }
-        return builder.defaultValue(HIDDEN.token)
+        return builder.defaultValue(HIDDEN.token).keepsAValue()
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of(SETTING))
             .help(HohenheimMicrocopy.HELP.of(SETTING)).build();
     }

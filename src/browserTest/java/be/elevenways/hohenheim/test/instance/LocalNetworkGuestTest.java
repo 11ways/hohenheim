@@ -26,6 +26,8 @@ import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
+import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
+import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -119,6 +121,24 @@ class LocalNetworkGuestTest extends HohenheimTestBase {
         }));
         assertThat(tenantHidden == null ? "" : violationKeys(tenantHidden)).as("step 4: hidden is a tenant's choice")
             .doesNotContain("vm_network_mode_operator");
+
+        // 5. The mode picker offers no clear (an empty picker would read as HIDDEN while showing nothing), yet the
+        //    mode stays optional: an operator's write without it is not refused for it, and reads as HIDDEN.
+        Select<?> picker = (Select<?>) FieldFormEntryRegistry.INSTANCE.deriveEntry(VmKind.NETWORK_MODE);
+        assertThat(picker.clearable()).as("step 5: the network-mode picker cannot be cleared").isFalse();
+        Map<String, Object> modeless = vmSettings(GuestNetworkMode.HIDDEN, false);
+        modeless.remove(GuestNetworkMode.SETTING);
+        Throwable withoutMode = catchThrowable(() -> TenantConduits.as(admin, () -> {
+            Row row = instances.createEmptyRow();
+            row.set(InstanceModel.NAME, PREFIX + "modeless");
+            row.set(InstanceModel.KIND, "hohenheim:vm");
+            row.set(InstanceModel.SETTINGS, modeless);
+            instances.save(row);
+        }));
+        assertThat(withoutMode == null ? "" : violationKeys(withoutMode)).as("step 5: a write without the mode passes")
+            .doesNotContain("settings." + GuestNetworkMode.SETTING);
+        assertThat(GuestNetworkMode.of(modeless)).as("step 5: a missing mode reads as HIDDEN")
+            .isEqualTo(GuestNetworkMode.HIDDEN);
     }
 
     @Test
