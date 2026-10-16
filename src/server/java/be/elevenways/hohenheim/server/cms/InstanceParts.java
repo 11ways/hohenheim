@@ -224,10 +224,11 @@ public final class InstanceParts {
         // the ADMIN panel, which this panel does not register.
         return ManageTwin.reached(entry(ManageTwin.id("instance")), TenantScopes.INSTANCES,
                 ResourceTabs.of(manageTabs()))
-            // The tenant's words, where the toolbar, the heading and the command palette read them: an app that runs as
-            // a workload (the Apps list's Type), never the operator's "Instances".
-            .label(HohenheimMicrocopy.MANAGE_APP.of("workload_apps"))
-            .description(HohenheimMicrocopy.MANAGE_APP.of("workload_apps_hint"))
+            // The tenant's words, where the toolbar, the heading and the command palette read them: what the rows ARE
+            // (machines and services, each row's subtext naming its kind from the kind options), never "apps" or the
+            // operator's "Instances".
+            .label(HohenheimMicrocopy.MANAGE_APP.of("machines_and_services"))
+            .description(HohenheimMicrocopy.MANAGE_APP.of("machines_and_services_hint"))
             .standsUnder(HohenheimSlugs.APPS)
             // One of the tenant's apps, as the Apps list words it: what the landing's Recent rows name its kind.
             .recordLabel(HohenheimMicrocopy.APP_LIST.of("singular"))

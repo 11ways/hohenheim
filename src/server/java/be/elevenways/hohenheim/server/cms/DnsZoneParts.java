@@ -115,14 +115,21 @@ public final class DnsZoneParts {
     }
 
     /**
-     * The Secondaries tab: the framework's child list over the zone-peer entry, narrowed to the zone. A secondary zone
-     * has none: its authority lives on its own primary.
+     * The Secondaries tab: the framework's child list over the zone-peer entry, narrowed to the zone, with a header link
+     * to the DNS peers a secondary is made from, so a zone without one is never a dead end. A secondary zone has none:
+     * its authority lives on its own primary.
      */
     private static @NonNull ChildList<Row> secondariesTab() {
         return ChildList.<Row>of(HohenheimSlugs.DNS_ZONE_PEERS)
             .label(HohenheimMicrocopy.DNS_ZONE.of("secondaries"))
             .icon(Icon.of("handshake"))
             .hide(HohenheimSlugs.DNS_ZONE_PEERS, DnsZonePeerModel.ZONE_ID.getName())
+            .headerLink(HohenheimSlugs.DNS_ZONE_PEERS,
+                PanelAction.<Row>link(HohenheimIds.id("dns_zone_peers_manage"), ActionPlacement.HEADER)
+                    .label(HohenheimMicrocopy.DNS_ZONE.of("manage_peers"))
+                    .icon(Icon.of("handshake"))
+                    .route((zone, request) -> CmsRoutes.list(request.panelSlug(), HohenheimSlugs.DNS_PEERS))
+                    .build())
             .visibleWhen((zone, access) -> !DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone)));
     }
 

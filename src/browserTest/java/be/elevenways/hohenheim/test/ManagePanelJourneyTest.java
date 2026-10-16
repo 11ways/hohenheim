@@ -523,7 +523,7 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
                 .doesNotContain("sites, instances and stacks");
 
             // 7b. The command palette finds the instance list, kept out of the sidebar, under Apps in the tenant's
-            //     words ("Workload apps"), never the operator's "Instances", which the admin panel keeps.
+            //     words ("Machines and services"), never the operator's "Instances", which the admin panel keeps.
             AccessContext viewer = AccessContext.of(TenantConduits.stubFor(
                 new UserPrincipal(this.tenantId, "Survival Tenant")));
             List<String> palette = PanelNavStates.sections(manage, viewer, null).stream()
@@ -531,11 +531,11 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
                 .flatMap(item -> item.members().stream())
                 .map(member -> member.label().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
                 .toList();
-            assertThat(palette).as("step 7b: the palette names the tenant's workloads as apps")
-                .contains("Workload apps").doesNotContain("Instances");
+            assertThat(palette).as("step 7b: the palette names what the tenant runs, never apps")
+                .contains("Machines and services").doesNotContain("Instances");
             PanelEntry twin = Objects.requireNonNull(manage.entryBySlug(HohenheimSlugs.INSTANCES));
             assertThat(twin.label().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
-                .as("step 7b: in Dutch too").isEqualTo("Workload-apps");
+                .as("step 7b: in Dutch too").isEqualTo("Machines en diensten");
             PanelEntry operator = Objects.requireNonNull(Objects.requireNonNull(
                 PanelRegistry.getBySlug(HohenheimSlugs.ADMIN)).entryBySlug(HohenheimSlugs.INSTANCES));
             assertThat(operator.label().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))

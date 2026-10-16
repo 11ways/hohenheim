@@ -4034,6 +4034,10 @@
     "text": "Secondaries",
     "scope": "dns_zone"
   },
+  "manage_peers": {
+    "text": "DNS-peers",
+    "scope": "dns_zone"
+  },
   "peer_name": [
     {
       "text": "Naam",
@@ -6289,7 +6293,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Limiet voor deze eigenaar; 0 weigert elke nieuwe instantie, leeg valt terug op de globale standaard",
+      "text": "Limiet voor deze eigenaar op elke draaiende werklast: machines, containers en gameservers. 0 weigert elke nieuwe, leeg valt terug op de globale standaard",
       "scope": "help"
     }
   ],
@@ -10467,7 +10471,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Limiet op het totale werklastgeheugen van deze eigenaar; 0 weigert elke werklast, leeg valt terug op het globale standaardmaximum",
+      "text": "Limiet op het totale werklastgeheugen van deze eigenaar, gameservers inbegrepen; 0 weigert elke werklast, leeg valt terug op het globale standaardmaximum",
       "scope": "help"
     }
   ],
@@ -10747,19 +10751,19 @@
     "text": "Alles op deze host: dezelfde records die cordon, drain en verwijderen blokkeren.",
     "scope": "server_overview"
   },
-  "workload_apps": [
+  "machines_and_services": [
     {
-      "text": "Workload-apps",
+      "text": "Machines en diensten",
       "scope": "manage_app"
     },
     {
-      "text": "workload-apps",
+      "text": "machines en diensten",
       "scope": "manage_app",
       "case": "sentence"
     }
   ],
-  "workload_apps_hint": {
-    "text": "Je apps die als container of virtuele machine draaien: hun status, deploys en console.",
+  "machines_and_services_hint": {
+    "text": "Alles wat voor je draait, elke rij met zijn soort: de status, aan en uit, en de console.",
     "scope": "manage_app"
   },
   "website_apps_hint": {
@@ -18339,6 +18343,13 @@
   "purpose_voice": {"scope": "port_purpose", "text": "Spraak"},
   "purpose_other": {"scope": "port_purpose", "text": "Andere"},
   "connect": {"scope": "instance_overview", "text": "Verbinden met"},
+  "game_address_set": {"scope": "instance_overview", "text": "Geef het een speladres"},
+  "game_address_change": {"scope": "instance_overview", "text": "Speladres wijzigen"},
+  "owner_quota": {"scope": "instance_overview", "text": "Quotum van de eigenaar"},
+  "quota_workloads": {"scope": "instance_overview", "text": "{$used} van {$limit} werklasten"},
+  "quota_workloads_open": {"scope": "instance_overview", "text": "{$used} werklasten, geen limiet"},
+  "quota_memory": {"scope": "instance_overview", "text": "{$used} van {$limit} MB geheugen"},
+  "quota_memory_open": {"scope": "instance_overview", "text": "{$used} MB geheugen, geen limiet"},
   "connect_hint": {"scope": "instance_overview", "text": "Spelers en clients verbinden met deze poorten van zijn host."},
   "connect_hint_clients": {"scope": "instance_overview", "text": "Clients verbinden met deze poorten van zijn host."},
   "connect_name": {"scope": "instance_overview", "text": "Spelers verbinden met {$address}, of met een poort hieronder."},

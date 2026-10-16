@@ -265,6 +265,15 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
         assertThat(overview.substring(row, overview.indexOf("</pl-table-row>", row)))
             .as("step 6: and says it is the game port").contains("data-endpoint-purpose").contains(">Game<");
 
+        // 6b. From its own page the operator reaches where it is named and what limits it: the Connect to card leads to
+        //     its Configuration, and the Details card names the owner's quota the game server counts against.
+        assertThat(overview).as("step 6b: the card offers changing the game address on the Configuration")
+            .contains("Change game address").contains("href=\"/admin/instances/" + appId + "\"");
+        assertThat(overview).as("step 6b: the Details card names the owner's quota it is charged to")
+            .contains("Owner's quota").contains("/admin/" + HohenheimSlugs.INSTANCE_QUOTAS);
+        assertThat(overview).as("step 6b: counting this game server among the owner's workloads")
+            .containsPattern("[1-9][0-9]* (of [0-9]+ )?workloads");
+
         // 7. Its Configuration shows the game address it was given, as an operator's entry; a container reached as a
         //    website has no such entry.
         assertThat(adminGet("/admin/instances/" + appId).body())

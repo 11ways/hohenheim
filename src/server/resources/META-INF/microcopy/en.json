@@ -4034,6 +4034,10 @@
     "text": "Secondaries",
     "scope": "dns_zone"
   },
+  "manage_peers": {
+    "text": "DNS peers",
+    "scope": "dns_zone"
+  },
   "peer_name": [
     {
       "text": "Name",
@@ -6289,7 +6293,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Cap for this owner; 0 refuses every new instance, empty falls back to the global default",
+      "text": "Cap for this owner on every live workload: machines, containers and game servers alike. 0 refuses every new one, empty falls back to the global default",
       "scope": "help"
     }
   ],
@@ -10467,7 +10471,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Cap on this owner's total workload memory; 0 refuses every workload, empty falls back to the global default",
+      "text": "Cap on this owner's total workload memory, game servers included; 0 refuses every workload, empty falls back to the global default",
       "scope": "help"
     }
   ],
@@ -10747,19 +10751,19 @@
     "text": "Everything on this host: the same records that block cordon, drain and delete.",
     "scope": "server_overview"
   },
-  "workload_apps": [
+  "machines_and_services": [
     {
-      "text": "Workload apps",
+      "text": "Machines and services",
       "scope": "manage_app"
     },
     {
-      "text": "workload apps",
+      "text": "machines and services",
       "scope": "manage_app",
       "case": "sentence"
     }
   ],
-  "workload_apps_hint": {
-    "text": "Your apps that run as a container or virtual machine: their status, deploys and console.",
+  "machines_and_services_hint": {
+    "text": "Everything that runs for you, each row naming its kind: its status, power and console.",
     "scope": "manage_app"
   },
   "website_apps_hint": {
@@ -18339,6 +18343,13 @@
   "purpose_voice": {"scope": "port_purpose", "text": "Voice"},
   "purpose_other": {"scope": "port_purpose", "text": "Other"},
   "connect": {"scope": "instance_overview", "text": "Connect to"},
+  "game_address_set": {"scope": "instance_overview", "text": "Give it a game address"},
+  "game_address_change": {"scope": "instance_overview", "text": "Change game address"},
+  "owner_quota": {"scope": "instance_overview", "text": "Owner's quota"},
+  "quota_workloads": {"scope": "instance_overview", "text": "{$used} of {$limit} workloads"},
+  "quota_workloads_open": {"scope": "instance_overview", "text": "{$used} workloads, no cap"},
+  "quota_memory": {"scope": "instance_overview", "text": "{$used} of {$limit} MB memory"},
+  "quota_memory_open": {"scope": "instance_overview", "text": "{$used} MB memory, no cap"},
   "connect_hint": {"scope": "instance_overview", "text": "Players and clients connect to these ports of its host."},
   "connect_hint_clients": {"scope": "instance_overview", "text": "Clients connect to these ports of its host."},
   "connect_name": {"scope": "instance_overview", "text": "Players connect to {$address}, or to a port below."},

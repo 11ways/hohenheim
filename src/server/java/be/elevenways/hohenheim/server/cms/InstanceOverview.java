@@ -1,5 +1,10 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.zenit.common.text.Texts;
+import be.elevenways.hohenheim.server.instance.InstanceQuota;
+import be.elevenways.hohenheim.server.quota.ChargedDimension.Charge;
+import be.elevenways.hohenheim.model.InstanceQuotaModel;
+import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -143,12 +148,17 @@ public final class InstanceOverview {
             // its lead speaks to players only when one of its ports is theirs (PortPurpose.reachedByPlayers).
             boolean service = reach.asksPorts();
             String gameAddress = instance.get(InstanceModel.GAME_ADDRESS);
-            main.add(portsCard(HohenheimMicrocopy.INSTANCE_OVERVIEW.of(service ? "connect" : "endpoint"),
+            WidgetInstance card = portsCard(HohenheimMicrocopy.INSTANCE_OVERVIEW.of(service ? "connect" : "endpoint"),
                 service && gameAddress != null
                     ? HohenheimMicrocopy.INSTANCE_OVERVIEW.of("connect_name").withArg("address", gameAddress)
                     : service ? PortPurpose.connectLead(namedPorts(settingsOf(instance)).stream()
                         .map(PublishedPort::purpose).toList())
-                    : HohenheimMicrocopy.INSTANCE_OVERVIEW.of("endpoint_hint"), ports));
+                    : HohenheimMicrocopy.INSTANCE_OVERVIEW.of("endpoint_hint"), ports);
+            // The game address is the operator's entry on the Configuration (InstanceParts.gameAddressAccess): the card
+            // that names it leads there, so a game server is given a name from its own page.
+            String linkKey = gameAddress != null ? "game_address_change" : "game_address_set";
+            main.add(service && !delegated ? CardWidget.withLink(card, HohenheimMicrocopy.INSTANCE_OVERVIEW.of(linkKey),
+                CmsRoutes.detail(panelSlug, HohenheimSlugs.INSTANCES, instanceId).toUrl(), "pen") : card);
         }
         // Memory, CPU, disk. A running workload's memory and CPU are LIVE: the gauges' element holds the stats hub's
         // feed while this page is open (seeded from what the hub holds now), never a stream opened by this render.
@@ -239,9 +249,49 @@ public final class InstanceOverview {
                 ServerModel.nameOf(serverId),
                 CmsRoutes.subpage(panelSlug, HohenheimSlugs.SERVERS, serverId, RecordOverview.SLUG).toUrl()));
         }
+        if (!delegated) {
+            WidgetFact quota = quotaFact(instance, panelSlug, locales, resolver);
+            if (quota != null) {
+                facts.add(quota);
+            }
+        }
         facts.addAll(databaseFacts(instance.get(InstanceModel.ID), panelSlug, delegated, locales, resolver));
         facts.add(backupFact(instance, locales, resolver));
         return facts;
+    }
+
+    /**
+     * The owner budget the record is charged to (InstanceQuota.COUNT's own answer, a stampless row the operator's), as
+     * "2 of 5 workloads, 4096 of 8192 MB memory", linked to that owner's quota when one is set and to the quotas
+     * otherwise: every live workload, a game server included, counts there.
+     *
+     * @return null for a record the count charges nothing
+     */
+    private static @Nullable WidgetFact quotaFact(@NonNull Row instance, @NonNull String panelSlug,
+                                                  @NonNull LocaleChain locales, @NonNull MessageResolver resolver) {
+        Charge charge = InstanceQuota.COUNT.held(instance);
+        if (charge == null) {
+            return null;
+        }
+        String owner = OwnerBudget.INSTANCES.packOf(charge.bucket());
+        String words = Texts.factRun(
+            usage(OwnerBudget.INSTANCES, owner, "quota_workloads").resolve(locales, resolver),
+            usage(OwnerBudget.OWNER_MEMORY, owner, "quota_memory").resolve(locales, resolver));
+        Row override = Models.get(InstanceQuotaModel.class).find()
+            .where(InstanceQuotaModel.SUBJECTS.eq(owner)).first();
+        String url = override != null
+            ? CmsRoutes.open(panelSlug, HohenheimSlugs.INSTANCE_QUOTAS, override.get(InstanceQuotaModel.ID)).toUrl()
+            : CmsRoutes.list(panelSlug, HohenheimSlugs.INSTANCE_QUOTAS).toUrl();
+        return WidgetFact.link(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("owner_quota").resolve(locales, resolver),
+            words, url);
+    }
+
+    /** @return one budget's spend for the owner, "2 of 5 workloads", or "2 workloads, no cap" where none is set */
+    private static @NonNull Microcopy usage(@NonNull OwnerBudget budget, @NonNull String owner, @NonNull String key) {
+        Integer limit = budget.limitFor(owner);
+        Microcopy words = HohenheimMicrocopy.INSTANCE_OVERVIEW.of(limit != null ? key : key + "_open")
+            .withArg("used", budget.usedBy(owner));
+        return limit != null ? words.withArg("limit", limit) : words;
     }
 
     /**
