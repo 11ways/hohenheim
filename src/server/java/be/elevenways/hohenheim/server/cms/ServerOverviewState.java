@@ -20,7 +20,10 @@ import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StackModel;
+import be.elevenways.hohenheim.server.host.DiskSpace;
+import be.elevenways.hohenheim.server.host.HostDisk;
 import be.elevenways.hohenheim.server.host.HostFact;
+import be.elevenways.zenit.common.text.ByteText;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostPins;
 import be.elevenways.hohenheim.server.host.HostPreflight;
@@ -210,6 +213,14 @@ public final class ServerOverviewState {
         if (capacity.measured()) {
             capacityBand.add(new WidgetInstance(FactListWidget.ID, Map.of())
                 .withData(capacityFacts(capacity, locales, resolver)));
+        }
+        // A host never measured has no disk bar at all; a reading too old says so instead of drawing one.
+        HostDisk.Reading disk = HostDisk.storedOf(server);
+        if (disk != null) {
+            capacityBand.add(new WidgetInstance(UsageBarWidget.ID,
+                    Map.of("label", HohenheimWidgetCopy.localized(
+                        HohenheimMicrocopy.SERVER_OVERVIEW.of("disk_capacity"))))
+                .withData(diskUsage(disk, locales, resolver)));
         }
         bands.add(band(new WidgetTree(capacityBand)));
 
@@ -464,6 +475,21 @@ public final class ServerOverviewState {
         return UsageData.measured(capacity.bookedMb(), capacity.budgetMb(),
             ServerParts.sizeOfMegabytes(capacity.bookedMb()), ServerParts.sizeOfMegabytes(capacity.budgetMb()),
             capacity.measuredAtIso());
+    }
+
+    /** The disk bar: used bytes against the instance-data filesystem's size, or why the reading is not trusted. */
+    private static @NonNull UsageData diskUsage(HostDisk.@NonNull Reading disk, @NonNull LocaleChain locales,
+                                                @Nullable MessageResolver resolver) {
+        if (!disk.fresh()) {
+            return UsageData.unmeasured(disk.measuredAt() == null
+                ? HohenheimMicrocopy.SERVER_OVERVIEW.of("unmeasured_body").resolve(locales, resolver)
+                : HohenheimMicrocopy.SERVER_OVERVIEW.of("evidence_stale")
+                    .withArg("ago", RelativeTime.ago(disk.measuredAt(), RelativeTimeWording.resolve(locales, resolver)))
+                    .resolve(locales, resolver));
+        }
+        DiskSpace space = disk.space();
+        return UsageData.measured(space.usedBytes(), space.totalBytes(), ByteText.human(space.usedBytes()),
+            ByteText.human(space.totalBytes()), disk.measuredAt() != null ? disk.measuredAt().toString() : null);
     }
 
     /** The numbers the bar itself cannot show: what is still bookable, and by whom. */

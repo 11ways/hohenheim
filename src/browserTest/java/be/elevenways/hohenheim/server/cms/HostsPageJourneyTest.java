@@ -3,12 +3,14 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.StateLineCell;
-import be.elevenways.hohenheim.host.HostMemoryCell;
+import be.elevenways.hohenheim.host.HostUsageCell;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.host.HostFactView;
 import be.elevenways.hohenheim.host.HostPreflightReportView;
 import be.elevenways.hohenheim.host.PreflightCheckView;
+import be.elevenways.hohenheim.server.host.DiskSpace;
+import be.elevenways.hohenheim.server.host.HostDisk;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.hohenheim.server.host.PreflightFinding;
@@ -24,6 +26,7 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.text.ByteText;
 import be.elevenways.zenit.common.ui.BadgeVariant;
 import org.junit.jupiter.api.Test;
 
@@ -100,13 +103,31 @@ class HostsPageJourneyTest extends HohenheimTestBase {
                 .anySatisfy(found -> assertThat(say(found.title())).isEqualTo(PREFIX + "waiting cannot run apps yet"));
 
             // 4. Memory reads the capacity ledger: a host without a reading has no bar, only the words.
-            HostMemoryCell measured = ServerParts.memoryCellOf(server(admitted));
+            HostUsageCell measured = ServerParts.memoryCellOf(server(admitted));
             assertThat(measured.measured()).as("step 4: the fixture's 16 GiB reading is a budget").isTrue();
             assertThat(say(measured.text())).as("step 4: booked against budget, in words").contains(" of ")
                 .endsWith(" booked");
-            HostMemoryCell blind = ServerParts.memoryCellOf(server(waiting));
+            HostUsageCell blind = ServerParts.memoryCellOf(server(waiting));
             assertThat(blind.measured()).as("step 4: no memory fact, no bar").isFalse();
             assertThat(say(blind.text())).as("step 4: and says so").isEqualTo("Not measured yet");
+
+            // 4b. Disk reads the heartbeat's stored reading of the instance-data filesystem: used against its size, and
+            //     a host never measured has no bar, only the words, never an empty 0.
+            long gib = 1024L * 1024 * 1024;
+            Row measuredDisk = server(admitted);
+            HostDisk.record(measuredDisk, new DiskSpace(100 * gib, 40 * gib), Now.instant());
+            Models.get(ServerModel.class).save(measuredDisk);
+            HostUsageCell disk = ServerParts.diskCellOf(server(admitted));
+            assertThat(disk.measured()).as("step 4b: a fresh reading draws a bar").isTrue();
+            assertThat(disk.percent()).as("step 4b: 60 of 100 GiB used").isEqualTo(60);
+            assertThat(say(disk.text())).as("step 4b: in words")
+                .isEqualTo(ByteText.human(60 * gib) + " of " + ByteText.human(100 * gib) + " used");
+            HostUsageCell noDisk = ServerParts.diskCellOf(server(waiting));
+            assertThat(noDisk.measured()).as("step 4b: never measured, no bar").isFalse();
+            assertThat(say(noDisk.text())).as("step 4b: and says so").isEqualTo("Not measured yet");
+            String hostPage = adminGet("/admin/" + HohenheimSlugs.SERVERS + "/" + admitted + "/page/overview").body();
+            assertThat(hostPage.split("<pl-usage-bar", -1).length - 1)
+                .as("step 4b: the host page draws the disk bar beside the memory bar").isEqualTo(2);
 
             // 5. The rendered list: words, not tokens, and the band above it.
             Row app = Models.get(InstanceModel.class).createEmptyRow();
@@ -127,7 +148,7 @@ class HostsPageJourneyTest extends HohenheimTestBase {
                 .as("step 5: never a check's code").doesNotContain("failed: nftables")
                 .as("step 5: what each host runs").contains("1 app, 0 databases").contains("Nothing yet")
                 .as("step 5: the attention band above the list").contains(PREFIX + "waiting cannot run apps yet")
-                .as("step 5: the memory bar").contains("hh-host-memory");
+                .as("step 5: the memory and disk bars").contains("hh-host-usage").contains("Disk");
 
             // 6. A host the last probe could not reach says why in words, and when it last answered; the host page
             //    names its checks and their verdicts in words too.

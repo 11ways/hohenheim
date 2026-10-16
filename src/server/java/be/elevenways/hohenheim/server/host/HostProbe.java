@@ -154,6 +154,16 @@ public final class HostProbe {
      * @param info the daemon's {@code /info} answer, null when the contact carried none
      */
     public static void recordSuccess(@NonNull String serverName, @Nullable Map<String, Object> info) {
+        recordSuccess(serverName, info, null);
+    }
+
+    /**
+     * {@link #recordSuccess(String, Map)} with the host's disk measured on the same contact ({@link HostDisk}).
+     *
+     * @param disk the instance-data filesystem as the caller measured it, outside any transaction; null records none
+     */
+    public static void recordSuccess(@NonNull String serverName, @Nullable Map<String, Object> info,
+                                     @Nullable DiskSpace disk) {
         Row server = Models.get(ServerModel.class).findByName(serverName);
         if (server == null) {
             return;
@@ -163,8 +173,13 @@ public final class HostProbe {
         server.set(ServerModel.LAST_ERROR_KIND, null);
         server.set(ServerModel.LAST_ERROR, null);
         // A quarantined host's answer proves nothing about which machine answered (its pin decides): no reading.
-        if (info != null && server.get(ServerModel.QUARANTINED_AT) == null) {
-            HostPreflight.recordMemoryReading(server, info, now);
+        if (server.get(ServerModel.QUARANTINED_AT) == null) {
+            if (info != null) {
+                HostPreflight.recordMemoryReading(server, info, now);
+            }
+            if (disk != null) {
+                HostDisk.record(server, disk, now);
+            }
         }
         // A heartbeat is bookkeeping, never activity: see HohenheimActivity.
         ActivityLog.suppressed(() -> Models.get(ServerModel.class).save(server));

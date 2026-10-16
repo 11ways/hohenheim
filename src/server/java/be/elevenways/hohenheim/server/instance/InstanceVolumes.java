@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
+import be.elevenways.hohenheim.server.host.DiskSpace;
 import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.server.host.VolumeBackends;
 import be.elevenways.hohenheim.server.host.VolumeOperations;
@@ -444,6 +445,11 @@ public final class InstanceVolumes {
     /** @return bytes free on the volume storage of {@code serverName} */
     public static long availableBytesOn(@NonNull String serverName) {
         return operationsFor(requireServer(serverName)).availableBytes(VolumeBackends.volumeRoot());
+    }
+
+    /** @return the size and free bytes of the volume storage of {@code serverName}, null when it could not answer */
+    public static @Nullable DiskSpace spaceOn(@NonNull String serverName) {
+        return operationsFor(requireServer(serverName)).space(VolumeBackends.volumeRoot());
     }
 
     /**

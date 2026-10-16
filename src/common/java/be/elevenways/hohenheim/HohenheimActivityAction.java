@@ -80,6 +80,8 @@ public enum HohenheimActivityAction implements ActivityAction {
     BACKUP("backup"),
     /** A backup attempt that stored nothing; the detail is the failure's own reason. */
     BACKUP_FAILED("backup_failed"),
+    /** A certificate issuance or renewal that failed; the detail is the failure's own reason. */
+    RENEWAL_FAILED("renewal_failed"),
     SNAPSHOT("snapshot"),
     SHELL_OPEN("shell_open"),
     SHELL_CLOSE("shell_close"),

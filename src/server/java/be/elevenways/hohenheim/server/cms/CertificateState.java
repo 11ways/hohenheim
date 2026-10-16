@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.WordedState;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.cms.common.resource.RecordHealth;
 import be.elevenways.zenit.common.ui.BadgeVariant;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -59,5 +60,27 @@ enum CertificateState implements WordedState {
     @Override
     public @NonNull Microcopy label() {
         return this.label;
+    }
+
+    /** @return the record health verdict this state reads as, headed by its word */
+    @NonNull RecordHealth health() {
+        return switch (this) {
+            case RENEWAL_FAILING, EXPIRED, NOT_LOADED -> RecordHealth.broken(this.label);
+            case WAITING_DNS, ISSUING, EXPIRING -> RecordHealth.attention(this.label);
+            case WORKS -> RecordHealth.ok(this.label);
+        };
+    }
+
+    /**
+     * @return the state stored as this token in a state cell
+     * @throws IllegalArgumentException for a token no state carries
+     */
+    static @NonNull CertificateState ofToken(@NonNull String token) {
+        for (CertificateState state : values()) {
+            if (state.token.equals(token)) {
+                return state;
+            }
+        }
+        throw new IllegalArgumentException("No certificate state " + token);
     }
 }

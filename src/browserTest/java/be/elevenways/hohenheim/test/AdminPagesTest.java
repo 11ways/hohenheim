@@ -454,8 +454,8 @@ class AdminPagesTest extends HohenheimTestBase {
             String list = adminGet("/admin/certificates").body();
             assertThat(list).contains("data-action-id=\"" + CertificateOperations.REQUEST.id() + "\"");
             assertThat(list)
-                .as("the renewal error is a visible list column")
-                .contains("DNS problem: NXDOMAIN");
+                .as("the renewal failure reads in plain words in the list")
+                .contains("The last renewal failed.");
 
             // 1. The detail page states what the certificate covers, when it expires and why
             //    the last renewal failed -- all three used to live on the LIST only, and the
@@ -467,7 +467,8 @@ class AdminPagesTest extends HohenheimTestBase {
             assertThat(detail).as("the coverage group is on the detail page").contains("Coverage");
             assertThat(detail).as("the covered host names are on the detail page")
                 .contains("broken.example.test");
-            assertThat(detail).contains("DNS problem: NXDOMAIN");
+            assertThat(detail).as("the renewal panel says why in plain words; the raw problem is the overview band's")
+                .contains("The last renewal failed.");
             // 2. Every absent renewal value SAYS it is absent instead of rendering a labelled
             //    empty box; the DNS publisher label is no longer an orphan.
             assertThat(readonlyEntry("expiry_display"))

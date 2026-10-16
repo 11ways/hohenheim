@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.tls;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
@@ -7,6 +8,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.HostnameAuthority;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.protoblast.common.util.BlastString;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -20,6 +22,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static be.elevenways.hohenheim.RawValues.trimmed;
 
@@ -80,6 +84,9 @@ public final class CertificateAuthority {
      */
     public static final class Refused extends RuntimeException {
 
+        /** {@link #Refused}'s message shape, read back by {@link #storedIn}. */
+        private static final Pattern STORED = Pattern.compile("Certificate request refused \\((\\w+)\\) for (\\S+)");
+
         private final Refusal refusal;
         private final String hostname;
 
@@ -96,6 +103,34 @@ public final class CertificateAuthority {
         /** @return the requested name that was refused, canonicalized */
         public @NonNull String hostname() {
             return this.hostname;
+        }
+
+        /** @return the refusal in the admin's words, naming the refused hostname */
+        public @NonNull Microcopy sentence() {
+            String key = switch (this.refusal) {
+                case NOT_SERVED -> "hostname_not_served";
+                case NOT_MANAGED -> "hostname_not_managed";
+                case EXCLUDED -> "excluded_hostnames";
+            };
+            return HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of(key).withArg("hostnames", this.hostname);
+        }
+
+        /**
+         * The refusal a stored failure text carries, read back from this class's own message shape.
+         *
+         * @return the refusal, null when the text names none (an ACME problem, or nothing stored)
+         */
+        public static @Nullable Refused storedIn(@Nullable String failure) {
+            Matcher found = failure == null ? null : STORED.matcher(failure);
+            if (found == null || !found.find()) {
+                return null;
+            }
+            for (Refusal refusal : Refusal.values()) {
+                if (refusal.name().equals(found.group(1))) {
+                    return new Refused(refusal, found.group(2));
+                }
+            }
+            return null;
         }
     }
 

@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.ControllerScope;
+import be.elevenways.hohenheim.server.host.HostDisk;
 import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.hohenheim.server.stack.StackInstances;
 import be.elevenways.hohenheim.server.util.PortProbe;
@@ -426,9 +427,10 @@ public final class DockerReconciler {
                 DockerClient client = servers.clientFor(serverName);
                 results.put(serverName, sweepServer(serverName, client));
                 // The sweep IS a successful daemon contact: the scheduled reconcile
-                // doubles as the host heartbeat, so last_seen_at and the memory reading
-                // placement rations against stay honest without a second per-host probe loop.
-                HostProbe.recordSuccess(serverName, infoOf(client, serverName));
+                // doubles as the host heartbeat, so last_seen_at, the memory reading
+                // placement rations against and the disk reading stay honest without
+                // a second per-host probe loop.
+                HostProbe.recordSuccess(serverName, infoOf(client, serverName), HostDisk.measure(serverName));
             } catch (Exception e) {
                 Blast.log("DOCKER RECONCILE: could not sweep server", serverName, "-", e.getMessage());
                 HostProbe.recordFailure(serverName,

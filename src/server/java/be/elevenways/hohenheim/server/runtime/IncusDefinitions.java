@@ -23,7 +23,7 @@ import java.util.Map;
  * @author  Jelle De Loecker
  * @since   0.1.0
  */
-final class IncusDefinitions {
+public final class IncusDefinitions {
 
     /** The daemon's name for the one device a workload cannot detach. */
     static final String ROOT_DEVICE = "root";
@@ -201,7 +201,7 @@ final class IncusDefinitions {
      * The pool the default profile's root disk lives on -- the one pool this driver places
      * custom volumes in, never a guess.
      */
-    static @NonNull String managedPoolName(@NonNull IncusClient incus) throws IOException {
+    public static @NonNull String managedPoolName(@NonNull IncusClient incus) throws IOException {
         Object devices = incus.profile("default").get("devices");
         if (devices instanceof Map<?, ?> map && map.get("root") instanceof Map<?, ?> root
                 && root.get("pool") instanceof String pool && !pool.isBlank()) {

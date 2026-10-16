@@ -3,6 +3,8 @@ package be.elevenways.hohenheim.server.docker;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.HostMode;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.host.DiskSpace;
+import be.elevenways.hohenheim.server.host.HostDisk;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.hohenheim.server.incus.IncusClient;
@@ -91,7 +93,8 @@ public class ServerService extends DatasourceScoped {
         }
         HostProbe.Outcome outcome = ServerModel.isIncus(row) ? probeIncus(row) : probe(row);
         if (outcome.reachable()) {
-            exec(() -> HostProbe.recordSuccess(name, outcome.info()));
+            DiskSpace disk = HostDisk.measure(name);
+            exec(() -> HostProbe.recordSuccess(name, outcome.info(), disk));
         } else {
             exec(() -> HostProbe.recordFailure(name, outcome));
         }

@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.tls.CertificateStore;
 import be.elevenways.hohenheim.server.tls.CertificateExpiry;
 import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.hohenheim.server.tls.UploadedCertificates;
+import be.elevenways.hohenheim.server.tls.RenewalFailure;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -31,8 +32,10 @@ import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.RecordOverview;
+import be.elevenways.zenit.cms.common.resource.RecordHealth;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import be.elevenways.zenit.cms.common.resource.ResourceForm;
+import be.elevenways.zenit.cms.common.resource.ResourceHealth;
 import be.elevenways.zenit.cms.common.resource.ResourceList;
 import be.elevenways.zenit.cms.common.resource.ResourceMutations;
 import be.elevenways.zenit.cms.common.resource.ResourceReads;
@@ -270,9 +273,7 @@ public final class CertificateParts {
                     .withArg("count", Math.max(errors, 1))
                 : HohenheimMicrocopy.CERTIFICATE.of("state_failing_detail")
                     .withArg("count", Math.max(errors, 1)).withArg("expiry", CertificateExpiry.inSentence(expires));
-            String error = cert.get(CertificateModel.RENEWAL_ERROR);
-            return StateLineCell.of(CertificateState.RENEWAL_FAILING, detail)
-                .withNote(error == null || error.isBlank() ? null : Microcopy.literal(error));
+            return StateLineCell.of(CertificateState.RENEWAL_FAILING, detail).withNote(failureWords(cert));
         }
         if (CertificateModel.STATUS_PENDING.equals(status)) {
             boolean manualDns = CertificateModel.CHALLENGE_DNS.equals(cert.get(CertificateModel.CHALLENGE_TYPE))
@@ -302,6 +303,39 @@ public final class CertificateParts {
                     .withArg("expiry", CertificateExpiry.inSentence(expires))
                 : CertificateExpiry.of(expires);
         return StateLineCell.of(CertificateState.WORKS, valid);
+    }
+
+    /**
+     * The last failed issuance or renewal in plain words, with when it failed when that is known; the raw reason stays
+     * the health band's technical detail.
+     *
+     * @return the words, null when the certificate's last issuance or renewal did not fail
+     */
+    static @Nullable Microcopy failureWords(@NonNull Row cert) {
+        RenewalFailure failure = RenewalFailure.of(cert);
+        if (failure == null) {
+            return null;
+        }
+        return failure.at() == null
+            ? HohenheimMicrocopy.CERTIFICATE.of("last_renewal_failed").withArg("reason", failure.sentence())
+            : HohenheimMicrocopy.CERTIFICATE.of("last_renewal_failed_at").withArg("reason", failure.sentence())
+                .withArg("when", instantText(failure.at(), ""));
+    }
+
+    /**
+     * The certificate's verdict for its record page and the dashboard's health reads: its state's tone and words; a
+     * failing Let's Encrypt renewal offers "Renew now" and keeps the raw failure as its technical detail.
+     */
+    static @NonNull RecordHealth health(@NonNull Row cert) {
+        RenewalFailure failure = RenewalFailure.of(cert);
+        if (failure != null) {
+            RecordHealth failing = CertificateState.RENEWAL_FAILING.health().detail(failureWords(cert))
+                .technical(Microcopy.literal(failure.reason()));
+            return CertificateModel.PROVIDER_LETSENCRYPT.equals(cert.get(CertificateModel.PROVIDER))
+                ? failing.fixedBy(CertificateOperations.RENEW.id()) : failing;
+        }
+        StateLineCell cell = stateCell(cert);
+        return CertificateState.ofToken(cell.state()).health().detail(cell.detail());
     }
 
     /**
@@ -335,6 +369,7 @@ public final class CertificateParts {
             .deleteConfirmation(DeleteConfirmation.<Row>of(deleteConfirmation())
                 .forRow((row, request) -> deleteConfirmationFor(row)))
             .actions(actions())
+            .health(ResourceHealth.of((cert, access) -> health(cert)))
             // AIDEV-NOTE: parity is the tab contract here: the legacy twin offered no contributed access tab.
             .tabs(ResourceTabs.<Row>of(List.of(RecordOverview.<Row>fields())).withHistory())
             .build();
@@ -435,7 +470,9 @@ public final class CertificateParts {
             CmsSupport.enumLabel(CertificateModel.CHALLENGE_TYPE, row.get(CertificateModel.CHALLENGE_TYPE))));
         values.put(DNS_PUBLISHER_DISPLAY.getName(), orNone(
             CmsSupport.enumLabel(CertificateModel.DNS_PUBLISHER, row.get(CertificateModel.DNS_PUBLISHER))));
-        values.put(RENEWAL_ERROR_DISPLAY.getName(), orNone(row.get(CertificateModel.RENEWAL_ERROR)));
+        Microcopy failure = failureWords(row);
+        values.put(RENEWAL_ERROR_DISPLAY.getName(), failure == null ? copy("value_none")
+            : CmsSupport.resolvedTextOrDefault(failure));
         Integer errors = row.get(CertificateModel.ERROR_COUNT);
         values.put(CertificateModel.ERROR_COUNT.getName(), errors != null ? errors : 0);
         // "Not scheduled" beside an enabled auto-renew read like a fault; the absence
@@ -566,6 +603,15 @@ public final class CertificateParts {
 
     private static @NonNull List<PanelAction<Row>> actions() {
         List<PanelAction<Row>> actions = new ArrayList<>();
+        // The public chain is no credential: any admin read may fetch it, beside the bundle that carries the key.
+        actions.add(PanelAction.<Row>link(HohenheimIds.id("download_certificate_chain"), ActionPlacement.ROW)
+            .label(HohenheimMicrocopy.CERTIFICATE.of("download_chain"))
+            .icon(Icon.of("link"))
+            .route((row, request) -> HohenheimEndpoints.CERTIFICATES_CHAIN_DOWNLOAD
+                .with(HohenheimEndpoints.CERT_ID, row.get(CertificateModel.ID)))
+            .shownWhen((row, access) -> !trimmed(row.get(CertificateModel.CERTIFICATE_PEM)).isEmpty())
+            .inlineInRow(false)
+            .build());
         actions.add(PanelAction.<Row>link(HohenheimIds.id("download_certificate"), ActionPlacement.ROW)
             .label(HohenheimMicrocopy.CERTIFICATE.of("download"))
             .icon(Icon.of("download"))
@@ -573,10 +619,12 @@ public final class CertificateParts {
                 .with(HohenheimEndpoints.CERT_ID, row.get(CertificateModel.ID)))
             // Exporting the PEM is rare next to edit/delete: overflow, not inline.
             .inlineInRow(false)
+            .inlineOnRecord(false)
             .build());
         // Re-ordering a certificate is how a domain is added or HTTP-01/DNS-01 is switched: the row's own domain list
         // and challenge are readonly on the form because they describe what the CA actually issued.
         actions.add(CertificateOperations.reissueAction());
+        actions.add(CertificateOperations.renewAction());
         actions.add(CertificateOperations.continueDnsAction());
         actions.add(CertificateOperations.requestAction());
         return actions;

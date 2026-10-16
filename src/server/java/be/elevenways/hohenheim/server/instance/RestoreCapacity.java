@@ -6,8 +6,8 @@ import be.elevenways.hohenheim.model.HostMode;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.host.HostDisk;
 import be.elevenways.hohenheim.server.host.HostKeys;
-import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.protoblast.server.process.ProcessOutcome;
 import be.elevenways.protoblast.server.process.Subprocess;
 import be.elevenways.protoblast.server.process.Termination;
@@ -126,29 +126,7 @@ public final class RestoreCapacity {
 
     /** Free space of the pool the default profile's root device names (or the first pool). */
     private static long incusAvailableBytes(int serverId) throws IOException {
-        IncusClient incus = new ServerService().incusClientFor(ServerModel.nameOf(serverId));
-        String pool = rootPoolOf(incus);
-        Map<String, Object> resources = incus.storagePoolResources(pool);
-        if (resources.get("space") instanceof Map<?, ?> space
-                && space.get("total") instanceof Number total
-                && space.get("used") instanceof Number used) {
-            return total.longValue() - used.longValue();
-        }
-        throw new IOException("Incus pool '" + pool + "' reported no space usage");
-    }
-
-    private static String rootPoolOf(IncusClient incus) throws IOException {
-        Map<String, Object> profile = incus.profile("default");
-        if (profile.get("devices") instanceof Map<?, ?> devices
-                && devices.get("root") instanceof Map<?, ?> root
-                && root.get("pool") instanceof String pool && !pool.isBlank()) {
-            return pool;
-        }
-        List<Map<String, Object>> pools = incus.storagePools();
-        if (!pools.isEmpty() && pools.get(0).get("name") instanceof String name) {
-            return name;
-        }
-        throw new IOException("No storage pool visible on the incus host");
+        return HostDisk.incusSpace(new ServerService().incusClientFor(ServerModel.nameOf(serverId))).freeBytes();
     }
 
     private static long availableBytes(int serverId, DockerClient docker) throws IOException {

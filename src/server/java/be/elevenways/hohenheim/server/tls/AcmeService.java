@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.tls;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.async.AsyncFailures;
 import be.elevenways.protoblast.common.thread.JobRunner;
@@ -8,6 +9,7 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.time.Pace;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
@@ -779,11 +781,13 @@ public class AcmeService {
      * to the security outcome and subtracts recoverability: an authority change that is
      * later undone (a re-granted site, a restored domain row) would silently expire the
      * certificate weeks later with no failure left to notice.
+     *
+     * @return whether a new certificate was issued; a failure is stored on the row, never thrown
      */
-    void renewCertificate(Row certRow, CertificateModel certModel) {
+    public boolean renewCertificate(Row certRow, CertificateModel certModel) {
         String domainsText = certRow.get(CertificateModel.DOMAIN_NAMES_TEXT);
         String niceName = certRow.get(CertificateModel.NICE_NAME);
-        if (domainsText == null || domainsText.isEmpty()) return;
+        if (domainsText == null || domainsText.isEmpty()) return false;
 
         List<String> hostnames = Arrays.asList(domainsText.split(","));
 
@@ -808,6 +812,7 @@ public class AcmeService {
 
             certificateStore.loadFromDatabase();
             Blast.log("ACME: renewed certificate", niceName);
+            return true;
 
         } catch (Exception e) {
             String reason = failureReason(e);
@@ -815,6 +820,7 @@ public class AcmeService {
             recordRenewalFailure(certRow, reason);
             certModel.save(certRow);
             notifyRenewalFailure(certRow, niceName, reason);
+            return false;
         }
     }
 
@@ -841,7 +847,10 @@ public class AcmeService {
         certRow.set(CertificateModel.NEXT_ATTEMPT_AT, null);
     }
 
-    /** Record a failed issuance/renewal: escalate the error count and schedule the retry. */
+    /**
+     * Record a failed issuance/renewal: escalate the error count, schedule the retry and note the failure in the
+     * certificate's activity, the moment {@link RenewalFailure} reads.
+     */
     public static void recordRenewalFailure(Row certRow, String message) {
         Integer previous = certRow.get(CertificateModel.ERROR_COUNT);
         int errorCount = (previous != null ? previous : 0) + 1;
@@ -850,6 +859,10 @@ public class AcmeService {
         certRow.set(CertificateModel.RENEWAL_ERROR, message);
         certRow.set(CertificateModel.ERROR_COUNT, errorCount);
         certRow.set(CertificateModel.NEXT_ATTEMPT_AT, computeNextAttempt(errorCount, Now.instant()));
+        Object id = certRow.get(CertificateModel.ID);
+        if (id != null) {
+            ActivityLog.record(Models.get(CertificateModel.class), id, HohenheimActivityAction.RENEWAL_FAILED, message);
+        }
     }
 
     /**

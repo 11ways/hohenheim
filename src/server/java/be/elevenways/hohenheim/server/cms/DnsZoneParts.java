@@ -333,10 +333,12 @@ public final class DnsZoneParts {
                 parts.add(HohenheimMicrocopy.DNS_ZONE.of("lead_transfer").withArg("status", transfer));
             }
         } else {
+            // The verdict's own words name the delegation ("Delegation matches", "Lame delegation"), as the list's
+            // Delegation column draws them, so no "delegation:" prefix stands ahead of them.
             Microcopy delegation = StandardFieldValueText.wordsOf(DnsZoneModel.DELEGATION_STATUS,
                 zone.get(DnsZoneModel.DELEGATION_STATUS));
             if (delegation != null) {
-                parts.add(HohenheimMicrocopy.DNS_ZONE.of("lead_delegation").withArg("status", delegation));
+                parts.add(delegation);
             }
             parts.add(HohenheimMicrocopy.DNS_ZONE.of("lead_secondaries")
                 .withArg("summary", Objects.requireNonNull(secondarySummary(zone), "a primary has a summary")));

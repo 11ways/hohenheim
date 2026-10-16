@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.host;
 
+import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.host.PreflightStatus;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -11,6 +12,8 @@ import be.elevenways.hohenheim.server.security.NftRunner;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
+import java.time.Duration;
 import be.elevenways.protoblast.server.build.BuildStamp;
 import be.elevenways.protoblast.server.build.BuildStamps;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -664,6 +667,18 @@ public final class HostPreflight {
         return parseInstant(stamps.get(factName));
     }
 
+    /**
+     * Whether a fact measured at {@code measuredAt} is inside the host facts' freshness bound
+     * ({@code capacity.facts_max_age_hours}); no bound keeps every reading fresh, no moment none.
+     */
+    public static boolean measuredRecently(@Nullable Instant measuredAt) {
+        Integer hours = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Capacity.FACTS_MAX_AGE_HOURS);
+        if (hours == null || hours <= 0) {
+            return true;
+        }
+        return measuredAt != null && measuredAt.isAfter(Now.instant().minus(Duration.ofHours(hours)));
+    }
+
     private static @Nullable Instant parseInstant(@Nullable Object raw) {
         if (raw instanceof Instant instant) {
             return instant;
@@ -784,10 +799,21 @@ public final class HostPreflight {
         if (!(memTotalOf(info) instanceof Number bytes) || bytes.longValue() <= 0) {
             return;
         }
+        recordReadings(server, Map.of(HostFact.MEM_TOTAL, bytes), at);
+    }
+
+    /**
+     * Records measured facts on the row, each stamped {@code at}, without saving it: what a heartbeat measures beside
+     * the last preflight's checks, {@code probed_at} and verdict, which it leaves as they were.
+     */
+    public static void recordReadings(@NonNull Row server, @NonNull Map<HostFact, Object> readings,
+                                      @NonNull Instant at) {
         Map<String, Object> capabilities = new LinkedHashMap<>(storedMap(server, null));
         Map<String, Object> factsAt = new LinkedHashMap<>(storedMap(server, FACTS_AT_KEY));
-        capabilities.put(MEM_TOTAL_FACT, bytes);
-        factsAt.put(MEM_TOTAL_FACT, at.toString());
+        for (Map.Entry<HostFact, Object> reading : readings.entrySet()) {
+            capabilities.put(reading.getKey().token(), reading.getValue());
+            factsAt.put(reading.getKey().token(), at.toString());
+        }
         capabilities.put(FACTS_AT_KEY, factsAt);
         server.set(ServerModel.CAPABILITIES, capabilities);
     }

@@ -97,8 +97,14 @@ public interface VolumeOperations {
      */
     void restore(@NonNull String hostPath, @NonNull Path source, @Nullable Integer ownerUid);
 
+    /** @return the size and free bytes of the filesystem holding {@code path}, null when the host could not answer */
+    @Nullable DiskSpace space(@NonNull String path);
+
     /** @return bytes free on the filesystem holding {@code path}, or -1 when the host could not answer */
-    long availableBytes(@NonNull String path);
+    default long availableBytes(@NonNull String path) {
+        DiskSpace space = this.space(path);
+        return space == null ? -1 : space.freeBytes();
+    }
 
     /** Who answers for one host's volume operations; a test installs a directory-backed one. */
     @FunctionalInterface
@@ -180,6 +186,6 @@ public interface VolumeOperations {
             throw refuse();
         }
 
-        @Override public long availableBytes(@NonNull String path) { throw refuse(); }
+        @Override public @Nullable DiskSpace space(@NonNull String path) { throw refuse(); }
     }
 }

@@ -2909,7 +2909,7 @@
   ],
   "download": [
     {
-      "text": "Downloaden",
+      "text": "Downloaden met privésleutel",
       "scope": "certificate"
     },
     {
@@ -2921,6 +2921,15 @@
     "text": "Vernieuwingsstatus",
     "scope": "certificate"
   },
+  "download_chain": {"text": "Certificaatketen downloaden", "scope": "certificate"},
+  "renew_now": {"text": "Nu vernieuwen", "scope": "certificate"},
+  "renew_now_description": {"text": "Vraagt Let's Encrypt nu een nieuw certificaat voor dezelfde namen, zoals de nachtelijke vernieuwing zou doen.", "scope": "certificate"},
+  "last_renewal_failed": {"text": "De laatste vernieuwing is mislukt. {$reason}", "scope": "certificate"},
+  "last_renewal_failed_at": {"text": "De laatste vernieuwing is mislukt op {$when}. {$reason}", "scope": "certificate"},
+  "renewal_failed": [
+    {"text": "Vernieuwing mislukt", "scope": "hohenheim", "target": "activity_action"},
+    {"text": "Vernieuwen van certificaat {$subject} is mislukt", "scope": "hohenheim", "target": "happened"}
+  ],
   "request_le": {
     "text": "Let's Encrypt-certificaat aanvragen",
     "scope": "certificate"
@@ -10704,6 +10713,7 @@
     "text": "Capaciteit",
     "scope": "server_overview"
   },
+  "disk_capacity": {"text": "Schijf", "scope": "server_overview"},
   "booked": {
     "text": "Geboekt",
     "scope": "server_overview"
@@ -13179,7 +13189,7 @@
     "scope": "dns_delegation"
   },
   "missing_glue": {
-    "text": "Glue-record ontbreekt",
+    "text": "Glue-records ontbreken bij de bovenliggende zone",
     "scope": "dns_delegation"
   },
   "ns_unreachable": {
@@ -13427,10 +13437,6 @@
   },
   "lead_records": {
     "text": ".match {$records :number}\none {{1 record}}\n* {{{$records} records}}",
-    "scope": "dns_zone"
-  },
-  "lead_delegation": {
-    "text": "delegatie: {$status}",
     "scope": "dns_zone"
   },
   "lead_secondaries": {
@@ -15815,6 +15821,7 @@
   "uncordon_server": { "text": "{$actor} liet {$subject} weer nieuwe apps aannemen", "scope": "hohenheim", "target": "happened" },
   "request_domain_certificate": { "text": "{$actor} vroeg een certificaat aan voor {$subject}", "scope": "hohenheim", "target": "happened" },
   "continue_dns_order": { "text": "{$actor} zette de DNS-controle van {$subject} voort", "scope": "hohenheim", "target": "happened" },
+  "renew_certificate": { "text": "{$actor} vernieuwde certificaat {$subject}", "scope": "hohenheim", "target": "happened" },
   "lift_ban": { "text": "{$actor} hief de blokkering van {$subject} op", "scope": "hohenheim", "target": "happened" },
   "lift_quarantine": { "text": "{$actor} gaf adres {$subject} vrij", "scope": "hohenheim", "target": "happened" },
   "delete_dns_zone": { "text": "{$actor} verwijderde DNS-zone {$subject}", "scope": "hohenheim", "target": "happened" },
@@ -16353,14 +16360,16 @@
   "runs_on_dedicated": {"text": "Eigen container op {$host}", "scope": "database_overview"},
   "runs_on_shared": {"text": "Gedeelde engine {$engine} op {$host}", "scope": "database_overview"},
   "memory_column": {"text": "Geheugen", "scope": "host_list"},
+  "disk_column": {"text": "Schijf", "scope": "host_list"},
+  "disk_used": {"text": "{$used} van {$total} gebruikt", "scope": "host_list"},
   "runs_column": {"text": "Draait", "scope": "host_list"},
   "cordoned_detail": {"text": "Apps die hier al draaien, blijven draaien", "scope": "host_list"},
   "checks_failed": {"text": ".match {$count :number}\none {{1 verplichte controle mislukt: {$checks}}}\n* {{{$count} verplichte controles mislukt: {$checks}}}", "scope": "host_list"},
   "never_checked": {"text": "Nog nooit gecontroleerd", "scope": "host_list"},
   "checks_pass": {"text": "Zijn verplichte controles slagen; Controleren en toelaten laat hier apps draaien", "scope": "host_list"},
   "memory_booked": {"text": "{$booked} van {$budget} geboekt", "scope": "host_list"},
-  "memory_unmeasured": {"text": "Nog niet gemeten", "scope": "host_list"},
-  "memory_stale": {"text": "Laatste meting te oud", "scope": "host_list"},
+  "reading_unmeasured": {"text": "Nog niet gemeten", "scope": "host_list"},
+  "reading_stale": {"text": "Laatste meting te oud", "scope": "host_list"},
   "host_option_facts": {"text": "{$state}. Geheugen: {$memory}.", "scope": "host_list"},
   "host_option_memory": {"text": "Geheugen: {$memory}", "scope": "host_list"},
   "runs_nothing": {"text": "Nog niets", "scope": "host_list"},
@@ -16956,6 +16965,8 @@
     "text": "Geheugen",
     "scope": "host_check"
   },
+  "fact_disk_total": {"text": "Schijfgrootte", "scope": "host_check"},
+  "fact_disk_free": {"text": "Schijf vrij", "scope": "host_check"},
   "fact_cgroup_version": {
     "text": "Cgroup-versie",
     "scope": "host_check"

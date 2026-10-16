@@ -2909,7 +2909,7 @@
   ],
   "download": [
     {
-      "text": "Download",
+      "text": "Download with private key",
       "scope": "certificate"
     },
     {
@@ -2921,6 +2921,15 @@
     "text": "Renewal status",
     "scope": "certificate"
   },
+  "download_chain": {"text": "Download certificate chain", "scope": "certificate"},
+  "renew_now": {"text": "Renew now", "scope": "certificate"},
+  "renew_now_description": {"text": "Asks Let's Encrypt for a new certificate for the same names now, as the nightly renewal would.", "scope": "certificate"},
+  "last_renewal_failed": {"text": "The last renewal failed. {$reason}", "scope": "certificate"},
+  "last_renewal_failed_at": {"text": "The last renewal failed on {$when}. {$reason}", "scope": "certificate"},
+  "renewal_failed": [
+    {"text": "Renewal failed", "scope": "hohenheim", "target": "activity_action"},
+    {"text": "Renewing certificate {$subject} failed", "scope": "hohenheim", "target": "happened"}
+  ],
   "request_le": {
     "text": "Request Let's Encrypt certificate",
     "scope": "certificate"
@@ -10704,6 +10713,7 @@
     "text": "Capacity",
     "scope": "server_overview"
   },
+  "disk_capacity": {"text": "Disk", "scope": "server_overview"},
   "booked": {
     "text": "Booked",
     "scope": "server_overview"
@@ -13179,7 +13189,7 @@
     "scope": "dns_delegation"
   },
   "missing_glue": {
-    "text": "Missing glue",
+    "text": "Glue records missing at the parent",
     "scope": "dns_delegation"
   },
   "ns_unreachable": {
@@ -13427,10 +13437,6 @@
   },
   "lead_records": {
     "text": ".match {$records :number}\none {{1 record}}\n* {{{$records} records}}",
-    "scope": "dns_zone"
-  },
-  "lead_delegation": {
-    "text": "delegation: {$status}",
     "scope": "dns_zone"
   },
   "lead_secondaries": {
@@ -15815,6 +15821,7 @@
   "uncordon_server": { "text": "{$actor} let {$subject} take new apps again", "scope": "hohenheim", "target": "happened" },
   "request_domain_certificate": { "text": "{$actor} requested a certificate for {$subject}", "scope": "hohenheim", "target": "happened" },
   "continue_dns_order": { "text": "{$actor} continued the DNS check of {$subject}", "scope": "hohenheim", "target": "happened" },
+  "renew_certificate": { "text": "{$actor} renewed certificate {$subject}", "scope": "hohenheim", "target": "happened" },
   "lift_ban": { "text": "{$actor} lifted the ban on {$subject}", "scope": "hohenheim", "target": "happened" },
   "lift_quarantine": { "text": "{$actor} released address {$subject}", "scope": "hohenheim", "target": "happened" },
   "delete_dns_zone": { "text": "{$actor} deleted DNS zone {$subject}", "scope": "hohenheim", "target": "happened" },
@@ -16353,14 +16360,16 @@
   "runs_on_dedicated": {"text": "Own container on {$host}", "scope": "database_overview"},
   "runs_on_shared": {"text": "Shared engine {$engine} on {$host}", "scope": "database_overview"},
   "memory_column": {"text": "Memory", "scope": "host_list"},
+  "disk_column": {"text": "Disk", "scope": "host_list"},
+  "disk_used": {"text": "{$used} of {$total} used", "scope": "host_list"},
   "runs_column": {"text": "Runs", "scope": "host_list"},
   "cordoned_detail": {"text": "Apps already here keep running", "scope": "host_list"},
   "checks_failed": {"text": ".match {$count :number}\none {{1 required check failed: {$checks}}}\n* {{{$count} required checks failed: {$checks}}}", "scope": "host_list"},
   "never_checked": {"text": "Never checked yet", "scope": "host_list"},
   "checks_pass": {"text": "Its required checks pass; Check and admit lets apps run here", "scope": "host_list"},
   "memory_booked": {"text": "{$booked} of {$budget} booked", "scope": "host_list"},
-  "memory_unmeasured": {"text": "Not measured yet", "scope": "host_list"},
-  "memory_stale": {"text": "Last measurement too old", "scope": "host_list"},
+  "reading_unmeasured": {"text": "Not measured yet", "scope": "host_list"},
+  "reading_stale": {"text": "Last measurement too old", "scope": "host_list"},
   "host_option_facts": {"text": "{$state}. Memory: {$memory}.", "scope": "host_list"},
   "host_option_memory": {"text": "Memory: {$memory}", "scope": "host_list"},
   "runs_nothing": {"text": "Nothing yet", "scope": "host_list"},
@@ -16956,6 +16965,8 @@
     "text": "Memory",
     "scope": "host_check"
   },
+  "fact_disk_total": {"text": "Disk size", "scope": "host_check"},
+  "fact_disk_free": {"text": "Disk free", "scope": "host_check"},
   "fact_cgroup_version": {
     "text": "Cgroup version",
     "scope": "host_check"

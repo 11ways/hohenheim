@@ -10,7 +10,7 @@ import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.dns.InternalDnsTxtPublisher;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
-import be.elevenways.hohenheim.server.tls.AcmeProblem;
+import be.elevenways.hohenheim.server.tls.RenewalFailure;
 import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.hohenheim.server.tls.CertificateAuthority;
 import be.elevenways.hohenheim.server.tls.CommandDnsTxtPublisher;
@@ -65,6 +65,10 @@ final class CertificateOperationHandlers {
                         .manualDnsRequestFor(cert.get(CertificateModel.ID)) != null;
             })
             .handle(call -> finishManual(call.subject()));
+        OperationHandlers.attach(CertificateOperations.RENEW).authorize(admin())
+            .applies(cert -> CertificateModel.PROVIDER_LETSENCRYPT.equals(cert.get(CertificateModel.PROVIDER)))
+            .availability((cert, access) -> letsEncryptUnavailable())
+            .handle(call -> renewNow(call.subject()));
     }
 
     private CertificateOperationHandlers() {
@@ -151,7 +155,7 @@ final class CertificateOperationHandlers {
                 AcmeService.ReissueResult outcome = acme.reissueCertificate(reissue, hostnames,
                     email.isEmpty() ? null : email, order.challenge(), publisher, requester);
                 if (!outcome.issued()) {
-                    throw refused(AcmeProblem.sentenceFor(outcome.failureReason()));
+                    throw refused(RenewalFailure.sentenceFor(outcome.failureReason()));
                 }
                 // The names are the point of the entry; no key material is ever logged.
                 ActivityLog.record(Models.get(CertificateModel.class), certId, HohenheimActivityAction.REISSUED,
@@ -163,19 +167,37 @@ final class CertificateOperationHandlers {
             Integer certId = outcome.certificateId();
             if (!outcome.issued() || certId == null) {
                 Row failed = Models.get(CertificateModel.class).findById(certId);
-                throw refused(AcmeProblem.sentenceFor(failed != null
+                throw refused(RenewalFailure.sentenceFor(failed != null
                         ? failed.get(CertificateModel.RENEWAL_ERROR) : null));
             }
             ActivityLog.record(Models.get(CertificateModel.class), certId, HohenheimActivityAction.REQUESTED, niceName);
             return certId;
         } catch (CertificateAuthority.Refused refusal) {
-            throw refused(refusalMessage(refusal));
+            throw refused(refusal.sentence());
         } catch (Violations violations) {
             throw violations;
         } catch (Exception failure) {
             Blast.log("ACME: order for", String.join(", ", hostnames), "failed:", failure.getMessage());
-            throw refused(AcmeProblem.sentenceFor(failure.getMessage()));
+            throw refused(RenewalFailure.sentenceFor(failure.getMessage()));
         }
+    }
+
+    /**
+     * Renews a certificate now, exactly as the renewal sweep would; a failure is stored as the sweep stores one and
+     * refused in its plain words.
+     */
+    private static int renewNow(@NonNull Row cert) {
+        ProxyServer proxy = ServerMain.getProxyServer();
+        if (proxy == null) {
+            throw refused(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("proxy_unavailable"));
+        }
+        int certId = cert.get(CertificateModel.ID);
+        if (!proxy.getAcmeService().renewCertificate(cert, Models.get(CertificateModel.class))) {
+            Row failed = Models.get(CertificateModel.class).findById(certId);
+            throw refused(RenewalFailure.sentenceFor(failed != null
+                ? failed.get(CertificateModel.RENEWAL_ERROR) : null));
+        }
+        return certId;
     }
 
     /** Finishes a manual DNS-01 order whose records the operator says are published. */
@@ -189,7 +211,8 @@ final class CertificateOperationHandlers {
         int certId = proxy.getAcmeService().completeManualDnsCertificate(pending.token());
         if (certId < 0) {
             Row failed = Models.get(CertificateModel.class).findById(cert.get(CertificateModel.ID));
-            throw refused(AcmeProblem.sentenceFor(failed != null ? failed.get(CertificateModel.RENEWAL_ERROR) : null));
+            throw refused(RenewalFailure.sentenceFor(failed != null
+                ? failed.get(CertificateModel.RENEWAL_ERROR) : null));
         }
         ActivityLog.record(Models.get(CertificateModel.class), certId,
                 HohenheimActivityAction.REQUESTED, "manual DNS-01");
@@ -259,19 +282,6 @@ final class CertificateOperationHandlers {
                 }
             }
         }
-    }
-
-    /**
-     * The user-facing rendering of an authority refusal; the decision lives in CertificateAuthority, inside the
-     * service, so every entry point answers to the same rule.
-     */
-    private static @NonNull Microcopy refusalMessage(CertificateAuthority.@NonNull Refused refused) {
-        String key = switch (refused.refusal()) {
-            case NOT_SERVED -> "hostname_not_served";
-            case NOT_MANAGED -> "hostname_not_managed";
-            case EXCLUDED -> "excluded_hostnames";
-        };
-        return HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of(key).withArg("hostnames", refused.hostname());
     }
 
     private static CertificateOperations.@NonNull Order require(CertificateOperations.@Nullable Order order) {

@@ -6,7 +6,7 @@ import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.host.HostCapacityView;
-import be.elevenways.hohenheim.host.HostMemoryCell;
+import be.elevenways.hohenheim.host.HostUsageCell;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
@@ -22,6 +22,8 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostAdmission;
+import be.elevenways.hohenheim.server.host.DiskSpace;
+import be.elevenways.hohenheim.server.host.HostDisk;
 import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.hohenheim.server.options.ServerOptions;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -84,6 +86,7 @@ import java.util.Objects;
 public final class ServerParts {
     private static final String STATE_COLUMN = "state";
     private static final String MEMORY_COLUMN = "memory";
+    private static final String DISK_COLUMN = "disk";
     private static final String RUNS_COLUMN = "runs";
     private static final long MEBIBYTE = 1024L * 1024L;
     /** Request memo of every host's app and database counts: three queries per rendered list. */
@@ -199,7 +202,9 @@ public final class ServerParts {
             .column(ColumnSpec.virtual("host_status", HohenheimMicrocopy.SERVER.of("host_status"))
                 .renderer(HohenheimTemplateIds.CELL_HOST_STATUS).hidden().build())
             .column(ColumnSpec.virtual(MEMORY_COLUMN, HohenheimMicrocopy.HOST_LIST.of("memory_column"))
-                .renderer(HohenheimTemplateIds.CELL_HOST_MEMORY).build())
+                .renderer(HohenheimTemplateIds.CELL_HOST_USAGE).build())
+            .column(ColumnSpec.virtual(DISK_COLUMN, HohenheimMicrocopy.HOST_LIST.of("disk_column"))
+                .renderer(HohenheimTemplateIds.CELL_HOST_USAGE).build())
             // What it runs sits under who may run here, as a card ends; a sixth column pushed the table
             // under the pinned row actions at 1440px.
             .column(ColumnSpec.fromField(ServerModel.POSTURE).filterable().subtext(RUNS_COLUMN).build())
@@ -224,6 +229,7 @@ public final class ServerParts {
             .widgets(scope -> AttentionCollector.band(AttentionCollector.hosts()))
             .computed(Objects.requireNonNull(table.column(STATE_COLUMN)), (row, request) -> stateCellOf(row))
             .computed(Objects.requireNonNull(table.column(MEMORY_COLUMN)), (row, request) -> memoryCellOf(row))
+            .computed(Objects.requireNonNull(table.column(DISK_COLUMN)), (row, request) -> diskCellOf(row))
             .computed(Objects.requireNonNull(table.column(RUNS_COLUMN)), ServerParts::runsCellOf)
             .build();
     }
@@ -234,14 +240,30 @@ public final class ServerParts {
     }
 
     /** Booked memory against the bookable budget, from the same ledger the host's overview and placement read. */
-    static @NonNull HostMemoryCell memoryCellOf(@NonNull Row server) {
+    static @NonNull HostUsageCell memoryCellOf(@NonNull Row server) {
         HostCapacityView capacity = capacityOf(server);
         if (!measured(capacity)) {
-            return new HostMemoryCell(false, 0, HohenheimMicrocopy.HOST_LIST.of(capacity != null && capacity.stale()
-                ? "memory_stale" : "memory_unmeasured"));
+            return new HostUsageCell(false, 0, HohenheimMicrocopy.HOST_LIST.of(capacity != null && capacity.stale()
+                ? "reading_stale" : "reading_unmeasured"));
         }
         int percent = (int) Math.min(100, Math.round(100.0 * capacity.bookedMb() / capacity.budgetMb()));
-        return new HostMemoryCell(true, percent, bookedText(capacity));
+        return new HostUsageCell(true, percent, bookedText(capacity));
+    }
+
+    /**
+     * The host's disk, the filesystem holding its instance data ({@link HostDisk}): used against its size. A host
+     * never measured, or measured too long ago, draws no bar, only the words saying so.
+     */
+    static @NonNull HostUsageCell diskCellOf(@NonNull Row server) {
+        HostDisk.Reading reading = HostDisk.storedOf(server);
+        if (reading == null || !reading.fresh()) {
+            return new HostUsageCell(false, 0,
+                HohenheimMicrocopy.HOST_LIST.of(reading == null ? "reading_unmeasured" : "reading_stale"));
+        }
+        DiskSpace space = reading.space();
+        int percent = (int) Math.min(100, Math.round(100.0 * space.usedBytes() / space.totalBytes()));
+        return new HostUsageCell(true, percent, HohenheimMicrocopy.HOST_LIST.of("disk_used")
+            .withArg("used", ByteText.human(space.usedBytes())).withArg("total", ByteText.human(space.totalBytes())));
     }
 
     /** @return the host's capacity ledger, null for a host without an id */

@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.HohenheimRoles;
+import be.elevenways.hohenheim.server.host.HostDisk;
 import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.hohenheim.server.incus.ControllerPresence;
 import be.elevenways.hohenheim.server.incus.IncusClient;
@@ -170,7 +171,7 @@ public class ReapIncusControllers extends ScheduledTask {
         // AIDEV-NOTE: the heartbeat carries the host's memory reading, as the Docker reconcile's does. Without it an
         // Incus host was measured only by a full preflight, so a host this sweep reached every 15 minutes still aged
         // past the freshness bound and silently stopped taking new apps (nightstrom on daystrom, 2026-10-12).
-        HostProbe.recordSuccess(name, memoryReadingOf(name, incus));
+        HostProbe.recordSuccess(name, memoryReadingOf(name, incus), HostDisk.measure(name));
 
         if (!reapingEnabled()) {
             return new HostOutcome(name, true, plan, List.of(), List.of(), List.of());

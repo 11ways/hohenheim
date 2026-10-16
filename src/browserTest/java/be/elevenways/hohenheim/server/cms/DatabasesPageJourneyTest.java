@@ -33,18 +33,14 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.server.task.TaskHold;
 import be.elevenways.zenit.server.task.TaskRuntime;
 import be.elevenways.zenit.server.task.TaskService;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -62,9 +58,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * was last backed up (read from the dumps on disk, never a stored claim), and "Back up now" beside them, offered dead
  * where a backup cannot be taken.
  *
- * AIDEV-NOTE: the planted engines claim RUNNING with no container behind them, so the ambient two-minute
- * ReconcileInstanceStatus sweep is held for the class: a sweep landing mid-journey flipped the engine to stopped and
- * step 2 read "No backup can be made now".
+ * AIDEV-NOTE: the planted engines claim RUNNING with no container behind them; a reconcile sweep landing mid-journey
+ * flipped the engine to stopped and step 2 read "No backup can be made now". HohenheimTestBase holds that sweep for
+ * the whole test JVM.
  *
  * @author Jelle De Loecker
  * @since  0.9.0
@@ -75,25 +71,13 @@ class DatabasesPageJourneyTest extends HohenheimTestBase {
     private static final LocaleChain EN = LocaleChain.ofTags("en");
     private static final String OVERDUE = "the nightly backup has not written a newer one";
 
-    /** The held reconcile sweep; null when this JVM runs no background task service. */
-    private static TaskHold reconcileHold;
-
-    @BeforeAll
-    static void holdTheReconcileSweep() {
+    /** The engines below claim RUNNING with nothing behind them, so no background sweep may run in this JVM. */
+    @Test
+    void theBackgroundReconcileSweepIsHeldForTheWholeJvm() {
         TaskService tasks = TaskRuntime.service();
-        if (tasks == null) {
-            return;
-        }
-        reconcileHold = tasks.pause(ReconcileInstanceStatus.ID);
-        assertThat(reconcileHold.awaitIdle(Duration.ofSeconds(20)))
-            .as("a reconcile sweep already running has ended before the fixtures are planted").isTrue();
-    }
-
-    @AfterAll
-    static void releaseTheReconcileSweep() {
-        if (reconcileHold != null) {
-            reconcileHold.close();
-            reconcileHold = null;
+        if (tasks != null) {
+            assertThat(tasks.isPaused(ReconcileInstanceStatus.ID))
+                .as("the suite base holds the two-minute reconcile sweep").isTrue();
         }
     }
 

@@ -110,8 +110,8 @@
         gap: var(--pl-space-xs);
     }
 
-    // A host's memory bar takes a usable width in its column; the flex column would otherwise shrink it to nothing.
-    .hh-host-memory {
+    // A host's usage bars take a usable width in their column; the flex column would otherwise shrink them to nothing.
+    .hh-host-usage {
         min-width: 9rem;
 
         pl-usage-bar {

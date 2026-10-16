@@ -202,18 +202,12 @@ public final class InstanceCapacity {
      * provenance, whose reading really is as old as their last probe.
      */
     private static boolean readingIsFresh(@NonNull Row server) {
-        Integer hours = Zenit.SETTINGS_VALUES.getValue(
-            HohenheimSettings.Capacity.FACTS_MAX_AGE_HOURS);
-        if (hours == null || hours <= 0) {
-            return true;
-        }
         Instant measuredAt = HostPreflight.factMeasuredAt(server,
             HostPreflight.MEM_TOTAL_FACT);
         if (measuredAt == null) {
             measuredAt = server.get(ServerModel.PROBED_AT);
         }
-        return measuredAt != null
-            && measuredAt.isAfter(Now.instant().minus(Duration.ofHours(hours)));
+        return HostPreflight.measuredRecently(measuredAt);
     }
 
     // -- the footprint --------------------------------------------------------

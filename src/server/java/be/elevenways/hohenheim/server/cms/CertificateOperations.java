@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.server.tls.RenewalFailure;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimEndpoints;
@@ -169,6 +170,21 @@ public final class CertificateOperations {
         .command(CmsCommands.EXTERNAL)
         .register();
 
+    /** Renews a Let's Encrypt certificate now, as the renewal sweep would: the fix a failing renewal offers. */
+    public static final Operation<Row, Void, Integer> RENEW =
+            Operation.declare(HohenheimIds.id("renew_certificate"))
+        .happened(OperationSentences.of("renew_certificate"))
+        .label(HohenheimMicrocopy.CERTIFICATE.of("renew_now"))
+        .description(HohenheimMicrocopy.CERTIFICATE.of("renew_now_description"))
+        .icon(Icon.of("rotate-right"))
+        .one(CERTIFICATE)
+        .gate(OperationGate.open())
+        .result(Integer.class)
+        .facts(OperationFact.REACHES_OUTSIDE)
+        .rateLimit(HohenheimEndpoints.LE_REQUEST_LIMIT)
+        .command(CmsCommands.EXTERNAL)
+        .register();
+
     private CertificateOperations() {
     }
 
@@ -225,6 +241,21 @@ public final class CertificateOperations {
         return PanelAction.<Row, Integer>places(CONTINUE_DNS, ActionPlacement.ROW, CertificateOperations::opened)
             .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("verify_dns"),
                 HohenheimMicrocopy.CERTIFICATE_REQUEST.of("publish_description"), ActionStyle.PRIMARY))
+            .build();
+    }
+
+    /**
+     * @return a failing Let's Encrypt certificate's "Renew now"; kept in the record's menu so its health band, which
+     *         names it as the failure's fix, is where the record page offers it
+     */
+    static @NonNull PanelAction<Row> renewAction() {
+        init();
+        return PanelAction.<Row, Integer>places(RENEW, ActionPlacement.ROW, CertificateOperations::opened)
+            .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.CERTIFICATE.of("renew_now"),
+                HohenheimMicrocopy.CERTIFICATE.of("renew_now_description"), ActionStyle.PRIMARY))
+            .hiddenWhen(cert -> !RenewalFailure.failing(cert))
+            .inlineOnRecord(false)
+            .inlineInRow(false)
             .build();
     }
 

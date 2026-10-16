@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.host.DiskSpace;
 import be.elevenways.hohenheim.server.host.VolumeOperations;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -178,6 +179,11 @@ final class FakeHostVolumes implements VolumeOperations.Hosts {
             if (ownerUid != null) {
                 RESTORED_OWNERS.put(this.server + ":" + hostPath, ownerUid);
             }
+        }
+
+        @Override
+        public @Nullable DiskSpace space(@NonNull String path) {
+            return availableBytes > 0 ? new DiskSpace(availableBytes, availableBytes) : null;
         }
 
         @Override

@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.server.HohenheimSettingsBoot;
 import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.hohenheim.server.task.ReconcileInstanceStatus;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.AuthSettings;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -19,6 +20,9 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.csrf.CsrfTokens;
 import be.elevenways.zenit.common.session.Session;
 import be.elevenways.zenit.server.http.SessionCookies;
+import be.elevenways.zenit.server.task.TaskHold;
+import be.elevenways.zenit.server.task.TaskRuntime;
+import be.elevenways.zenit.server.task.TaskService;
 import com.microsoft.playwright.options.Cookie;
 
 import java.io.IOException;
@@ -29,6 +33,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import be.elevenways.zenit.common.session.SessionToken;
 import be.elevenways.zenit.common.flash.FlashNotice;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
@@ -60,6 +65,8 @@ public abstract class HohenheimTestBase extends ZenitBrowserTestBase {
     protected static String csrfToken;
     /** Every session {@link #sessionFor} minted in this JVM, drained with the admin one before each test. */
     private static final Set<String> MINTED_SESSIONS = ConcurrentHashMap.newKeySet();
+    /** The reconcile sweep held for this JVM's lifetime; null when the boot started no task service. */
+    private static @Nullable TaskHold reconcileHold;
 
     @Override
     protected void bootHost() throws Exception {
@@ -106,6 +113,7 @@ public abstract class HohenheimTestBase extends ZenitBrowserTestBase {
         // ServerMain installed them after BINDING, so the suite was a second,
         // safer truth and could never see production's pre-wiring window.
         HohenheimTestRuntime.ensureBooted();
+        holdTheReconcileSweep();
 
         sessionToken = seedAuthenticatedAdmin();
 
@@ -113,6 +121,25 @@ public abstract class HohenheimTestBase extends ZenitBrowserTestBase {
         // bucket per principal; a full suite would trip them across classes.
         // The dedicated rate-limit test lifts the exemption for its hammer.
         RateLimitExemption.exemptAll();
+    }
+
+    /**
+     * Pauses the two-minute instance-status sweep for the whole JVM, waiting out a sweep already running.
+     *
+     * AIDEV-NOTE: dozens of classes plant RUNNING instances with no container behind them; a sweep landing mid-test
+     * flips them to stopped (DatabasesPageJourneyTest once read "No backup can be made now"). A class that tests
+     * reconciling calls InstanceStatusReconciler itself. The hold dies with the service: TestDatabases stops the
+     * service on a database swap and nothing restarts it.
+     */
+    private static void holdTheReconcileSweep() {
+        TaskService tasks = TaskRuntime.service();
+        if (tasks == null || reconcileHold != null) {
+            return;
+        }
+        reconcileHold = tasks.pause(ReconcileInstanceStatus.ID);
+        if (!reconcileHold.awaitIdle(Duration.ofSeconds(20))) {
+            throw new IllegalStateException("A reconcile sweep already running did not end within 20 seconds");
+        }
     }
 
     @Override

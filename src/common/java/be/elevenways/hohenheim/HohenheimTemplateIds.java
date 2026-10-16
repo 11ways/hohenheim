@@ -72,7 +72,7 @@ public final class HohenheimTemplateIds {
     // List-cell partials; a column names one through its renderer.
     public static final Identifier CELL_STATE_LINE = Identifier.of("hohenheim", "cms/cell/state-line");
     public static final Identifier CELL_HOST_STATUS = Identifier.of("hohenheim", "cms/cell/host-status");
-    public static final Identifier CELL_HOST_MEMORY = Identifier.of("hohenheim", "cms/cell/host-memory");
+    public static final Identifier CELL_HOST_USAGE = Identifier.of("hohenheim", "cms/cell/host-usage");
     public static final Identifier CELL_MANAGED_BY = Identifier.of("hohenheim", "cms/cell/managed-by");
     public static final Identifier CELL_INSTALL_STATE = Identifier.of("hohenheim", "cms/cell/install-state");
     public static final Identifier CELL_SITE_HOSTNAMES = Identifier.of("hohenheim", "cms/cell/site-hostnames");

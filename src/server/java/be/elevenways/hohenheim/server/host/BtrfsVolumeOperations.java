@@ -204,18 +204,19 @@ public final class BtrfsVolumeOperations implements VolumeOperations {
     }
 
     @Override
-    public long availableBytes(@NonNull String path) {
-        HostShell.Result result = this.shell.run("df -B1 --output=avail " + HostShell.quote(path));
+    public @Nullable DiskSpace space(@NonNull String path) {
+        HostShell.Result result = this.shell.run("df -B1 --output=size,avail " + HostShell.quote(path));
         String[] lines = result.text().trim().split("\n");
         try {
-            if (result.ok()) {
-                return Long.parseLong(lines[lines.length - 1].trim());
+            String[] figures = lines[lines.length - 1].trim().split("\\s+");
+            if (result.ok() && figures.length == 2) {
+                return new DiskSpace(Long.parseLong(figures[0]), Long.parseLong(figures[1]));
             }
-        } catch (NumberFormatException unparseable) {
+        } catch (IllegalArgumentException unparseable) {
             // unanswerable, like a failed df
         }
-        Blast.log("VOLUMES: could not measure the free space of", path, "-", result.text());
-        return -1;
+        Blast.log("VOLUMES: could not measure the space of", path, "-", result.text());
+        return null;
     }
 
     /**

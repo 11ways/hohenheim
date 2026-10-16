@@ -398,6 +398,19 @@ public class HohenheimEndpoints {
         .rateLimit(DOWNLOAD_LIMIT)
         .build();
 
+    /**
+     * A certificate's public chain alone (its CERTIFICATE blocks, never the key), so not interactive-only: the body is
+     * no credential, the {@link #CERTIFICATES_DOWNLOAD} note's question answered the other way.
+     */
+    public static final Endpoint<Object> CERTIFICATES_CHAIN_DOWNLOAD = Endpoint.<Object>builder()
+        .identifier(HohenheimIds.id("certificates_chain_download"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("certificates").addDelimiter().addParameter(CERT_ID)
+            .addDelimiter().addStatic("chain").build())
+        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
+        .rateLimit(DOWNLOAD_LIMIT)
+        .build();
+
     // --- Managed database dump download / restore upload ---
     public static final Endpoint<Object> DATABASES_BACKUP = Endpoint.<Object>builder()
         .identifier(HohenheimIds.id("databases_backup"))

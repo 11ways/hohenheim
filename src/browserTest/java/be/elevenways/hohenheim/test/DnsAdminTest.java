@@ -133,6 +133,24 @@ class DnsAdminTest extends HohenheimTestBase {
         // the answers its row in the zones list gives. A new primary has no delegation check yet, so none is worded.
         assertThat(page.locator("[data-cms-record-lead]").textContent().trim())
             .as("the zone's lead line").isEqualTo("Primary zone · 1 record · secondaries: None linked");
+        // Once checked, the verdict's own words stand in the line, without a "delegation:" prefix ahead of words that
+        // already say delegation; the zones list draws the same words under its Delegation header.
+        Row checked = Models.get(DnsZoneModel.class).find().where(DnsZoneModel.ID.eq(zoneId)).first();
+        checked.set(DnsZoneModel.DELEGATION_STATUS, "missing_glue");
+        Models.get(DnsZoneModel.class).save(checked);
+        navigateToApp("/admin/dns-zones/" + zoneId + "/page/records");
+        waitForHydration();
+        assertThat(page.locator("[data-cms-record-lead]").textContent().trim())
+            .as("the checked zone's lead line").isEqualTo(
+                "Primary zone · 1 record · Glue records missing at the parent · secondaries: None linked");
+        navigateToApp("/admin/dns-zones");
+        waitForHydration();
+        assertThat(page.locator("body").textContent()).as("the zones list's Delegation cell")
+            .contains("Glue records missing at the parent");
+        checked.set(DnsZoneModel.DELEGATION_STATUS, null);
+        Models.get(DnsZoneModel.class).save(checked);
+        navigateToApp("/admin/dns-zones/" + zoneId + "/page/records");
+        waitForHydration();
         // The tab renders the record RESOURCE's own row surface, so the record is reachable
         // twice by design: the title cell links to it, and so does the synthesized Edit row
         // action beside it (the shape every generated list has). The compact row menu
