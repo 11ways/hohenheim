@@ -40,8 +40,24 @@ public class CertificateModel extends Model {
     /**
      * The statuses whose stored certificate the proxy serves: an active one, and one whose last renewal failed, since
      * the certificate it still holds stays valid until it expires and a failed renewal must not take a site offline.
+     *
+     * AIDEV-NOTE: THE served rule. The proxy's store, the working names without a proxy, the force-HTTPS latch, the
+     * unloaded-certificates count and the put-online reuse read it (here or through {@link #served}); never compare
+     * a status to {@link #STATUS_ACTIVE} to ask whether a certificate is served. DashboardVocabularyDriftTest makes a
+     * new {@link #STATUS} value choose a side.
      */
     public static final List<String> SERVED_STATUSES = List.of(STATUS_ACTIVE, STATUS_ERROR);
+
+    /** @return whether the proxy serves a certificate stored with this status; an unknown or absent one is not */
+    public static boolean served(@Nullable String status) {
+        return status != null && SERVED_STATUSES.contains(status);
+    }
+
+    /** @return whether the proxy serves this stored certificate by its status ({@link #SERVED_STATUSES}) */
+    public static boolean served(@NonNull Row certificate) {
+        String status = certificate.get(STATUS);
+        return served(status);
+    }
 
     /** {@link #PROVIDER} value for the internal ACME account key row (excluded from listings). */
     public static final String PROVIDER_ACME_ACCOUNT = "acme_account";

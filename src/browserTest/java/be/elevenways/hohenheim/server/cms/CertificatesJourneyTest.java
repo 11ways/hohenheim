@@ -175,18 +175,24 @@ class CertificatesJourneyTest extends HohenheimTestBase {
             .as("step 4: the generic create is gone").doesNotContain("New certificate");
 
         // 5. An uploaded certificate stores what it says about itself: the names it covers and when it expires, so it
-        //    reads "Works" with its expiry (and "Expiring" in its last days) like an issued one.
+        //    reads "Works" with its expiry (and "Expiring" in its last days) like an issued one. A key pasted with the
+        //    certificate (one bundle) is accepted, and stored only in the key's own column.
         KeyPair keys = TlsCertificateTest.generateKeyPair();
         String uploadedName = "uploaded-" + suffix + ".test";
+        String uploadedKey = TlsCertificateTest.keyToPem(keys);
         Object id = CertificateParts.create(Map.of(
             CertificateModel.NICE_NAME.getName(), "Uploaded " + suffix,
             CertificateModel.CERTIFICATE_PEM.getName(),
-            TlsCertificateTest.certToPem(TlsCertificateTest.generateSelfSignedCert(keys, uploadedName)),
-            CertificateModel.PRIVATE_KEY_PEM.getName(), TlsCertificateTest.keyToPem(keys)));
+            TlsCertificateTest.certToPem(TlsCertificateTest.generateSelfSignedCert(keys, uploadedName)) + "\n"
+                + uploadedKey,
+            CertificateModel.PRIVATE_KEY_PEM.getName(), uploadedKey));
         Row uploaded = Models.get(CertificateModel.class).findById((Integer) id);
         assertThat((String) uploaded.get(CertificateModel.DOMAIN_NAMES_TEXT)).as("step 5: the names it covers")
             .isEqualTo(uploadedName);
         assertThat((Object) uploaded.get(CertificateModel.EXPIRES_ON)).as("step 5: its expiry is stored").isNotNull();
+        assertThat((String) uploaded.get(CertificateModel.CERTIFICATE_PEM))
+            .as("step 5: the certificate text keeps its certificate").contains("BEGIN CERTIFICATE")
+            .as("step 5: and never the key pasted with it").doesNotContain("PRIVATE KEY");
         StateLineCell uploadedCell = CertificateParts.stateCell(uploaded);
         assertThat(uploadedCell.state()).as("step 5: it works").isEqualTo("works");
         assertThat(uploadedCell.detail().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))

@@ -129,12 +129,12 @@ public final class ProxyAttention {
         if (refused == null) {
             return;
         }
-        long active = Models.get(CertificateModel.class).find()
-            .where(CertificateModel.STATUS.eq(CertificateModel.STATUS_ACTIVE)).count();
+        long served = Models.get(CertificateModel.class).find()
+            .where(CertificateModel.STATUS.in(CertificateModel.SERVED_STATUSES)).count();
         items.add(item(AttentionSeverity.ERROR, "certificate",
             HohenheimMicrocopy.ATTENTION_TITLE.of("https_unavailable"),
-            active == 0 ? HohenheimMicrocopy.ATTENTION_DETAIL.of("https_no_certificate")
-                : HohenheimMicrocopy.ATTENTION_DETAIL.of("https_certificates_unloaded").withArg("count", active),
+            served == 0 ? HohenheimMicrocopy.ATTENTION_DETAIL.of("https_no_certificate")
+                : HohenheimMicrocopy.ATTENTION_DETAIL.of("https_certificates_unloaded").withArg("count", served),
             CmsRoutes.list(ADMIN, HohenheimSlugs.CERTIFICATES),
             HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_certificates"))
             .about(AttentionSubject.httpsTermination(), refused));

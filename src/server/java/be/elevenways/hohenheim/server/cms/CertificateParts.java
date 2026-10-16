@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
+import be.elevenways.hohenheim.server.tls.CertificatePem;
 import be.elevenways.hohenheim.server.tls.CertificateStore;
 import be.elevenways.hohenheim.server.tls.CertificateExpiry;
 import be.elevenways.hohenheim.server.tls.AcmeService;
@@ -532,6 +533,7 @@ public final class CertificateParts {
     static @NonNull Object create(@NonNull Map<String, Object> submitted) {
         Map<String, Object> values = CmsSupport.mutable(submitted);
         describe(values, validatePems(values, null));
+        keepChainOnly(values);
         Row row = Models.get(CertificateModel.class).createEmptyRow();
         values.forEach(row::set);
         row.set(CertificateModel.PROVIDER, CertificateModel.PROVIDER_CUSTOM);
@@ -547,6 +549,7 @@ public final class CertificateParts {
         if (values.containsKey(CertificateModel.CERTIFICATE_PEM.getName())) {
             describe(values, leaf);
         }
+        keepChainOnly(values);
         if (CertificateModel.DNS_PUBLISHER_MANUAL.equals(existing.get(CertificateModel.DNS_PUBLISHER))) {
             values.put(CertificateModel.AUTO_RENEW.getName(), false);
         }
@@ -568,6 +571,16 @@ public final class CertificateParts {
         values.put(CertificateModel.DOMAIN_NAMES_TEXT.getName(), String.join(",", CertificateStore.hostnamesOf(leaf)));
         values.put(CertificateModel.ISSUED_ON.getName(), leaf.getNotBefore().toInstant());
         values.put(CertificateModel.EXPIRES_ON.getName(), leaf.getNotAfter().toInstant());
+    }
+
+    /**
+     * A submitted certificate text is stored as its CERTIFICATE blocks only: a key pasted with it is the key field's
+     * value, kept in its encrypted column, never in the plain certificate column.
+     */
+    private static void keepChainOnly(@NonNull Map<String, Object> values) {
+        if (values.get(CertificateModel.CERTIFICATE_PEM.getName()) instanceof String pem) {
+            values.put(CertificateModel.CERTIFICATE_PEM.getName(), CertificatePem.chainText(pem));
+        }
     }
 
     /**

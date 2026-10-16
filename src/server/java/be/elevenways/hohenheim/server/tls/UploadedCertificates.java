@@ -3,20 +3,13 @@ package be.elevenways.hohenheim.server.tls;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.validation.Violations;
-import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
-import org.bouncycastle.openssl.PEMKeyPair;
-import org.bouncycastle.openssl.PEMParser;
-import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.io.ByteArrayInputStream;
-import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.Signature;
-import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -106,18 +99,14 @@ public final class UploadedCertificates {
         return chainOf(certificatePem).getFirst();
     }
 
-    /** @return every certificate in the PEM, in the order given */
+    /** @return every certificate of the PEM's CERTIFICATE blocks, in the order given ({@link CertificatePem}) */
     private static @NonNull List<X509Certificate> chainOf(@Nullable String pem) {
         if (pem == null || pem.isBlank()) {
             throw Violations.ofField(CERTIFICATE_FIELD, null, HohenheimMicrocopy.VIOLATIONS.of("cert_pem_required"));
         }
-        List<X509Certificate> chain = new ArrayList<>();
+        List<X509Certificate> chain;
         try {
-            CertificateFactory factory = CertificateFactory.getInstance("X.509");
-            for (var certificate : factory.generateCertificates(
-                    new ByteArrayInputStream(pem.getBytes(StandardCharsets.UTF_8)))) {
-                chain.add((X509Certificate) certificate);
-            }
+            chain = CertificatePem.chainOf(pem);
         } catch (Exception unreadable) {
             // The parser's own words name its internals, never what to paste: the refusal says that instead.
             throw Violations.ofField(CERTIFICATE_FIELD, null, HohenheimMicrocopy.VIOLATIONS.of("cert_pem_invalid"));
@@ -133,20 +122,12 @@ public final class UploadedCertificates {
         if (pem == null || pem.isBlank()) {
             throw Violations.ofField(KEY_FIELD, null, HohenheimMicrocopy.VIOLATIONS.of("key_pem_required"));
         }
-        try (PEMParser parser = new PEMParser(new StringReader(pem))) {
-            Object read = parser.readObject();
-            JcaPEMKeyConverter converter = new JcaPEMKeyConverter();
-            if (read instanceof PEMKeyPair pair) {
-                return converter.getKeyPair(pair).getPrivate();
-            }
-            if (read instanceof PrivateKeyInfo info) {
-                return converter.getPrivateKey(info);
-            }
+        try {
+            return CertificatePem.privateKeyOf(pem);
         } catch (Exception unreadable) {
+            // Never quote the PEM: a certificate pasted into the key field must not be echoed, nor a key anywhere.
             throw Violations.ofField(KEY_FIELD, null, HohenheimMicrocopy.VIOLATIONS.of("key_pem_invalid"));
         }
-        // Never quote the PEM: a certificate pasted into the key field must not be echoed, nor a key anywhere.
-        throw Violations.ofField(KEY_FIELD, null, HohenheimMicrocopy.VIOLATIONS.of("key_pem_invalid"));
     }
 
     /** Whether the private key signs what the certificate's public key verifies. */

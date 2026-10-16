@@ -20,7 +20,7 @@ import java.util.Set;
  * Which stored certificate covers a hostname, by SAN list (exact or
  * single-label wildcard, the {@link CertificateStore} semantics) -- DB-backed,
  * so it also answers for certificates the TLS store has not loaded (pending,
- * error). Active certificates win over broken ones.
+ * error). Active certificates win over served ones whose renewal failed, and those over the rest.
  *
  * @author Jelle De Loecker
  * @since 0.2.0
@@ -29,7 +29,7 @@ public final class CertificateCoverage {
 
     private CertificateCoverage() {}
 
-    /** @return the covering certificate row (active preferred), or null */
+    /** @return the covering certificate row (active preferred, then served), or null */
     public static @Nullable Row coveringCertificate(@Nullable String hostname) {
         if (hostname == null || hostname.isEmpty()) {
             return null;
@@ -41,6 +41,7 @@ public final class CertificateCoverage {
                 CertificateModel.PROVIDER.ne(CertificateModel.PROVIDER_ACME_ACCOUNT)))
             .all();
 
+        Row served = null;
         Row fallback = null;
         for (Row cert : certs) {
             if (!covers(cert, needle)) {
@@ -49,11 +50,14 @@ public final class CertificateCoverage {
             if (CertificateModel.STATUS_ACTIVE.equals(cert.get(CertificateModel.STATUS))) {
                 return cert;
             }
+            if (served == null && CertificateModel.served(cert)) {
+                served = cert;
+            }
             if (fallback == null) {
                 fallback = cert;
             }
         }
-        return fallback;
+        return served != null ? served : fallback;
     }
 
     /**
@@ -79,11 +83,12 @@ public final class CertificateCoverage {
 
     /**
      * The names a working certificate covers: what the running proxy's certificate store loaded (the names it answers
-     * a handshake for), and the names an ACTIVE certificate row declares only where no proxy runs in this process (a
-     * node without the proxy role, a test), because the stored rows are then all there is to read.
+     * a handshake for), and the names a served certificate row ({@link CertificateModel#SERVED_STATUSES}) declares
+     * only where no proxy runs in this process (a node without the proxy role, a test), because the stored rows are
+     * then all there is to read.
      *
      * AIDEV-NOTE: THE rule routing (RouteTableBuilder's global force), the force-HTTPS latch, "Get a certificate" and
-     * every HTTPS display (AppHealth.workingNames, which also asks whether the listener terminates) read. An ACTIVE row
+     * every HTTPS display (AppHealth.workingNames, which also asks whether the listener terminates) read. A served row
      * is not a working certificate: a row without loadable material was once sent to HTTPS by the global setting,
      * auto-forced and hiding "Get a certificate", while the proxy could serve it nothing.
      */
@@ -94,10 +99,10 @@ public final class CertificateCoverage {
 
     /**
      * @param store the proxy's certificate store, null where no proxy runs in this process
-     * @return {@link #workingNames()} for that store: what it loaded, or the ACTIVE rows without one
+     * @return {@link #workingNames()} for that store: what it loaded, or the served rows without one
      */
     public static @NonNull Set<String> workingNames(@Nullable CertificateStore store) {
-        return store == null ? activeNames() : store.servedNames();
+        return store == null ? servedNames() : store.servedNames();
     }
 
     /**
@@ -111,11 +116,11 @@ public final class CertificateCoverage {
         return store == null || id != null && store.holds(id);
     }
 
-    /** Every name an ACTIVE certificate row declares, read once. */
-    private static @NonNull Set<String> activeNames() {
+    /** Every name a served certificate row declares, read once. */
+    private static @NonNull Set<String> servedNames() {
         Set<String> names = new HashSet<>();
         for (Row cert : Models.get(CertificateModel.class).find()
-                .where(CertificateModel.STATUS.eq(CertificateModel.STATUS_ACTIVE)).all()) {
+                .where(CertificateModel.STATUS.in(CertificateModel.SERVED_STATUSES)).all()) {
             if (!CertificateModel.PROVIDER_ACME_ACCOUNT.equals(cert.get(CertificateModel.PROVIDER))) {
                 names.addAll(namesOf(cert));
             }

@@ -20,8 +20,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * A Let's Encrypt certificate whose renewal fails: its public chain downloads from its page without the key, the
- * failure is stored with its moment and read in plain words on the list and the page, the proxy keeps serving the
- * certificate it still holds, and the page's health band offers "Renew now", which runs the renewal again.
+ * proxy loads it even where its stored text also holds the key, the failure is stored with its moment and read in
+ * plain words on the list and the page, the certificate it still holds keeps being served and counted as working, and
+ * the page's health band offers "Renew now", which runs the renewal again.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -78,7 +79,8 @@ class CertificateRenewalFailureJourneyTest extends HohenheimTestBase {
         String recordPage = "/admin/certificates/" + this.certId + "/page/overview";
 
         // 1. A working certificate's page offers its public chain, and the chain carries no key, even where the stored
-        //    certificate text holds one. The proxy serves it.
+        //    certificate text holds one. The proxy serves it, and loads it from such a text too: the chain is the
+        //    text's certificate blocks, the key comes from the key column.
         CertificateStore served = new CertificateStore();
         served.loadFromDatabase();
         assertThat(served.holds(this.certId)).as("step 1: the proxy serves the working certificate").isTrue();
@@ -92,6 +94,8 @@ class CertificateRenewalFailureJourneyTest extends HohenheimTestBase {
         assertThat(chain.statusCode()).as("step 1: the chain downloads").isEqualTo(200);
         assertThat(chain.body()).as("step 1: the certificate block and nothing of the key")
             .contains(certPem).doesNotContain("PRIVATE KEY");
+        served.loadFromDatabase();
+        assertThat(served.holds(this.certId)).as("step 1: the proxy loads a text that also holds the key").isTrue();
         cert.set(CertificateModel.CERTIFICATE_PEM, certPem);
         certificates.save(cert);
         assertThat(page.locator("body").textContent())
@@ -104,6 +108,8 @@ class CertificateRenewalFailureJourneyTest extends HohenheimTestBase {
         served.loadFromDatabase();
         assertThat(served.holds(this.certId))
             .as("step 2: the certificate it still holds keeps being served until it expires").isTrue();
+        assertThat(CertificateCoverage.workingNames(null))
+            .as("step 2: without a proxy's store, the stored rows count it as working by the same rule").contains(HOST);
 
         // 3. The list says why in plain words, and when.
         navigateToApp("/admin/certificates");

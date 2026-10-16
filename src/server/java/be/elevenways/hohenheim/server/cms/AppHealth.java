@@ -703,10 +703,10 @@ final class AppHealth {
 
     /**
      * The names HTTPS works for: what the running proxy's certificate store answers a handshake for while it
-     * terminates HTTPS, nothing while it cannot, and the names an ACTIVE certificate row declares where no proxy runs
+     * terminates HTTPS, nothing while it cannot, and the names a served certificate row declares where no proxy runs
      * in this process (a node without the proxy role, a test), because the stored rows are then all there is to read.
      *
-     * AIDEV-NOTE: an ACTIVE row is not a working certificate. A shop once had an active row without loadable material,
+     * AIDEV-NOTE: a served row is not a working certificate. A shop once had an active row without loadable material,
      * and every HTTPS cell said "Works" while the proxy could serve nothing; reading the store is what makes the cells,
      * the verdicts and the attention items agree with the handshake a visitor gets. The names are
      * {@link CertificateCoverage#workingNames()}, the rule routing and the force-HTTPS latch read too; only the

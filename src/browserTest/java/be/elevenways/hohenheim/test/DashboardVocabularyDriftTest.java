@@ -23,6 +23,7 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.regex.Matcher;
@@ -33,7 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * The dashboard's rendered vocabularies -- attention severity, onboarding state, certificate coverage,
+ * The dashboard's rendered vocabularies -- attention severity, onboarding state, certificate coverage and serving,
  * workload tier, trust lane and the display widget ids -- stay bound to their one declaring home.
  *
  * @author Jelle De Loecker
@@ -106,6 +107,21 @@ class DashboardVocabularyDriftTest {
         assertThat(CertCoverage.ofCertificateStatus(null)).as("step 2: no certificate").isEqualTo(CertCoverage.NONE);
         assertThat(CertCoverage.ofCertificateStatus("revoked"))
             .as("step 2: an unknown status fails closed onto not-covered").isEqualTo(CertCoverage.ERROR);
+    }
+
+    @Test
+    void everyCertificateStatusChoosesWhetherTheProxyServesIt() {
+        // 1. Each declared status is classified on purpose: a new STATUS value fails here until it chooses a side.
+        Map<String, Boolean> served = Map.of(CertificateModel.STATUS_ACTIVE, true,
+            CertificateModel.STATUS_ERROR, true, CertificateModel.STATUS_PENDING, false);
+        assertThat(served.keySet()).as("step 1: every CertificateModel.STATUS value is classified")
+            .containsExactlyInAnyOrderElementsOf(CertificateModel.STATUS.getValues().keySet());
+        served.forEach((status, expected) -> assertThat(CertificateModel.served(status))
+            .as("step 1: %s served", status).isEqualTo(expected));
+
+        // 2. A status nobody declared, or none, fails closed: not served.
+        assertThat(CertificateModel.served("revoked")).as("step 2: an unknown status is not served").isFalse();
+        assertThat(CertificateModel.served((String) null)).as("step 2: no status is not served").isFalse();
     }
 
     @Test

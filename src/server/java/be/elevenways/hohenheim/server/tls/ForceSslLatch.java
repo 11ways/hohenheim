@@ -19,13 +19,14 @@ import java.util.Collection;
  * certificate covers its hostname, and disarms the latch.
  *
  * AIDEV-NOTE: two moments, one rule, and the rule is {@link CertificateCoverage#workingNames()}: what the running
- * proxy loaded, the stored ACTIVE rows only where no proxy runs in this process. A certificate that starts working
- * forces every armed row it covers: the proxy's store loading it ({@link #fire(CertificateStore)}, after every store
- * load the proxy makes) or, without a proxy, the row saved ACTIVE. A domain row written while a working certificate
- * already covers it forces itself in the same write. An ACTIVE row whose material the store cannot load forces
- * nothing (it used to, sending visitors to a handshake no certificate answers). The latch only ever switches
- * force_ssl ON, once: a certificate lost later leaves force_ssl on, so the dispatcher keeps failing closed, and an
- * operator's explicit "off" disarmed the latch before it could fire (SiteDomainModel).
+ * proxy loaded, the stored served rows ({@link CertificateModel#SERVED_STATUSES}) only where no proxy runs in this
+ * process. A certificate that starts working forces every armed row it covers: the proxy's store loading it
+ * ({@link #fire(CertificateStore)}, after every store load the proxy makes) or, without a proxy, the row saved with a
+ * served status. A domain row written while a working certificate already covers it forces itself in the same write.
+ * A served row whose material the store cannot load forces nothing (it used to, sending visitors to a handshake no
+ * certificate answers). The latch only ever switches force_ssl ON, once: a certificate lost later leaves force_ssl
+ * on, so the dispatcher keeps failing closed, and an operator's explicit "off" disarmed the latch before it could
+ * fire (SiteDomainModel).
  *
  * @author Jelle De Loecker
  * @since  0.2.0
@@ -50,7 +51,7 @@ public final class ForceSslLatch {
             Row cert = Models.get(CertificateModel.class).findById(id);
             // With a proxy in this process the row is not the rule: its store loading the certificate fires.
             if (cert != null && ServerMain.getProxyServer() == null
-                    && CertificateModel.STATUS_ACTIVE.equals(cert.get(CertificateModel.STATUS))
+                    && CertificateModel.served(cert)
                     && !CertificateModel.PROVIDER_ACME_ACCOUNT.equals(cert.get(CertificateModel.PROVIDER))) {
                 fire(CertificateCoverage.namesOf(cert));
             }

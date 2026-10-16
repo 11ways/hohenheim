@@ -19,7 +19,8 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * A new address is served over plain HTTP until a working certificate covers it, then forces HTTPS by itself, once.
+ * A new address is served over plain HTTP until a working certificate covers it, then forces HTTPS by itself, once; a
+ * certificate whose renewal failed still works until it expires, an order not issued yet does not.
  *
  * @author Jelle De Loecker
  * @since  0.2.0
@@ -72,17 +73,30 @@ class NewDomainHttpsJourneyTest extends HohenheimTestBase {
         assertThat((Boolean) underWildcard.get(SiteDomainModel.FORCE_SSL))
             .as("step 4: an address written under a working certificate is forced at once").isTrue();
 
-        // 5. The certificate is lost: a forced address keeps failing closed, and the operator SEES it -- the site's
+        // 5. A certificate whose last renewal failed is still served until it expires, so saving it forces the armed
+        //    address it covers like a working one; an order not issued yet forces nothing.
+        Row held = domain(site, "held.failing-journey.test", null);
+        Row waiting = domain(site, "waiting.failing-journey.test", null);
+        Row failing = certificate("failing-journey", "held.failing-journey.test", CertificateModel.STATUS_ERROR);
+        Row pending = certificate("pending-journey", "waiting.failing-journey.test", CertificateModel.STATUS_PENDING);
+        assertThat((Boolean) domains.findById(held.get(SiteDomainModel.ID)).get(SiteDomainModel.FORCE_SSL))
+            .as("step 5: a served certificate whose renewal failed forces its address").isTrue();
+        assertThat((Boolean) domains.findById(waiting.get(SiteDomainModel.ID)).get(SiteDomainModel.FORCE_SSL))
+            .as("step 5: an order not issued yet does not").isFalse();
+        certificates.delete(failing);
+        certificates.delete(pending);
+
+        // 6. The certificate is lost: a forced address keeps failing closed, and the operator SEES it -- the site's
         //    HTTPS cell turns to the error page and an attention item names the address.
         certificates.delete(cert);
         certificates.delete(wildcard);
         assertThat((Boolean) domains.findById(fresh.get(SiteDomainModel.ID)).get(SiteDomainModel.FORCE_SSL))
-            .as("step 5: losing the certificate never unforces").isTrue();
-        assertThat(SiteParts.tlsOf(site)).as("step 5: the site reads broken")
+            .as("step 6: losing the certificate never unforces").isTrue();
+        assertThat(SiteParts.tlsOf(site)).as("step 6: the site reads broken")
             .isEqualTo(SiteTls.BROKEN);
         List<AttentionItem> items = new ArrayList<>();
         ProxyAttention.forcedWithoutCertificate(items);
-        assertThat(items).as("step 5: one item per forced address without a working certificate")
+        assertThat(items).as("step 6: one item per forced address without a working certificate")
             .anySatisfy(item -> assertThat(String.valueOf(item.title().args().asMap().get("hostname")))
                 .isEqualTo("fresh.https-journey.test"));
     }
@@ -111,11 +125,15 @@ class NewDomainHttpsJourneyTest extends HohenheimTestBase {
     }
 
     private static Row certificate(String name, String names) {
+        return certificate(name, names, CertificateModel.STATUS_ACTIVE);
+    }
+
+    private static Row certificate(String name, String names, String status) {
         CertificateModel certificates = Models.get(CertificateModel.class);
         Row cert = certificates.createEmptyRow();
         cert.set(CertificateModel.NICE_NAME, name);
         cert.set(CertificateModel.PROVIDER, CertificateModel.PROVIDER_CUSTOM);
-        cert.set(CertificateModel.STATUS, CertificateModel.STATUS_ACTIVE);
+        cert.set(CertificateModel.STATUS, status);
         cert.set(CertificateModel.DOMAIN_NAMES_TEXT, names);
         certificates.save(cert);
         return cert;

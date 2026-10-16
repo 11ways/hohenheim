@@ -195,10 +195,10 @@ final class PutOnlineHandlers {
         return parent.indexOf('.') < 0 ? null : HostPattern.oneLabelUnder(parent, null).text();
     }
 
-    /** @return the active, unexpired certificate Hohenheim holds that covers the address, null when none does */
+    /** @return the served, unexpired certificate Hohenheim holds that covers the address, null when none does */
     private static @Nullable Row usableCovering(@NonNull String hostname) {
         Row covering = CertificateCoverage.coveringCertificate(hostname);
-        if (covering == null || !CertificateModel.STATUS_ACTIVE.equals(covering.get(CertificateModel.STATUS))) {
+        if (covering == null || !CertificateModel.served(covering)) {
             return null;
         }
         Instant expires = covering.get(CertificateModel.EXPIRES_ON);

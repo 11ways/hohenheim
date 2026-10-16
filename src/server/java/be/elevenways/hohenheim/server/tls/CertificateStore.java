@@ -7,20 +7,13 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 
-import java.io.*;
 import java.security.*;
-import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.*;
 
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.X509ExtendedKeyManager;
-
-import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
-import org.bouncycastle.openssl.PEMKeyPair;
-import org.bouncycastle.openssl.PEMParser;
-import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter;
 
 /**
  * Manages an in-memory KeyStore for TLS certificate lookup.
@@ -237,8 +230,10 @@ public class CertificateStore {
 
         if (certPem == null || keyPem == null) return null;
 
-        PrivateKey privateKey = parsePrivateKey(keyPem);
-        X509Certificate[] chain = parseCertificateChain(certPem);
+        // The chain is the text's CERTIFICATE blocks only: a stored text may also hold its key, which is read from
+        // the key column, where keys belong.
+        PrivateKey privateKey = CertificatePem.privateKeyOf(keyPem);
+        X509Certificate[] chain = CertificatePem.chainOf(certPem).toArray(new X509Certificate[0]);
 
         if (chain.length == 0) {
             throw new IllegalArgumentException("Empty certificate chain");
@@ -266,40 +261,6 @@ public class CertificateStore {
             }
         }
         throw new IllegalStateException("No X509ExtendedKeyManager found in KeyManagerFactory");
-    }
-
-    // -----------------------------------------------------------------------
-    // PEM parsing
-    // -----------------------------------------------------------------------
-
-    private static PrivateKey parsePrivateKey(String pem) throws Exception {
-        try (PEMParser parser = new PEMParser(new StringReader(pem))) {
-            Object parsed = parser.readObject();
-            JcaPEMKeyConverter converter = new JcaPEMKeyConverter();
-
-            if (parsed instanceof PEMKeyPair keyPair) {
-                return converter.getPrivateKey(keyPair.getPrivateKeyInfo());
-            } else if (parsed instanceof PrivateKeyInfo keyInfo) {
-                return converter.getPrivateKey(keyInfo);
-            } else {
-                throw new IllegalArgumentException(
-                    "Unsupported PEM object: " + (parsed != null ? parsed.getClass().getName() : "null"));
-            }
-        }
-    }
-
-    private static X509Certificate[] parseCertificateChain(String pem) throws Exception {
-        CertificateFactory cf = CertificateFactory.getInstance("X.509");
-        List<X509Certificate> chain = new ArrayList<>();
-
-        try (InputStream is = new ByteArrayInputStream(pem.getBytes())) {
-            var certs = cf.generateCertificates(is);
-            for (var cert : certs) {
-                chain.add((X509Certificate) cert);
-            }
-        }
-
-        return chain.toArray(new X509Certificate[0]);
     }
 
     /**
