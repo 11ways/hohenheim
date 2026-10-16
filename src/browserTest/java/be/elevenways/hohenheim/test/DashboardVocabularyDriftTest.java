@@ -62,12 +62,18 @@ class DashboardVocabularyDriftTest {
             .as("step 3: an unknown severity is refused").isInstanceOf(IllegalArgumentException.class);
 
         // 4. A framework verdict's tone raises attention in one way only: broken is an error, attention a warning,
-        //    and a fine or not-yet-known verdict raises nothing.
+        //    and a fine, not-yet-known or retired verdict raises nothing.
         assertThat(AttentionSeverity.ofTone(HealthTone.BROKEN)).as("step 4: broken").isEqualTo(AttentionSeverity.ERROR);
         assertThat(AttentionSeverity.ofTone(HealthTone.ATTENTION)).as("step 4: attention")
             .isEqualTo(AttentionSeverity.WARNING);
         assertThat(AttentionSeverity.ofTone(HealthTone.OK)).as("step 4: fine").isNull();
         assertThat(AttentionSeverity.ofTone(HealthTone.UNKNOWN)).as("step 4: not known yet").isNull();
+        assertThat(AttentionSeverity.ofTone(HealthTone.RETIRED)).as("step 4: retired on purpose").isNull();
+        for (HealthTone tone : HealthTone.values()) {
+            assertThat(AttentionSeverity.ofTone(tone) != null)
+                .as("step 4: %s raises an item exactly when the framework says it needs attention", tone)
+                .isEqualTo(tone.needsAttention());
+        }
 
         // 5. A state that raises an item says how loudly on its member, and only the failing ones do.
         assertThat(DelegationVerdict.MATCHES.severity()).as("step 5: a matching delegation raises nothing").isNull();

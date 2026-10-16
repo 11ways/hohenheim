@@ -280,7 +280,7 @@ public final class AppParts {
      */
     static @NonNull Microcopy stateWord(@NonNull RecordHealth verdict) {
         return switch (verdict.tone()) {
-            case OK, ATTENTION, BROKEN -> stateLabel(verdict.tone().token());
+            case OK, ATTENTION, BROKEN, RETIRED -> stateLabel(verdict.tone().token());
             case UNKNOWN -> verdict.headline();
         };
     }

@@ -15281,6 +15281,10 @@
     "text": "Onbekend",
     "scope": "app_list"
   },
+  "state_retired": {
+    "text": "Buiten gebruik",
+    "scope": "app_list"
+  },
   "domain_names": [
     {
       "text": "Domeinen",

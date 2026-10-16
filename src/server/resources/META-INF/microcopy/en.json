@@ -15281,6 +15281,10 @@
     "text": "Unknown",
     "scope": "app_list"
   },
+  "state_retired": {
+    "text": "Retired",
+    "scope": "app_list"
+  },
   "domain_names": [
     {
       "text": "Domains",
