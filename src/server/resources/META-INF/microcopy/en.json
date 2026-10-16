@@ -10724,6 +10724,7 @@
     "text": "Bookable",
     "scope": "server_overview"
   },
+  "bookable_free": {"text": "{$free} free of {$budget}", "scope": "server_overview"},
   "unmeasured": [
     {
       "text": "Unmeasured",

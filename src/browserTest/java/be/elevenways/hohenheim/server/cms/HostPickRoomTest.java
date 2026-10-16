@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.host.HostCapacityView;
 import be.elevenways.hohenheim.host.HostStanding;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.DiskSpace;
@@ -11,6 +13,7 @@ import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.host.HostFixtures;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.edit.EditContext;
@@ -19,6 +22,7 @@ import be.elevenways.zenit.common.edit.OptionMeter;
 import be.elevenways.zenit.common.edit.SiblingJudgement;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.Zenit;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -90,6 +94,16 @@ class HostPickRoomTest extends HohenheimTestBase {
         assertThat(((Microcopy) meters.get(1).text().args().get("disk")).key()).as("step 1b: the list's own reading")
             .isEqualTo("disk_used");
 
+        // 1c. The host page's Bookable fact reads what is still free to book from the same ledger the meter reads:
+        //     3 MB free of the budget, never the whole budget beside a "3 MB free" warning.
+        HostCapacityView ledger = InstanceCapacity.viewOf(server(full), full);
+        assertThat(ledger.freeMb()).as("step 1c: the ledger leaves 3 MB free").isEqualTo(3);
+        String budget = ServerParts.sizeOfMegabytes(ledger.bookableMb());
+        assertThat(bookableFact(ledger, "en")).as("step 1c: free of the budget")
+            .isEqualTo(ServerParts.sizeOfMegabytes(3) + " free of " + budget);
+        assertThat(bookableFact(ledger, "nl")).as("step 1c: in Dutch too")
+            .isEqualTo(ServerParts.sizeOfMegabytes(3) + " vrij van " + budget);
+
         // 2. The kind-led Where step judges the full host by the run's own booking rule at the kind's default memory:
         //    refused, naming the host, what is needed and what is free.
         SiblingJudgement<?, Integer> judged = Objects.requireNonNull(
@@ -129,6 +143,14 @@ class HostPickRoomTest extends HohenheimTestBase {
         // 3. A host with room still takes new apps.
         assertThat(HostVerdict.of(server(roomy)).standing()).as("step 3: the roomy host takes new apps")
             .isEqualTo(HostStanding.TAKING);
+    }
+
+    /** @return the value of the host page's Bookable fact, in the given language */
+    private static String bookableFact(HostCapacityView ledger, String tag) {
+        LocaleChain locales = LocaleChain.ofTags(tag);
+        String label = HohenheimMicrocopy.SERVER_OVERVIEW.of("bookable").resolve(locales, Zenit.getMessageResolver());
+        return ServerOverviewState.capacityFacts(ledger, locales, Zenit.getMessageResolver()).stream()
+            .filter(fact -> fact.label().equals(label)).findFirst().orElseThrow().value();
     }
 
     private static Row server(int id) {

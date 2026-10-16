@@ -494,10 +494,9 @@ public final class ServerOverviewState {
             ByteText.human(space.totalBytes()), disk.measuredAt() != null ? disk.measuredAt().toString() : null);
     }
 
-    /** The numbers the bar itself cannot show: what is still bookable, and by whom. */
-    private static @NonNull List<WidgetFact> capacityFacts(@NonNull HostCapacityView capacity,
-                                                           @NonNull LocaleChain locales,
-                                                           @Nullable MessageResolver resolver) {
+    /** The numbers the bar itself cannot show: what is booked, the budget, and what is still free to book in it. */
+    static @NonNull List<WidgetFact> capacityFacts(@NonNull HostCapacityView capacity, @NonNull LocaleChain locales,
+                                                   @Nullable MessageResolver resolver) {
         List<WidgetFact> facts = new ArrayList<>();
         if (!capacity.measured()) {
             return facts;
@@ -507,7 +506,10 @@ public final class ServerOverviewState {
         facts.add(WidgetFact.of(HohenheimMicrocopy.SERVER_OVERVIEW.of("budget")
             .resolve(locales, resolver), ServerParts.sizeOfMegabytes(capacity.budgetMb())));
         facts.add(WidgetFact.of(HohenheimMicrocopy.SERVER_OVERVIEW.of("bookable").resolve(locales, resolver),
-            ServerParts.sizeOfMegabytes(capacity.bookableMb())));
+            HohenheimMicrocopy.SERVER_OVERVIEW.of("bookable_free")
+                .withArg("free", ServerParts.sizeOfMegabytes(capacity.freeMb()))
+                .withArg("budget", ServerParts.sizeOfMegabytes(capacity.bookableMb()))
+                .resolve(locales, resolver)));
         return facts;
     }
 

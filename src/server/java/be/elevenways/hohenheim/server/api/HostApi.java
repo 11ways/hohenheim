@@ -100,9 +100,9 @@ public final class HostApi {
         entry.put("budget_mb", capacity.budgetMb());
         entry.put("booked_mb", capacity.bookedMb());
         entry.put("bookable_mb", capacity.bookableMb());
-        // What is left to book, which is the number an operator planning a move wants and
-        // the only one the panel's three facts leave to arithmetic.
-        entry.put("free_mb", Math.max(0, capacity.bookableMb() - capacity.bookedMb()));
+        // What is left to book, which is the number an operator planning a move wants; the host page's
+        // "Bookable" fact says the same figure.
+        entry.put("free_mb", capacity.freeMb());
         entry.put("overcommit_ratio", overcommitRatio());
         entry.put("reserve_mb", reserveMb());
         entry.put("measured_at", capacity.measuredAtIso());
