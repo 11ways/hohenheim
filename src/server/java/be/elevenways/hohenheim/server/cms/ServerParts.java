@@ -66,6 +66,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.operation.OperationHandlers;
+import be.elevenways.zenit.widget.common.data.UsageData;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -246,7 +247,7 @@ public final class ServerParts {
             return new HostUsageCell(false, 0, HohenheimMicrocopy.HOST_LIST.of(capacity != null && capacity.stale()
                 ? "reading_stale" : "reading_unmeasured"));
         }
-        int percent = (int) Math.min(100, Math.round(100.0 * capacity.bookedMb() / capacity.budgetMb()));
+        int percent = UsageData.percentOf(capacity.bookedMb(), capacity.budgetMb());
         return new HostUsageCell(true, percent, bookedText(capacity));
     }
 
@@ -261,7 +262,7 @@ public final class ServerParts {
                 HohenheimMicrocopy.HOST_LIST.of(reading == null ? "reading_unmeasured" : "reading_stale"));
         }
         DiskSpace space = reading.space();
-        int percent = (int) Math.min(100, Math.round(100.0 * space.usedBytes() / space.totalBytes()));
+        int percent = UsageData.percentOf(space.usedBytes(), space.totalBytes());
         return new HostUsageCell(true, percent, diskUsedText(space));
     }
 

@@ -66,7 +66,7 @@ class ServerAdminTest extends HohenheimTestBase {
         assertThat(page.locator(".hh-host-state[data-host-state]").count())
             .as("step 4: with the structured state cell in its header").isEqualTo(1);
         assertThat(page.locator(".widget-usage").count())
-            .as("step 4: and an explicit capacity state").isEqualTo(1);
+            .as("step 4: and an explicit state for its memory and for its disk").isEqualTo(2);
     }
 
     /** SSH-target round trip, argument-injection refusal and the implicit local host's guards. */

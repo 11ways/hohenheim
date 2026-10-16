@@ -206,8 +206,8 @@ public final class ServerOverviewState {
 
         HostCapacityView capacity = capacityOf(server, serverId);
         List<WidgetInstance> capacityBand = new ArrayList<>();
-        capacityBand.add(new WidgetInstance(UsageBarWidget.ID,
-                Map.of("label", HohenheimWidgetCopy.localized(HohenheimMicrocopy.SERVER_OVERVIEW.of("capacity"))))
+        capacityBand.add(new WidgetInstance(UsageBarWidget.ID, Map.of("label",
+                HohenheimWidgetCopy.localized(HohenheimMicrocopy.SERVER_OVERVIEW.of("memory_capacity"))))
             .withData(capacityUsage(capacity, locales, resolver)));
         // Without a usable reading there is nothing booked against a budget to list: no empty "Nothing to show".
         if (capacity.measured()) {

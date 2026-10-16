@@ -10709,10 +10709,7 @@
     "text": "Gemeten",
     "scope": "server_overview"
   },
-  "capacity": {
-    "text": "Capaciteit",
-    "scope": "server_overview"
-  },
+  "memory_capacity": {"text": "Geheugen", "scope": "server_overview"},
   "disk_capacity": {"text": "Schijf", "scope": "server_overview"},
   "disk_unmeasured": {"text": "Nog geen schijfmeting.", "scope": "server_overview"},
   "booked": {

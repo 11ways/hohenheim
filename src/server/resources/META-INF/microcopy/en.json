@@ -10709,10 +10709,7 @@
     "text": "Measured",
     "scope": "server_overview"
   },
-  "capacity": {
-    "text": "Capacity",
-    "scope": "server_overview"
-  },
+  "memory_capacity": {"text": "Memory", "scope": "server_overview"},
   "disk_capacity": {"text": "Disk", "scope": "server_overview"},
   "disk_unmeasured": {"text": "No disk reading yet.", "scope": "server_overview"},
   "booked": {

@@ -37,6 +37,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -112,22 +114,29 @@ class HostsPageJourneyTest extends HohenheimTestBase {
             assertThat(say(blind.text())).as("step 4: and says so").isEqualTo("Not measured yet");
 
             // 4b. Disk reads the heartbeat's stored reading of the instance-data filesystem: used against its size, and
-            //     a host never measured has no bar, only the words, never an empty 0.
+            //     a host never measured has no bar, only the words, never an empty 0. 90.6% used is 90% everywhere.
             long gib = 1024L * 1024 * 1024;
+            long used = 906 * gib / 10;
             Row measuredDisk = server(admitted);
-            HostDisk.record(measuredDisk, new DiskSpace(100 * gib, 40 * gib), Now.instant());
+            HostDisk.record(measuredDisk, new DiskSpace(100 * gib, 100 * gib - used), Now.instant());
             Models.get(ServerModel.class).save(measuredDisk);
             HostUsageCell disk = ServerParts.diskCellOf(server(admitted));
             assertThat(disk.measured()).as("step 4b: a fresh reading draws a bar").isTrue();
-            assertThat(disk.percent()).as("step 4b: 60 of 100 GiB used").isEqualTo(60);
+            assertThat(disk.percent()).as("step 4b: 90.6 of 100 GiB used, rounded down").isEqualTo(90);
             assertThat(say(disk.text())).as("step 4b: in words")
-                .isEqualTo(ByteText.human(60 * gib) + " of " + ByteText.human(100 * gib) + " used");
+                .isEqualTo(ByteText.human(used) + " of " + ByteText.human(100 * gib) + " used");
             HostUsageCell noDisk = ServerParts.diskCellOf(server(waiting));
             assertThat(noDisk.measured()).as("step 4b: never measured, no bar").isFalse();
             assertThat(say(noDisk.text())).as("step 4b: and says so").isEqualTo("Not measured yet");
             String hostPage = adminGet("/admin/" + HohenheimSlugs.SERVERS + "/" + admitted + "/page/overview").body();
             assertThat(hostPage.split("<pl-usage-bar", -1).length - 1)
                 .as("step 4b: the host page draws the disk bar beside the memory bar").isEqualTo(2);
+            assertThat(texts(hostPage, "widget-heading[^>]*>(.*?)</h3>"))
+                .as("step 4b: the memory bar is headed Memory, beside Disk").contains("Memory", "Disk")
+                .doesNotContain("Capacity");
+            assertThat(texts(hostPage, "widget-usage-percent[^>]*>(.*?)</span>"))
+                .as("step 4b: the host page's memory and disk read the list's own percentages")
+                .containsExactly(ServerParts.memoryCellOf(server(admitted)).percent() + "%", disk.percent() + "%");
             assertThat(adminGet("/admin/" + HohenheimSlugs.SERVERS + "/" + waiting + "/page/overview").body())
                 .as("step 4b: a never-measured host's page names its disk, and says it has no reading instead of"
                     + " drawing an empty bar").contains("No disk reading yet.");
@@ -385,5 +394,15 @@ class HostsPageJourneyTest extends HohenheimTestBase {
 
     private static String say(Microcopy copy) {
         return copy == null ? "" : copy.resolve(EN, Zenit.getMessageResolver());
+    }
+
+    /** @return the text of every first group of the pattern in the markup, tags and edge whitespace dropped */
+    private static List<String> texts(String markup, String regex) {
+        List<String> found = new ArrayList<>();
+        Matcher matcher = Pattern.compile(regex, Pattern.DOTALL).matcher(markup);
+        while (matcher.find()) {
+            found.add(matcher.group(1).replaceAll("<[^>]*>", "").trim());
+        }
+        return found;
     }
 }

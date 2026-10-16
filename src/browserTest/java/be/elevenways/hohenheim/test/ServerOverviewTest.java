@@ -304,15 +304,20 @@ class ServerOverviewTest extends HohenheimTestBase {
             .contains("Memory last measured ").contains(" ago, too long ago to place new apps here.")
             .as("step 1: and no empty fact list follows it").doesNotContain("Nothing to show");
 
-        // 2. A fresh measurement turns into a real usage bar with the booked numbers.
+        // 2. A fresh measurement turns into a real usage bar with the booked numbers. The memory widget comes first;
+        //    the disk beside it has no reading on this host and keeps saying so.
         HostPreflight.store("overview-capacity", new HostPreflight.Report(List.of(),
             Map.of(HostPreflight.MEM_TOTAL_FACT, 16L * 1024 * 1024 * 1024),
             true, Now.instant(), null));
         HttpResponse<String> fresh = adminGet("/admin/servers/" + hostId + "/page/overview");
-        assertThat(fresh.body())
+        String[] widgets = fresh.body().split("class=\"widget widget-usage\"", -1);
+        assertThat(widgets.length - 1).as("step 2: a memory and a disk widget").isEqualTo(2);
+        assertThat(widgets[1])
             .as("step 2: a fresh measurement renders a real usage bar")
             .doesNotContain("widget-usage-unmeasured")
             .contains("<pl-usage-bar");
+        assertThat(widgets[2]).as("step 2: the disk without a reading still says so")
+            .contains("widget-usage-unmeasured");
     }
 
     /**
