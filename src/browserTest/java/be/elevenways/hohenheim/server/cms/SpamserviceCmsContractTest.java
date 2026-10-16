@@ -17,10 +17,12 @@ import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.resource.PartialWrite;
 import be.elevenways.zenit.cms.common.schema.FilterState;
 import be.elevenways.zenit.cms.common.schema.RangeFilterValue;
 import be.elevenways.zenit.cms.common.schema.TableView;
 import be.elevenways.zenit.cms.server.page.SettingsBackend;
+import be.elevenways.zenit.cms.server.panel.PartsWrites;
 import be.elevenways.zenit.common.data.RecordPage;
 import be.elevenways.zenit.common.orm.field.DateField;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
@@ -272,6 +274,11 @@ class SpamserviceCmsContractTest {
         return ExecutionIdentity.supply(ExecutionIdentity.caller(caller, CallerChannel.of(caller)), body);
     }
 
+    /** @return the write the update lane hands a store writer: the submitted entries over the record's form values */
+    private static <T> PartialWrite submitted(PanelResource<T> resource, T existing, Map<String, Object> entries) {
+        return PartsWrites.guarded(resource, entries).over(() -> resource.formValues(existing));
+    }
+
     @Test
     void clientUpdatesUseRevisionGuardedPutWithoutProvisioningMetadata() throws Exception {
         AtomicReference<String> method = new AtomicReference<>();
@@ -289,9 +296,9 @@ class SpamserviceCmsContractTest {
             "owned", null, "eng", 50, null, null, null, "r1");
         PanelResource<ManagedClient> resource = SpamserviceClientsResource.create(() -> client);
 
-        resource.writes().storeUpdate().update(existing, Map.of(
+        resource.writes().storeUpdate().update(existing, submitted(resource, existing, Map.of(
             "name", "Renamed", "enabled", true, "trusted", true, "provisioner", false,
-            "manager", false, "allowed_languages", "eng", "spam_threshold", 55, "notes", "note"),
+            "manager", false, "allowed_languages", "eng", "spam_threshold", 55, "notes", "note")),
             AccessContext.anonymous());
 
         assertThat(method.get()).isEqualTo("PUT");
@@ -330,8 +337,9 @@ class SpamserviceCmsContractTest {
         //    threshold -- every one of them a setting a blank PUT would silently drop.
         ManagedClient existing = new ManagedClient(clientId, "Original", true, true, true, false,
             "owned", null, "eng,nld", 80, "keep this note", null, null, "r1");
-        SpamserviceClientsResource.create(() -> client).writes().storeUpdate().update(existing,
-            Map.of("name", "Renamed"), AccessContext.anonymous());
+        PanelResource<ManagedClient> clients = SpamserviceClientsResource.create(() -> client);
+        clients.writes().storeUpdate().update(existing, submitted(clients, existing, Map.of("name", "Renamed")),
+            AccessContext.anonymous());
 
         assertThat(body.get()).as("step 1: the rename is the only field that moved")
             .contains("\"name\":\"Renamed\"").contains("\"enabled\":true")
@@ -340,18 +348,20 @@ class SpamserviceCmsContractTest {
 
         // 2. Same for a spam word: score, language and leet survive a correction of the
         //    word itself.
-        SpamserviceWordsResource.create(() -> client).writes().storeUpdate().update(
-            new SpamWordEntry(wordId, "viagraa", 70, "eng", true, null, null),
-            Map.of("word", "viagra"), AccessContext.anonymous());
+        PanelResource<SpamWordEntry> words = SpamserviceWordsResource.create(() -> client);
+        SpamWordEntry word = new SpamWordEntry(wordId, "viagraa", 70, "eng", true, null, null);
+        words.writes().storeUpdate().update(word, submitted(words, word, Map.of("word", "viagra")),
+            AccessContext.anonymous());
 
         assertThat(body.get()).as("step 2: the word's score, language and leet flag survive")
             .contains("\"word\":\"viagra\"").contains("\"score\":70")
             .contains("eng").contains("\"leet\":true");
 
         // 3. And a key write that carries no name must not rename the key to "null".
-        SpamserviceClientKeysResource.create(() -> client).writes().storeUpdate().update(
-            new ManagedClientKey(keyId, clientId, "primary", true, null, null),
-            Map.of("active", false), AccessContext.anonymous());
+        PanelResource<ManagedClientKey> keys = SpamserviceClientKeysResource.create(() -> client);
+        ManagedClientKey key = new ManagedClientKey(keyId, clientId, "primary", true, null, null);
+        keys.writes().storeUpdate().update(key, submitted(keys, key, Map.of("active", false)),
+            AccessContext.anonymous());
 
         assertThat(body.get()).as("step 3: an absent name is sent as absent, never as \"null\"")
             .doesNotContain("\"name\":\"null\"");
@@ -360,10 +370,10 @@ class SpamserviceCmsContractTest {
         //    stored name is null, edited by a write that carries no name. The fallback is the
         //    null itself, and String.valueOf over it is the four characters "null" -- PUT to
         //    the live filter as the client's new name.
-        SpamserviceClientsResource.create(() -> client).writes().storeUpdate().update(
-            new ManagedClient(clientId, null, true, false, false, false, "owned", null, "eng",
-                50, null, null, null, "r1"),
-            Map.of("enabled", true), AccessContext.anonymous());
+        ManagedClient unnamed = new ManagedClient(clientId, null, true, false, false, false, "owned", null, "eng",
+            50, null, null, null, "r1");
+        clients.writes().storeUpdate().update(unnamed, submitted(clients, unnamed, Map.of("enabled", true)),
+            AccessContext.anonymous());
 
         assertThat(body.get())
             .as("step 4: a client with no stored name is never renamed to the text \"null\"")
@@ -373,7 +383,7 @@ class SpamserviceCmsContractTest {
         //    submitted entry coerces to -- getOrDefault answers null for a present key.
         Map<String, Object> blankName = new java.util.HashMap<>();
         blankName.put("name", null);
-        SpamserviceClientsResource.create(() -> client).writes().storeUpdate().update(existing, blankName,
+        clients.writes().storeUpdate().update(existing, submitted(clients, existing, blankName),
             AccessContext.anonymous());
 
         assertThat(body.get())
