@@ -32,7 +32,6 @@ class ProxyServerStateTest {
         // HohenheimTestRuntime funnel, and the TASKS stage reads the role snapshot.
         be.elevenways.hohenheim.server.HohenheimRoles.capture();
         ServerZenitRuntime.init();
-        Zenit.getHawkeye().setClientScriptLocation("/cms.js");
     }
 
     @Test

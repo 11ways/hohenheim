@@ -40,7 +40,6 @@ class TlsResilienceTest {
         HohenheimEndpoints.init();
         TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();
-        Zenit.getHawkeye().setClientScriptLocation("/cms.js");
     }
 
     private static Row createCert(String niceName, String provider, String status, String domains) {

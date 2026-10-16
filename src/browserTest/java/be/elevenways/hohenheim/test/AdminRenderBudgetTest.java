@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.zenit.common.Zenit;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpClient;
@@ -53,11 +54,13 @@ class AdminRenderBudgetTest extends HohenheimTestBase {
             median.put(path, samples.get(samples.size() / 2));
         }
 
-        long bundleBytes = fetchSize(client, "/cms.js");
+        // The bundle the pages load: the one this lane serves (HohenheimTestBase), never a spelled name.
+        String bundle = Zenit.getHawkeye().getClientScriptLocation();
+        long bundleBytes = fetchSize(client, bundle);
 
         StringBuilder report = new StringBuilder("\nADMIN RENDER BUDGET (median of "
             + SAMPLES + " after " + WARMUP + " warmups, no browser)\n"
-            + "  client bundle /cms.js = " + bundleBytes + " bytes\n");
+            + "  client bundle " + bundle + " = " + bundleBytes + " bytes\n");
         median.forEach((path, ms) -> report.append(String.format("  %6d ms  %s%n", ms, path)));
         System.out.println(report);
 

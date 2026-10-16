@@ -111,8 +111,10 @@ public abstract class HohenheimTestBase extends ZenitBrowserTestBase {
         // discovered HohenheimHostWiring module at the MODULES stage inside this
         // call. The harness used to hand-install those AFTER booting while
         // ServerMain installed them after BINDING, so the suite was a second,
-        // safer truth and could never see production's pre-wiring window.
+        // safer truth and could never see production's pre-wiring window. The one
+        // test-owned choice is the bundle: the pages load what this lane serves.
         HohenheimTestRuntime.ensureBooted();
+        serveLaneBundle();
         holdTheReconcileSweep();
 
         sessionToken = seedAuthenticatedAdmin();

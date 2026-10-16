@@ -6,7 +6,6 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.SystemUserModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.task.UpdateSystemUsers;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import org.junit.jupiter.api.*;
 import static org.assertj.core.api.Assertions.*;
@@ -28,7 +27,6 @@ class DiscoveryTaskTest {
         HohenheimEndpoints.init();
         TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();
-        Zenit.getHawkeye().setClientScriptLocation("/cms.js");
     }
 
     @Test

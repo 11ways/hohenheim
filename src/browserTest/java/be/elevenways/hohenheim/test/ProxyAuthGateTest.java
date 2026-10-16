@@ -55,7 +55,6 @@ class ProxyAuthGateTest {
         HohenheimEndpoints.init();
         TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();
-        Zenit.getHawkeye().setClientScriptLocation("/cms.js");
         RateLimitMiddleware.limiter().clear();
     }
 

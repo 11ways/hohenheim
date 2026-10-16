@@ -43,7 +43,6 @@ class ProxyDispatchTest {
         HohenheimEndpoints.init();
         File db = TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();
-        Zenit.getHawkeye().setClientScriptLocation("/cms.js");
     }
 
     @AfterAll

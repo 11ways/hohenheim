@@ -39,7 +39,6 @@ public final class ProxyTestSupport {
         // it; the second HohenheimDatabase.init() this used to make was pure duplication.
         resetDatabase();
         HohenheimTestRuntime.ensureBooted();
-        Zenit.getHawkeye().setClientScriptLocation("/cms.js");
     }
 
     /** Point the runtime at a fresh temp SQLite file and re-init. */

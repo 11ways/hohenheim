@@ -45,7 +45,6 @@ class ProxySocketDispatchTest {
         HohenheimEndpoints.init();
         TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();
-        Zenit.getHawkeye().setClientScriptLocation("/cms.js");
     }
 
     @AfterAll

@@ -9,7 +9,6 @@ import be.elevenways.hohenheim.server.SystemUsers;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.server.process.ProcessOutcome;
 import be.elevenways.protoblast.server.process.Subprocess;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.BeforeAll;
@@ -39,7 +38,6 @@ class SystemUsersTest {
         HohenheimEndpoints.init();
         TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();
-        Zenit.getHawkeye().setClientScriptLocation("/cms.js");
 
         saveUser("hh-uid-test-user", 4242);
         saveUser("hh-uid-test-root", 0);
