@@ -663,7 +663,8 @@ public final class StackParts {
         for (String key : List.of(StackServiceModel.HEALTH_INTERVAL_SECONDS.getName(),
                 StackServiceModel.HEALTH_TIMEOUT_SECONDS.getName(), StackServiceModel.HEALTH_RETRIES.getName(),
                 StackServiceModel.HEALTH_START_PERIOD_SECONDS.getName())) {
-            if (!(submitted.get(key) instanceof Number number)) {
+            // Only if sent: a write that leaves a timing alone (an inline cell) carries no key for it.
+            if (!submitted.containsKey(key) || !(submitted.get(key) instanceof Number number)) {
                 continue;
             }
             boolean zeroAllowed = StackServiceModel.HEALTH_START_PERIOD_SECONDS.getName().equals(key);
@@ -681,7 +682,9 @@ public final class StackParts {
      * authority (it runs on the deploy path), and this call only moves the moment of refusal earlier.
      */
     private static void validCapabilities(@NonNull Map<String, Object> submitted) {
-        if (!(submitted.get(StackServiceModel.CAPABILITIES.getName()) instanceof List<?> declared)) {
+        // Only if sent: a write that leaves the capabilities alone carries no key for them.
+        String key = StackServiceModel.CAPABILITIES.getName();
+        if (!submitted.containsKey(key) || !(submitted.get(key) instanceof List<?> declared)) {
             return;
         }
         List<String> names = new ArrayList<>();
@@ -755,10 +758,11 @@ public final class StackParts {
      *
      * AIDEV-NOTE: a Records entry coerces to a List of ROWS (SubmittedValueCoercion.coerceRecords), never a List of
      * Maps -- reading them as maps silently yields nothing and every check over them becomes dead code. These are the
-     * very rows the save stages, so a canonical value set on one is the stored one.
+     * very rows the save stages, so a canonical value set on one is the stored one. Only if sent: a write that leaves
+     * the records alone carries no key for them, and reads as none.
      */
     private static @NonNull List<Row> recordsOf(@NonNull Map<String, Object> submitted, @NonNull String key) {
-        if (!(submitted.get(key) instanceof List<?> list)) {
+        if (!submitted.containsKey(key) || !(submitted.get(key) instanceof List<?> list)) {
             return List.of();
         }
         List<Row> records = new ArrayList<>();

@@ -334,8 +334,10 @@ public final class NotificationChannelParts {
         if (!url.isEmpty() && !(url.startsWith("http://") || url.startsWith("https://"))) {
             throw Violations.ofField("url", null, HohenheimMicrocopy.VIOLATIONS.of("url_scheme"));
         }
-        if (save.values().get(NotificationChannelModel.EVENTS.getName()) instanceof List<?> events) {
-            for (Object event : events) {
+        // Only if sent: a write that leaves the events alone carries no key for them.
+        String events = NotificationChannelModel.EVENTS.getName();
+        if (save.values().containsKey(events) && save.values().get(events) instanceof List<?> sent) {
+            for (Object event : sent) {
                 if (!NotificationEvents.isKnown(String.valueOf(event))) {
                     throw Violations.ofField("events", event, HohenheimMicrocopy.VIOLATIONS.of("unknown_event")
                         .withArg("event", String.valueOf(event))

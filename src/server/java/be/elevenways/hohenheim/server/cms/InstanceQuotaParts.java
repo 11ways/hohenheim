@@ -183,7 +183,9 @@ public final class InstanceQuotaParts {
 
     /** Stores the picked subjects as the owner's pack; none picked is the operator's empty pack. */
     private static void packOwners(@NonNull RowSave save) {
-        if (save.values().get(OWNERS.getName()) instanceof List<?> picked) {
+        // Only if sent: a write that leaves the owners alone carries no key for them.
+        String owners = OWNERS.getName();
+        if (save.values().containsKey(owners) && save.values().get(owners) instanceof List<?> picked) {
             LinkedHashSet<String> subjects = new LinkedHashSet<>();
             for (Object subject : picked) {
                 subjects.add(String.valueOf(subject));
