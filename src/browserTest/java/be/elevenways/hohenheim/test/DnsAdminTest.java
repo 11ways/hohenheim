@@ -130,9 +130,10 @@ class DnsAdminTest extends HohenheimTestBase {
         waitForHydration();
         assertThat(page.locator("body").textContent()).contains("www").contains("192.0.2.10");
         // The zone's heading carries a line under its name, as an address's does: what the zone is and how it stands,
-        // the answers its row in the zones list gives. A new primary has no delegation check yet, so none is worded.
+        // the answers its row in the zones list gives, each a phrase of its own. A new primary has no delegation check
+        // yet, so none is worded, and its secondaries read as a phrase, not as a "secondaries:" label.
         assertThat(page.locator("[data-cms-record-lead]").textContent().trim())
-            .as("the zone's lead line").isEqualTo("Primary zone · 1 record · secondaries: None linked");
+            .as("the zone's lead line").isEqualTo("Primary zone · 1 record · No secondaries");
         // Once checked, the verdict's own words stand in the line, without a "delegation:" prefix ahead of words that
         // already say delegation; the zones list draws the same words under its Delegation header.
         Row checked = Models.get(DnsZoneModel.class).find().where(DnsZoneModel.ID.eq(zoneId)).first();
@@ -142,7 +143,7 @@ class DnsAdminTest extends HohenheimTestBase {
         waitForHydration();
         assertThat(page.locator("[data-cms-record-lead]").textContent().trim())
             .as("the checked zone's lead line").isEqualTo(
-                "Primary zone · 1 record · Glue records missing at the parent · secondaries: None linked");
+                "Primary zone · 1 record · Glue records missing at the parent · No secondaries");
         navigateToApp("/admin/dns-zones");
         waitForHydration();
         assertThat(page.locator("body").textContent()).as("the zones list's Delegation cell")

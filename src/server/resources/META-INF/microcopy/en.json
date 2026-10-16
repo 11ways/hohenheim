@@ -10714,6 +10714,7 @@
     "scope": "server_overview"
   },
   "disk_capacity": {"text": "Disk", "scope": "server_overview"},
+  "disk_unmeasured": {"text": "No disk reading yet.", "scope": "server_overview"},
   "booked": {
     "text": "Booked",
     "scope": "server_overview"
@@ -13439,8 +13440,12 @@
     "text": ".match {$records :number}\none {{1 record}}\n* {{{$records} records}}",
     "scope": "dns_zone"
   },
-  "lead_secondaries": {
-    "text": "secondaries: {$summary}",
+  "lead_secondaries_none": {
+    "text": "No secondaries",
+    "scope": "dns_zone"
+  },
+  "lead_secondaries_current": {
+    "text": ".match {$total :number}\none {{{$current} of 1 secondary current}}\n* {{{$current} of {$total} secondaries current}}",
     "scope": "dns_zone"
   },
   "lead_transfer": {
@@ -16372,6 +16377,7 @@
   "reading_stale": {"text": "Last measurement too old", "scope": "host_list"},
   "host_option_facts": {"text": "{$state}. Memory: {$memory}.", "scope": "host_list"},
   "host_option_memory": {"text": "Memory: {$memory}", "scope": "host_list"},
+  "host_option_disk": {"text": "Disk: {$disk}", "scope": "host_list"},
   "runs_nothing": {"text": "Nothing yet", "scope": "host_list"},
   "runs_count": {"text": "{$apps}, {$databases}", "scope": "host_list"},
   "apps_count": {"text": ".match {$count :number}\none {{1 app}}\n* {{{$count} apps}}", "scope": "host_list"},

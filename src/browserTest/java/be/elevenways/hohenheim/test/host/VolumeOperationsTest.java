@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.host;
 
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.server.host.BtrfsVolumeOperations;
+import be.elevenways.hohenheim.server.host.DiskSpace;
 import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.server.host.PrivilegedHelper;
 import be.elevenways.hohenheim.server.host.VolumeOperations;
@@ -284,6 +285,34 @@ class VolumeOperationsTest {
             .as("step 2: an unreadable usage is -1 -- reporting 0 would read as an empty"
                 + " volume, which is the number an operator acts on")
             .isEqualTo(-1L);
+    }
+
+    /**
+     * How full a host's disk is reads the same on every backend: a df of the deepest existing ancestor of the path, so
+     * a host without volume storage (backend None) and a fresh host whose volume root was never created still answer.
+     */
+    @Test
+    void everyBackendMeasuresTheFilesystemHoldingAPath() {
+
+        String path = "/srv/data/volumes";
+        for (VolumeBackend backend : VolumeBackend.values()) {
+            FakeShell shell = new FakeShell(script -> new HostShell.Result(0,
+                "     1B-blocks        Avail\n 85899345920 64424509440"));
+
+            // 1. Measuring is no volume operation: it reads the filesystem, so it never refuses by backend.
+            DiskSpace space = VolumeOperations.forBackend(backend, shell).space(path);
+            assertThat(space).as("step 1: %s answers with the filesystem's size and free bytes", backend)
+                .isEqualTo(new DiskSpace(85899345920L, 64424509440L));
+
+            // 2. It asks df about the deepest ancestor that exists, so a volume root created on first use still reads.
+            assertThat(shell.last()).as("step 2: %s walks up to an existing ancestor first", backend)
+                .contains("while [ ! -e").contains("df -B1 --output=size,avail");
+        }
+
+        // 3. A host that cannot answer is unmeasured, never 0.
+        FakeShell failing = new FakeShell(script -> new HostShell.Result(1, "df: cannot read"));
+        assertThat(VolumeOperations.forBackend(VolumeBackend.NONE, failing).space(path))
+            .as("step 3: an unanswered df is no reading").isNull();
     }
 
     /**

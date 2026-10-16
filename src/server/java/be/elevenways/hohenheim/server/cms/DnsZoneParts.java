@@ -297,19 +297,36 @@ public final class DnsZoneParts {
      * @return the summary, or null on a secondary (its inbound status column answers instead)
      */
     private static @Nullable Microcopy secondarySummary(@NonNull Row zone) {
+        SecondaryCounts counts = secondaryCountsOf(zone);
+        if (counts == null) {
+            return null;
+        }
+        return counts.total() == 0 ? HohenheimMicrocopy.DNS_ZONE.of("secondaries_none")
+            : HohenheimMicrocopy.DNS_ZONE.of("secondaries_current")
+                .withArg("current", counts.current()).withArg("total", counts.total());
+    }
+
+    /** How many secondaries a primary has linked and how many serve its serial; a phrase of its own in the lead line. */
+    private static @NonNull Microcopy leadSecondaries(@NonNull SecondaryCounts counts) {
+        return counts.total() == 0 ? HohenheimMicrocopy.DNS_ZONE.of("lead_secondaries_none")
+            : HohenheimMicrocopy.DNS_ZONE.of("lead_secondaries_current")
+                .withArg("current", counts.current()).withArg("total", counts.total());
+    }
+
+    /** A primary's linked secondaries, and how many of them serve its current serial. */
+    private record SecondaryCounts(int total, int current) {
+    }
+
+    /** @return the counts off the freshness the probe task persists, null on a secondary */
+    private static @Nullable SecondaryCounts secondaryCountsOf(@NonNull Row zone) {
         if (DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))) {
             return null;
         }
         Integer id = zone.get(DnsZoneModel.ID);
         long total = RouteScope.memo(SECONDARY_COUNTS, DnsZoneParts::secondaryCounts).getOrDefault(id, 0L);
-        if (total == 0) {
-            return HohenheimMicrocopy.DNS_ZONE.of("secondaries_none");
-        }
-        long current = RouteScope.memo(CURRENT_SECONDARY_COUNTS, DnsZoneParts::currentSecondaryCounts)
-            .getOrDefault(id, 0L);
-        return HohenheimMicrocopy.DNS_ZONE.of("secondaries_current")
-            .withArg("current", Math.toIntExact(current))
-            .withArg("total", Math.toIntExact(total));
+        long current = total == 0 ? 0L
+            : RouteScope.memo(CURRENT_SECONDARY_COUNTS, DnsZoneParts::currentSecondaryCounts).getOrDefault(id, 0L);
+        return new SecondaryCounts(Math.toIntExact(total), Math.toIntExact(current));
     }
 
     /**
@@ -340,8 +357,7 @@ public final class DnsZoneParts {
             if (delegation != null) {
                 parts.add(delegation);
             }
-            parts.add(HohenheimMicrocopy.DNS_ZONE.of("lead_secondaries")
-                .withArg("summary", Objects.requireNonNull(secondarySummary(zone), "a primary has a summary")));
+            parts.add(leadSecondaries(Objects.requireNonNull(secondaryCountsOf(zone), "a primary has counts")));
         }
         List<String> words = new ArrayList<>();
         for (Microcopy part : parts) {

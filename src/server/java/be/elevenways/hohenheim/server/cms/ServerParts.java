@@ -262,8 +262,13 @@ public final class ServerParts {
         }
         DiskSpace space = reading.space();
         int percent = (int) Math.min(100, Math.round(100.0 * space.usedBytes() / space.totalBytes()));
-        return new HostUsageCell(true, percent, HohenheimMicrocopy.HOST_LIST.of("disk_used")
-            .withArg("used", ByteText.human(space.usedBytes())).withArg("total", ByteText.human(space.totalBytes())));
+        return new HostUsageCell(true, percent, diskUsedText(space));
+    }
+
+    /** @return a disk's used bytes against its size in words, the one way the list and the host pick say it */
+    private static @NonNull Microcopy diskUsedText(@NonNull DiskSpace space) {
+        return HohenheimMicrocopy.HOST_LIST.of("disk_used")
+            .withArg("used", ByteText.human(space.usedBytes())).withArg("total", ByteText.human(space.totalBytes()));
     }
 
     /** @return the host's capacity ledger, null for a host without an id */
@@ -289,10 +294,11 @@ public final class ServerParts {
     }
 
     /**
-     * A host as a host pick offers it: its name, then the Hosts list's facts, read from the same verdict and capacity
-     * ledger the list draws: the standing's badge words as its line and, when measured, its booked memory as the
-     * option's meter (an unmeasured host says so in its line instead); the host glyph wears the standing's tone, since
-     * a select option's tone shows on its glyph alone.
+     * A host as a host pick offers it: its name, then the Hosts list's facts, read from the same verdict, capacity
+     * ledger and disk reading the list draws: the standing's badge words as its line and, when measured, its booked
+     * memory and then its disk as the option's meters (an unmeasured host says so in its line instead, a disk without a
+     * fresh reading draws no meter); the host glyph wears the standing's tone, since a select option's tone shows on its
+     * glyph alone.
      */
     public static @NonNull FieldOption<Integer> hostOption(@NonNull Row server) {
         StateLineCell state = stateCellOf(server);
@@ -305,9 +311,16 @@ public final class ServerParts {
             return option.withDescription(HohenheimMicrocopy.HOST_LIST.of("host_option_facts")
                 .withArg("state", state.label()).withArg("memory", memoryCellOf(server).text()));
         }
-        return option.withDescription(state.label()).withMeter(new OptionMeter(capacity.bookedMb(),
-            capacity.budgetMb(), HohenheimMicrocopy.HOST_LIST.of("host_option_memory")
+        FieldOption<Integer> metered = option.withDescription(state.label()).withMeter(new OptionMeter(
+            capacity.bookedMb(), capacity.budgetMb(), HohenheimMicrocopy.HOST_LIST.of("host_option_memory")
                 .withArg("memory", bookedText(capacity))));
+        HostDisk.Reading disk = HostDisk.storedOf(server);
+        if (disk == null || !disk.fresh()) {
+            return metered;
+        }
+        DiskSpace space = disk.space();
+        return metered.withMeter(new OptionMeter(space.usedBytes(), space.totalBytes(),
+            HohenheimMicrocopy.HOST_LIST.of("host_option_disk").withArg("disk", diskUsedText(space))));
     }
 
     /** How many apps and managed databases the host runs, counted once per rendered list. */

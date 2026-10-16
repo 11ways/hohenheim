@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.platform.PlatformSeam;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.validation.Violations;
@@ -97,8 +98,38 @@ public interface VolumeOperations {
      */
     void restore(@NonNull String hostPath, @NonNull Path source, @Nullable Integer ownerUid);
 
-    /** @return the size and free bytes of the filesystem holding {@code path}, null when the host could not answer */
+    /**
+     * Measures the filesystem holding a path.
+     *
+     * AIDEV-NOTE: every member answers, the unimplemented ones too: measuring reads the filesystem and creates no
+     * volume, so it is no capability a backend could lack ({@link #spaceOver}).
+     *
+     * @return the size and free bytes, null when the host could not answer
+     */
     @Nullable DiskSpace space(@NonNull String path);
+
+    /**
+     * Measures the filesystem holding a path's deepest existing ancestor, so a volume root that is created on first use
+     * still reads.
+     *
+     * @return the size and free bytes, null when the host could not answer
+     */
+    static @Nullable DiskSpace spaceOver(@NonNull HostShell shell, @NonNull String path) {
+        HostShell.Result result = shell.run("p=" + HostShell.quote(path) + "; "
+            + "while [ ! -e \"$p\" ] && [ \"$p\" != \"/\" ]; do p=$(dirname \"$p\"); done; "
+            + "df -B1 --output=size,avail \"$p\"");
+        String[] lines = result.text().trim().split("\n");
+        try {
+            String[] figures = lines[lines.length - 1].trim().split("\\s+");
+            if (result.ok() && figures.length == 2) {
+                return new DiskSpace(Long.parseLong(figures[0]), Long.parseLong(figures[1]));
+            }
+        } catch (IllegalArgumentException unparseable) {
+            // unanswerable, like a failed df
+        }
+        Blast.log("VOLUMES: could not measure the space of", path, "-", result.text());
+        return null;
+    }
 
     /** @return bytes free on the filesystem holding {@code path}, or -1 when the host could not answer */
     default long availableBytes(@NonNull String path) {
@@ -139,17 +170,19 @@ public interface VolumeOperations {
                                                 @NonNull HostShell shell) {
         return switch (backend) {
             case BTRFS -> new BtrfsVolumeOperations(shell);
-            case ZFS, XFS_PRJQUOTA, NONE, UNCHECKED -> new UnimplementedVolumeOperations(backend);
+            case ZFS, XFS_PRJQUOTA, NONE, UNCHECKED -> new UnimplementedVolumeOperations(backend, shell);
         };
     }
 
-    /** The refusal every unimplemented backend answers every operation with. */
+    /** The refusal every unimplemented backend answers every volume operation with; measuring still answers. */
     final class UnimplementedVolumeOperations implements VolumeOperations {
 
         private final VolumeBackend backend;
+        private final HostShell shell;
 
-        UnimplementedVolumeOperations(@NonNull VolumeBackend backend) {
+        UnimplementedVolumeOperations(@NonNull VolumeBackend backend, @NonNull HostShell shell) {
             this.backend = backend;
+            this.shell = shell;
         }
 
         private Violations refuse() {
@@ -186,6 +219,6 @@ public interface VolumeOperations {
             throw refuse();
         }
 
-        @Override public @Nullable DiskSpace space(@NonNull String path) { throw refuse(); }
+        @Override public @Nullable DiskSpace space(@NonNull String path) { return spaceOver(this.shell, path); }
     }
 }

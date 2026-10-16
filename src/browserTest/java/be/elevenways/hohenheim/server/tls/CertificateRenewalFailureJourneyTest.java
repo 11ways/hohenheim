@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.tls;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.TlsCertificateTest;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -13,13 +14,14 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
+import java.security.KeyPair;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * A Let's Encrypt certificate whose renewal fails: its public chain downloads from its page without the key, the
- * failure is stored with its moment and read in plain words on the list and the page, and the page's health band
- * offers "Renew now", which runs the renewal again.
+ * failure is stored with its moment and read in plain words on the list and the page, the proxy keeps serving the
+ * certificate it still holds, and the page's health band offers "Renew now", which runs the renewal again.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -27,10 +29,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 class CertificateRenewalFailureJourneyTest extends HohenheimTestBase {
 
     private static final String HOST = "renewfail-journey.example";
-    private static final String CERT_PEM =
-        "-----BEGIN CERTIFICATE-----\nUkVORVdGQUlMLUNIQUlO\n-----END CERTIFICATE-----";
-    private static final String KEY_PEM =
-        "-----BEGIN PRIVATE KEY-----\nUkVORVdGQUlMLUtFWQ==\n-----END PRIVATE KEY-----";
 
     private Integer certId;
 
@@ -62,6 +60,9 @@ class CertificateRenewalFailureJourneyTest extends HohenheimTestBase {
 
     @Test
     void aFailingRenewalSaysWhyAndWhenAndOffersRenewNow() throws Exception {
+        KeyPair keys = TlsCertificateTest.generateKeyPair();
+        String certPem = TlsCertificateTest.certToPem(TlsCertificateTest.generateSelfSignedCert(keys, HOST)).trim();
+        String keyPem = TlsCertificateTest.keyToPem(keys).trim();
         CertificateModel certificates = Models.get(CertificateModel.class);
         Row cert = certificates.createEmptyRow();
         cert.set(CertificateModel.NICE_NAME, HOST);
@@ -70,22 +71,29 @@ class CertificateRenewalFailureJourneyTest extends HohenheimTestBase {
         cert.set(CertificateModel.DOMAIN_NAMES_TEXT, HOST);
         cert.set(CertificateModel.CHALLENGE_TYPE, CertificateModel.CHALLENGE_HTTP);
         cert.set(CertificateModel.AUTO_RENEW, true);
-        cert.set(CertificateModel.CERTIFICATE_PEM, CERT_PEM + "\n" + KEY_PEM);
-        cert.set(CertificateModel.PRIVATE_KEY_PEM, KEY_PEM);
+        cert.set(CertificateModel.CERTIFICATE_PEM, certPem);
+        cert.set(CertificateModel.PRIVATE_KEY_PEM, keyPem);
         certificates.save(cert);
         this.certId = cert.get(CertificateModel.ID);
         String recordPage = "/admin/certificates/" + this.certId + "/page/overview";
 
         // 1. A working certificate's page offers its public chain, and the chain carries no key, even where the stored
-        //    certificate text holds one.
+        //    certificate text holds one. The proxy serves it.
+        CertificateStore served = new CertificateStore();
+        served.loadFromDatabase();
+        assertThat(served.holds(this.certId)).as("step 1: the proxy serves the working certificate").isTrue();
         navigateToApp(recordPage);
         waitForHydration();
         assertThat(page.locator("body").textContent()).as("step 1: the page offers the chain")
             .contains("Download certificate chain");
+        cert.set(CertificateModel.CERTIFICATE_PEM, certPem + "\n" + keyPem);
+        certificates.save(cert);
         HttpResponse<String> chain = adminGet("/certificates/" + this.certId + "/chain");
         assertThat(chain.statusCode()).as("step 1: the chain downloads").isEqualTo(200);
         assertThat(chain.body()).as("step 1: the certificate block and nothing of the key")
-            .contains(CERT_PEM).doesNotContain("PRIVATE KEY");
+            .contains(certPem).doesNotContain("PRIVATE KEY");
+        cert.set(CertificateModel.CERTIFICATE_PEM, certPem);
+        certificates.save(cert);
         assertThat(page.locator("body").textContent())
             .as("step 1: a working certificate offers no renewal").doesNotContain("Renew now");
 
@@ -93,6 +101,9 @@ class CertificateRenewalFailureJourneyTest extends HohenheimTestBase {
         //    its moment, the certificate's activity entry.
         ServerMain.getProxyServer().getAcmeService().renewCertificate(cert, certificates);
         assertThat(failures()).as("step 2: the failure is noted with its moment").isEqualTo(1);
+        served.loadFromDatabase();
+        assertThat(served.holds(this.certId))
+            .as("step 2: the certificate it still holds keeps being served until it expires").isTrue();
 
         // 3. The list says why in plain words, and when.
         navigateToApp("/admin/certificates");

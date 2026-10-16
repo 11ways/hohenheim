@@ -569,8 +569,8 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
             .contains("Runs on").contains("Hohenheim picks the host with room for it, unless you pick one.");
         FieldOption<Integer> host = InstanceTemplateHandlers.hostOptions().stream()
             .filter(option -> Integer.valueOf(hostId).equals(option.value())).findFirst().orElseThrow();
-        assertThat(Objects.requireNonNull(host.meter()).text().key())
-            .as("step 2: a measured host option carries the Hosts list's booked memory as its meter")
+        assertThat(host.meters().get(0).text().key())
+            .as("step 2: a measured host option carries the Hosts list's booked memory as its first meter")
             .isEqualTo("host_option_memory");
         assertThat(host.description()).as("step 2: and its standing as its line").isNotNull();
         assertThat(host.tone()).as("step 2: in the standing's badge tone").isNotNull();

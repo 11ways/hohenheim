@@ -37,6 +37,12 @@ public class CertificateModel extends Model {
     /** {@link #STATUS} value for a certificate order that has not completed yet. */
     public static final String STATUS_PENDING = "pending";
 
+    /**
+     * The statuses whose stored certificate the proxy serves: an active one, and one whose last renewal failed, since
+     * the certificate it still holds stays valid until it expires and a failed renewal must not take a site offline.
+     */
+    public static final List<String> SERVED_STATUSES = List.of(STATUS_ACTIVE, STATUS_ERROR);
+
     /** {@link #PROVIDER} value for the internal ACME account key row (excluded from listings). */
     public static final String PROVIDER_ACME_ACCOUNT = "acme_account";
 

@@ -2,6 +2,8 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.host.HostStanding;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.host.DiskSpace;
+import be.elevenways.hohenheim.server.host.HostDisk;
 import be.elevenways.hohenheim.server.instance.InstancePlacement;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
@@ -10,6 +12,7 @@ import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.edit.EditContext;
 import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.OptionMeter;
@@ -20,6 +23,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -58,18 +62,33 @@ class HostPickRoomTest extends HohenheimTestBase {
     }
 
     @Test
-    void aFullHostShowsItsMeterAndIsRefusedInTheWhereStep() {
-        // 1. A measured host is offered with its standing as its line and its booked memory as its meter: the full
-        //    host's bar is all but full, the roomy one's empty.
+    void aFullHostShowsItsMetersAndIsRefusedInTheWhereStep() {
+        // 1. A measured host is offered with its standing as its line and its booked memory as its first meter: the
+        //    full host's bar is all but full, the roomy one's empty.
         FieldOption<Integer> fullOption = ServerParts.hostOption(server(full));
-        OptionMeter meter = Objects.requireNonNull(fullOption.meter(), "step 1: a measured host carries a meter");
+        assertThat(fullOption.meters()).as("step 1: a measured host without a disk reading carries one meter")
+            .hasSize(1);
+        OptionMeter meter = fullOption.meters().get(0);
         assertThat(meter.perMille()).as("step 1: 3 MB free of its budget reads full").isGreaterThanOrEqualTo(990);
         assertThat(meter.text().key()).as("step 1: in the Hosts list's words").isEqualTo("host_option_memory");
         assertThat(Objects.requireNonNull(fullOption.description()).key())
             .as("step 1: the line is the standing alone, the memory moved into the meter")
             .isNotEqualTo("host_option_facts");
-        assertThat(Objects.requireNonNull(ServerParts.hostOption(server(roomy)).meter()).perMille())
+        assertThat(ServerParts.hostOption(server(roomy)).meters().get(0).perMille())
             .as("step 1: an empty host's bar is empty").isZero();
+
+        // 1b. A host with a fresh disk reading carries its disk as the second meter, in the Hosts list's words.
+        long gib = 1024L * 1024 * 1024;
+        Row measured = server(roomy);
+        HostDisk.record(measured, new DiskSpace(80 * gib, 60 * gib), Now.instant());
+        Models.get(ServerModel.class).save(measured);
+        List<OptionMeter> meters = ServerParts.hostOption(server(roomy)).meters();
+        assertThat(meters).as("step 1b: memory, then disk").hasSize(2);
+        assertThat(meters.get(1).perMille()).as("step 1b: 20 of 80 GiB used").isEqualTo(250);
+        assertThat(meters.get(1).text().key()).as("step 1b: in the Hosts list's disk words, named")
+            .isEqualTo("host_option_disk");
+        assertThat(((Microcopy) meters.get(1).text().args().get("disk")).key()).as("step 1b: the list's own reading")
+            .isEqualTo("disk_used");
 
         // 2. The kind-led Where step judges the full host by the run's own booking rule at the kind's default memory:
         //    refused, naming the host, what is needed and what is free.

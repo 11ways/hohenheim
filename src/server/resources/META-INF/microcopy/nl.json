@@ -10714,6 +10714,7 @@
     "scope": "server_overview"
   },
   "disk_capacity": {"text": "Schijf", "scope": "server_overview"},
+  "disk_unmeasured": {"text": "Nog geen schijfmeting.", "scope": "server_overview"},
   "booked": {
     "text": "Geboekt",
     "scope": "server_overview"
@@ -13439,8 +13440,12 @@
     "text": ".match {$records :number}\none {{1 record}}\n* {{{$records} records}}",
     "scope": "dns_zone"
   },
-  "lead_secondaries": {
-    "text": "secundaires: {$summary}",
+  "lead_secondaries_none": {
+    "text": "Geen secundaire servers",
+    "scope": "dns_zone"
+  },
+  "lead_secondaries_current": {
+    "text": ".match {$total :number}\none {{{$current} van 1 secundaire server actueel}}\n* {{{$current} van {$total} secundaire servers actueel}}",
     "scope": "dns_zone"
   },
   "lead_transfer": {
@@ -16372,6 +16377,7 @@
   "reading_stale": {"text": "Laatste meting te oud", "scope": "host_list"},
   "host_option_facts": {"text": "{$state}. Geheugen: {$memory}.", "scope": "host_list"},
   "host_option_memory": {"text": "Geheugen: {$memory}", "scope": "host_list"},
+  "host_option_disk": {"text": "Schijf: {$disk}", "scope": "host_list"},
   "runs_nothing": {"text": "Nog niets", "scope": "host_list"},
   "runs_count": {"text": "{$apps}, {$databases}", "scope": "host_list"},
   "apps_count": {"text": ".match {$count :number}\none {{1 app}}\n* {{{$count} apps}}", "scope": "host_list"},

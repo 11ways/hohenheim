@@ -128,6 +128,9 @@ class HostsPageJourneyTest extends HohenheimTestBase {
             String hostPage = adminGet("/admin/" + HohenheimSlugs.SERVERS + "/" + admitted + "/page/overview").body();
             assertThat(hostPage.split("<pl-usage-bar", -1).length - 1)
                 .as("step 4b: the host page draws the disk bar beside the memory bar").isEqualTo(2);
+            assertThat(adminGet("/admin/" + HohenheimSlugs.SERVERS + "/" + waiting + "/page/overview").body())
+                .as("step 4b: a never-measured host's page names its disk, and says it has no reading instead of"
+                    + " drawing an empty bar").contains("No disk reading yet.");
 
             // 5. The rendered list: words, not tokens, and the band above it.
             Row app = Models.get(InstanceModel.class).createEmptyRow();

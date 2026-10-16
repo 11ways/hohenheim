@@ -214,14 +214,12 @@ public final class ServerOverviewState {
             capacityBand.add(new WidgetInstance(FactListWidget.ID, Map.of())
                 .withData(capacityFacts(capacity, locales, resolver)));
         }
-        // A host never measured has no disk bar at all; a reading too old says so instead of drawing one.
+        // The disk reads beside the memory: a host never measured says so in the Hosts list's words, never an empty
+        // bar, and a reading too old says how old instead of drawing one.
         HostDisk.Reading disk = HostDisk.storedOf(server);
-        if (disk != null) {
-            capacityBand.add(new WidgetInstance(UsageBarWidget.ID,
-                    Map.of("label", HohenheimWidgetCopy.localized(
-                        HohenheimMicrocopy.SERVER_OVERVIEW.of("disk_capacity"))))
-                .withData(diskUsage(disk, locales, resolver)));
-        }
+        capacityBand.add(new WidgetInstance(UsageBarWidget.ID,
+                Map.of("label", HohenheimWidgetCopy.localized(HohenheimMicrocopy.SERVER_OVERVIEW.of("disk_capacity"))))
+            .withData(diskUsage(disk, locales, resolver)));
         bands.add(band(new WidgetTree(capacityBand)));
 
         bands.add(band(new WidgetTree(List.of(
@@ -477,9 +475,13 @@ public final class ServerOverviewState {
             capacity.measuredAtIso());
     }
 
-    /** The disk bar: used bytes against the instance-data filesystem's size, or why the reading is not trusted. */
-    private static @NonNull UsageData diskUsage(HostDisk.@NonNull Reading disk, @NonNull LocaleChain locales,
+    /** The disk bar: used bytes against the instance-data filesystem's size, or why there is no trusted reading. */
+    private static @NonNull UsageData diskUsage(HostDisk.@Nullable Reading disk, @NonNull LocaleChain locales,
                                                 @Nullable MessageResolver resolver) {
+        if (disk == null) {
+            return UsageData.unmeasured(
+                HohenheimMicrocopy.SERVER_OVERVIEW.of("disk_unmeasured").resolve(locales, resolver));
+        }
         if (!disk.fresh()) {
             return UsageData.unmeasured(disk.measuredAt() == null
                 ? HohenheimMicrocopy.SERVER_OVERVIEW.of("unmeasured_body").resolve(locales, resolver)

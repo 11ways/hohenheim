@@ -68,7 +68,7 @@ public class CertificateStore {
     }
 
     /**
-     * Load all active certificates from the database.
+     * Load every certificate the proxy serves ({@link CertificateModel#SERVED_STATUSES}) from the database.
      * Builds a complete new snapshot and swaps it in atomically.
      */
     public synchronized void loadFromDatabase() {
@@ -77,7 +77,7 @@ public class CertificateStore {
 
         List<Row> certs = certModel.find()
             .where(CertificateModel.CERTIFICATE_PEM.isNotNull())
-            .where(CertificateModel.STATUS.eq("active"))
+            .where(CertificateModel.STATUS.in(CertificateModel.SERVED_STATUSES))
             .orderBy(CertificateModel.ID, SortOrder.ASC)
             .all();
 
