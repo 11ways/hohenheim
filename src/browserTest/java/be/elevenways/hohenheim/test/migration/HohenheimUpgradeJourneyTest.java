@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.migration.HohenheimMigration;
 import be.elevenways.hohenheim.migration.InitialMigration;
 import be.elevenways.hohenheim.migration.M011_ReviewHardening;
 import be.elevenways.hohenheim.server.migration.M015_ServerLanParent;
+import be.elevenways.hohenheim.server.migration.M016_CertificateKeysOutOfPlainText;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -328,11 +329,14 @@ class HohenheimUpgradeJourneyTest {
             .filter(supplier -> !(supplier.get() instanceof InitialMigration)).toList();
         var withoutOwnerScope = withoutCreationSource.stream()
             .filter(supplier -> !(supplier.get() instanceof M011_ReviewHardening)).toList();
+        // M016 is irreversible and chained after M015, so M015's down is rehearsed before M016 joins (step 1b's rerun).
+        var throughM015 = withoutCreationSource.stream()
+            .filter(supplier -> !(supplier.get() instanceof M016_CertificateKeysOutOfPlainText)).toList();
         assertThatThrownBy(() -> MigrationRunner.overCompleteSet(rehearsal, withoutOwnerScope)
             .acknowledgeMissingMigrationVersions("001").migrate().requireSuccess())
             .as("step 1a: missing creation history cannot silently omit the declared sites instant scope")
             .isInstanceOf(MigrationException.class).hasMessageContaining("sites").hasMessageContaining("FrozenModel");
-        MigrationRunner.overCompleteSet(rehearsal, withoutCreationSource)
+        MigrationRunner.overCompleteSet(rehearsal, throughM015)
             .acknowledgeMissingMigrationVersions("001").migrate().requireSuccess();
         assertThat(scalar(rehearsalUrl, "SELECT created_at FROM sites WHERE id = " + siteId))
             .as("step 1a: M011's frozen owner scope preserves the pre-epoch microseconds without creation source")
@@ -343,7 +347,7 @@ class HohenheimUpgradeJourneyTest {
         assertThat(scalar(rehearsalUrl, "SELECT requested_by_user_id FROM certificates WHERE id = " + OPERATOR_CERT))
             .as("step 1b: the requester is the operator's UUID").isEqualTo(rehearsedOperator);
         MigrationKey rekey = MigrationKey.of(HohenheimMigration.STREAM, "015");
-        MigrationRunner.overCompleteSet(rehearsal, withoutCreationSource).acknowledgeMissingMigrationVersions("001")
+        MigrationRunner.overCompleteSet(rehearsal, throughM015).acknowledgeMissingMigrationVersions("001")
             .rollback(rekey).requireSuccess();
         assertThat(strings(rehearsalUrl, "SELECT requested_by_user_id FROM certificates WHERE id = " + OPERATOR_CERT
                 + " UNION ALL SELECT approved_by_user_id FROM instance_templates WHERE id IN (1, 2)"

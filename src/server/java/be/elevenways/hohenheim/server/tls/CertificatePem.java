@@ -37,29 +37,46 @@ public final class CertificatePem {
     private static final Pattern CERTIFICATE_BLOCK =
         Pattern.compile("-----BEGIN CERTIFICATE-----[\\s\\S]*?-----END CERTIFICATE-----");
 
+    /** One private key block of a PEM text, PKCS#8, a bare key pair or passphrase-protected alike. */
+    private static final Pattern KEY_BLOCK =
+        Pattern.compile("-----BEGIN ([A-Z0-9 ]*)PRIVATE KEY-----[\\s\\S]*?-----END \\1PRIVATE KEY-----");
+
     private CertificatePem() {
     }
 
     /** @return the text's CERTIFICATE blocks, in the order given; empty for null or a text without one */
     public static @NonNull List<String> certificateBlocks(@Nullable String pem) {
+        return blocksOf(CERTIFICATE_BLOCK, pem);
+    }
+
+    /** @return the text's CERTIFICATE blocks, each ended by a newline; empty when it holds none */
+    public static @NonNull String chainText(@Nullable String pem) {
+        return joined(certificateBlocks(pem));
+    }
+
+    /** @return the text's private key blocks, each ended by a newline; empty for null or a text without one */
+    public static @NonNull String keyText(@Nullable String pem) {
+        return joined(blocksOf(KEY_BLOCK, pem));
+    }
+
+    private static @NonNull List<String> blocksOf(@NonNull Pattern kind, @Nullable String pem) {
         List<String> blocks = new ArrayList<>();
         if (pem == null) {
             return blocks;
         }
-        Matcher block = CERTIFICATE_BLOCK.matcher(pem);
+        Matcher block = kind.matcher(pem);
         while (block.find()) {
             blocks.add(block.group());
         }
         return blocks;
     }
 
-    /** @return the text's CERTIFICATE blocks, each ended by a newline; empty when it holds none */
-    public static @NonNull String chainText(@Nullable String pem) {
-        StringBuilder chain = new StringBuilder();
-        for (String block : certificateBlocks(pem)) {
-            chain.append(block).append('\n');
+    private static @NonNull String joined(@NonNull List<String> blocks) {
+        StringBuilder text = new StringBuilder();
+        for (String block : blocks) {
+            text.append(block).append('\n');
         }
-        return chain.toString();
+        return text.toString();
     }
 
     /**
