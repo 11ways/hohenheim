@@ -9,8 +9,8 @@ import java.util.regex.Pattern;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The personal account pages render in zenit-auth's own neutral card, and every one of
- * them anchors the named block that soft navigation repopulates.
+ * The personal account pages render in plumage's shared card frame (zenit-auth's account pages, since 66a0858), and
+ * every one of them anchors the named block that soft navigation repopulates.
  *
  * AIDEV-NOTE: this suite used to assert the opposite -- that the account pages ride the
  * admin shell. zenit-auth reverted that deliberately (bff5174): the host frame
@@ -32,15 +32,19 @@ class AccountShellTest extends HohenheimTestBase {
      */
     private static final String NAMED_BLOCK = "<he-block block-name=\"main\"";
 
+    /** The card frame and its card, by tag; the renderer may stamp attributes onto either opening tag. */
+    private static final Pattern CARD_FRAME = Pattern.compile("<pl-card-frame[\\s>]");
+    private static final Pattern CARD = Pattern.compile("<pl-card-frame-card[\\s>]");
+
     @Test
     void theAccountPagesRenderInTheirOwnCardAndCanSwapIt() throws Exception {
-        // 1. The overview renders in the neutral auth card, outside any panel chrome.
+        // 1. The overview renders in the neutral card frame, outside any panel chrome.
         HttpResponse<String> account = adminGet("/account");
         assertThat(account.statusCode()).as("step 1: /account renders").isEqualTo(200);
         assertThat(account.body())
-            .as("step 1: the page sits in the auth card, not in an admin panel's shell")
-            .contains("auth-shell")
-            .contains("auth-card")
+            .as("step 1: the page sits in the card frame, not in an admin panel's shell")
+            .containsPattern(CARD_FRAME)
+            .containsPattern(CARD)
             .doesNotContain("cms-sidebar-nav");
         assertThat(account.body())
             .as("step 1: and it anchors the block a soft navigation repopulates")
@@ -51,9 +55,10 @@ class AccountShellTest extends HohenheimTestBase {
         HttpResponse<String> sessions = adminGet("/account/sessions");
         assertThat(sessions.statusCode()).as("step 2: /account/sessions renders").isEqualTo(200);
         assertThat(sessions.body())
-            .as("step 2: the subpage links back to the overview from inside the same block")
+            .as("step 2: the subpage links back to the overview from inside the same block, in the same card")
             .contains("data-auth-back-to-account")
-            .contains(NAMED_BLOCK);
+            .contains(NAMED_BLOCK)
+            .containsPattern(CARD);
 
         // 3. Revoking one session is a confirm page first, reached from the sessions list
         //    by its own link. This is the navigation the 2026-08-28 pass saw change the
