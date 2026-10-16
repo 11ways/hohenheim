@@ -129,6 +129,10 @@ class DnsAdminTest extends HohenheimTestBase {
         navigateToApp("/admin/dns-zones/" + zoneId + "/page/records");
         waitForHydration();
         assertThat(page.locator("body").textContent()).contains("www").contains("192.0.2.10");
+        // The zone's heading carries a line under its name, as an address's does: what the zone is and how it stands,
+        // the answers its row in the zones list gives. A new primary has no delegation check yet, so none is worded.
+        assertThat(page.locator("[data-cms-record-lead]").textContent().trim())
+            .as("the zone's lead line").isEqualTo("Primary zone · 1 record · secondaries: None linked");
         // The tab renders the record RESOURCE's own row surface, so the record is reachable
         // twice by design: the title cell links to it, and so does the synthesized Edit row
         // action beside it (the shape every generated list has). The compact row menu

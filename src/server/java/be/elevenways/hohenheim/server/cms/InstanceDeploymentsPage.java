@@ -255,12 +255,17 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
     }
 
     /**
-     * The build each release ran, keyed by the release's id: per release, oldest first, the newest succeeded build of
-     * its image that started before it and that no earlier release ran.
+     * The build each release ran, keyed by the release's id: the build that started inside the release's own span, else
+     * the newest succeeded build of its image that started before it, unless another release ran that build.
      *
-     * AIDEV-NOTE: a release row times only its own switch (start the candidate, probe, swap); the build that made its
-     * image is a row of its own, so a first static release read "548 ms". A rollback, or a restart of an unchanged
-     * image, runs no build: the build of its image belongs to the release that ran it first.
+     * AIDEV-NOTE: a forward release creates its row and THEN resolves its spec by building ({@code ReleaseEngine
+     * .release}), so its build starts milliseconds after it and its own time already covers the build; only a first
+     * release is handed an image built just before it, its row timing the switch alone (a first static release read
+     * "548 ms"). Pairing only builds that started before a release matched every forward release with an older build
+     * of the same image: walk-site's live release read "59 min 1 s", from the previous release's build an hour
+     * earlier. A build inside any release's span, a failed one's included, is that release's and never another's. A
+     * rollback, or a restart of an unchanged image, runs no build: the build of its image belongs to the release that
+     * ran it first.
      *
      * @param releases the owner's releases, newest first
      * @param builds   the owner's builds, newest first
@@ -268,10 +273,27 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
     static @NonNull Map<Object, Row> buildsRun(@NonNull List<Row> releases, @NonNull List<Row> builds) {
         Map<Object, Row> ran = new HashMap<>();
         Set<Object> taken = new HashSet<>();
+        // 1. The build a release ran inside its own span, whatever became of either.
+        for (Row release : releases) {
+            Instant started = release.get(ReleaseOperationModel.STARTED_AT);
+            if (started == null) {
+                continue;
+            }
+            Instant finished = release.get(ReleaseOperationModel.FINISHED_AT);
+            for (Row build : builds) {
+                Instant built = build.get(BuildOperationModel.STARTED_AT);
+                if (built != null && !built.isBefore(started) && (finished == null || !built.isAfter(finished))
+                        && taken.add(build.get(BuildOperationModel.ID))) {
+                    ran.put(release.get(ReleaseOperationModel.ID), build);
+                    break;
+                }
+            }
+        }
+        // 2. A release that built nothing itself was handed its image: the newest build of it, unless a release ran it.
         for (Row release : releases.reversed()) {
             String image = Objects.toString(release.get(ReleaseOperationModel.IMAGE_ID), "");
             Instant started = release.get(ReleaseOperationModel.STARTED_AT);
-            if (image.isEmpty() || started == null) {
+            if (image.isEmpty() || started == null || ran.containsKey(release.get(ReleaseOperationModel.ID))) {
                 continue;
             }
             for (Row build : builds) {
@@ -279,7 +301,7 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
                 if (image.equals(Objects.toString(build.get(BuildOperationModel.IMAGE_ID), ""))
                         && BuildOperationModel.LIFECYCLE.is(build.get(BuildOperationModel.STATUS),
                             OperationStatus.SUCCEEDED)
-                        && built != null && !built.isAfter(started)) {
+                        && built != null && built.isBefore(started)) {
                     if (taken.add(build.get(BuildOperationModel.ID))) {
                         ran.put(release.get(ReleaseOperationModel.ID), build);
                     }
@@ -291,14 +313,15 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
     }
 
     /**
-     * @return how long the whole release took: from the start of the build it ran to its own finish, or its own switch
-     *         time when it ran no build; null while it runs
+     * @return how long the whole release took: from the start of a build it was handed to its own finish, its own
+     *         time when it ran its build itself or ran none; null while it runs
      */
     static @Nullable Integer releaseDurationMs(@NonNull Row release, @Nullable Row build) {
         Integer own = release.get(ReleaseOperationModel.DURATION_MS);
+        Instant started = release.get(ReleaseOperationModel.STARTED_AT);
         Instant finished = release.get(ReleaseOperationModel.FINISHED_AT);
         Instant built = build == null ? null : build.get(BuildOperationModel.STARTED_AT);
-        if (own == null || finished == null || built == null) {
+        if (own == null || started == null || finished == null || built == null || !built.isBefore(started)) {
             return own;
         }
         return (int) (finished.toEpochMilli() - built.toEpochMilli());

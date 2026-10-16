@@ -13417,6 +13417,30 @@
     "text": "{$current} van {$total} actueel",
     "scope": "dns_zone"
   },
+  "lead_primary": {
+    "text": "Primaire zone",
+    "scope": "dns_zone"
+  },
+  "lead_secondary": {
+    "text": "Secundaire zone",
+    "scope": "dns_zone"
+  },
+  "lead_records": {
+    "text": ".match {$records :number}\none {{1 record}}\n* {{{$records} records}}",
+    "scope": "dns_zone"
+  },
+  "lead_delegation": {
+    "text": "delegatie: {$status}",
+    "scope": "dns_zone"
+  },
+  "lead_secondaries": {
+    "text": "secundaires: {$summary}",
+    "scope": "dns_zone"
+  },
+  "lead_transfer": {
+    "text": "overdracht: {$status}",
+    "scope": "dns_zone"
+  },
   "import_replica_title": {
     "text": "Deze zone is een replica",
     "scope": "dns_zone"

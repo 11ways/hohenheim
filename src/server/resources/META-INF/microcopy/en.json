@@ -13417,6 +13417,30 @@
     "text": "{$current} of {$total} current",
     "scope": "dns_zone"
   },
+  "lead_primary": {
+    "text": "Primary zone",
+    "scope": "dns_zone"
+  },
+  "lead_secondary": {
+    "text": "Secondary zone",
+    "scope": "dns_zone"
+  },
+  "lead_records": {
+    "text": ".match {$records :number}\none {{1 record}}\n* {{{$records} records}}",
+    "scope": "dns_zone"
+  },
+  "lead_delegation": {
+    "text": "delegation: {$status}",
+    "scope": "dns_zone"
+  },
+  "lead_secondaries": {
+    "text": "secondaries: {$summary}",
+    "scope": "dns_zone"
+  },
+  "lead_transfer": {
+    "text": "transfer: {$status}",
+    "scope": "dns_zone"
+  },
   "import_replica_title": {
     "text": "This zone is a replica",
     "scope": "dns_zone"

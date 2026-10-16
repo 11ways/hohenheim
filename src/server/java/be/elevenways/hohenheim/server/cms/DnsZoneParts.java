@@ -37,6 +37,7 @@ import be.elevenways.zenit.cms.common.resource.ResourceForm;
 import be.elevenways.zenit.cms.common.resource.ResourceMutations;
 import be.elevenways.zenit.cms.common.resource.ResourceTabs;
 import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
+import be.elevenways.zenit.cms.common.resource.RecordLead;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
@@ -55,6 +56,7 @@ import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.routing.RouteScope;
+import be.elevenways.zenit.common.orm.narration.StandardFieldValueText;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
@@ -67,6 +69,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 
 import static be.elevenways.hohenheim.RawValues.trimmed;
 
@@ -92,7 +95,7 @@ public final class DnsZoneParts {
                 .rowLink((row, request) -> CmsRoutes.subpage(request.panelSlug(), HohenheimSlugs.DNS_ZONES,
                     row.get(DnsZoneModel.ID), HohenheimSlugs.Tab.RECORDS)).build())
             .form(ResourceForm.<Row>of(parts.formSpec()).bindings(parts.fieldBindings())
-                .quickCreate(parts.quickCreate()).build())
+                .quickCreate(parts.quickCreate()).lead(DnsZoneParts::lead).build())
             .writes(ResourceMutations.rows().create(call -> parts.persistRow(call.values(), call.access()))
                 .update(call -> { parts.updateRow(call.record(), call.values(), call.access()); return null; })
                 .delete(DnsOperations.DELETE_ZONE).build())
@@ -293,7 +296,7 @@ public final class DnsZoneParts {
      *
      * @return the summary, or null on a secondary (its inbound status column answers instead)
      */
-    private static @Nullable Object secondarySummary(@NonNull Row zone) {
+    private static @Nullable Microcopy secondarySummary(@NonNull Row zone) {
         if (DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))) {
             return null;
         }
@@ -307,6 +310,42 @@ public final class DnsZoneParts {
         return HohenheimMicrocopy.DNS_ZONE.of("secondaries_current")
             .withArg("current", Math.toIntExact(current))
             .withArg("total", Math.toIntExact(total));
+    }
+
+    /**
+     * The line under a zone's heading on every tab: its role, its record count and how its delegation and secondaries
+     * (a primary) or its transfer (a secondary) stand, the same answers as its row in the zones list. None on the
+     * create form; a status never written yet is left out rather than worded.
+     */
+    private static @Nullable RecordLead lead(@NonNull Row zone, @NonNull AccessContext access) {
+        Conduit conduit = access.conduit();
+        if (zone.get(DnsZoneModel.ID) == null || conduit == null) {
+            return null;
+        }
+        boolean secondary = DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone));
+        List<Microcopy> parts = new ArrayList<>();
+        parts.add(HohenheimMicrocopy.DNS_ZONE.of(secondary ? "lead_secondary" : "lead_primary"));
+        parts.add(HohenheimMicrocopy.DNS_ZONE.of("lead_records").withArg("records", Math.toIntExact(recordCount(zone))));
+        if (secondary) {
+            Microcopy transfer = StandardFieldValueText.wordsOf(DnsZoneModel.TRANSFER_STATUS,
+                zone.get(DnsZoneModel.TRANSFER_STATUS));
+            if (transfer != null) {
+                parts.add(HohenheimMicrocopy.DNS_ZONE.of("lead_transfer").withArg("status", transfer));
+            }
+        } else {
+            Microcopy delegation = StandardFieldValueText.wordsOf(DnsZoneModel.DELEGATION_STATUS,
+                zone.get(DnsZoneModel.DELEGATION_STATUS));
+            if (delegation != null) {
+                parts.add(HohenheimMicrocopy.DNS_ZONE.of("lead_delegation").withArg("status", delegation));
+            }
+            parts.add(HohenheimMicrocopy.DNS_ZONE.of("lead_secondaries")
+                .withArg("summary", Objects.requireNonNull(secondarySummary(zone), "a primary has a summary")));
+        }
+        List<String> words = new ArrayList<>();
+        for (Microcopy part : parts) {
+            words.add(part.asString(conduit));
+        }
+        return new RecordLead(String.join(" · ", words), null);
     }
 
     /**
