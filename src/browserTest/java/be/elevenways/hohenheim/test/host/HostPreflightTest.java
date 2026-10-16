@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.PinnedImages;
+import be.elevenways.hohenheim.server.host.HostDisk;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.host.PreflightFinding;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
@@ -178,6 +179,9 @@ class HostPreflightTest {
                     assertThat((Map<?, ?>) map.get("checks")).isNotEmpty());
             assertThat((Object) local.get(ServerModel.LAST_SEEN_AT))
                 .as("step 2: the daemon contact updated last_seen_at").isNotNull();
+            assertThat(HostDisk.storedOf(local))
+                .as("step 2: the same contact measured the host's disk, as Probe now and the heartbeat do")
+                .isNotNull();
 
             // 3. The nftables outcome is recorded VERBATIM. On a host with passwordless
             //    nft it passes; on this machine it fails -- either way the verdict must

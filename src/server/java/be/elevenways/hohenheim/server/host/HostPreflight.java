@@ -131,7 +131,12 @@ public final class HostPreflight {
 
     /**
      * Run the full preflight against one inventoried host and STORE the outcome on its
-     * record (capabilities JSON, probed_at, preflight_ok, health columns).
+     * record (capabilities JSON, probed_at, preflight_ok, health columns), with its disk
+     * measured on the same contact when the daemon answered.
+     *
+     * AIDEV-NOTE: Check again is the host page's one verb and stands in for Probe now, so it
+     * measures the disk the heartbeat measures ({@link HostDisk}); before, a host checked
+     * right after a restart still read "No disk reading yet" until the hourly sweep.
      *
      * @throws IllegalArgumentException when no such server exists
      */
@@ -145,25 +150,32 @@ public final class HostPreflight {
         // it is probed for both runtimes before the daemon battery branches. Its own
         // failures are stored as `unchecked` (VolumeBackends.probe), never thrown.
         VolumeBackends.store(server, VolumeBackends.probe(server));
+        Report report;
         // The runtime declaration is DATA on the record: an Incus host gets the Incus
         // battery through the same store funnel, never a Docker probe aimed at it.
         if (ServerModel.isIncus(server)) {
-            return IncusPreflight.runAndStore(server);
+            report = IncusPreflight.runAndStore(server);
+        } else {
+            try {
+                // The SAME per-server nft lane the workload policy applier uses -- what this
+                // probe proves is what a deploy will later rely on, not a lookalike.
+                report = run(servers.clientFor(serverName), NftRunner.forServer(server));
+            } catch (HostKeys.HostTrustException refusal) {
+                // An unpinned host cannot be probed at all -- that refusal is itself the
+                // verdict, and it must be STORED like any other, not thrown at the operator
+                // as an untyped stack trace.
+                HostProbe.Outcome outcome = HostProbe.classify(refusal);
+                report = new Report(List.of(Check.of("daemon", STATUS_FAIL, true, unreachable(outcome))),
+                    Map.of(), false, Now.instant(), outcome);
+            }
+            store(serverName, report, DOCKER_BATTERY);
         }
-        Report report;
-        try {
-            // The SAME per-server nft lane the workload policy applier uses -- what this
-            // probe proves is what a deploy will later rely on, not a lookalike.
-            report = run(servers.clientFor(serverName), NftRunner.forServer(server));
-        } catch (HostKeys.HostTrustException refusal) {
-            // An unpinned host cannot be probed at all -- that refusal is itself the
-            // verdict, and it must be STORED like any other, not thrown at the operator
-            // as an untyped stack trace.
-            HostProbe.Outcome outcome = HostProbe.classify(refusal);
-            report = new Report(List.of(Check.of("daemon", STATUS_FAIL, true, unreachable(outcome))),
-                Map.of(), false, Now.instant(), outcome);
+        if (report.daemonFailure() == null && report.check("daemon") != null) {
+            DiskSpace disk = HostDisk.measure(serverName);
+            if (disk != null) {
+                HostProbe.recordSuccess(serverName, null, disk);
+            }
         }
-        store(serverName, report, DOCKER_BATTERY);
         return report;
     }
 
