@@ -45,6 +45,8 @@ import static be.elevenways.hohenheim.test.ApiSupport.form;
  * instance tier refuses to deploy unprotected) and the pinned Alpine image; {@link LiveLane} names each need it
  * skips on. The volume's content is seeded inside the container with every modification time set to {@link #T0},
  * so a listing carries no clock; the class runs on a database of its own, so every id is the same on every run.
+ * The listed directory holds a file, so its own lstat size is non-zero on every filesystem (4096 on ext4, a
+ * name-length sum on btrfs): the captured 0 proves the API never exposes that host-dependent number.
  *
  * @author Jelle De Loecker
  * @since  0.9.0
@@ -133,11 +135,11 @@ class ApiWireFilesLiveTest extends HohenheimTestBase {
         LiveLane.require(LiveLane.Need.NETNS, netns != null,
             "no private netns: the instance tier refuses to deploy unprotected");
 
-        // 1. A deployed container whose volume holds one directory and one file, every timestamp T0.
+        // 1. A deployed container whose volume holds one non-empty directory and one file, every timestamp T0.
         new InstanceService().deploy(instanceId);
         DockerClient.ExecResult seeded = docker.exec(handle, List.of("/bin/sh", "-c",
-            "mkdir -p /data/sub && printf 'hello\\n' > /data/hello.txt"
-                + " && touch -d '2026-01-02 03:04:05' /data/hello.txt /data/sub /data"));
+            "mkdir -p /data/sub && printf 'hello\\n' > /data/hello.txt && printf 'kept\\n' > /data/sub/kept.txt"
+                + " && touch -d '2026-01-02 03:04:05' /data/sub/kept.txt /data/hello.txt /data/sub /data"));
         if (seeded.exitCode() != 0) {
             throw new IllegalStateException("the volume could not be seeded: " + seeded.output());
         }

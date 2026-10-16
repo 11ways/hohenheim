@@ -29,14 +29,25 @@ public interface InstanceFileSupport {
     /**
      * One entry as the driver observed it.
      *
+     * AIDEV-NOTE: a directory's size is always 0, as the API wire capture states it. Its lstat size is the host
+     * filesystem's own bookkeeping (4096 on ext4, a name-length sum on btrfs), so the same volume would list
+     * differently per host; the API, the Files tab and SFTP all read entries from here, so no driver can leak it.
+     *
      * @param name      the basename only (never a path)
      * @param kind      lstat kind; SYMLINK is never followed by this seam
-     * @param size      bytes for a file, the link text length for a symlink
+     * @param size      bytes for a file, the link text length for a symlink, 0 for a directory
      * @param modified  epoch seconds, or 0 when the driver could not tell
      * @param mode      permission bits as a 4-digit octal string, e.g. {@code 0644}
      */
     record Entry(@NonNull String name, @NonNull FilesystemNodeKind kind, long size, long modified,
-                 @NonNull String mode) {}
+                 @NonNull String mode) {
+
+        public Entry {
+            if (kind == FilesystemNodeKind.DIRECTORY) {
+                size = 0;
+            }
+        }
+    }
 
     /**
      * The IMMEDIATE children of a directory, never recursive.

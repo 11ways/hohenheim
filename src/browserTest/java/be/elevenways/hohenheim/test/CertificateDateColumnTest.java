@@ -4,12 +4,15 @@ import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.server.time.JvmZoneClock;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.util.TimeZone;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -21,6 +24,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  * in a hover title -- and no date column carried sortable(), so a crafted
  * {@code ?sort=expires_on} was dropped by ListQueryState and the rows came back in the
  * default created_at order.
+ *
+ * AIDEV-NOTE: the request carries no zn-tz cookie, so the cell reads in the office zone (office.zone, Europe/Brussels
+ * in default.dry), the zone an unknown viewer zone reads as; the JVM default zone is forced to Asia/Kathmandu for
+ * step 1, so a render that fell back to the host's own zone fails here even on a host running in Europe/Brussels.
+ *
+ * @author Jelle De Loecker
+ * @since  0.1.0
  */
 class CertificateDateColumnTest extends HohenheimTestBase {
 
@@ -34,8 +44,15 @@ class CertificateDateColumnTest extends HohenheimTestBase {
     private static final Instant EARLY_EXPIRY = Instant.parse("2031-03-04T05:06:00Z");
     private static final Instant LATE_EXPIRY = Instant.parse("2032-07-08T09:10:00Z");
 
-    private static final String EARLY_WALL = "2031-03-04 05:06";
-    private static final String LATE_WALL = "2032-07-08 09:10";
+    /** The office zone the walls below are read in; step 1 proves default.dry still declares it. */
+    private static final ZoneId OFFICE_ZONE = ZoneId.of("Europe/Brussels");
+
+    /** UTC+05:45 all year, the forced host zone: neither UTC nor the office zone. */
+    private static final String HOST_ZONE = "Asia/Kathmandu";
+
+    /** The expiries in the office zone: CET (+01:00) in March, CEST (+02:00) in July. */
+    private static final String EARLY_WALL = "2031-03-04 06:06";
+    private static final String LATE_WALL = "2032-07-08 11:10";
 
     private static Integer earlyId;
     private static Integer lateId;
@@ -81,11 +98,20 @@ class CertificateDateColumnTest extends HohenheimTestBase {
     void theListReadsExpiryAbsoluteFirstAndHonoursASortOnIt() throws Exception {
 
         // 1. The cell carries the ABSOLUTE wall-clock reading as its text, not only a
-        //    relative one hidden behind a tooltip.
-        HttpResponse<String> list = journeyList("");
+        //    relative one hidden behind a tooltip, read in the office zone: the request names
+        //    no viewer zone, and the host's own zone (forced to another one here) never applies.
+        assertThat(JvmZoneClock.office()).as("step 1: default.dry declares the office zone").isEqualTo(OFFICE_ZONE);
+        HttpResponse<String> list;
+        TimeZone original = TimeZone.getDefault();
+        TimeZone.setDefault(TimeZone.getTimeZone(HOST_ZONE));
+        try {
+            list = journeyList("");
+        } finally {
+            TimeZone.setDefault(original);
+        }
         assertThat(list.statusCode()).isEqualTo(200);
         assertThat(list.body())
-            .as("step 1: the expiry cell reads as a calendar day and time")
+            .as("step 1: the expiry cell reads as a calendar day and time in the office zone")
             .contains(EARLY_WALL)
             .contains(LATE_WALL);
 

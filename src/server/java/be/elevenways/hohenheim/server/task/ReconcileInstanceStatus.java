@@ -20,9 +20,12 @@ import java.util.List;
  */
 public class ReconcileInstanceStatus extends ScheduledTask {
 
+    /** The task's catalog id, also the {@code system_task_history.task_type} its runs are stored under. */
+    public static final Identifier ID = HohenheimIds.id("reconcile_instance_status");
+
     @Override
     public @NonNull Identifier id() {
-        return HohenheimIds.id("reconcile_instance_status");
+        return ID;
     }
 
     @Override
