@@ -5,7 +5,12 @@ import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import com.microsoft.playwright.assertions.PlaywrightAssertions;
+import be.elevenways.protoblast.common.time.Now;
 import org.junit.jupiter.api.*;
+
+import java.time.Duration;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -67,6 +72,48 @@ class ServerAdminTest extends HohenheimTestBase {
             .as("step 4: with the structured state cell in its header").isEqualTo(1);
         assertThat(page.locator(".widget-usage").count())
             .as("step 4: and an explicit state for its memory and for its disk").isEqualTo(2);
+    }
+
+    /**
+     * The Hosts list's status line under a host's name reads as one run: "Docker 29.7.1, seen 2 hours ago" wraps as
+     * text in its cell, the time following the words, never standing as a column of its own beside them.
+     */
+    @Test
+    void theHostStatusLineIsOneRunOfWordsAndTime() {
+        // 1. A host whose daemon answered two hours ago, at the width where the name column wraps its status line.
+        Row host = Models.get(ServerModel.class).createEmptyRow();
+        host.set(ServerModel.NAME, "status-line-host");
+        host.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
+        host.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
+        host.set(ServerModel.CAPABILITIES, new LinkedHashMap<>(Map.of("docker_version", "29.7.1")));
+        host.set(ServerModel.LAST_SEEN_AT, Now.instant().minus(Duration.ofHours(2)));
+        Models.get(ServerModel.class).save(host);
+        try {
+            page.setViewportSize(1280, 900);
+            navigateToApp("/admin/servers");
+            waitForHydration();
+
+            // 2. The time follows the words in the same run: it starts on or below the words' last line.
+            @SuppressWarnings("unchecked")
+            Map<String, Object> line = (Map<String, Object>) page.evaluate("() => {"
+                + " const cell = [...document.querySelectorAll('.hh-host-state')]"
+                + "   .find(c => c.textContent.includes('29.7.1'));"
+                + " const time = cell.querySelector('pl-relative-time');"
+                + " const words = document.createRange();"
+                + " words.setStart(cell, 0); words.setEndBefore(time);"
+                + " const rects = [...words.getClientRects()].filter(r => r.width > 0);"
+                + " const last = rects[rects.length - 1];"
+                + " return {text: cell.textContent.replace(/\\s+/g, ' ').trim(),"
+                + "   lastWordsTop: last.top, timeTop: time.getClientRects()[0].top}; }");
+            assertThat((String) line.get("text")).as("step 2: the line names the daemon and when it was seen")
+                .contains("Docker 29.7.1").contains("ago");
+            assertThat(((Number) line.get("timeTop")).doubleValue())
+                .as("step 2: the time follows the words' last line, not a column beside them")
+                .isGreaterThanOrEqualTo(((Number) line.get("lastWordsTop")).doubleValue() - 1);
+        } finally {
+            HardDeletes.row(Models.get(ServerModel.class), Models.get(ServerModel.class).findById(
+                host.get(ServerModel.ID)));
+        }
     }
 
     /** SSH-target round trip, argument-injection refusal and the implicit local host's guards. */

@@ -632,10 +632,19 @@
         }
     }
 
+    /* The dot beside one run of words and time (host-status.hwk). */
     .hh-host-state {
         display: inline-flex;
         align-items: center;
         gap: var(--pl-space-xs);
+
+        > pl-status-dot {
+            flex: none;
+        }
+
+        .hh-host-state-text {
+            min-width: 0;
+        }
 
         .hh-host-state-quarantined {
             color: var(--pl-color-destructive-strong);

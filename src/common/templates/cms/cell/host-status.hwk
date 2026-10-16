@@ -1,18 +1,13 @@
 {#- Structured host-list status cell: a status dot, a short state word and a live
     relative time -- never a fully-resolved sentence. Quarantine wins and is LOUD.
     The dot, the wording and its emphasis are FACTS on HostState, so no state can render
-    green (or quiet) by falling through a branch this template forgot. -#}
+    green (or quiet) by falling through a branch this template forgot. The words and the time
+    are ONE run of text beside the dot: as two flex items they wrapped as two columns
+    ("Docker 29.7.1, seen" beside "2 hours ago") in a narrow name column. -#}
 {% declare value: HostStatusCell %}
 {% if value != null %}
 <span class="hh-host-state" data-host-state={% value.stateToken %}>
     <pl-status-dot status={% value.dot %}></pl-status-dot>
-    {% if value.loud %}
-    <strong class="hh-host-state-quarantined">{{ value.stateText }}</strong>
-    {% else %}
-    <span>{{ value.stateText }}</span>
-    {% /if %}
-    {% if value.lastSeenIso != null %}
-    <pl-relative-time datetime={% value.lastSeenIso %} title={% value.lastSeenIso %}></pl-relative-time>
-    {% /if %}
+    <span class="hh-host-state-text">{% if value.loud %}<strong class="hh-host-state-quarantined">{{ value.stateText }}</strong>{% else %}{{ value.stateText }}{% /if %}{% if value.lastSeenIso != null %} <pl-relative-time datetime={% value.lastSeenIso %} title={% value.lastSeenIso %}></pl-relative-time>{% /if %}</span>
 </span>
 {% /if %}
