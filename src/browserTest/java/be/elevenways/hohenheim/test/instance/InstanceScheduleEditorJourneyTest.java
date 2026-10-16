@@ -24,8 +24,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * An instance schedule's cron edits as a schedule picker on its record page: a backup schedule moves from every night
- * to Sunday night through the presets, a power schedule keeps and edits its custom expression, and an expression the
- * scheduler cannot run is refused on the field.
+ * to Sunday night through the presets, a power schedule keeps and edits its custom expression, an expression the
+ * scheduler cannot run is refused on the field, and a new schedule saved untouched stores the default it shows.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -41,6 +41,7 @@ class InstanceScheduleEditorJourneyTest extends HohenheimTestBase {
     private static Integer instanceId;
     private static Integer backupId;
     private static Integer powerId;
+    private static Integer createdId;
 
     @BeforeAll
     static void seed() {
@@ -60,7 +61,7 @@ class InstanceScheduleEditorJourneyTest extends HohenheimTestBase {
     @AfterAll
     static void cleanUp() {
         Model steps = Models.get(RecordScheduleStepModel.class);
-        for (Integer id : new Integer[] {backupId, powerId}) {
+        for (Integer id : new Integer[] {backupId, powerId, createdId}) {
             if (id == null) {
                 continue;
             }
@@ -121,6 +122,21 @@ class InstanceScheduleEditorJourneyTest extends HohenheimTestBase {
         page.waitForSelector("text=This is not a cron expression a schedule can run");
         assertThat(Models.get(RecordScheduleModel.class).findById(powerId).get(RecordScheduleModel.CRON))
             .as("step 4: the stored cron stays").isEqualTo("0 7 * * 1-5");
+
+        // 5. A new schedule saved without touching the picker stores the "Every day at 02:00" the picker shows.
+        navigateToApp("/admin/instance-schedules/new?record_id=" + instanceId);
+        waitForHydration();
+        assertThat(page.locator(READING).innerText()).as("step 5: the new picker reads its default")
+            .contains("Every day at 02:00");
+        type("input[name='name']", PREFIX + "untouched");
+        page.evaluate("document.querySelector('form.cms-form-layout').requestSubmit()");
+        page.waitForURL(url -> url.contains("/page/steps"));
+        Row created = Models.get(RecordScheduleModel.class).find()
+            .where(RecordScheduleModel.NAME.eq(PREFIX + "untouched")).first();
+        assertThat(created).as("step 5: the schedule is created, not refused").isNotNull();
+        createdId = created.get(RecordScheduleModel.ID);
+        assertThat(created.get(RecordScheduleModel.CRON)).as("step 5: the shown default is stored")
+            .isEqualTo("0 2 * * *");
     }
 
     private static int schedule(String name, String cron, String action) {
