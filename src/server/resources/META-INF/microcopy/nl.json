@@ -13398,12 +13398,6 @@
     "text": "De nieuwe resourcelimieten konden niet toegepast worden: {$reason}. Er is niets gewijzigd.",
     "scope": "violations"
   },
-  "pagination": [
-    {
-      "text": "Postvakpagina's",
-      "scope": "admin_inbox"
-    }
-  ],
   "last_axfr_serial": [
     {
       "text": "AXFR-serienummer",

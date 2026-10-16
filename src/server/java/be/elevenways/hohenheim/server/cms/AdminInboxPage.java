@@ -3,34 +3,27 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
-import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
-import be.elevenways.plumage.component.Pager;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.PanelPage;
-import be.elevenways.zenit.notifications.inbox.NotificationInboxItemView;
 import be.elevenways.zenit.notifications.server.NotificationInbox;
 import be.elevenways.zenit.common.conduit.Conduit;
-import be.elevenways.zenit.common.data.PageWindow;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
-import be.elevenways.zenit.common.routing.BoundEndpoint;
-import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
- * The operator's own notification inbox: the shipped zenit-notifications surface mounted
- * under this panel's route and gate.
+ * The operator's own notification inbox: zenit-notifications' shared inbox screen ({@code NotificationInbox.page},
+ * drawn by {@code <znt-inbox-page>}) mounted under this panel's route and gate.
  *
  * AIDEV-NOTE: this is where a platform alert becomes VISIBLE with nothing
  * configured. Every alert fans out to the inbox of every administrator
@@ -67,33 +60,10 @@ public final class AdminInboxPage extends PanelPage {
     @Override
     public @NonNull ActionResult<?> render(@NonNull PanelRequest request) {
         Conduit conduit = request.conduit();
-        long total = NotificationInbox.itemCount(conduit);
-        PageWindow window = PageWindow.of(requestedPage(conduit), total,
-            NotificationInbox.DEFAULT_LIMIT, PageWindow.OutOfRange.CLAMP);
-        List<NotificationInboxItemView> items =
-            NotificationInbox.itemsFor(conduit, window.pageSize(), window.offset());
-
         Map<String, Object> vars = new HashMap<>();
         vars.put("title", label().asString(conduit));
         vars.put("lead", description());
-        vars.put("items", items);
-        vars.put("markAllTarget", NotificationInbox.markAllTarget(conduit));
-        vars.put("pager", Pager.of(window, total, page -> pageUrl(page).toUrl()));
+        vars.put("page", NotificationInbox.page(conduit, CmsRoutes.list(HohenheimSlugs.ADMIN, slug()).toUrl()));
         return new RenderTemplateResult(HohenheimTemplateIds.INBOX, vars);
-    }
-
-    /**
-     * This page at a different page number, composed typed -- never a concatenated query.
-     * Page 1 is the bare route, the parameter's absence.
-     */
-    private @NonNull RouteTarget pageUrl(int page) {
-        BoundEndpoint<?> list = CmsRoutes.list(HohenheimSlugs.ADMIN, slug());
-        return page <= 1 ? list : list.with(HohenheimParams.INBOX_PAGE, page);
-    }
-
-    /** The page the URL asks for; anything absent or unreadable is page 1. */
-    private static int requestedPage(@NonNull Conduit conduit) {
-        Integer requested = CmsSupport.prefill(conduit, HohenheimParams.INBOX_PAGE);
-        return requested == null || requested < 1 ? 1 : requested;
     }
 }

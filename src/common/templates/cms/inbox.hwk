@@ -1,23 +1,19 @@
-{#- The operator's own notification inbox. The list, the unread styling, the
-    importance badges and both read forms are the shipped zenit-notifications surface;
-    this page owns only the route, the heading (zenitcms:page-header, so a cluster landing has one h1) and
-    the page window. -#}
+{#- The operator's own notification inbox: zenit-notifications' inbox screen (znt-inbox-page: Unread / All, one card
+    per record, its pager) under the panel's page header, "Mark all read" in the header's actions. This page owns only
+    the route and the heading (zenitcms:page-header, so a cluster landing has one h1). -#}
 {% declare title: String %}
-{% declare items: List<NotificationInboxItemView> %}
-{% declare markAllTarget: RouteTarget %}
-{% declare pager: Pager %}
+{% declare page: NotificationInboxPageView %}
 {% declare lead: Microcopy %}
 {#- True on the Activity cluster's landing, headed by its cluster (CmsClusterDecorator): the page header draws no h1. -#}
 {% declare headedByCluster: Boolean = false %}
 {% extend "zenitcms:shell" var:title=title %}
 
+{% snippet markAll() %}<znt-inbox-mark-all target={% page.markAllTarget %}></znt-inbox-mark-all>{% /snippet %}
+
 {% block "main" %}
 <section class="cms-resource-form-page" data-admin-inbox>
-    {% render "zenitcms:page-header" var:title=title var:lead=lead %}
+    {% render "zenitcms:page-header" var:title=title var:lead=lead var:actions=markAll %}
 
-    <znt-inbox items={% items %} markAllTarget={% markAllTarget %}></znt-inbox>
-
-    {#- plumage's numbered pager over core's PageWindow; it renders nothing for one page. -#}
-    <pl-pager pager={% pager %} label={% t("pagination", scope: "admin_inbox") %} data-admin-inbox-pagination></pl-pager>
+    <znt-inbox-page page={% page %}></znt-inbox-page>
 </section>
 {% /block %}

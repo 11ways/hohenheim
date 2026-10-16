@@ -124,9 +124,4 @@ public final class HohenheimParams {
     public static final ParameterDefinition<String> REMOTE_RECORD =
         ParameterDefinition.builder(String.class).name("record")
             .stringResolver(value -> value).build();
-
-    /** The page of notification-inbox items being read. */
-    public static final ParameterDefinition<Integer> INBOX_PAGE =
-        ParameterDefinition.builder(Integer.class).name("page")
-            .stringResolver(Integer::parseInt).build();
 }

@@ -13398,12 +13398,6 @@
     "text": "The new resource ceilings could not be applied: {$reason}. Nothing was changed.",
     "scope": "violations"
   },
-  "pagination": [
-    {
-      "text": "Inbox pages",
-      "scope": "admin_inbox"
-    }
-  ],
   "last_axfr_serial": [
     {
       "text": "AXFR serial",
