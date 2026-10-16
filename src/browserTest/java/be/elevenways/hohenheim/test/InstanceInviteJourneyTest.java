@@ -110,6 +110,8 @@ class InstanceInviteJourneyTest extends HohenheimTestBase {
                 "_tab=access&_confirmed=1&access.__removed=" + new SubjectTag(GrantSubjectType.USER, personId).token());
             assertThat(revoked.statusCode()).as("step 5: the revocation saves").isIn(302, 303);
             assertThat(reaches(personId, vmId)).as("step 5: the grant is gone").isFalse();
+            assertThat(Models.get(UserModel.class).findFirst(UserModel.EMAIL, INVITEE))
+                .as("step 5: the account that signed in survives the revoke").isNotNull();
             Response list = person.navigate(this.baseUrl() + "/manage/instances");
             assertThat(list.status()).as("step 5: /manage refuses someone who holds nothing").isEqualTo(403);
             assertThat(person.content()).as("step 5: the machine left their /manage").doesNotContain(PREFIX + "vm");
@@ -129,6 +131,83 @@ class InstanceInviteJourneyTest extends HohenheimTestBase {
             }
             HardDeletes.byId(Models.get(InstanceModel.class), vmId);
         }
+    }
+
+    @Test
+    void anOperatorResendsAndCancelsAnInvitationAndARevokeTakesTheUnusedAccountAlong() throws Exception {
+        String invitee = PREFIX + "pending@example.com";
+        List<String> mailed = new CopyOnWriteArrayList<>();
+        AuthMail.Sender previousSender = AuthMail.SENDER.require();
+        String previousBase = ServerSettings.VALUES.getValue(ServerSettings.Network.MAIN_URL);
+        ServerSettings.VALUES.setValue(ServerSettings.Network.MAIN_URL, this.baseUrl());
+        AuthMail.SENDER.install(new InvitationCapture(mailed));
+        int vmId = vm();
+        String accessTab = "/admin/instances/" + vmId + "/page/access";
+        BrowserContext personContext = browser.newContext();
+        try {
+            Page person = personContext.newPage();
+
+            // 1. The operator invites an address no account holds: the person is listed as waiting for an answer,
+            //    marked "Invited", with when the link stops working.
+            navigateToApp(accessTab);
+            page.fill("[data-sharing-invite-form] pl-input[name='email'] input", invitee);
+            page.locator("[data-sharing-invite-form] pl-button[type='submit']").click();
+            page.waitForCondition(() -> mailed.size() == 1);
+            page.waitForSelector("[data-sharing-invitation]");
+            assertThat(page.locator("[data-sharing-invitation]").textContent())
+                .as("step 1: the invitee is marked Invited").contains("Invited").contains(invitee);
+            assertThat(page.locator("[data-sharing-invitation-expiry]").textContent())
+                .as("step 1: with when the link stops working").contains("Link expires");
+            UUID firstId = accountId(invitee);
+
+            // 2. Resend mails a fresh link; the first one is refused from then on.
+            page.locator("[data-sharing-invitation-resend] pl-button[type='submit']").click();
+            page.waitForCondition(() -> mailed.size() == 2);
+            assertThat(person.navigate(mailed.get(0)).status())
+                .as("step 2: THE ASSERTION -- the old link is refused").isEqualTo(400);
+            assertThat(person.navigate(mailed.get(1)).status()).as("step 2: the new link opens").isEqualTo(200);
+            assertThat(accountId(invitee)).as("step 2: the same account").isEqualTo(firstId);
+
+            // 3. Cancel invitation removes the never-used account, its link and the machine's grant.
+            page.waitForSelector("[data-sharing-invitation-cancel]");
+            page.locator("[data-sharing-invitation-cancel] pl-button[type='submit']").click();
+            page.waitForCondition(() -> Models.get(UserModel.class).findFirst(UserModel.EMAIL, invitee) == null);
+            assertThat(person.navigate(mailed.get(1)).status())
+                .as("step 3: the cancelled link opens nothing").isEqualTo(400);
+            assertThat(reaches(firstId, vmId)).as("step 3: the grant went with the account").isFalse();
+            navigateToApp(accessTab);
+            page.waitForSelector("[data-sharing-invite-form]");
+            assertThat(page.locator("[data-sharing-invitation]").count()).as("step 3: nobody waits").isZero();
+
+            // 4. Invited again, then revoked on the Access tab: it was all the invitee held, so the account goes too.
+            page.fill("[data-sharing-invite-form] pl-input[name='email'] input", invitee);
+            page.locator("[data-sharing-invite-form] pl-button[type='submit']").click();
+            page.waitForCondition(() -> mailed.size() == 3);
+            UUID secondId = accountId(invitee);
+            HttpResponse<String> revoked = adminPostForm(
+                "/admin/instances/invoke/zenit.save_record_sharing?ids=" + vmId,
+                "_tab=access&_confirmed=1&access.__removed=" + new SubjectTag(GrantSubjectType.USER, secondId).token());
+            assertThat(revoked.statusCode()).as("step 4: the revocation saves").isIn(302, 303);
+            assertThat(Models.get(UserModel.class).findFirst(UserModel.EMAIL, invitee))
+                .as("step 4: THE ASSERTION -- revoking the last grant removed the unused account").isNull();
+        } finally {
+            personContext.close();
+            AuthMail.SENDER.install(previousSender);
+            ServerSettings.VALUES.setValue(ServerSettings.Network.MAIN_URL, previousBase);
+            Row account = Models.get(UserModel.class).findFirst(UserModel.EMAIL, invitee);
+            if (account != null) {
+                HardDeletes.where(Models.get(RecordGrantModel.class),
+                    RecordGrantModel.SUBJECT_ID.eq(account.get(UserModel.ID)));
+                HardDeletes.row(Models.get(UserModel.class), account);
+            }
+            HardDeletes.byId(Models.get(InstanceModel.class), vmId);
+        }
+    }
+
+    private static UUID accountId(String email) {
+        Row account = Models.get(UserModel.class).findFirst(UserModel.EMAIL, email);
+        assertThat(account).as("the invitation's account exists").isNotNull();
+        return account.get(UserModel.ID);
     }
 
     private static boolean reaches(UUID userId, int instanceId) {
