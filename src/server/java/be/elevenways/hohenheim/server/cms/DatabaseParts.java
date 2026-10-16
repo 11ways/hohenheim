@@ -722,7 +722,7 @@ public final class DatabaseParts {
         WidgetInstance card = new WidgetInstance(CardWidget.ID,
             Map.of("title", HohenheimMicrocopy.DATABASE_LIST.of("engines_title"), "lead",
                 HohenheimMicrocopy.DATABASE_LIST.of("engines_lead")),
-            new WidgetTree(List.of(new WidgetInstance(FactListWidget.ID, Map.of()).withData(facts))));
+            new WidgetTree(List.of(FactListWidget.of(facts))));
         return new WidgetTree(List.of(AdminDashboard.section(card)));
     }
 

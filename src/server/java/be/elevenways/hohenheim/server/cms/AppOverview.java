@@ -39,7 +39,6 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.WidgetTree;
 import be.elevenways.zenit.widget.common.builtin.CardWidget;
-import be.elevenways.zenit.widget.common.builtin.FactListWidget;
 import be.elevenways.zenit.widget.common.builtin.RecordsWidget;
 import be.elevenways.zenit.widget.common.builtin.SectionWidget;
 import be.elevenways.zenit.widget.common.builtin.UsageBarWidget;
@@ -249,8 +248,7 @@ final class AppOverview {
     }
 
     static @NonNull WidgetInstance details(@NonNull List<WidgetFact> facts) {
-        return CardWidget.of(HohenheimMicrocopy.APP_OVERVIEW.of("details"),
-            new WidgetTree(List.of(new WidgetInstance(FactListWidget.ID, Map.of()).withData(facts))));
+        return CardWidget.ofFacts(HohenheimMicrocopy.APP_OVERVIEW.of("details"), facts);
     }
 
     /**

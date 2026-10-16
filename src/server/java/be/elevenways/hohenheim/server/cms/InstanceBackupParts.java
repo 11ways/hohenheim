@@ -35,10 +35,8 @@ import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
-import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.WidgetTree;
 import be.elevenways.zenit.widget.common.builtin.CardWidget;
-import be.elevenways.zenit.widget.common.builtin.FactListWidget;
 import be.elevenways.zenit.widget.common.data.WidgetFact;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -48,7 +46,6 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -123,8 +120,8 @@ public final class InstanceBackupParts {
         if (facts.isEmpty()) {
             return null;
         }
-        return new WidgetTree(List.of(CardWidget.of(HohenheimMicrocopy.INSTANCE_BACKUP.of("backup_contents"),
-            new WidgetTree(List.of(new WidgetInstance(FactListWidget.ID, Map.of()).withData(List.copyOf(facts)))))));
+        return new WidgetTree(List.of(CardWidget.ofFacts(HohenheimMicrocopy.INSTANCE_BACKUP.of("backup_contents"),
+            facts)));
     }
 
     /**

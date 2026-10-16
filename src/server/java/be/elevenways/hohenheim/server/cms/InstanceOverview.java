@@ -54,7 +54,6 @@ import be.elevenways.zenit.widget.common.WidgetTree;
 import be.elevenways.zenit.widget.common.builtin.AlertVariant;
 import be.elevenways.zenit.widget.common.builtin.AlertWidget;
 import be.elevenways.zenit.widget.common.builtin.CardWidget;
-import be.elevenways.zenit.widget.common.builtin.FactListWidget;
 import be.elevenways.zenit.widget.common.data.NoticeData;
 import be.elevenways.zenit.widget.common.data.UsageData;
 import be.elevenways.zenit.widget.common.data.WidgetBadge;
@@ -637,8 +636,7 @@ public final class InstanceOverview {
                 .resolve(locales, resolver),
                 HohenheimMicrocopy.INSTANCE_OVERVIEW.of(operators).resolve(locales, resolver)));
         }
-        return CardWidget.of(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("your_part"),
-            new WidgetTree(List.of(new WidgetInstance(FactListWidget.ID, Map.of()).withData(facts))));
+        return CardWidget.ofFacts(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("your_part"), facts);
     }
 
     // -- helpers ---------------------------------------------------------------------

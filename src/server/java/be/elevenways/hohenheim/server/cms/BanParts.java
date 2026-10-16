@@ -276,7 +276,7 @@ public final class BanParts {
         WidgetTree body = facts.isEmpty()
             ? new WidgetTree(List.of(new WidgetInstance(TextBlockWidget.ID, Map.of("body",
                 HohenheimMicrocopy.BAN.of("no_misses").asString(conduit)))))
-            : new WidgetTree(List.of(new WidgetInstance(FactListWidget.ID, Map.of()).withData(facts)));
+            : new WidgetTree(List.of(FactListWidget.of(facts)));
         return new WidgetInstance(CardWidget.ID, Map.of("title", HohenheimMicrocopy.BAN.of("recent_misses_title"),
             "lead", HohenheimMicrocopy.BAN.of("recent_misses_lead").withArg("threshold", scorer.banThreshold())
                 .withArg("minutes", Math.max(1, scorer.windowSeconds() / 60))), body);
@@ -304,7 +304,7 @@ public final class BanParts {
         WidgetInstance card = new WidgetInstance(CardWidget.ID,
             Map.of("title", HohenheimMicrocopy.BAN.of("never_block_title"),
             "lead", HohenheimMicrocopy.BAN.of(facts.size() > 1 ? "never_block_lead" : "never_block_empty")),
-            new WidgetTree(List.of(new WidgetInstance(FactListWidget.ID, Map.of()).withData(facts))));
+            new WidgetTree(List.of(FactListWidget.of(facts))));
         return CardWidget.withLink(card, HohenheimMicrocopy.BAN.of("never_block_change"),
             AttentionCollector.securitySettingsTarget().toUrl(), "gear");
     }

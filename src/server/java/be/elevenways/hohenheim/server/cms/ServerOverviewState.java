@@ -147,11 +147,10 @@ public final class ServerOverviewState {
         // what the preflight probe measured on the data root, and -- when it measured
         // nothing usable -- what that refuses and how to fix it, in the operator's words.
         VolumeBackend volumeBackend = ServerModel.volumeBackendOf(server);
-        state.add(new WidgetInstance(FactListWidget.ID, Map.of())
-            .withData(List.of(WidgetFact.badge(
-                HohenheimMicrocopy.SERVER_OVERVIEW.of("volume_backend").resolve(locales, resolver),
-                WidgetBadge.of(volumeBackend.label().resolve(locales, resolver),
-                    volumeBackend.color(), volumeBackend.icon())))));
+        state.add(FactListWidget.of(List.of(WidgetFact.badge(
+            HohenheimMicrocopy.SERVER_OVERVIEW.of("volume_backend").resolve(locales, resolver),
+            WidgetBadge.of(volumeBackend.label().resolve(locales, resolver),
+                volumeBackend.color(), volumeBackend.icon())))));
         if (volumeBackend == VolumeBackend.UNCHECKED && server.get(ServerModel.VOLUME_PROBED_AT) == null) {
             // Never checked at all (a new host's stored default): there is no finding and no reason yet.
             state.add(alert(AlertVariant.WARNING, NoticeData.of(
@@ -186,10 +185,9 @@ public final class ServerOverviewState {
 
         PostureAcknowledgementView acknowledgement = acknowledgementViewOf(server);
         if (acknowledgement.needed()) {
-            state.add(new WidgetInstance(FactListWidget.ID, Map.of())
-                .withData(List.of(WidgetFact.badge(
-                    HohenheimMicrocopy.SERVER_OVERVIEW.of("acknowledgement").resolve(locales, resolver),
-                    acknowledgementBadge(acknowledgement, locales, resolver)))));
+            state.add(FactListWidget.of(List.of(WidgetFact.badge(
+                HohenheimMicrocopy.SERVER_OVERVIEW.of("acknowledgement").resolve(locales, resolver),
+                acknowledgementBadge(acknowledgement, locales, resolver)))));
         }
 
         // The host's actions are its record heading's (zenitcms:record-head), never a second row here.
@@ -211,8 +209,7 @@ public final class ServerOverviewState {
             .withData(capacityUsage(capacity, locales, resolver)));
         // Without a usable reading there is nothing booked against a budget to list: no empty "Nothing to show".
         if (capacity.measured()) {
-            capacityBand.add(new WidgetInstance(FactListWidget.ID, Map.of())
-                .withData(capacityFacts(capacity, locales, resolver)));
+            capacityBand.add(FactListWidget.of(capacityFacts(capacity, locales, resolver)));
         }
         // The disk reads beside the memory: a host never measured says so in the Hosts list's words, never an empty
         // bar, and a reading too old says how old instead of drawing one.

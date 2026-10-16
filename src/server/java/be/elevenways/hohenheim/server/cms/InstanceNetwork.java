@@ -11,16 +11,13 @@ import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.widget.common.WidgetInstance;
-import be.elevenways.zenit.widget.common.WidgetTree;
 import be.elevenways.zenit.widget.common.builtin.CardWidget;
-import be.elevenways.zenit.widget.common.builtin.FactListWidget;
 import be.elevenways.zenit.widget.common.data.WidgetFact;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 /**
  * The Network card of a machine's overview: how its guest is connected ({@link GuestNetworkMode}) and the addresses
@@ -59,12 +56,10 @@ final class InstanceNetwork {
             mode.description(publishesPorts).resolve(locales, resolver)));
         facts.addAll(addressFacts(read, locales, resolver));
         List<WidgetInstance> cards = new ArrayList<>();
-        cards.add(CardWidget.of(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("network"),
-            new WidgetTree(List.of(new WidgetInstance(FactListWidget.ID, Map.of()).withData(facts)))));
+        cards.add(CardWidget.ofFacts(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("network"), facts));
         if (mode.connectsAtGuestAddress()) {
-            cards.add(CardWidget.of(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("connect"),
-                new WidgetTree(List.of(new WidgetInstance(FactListWidget.ID, Map.of())
-                    .withData(connectFacts(read, locales, resolver))))));
+            cards.add(CardWidget.ofFacts(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("connect"),
+                connectFacts(read, locales, resolver)));
         }
         return cards;
     }

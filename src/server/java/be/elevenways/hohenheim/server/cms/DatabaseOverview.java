@@ -23,7 +23,6 @@ import be.elevenways.zenit.common.text.ByteText;
 import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.WidgetTree;
 import be.elevenways.zenit.widget.common.builtin.CardWidget;
-import be.elevenways.zenit.widget.common.builtin.FactListWidget;
 import be.elevenways.zenit.widget.common.data.WidgetBadge;
 import be.elevenways.zenit.widget.common.data.WidgetFact;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -31,7 +30,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 /**
  * A managed database's front door (the right-hand column of the Databases page): how it is reached, which apps use it
@@ -64,12 +62,14 @@ final class DatabaseOverview {
         Integer id = database.get(DatabaseModel.ID);
 
         List<WidgetInstance> main = new ArrayList<>();
-        main.add(card(HohenheimMicrocopy.DATABASE_TAB.of("connection"),
+        main.add(CardWidget.ofFacts(HohenheimMicrocopy.DATABASE_TAB.of("connection"),
             connectionFacts(database, panelSlug, locales, resolver)));
-        main.add(card(HohenheimMicrocopy.DATABASE_TAB.of("used_by"), usedByFacts(id, panelSlug, locales, resolver)));
+        main.add(CardWidget.ofFacts(HohenheimMicrocopy.DATABASE_TAB.of("used_by"),
+            usedByFacts(id, panelSlug, locales, resolver)));
 
         List<WidgetInstance> side = new ArrayList<>();
-        side.add(card(HohenheimMicrocopy.DATABASE_OVERVIEW.of("backups"), backupFacts(database, locales, resolver)));
+        side.add(CardWidget.ofFacts(HohenheimMicrocopy.DATABASE_OVERVIEW.of("backups"),
+            backupFacts(database, locales, resolver)));
         if (id != null) {
             side.add(AppOverview.recent(Models.get(DatabaseModel.class), id));
         }
@@ -159,11 +159,6 @@ final class DatabaseOverview {
         return HohenheimMicrocopy.DATABASE_OVERVIEW.of("runs_on_shared").withArg("host", host)
             .withArg("engine", engine != null ? String.valueOf((Object) engine.get(DatabaseEngineModel.NAME))
                 : "#" + engineId);
-    }
-
-    private static @NonNull WidgetInstance card(@NonNull Microcopy title, @NonNull List<WidgetFact> facts) {
-        return CardWidget.of(title, new WidgetTree(List.of(
-            new WidgetInstance(FactListWidget.ID, Map.of()).withData(facts))));
     }
 
     private static @NonNull String text(@NonNull String key, @NonNull LocaleChain locales,
