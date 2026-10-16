@@ -137,6 +137,15 @@ public class CertificateModel extends Model {
         .visibleIn(EditView.EDIT)
         .attribute(FieldAttributes.GROUP, "renewal")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("cert_next_attempt_at")).build());
+
+    /**
+     * When the last issuance or renewal failed, set beside {@link #RENEWAL_ERROR} and cleared on success; null for a
+     * failure stored before M017 found its moment.
+     *
+     * AIDEV-NOTE: RenewalFailure reads this, never the certificate's activity: history may be pruned.
+     */
+    public static final DateTimeField RENEWAL_FAILED_AT = SCHEMA.addField(DateTimeField.builder()
+        .name("renewal_failed_at").build());
     public static final StringField DOMAIN_NAMES_TEXT = SCHEMA.addField(StringField.builder().name("domain_names_text")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("cert_domain_names")).build());
 

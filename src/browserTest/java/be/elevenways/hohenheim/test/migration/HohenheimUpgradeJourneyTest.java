@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.migration.InitialMigration;
 import be.elevenways.hohenheim.migration.M011_ReviewHardening;
 import be.elevenways.hohenheim.server.migration.M015_ServerLanParent;
 import be.elevenways.hohenheim.server.migration.M016_CertificateKeysOutOfPlainText;
+import be.elevenways.hohenheim.server.migration.M017_InstanceHealthOnTheRow;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -329,9 +330,11 @@ class HohenheimUpgradeJourneyTest {
             .filter(supplier -> !(supplier.get() instanceof InitialMigration)).toList();
         var withoutOwnerScope = withoutCreationSource.stream()
             .filter(supplier -> !(supplier.get() instanceof M011_ReviewHardening)).toList();
-        // M016 is irreversible and chained after M015, so M015's down is rehearsed before M016 joins (step 1b's rerun).
+        // M016 is irreversible and chained after M015, so M015's down is rehearsed before M016 and M017, which
+        // follows it in the stream, join (step 1b's rerun).
         var throughM015 = withoutCreationSource.stream()
-            .filter(supplier -> !(supplier.get() instanceof M016_CertificateKeysOutOfPlainText)).toList();
+            .filter(supplier -> !(supplier.get() instanceof M016_CertificateKeysOutOfPlainText)
+                && !(supplier.get() instanceof M017_InstanceHealthOnTheRow)).toList();
         assertThatThrownBy(() -> MigrationRunner.overCompleteSet(rehearsal, withoutOwnerScope)
             .acknowledgeMissingMigrationVersions("001").migrate().requireSuccess())
             .as("step 1a: missing creation history cannot silently omit the declared sites instant scope")

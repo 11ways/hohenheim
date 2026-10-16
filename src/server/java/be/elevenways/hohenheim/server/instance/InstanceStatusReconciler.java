@@ -58,15 +58,6 @@ public final class InstanceStatusReconciler {
     /** What a correction's detail adds when crash-loop protection held the restart back. */
     private static final String CRASH_LOOP_NOTE = "; crash loop, automatic restarts suspended";
 
-    /**
-     * A correction as its {@link HohenheimActivityAction#RECONCILED} row records it.
-     *
-     * @param settled   the status the record was corrected to
-     * @param crashLoop whether crash-loop protection held the restart back
-     */
-    public record Correction(@NonNull String settled, boolean crashLoop) {
-    }
-
     /** What one record's reconciliation decided. */
     public enum Verdict {
 
@@ -287,30 +278,17 @@ public final class InstanceStatusReconciler {
         return new Outcome(instanceId, Verdict.CORRECTED, stored, state);
     }
 
-    /** @return the detail of a correction's activity row, which {@link #correctionOf} reads back */
+    /**
+     * The detail of a correction's activity row, for the reader of the log only.
+     *
+     * AIDEV-NOTE: nothing reads this text back; the stoppage a correction to ERROR causes is stamped on the record
+     * (InstanceOperationGuard.stampObserved). M017 parsed the corrections stored before that once, with its own frozen
+     * copy of this shape.
+     */
     private static @NonNull String correctionDetail(@NonNull String stored, @NonNull String settled,
                                                     @Nullable ContainerState state, boolean flapping) {
         return stored + ARROW + settled + " (died without an observed stop; the daemon reports the workload "
             + (state == ContainerState.ABSENT ? "absent" : "stopped") + (flapping ? CRASH_LOOP_NOTE : "") + ")";
-    }
-
-    /**
-     * The correction a stored {@link HohenheimActivityAction#RECONCILED} row records: rows written before an ERROR
-     * stamp recorded its cause verb (2026-10-08) are the only fact of how such a record stopped.
-     *
-     * AIDEV-NOTE: the detail is frozen stored text, so it is read back here, beside the one writer of its shape
-     * ({@link #correctionDetail}); a row of another shape reads as no correction.
-     *
-     * @return the correction, null for a detail no correction wrote
-     */
-    public static @Nullable Correction correctionOf(@Nullable String detail) {
-        int arrow = detail == null ? -1 : detail.indexOf(ARROW);
-        if (arrow < 0) {
-            return null;
-        }
-        String rest = detail.substring(arrow + ARROW.length());
-        int end = rest.indexOf(' ');
-        return new Correction(end < 0 ? rest : rest.substring(0, end), detail.contains(CRASH_LOOP_NOTE));
     }
 
     /**

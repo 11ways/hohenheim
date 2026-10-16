@@ -166,12 +166,24 @@ final class InstanceOperationGuard {
     static void stamp(@NonNull HostLeases leases, int instanceId, int serverId,
                       @NonNull String status, @NonNull Object instanceName) {
         requireCause(status, null);
-        write(leases, instanceId, serverId, status, instanceName);
+        write(leases, instanceId, serverId, status, instanceName, null, null, false);
     }
 
     /**
-     * {@link #stamp} of {@code error}, recording what caused it on the record's activity, where the dashboard's
-     * crash item reads its words ({@code InstanceErrorCauses}).
+     * {@link #stamp} of a deploy's outcome, stamping the moment it started in the same statement
+     * ({@link InstanceModel#STARTED_AT}, the overview's "Started").
+     *
+     * @throws Violations {@code instance_fenced_out}
+     */
+    static void stampStarted(@NonNull HostLeases leases, int instanceId, int serverId,
+                             @NonNull String status, @NonNull Object instanceName) {
+        requireCause(status, null);
+        write(leases, instanceId, serverId, status, instanceName, null, null, true);
+    }
+
+    /**
+     * {@link #stamp} of {@code error}, stamping what caused it on the record in the same statement (where its health
+     * reads it, WorkloadErrors) and recording it on the record's activity.
      *
      * AIDEV-NOTE: the ONE way a workload reaches ERROR with a cause, and {@link #stamp} refuses ERROR without one:
      * the status alone told a failed start, a failed restore and a crash apart for nobody, so the dashboard claimed a
@@ -184,7 +196,7 @@ final class InstanceOperationGuard {
     static void stampError(@NonNull HostLeases leases, int instanceId, int serverId, @NonNull Object instanceName,
                            @NonNull HohenheimActivityAction cause, @Nullable String detail) {
         requireCause(InstanceModel.STATUS_ERROR, cause);
-        write(leases, instanceId, serverId, InstanceModel.STATUS_ERROR, instanceName);
+        write(leases, instanceId, serverId, InstanceModel.STATUS_ERROR, instanceName, cause, detail, false);
         recordCause(instanceId, cause, detail);
     }
 
@@ -222,9 +234,15 @@ final class InstanceOperationGuard {
             : HohenheimActivityAction.WORKLOAD_START_FAILED;
     }
 
-    /** The fenced status write behind {@link #stamp} and {@link #stampError}. */
+    /**
+     * The fenced status write behind {@link #stamp}, {@link #stampStarted} and {@link #stampError}.
+     *
+     * @param cause   what made the status {@code error}, stamped beside it; null for any other status
+     * @param started whether the status is a start's outcome, which stamps its moment
+     */
     private static void write(@NonNull HostLeases leases, int instanceId, int serverId,
-                              @NonNull String status, @NonNull Object instanceName) {
+                              @NonNull String status, @NonNull Object instanceName,
+                              @Nullable HohenheimActivityAction cause, @Nullable String detail, boolean started) {
         // AIDEV-NOTE: UPDATED_AT is assigned HERE because this is a set-based updateAll
         // that fires no write hooks -- without it a CAPTURING/RESTORING stamp leaves the
         // row's timestamp at whatever save() last wrote, and the boot settle
@@ -234,12 +252,15 @@ final class InstanceOperationGuard {
         // AIDEV-NOTE: an operation also CLEARS the observed kill (see
         // InstanceModel.WORKLOAD_KILLED_AT): a deploy, stop or restart replaces the container
         // that carried it, and a kill that survives the operation is re-observed next sweep.
-        int matched = fenced(leases, instanceId, serverId)
+        Instant now = Now.instant();
+        var statement = fenced(leases, instanceId, serverId)
             .assign(InstanceModel.STATUS, status)
-            .assign(InstanceModel.UPDATED_AT, Now.instant())
-            .assign(InstanceModel.WORKLOAD_KILLED_AT, null)
-            .updateAll();
-        requireMatched(matched, serverId, instanceName);
+            .assign(InstanceModel.UPDATED_AT, now)
+            .assign(InstanceModel.WORKLOAD_KILLED_AT, null);
+        if (started) {
+            statement = statement.assign(InstanceModel.STARTED_AT, now);
+        }
+        requireMatched(InstanceModel.withStoppage(statement, cause, detail).updateAll(), serverId, instanceName);
     }
 
     /**
@@ -273,7 +294,7 @@ final class InstanceOperationGuard {
         if (changed) {
             statement = statement.assign(InstanceModel.UPDATED_AT, Now.instant());
         }
-        requireMatched(statement.updateAll(), serverId, instanceName);
+        requireMatched(InstanceModel.withStoppage(statement, cause, null).updateAll(), serverId, instanceName);
         if (cause != null) {
             recordCause(instanceId, cause, null);
         }
@@ -325,12 +346,11 @@ final class InstanceOperationGuard {
         // the destination is the over-release that clamps its bucket to zero.
         long booked = reservedTargetServerId == null ? 0 : InstanceCapacity.windowReservedOf(
             Models.get(InstanceModel.class).findById(instanceId));
-        int matched = fenced(leases, instanceId, serverId)
+        var statement = fenced(leases, instanceId, serverId)
             .assign(InstanceModel.STATUS, status)
             .assign(InstanceModel.MIGRATE_TARGET_ID, (Object) null)
-            .assign(InstanceModel.MIGRATE_RESERVED_MB, (Object) null)
-            .updateAll();
-        requireMatched(matched, serverId, instanceName);
+            .assign(InstanceModel.MIGRATE_RESERVED_MB, (Object) null);
+        requireMatched(InstanceModel.withStoppage(statement, cause, null).updateAll(), serverId, instanceName);
         if (reservedTargetServerId != null) {
             InstanceCapacity.release(reservedTargetServerId, booked);
         }
@@ -402,11 +422,7 @@ final class InstanceOperationGuard {
     /** Records the cause on the record's activity, its detail the first line of what the cause declares. */
     private static void recordCause(int instanceId, @NonNull HohenheimActivityAction cause, @Nullable String detail) {
         // The row carries the detail its cause's fact declares, and nothing where it declares none.
-        String kept = switch (cause.errorCause()) {
-            case EXIT_CODE, MESSAGE -> detail;
-            case NONE, PLAIN, HOST_ISOLATION -> null;
-        };
-        String line = kept == null ? null : kept.strip().lines().findFirst().orElse(null);
+        String line = InstanceModel.stoppageDetailOf(cause, detail);
         ActivityLog.record(Models.get(InstanceModel.class), instanceId, cause,
             Texts.blankAsNull(line));
     }

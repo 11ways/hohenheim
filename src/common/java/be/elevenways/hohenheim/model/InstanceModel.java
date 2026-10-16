@@ -1,11 +1,14 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hawkeye.common.annotation.HawkeyeFunction;
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.ports.PortLedger;
+import be.elevenways.protoblast.common.util.BlastString;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.behaviour.SoftDeleteBehaviour;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -14,8 +17,10 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
+import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
+import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.zenit.common.ui.ColorHue;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -446,6 +451,46 @@ public class InstanceModel extends Model {
         DateTimeField.builder().name("workload_killed_at").build());
 
     /**
+     * What last stopped the workload with an error: the path of its cause verb ({@code workload_exited}), or
+     * {@code reconciled} for a record whose only fact is the reconciler's correction from before causes were recorded
+     * (2026-10-08, converted by M017); null while none was stamped.
+     *
+     * AIDEV-NOTE: health reads THIS row, never the activity log (folio-history-DESIGN-v3.2 G.7): the log may be
+     * pruned and stops carrying prose. Written only by InstanceOperationGuard's ERROR stamps, in the same statement
+     * as the status; a later non-error status leaves it, since only an ERROR status reads it. A plain string, never
+     * rendered: the verb vocabulary is its home, and {@link #stoppageCauseOf} reads an unknown key as none.
+     */
+    public static final StringField STOPPAGE_CAUSE = SCHEMA.addField(
+        StringField.builder().name("stoppage_cause").filterable(false).build());
+
+    /** The first line of the stoppage's own detail: an exit code or a failure's message, as its cause declares. */
+    public static final TextField STOPPAGE_DETAIL = SCHEMA.addField(
+        TextField.builder().name("stoppage_detail").filterable(false).build());
+
+    /** When {@link #STOPPAGE_CAUSE} was stamped. */
+    public static final DateTimeField STOPPAGE_AT = SCHEMA.addField(
+        DateTimeField.builder().name("stoppage_at").build());
+
+    /**
+     * Why no automatic restart followed the stoppage, a {@link HohenheimActivityAction.RestartWithheld} in lower case
+     * ({@link #keyOf}); never rendered, read through {@link #restartWithheldOf}.
+     *
+     * AIDEV-NOTE: stored rather than read off the cause verb because a converted correction ({@code reconciled})
+     * withholds by crash loop or by policy, which its verb cannot say.
+     */
+    public static final StringField RESTART_WITHHELD = SCHEMA.addField(
+        StringField.builder().name("restart_withheld").filterable(false).build());
+
+    /**
+     * When Hohenheim last started this workload: the deploy's outcome stamp sets it, a failed start clears it (the
+     * start it named is not what runs now); null while no start is known.
+     *
+     * AIDEV-NOTE: a restart the container runtime does on its own (Docker's restart policy) writes nothing here.
+     */
+    public static final DateTimeField STARTED_AT = SCHEMA.addField(
+        DateTimeField.builder().name("started_at").build());
+
+    /**
      * The RESOLVED image identity the workload actually runs (incus: the image
      * fingerprint behind {@code volatile.base_image}), recorded at deploy. A mutable
      * alias is not a deployment identity: recreating an absent workload uses this pin,
@@ -590,7 +635,79 @@ public class InstanceModel extends Model {
      */
     public static final List<Field<?, ?>> OPERATION_OWNED = List.of(CLAIM_FENCE, STATUS, STATUS_OBSERVED_AT,
         WORKLOAD_KILLED_AT, INSTALL_STATE, INSTALL_ERROR, RUNTIME_ROLE, IMAGE_FINGERPRINT, MIGRATE_TARGET_ID,
-        MIGRATE_RESERVED_MB);
+        MIGRATE_RESERVED_MB, STOPPAGE_CAUSE, STOPPAGE_DETAIL, STOPPAGE_AT, RESTART_WITHHELD, STARTED_AT);
+
+    /**
+     * @return the verb whose stoppage this record's ERROR status is, null when none is stored or the stored key names
+     *         no verb that records one
+     */
+    public static @Nullable HohenheimActivityAction stoppageCauseOf(@NonNull Row row) {
+        String stored = row.get(STOPPAGE_CAUSE);
+        for (HohenheimActivityAction action : HohenheimActivityAction.values()) {
+            if (recordsStoppage(action) && action.id().getPath().equals(stored)) {
+                return action;
+            }
+        }
+        return null;
+    }
+
+    /** @return why no restart followed the stored stoppage; NONE when none is stored or the key is unknown */
+    public static HohenheimActivityAction.@NonNull RestartWithheld restartWithheldOf(@NonNull Row row) {
+        String stored = row.get(RESTART_WITHHELD);
+        for (HohenheimActivityAction.RestartWithheld withheld : HohenheimActivityAction.RestartWithheld.values()) {
+            if (keyOf(withheld).equals(stored)) {
+                return withheld;
+            }
+        }
+        return HohenheimActivityAction.RestartWithheld.NONE;
+    }
+
+    /** @return the {@link #RESTART_WITHHELD} key of one reason */
+    public static @NonNull String keyOf(HohenheimActivityAction.@NonNull RestartWithheld withheld) {
+        return BlastString.lower(withheld.name());
+    }
+
+    /**
+     * Adds an ERROR cause's stoppage to a statement that stamps it: the cause, its kept detail, the moment and why no
+     * restart followed; a failed start also clears {@link #STARTED_AT}, which no longer names what runs.
+     *
+     * AIDEV-NOTE: InstanceOperationGuard's fenced ERROR stamps are its writers; a test seeds a stoppage through it too,
+     * so a reader is proven against the facts production writes.
+     *
+     * @param cause  a verb whose {@link HohenheimActivityAction#errorCause()} is a cause, or null for none
+     * @param detail the cause's detail (an exit code, a failure's message), kept as {@link #stoppageDetailOf} keeps it
+     * @return the statement, unchanged when there is no cause
+     */
+    public static @NonNull QueryBuilder<Row> withStoppage(@NonNull QueryBuilder<Row> statement,
+                                                         @Nullable HohenheimActivityAction cause,
+                                                         @Nullable String detail) {
+        if (cause == null) {
+            return statement;
+        }
+        QueryBuilder<Row> stamped = statement
+            .assign(STOPPAGE_CAUSE, cause.id().getPath())
+            .assign(STOPPAGE_DETAIL, stoppageDetailOf(cause, detail))
+            .assign(STOPPAGE_AT, Now.instant())
+            .assign(RESTART_WITHHELD, keyOf(cause.restartWithheld()));
+        return switch (cause.errorPhase()) {
+            case START -> stamped.assign(STARTED_AT, null);
+            case RUNNING -> stamped;
+        };
+    }
+
+    /** @return the first line of the detail a cause's fact declares, null where it declares none or it is blank */
+    public static @Nullable String stoppageDetailOf(@NonNull HohenheimActivityAction cause, @Nullable String detail) {
+        String kept = switch (cause.errorCause()) {
+            case EXIT_CODE, MESSAGE -> detail;
+            case NONE, PLAIN, HOST_ISOLATION -> null;
+        };
+        return Texts.blankAsNull(kept == null ? null : kept.strip().lines().findFirst().orElse(null));
+    }
+
+    /** @return whether a verb can be a {@link #STOPPAGE_CAUSE}: every ERROR cause, and the legacy correction */
+    private static boolean recordsStoppage(@NonNull HohenheimActivityAction action) {
+        return action.errorCause().isCause() || action == HohenheimActivityAction.RECONCILED;
+    }
 
     /**
      * Save a configuration change through the full save pipeline; an existing record's {@link #OPERATION_OWNED}

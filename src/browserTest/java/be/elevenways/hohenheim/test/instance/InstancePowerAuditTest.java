@@ -172,13 +172,14 @@ class InstancePowerAuditTest {
                     + " operations are answerable")
                 .hasSize(2);
 
-            // 3b. The ERROR names what caused it: the failed start is recorded as the cause, with the failure's
-            //     own message, and the dashboard item words it, never "exited unexpectedly". Its title says
-            //     the start failed, never that sentence twice; its detail is worded and the message is the
-            //     technical line under it.
-            List<Row> causes = activityFor(id, HohenheimActivityAction.WORKLOAD_START_FAILED.id().toString());
-            assertThat(causes).as("step 3b: the error's cause is recorded once").hasSize(1);
-            assertThat((String) causes.get(0).get(ActivityModel.DETAIL))
+            // 3b. The ERROR names what caused it: the failed start is stored on the record as the cause, with the
+            //     failure's own message, and the dashboard item words it from there, never "exited unexpectedly". Its
+            //     title says the start failed, never that sentence twice; its detail is worded and the message is
+            //     the technical line under it.
+            Row stopped = Models.get(InstanceModel.class).findById(id);
+            assertThat(InstanceModel.stoppageCauseOf(stopped)).as("step 3b: the error's cause is stored")
+                .isEqualTo(HohenheimActivityAction.WORKLOAD_START_FAILED);
+            assertThat((String) stopped.get(InstanceModel.STOPPAGE_DETAIL))
                 .as("step 3b: with the failure's own message").isNotBlank();
             List<AttentionItem> items = new ArrayList<>();
             InstanceAttention.crashedInstances(items);

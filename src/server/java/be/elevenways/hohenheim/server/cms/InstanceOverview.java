@@ -6,7 +6,6 @@ import be.elevenways.hohenheim.server.quota.ChargedDimension.Charge;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.HohenheimSlugs;
-import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.app.PutOnlineReach;
@@ -46,10 +45,8 @@ import be.elevenways.zenit.cms.common.render.table.HealthCellState;
 import be.elevenways.zenit.cms.common.resource.RecordHealth;
 import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.zenit.common.conduit.Conduit;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.KnownCapabilities;
 import be.elevenways.zenit.common.security.KnownCapability;
@@ -236,9 +233,10 @@ public final class InstanceOverview {
         // deliberately: reading it costs nothing, while dialling the daemon per render is
         // the thing the disk gauge already refuses to do.
         facts.add(statusConfirmation(runtime, locales, resolver));
-        // How long it has run ("Running for 2 hours"): since its last start.
+        // How long it has run ("Running for 2 hours"): since the last start of what runs, stamped on its record
+        // (InstanceModel.STARTED_AT); a failed start since clears it, so an old start never shows beside it.
         Instant started = InstanceModel.STATUS_RUNNING.equals(runtime.get(InstanceModel.STATUS))
-            ? lastStartOf(instance.get(InstanceModel.ID)) : null;
+            ? runtime.get(InstanceModel.STARTED_AT) : null;
         if (started != null) {
             facts.add(WidgetFact.instant(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("started")
                 .resolve(locales, resolver), started.toString()));
@@ -292,38 +290,6 @@ public final class InstanceOverview {
         Microcopy words = HohenheimMicrocopy.INSTANCE_OVERVIEW.of(limit != null ? key : key + "_open")
             .withArg("used", budget.usedBy(owner));
         return limit != null ? words.withArg("limit", limit) : words;
-    }
-
-    /**
-     * When this workload last started: the newest row of {@link HohenheimActivityAction#DEPLOYED}, which every start of
-     * a container records (InstanceService's deploy, an application's release), unless a start that failed came after
-     * it; null when the activity log holds none (switched off, pruned), and then the card says only that it runs.
-     *
-     * AIDEV-NOTE: a restart the container runtime does on its own (Docker's restart policy) writes no row, so this is
-     * the last start Hohenheim made; no stored column or daemon call says more, and this page dials no daemon. A newer
-     * failed start (a cause whose {@link HohenheimActivityAction#errorPhase()} is START) means the start this row
-     * records is not what runs now, so the card names no start rather than an old one beside "could not be started"
-     * (a shop once read "Started 2 hours ago" under a minute-old failed start).
-     */
-    static @Nullable Instant lastStartOf(int instanceId) {
-        if (Models.get(ActivityModel.MODEL_ID) == null) {
-            return null;
-        }
-        List<String> outcomes = new ArrayList<>();
-        for (HohenheimActivityAction action : HohenheimActivityAction.values()) {
-            if (action == HohenheimActivityAction.DEPLOYED || (action.errorCause().isCause()
-                    && action.errorPhase() == HohenheimActivityAction.ErrorPhase.START)) {
-                outcomes.add(action.id().toString());
-            }
-        }
-        Row row = Models.get(ActivityModel.class).find()
-            .where(ActivityModel.MODEL.eq(InstanceModel.MODEL_ID.toString()))
-            .where(ActivityModel.RECORD_ID.eq(String.valueOf(instanceId)))
-            .where(ActivityModel.ACTION.in(outcomes))
-            .orderBy(ActivityModel.ID, SortOrder.DESC)
-            .first();
-        return row == null || !HohenheimActivityAction.DEPLOYED.id().toString().equals(row.get(ActivityModel.ACTION))
-            ? null : row.get(ActivityModel.CREATED_AT);
     }
 
     /**

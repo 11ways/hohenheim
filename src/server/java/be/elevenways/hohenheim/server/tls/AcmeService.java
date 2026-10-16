@@ -845,11 +845,12 @@ public class AcmeService {
         certRow.set(CertificateModel.RENEWAL_ERROR, null);
         certRow.set(CertificateModel.ERROR_COUNT, 0);
         certRow.set(CertificateModel.NEXT_ATTEMPT_AT, null);
+        certRow.set(CertificateModel.RENEWAL_FAILED_AT, null);
     }
 
     /**
-     * Record a failed issuance/renewal: escalate the error count, schedule the retry and note the failure in the
-     * certificate's activity, the moment {@link RenewalFailure} reads.
+     * Record a failed issuance/renewal: escalate the error count, schedule the retry, stamp the moment
+     * {@link RenewalFailure} reads, and note the failure in the certificate's activity.
      */
     public static void recordRenewalFailure(Row certRow, String message) {
         Integer previous = certRow.get(CertificateModel.ERROR_COUNT);
@@ -858,7 +859,9 @@ public class AcmeService {
         certRow.set(CertificateModel.STATUS, CertificateModel.STATUS_ERROR);
         certRow.set(CertificateModel.RENEWAL_ERROR, message);
         certRow.set(CertificateModel.ERROR_COUNT, errorCount);
-        certRow.set(CertificateModel.NEXT_ATTEMPT_AT, computeNextAttempt(errorCount, Now.instant()));
+        Instant now = Now.instant();
+        certRow.set(CertificateModel.NEXT_ATTEMPT_AT, computeNextAttempt(errorCount, now));
+        certRow.set(CertificateModel.RENEWAL_FAILED_AT, now);
         Object id = certRow.get(CertificateModel.ID);
         if (id != null) {
             ActivityLog.record(Models.get(CertificateModel.class), id, HohenheimActivityAction.RENEWAL_FAILED, message);

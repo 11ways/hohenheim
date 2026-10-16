@@ -12,12 +12,10 @@ import be.elevenways.hohenheim.server.instance.InstanceStatusReconciler;
 import be.elevenways.hohenheim.server.instance.InstanceStatusReconciler.Verdict;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.test.Poll;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.SortOrder;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -118,18 +116,17 @@ class InstanceStatusReconcileTest {
                     + " must not render as the same pill")
                 .isEqualTo(InstanceModel.STATUS_ERROR);
 
-            // 4. The correction is ACCOUNTABLE: an operator can find out when their box
-            //    stopped and on whose evidence, without reading a log file.
-            List<Row> reconciled = activity(id,
-                HohenheimActivityAction.RECONCILED.id().toString());
-            assertThat(reconciled)
-                .as("step 4: the correction is recorded on the record's own activity")
-                .hasSize(1);
-            assertThat((String) reconciled.get(0).get(ActivityModel.DETAIL))
-                .as("step 4: naming both statuses, the crash shape and the evidence")
-                .contains(InstanceModel.STATUS_RUNNING)
-                .contains(InstanceModel.STATUS_ERROR)
-                .contains("died without an observed stop");
+            // 4. The correction is ACCOUNTABLE: the record itself says what stopped it, when, and why nothing
+            //    restarted it, so its health never depends on a history that may be pruned.
+            Row stopped = Models.get(InstanceModel.class).findById(id);
+            assertThat(InstanceModel.stoppageCauseOf(stopped))
+                .as("step 4: the unwatched death is stored as the error's cause")
+                .isEqualTo(HohenheimActivityAction.WORKLOAD_EXITED);
+            assertThat((Instant) stopped.get(InstanceModel.STOPPAGE_AT))
+                .as("step 4: with its moment").isNotNull();
+            assertThat(InstanceModel.restartWithheldOf(stopped))
+                .as("step 4: and its crash policy as why nothing restarted it")
+                .isEqualTo(HohenheimActivityAction.RestartWithheld.BY_POLICY);
 
             // 4b. And the dashboard SEES it: the crashedInstances attention item reads
             //     exactly the status this correction stamped, and links to this record.
@@ -140,10 +137,8 @@ class InstanceStatusReconcileTest {
                 .anySatisfy(item -> assertThat(item.target().toUrl())
                     .contains("/instances/" + id + "/"));
 
-            // 4c. And it says what happened: the crash is recorded as the error's cause, and the item's detail is
-            //     that cause's sentence, never a guess from the status, followed by why nothing restarted it.
-            assertThat(activity(id, HohenheimActivityAction.WORKLOAD_EXITED.id().toString()))
-                .as("step 4c: the unwatched death is recorded as the error's cause").hasSize(1);
+            // 4c. And it says what happened: the item's detail is that cause's sentence, never a guess from the
+            //     status, followed by why nothing restarted it.
             String exited = HohenheimActivityAction.WORKLOAD_EXITED.happened().withArg("subject", "reconcile-crash")
                 .resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver());
             assertThat(attention)
@@ -383,7 +378,7 @@ class InstanceStatusReconcileTest {
                 "step 2: and restarted again");
 
             // 3. Third death inside the window trips flap protection: the record settles
-            //    to ERROR, restarts are suspended, and the loop is named in the activity.
+            //    to ERROR, restarts are suspended, and the loop is stored as what stopped it.
             FakeNativeDaemons.daemonOf(hostId)
                 .get(FakeNativeDaemons.handleOf(id)).running = false;
             assertThat(reconciler.reconcile(id).verdict())
@@ -391,11 +386,13 @@ class InstanceStatusReconcileTest {
                 .isEqualTo(Verdict.CORRECTED);
             awaitStatus(id, InstanceModel.STATUS_ERROR,
                 "step 3: but flap protection suspends the restarts");
-            List<Row> reconciled = activity(id,
-                HohenheimActivityAction.RECONCILED.id().toString());
-            assertThat((String) reconciled.get(0).get(ActivityModel.DETAIL))
+            Row looped = Models.get(InstanceModel.class).findById(id);
+            assertThat(InstanceModel.stoppageCauseOf(looped))
+                .as("step 3: the crash loop is the stored cause")
+                .isEqualTo(HohenheimActivityAction.WORKLOAD_CRASH_LOOPED);
+            assertThat(InstanceModel.restartWithheldOf(looped))
                 .as("step 3: and the suspension is named where the operator looks")
-                .contains("crash loop");
+                .isEqualTo(HohenheimActivityAction.RestartWithheld.BY_CRASH_LOOP);
         });
     }
 
@@ -446,10 +443,10 @@ class InstanceStatusReconcileTest {
                 .as("step 2: the daemon runs the workload again")
                 .isTrue();
 
-            // 3. The restart is no crash: no exit cause is recorded, so nothing reads it as an error.
-            assertThat(activity(id, HohenheimActivityAction.WORKLOAD_EXITED.id().toString()))
-                .as("step 3: a restarted workload records no exit cause")
-                .isEmpty();
+            // 3. The restart is no crash: no stoppage is stored, so nothing reads it as an error.
+            assertThat(InstanceModel.stoppageCauseOf(Models.get(InstanceModel.class).findById(id)))
+                .as("step 3: a restarted workload stores no exit cause")
+                .isNull();
         });
     }
 
@@ -471,15 +468,6 @@ class InstanceStatusReconcileTest {
     private static Instant killedAtOf(int instanceId) {
         return Models.get(InstanceModel.class).findById(instanceId)
             .get(InstanceModel.WORKLOAD_KILLED_AT);
-    }
-
-    private static List<Row> activity(int instanceId, String action) {
-        return Models.get(ActivityModel.class).find()
-            .where(ActivityModel.MODEL.eq(InstanceModel.MODEL_ID.toString()))
-            .where(ActivityModel.RECORD_ID.eq(String.valueOf(instanceId)))
-            .where(ActivityModel.ACTION.eq(action))
-            .orderBy(ActivityModel.ID, SortOrder.DESC)
-            .all();
     }
 
     private static void crashPolicyNone(int instanceId) {

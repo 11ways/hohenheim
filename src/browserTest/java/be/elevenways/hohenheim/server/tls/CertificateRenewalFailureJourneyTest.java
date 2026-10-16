@@ -4,7 +4,6 @@ import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TlsCertificateTest;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
@@ -15,6 +14,7 @@ import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
 import java.security.KeyPair;
+import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -102,9 +102,10 @@ class CertificateRenewalFailureJourneyTest extends HohenheimTestBase {
             .as("step 1: a working certificate offers no renewal").doesNotContain("Renew now");
 
         // 2. The renewal sweep's own path fails it: this installation serves no such name. The failure is stored with
-        //    its moment, the certificate's activity entry.
+        //    its moment on the certificate itself.
         ServerMain.getProxyServer().getAcmeService().renewCertificate(cert, certificates);
-        assertThat(failures()).as("step 2: the failure is noted with its moment").isEqualTo(1);
+        Instant failedAt = certificates.findById(this.certId).get(CertificateModel.RENEWAL_FAILED_AT);
+        assertThat(failedAt).as("step 2: the failure is stored with its moment").isNotNull();
         served.loadFromDatabase();
         assertThat(served.holds(this.certId))
             .as("step 2: the certificate it still holds keeps being served until it expires").isTrue();
@@ -127,21 +128,14 @@ class CertificateRenewalFailureJourneyTest extends HohenheimTestBase {
         assertThat(page.locator("[data-cms-record-health-fixes]").textContent())
             .as("step 4: the band offers the renewal").contains("Renew now");
 
-        // 5. Renew now, confirmed, runs the renewal again: it is refused, and noted as a second failure.
+        // 5. Renew now, confirmed, runs the renewal again: it is refused, and stored as a second failure.
         HttpResponse<String> renewed = adminPostForm(
             "/admin/certificates/invoke/hohenheim.renew_certificate?ids=" + this.certId, confirmed(""));
         assertThat(renewed.statusCode()).as("step 5: answered, its refusal flashed back to the page")
             .isIn(302, 303, 422);
-        assertThat(failures()).as("step 5: the second failure is noted").isEqualTo(2);
         Row after = certificates.findById(this.certId);
         assertThat((Integer) after.get(CertificateModel.ERROR_COUNT)).as("step 5: counted").isEqualTo(2);
-    }
-
-    private long failures() {
-        return Models.get(ActivityModel.class).find()
-            .where(ActivityModel.MODEL.eq(CertificateModel.MODEL_ID.toString()))
-            .where(ActivityModel.RECORD_ID.eq(String.valueOf(this.certId)))
-            .where(ActivityModel.ACTION.eq("hohenheim:renewal_failed"))
-            .all().size();
+        assertThat((Instant) after.get(CertificateModel.RENEWAL_FAILED_AT)).as("step 5: at its own moment")
+            .isAfterOrEqualTo(failedAt);
     }
 }

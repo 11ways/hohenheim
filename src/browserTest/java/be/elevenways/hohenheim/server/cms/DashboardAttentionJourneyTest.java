@@ -633,10 +633,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             //     names the database as its root and Needs attention draws the database alone.
             int leftoverId = leftover.get(InstanceModel.ID);
             OwnedInstances.inScopeUnchecked(DatabaseInstances.SOURCE, DatabaseModel.MODEL_ID, movedId, () ->
-                Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(leftoverId))
-                    .assign(InstanceModel.STATUS, InstanceModel.STATUS_ERROR).bypassBehaviours().updateAll());
-            ActivityLog.record(Models.get(InstanceModel.class), leftoverId,
-                HohenheimActivityAction.WORKLOAD_ISOLATION_REFUSED, null);
+                stopped(leftoverId, HohenheimActivityAction.WORKLOAD_ISOLATION_REFUSED, null));
             List<AttentionItem> crashed = new ArrayList<>();
             InstanceAttention.crashedInstances(crashed);
             AttentionItem leftoverStop = titled(crashed, leftover.get(InstanceModel.NAME) + " could not be started");
@@ -695,10 +692,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             Row app = instance(PREFIX + "unisolated", local);
             int appId = app.get(InstanceModel.ID);
             cleanup.add(() -> HardDeletes.row(Models.get(InstanceModel.class), app));
-            Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(appId))
-                .assign(InstanceModel.STATUS, InstanceModel.STATUS_ERROR).bypassBehaviours().updateAll();
-            ActivityLog.record(Models.get(InstanceModel.class), appId,
-                HohenheimActivityAction.WORKLOAD_ISOLATION_REFUSED, null);
+            stopped(appId, HohenheimActivityAction.WORKLOAD_ISOLATION_REFUSED, null);
             List<AttentionItem> crashed = new ArrayList<>();
             InstanceAttention.crashedInstances(crashed);
             AttentionItem refused = titled(crashed, PREFIX + "unisolated could not be started");
@@ -919,10 +913,8 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             Row refusedSite = setupInstanceSite(PREFIX + "refused-site", PREFIX + "refused-site", refusedId);
             cleanup.add(() -> HardDeletes.row(Models.get(SiteModel.class), fresh(refusedSite)));
             addDomain(refusedSite, "refused.conflict.test", "exact", null, false);
-            ActivityLog.record(Models.get(InstanceModel.class), refusedId,
-                HohenheimActivityAction.WORKLOAD_START_FAILED,
+            stopped(refusedId, HohenheimActivityAction.WORKLOAD_START_FAILED,
                 "Conflict. The container name /conflict is already in use");
-            errored(refusedId);
             String dashboard = adminGet("/admin/dashboard").body();
             assertThat(appRow(dashboard, PREFIX + "refused"))
                 .as("step 1: the row's badge reads the app's verdict, not its address's certificate")
@@ -954,9 +946,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             Row restart = instance(PREFIX + "restart", local);
             cleanup.add(() -> HardDeletes.row(Models.get(InstanceModel.class), restart));
             int restartId = restart.get(InstanceModel.ID);
-            ActivityLog.record(Models.get(InstanceModel.class), restartId,
-                HohenheimActivityAction.WORKLOAD_RESTART_REFUSED, "Instance quota reached");
-            errored(restartId);
+            stopped(restartId, HohenheimActivityAction.WORKLOAD_RESTART_REFUSED, "Instance quota reached");
             AttentionItem restartItem = rootOf(AttentionCollector.collect(), AttentionSubject.instance(restartId));
             assertThat(restartItem).as("step 3: the refused restart is a root").isNotNull();
             assertThat(List.of(say(restartItem.title()), say(restartItem.detail()), say(restartItem.note())))
@@ -1036,9 +1026,8 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             Row held = instance(PREFIX + "held", local);
             cleanup.add(() -> HardDeletes.row(Models.get(InstanceModel.class), held));
             int heldId = held.get(InstanceModel.ID);
-            ActivityLog.record(Models.get(InstanceModel.class), heldId, HohenheimActivityAction.WORKLOAD_START_FAILED,
+            stopped(heldId, HohenheimActivityAction.WORKLOAD_START_FAILED,
                 "Conflict. The container name /hohenheim-held is already in use");
-            errored(heldId);
             Row second = instance(PREFIX + "held-2", local);
             cleanup.add(() -> HardDeletes.row(Models.get(InstanceModel.class), second));
             String refusal = ServerModel.nameOf(local) + " is not admitted to run apps yet. Check and admit it first.";
@@ -1113,9 +1102,12 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
         return dashboard.substring(start, dashboard.indexOf("</pl-list-item>", start));
     }
 
-    private static void errored(int instanceId) {
-        Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(instanceId))
-            .assign(InstanceModel.STATUS, InstanceModel.STATUS_ERROR).bypassBehaviours().updateAll();
+    /** Stamps ERROR with its cause's stoppage as the operation guard's ERROR stamps do: on the row, then in activity. */
+    private static void stopped(int instanceId, HohenheimActivityAction cause, String detail) {
+        InstanceModel.withStoppage(Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(instanceId))
+            .assign(InstanceModel.STATUS, InstanceModel.STATUS_ERROR), cause, detail).bypassBehaviours().updateAll();
+        ActivityLog.record(Models.get(InstanceModel.class), instanceId, cause,
+            InstanceModel.stoppageDetailOf(cause, detail));
     }
 
     private static AttentionItem titled(List<AttentionItem> items, String title) {

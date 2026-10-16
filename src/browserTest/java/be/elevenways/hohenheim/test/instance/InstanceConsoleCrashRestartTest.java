@@ -152,13 +152,11 @@ class InstanceConsoleCrashRestartTest {
                 Poll.until("step 3: the refused restart leaves the record in error", WAIT,
                     () -> InstanceModel.STATUS_ERROR.equals(
                         Models.get(InstanceModel.class).findById(instanceId).get(InstanceModel.STATUS)));
-                List<Row> causes = Models.get(ActivityModel.class).find()
-                    .where(ActivityModel.MODEL.eq(InstanceModel.MODEL_ID.toString()))
-                    .where(ActivityModel.RECORD_ID.eq(String.valueOf(instanceId)))
-                    .where(ActivityModel.ACTION.eq(HohenheimActivityAction.WORKLOAD_RESTART_REFUSED.id().toString()))
-                    .all();
-                assertThat(causes).as("step 3: the refused restart is recorded once as the cause").hasSize(1);
-                assertThat((String) causes.get(0).get(ActivityModel.DETAIL))
+                Row stopped = Models.get(InstanceModel.class).findById(instanceId);
+                assertThat(InstanceModel.stoppageCauseOf(stopped))
+                    .as("step 3: the refused restart is stored as the cause")
+                    .isEqualTo(HohenheimActivityAction.WORKLOAD_RESTART_REFUSED);
+                assertThat((String) stopped.get(InstanceModel.STOPPAGE_DETAIL))
                     .as("step 3: with the refusal's own words").isNotBlank();
             } finally {
                 servers.find().where(ServerModel.ID.eq(hostId)).assign(ServerModel.ADMISSION, admission)

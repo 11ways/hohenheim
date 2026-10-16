@@ -355,9 +355,11 @@ public final class InstanceService {
             // The fence gate comes BEFORE any ledger write: a stale controller that
             // reached the ledger first would delete the winner's fresh port claim.
             // With a readiness matcher the stamp is STARTING; the matcher's own
-            // fenced write flips it to RUNNING when the line is observed.
-            stampGuarded(resolved, watch != null
-                ? watch.initialStatus() : InstanceModel.STATUS_RUNNING);
+            // fenced write flips it to RUNNING when the line is observed. The stamp also
+            // records the start's moment on the record.
+            InstanceOperationGuard.stampStarted(this.leases, instanceId, resolved.serverId(),
+                watch != null ? watch.initialStatus() : InstanceModel.STATUS_RUNNING,
+                String.valueOf((Object) resolved.row().get(InstanceModel.NAME)));
             // Every record-after publication's observed port is recorded in ONE call: the
             // ledger supersedes whatever observed claims the owner held that are not in
             // the set, so a call per publication kept only the last one.

@@ -414,12 +414,9 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
             assertThat(cpu.max()).as("step 2: of its two cores").isEqualTo(200L);
             assertThat(cpu.maxLabel()).as("step 2: said as cores").isEqualTo("2 cores");
 
-            // 3. The overview draws Memory, Root disk and CPU, and Details say when it started
-            //    (its last start's activity row), the database it uses with that database's state, and its backups.
-            ActivityLog.record(Models.get(InstanceModel.class), instance.get(InstanceModel.ID),
-                HohenheimActivityAction.DEPLOYED, "app-journey-details");
-            assertThat(InstanceOverview.lastStartOf(instance.get(InstanceModel.ID)))
-                .as("step 3: its last start is the newest start row").isNotNull();
+            // 3. The overview draws Memory, Root disk and CPU, and Details say when it started (the start its record
+            //    stamped), the database it uses with that database's state, and its backups.
+            started(instance.get(InstanceModel.ID));
             DatabaseModel databases = Models.get(DatabaseModel.class);
             Row database = databases.createEmptyRow();
             Map.of(DatabaseModel.NAME.getName(), (Object) "app-journey-shop", DatabaseModel.ENGINE.getName(), "mysql",
@@ -485,24 +482,24 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
             // 1. A running workload Hohenheim started names that start under Started.
             HostFixtures.makeLocalPlaceable(16L * 1024);
             status(id, InstanceModel.STATUS_RUNNING);
-            ActivityLog.record(Models.get(InstanceModel.class), id, HohenheimActivityAction.DEPLOYED, null);
-            assertThat(InstanceOverview.lastStartOf(id)).as("step 1: its last start is named").isNotNull();
+            started(id);
+            assertThat(adminGet("/admin/instances/" + id + "/page/overview").body())
+                .as("step 1: its last start is named").contains(STARTED_FACT);
 
             // 2. Its next start fails: the stored status says error, the verdict reads a start that failed with why,
             //    and Started names no older start beside it.
-            ActivityLog.record(Models.get(InstanceModel.class), id, HohenheimActivityAction.WORKLOAD_START_FAILED,
-                "image app-journey:missing was not found");
-            status(id, InstanceModel.STATUS_ERROR);
+            stopped(id, HohenheimActivityAction.WORKLOAD_START_FAILED, "image app-journey:missing was not found");
             String failed = adminGet("/admin/instances/" + id + "/page/overview").body();
             assertThat(failed).as("step 2: the band reads a failed start in words, the failure's text after them")
                 .contains("Could not start")
                 .containsSubsequence("It never got to run.", "Technically: image app-journey:missing was not found")
                 .doesNotContain("What refused it")
                 .doesNotContain("Stopped after an error");
-            assertThat(InstanceOverview.lastStartOf(id)).as("step 2: no start is named after a failed one").isNull();
             // A record left claiming running beside that failed start still names no start.
             status(id, InstanceModel.STATUS_RUNNING);
-            assertThat(InstanceOverview.lastStartOf(id)).as("step 2: nor for a stale running claim").isNull();
+            assertThat(adminGet("/admin/instances/" + id + "/page/overview").body())
+                .as("step 2: no start is named after a failed one, even for a stale running claim")
+                .doesNotContain(STARTED_FACT);
 
             // 3. Hohenheim correcting a stored status is bookkeeping: its rows stay out of Recent (the full log lists
             //    them through the internal filter), so Recent reads what happened, the failed start.
@@ -533,7 +530,7 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
             link.set(InstanceDatabaseModel.ENV_PREFIX, "DB");
             links.save(link);
             cleanup.add(() -> HardDeletes.row(links, link));
-            ActivityLog.record(Models.get(InstanceModel.class), id, HohenheimActivityAction.DEPLOYED, null);
+            started(id);
             Row site = ProxyTestSupport.setupInstanceSite("app-journey-verdict-site", "app-journey-verdict-site", id);
             cleanup.add(() -> HardDeletes.row(Models.get(SiteModel.class), site));
             ProxyTestSupport.addDomain(site, "verdict.app-journey.test", "exact", null, false);
@@ -548,8 +545,7 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
             assertThat(down).as("step 4: the band says visitors get an error page because of the database")
                 .contains("Visitors get an error page")
                 .contains("Its database app-journey-verdict-db is not running.");
-            assertThat(InstanceOverview.lastStartOf(id)).as("step 4: it started, so Started names that start")
-                .isNotNull();
+            assertThat(down).as("step 4: it started, so Started names that start").contains(STARTED_FACT);
         } finally {
             for (int i = cleanup.size() - 1; i >= 0; i--) {
                 cleanup.get(i).run();
@@ -560,7 +556,7 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
     /**
      * devbox on Daystrom: it died with its host's reboot while its crash policy was None, and its overview read only
      * "No cause was recorded". An errored workload's overview now says when it stopped, why nothing restarted it and
-     * what to do, from the facts its record and activity hold.
+     * what to do, from the facts its record holds.
      */
     @Test
     void anErroredWorkloadSaysWhenItStoppedWhyNothingRestartedItAndWhatToDo() throws Exception {
@@ -574,40 +570,35 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
             HostFixtures.makeLocalPlaceable(16L * 1024);
 
             // 1. devbox as it stands: the reconciler corrected it to error before causes were recorded, with no crash
-            //    loop in its note, so its crash policy did not restart it then; a data step set Restart since.
+            //    loop in its note, so its crash policy did not restart it then; a data step set Restart since. M017
+            //    stored that correction on the record.
             policy(id, InstanceModel.CRASH_RESTART);
-            ActivityLog.record(Models.get(InstanceModel.class), id, HohenheimActivityAction.RECONCILED,
-                "running -> error (died without an observed stop; the daemon reports the workload absent)");
-            status(id, InstanceModel.STATUS_ERROR);
+            converted(id, HohenheimActivityAction.RestartWithheld.BY_POLICY);
             assertThat(adminGet(page).body()).as("step 1: when it stopped, why nothing restarted it, what to do")
                 .contains("app-journey-errored stopped without a stop anyone asked for and was not restarted on "
                     + today + ". Its crash policy did not restart it then; it does now. Restart it to bring it back.")
                 .doesNotContain("No cause was recorded for this error");
 
             // 2. The same correction with crash-loop protection in its note: that is why nothing restarted it.
-            ActivityLog.record(Models.get(InstanceModel.class), id, HohenheimActivityAction.RECONCILED,
-                "running -> error (died without an observed stop; the daemon reports the workload absent;"
-                    + " crash loop, automatic restarts suspended)");
+            converted(id, HohenheimActivityAction.RestartWithheld.BY_CRASH_LOOP);
             assertThat(adminGet(page).body()).as("step 2: crash-loop protection held it back")
                 .contains("Crash-loop protection held back further restarts: find what makes it exit, then deploy"
                     + " or restart it.");
 
-            // 3. A recorded exit (the cause every stop now records) while its policy is still None: the policy is why,
+            // 3. A stamped exit (the cause every stop now stores) while its policy is still None: the policy is why,
             //    and setting it to restart is named beside starting it.
             policy(id, InstanceModel.CRASH_NONE);
-            ActivityLog.record(Models.get(InstanceModel.class), id, HohenheimActivityAction.WORKLOAD_EXITED, "137");
-            assertThat(adminGet(page).body()).as("step 3: the recorded exit, its code and the policy")
+            stopped(id, HohenheimActivityAction.WORKLOAD_EXITED, "137");
+            assertThat(adminGet(page).body()).as("step 3: the stamped exit, its code and the policy")
                 .contains("app-journey-errored exited unexpectedly and was not restarted (exit code 137) on " + today
                     + ". Its crash policy does not restart it: restart it to bring it back, or set its crash policy"
                     + " to Restart on crash.");
 
-            // 4. A recorded crash loop says the protection held it back, whatever its policy says now.
+            // 4. A stamped crash loop says the protection held it back, whatever its policy says now.
             policy(id, InstanceModel.CRASH_RESTART);
-            ActivityLog.record(Models.get(InstanceModel.class), id, HohenheimActivityAction.WORKLOAD_CRASH_LOOPED,
-                null);
-            assertThat(adminGet(page).body()).as("step 4: a recorded crash loop")
+            stopped(id, HohenheimActivityAction.WORKLOAD_CRASH_LOOPED, null);
+            assertThat(adminGet(page).body()).as("step 4: a stamped crash loop")
                 .contains("on " + today + ". Crash-loop protection held back further restarts");
-
             // 5. No automatic restart came of reading it: the record is still in error.
             assertThat(String.valueOf((Object) Models.get(InstanceModel.class).findById(id).get(InstanceModel.STATUS)))
                 .as("step 5: nothing restarted it").isEqualTo(InstanceModel.STATUS_ERROR);
@@ -856,6 +847,34 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
     private static void status(int instanceId, String status) {
         Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(instanceId))
             .assign(InstanceModel.STATUS, status).bypassBehaviours().updateAll();
+    }
+
+    /** The Details card's Started fact, drawn only while a start is known. */
+    private static final String STARTED_FACT = "widget-facts-term\">Started</dt>";
+
+    /** Stamps a start on the record now, as a deploy's outcome stamp does. */
+    private static void started(int instanceId) {
+        Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(instanceId))
+            .assign(InstanceModel.STARTED_AT, Now.instant()).bypassBehaviours().updateAll();
+    }
+
+    /** Stamps ERROR with its cause's stoppage as the operation guard's ERROR stamps do: on the row, then in activity. */
+    private static void stopped(int instanceId, HohenheimActivityAction cause, String detail) {
+        InstanceModel.withStoppage(Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(instanceId))
+            .assign(InstanceModel.STATUS, InstanceModel.STATUS_ERROR), cause, detail).bypassBehaviours().updateAll();
+        ActivityLog.record(Models.get(InstanceModel.class), instanceId, cause,
+            InstanceModel.stoppageDetailOf(cause, detail));
+    }
+
+    /** Stores a reconciler correction to ERROR from before causes, as M017 converts one. */
+    private static void converted(int instanceId, HohenheimActivityAction.RestartWithheld withheld) {
+        Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(instanceId))
+            .assign(InstanceModel.STATUS, InstanceModel.STATUS_ERROR)
+            .assign(InstanceModel.STOPPAGE_CAUSE, HohenheimActivityAction.RECONCILED.id().getPath())
+            .assign(InstanceModel.STOPPAGE_DETAIL, null)
+            .assign(InstanceModel.STOPPAGE_AT, Now.instant())
+            .assign(InstanceModel.RESTART_WITHHELD, InstanceModel.keyOf(withheld))
+            .bypassBehaviours().updateAll();
     }
 
     /** Whether the site's overview states this health tone; for polling, so a failed request is a failure. */
