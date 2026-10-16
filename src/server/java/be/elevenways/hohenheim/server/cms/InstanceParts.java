@@ -45,7 +45,6 @@ import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.page.CmsRecordLinks;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
-import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.ChildList;
@@ -185,7 +184,7 @@ public final class InstanceParts {
                 .computed(Objects.requireNonNull(table.column(MANAGED_BY_COLUMN)),
                     (row, request) -> managedByCellOf(row))
                 .build())
-            .form(form(createForm()).createDefaults(InstanceParts::createDefaults)
+            .form(form(createForm()).createDefaults((access, panel) -> InstanceParts.createDefaults(access))
                 .bindings(List.of(ResourceFieldBinding.of(InstanceModel.KIND.getName(), kindAccess()),
                     ResourceFieldBinding.of(InstanceModel.GAME_ADDRESS.getName(), gameAddressAccess())))
                 .build())
@@ -391,9 +390,9 @@ public final class InstanceParts {
      * The create form's values: its defaults, plus the kind "Put something online" asked for ({@code ?kind=}) when it
      * names a kind that page offers.
      */
-    private static @NonNull Map<String, Object> createDefaults(@NonNull PanelRequest request) {
+    private static @NonNull Map<String, Object> createDefaults(@NonNull AccessContext access) {
         Map<String, Object> values = new LinkedHashMap<>(createForm().defaultValues());
-        String kind = CmsSupport.prefill(request.conduit(), HohenheimParams.PUT_ONLINE_KIND);
+        String kind = CmsSupport.prefill(access.conduit(), HohenheimParams.PUT_ONLINE_KIND);
         Identifier kindId = kind == null ? null : Identifier.tryParse(kind);
         if (kindId != null && InstanceKindRegistry.REGISTRY.get(kindId) instanceof InstanceKindInfo info
                 && info.putOnlineGroup() != null) {

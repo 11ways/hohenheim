@@ -56,9 +56,9 @@ public final class VolumeParts {
             .scope(RowScope.within(() -> InstanceVolumeModel.INSTANCE_ID.isNotNull()))
             .parent(ResourceParent.of(HohenheimSlugs.INSTANCES, InstanceVolumeModel.INSTANCE_ID)
                 .tab(HohenheimSlugs.Tab.VOLUMES))
-            .form(ResourceForm.<Row>of(VolumeOperations.FORM).createDefaults(request -> {
+            .form(ResourceForm.<Row>of(VolumeOperations.FORM).createDefaults((access, panel) -> {
                 Map<String, Object> values = new LinkedHashMap<>(VolumeOperations.FORM.defaultValues());
-                Integer owner = CmsSupport.prefill(request.conduit(), HohenheimParams.INSTANCE_ID_PREFILL);
+                Integer owner = CmsSupport.prefill(access.conduit(), HohenheimParams.INSTANCE_ID_PREFILL);
                 if (owner != null) values.put(InstanceVolumeModel.INSTANCE_ID.getName(), owner);
                 return Map.copyOf(values);
             }).build())

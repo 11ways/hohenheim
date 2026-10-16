@@ -384,7 +384,7 @@ public final class DatabaseParts {
                 .landingTab(RecordOverview.SLUG)
                 .tabLabel(HohenheimMicrocopy.APP_OVERVIEW.of("configuration"))
                 .bindings(adminBindings())
-                .createDefaults(DatabaseParts::createDefaults)
+                .createDefaults((access, panel) -> DatabaseParts.createDefaults(access))
                 .notice((database, access) -> resizeNotice(database))
                 .build())
             .writes(ResourceMutations.rows()
@@ -511,7 +511,7 @@ public final class DatabaseParts {
      * tmpfs database are dedicated by definition, and leaving the select on shared for one of those is refused BY NAME
      * ({@code database_placement_unsupported} / {@code database_ephemeral_shared}) rather than silently rewritten.
      */
-    private static @NonNull Map<String, Object> createDefaults(@NonNull PanelRequest request) {
+    private static @NonNull Map<String, Object> createDefaults(@NonNull AccessContext access) {
         Map<String, Object> values = new LinkedHashMap<>(ADMIN_FORM.defaultValues());
         values.put(DatabaseModel.SERVER_ID.getName(), ServerModel.localServerId());
         values.put(DatabaseModel.PLACEMENT.getName(), DatabaseModel.PLACEMENT_SHARED);
@@ -871,7 +871,7 @@ public final class DatabaseParts {
                 .build())
             .form(ResourceForm.<Row>of(ENGINE_FORM)
                 .bindings(engineBindings())
-                .createDefaults(DatabaseParts::engineDefaults)
+                .createDefaults((access, panel) -> DatabaseParts.engineDefaults(access))
                 // A new ceiling recreates the engine container, and every database on it loses its connections until
                 // it is back.
                 .notice((engine, access) -> engine.get(DatabaseEngineModel.ID) == null ? null
@@ -898,7 +898,7 @@ public final class DatabaseParts {
     }
 
     /** The host pick defaults to the local daemon, and the superuser to the shipped word. */
-    private static @NonNull Map<String, Object> engineDefaults(@NonNull PanelRequest request) {
+    private static @NonNull Map<String, Object> engineDefaults(@NonNull AccessContext access) {
         Map<String, Object> values = new LinkedHashMap<>(ENGINE_FORM.defaultValues());
         values.put(DatabaseEngineModel.SERVER_ID.getName(), ServerModel.localServerId());
         values.put(DatabaseEngineModel.ROOT_USER.getName(), "root");

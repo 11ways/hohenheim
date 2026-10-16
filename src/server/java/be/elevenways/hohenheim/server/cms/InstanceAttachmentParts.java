@@ -28,7 +28,6 @@ import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
@@ -152,9 +151,9 @@ public final class InstanceAttachmentParts {
         return form.build();
     }
 
-    /** The device type a create link prefilled, or null when it named none. */
-    private static @Nullable DeviceType prefilledType(@NonNull PanelRequest request) {
-        return DeviceType.parse(CmsSupport.prefill(request.conduit(), HohenheimParams.DEVICE_TYPE_PREFILL));
+    /** The device type a create link prefilled, or null when it named none or there is no request. */
+    private static @Nullable DeviceType prefilledType(@Nullable Conduit conduit) {
+        return DeviceType.parse(CmsSupport.prefill(conduit, HohenheimParams.DEVICE_TYPE_PREFILL));
     }
 
     private static PanelResource.@NonNull Builder<Row> devices(@NonNull Identifier id, @NonNull FormSpec form) {
@@ -178,8 +177,8 @@ public final class InstanceAttachmentParts {
             .parent(ResourceParent.of(HohenheimSlugs.INSTANCES, InstanceDeviceModel.INSTANCE_ID)
                 .tab(HohenheimSlugs.Tab.DEVICES).fixed())
             .reads(ResourceReads.rows())
-            .form(ResourceForm.<Row>of(form).createDefaults(request -> {
-                DeviceType type = prefilledType(request);
+            .form(ResourceForm.<Row>of(form).createDefaults((access, panel) -> {
+                DeviceType type = prefilledType(access.conduit());
                 Map<String, Object> values = new LinkedHashMap<>(form.defaultValues());
                 if (type != null) {
                     values.put(InstanceDeviceModel.TYPE.getName(), type.token());
@@ -188,7 +187,7 @@ public final class InstanceAttachmentParts {
             })
                 // The page a Devices tab link opens is named by the kind it attaches.
                 .createTitle(request -> {
-                    DeviceType type = prefilledType(request);
+                    DeviceType type = prefilledType(request.conduit());
                     return type != null ? type.attachTitle() : null;
                 })
                 // An attached device is seen where it lives: its instance's Devices tab, beside its siblings.
@@ -378,9 +377,9 @@ public final class InstanceAttachmentParts {
             .tab(HohenheimSlugs.Tab.DATABASES))
             .reads(ResourceReads.rows().title(InstanceAttachmentParts::linkTitle))
             .form(ResourceForm.<Row>of(form)
-                .createDefaults(request -> {
+                .createDefaults((access, panel) -> {
                     Map<String, Object> values = new LinkedHashMap<>();
-                    Integer instanceId = CmsSupport.prefill(request.conduit(), HohenheimParams.INSTANCE_ID_PREFILL);
+                    Integer instanceId = CmsSupport.prefill(access.conduit(), HohenheimParams.INSTANCE_ID_PREFILL);
                     if (instanceId != null) {
                         values.put(InstanceDatabaseModel.INSTANCE_ID.getName(), instanceId);
                     }

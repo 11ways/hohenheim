@@ -18,7 +18,6 @@ import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
-import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import be.elevenways.zenit.cms.common.resource.ResourceForm;
@@ -43,6 +42,8 @@ import be.elevenways.zenit.common.orm.field.DateTimeField;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.UuidField;
+import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Secret;
 import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.zenit.common.ui.Icon;
@@ -219,7 +220,7 @@ public final class SpamserviceClientKeysResource {
                 .bindings(List.of(
                     ResourceFieldBinding.of("last_used", FieldAccess.alwaysReadonly()),
                     ResourceFieldBinding.of("created_at", FieldAccess.alwaysReadonly())))
-                .createDefaults(request -> createDefaults(request))
+                .createDefaults((access, panel) -> SpamserviceClientKeysResource.createDefaults(access))
                 .build())
             .writes(ResourceMutations.<ManagedClientKey>store()
                 // From the Keys tab the client is the tab's parent; the standalone create keeps the form's own pick.
@@ -248,8 +249,9 @@ public final class SpamserviceClientKeysResource {
     }
 
     /** The client the create link names (the tab's {@code parent}), preselected like the scoped create always did. */
-    private static @NonNull Map<String, Object> createDefaults(@NonNull PanelRequest request) {
-        return createDefaults(request.conduit().getParameter(CmsEndpoints.PARENT_PARAM));
+    private static @NonNull Map<String, Object> createDefaults(@NonNull AccessContext access) {
+        Conduit conduit = access.conduit();
+        return createDefaults(conduit != null ? conduit.getParameter(CmsEndpoints.PARENT_PARAM) : null);
     }
 
     /** @param parent the create link's parent key; a malformed one is no prefill, never an exception */

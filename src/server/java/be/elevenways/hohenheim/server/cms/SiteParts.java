@@ -156,7 +156,7 @@ public final class SiteParts {
                         : FieldAccess.Decision.EDITABLE))))
                 // The create stages both without a form entry; a revision restore must still own them.
                 .restorableOutsideForm(Set.of(SiteModel.SLUG.getName(), SiteModel.STATUS.getName()))
-                .createDefaults(SiteParts::createDefaults)
+                .createDefaults((access, panel) -> SiteParts.createDefaults(access))
                 .createdRecordUrl(SiteParts::createdRecordUrl)
                 .build())
             .writes(ResourceMutations.rows()
@@ -309,9 +309,9 @@ public final class SiteParts {
             : new RecordLead(AppOverview.siteLead(site, access.conduit()), null);
     }
 
-    private static @NonNull Map<String, Object> createDefaults(@NonNull PanelRequest request) {
+    private static @NonNull Map<String, Object> createDefaults(@NonNull AccessContext access) {
         Map<String, Object> values = new LinkedHashMap<>(SiteWrites.ADMIN_FORM.defaultValues());
-        Conduit conduit = request.conduit();
+        Conduit conduit = access.conduit();
         String kind = CmsSupport.prefill(conduit, HohenheimParams.UPSTREAM_KIND_PREFILL);
         if (kind != null && UpstreamKinds.REGISTRY.get(Identifier.tryParse(kind)) != null) {
             values.put(SiteModel.UPSTREAM_KIND.getName(), kind);

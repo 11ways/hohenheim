@@ -129,7 +129,7 @@ public final class InstanceScheduleParts {
                 .bindings(List.of(ResourceFieldBinding.of(RecordScheduleModel.RECORD_ID.getName(),
                     FieldAccess.customRecordAware((ctx, record) -> record == null
                         ? FieldAccess.Decision.EDITABLE : FieldAccess.Decision.READONLY))))
-                .createDefaults(request -> createDefaults(form, request.conduit()))
+                .createDefaults((access, panel) -> createDefaults(form, access.conduit()))
                 // AIDEV-NOTE: deliberately NO inline cell: ENABLED makes the row DUE for a sweeper polling every
                 // minute, so one click would fire a real chain against a live instance within 60s, and every write
                 // re-stamps run_as. That wants a form and a deliberate save.
@@ -152,7 +152,7 @@ public final class InstanceScheduleParts {
     }
 
     /** The instance's Schedules tab links here with ?record_id= so the target is preset, as a STRING. */
-    private static @NonNull Map<String, Object> createDefaults(@NonNull FormSpec form, @NonNull Conduit conduit) {
+    private static @NonNull Map<String, Object> createDefaults(@NonNull FormSpec form, @Nullable Conduit conduit) {
         Map<String, Object> values = new LinkedHashMap<>(form.defaultValues());
         Integer instanceId = CmsSupport.prefill(conduit, HohenheimParams.RECORD_ID_PREFILL);
         if (instanceId != null) {

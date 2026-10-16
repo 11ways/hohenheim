@@ -146,7 +146,7 @@ public final class StackParts {
                 .build())
             .form(ResourceForm.<Row>of(form)
                 // The server pick defaults to the local daemon (ensuring its row exists for the picker).
-                .createDefaults(request -> {
+                .createDefaults((access, panel) -> {
                     Map<String, Object> values = new LinkedHashMap<>(form.defaultValues());
                     values.put(StackModel.SERVER_ID.getName(), ServerModel.localServerId());
                     return Map.copyOf(values);
@@ -241,8 +241,8 @@ public final class StackParts {
                 .search(StackServiceModel.NAME, StackServiceModel.IMAGE).build())
             // The Services tab links here with ?stack_id= so the pick is preselected.
             .form(ResourceForm.<Row>of(form)
-                .createDefaults(request -> prefilled(form, StackServiceModel.STACK_ID.getName(),
-                    CmsSupport.prefill(request.conduit(), HohenheimParams.STACK_ID_PREFILL)))
+                .createDefaults((access, panel) -> prefilled(form, StackServiceModel.STACK_ID.getName(),
+                    CmsSupport.prefill(access.conduit(), HohenheimParams.STACK_ID_PREFILL)))
                 .build())
             .writes(ResourceMutations.rows().create().update()
                 .delete(StackOperations.DELETE_SERVICE)
@@ -289,8 +289,8 @@ public final class StackParts {
                 .search(StackFileModel.CONTAINER_PATH).build())
             // The Services tab links here with ?stack_service_id= so the pick is preselected.
             .form(ResourceForm.<Row>of(form)
-                .createDefaults(request -> prefilled(form, StackFileModel.STACK_SERVICE_ID.getName(),
-                    CmsSupport.prefill(request.conduit(), HohenheimParams.STACK_SERVICE_ID_PREFILL)))
+                .createDefaults((access, panel) -> prefilled(form, StackFileModel.STACK_SERVICE_ID.getName(),
+                    CmsSupport.prefill(access.conduit(), HohenheimParams.STACK_SERVICE_ID_PREFILL)))
                 .build())
             .writes(ResourceMutations.rows().create().update().delete().beforeSave(StackParts::validFile).build())
             .tabs(ResourceTabs.<Row>none().withHistory().withContributions())

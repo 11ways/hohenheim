@@ -411,6 +411,12 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
             assertThat(createDefaults(operator(), HohenheimSlugs.ADMIN, foreign))
                 .as("step 3: the operator's create under that site reads it")
                 .containsEntry(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName(), true);
+
+            // 4. A create without a request (a task) has no create link naming a parent site, so even handed the
+            //    panel it starts exactly as under none.
+            assertThat(DomainParts.manage().form().createDefaults(holder().detach(),
+                    PanelRegistry.getBySlug(HohenheimSlugs.MANAGE)))
+                .as("step 4: no conduit, no parent site to read").isEqualTo(none);
         } finally {
             RecordGrants.revoke(GrantSubjectType.USER, holderId, SiteModel.MODEL_ID, own, HohenheimCapabilities.MANAGE);
             HardDeletes.byId(Models.get(SiteModel.class), own);
@@ -418,19 +424,20 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
         }
     }
 
-    /** The defaults a domain create form opens with on {@code panel}, under {@code parent} when given. */
+    /**
+     * The defaults a domain create form opens with on {@code panel}, under {@code parent} when given; the panel is
+     * the hook's argument only, never a conduit parameter.
+     */
     private static Map<String, Object> createDefaults(AccessContext ctx, String panel, Integer parent) {
         EndpointConduit conduit = new EndpointConduit()
             .withAttribute(ConduitAttributes.PRINCIPAL, ctx.principal())
-            .setParameter(CmsEndpoints.PANEL_PARAM, panel)
             .setParameter(CmsEndpoints.RESOURCE_PARAM, HohenheimSlugs.DOMAINS);
         if (parent != null) {
             conduit.setQueryParam(CmsEndpoints.PARENT_PARAM.getName(), String.valueOf(parent));
         }
-        AccessContext access = AccessContext.of(conduit);
-        PanelRequest request = new PanelRequest(PanelRegistry.getBySlug(panel), conduit, access, null);
         PanelResource<Row> resource = HohenheimSlugs.ADMIN.equals(panel) ? DomainParts.admin() : DomainParts.manage();
-        return resource.form().createDefaults(request);
+        return resource.form().createDefaults(AccessContext.of(conduit),
+            Objects.requireNonNull(PanelRegistry.getBySlug(panel)));
     }
 
     private static int passthroughSite(String name) {

@@ -72,9 +72,9 @@ public final class InstanceFileParts {
             .reads(ResourceReads.rows())
             .form(ResourceForm.<Row>of(form)
                 // The Provisioning tab links here with ?instance_id= so the pick arrives preselected.
-                .createDefaults(request -> {
+                .createDefaults((access, panel) -> {
                     Map<String, Object> values = new LinkedHashMap<>(form.defaultValues());
-                    Integer instanceId = CmsSupport.prefill(request.conduit(), HohenheimParams.INSTANCE_ID_PREFILL);
+                    Integer instanceId = CmsSupport.prefill(access.conduit(), HohenheimParams.INSTANCE_ID_PREFILL);
                     if (instanceId != null) {
                         values.put(InstanceFileModel.INSTANCE_ID.getName(), instanceId);
                     }

@@ -26,6 +26,7 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.render.CmsTemplateIds;
 import be.elevenways.zenit.cms.common.render.table.RecordLink;
@@ -440,7 +441,7 @@ public final class DomainParts {
      */
     private static @NonNull ResourceForm<Row> form(@NonNull FormSpec spec) {
         return ResourceForm.<Row>of(spec)
-            .createDefaults(request -> createDefaults(spec, request))
+            .createDefaults((access, panel) -> createDefaults(spec, access, panel))
             .quickCreate(QUICK_CREATE)
             .quickCreatePresets(access -> CmsSupport.parentPreset(access, SiteDomainModel.SITE_ID.getName(),
                 HohenheimSlugs.SITES))
@@ -475,15 +476,18 @@ public final class DomainParts {
      * with HTTPS forcing and ACME off: that site terminates no TLS here. The parent field itself is the framework's
      * child create preset.
      *
-     * AIDEV-NOTE: the site is read through the panel's own site entry, the caller's scope: a site the caller cannot
-     * reach opens the create exactly as no site does, so the form is no probe of another tenant's configuration.
+     * AIDEV-NOTE: the site is read through the create's panel's own site entry, the caller's scope: a site the caller
+     * cannot reach opens the create exactly as no site does, so the form is no probe of another tenant's
+     * configuration. The site is the create link's parent, so a caller without a request names none.
      */
-    private static @NonNull Map<String, Object> createDefaults(@NonNull FormSpec spec, @NonNull PanelRequest request) {
+    private static @NonNull Map<String, Object> createDefaults(@NonNull FormSpec spec, @NonNull AccessContext access,
+                                                               @NonNull Panel panel) {
         Map<String, Object> values = new LinkedHashMap<>(spec.defaultValues());
-        Integer siteId = CmsSupport.scopedParentId(request.conduit(), CmsEndpoints.PARENT_PARAM.getName(),
-            HohenheimSlugs.SITES);
-        if (siteId != null && request.panel().entryBySlug(HohenheimSlugs.SITES) instanceof PanelResource<?> sites) {
-            Object site = PartsReads.loadRow(request, sites, siteId, request.access());
+        Conduit conduit = access.conduit();
+        Integer siteId = conduit == null ? null
+            : CmsSupport.scopedParentId(conduit, CmsEndpoints.PARENT_PARAM.getName(), HohenheimSlugs.SITES);
+        if (siteId != null && panel.entryBySlug(HohenheimSlugs.SITES) instanceof PanelResource<?> sites) {
+            Object site = PartsReads.loadRow(panel, sites, siteId, access);
             if (site instanceof Row row && TlsPassthroughUpstreamKind.ID.toString()
                     .equals(row.get(SiteModel.UPSTREAM_KIND))) {
                 values.put(SiteDomainModel.FORCE_SSL.getName(), false);

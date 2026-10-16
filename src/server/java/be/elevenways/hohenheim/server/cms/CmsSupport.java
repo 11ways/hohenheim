@@ -254,10 +254,11 @@ public final class CmsSupport {
      * it through the definition's own resolver. The name and the parse therefore have ONE home
      * (HohenheimParams), shared with the links that compose the same parameter.
      *
-     * @return the resolved value, or null when the parameter is absent, blank or malformed
+     * @param conduit the request, null for a caller without one (a create default asked by a task)
+     * @return the resolved value, or null when there is no request or the parameter is absent, blank or malformed
      */
-    public static <T> @Nullable T prefill(@NonNull Conduit conduit, @NonNull ParameterDefinition<T> param) {
-        String raw = conduit.getQueryParam(param.getName());
+    public static <T> @Nullable T prefill(@Nullable Conduit conduit, @NonNull ParameterDefinition<T> param) {
+        String raw = conduit != null ? conduit.getQueryParam(param.getName()) : null;
         if (raw == null || raw.isBlank()) {
             return null;
         }

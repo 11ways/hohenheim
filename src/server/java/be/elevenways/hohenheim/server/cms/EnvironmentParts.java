@@ -9,7 +9,7 @@ import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
-import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
@@ -131,7 +131,7 @@ public final class EnvironmentParts {
             // AIDEV-NOTE: the name is the one inline cell. PROJECT_ID is a RelationPick (outside the compact cell
             // subset), and re-homing an environment in use is refused by the ProjectGuards write funnel.
             .form(ResourceForm.<Row>of(form)
-                .createDefaults(request -> prefill(request, HohenheimParams.PROJECT_ID_PREFILL,
+                .createDefaults((access, panel) -> prefill(access, HohenheimParams.PROJECT_ID_PREFILL,
                     EnvironmentModel.PROJECT_ID.getName()))
                 .quickCreate(ENVIRONMENT_QUICK_CREATE)
                 .quickCreatePresets(access -> CmsSupport.parentPreset(access, EnvironmentModel.PROJECT_ID.getName(),
@@ -190,7 +190,7 @@ public final class EnvironmentParts {
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).facets().ruleFilters()
                 .search(InstanceVariableModel.KEY).build())
             .form(ResourceForm.<Row>of(form)
-                .createDefaults(request -> prefill(request, HohenheimParams.ENVIRONMENT_ID_PREFILL,
+                .createDefaults((access, panel) -> prefill(access, HohenheimParams.ENVIRONMENT_ID_PREFILL,
                     InstanceVariableModel.ENVIRONMENT_ID.getName()))
                 .quickCreate(VARIABLE_QUICK_CREATE)
                 .quickCreatePresets(access -> CmsSupport.parentPreset(access,
@@ -234,10 +234,10 @@ public final class EnvironmentParts {
     }
 
     /** A related-record link's {@code ?<parent>_id=} prefill. */
-    private static @NonNull Map<String, Object> prefill(@NonNull PanelRequest request,
+    private static @NonNull Map<String, Object> prefill(@NonNull AccessContext access,
                                                         @NonNull ParameterDefinition<Integer> param,
                                                         @NonNull String field) {
-        Integer id = CmsSupport.prefill(request.conduit(), param);
+        Integer id = CmsSupport.prefill(access.conduit(), param);
         return id != null ? Map.of(field, id) : Map.of();
     }
 }

@@ -146,7 +146,7 @@ public final class TemplateChildParts {
             HohenheimMicrocopy.TEMPLATE_DATABASE, 19,
             Icon.of("database"),
                 InstanceTemplateDatabaseModel.TEMPLATE_ID)
-            .form(ResourceForm.<Row>of(spec).createDefaults(request -> {
+            .form(ResourceForm.<Row>of(spec).createDefaults((access, panel) -> {
                 Map<String, Object> values = new LinkedHashMap<>(spec.defaultValues());
                 values.put(InstanceTemplateDatabaseModel.ENV_PREFIX.getName(), InstanceDatabaseModel.DEFAULT_PREFIX);
                 return Map.copyOf(values);

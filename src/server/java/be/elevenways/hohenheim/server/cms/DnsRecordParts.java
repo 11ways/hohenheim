@@ -74,7 +74,7 @@ public final class DnsRecordParts {
             .form(ResourceForm.<Row>of(parts.formSpec()).quickCreate(QUICK_CREATE)
                 .quickCreatePresets(access -> CmsSupport.parentPreset(access, DnsRecordModel.ZONE_ID.getName(),
                     HohenheimSlugs.DNS_ZONES))
-                .createDefaults(request -> parts.createValues(request.conduit()))
+                .createDefaults((access, panel) -> parts.createValues(access))
                 .inlineEditable(parts.inlineEditableFields().toArray(Field<?, ?>[]::new)).build())
             // Its own list is kept out of the sidebar (entry) and stands under the zones through this parent; reached
             // from a zone's Records tab.
@@ -185,9 +185,9 @@ public final class DnsRecordParts {
      * REPLACES the base implementation, which is what serves them, so the create form
      * used to open with Enabled unticked and create a disabled record.
      */
-    public @NonNull Map<String, Object> createValues(@NonNull Conduit conduit) {
+    public @NonNull Map<String, Object> createValues(@NonNull AccessContext access) {
         Map<String, Object> values = new LinkedHashMap<>(this.formSpec().defaultValues());
-        Integer zoneId = prefilledZoneId(conduit);
+        Integer zoneId = prefilledZoneId(access.conduit());
         if (zoneId != null) {
             values.put(DnsRecordModel.ZONE_ID.getName(), zoneId);
         }
@@ -265,8 +265,8 @@ public final class DnsRecordParts {
             .withArg("ttl", String.valueOf(DnsZoneModel.defaultTtlOf(zone)));
     }
 
-    /** @return the zone a request is scoped to through its {@code ?zone_id=} prefill, or null */
-    private static @Nullable Integer prefilledZoneId(@NonNull Conduit conduit) {
+    /** @return the zone a request is scoped to through its {@code ?zone_id=} prefill, or null (also without one) */
+    private static @Nullable Integer prefilledZoneId(@Nullable Conduit conduit) {
         // Malformed prefill: no preselection, never a broken form.
         return CmsSupport.prefill(conduit, HohenheimParams.ZONE_ID_PREFILL);
     }
