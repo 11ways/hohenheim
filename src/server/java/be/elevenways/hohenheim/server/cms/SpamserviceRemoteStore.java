@@ -14,6 +14,7 @@ import be.elevenways.zenit.cms.common.schema.TableView;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.data.PageWindow;
 import be.elevenways.zenit.common.data.RecordPage;
+import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.security.AccessContext;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -217,18 +218,15 @@ final class SpamserviceRemoteStore {
     }
 
     /**
-     * A remote DTO's REQUIRED text field, read off a partial write with the stored value as the fallback.
+     * A remote DTO's REQUIRED text field, read off the record's merged values.
      *
-     * AIDEV-NOTE: never a bare {@code String.valueOf(values.getOrDefault(...))}. getOrDefault answers null for a key
-     * that is PRESENT and null -- which is exactly what a blank submitted entry coerces to -- and String.valueOf(null)
-     * is the four characters "null", which this family then PUTs to the live service. It renamed an API key once and
-     * a spam filter client once; the guard belongs here, because it was fixed one file at a time twice.
-     *
-     * @param stored the value the loaded record carries, or null on a create
+     * AIDEV-NOTE: never a bare {@code String.valueOf(values.get(...))}. A blank submitted entry coerces to a present
+     * null, and String.valueOf(null) is the four characters "null", which this family then PUTs to the live service.
+     * It renamed an API key once and a spam filter client once; the guard belongs here, because it was fixed one file
+     * at a time twice.
      */
-    static @NonNull String requiredText(@NonNull Map<String, Object> values, @NonNull String name,
-                                        @Nullable String stored) {
-        Object value = values.getOrDefault(name, stored);
+    static @NonNull String requiredText(OperationInput.@NonNull Values values, @NonNull String name) {
+        Object value = values.get(name);
         return value == null ? "" : String.valueOf(value);
     }
 

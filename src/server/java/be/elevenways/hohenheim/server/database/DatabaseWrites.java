@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.cms.DeleteImpact;
 import be.elevenways.hohenheim.server.cms.ProvisionedRecords;
 import be.elevenways.hohenheim.server.cms.WithheldFailure;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
+import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -99,11 +100,15 @@ public final class DatabaseWrites {
     /**
      * THE resize: the two resource ceilings and nothing else, through the lane shared with the engines
      * ({@link ProvisionedRecords#resize}). The engine row's reservation runs INLINE, so a host without room refuses on
-     * the form ({@code host_capacity_reached}). A ceiling the write does not carry keeps its stored value.
+     * the form ({@code host_capacity_reached}). The ceilings are read off the merged record, so a ceiling the write
+     * does not carry keeps its stored value.
      *
+     * @param values the entries this write carries
+     * @param merged the stored record's values with the submission over them
      * @throws Violations {@code database_shared_limits} for a ceiling submitted on a shared record
      */
-    public static void resize(@NonNull Row existing, @NonNull Map<String, Object> values) {
+    public static void resize(@NonNull Row existing, @NonNull Map<String, Object> values,
+                              OperationInput.@NonNull Values merged) {
         if (DatabaseModel.isShared(existing)) {
             // The fields are HIDDEN on a shared record, so a submitted value did not come from the rendered form;
             // refuse it by name instead of booking a ceiling against a container this record does not own.
@@ -113,7 +118,7 @@ public final class DatabaseWrites {
             return;
         }
         DatabaseService service = new DatabaseService();
-        ProvisionedRecords.resize(Models.get(DatabaseModel.class), existing, values, DATABASE_CEILINGS,
+        ProvisionedRecords.resize(Models.get(DatabaseModel.class), existing, merged, DATABASE_CEILINGS,
             DatabaseInstances::reserveEngineRow, service::provisionInBackground);
     }
 
@@ -214,9 +219,9 @@ public final class DatabaseWrites {
         return engineId;
     }
 
-    /** An engine's resize: the two ceilings through the lane shared with the dedicated databases. */
-    public static void resizeEngine(@NonNull Row existing, @NonNull Map<String, Object> values) {
-        ProvisionedRecords.resize(Models.get(DatabaseEngineModel.class), existing, values, ENGINE_CEILINGS,
+    /** An engine's resize: the two ceilings, off the merged record, through the lane shared with the databases. */
+    public static void resizeEngine(@NonNull Row existing, OperationInput.@NonNull Values merged) {
+        ProvisionedRecords.resize(Models.get(DatabaseEngineModel.class), existing, merged, ENGINE_CEILINGS,
             DatabaseEngines::reserveRow, DatabaseEngines::redeployInBackground);
     }
 

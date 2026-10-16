@@ -27,7 +27,6 @@ import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.EnumField;
-import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.routing.ParameterDefinition;
 import be.elevenways.zenit.common.routing.RouteLocales;
 import be.elevenways.zenit.common.routing.RouteScope;
@@ -37,7 +36,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import static be.elevenways.hohenheim.RawValues.trimmed;
 import static be.elevenways.hohenheim.RawValues.parsedInt;
 
 /**
@@ -88,44 +86,11 @@ public final class CmsSupport {
         return new LinkedHashMap<>(coerced);
     }
 
-    /**
-     * The value a write carries for one column, or the STORED one when it carries none.
-     *
-     * AIDEV-NOTE: THE partial-write read. The inline cell lane hands persist/updateRow a map
-     * holding EXACTLY ONE entry (and an IMMUTABLE one), so absence means LEAVE ALONE
-     * everywhere in this pipeline. A validator or normalizer that reads a sibling straight
-     * off the coerced map either refuses a field the operator never touched or -- worse --
-     * writes a blank over stored data. containsKey, never a null check: a submitted null is
-     * a deliberate clear and must not silently resurrect the stored value.
-     *
-     * @param existing the stored row, or null on a create (where absence really is blank)
-     */
-    public static @Nullable Object valueOf(@NonNull Map<String, Object> coerced,
-                                           @Nullable Row existing, @NonNull Field<?, ?> field) {
-        if (coerced.containsKey(field.getName())) {
-            return coerced.get(field.getName());
-        }
-        return existing != null ? existing.get(field) : null;
-    }
-
-    // AIDEV-NOTE: there is deliberately NO valueOf(coerced, String, Object) overload for
-    // record types that are not a Row: that shape is exactly Map.getOrDefault (a present
-    // null value reads as null in both, so the deliberate-clear rule above holds), and
-    // getOrDefault is the framework's own documented sibling-read spelling. The Row form
-    // stays because a Row keyed by Field cannot express it.
-
-    /** {@link #valueOf} as a trimmed string; absent, null and blank all read as {@code ""}. */
-    public static @NonNull String textOf(@NonNull Map<String, Object> coerced,
-                                         @Nullable Row existing, @NonNull Field<?, ?> field) {
-        Object value = valueOf(coerced, existing, field);
-        return trimmed(value);
-    }
-
-    /** {@link #valueOf} as an Integer; anything that is not one reads as null. */
-    public static @Nullable Integer intOf(@NonNull Map<String, Object> coerced,
-                                          @Nullable Row existing, @NonNull Field<?, ?> field) {
-        return valueOf(coerced, existing, field) instanceof Integer value ? value : null;
-    }
+    // AIDEV-NOTE: there is deliberately NO stored-plus-submitted helper here. The inline cell
+    // lane hands a writer a map holding EXACTLY ONE entry, so absence means LEAVE ALONE; an
+    // UPDATE writer reads the whole record as coerced.merged() / call.merged() (zenit-cms
+    // PartialWrite: the stored form values with the submission over them), and keeps the
+    // submitted map for what was sent (containsKey). A hand merge here once duplicated it.
 
     /**
      * THE resolution of a microcopy outside a template, in the CURRENT request's locale

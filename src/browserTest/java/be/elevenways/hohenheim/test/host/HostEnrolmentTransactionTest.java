@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.cms.ServerParts;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceVerb;
 import be.elevenways.zenit.cms.common.resource.RowWriteCall;
+import be.elevenways.zenit.cms.server.panel.PartsWrites;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
@@ -105,8 +106,8 @@ class HostEnrolmentTransactionTest {
             try (HostEnrolment.Replacement ignored = HostEnrolment.replaceCeremonyForTesting(accepting)) {
                 Map<String, Object> retry = new LinkedHashMap<>();
                 retry.put("incus_trust_token", "fresh-token");
-                resource.writes().rowWriter(ResourceVerb.UPDATE).write(
-                    new RowWriteCall(ResourceVerb.UPDATE, servers.findById(id), Map.copyOf(retry), operator));
+                // The update lane's own entry point: its PartialWrite carries the stored host.
+                PartsWrites.updateRow(resource, servers.findById(id), Map.copyOf(retry), operator);
             }
             Row retried = servers.findById(id);
             assertThat(accepting.steps)

@@ -26,6 +26,7 @@ import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationGate;
+import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.operation.SubjectArity;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -119,13 +120,13 @@ public final class AuthProviderParts {
                 .create(call -> {
                     SiteAuthProviderModel providers = Models.get(SiteAuthProviderModel.class);
                     Row provider = providers.createEmptyRow();
-                    normalized(call.values(), null).forEach(provider::set);
+                    normalized(call.values(), call.merged(), null).forEach(provider::set);
                     providers.save(provider);
                     return provider.get(SiteAuthProviderModel.ID);
                 })
                 .update(call -> {
                     Row provider = call.record();
-                    normalized(call.values(), provider).forEach(provider::set);
+                    normalized(call.values(), call.merged(), provider).forEach(provider::set);
                     Models.get(SiteAuthProviderModel.class).save(provider);
                     return null;
                 })
@@ -141,15 +142,18 @@ public final class AuthProviderParts {
      * The write's values with the config stored the way its provider type keeps it.
      *
      * AIDEV-NOTE: an unknown provider type MUST fail loudly: storing the submitted config as-is would bypass the
-     * provider's canonical storage normalization. A write that carries no config (an inline rename) keeps the stored
-     * one untouched.
+     * provider's canonical storage normalization. The type is read off the merged record; the config is normalized
+     * only when this write carries it, so a write without one (an inline rename) keeps the stored one untouched.
      *
+     * @param values the submitted entries, the ones written
+     * @param merged the record's stored values with the submission over them
      * @param existing the stored provider, null on a create
      * @throws Violations on the provider type when no handler knows it
      */
-    static @NonNull Map<String, Object> normalized(@NonNull Map<String, Object> values, @Nullable Row existing) {
+    static @NonNull Map<String, Object> normalized(@NonNull Map<String, Object> values,
+                                                   OperationInput.@NonNull Values merged, @Nullable Row existing) {
         Map<String, Object> written = new LinkedHashMap<>(values);
-        Object typeValue = CmsSupport.valueOf(written, existing, SiteAuthProviderModel.PROVIDER_TYPE);
+        Object typeValue = merged.get(SiteAuthProviderModel.PROVIDER_TYPE.getName());
         String providerType = typeValue != null ? String.valueOf(typeValue) : null;
         SiteAuthProviderTypeHandler handler = SiteAuthProviders.getHandler(providerType);
         if (handler == null) {

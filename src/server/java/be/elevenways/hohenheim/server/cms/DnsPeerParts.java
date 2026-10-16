@@ -31,6 +31,7 @@ import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSpec;
+import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -67,7 +68,10 @@ public final class DnsPeerParts {
             .form(ResourceForm.<Row>of(parts.formSpec())
                 .inlineEditable(parts.inlineEditableFields().toArray(Field<?, ?>[]::new)).build())
             .writes(ResourceMutations.rows().create(call -> parts.persistRow(call.values(), call.access()))
-                .update(call -> { parts.updateRow(call.record(), call.values(), call.access()); return null; })
+                .update(call -> {
+                    parts.updateRow(call.record(), call.values(), call.merged(), call.access());
+                    return null;
+                })
                 .delete(DnsOperations.DELETE_PEER).build())
             .deleteConfirmation(DeleteConfirmation.<Row>of(parts.deleteConfirmation())
                 .forRow((row, request) -> parts.deleteConfirmationFor(row)))
@@ -240,15 +244,16 @@ public final class DnsPeerParts {
 
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
                                       @NonNull AccessContext accessContext) {
-        Map<String, Object> write = stripCredentialsOfNameserver(coerced, null);
-        validate(write, null);
+        Map<String, Object> write = stripCredentialsOfNameserver(coerced, new OperationInput.Values(coerced));
+        validate(new OperationInput.Values(write));
         return DnsRowWrites.create(this.model(), this.formSpec(), write, accessContext);
     }
 
+    /** @param merged the stored peer's values with the submission over them, which the checks read */
     public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
-                          @NonNull AccessContext accessContext) {
-        Map<String, Object> write = stripCredentialsOfNameserver(coerced, existing);
-        validate(write, existing);
+                          OperationInput.@NonNull Values merged, @NonNull AccessContext accessContext) {
+        Map<String, Object> write = stripCredentialsOfNameserver(coerced, merged);
+        validate(merged);
         DnsRowWrites.update(this.model(), this.formSpec(), existing, write, accessContext);
     }
 
@@ -256,27 +261,26 @@ public final class DnsPeerParts {
      * Blanks the edit-forwarding credentials whenever the type this write DECLARES is a plain
      * nameserver, so they can neither be smuggled in nor survive a demotion.
      *
-     * AIDEV-NOTE: keyed on the SUBMITTED type, which is what lets the opposite direction work
-     * -- promoting a peer to Hohenheim carries base_url/api_key in the same submit and keeps
+     * AIDEV-NOTE: keyed on the merged type, the SUBMITTED one whenever the write carries it,
+     * which is what lets the opposite direction work -- promoting a peer to Hohenheim
+     * carries base_url/api_key in the same submit and keeps
      * them. Only a write that names peer_type or one of the two columns is touched, because a
      * partial write (the inline cell lane hands exactly one entry) means LEAVE ALONE. The
      * secret arm is safe here: FormSecrets.restore has already put the stored api_key back
      * before this runs, so writing "" clears it rather than reading as "unchanged".
      *
+     * @param merged the write's values over the stored peer's, which name its type
      * @return the map to write: a blanked copy when the rule fires, the input itself otherwise
      */
     private static @NonNull Map<String, Object> stripCredentialsOfNameserver(
-            @NonNull Map<String, Object> coerced, @Nullable Row existing) {
+            @NonNull Map<String, Object> coerced, OperationInput.@NonNull Values merged) {
         boolean declaresType = coerced.containsKey(DnsPeerModel.PEER_TYPE.getName());
         boolean carriesCredentials = coerced.containsKey(DnsPeerModel.BASE_URL.getName())
             || coerced.containsKey(DnsPeerModel.API_KEY.getName());
         if (!declaresType && !carriesCredentials) {
             return coerced;
         }
-        String type = declaresType
-            ? String.valueOf(coerced.get(DnsPeerModel.PEER_TYPE.getName()))
-            : (existing != null ? DnsPeerModel.typeOf(existing) : DnsPeerModel.TYPE_NAMESERVER);
-        if (DnsPeerModel.TYPE_HOHENHEIM.equals(type)) {
+        if (DnsPeerModel.TYPE_HOHENHEIM.equals(merged.get(DnsPeerModel.PEER_TYPE.getName()))) {
             return coerced;
         }
         Map<String, Object> write = CmsSupport.mutable(coerced);
@@ -289,55 +293,43 @@ public final class DnsPeerParts {
      * The declared type decides which channel must be complete: a Hohenheim peer without
      * admin credentials forwards nothing, and a plain nameserver without a transfer host
      * is a peer this server can never reach.
+     *
+     * AIDEV-NOTE: every check reads the MERGED peer, so a field the write does not carry is
+     * judged at its stored value. A blank secret needs no rule of its own: the form sends a
+     * secret back empty to mean "unchanged" and FormSecrets restores it before any writer.
      */
-    private static void validate(@NonNull Map<String, Object> coerced, @Nullable Row existing) {
-        String name = value(coerced, existing, DnsPeerModel.NAME);
+    private static void validate(OperationInput.@NonNull Values merged) {
+        String name = value(merged, DnsPeerModel.NAME);
         if (name.isEmpty()) {
             throw Violations.ofField("name", name, HohenheimMicrocopy.VIOLATIONS.of("name_required"));
         }
-        String algorithm = value(coerced, existing, DnsPeerModel.TSIG_ALGORITHM);
+        String algorithm = value(merged, DnsPeerModel.TSIG_ALGORITHM);
         if (!algorithm.isEmpty() && !DnsTsig.isSupportedAlgorithm(algorithm)) {
             throw Violations.ofField("tsig_algorithm", algorithm,
                 HohenheimMicrocopy.VIOLATIONS.of("dns_tsig_algorithm"));
         }
-        Object portValue = coerced.get("transfer_port");
+        Object portValue = merged.get(DnsPeerModel.TRANSFER_PORT.getName());
         if (portValue instanceof Integer port && (port < 1 || port > 65535)) {
             throw Violations.ofField("transfer_port", port, HohenheimMicrocopy.VIOLATIONS.of("dns_port_range"));
         }
 
-        String type = DnsPeerModel.TYPE_HOHENHEIM.equals(value(coerced, existing, DnsPeerModel.PEER_TYPE))
-            ? DnsPeerModel.TYPE_HOHENHEIM : DnsPeerModel.TYPE_NAMESERVER;
-        if (DnsPeerModel.TYPE_HOHENHEIM.equals(type)) {
-            if (value(coerced, existing, DnsPeerModel.BASE_URL).isEmpty()) {
+        if (DnsPeerModel.TYPE_HOHENHEIM.equals(value(merged, DnsPeerModel.PEER_TYPE))) {
+            if (value(merged, DnsPeerModel.BASE_URL).isEmpty()) {
                 throw Violations.ofField("base_url", "",
                     HohenheimMicrocopy.VIOLATIONS.of("dns_peer_base_url_required"));
             }
-            if (value(coerced, existing, DnsPeerModel.API_KEY).isEmpty()) {
+            if (value(merged, DnsPeerModel.API_KEY).isEmpty()) {
                 throw Violations.ofField("api_key", "",
                     HohenheimMicrocopy.VIOLATIONS.of("dns_peer_api_key_required"));
             }
         }
-        else if (value(coerced, existing, DnsPeerModel.TRANSFER_HOST).isEmpty()) {
+        else if (value(merged, DnsPeerModel.TRANSFER_HOST).isEmpty()) {
             throw Violations.ofField("transfer_host", "",
                 HohenheimMicrocopy.VIOLATIONS.of("dns_peer_transfer_host_required"));
         }
     }
 
-    /** The submitted value, falling back to the stored one for a field the form omitted. */
-    private static @NonNull String value(@NonNull Map<String, Object> coerced, @Nullable Row existing,
-                                         @NonNull Field<?, ?> field) {
-        Object submitted = coerced.get(field.getName());
-        if (submitted != null && !String.valueOf(submitted).trim().isEmpty()) {
-            return String.valueOf(submitted).trim();
-        }
-        if (coerced.containsKey(field.getName())) {
-            // Explicitly submitted blank: only a stored SECRET survives it (the form
-            // sends secrets back empty to mean "unchanged"), everything else is a clear.
-            if (!field.isSecret() || existing == null) {
-                return "";
-            }
-        }
-        Object stored = existing != null ? existing.get(field.getName()) : null;
-        return trimmed(stored);
+    private static @NonNull String value(OperationInput.@NonNull Values merged, @NonNull Field<?, ?> field) {
+        return trimmed(merged.get(field.getName()));
     }
 }

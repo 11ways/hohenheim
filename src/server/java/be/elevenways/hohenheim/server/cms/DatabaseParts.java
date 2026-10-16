@@ -390,7 +390,7 @@ public final class DatabaseParts {
             .writes(ResourceMutations.rows()
                 .create(call -> DatabaseWrites.create(call.values()))
                 .update(call -> {
-                    DatabaseWrites.resize(Objects.requireNonNull(call.record()), call.values());
+                    DatabaseWrites.resize(Objects.requireNonNull(call.record()), call.values(), call.merged());
                     return null;
                 })
                 .delete(DELETE)
@@ -880,7 +880,7 @@ public final class DatabaseParts {
             .writes(ResourceMutations.rows()
                 .create(call -> DatabaseWrites.createEngine(call.values()))
                 .update(call -> {
-                    DatabaseWrites.resizeEngine(Objects.requireNonNull(call.record()), call.values());
+                    DatabaseWrites.resizeEngine(Objects.requireNonNull(call.record()), call.merged());
                     return null;
                 })
                 .delete(DELETE_ENGINE)

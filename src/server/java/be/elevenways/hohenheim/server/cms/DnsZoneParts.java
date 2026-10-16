@@ -51,6 +51,7 @@ import be.elevenways.zenit.common.edit.FormSection;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.Select;
+import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -97,7 +98,10 @@ public final class DnsZoneParts {
             .form(ResourceForm.<Row>of(parts.formSpec()).bindings(parts.fieldBindings())
                 .quickCreate(parts.quickCreate()).lead(DnsZoneParts::lead).build())
             .writes(ResourceMutations.rows().create(call -> parts.persistRow(call.values(), call.access()))
-                .update(call -> { parts.updateRow(call.record(), call.values(), call.access()); return null; })
+                .update(call -> {
+                    parts.updateRow(call.record(), call.values(), call.merged(), call.access());
+                    return null;
+                })
                 .delete(DnsOperations.DELETE_ZONE).build())
             .deleteConfirmation(DeleteConfirmation.<Row>of(parts.deleteConfirmation())
                 .forRow((row, request) -> parts.deleteConfirmationFor(row)))
@@ -533,15 +537,16 @@ public final class DnsZoneParts {
         return id;
     }
 
+    /** @param merged the stored zone's values with the submission over them */
     public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
-                          @NonNull AccessContext accessContext) {
+                          OperationInput.@NonNull Values merged, @NonNull AccessContext accessContext) {
         Map<String, Object> values = CmsSupport.mutable(coerced);
         validate(values, existing, this.model());
         DnsRowWrites.update(this.model(), this.formSpec(), existing, values, accessContext);
 
         // Bumping a SECONDARY zone's serial would leapfrog the primary's and
         // freeze replication (the refresh check would see "already current").
-        Object role = values.containsKey("role") ? values.get("role") : existing.get(DnsZoneModel.ROLE);
+        Object role = merged.get(DnsZoneModel.ROLE.getName());
         if (DnsZoneModel.ROLE_SECONDARY.equals(role)) {
             DnsZoneStore.INSTANCE.reload();
         }
@@ -622,7 +627,7 @@ public final class DnsZoneParts {
                                  @NonNull Model model) {
         boolean creating = existing == null;
         if (creating || coerced.containsKey(DnsZoneModel.ORIGIN.getName())) {
-            Object originValue = CmsSupport.valueOf(coerced, existing, DnsZoneModel.ORIGIN);
+            Object originValue = coerced.get(DnsZoneModel.ORIGIN.getName());
             String rawOrigin = originValue != null ? String.valueOf(originValue) : "";
             String origin = DnsNames.normalizeOrigin(rawOrigin);
             if (origin == null) {

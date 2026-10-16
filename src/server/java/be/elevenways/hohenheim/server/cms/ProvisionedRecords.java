@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import be.elevenways.zenit.common.edit.FieldAccess;
+import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -69,24 +70,22 @@ public final class ProvisionedRecords {
             }).acrossRecords(ctx -> FieldAccess.Decision.READONLY));
     }
 
-    /**
-     * The ceilings this write asks for: a ceiling the write does not CARRY keeps its stored value.
-     *
-     * AIDEV-NOTE: the coerced map is PARTIAL (the inline cell lane submits one entry, a reduced
-     * spec fewer), so an absent memory limit means "leave it", never "no ceiling". Reading it off
-     * the map with a null fallback turned a one-field write into an uncapped container AND a
-     * recreate. A present null is still a deliberate clear.
-     */
-    static @NonNull ResourceLimits requested(@NonNull Map<String, Object> coerced, @NonNull Row existing,
-                                             @NonNull Columns columns) {
-        Object memory = CmsSupport.valueOf(coerced, existing, columns.memoryMb());
-        Object cpus = CmsSupport.valueOf(coerced, existing, columns.cpus());
+    /** The ceilings this write asks for, off the merged record: a ceiling it does not carry keeps its stored one. */
+    static @NonNull ResourceLimits requested(OperationInput.@NonNull Values merged, @NonNull Columns columns) {
+        Object memory = merged.get(columns.memoryMb().getName());
+        Object cpus = merged.get(columns.cpus().getName());
         return ResourceLimits.of(memory instanceof Integer mb ? mb : null, cpus instanceof Double c ? c : null);
     }
 
-    /** Whether this write carries a non-null value for either ceiling. */
+    /**
+     * Whether this write carries a non-null value for either ceiling.
+     *
+     * AIDEV-NOTE: deliberately the SUBMITTED entries, never merged(): a shared record refuses a ceiling it was SENT,
+     * while its stored ceilings are no write at all.
+     */
     public static boolean carriesCeiling(@NonNull Map<String, Object> coerced, @NonNull Columns columns) {
-        return coerced.get(columns.memoryMb().getName()) != null || coerced.get(columns.cpus().getName()) != null;
+        return coerced.getOrDefault(columns.memoryMb().getName(), null) != null
+            || coerced.getOrDefault(columns.cpus().getName(), null) != null;
     }
 
     /**
@@ -100,12 +99,13 @@ public final class ProvisionedRecords {
      * apply the OLD ceiling. An unchanged ceiling pair is a no-op on purpose: a deploy is a
      * RECREATE, so "operator pressed Save" must never drop every live connection for nothing.
      *
+     * @param merged the stored record's values with the submission over them; a present null is a deliberate clear
      * @param redeploy recreates the container of the record with this id, in the background
      */
-    public static void resize(@NonNull Model model, @NonNull Row existing, @NonNull Map<String, Object> coerced,
+    public static void resize(@NonNull Model model, @NonNull Row existing, OperationInput.@NonNull Values merged,
                               @NonNull Columns columns, @NonNull Reservation reservation,
                               @NonNull IntConsumer redeploy) {
-        ResourceLimits limits = requested(coerced, existing, columns);
+        ResourceLimits limits = requested(merged, columns);
         if (Objects.equals(limits.memoryMb(), existing.get(columns.memoryMb()))
                 && Objects.equals(limits.cpus(), existing.get(columns.cpus()))) {
             return;

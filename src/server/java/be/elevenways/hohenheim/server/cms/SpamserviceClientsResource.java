@@ -27,6 +27,7 @@ import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FormSpec;
+import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.field.BooleanField;
 import be.elevenways.zenit.common.orm.field.Field;
@@ -136,10 +137,10 @@ public final class SpamserviceClientsResource {
                     ResourceFieldBinding.of("provisioned_by_client_id", FieldAccess.alwaysReadonly())))
                 .build())
             .writes(ResourceMutations.<ManagedClient>store()
-                .create((values, access) -> SpamserviceRemoteStore.require(clients).createClient(input(values, null))
-                    .id())
+                .create((values, access) -> SpamserviceRemoteStore.require(clients)
+                    .createClient(input(new OperationInput.Values(values))).id())
                 .update((existing, values, access) -> SpamserviceRemoteStore.require(clients)
-                    .updateClient(existing.id(), input(values, existing), existing.revision()))
+                    .updateClient(existing.id(), input(values.merged()), existing.revision()))
                 .delete((existing, access) -> SpamserviceRemoteStore.require(clients).deleteClient(existing.id()))
                 .build())
             .tabs(ResourceTabs.of(List.of(ChildList.<ManagedClient>of(HohenheimSlugs.SPAMSERVICE_KEYS)
@@ -162,7 +163,7 @@ public final class SpamserviceClientsResource {
 
     private static @NonNull Map<String, Object> values(@NonNull ManagedClient row) {
         return Map.ofEntries(
-            Map.entry("name", row.name()), Map.entry("enabled", row.enabled()),
+            Map.entry("name", Objects.requireNonNullElse(row.name(), "")), Map.entry("enabled", row.enabled()),
             Map.entry("trusted", row.trusted()), Map.entry("provisioner", row.provisioner()),
             Map.entry("manager", row.manager()), Map.entry("external_id",
                 Objects.requireNonNullElse(row.externalId(), "")),
@@ -173,34 +174,28 @@ public final class SpamserviceClientsResource {
     }
 
     /**
-     * The whole remote client, filled from the STORED record wherever this write carries no value for a field.
+     * The whole remote client, built from the record's merged values.
      *
      * AIDEV-NOTE: the remote update is a revision-guarded full-DTO PUT, and the inline cell lane hands the update a
-     * map holding EXACTLY ONE entry. Building the DTO off that map alone would have DISABLED the client, dropped its
-     * language whitelist and reset its threshold to 50 on any single edit -- a live filter reconfigured by a rename.
-     * The stored record is the fallback here rather than a remote merge semantic, which the service's own API does
-     * not promise.
-     *
-     * @param stored the client being edited, or null on a create
+     * map holding EXACTLY ONE entry: an update reads {@code merged()} (the stored record with the submission over it),
+     * never the submitted map alone, which once DISABLED the client, dropped its language whitelist and reset its
+     * threshold to 50 on any single edit -- a live filter reconfigured by a rename.
      */
-    private static ManagedClientInput input(Map<String, Object> values, @Nullable ManagedClient stored) {
+    private static ManagedClientInput input(OperationInput.@NonNull Values values) {
         return new ManagedClientInput(
-            SpamserviceRemoteStore.requiredText(values, "name", stored == null ? "" : stored.name()),
-            bool(values, "enabled", stored == null ? null : stored.enabled()),
-            bool(values, "trusted", stored == null ? null : stored.trusted()),
-            bool(values, "provisioner", stored == null ? null : stored.provisioner()),
-            bool(values, "manager", stored == null ? null : stored.manager()),
-            nullable(values, "allowed_languages", stored == null ? null : stored.allowedLanguages()),
-            RawValues.intOr(values.getOrDefault("spam_threshold", stored == null ? null : stored.spamThreshold()), 50),
-            nullable(values, "notes", stored == null ? null : stored.notes()));
+            SpamserviceRemoteStore.requiredText(values, NAME.getName()),
+            bool(values, ENABLED), bool(values, TRUSTED), bool(values, PROVISIONER), bool(values, MANAGER),
+            nullable(values, ALLOWED_LANGUAGES),
+            RawValues.intOr(values.get(SPAM_THRESHOLD.getName()), 50),
+            nullable(values, NOTES));
     }
 
-    private static boolean bool(Map<String, Object> values, String name, @Nullable Object stored) {
-        return Boolean.TRUE.equals(values.getOrDefault(name, stored));
+    private static boolean bool(OperationInput.@NonNull Values values, @NonNull Field<?, ?> field) {
+        return Boolean.TRUE.equals(values.get(field.getName()));
     }
 
-    private static @Nullable String nullable(Map<String, Object> values, String name, @Nullable Object stored) {
-        Object value = values.getOrDefault(name, stored);
+    private static @Nullable String nullable(OperationInput.@NonNull Values values, @NonNull Field<?, ?> field) {
+        Object value = values.get(field.getName());
         return value == null || String.valueOf(value).isBlank() ? null : String.valueOf(value).trim();
     }
 }

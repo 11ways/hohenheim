@@ -1,9 +1,11 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.DnsZoneModel;
-import be.elevenways.hohenheim.server.cms.DnsZoneParts;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.server.panel.PartsWrites;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -58,12 +60,13 @@ class DnsZoneSoaPartialWriteTest extends HohenheimTestBase {
     @Test
     void aZoneWriteWithoutTheSoaFieldsKeepsThem() {
         Model zones = Models.get(DnsZoneModel.class);
-        DnsZoneParts resource = new DnsZoneParts();
+        // The admin entry's own update lane, whose PartialWrite carries the stored zone.
+        PanelResource<Row> resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, HohenheimSlugs.DNS_ZONES);
 
         // 1. A one-entry immutable write (the inline cell lane's shape, and what a form
         //    that did not render the SOA entries submits) changes that column only.
         Map<String, Object> before = InlineCellIsolationTest.storedValues(zones, zoneId);
-        resource.updateRow(zones.findById(zoneId),
+        PartsWrites.updateRow(resource, zones.findById(zoneId),
             Map.of(DnsZoneModel.DEFAULT_TTL.getName(), 7200), admin);
         Map<String, Object> after = InlineCellIsolationTest.storedValues(zones, zoneId);
         assertThat(after.get(DnsZoneModel.DEFAULT_TTL.getName()))
@@ -79,7 +82,7 @@ class DnsZoneSoaPartialWriteTest extends HohenheimTestBase {
         }
 
         // 2. A write that DOES carry the SOA contact still normalizes it (trimmed).
-        resource.updateRow(zones.findById(zoneId),
+        PartsWrites.updateRow(resource, zones.findById(zoneId),
             Map.of(DnsZoneModel.SOA_CONTACT.getName(), "  dns@" + ORIGIN + " "), admin);
         Row trimmed = zones.findById(zoneId);
         assertThat((String) trimmed.get(DnsZoneModel.SOA_CONTACT))
@@ -88,13 +91,13 @@ class DnsZoneSoaPartialWriteTest extends HohenheimTestBase {
             .as("step 2: the primary NS it did not carry is untouched").isEqualTo("ns1." + ORIGIN);
 
         // 3. A carried blank is a deliberate clear, never confused with absence.
-        resource.updateRow(zones.findById(zoneId),
+        PartsWrites.updateRow(resource, zones.findById(zoneId),
             Map.of(DnsZoneModel.SOA_PRIMARY_NS.getName(), ""), admin);
         assertThat((String) zones.findById(zoneId).get(DnsZoneModel.SOA_PRIMARY_NS))
             .as("step 3: a submitted blank clears the primary NS").isNullOrEmpty();
 
         // 4. And a carried malformed value is still refused on its own field.
-        assertThatThrownBy(() -> resource.updateRow(zones.findById(zoneId),
+        assertThatThrownBy(() -> PartsWrites.updateRow(resource, zones.findById(zoneId),
                 Map.of(DnsZoneModel.SOA_CONTACT.getName(), "not an address"), admin))
             .as("step 4: a malformed carried contact is refused")
             .isInstanceOf(Violations.class);

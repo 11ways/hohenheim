@@ -23,6 +23,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationGate;
+import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.operation.SubjectArity;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.server.operation.RowDeleteOperations;
@@ -366,7 +367,8 @@ public final class CertificateParts {
             .form(ResourceForm.<Row>of(ADMIN_FORM).bindings(fieldBindings()).wideRecordPages()
                 .landingTab(RecordOverview.SLUG).build())
             .writes(ResourceMutations.rows().create(call -> create(call.values()))
-                .update(call -> { update(call.record(), call.values()); return null; }).delete(DELETE).build())
+                .update(call -> { update(call.record(), call.values(), call.merged()); return null; })
+                .delete(DELETE).build())
             .deleteConfirmation(DeleteConfirmation.<Row>of(deleteConfirmation())
                 .forRow((row, request) -> deleteConfirmationFor(row)))
             .actions(actions())
@@ -532,7 +534,7 @@ public final class CertificateParts {
     /** An uploaded certificate: refused unless its certificate and key both parse; reachable from tests. */
     static @NonNull Object create(@NonNull Map<String, Object> submitted) {
         Map<String, Object> values = CmsSupport.mutable(submitted);
-        describe(values, validatePems(values, null));
+        describe(values, validatePems(values, new OperationInput.Values(values), null));
         keepChainOnly(values);
         Row row = Models.get(CertificateModel.class).createEmptyRow();
         values.forEach(row::set);
@@ -543,9 +545,10 @@ public final class CertificateParts {
         return row.get(CertificateModel.ID);
     }
 
-    private static void update(@NonNull Row existing, @NonNull Map<String, Object> submitted) {
+    private static void update(@NonNull Row existing, @NonNull Map<String, Object> submitted,
+                               OperationInput.@NonNull Values merged) {
         Map<String, Object> values = CmsSupport.mutable(submitted);
-        X509Certificate leaf = validatePems(values, existing);
+        X509Certificate leaf = validatePems(values, merged, existing);
         if (values.containsKey(CertificateModel.CERTIFICATE_PEM.getName())) {
             describe(values, leaf);
         }
@@ -587,22 +590,24 @@ public final class CertificateParts {
      * All three parts must be present and parseable, submitted or stored; a submitted certificate or key is judged in
      * full ({@link UploadedCertificates#check}: key match, chain order, validity).
      *
-     * AIDEV-NOTE: each read takes the STORED value when the write does not carry the key.
-     * The inline cell lane hands updateRow a map holding EXACTLY ONE entry, so demanding
-     * all three off that map refused every partial write with "cert_fields_required" --
-     * about a certificate body that was sitting in the row all along. Re-parsing the
-     * stored PEMs on an unrelated edit is deliberate: they are the record's whole point,
-     * and a row that cannot parse must not be saved further. Only a NEW body is judged in full: an expired Let's
-     * Encrypt row must stay editable (its auto-renew switch is how it is repaired).
+     * AIDEV-NOTE: the three parts are read off the MERGED record. The inline cell lane hands updateRow a map holding
+     * EXACTLY ONE entry, so demanding all three off that map refused every partial write with "cert_fields_required"
+     * -- about a certificate body that was sitting in the row all along. Re-parsing the stored PEMs on an unrelated
+     * edit is deliberate: they are the record's whole point, and a row that cannot parse must not be saved further.
+     * Only a NEW body is judged in full, which is the one "only if sent" read here: an expired Let's Encrypt row must
+     * stay editable (its auto-renew switch is how it is repaired).
      *
+     * @param coerced the entries this write carries
+     * @param merged the record's stored values with the submission over them, the create's own values on a create
      * @param existing the stored certificate, or null on a create
      * @return the certificate's leaf (the first in the PEM)
      */
     private static @Nullable X509Certificate validatePems(@NonNull Map<String, Object> coerced,
+                                                          OperationInput.@NonNull Values merged,
                                                           @Nullable Row existing) {
-        String certPem = CmsSupport.textOf(coerced, existing, CertificateModel.CERTIFICATE_PEM);
-        String keyPem = CmsSupport.textOf(coerced, existing, CertificateModel.PRIVATE_KEY_PEM);
-        String name = CmsSupport.textOf(coerced, existing, CertificateModel.NICE_NAME);
+        String certPem = trimmed(merged.get(CertificateModel.CERTIFICATE_PEM.getName()));
+        String keyPem = trimmed(merged.get(CertificateModel.PRIVATE_KEY_PEM.getName()));
+        String name = trimmed(merged.get(CertificateModel.NICE_NAME.getName()));
         if (name.isEmpty() || certPem.isEmpty() || keyPem.isEmpty()) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("cert_fields_required"));
         }

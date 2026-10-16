@@ -18,6 +18,7 @@ import be.elevenways.zenit.cms.common.resource.ResourceReads;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FormSpec;
+import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.field.BooleanField;
 import be.elevenways.zenit.common.orm.field.Field;
@@ -25,7 +26,6 @@ import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 import java.util.Map;
@@ -99,37 +99,32 @@ public final class SpamserviceWordsResource {
             .form(ResourceForm.<SpamWordEntry>of(FormSpec.builder().add(WORD).add(SCORE).add(LANGUAGE).add(LEET)
                 .build()).build())
             .writes(ResourceMutations.<SpamWordEntry>store()
-                .create((values, access) -> SpamserviceRemoteStore.require(clients).createSpamWord(input(values, null)))
+                .create((values, access) -> SpamserviceRemoteStore.require(clients)
+                    .createSpamWord(input(new OperationInput.Values(values))))
                 .update((word, values, access) -> SpamserviceRemoteStore.require(clients)
-                    .updateSpamWord(word.id(), input(values, word)))
+                    .updateSpamWord(word.id(), input(values.merged())))
                 .delete((word, access) -> SpamserviceRemoteStore.require(clients).deleteSpamWord(word.id()))
                 .build())
             .build();
     }
 
     private static @NonNull Map<String, Object> values(@NonNull SpamWordEntry row) {
-        return Map.of("word", row.word(), "score", row.score(), "language",
+        return Map.of("word", Objects.requireNonNullElse(row.word(), ""), "score", row.score(), "language",
             Objects.requireNonNullElse(row.language(), ""), "leet", row.leet());
     }
 
     /**
-     * The whole remote word, filled from the STORED entry wherever this write carries no value for a field.
+     * The whole remote word, built from the record's merged values.
      *
      * AIDEV-NOTE: the remote update is a full-DTO PUT, and the inline cell lane hands the update a map holding EXACTLY
-     * ONE entry. Building the DTO off that map alone pushed a blank word, a zero score and leet=false to the LIVE
-     * filter on any single edit. The stored record is the fallback here rather than a remote merge semantic, which the
-     * service's own API does not promise.
-     *
-     * @param stored the entry being edited, or null on a create
+     * ONE entry: an update reads {@code merged()} (the stored entry with the submission over it), never the submitted
+     * map alone, which once pushed a blank word, a zero score and leet=false to the LIVE filter on any single edit.
      */
-    private static SpamWordInput input(Map<String, Object> values, @Nullable SpamWordEntry stored) {
-        String word = SpamserviceRemoteStore.requiredText(values, "word", stored == null ? "" : stored.word());
-        Object score = values.getOrDefault("score", stored == null ? null : stored.score());
-        Object rawLanguage = values.getOrDefault("language", stored == null ? null : stored.language());
-        Object leet = values.getOrDefault("leet", stored == null ? null : stored.leet());
-        String language = trimmed(rawLanguage);
+    private static SpamWordInput input(OperationInput.@NonNull Values values) {
+        String word = SpamserviceRemoteStore.requiredText(values, WORD.getName());
+        String language = trimmed(values.get(LANGUAGE.getName()));
         return new SpamWordInput(word,
-            RawValues.intOr(score, 0),
-            language.isEmpty() ? null : language, Boolean.TRUE.equals(leet));
+            RawValues.intOr(values.get(SCORE.getName()), 0),
+            language.isEmpty() ? null : language, Boolean.TRUE.equals(values.get(LEET.getName())));
     }
 }

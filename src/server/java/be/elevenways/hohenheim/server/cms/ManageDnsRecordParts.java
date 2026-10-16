@@ -24,6 +24,7 @@ import be.elevenways.zenit.cms.common.schema.TableView;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.Nested;
+import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.cms.common.resource.ResourceParent;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.StringField;
@@ -37,6 +38,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * The /manage view over individual DNS records: a tenant authors names under the hostnames
@@ -67,7 +70,10 @@ public final class ManageDnsRecordParts {
             .form(ResourceForm.<Row>of(parts.formSpec()).inlineEditable(DnsRecordModel.NAME, DnsRecordModel.VALUE,
                 DnsRecordModel.TTL, DnsRecordModel.ENABLED).build())
             .writes(ResourceMutations.rows().create(call -> parts.persistRow(call.values(), call.access()))
-                .update(call -> { parts.updateRow(call.record(), call.values(), call.access()); return null; })
+                .update(call -> {
+                    parts.updateRow(call.record(), call.values(), call.merged(), call.access());
+                    return null;
+                })
                 .delete(DnsOperations.DELETE_RECORD).build())
             .build();
     }
@@ -212,22 +218,24 @@ public final class ManageDnsRecordParts {
     /** zone_id is resolved from the name and is not a form entry; stamp it like the provider stamp. */
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
                                       @NonNull AccessContext accessContext) {
-        return this.records.persistRow(resolveZone(coerced, null, accessContext), accessContext);
+        return this.records.persistRow(resolveZone(coerced, new OperationInput.Values(coerced), null, accessContext),
+            accessContext);
     }
 
+    /** @param merged the stored record's values (its absolute name) with the submission over them */
     public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
-                          @NonNull AccessContext accessContext) {
-        this.records.updateRow(existing, resolveZone(coerced, existing, accessContext), accessContext);
+                          OperationInput.@NonNull Values merged, @NonNull AccessContext accessContext) {
+        this.records.updateRow(existing, resolveZone(coerced, merged, existing, accessContext), accessContext);
     }
 
     /**
      * Split the submitted absolute name into (zone, relative owner).
      *
-     * AIDEV-NOTE: a submitted name WINS, an absent one falls back to the stored row's own
-     * absolute name -- the per-key partial-update semantic DnsRecordEdits already applies.
-     * Without the fallback an update carrying only some entries (the inline cell lane
-     * commits exactly ONE) resolved an empty name and refused with "no hosted zone contains
-     * this name", which is a message about a field the operator never touched.
+     * AIDEV-NOTE: the name is read off the MERGED record, whose stored value is the row's own
+     * absolute name (this resource's mapValues) -- the per-key partial-update semantic
+     * DnsRecordEdits applies. A name read off the submitted map alone (the inline cell lane
+     * commits exactly ONE entry) resolved an empty name and refused with "no hosted zone
+     * contains this name", which is a message about a field the operator never touched.
      *
      * AIDEV-NOTE: a tenant gets ONE answer for "no hosted zone contains this name" and "a
      * hosted zone does, but the name is not yours": the write pipeline's own authority
@@ -243,12 +251,11 @@ public final class ManageDnsRecordParts {
      *         from ever disagreeing)
      */
     private @NonNull Map<String, Object> resolveZone(@NonNull Map<String, Object> coerced,
+                                                     OperationInput.@NonNull Values merged,
                                                      @Nullable Row existing,
                                                      @NonNull AccessContext accessContext) {
         Map<String, Object> values = CmsSupport.mutable(coerced);
-        Object raw = values.get(DnsRecordModel.NAME.getName());
-        String fqdn = raw != null ? String.valueOf(raw).trim()
-            : existing != null ? absoluteName(existing) : "";
+        String fqdn = trimmed(merged.get(DnsRecordModel.NAME.getName()));
 
         boolean operator = HohenheimAccess.isAdmin(accessContext);
         ZoneMatch match = hostingZone(fqdn);

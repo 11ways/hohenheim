@@ -30,7 +30,15 @@ public final class DnsRecordEdits {
 
     private DnsRecordEdits() {}
 
-    /** @return the validated zone id; normalizes {@code name} in place */
+    /**
+     * Validates one record write and normalizes its {@code name} and {@code data} in place.
+     *
+     * AIDEV-NOTE: the stored-row fallbacks below are deliberately NOT zenit-cms's merged(): this pipeline is shared
+     * with the peer/automation API's update ({@code DnsRecordApiHandlers}), whose form map is no PartialWrite and
+     * means the same "absent keeps stored". One home for both lanes; the CMS writer hands its submitted map and row.
+     *
+     * @return the validated zone id
+     */
     public static int validate(@NonNull Map<String, Object> coerced, @Nullable Row existing,
                         @NonNull Model model) {
         Object zoneValue = coerced.containsKey("zone_id") ? coerced.get("zone_id")

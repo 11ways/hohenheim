@@ -147,8 +147,11 @@ public final class ServerParts {
             .list(hostList(tableSpec()))
             .reads(ResourceReads.rows().mapCells((row, column) -> "host_status".equals(column.name())
                     ? statusCellOf(row) : null))
-            .writes(ResourceMutations.rows().create(call -> ServerInventoryWrites.create(call.values()))
-                .update(call -> { ServerInventoryWrites.update(call.record(), call.values()); return null; })
+            .writes(ResourceMutations.rows().create(call -> ServerInventoryWrites.create(call.values(), call.merged()))
+                .update(call -> {
+                    ServerInventoryWrites.update(call.record(), call.values(), call.merged());
+                    return null;
+                })
                 .delete(DELETE).scopeVerifiedBeforeWrite().ownsWriteEnvelope(ResourceVerb.CREATE,
                         ResourceVerb.UPDATE).build())
             .deleteConfirmation(DeleteConfirmation.<Row>of(DeleteConfirmation.body(

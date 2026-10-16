@@ -51,6 +51,7 @@ import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.edit.Select;
+import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.EnumField;
@@ -253,7 +254,7 @@ public final class InstanceAttachmentParts {
         String name = String.valueOf(values.get(InstanceDeviceModel.NAME.getName()));
         InstanceDevices devices = new InstanceDevices();
         switch (DeviceType.require(values.get(InstanceDeviceModel.TYPE.getName()))) {
-            case DISK -> devices.attachDisk(instanceId, name, sizeOf(values, null));
+            case DISK -> devices.attachDisk(instanceId, name, sizeOf(call.merged()));
             case NIC -> devices.attachNic(instanceId, name);
             // The form's select never offers it (ownAttachAction): install media is attached by its own operation.
             case CDROM -> throw new IllegalStateException("install media is attached through "
@@ -276,29 +277,30 @@ public final class InstanceAttachmentParts {
      * The only editable dimension is a disk's SIZE: a device's name, type and owning instance are its identity at the
      * daemon, and there is no rename or re-home operation to honour a change of them with.
      *
-     * AIDEV-NOTE: the identity reads take the STORED value when the write does not carry the key, which means
-     * "unchanged" and passes: the inline cell lane writes a map holding exactly one entry.
+     * AIDEV-NOTE: the identity reads take the MERGED record, where a key the write does not carry is the stored value,
+     * which means "unchanged" and passes: the inline cell lane writes a map holding exactly one entry. The media read
+     * stays on the submitted map: no device form declares it, so only a hand-posted value is judged.
      */
     private static @Nullable Object resizeDevice(@NonNull RowWriteCall call) {
         Row existing = Objects.requireNonNull(call.record(), "an update carries its record");
-        Map<String, Object> values = call.values();
+        OperationInput.Values merged = call.merged();
         Integer owner = existing.get(InstanceDeviceModel.INSTANCE_ID);
         int instanceId = owner != null ? owner : -1;
         String name = existing.get(InstanceDeviceModel.NAME);
         String type = existing.get(InstanceDeviceModel.TYPE);
-        Object submittedName = CmsSupport.valueOf(values, existing, InstanceDeviceModel.NAME);
+        Object submittedName = merged.get(InstanceDeviceModel.NAME.getName());
         if (!String.valueOf(name).equals(String.valueOf(submittedName))) {
             throw Violations.ofField("name", submittedName,
                 HohenheimMicrocopy.VIOLATIONS.of("device_rename_unsupported"));
         }
-        Object submittedType = CmsSupport.valueOf(values, existing, InstanceDeviceModel.TYPE);
+        Object submittedType = merged.get(InstanceDeviceModel.TYPE.getName());
         if (!String.valueOf(type).equals(String.valueOf(submittedType)) || instanceId != requireInstance(
-                CmsSupport.valueOf(values, existing, InstanceDeviceModel.INSTANCE_ID))) {
+                merged.get(InstanceDeviceModel.INSTANCE_ID.getName()))) {
             throw Violations.ofField("type", submittedType,
                 HohenheimMicrocopy.VIOLATIONS.of("device_retype_unsupported"));
         }
         String storedMedia = existing.get(InstanceDeviceModel.SOURCE_MEDIA);
-        Object submittedMedia = values.get(InstanceDeviceModel.SOURCE_MEDIA.getName());
+        Object submittedMedia = call.values().getOrDefault(InstanceDeviceModel.SOURCE_MEDIA.getName(), null);
         if (submittedMedia != null && !String.valueOf(submittedMedia).trim().isEmpty()
                 && !String.valueOf(submittedMedia).trim().equals(storedMedia == null ? "" : storedMedia)) {
             // Swapping media is detach-and-attach at the daemon; an in-place edit would report success while the old
@@ -309,7 +311,7 @@ public final class InstanceAttachmentParts {
         if (DeviceType.parse(type) != DeviceType.DISK) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("device_resize_not_a_disk"));
         }
-        new InstanceDevices().resizeDisk(instanceId, name, sizeOf(values, existing));
+        new InstanceDevices().resizeDisk(instanceId, name, sizeOf(merged));
         ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.DEVICE_RESIZED, null);
         return null;
     }
@@ -323,9 +325,9 @@ public final class InstanceAttachmentParts {
         return instanceId;
     }
 
-    /** The submitted size, else the stored one -- a write that carries no size resizes nothing. */
-    private static int sizeOf(@NonNull Map<String, Object> values, @Nullable Row existing) {
-        Object size = CmsSupport.valueOf(values, existing, InstanceDeviceModel.SIZE_GB);
+    /** The disk's size off the merged record -- a write that carries no size resizes nothing. */
+    private static int sizeOf(OperationInput.@NonNull Values merged) {
+        Object size = merged.get(InstanceDeviceModel.SIZE_GB.getName());
         if (size instanceof Number number) {
             return number.intValue();
         }

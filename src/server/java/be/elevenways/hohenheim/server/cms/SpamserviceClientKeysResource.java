@@ -311,16 +311,18 @@ public final class SpamserviceClientKeysResource {
     /**
      * Rename and enable/disable, each sent only when this write actually carries it.
      *
-     * AIDEV-NOTE: the remote call already reads null as "leave alone" (enable and revoke rely on it), but the name was
-     * passed through String.valueOf, so a write that did not carry the key -- the inline cell lane hands the update a
-     * map holding EXACTLY ONE entry -- renamed the key to the literal text "null".
+     * AIDEV-NOTE: deliberately the SUBMITTED map, never {@code merged()}: the remote call reads null as "leave alone"
+     * (enable and revoke rely on it), so a field this write does not carry is sent as absent rather than as its stored
+     * value. The name once went through String.valueOf, so a write without it (the inline cell lane hands the update a
+     * map holding EXACTLY ONE entry) renamed the key to the literal text "null". containsKey first: a plain get of an
+     * absent declared field is a sibling read the partial-write guard refuses.
      */
     private static void update(@NonNull Supplier<SpamserviceClient> clients, @NonNull ManagedClientKey existing,
                                @NonNull Map<String, Object> values) {
-        Object name = values.get("name");
-        SpamserviceRemoteStore.require(clients).updateKey(existing.id(),
-            values.containsKey("name") && name != null ? String.valueOf(name) : null,
-            values.get("active") instanceof Boolean active ? active : null);
+        Object name = values.containsKey("name") ? values.get("name") : null;
+        Object active = values.containsKey("active") ? values.get("active") : null;
+        SpamserviceRemoteStore.require(clients).updateKey(existing.id(), name != null ? String.valueOf(name) : null,
+            active instanceof Boolean flag ? flag : null);
     }
 
     private static @NonNull String keyOf(@NonNull ManagedClientKey key) {
