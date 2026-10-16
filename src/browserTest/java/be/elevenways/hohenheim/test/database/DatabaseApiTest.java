@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Test;
 import java.net.http.HttpResponse;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -78,14 +79,14 @@ class DatabaseApiTest extends HohenheimTestBase {
         links.save(link);
         linkId = link.get(InstanceDatabaseModel.ID);
 
-        int adminId = Models.get(UserModel.class).find()
+        UUID adminId = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first().get(UserModel.ID);
         keyAdmin = ApiKeyService.create(adminId, PREFIX + "admin", List.of("hohenheim.*"), null)
             .plaintext();
 
         // The delegate: the /manage door plus view AND destroy on this one record, so the
         // 403s below can only be about the ADMIN-only verbs and never about a missing grant.
-        int tenantId = ApiSupport.user(PREFIX + "tenant@surface.test", "Database API Tenant");
+        UUID tenantId = ApiSupport.user(PREFIX + "tenant@surface.test", "Database API Tenant");
         GrantService.createDirectGrant(GrantSubjectType.USER, tenantId, MANAGE_ACCESS, true);
         RecordGrants.grant(GrantSubjectType.USER, tenantId, DatabaseModel.MODEL_ID, databaseId,
             HohenheimCapabilities.VIEW, true);

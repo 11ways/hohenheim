@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -64,7 +65,7 @@ class InstanceStatsRefusalTest extends HohenheimTestBase {
         Models.get(InstanceModel.class).save(instance);
         int instanceId = instance.get(InstanceModel.ID);
 
-        Integer tenantId = ApiSupport.user("stats-refusal-tenant@hohenheim.local",
+        UUID tenantId = ApiSupport.user("stats-refusal-tenant@hohenheim.local",
             "Stats Refusal Tenant");
         try {
             // 0. Before the grant, the tenant's link is refused as not permitted, the same for

@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.UUID;
 import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -225,7 +226,7 @@ public final class ApiWire {
     }
 
     /** @return the operator account of the current database, holding every permission, created on first use */
-    public static int operatorId() {
+    public static UUID operatorId() {
         return TenantConduits.operatorUser().get(UserModel.ID);
     }
 

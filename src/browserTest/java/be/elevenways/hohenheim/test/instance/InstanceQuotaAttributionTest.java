@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.auth.cms.SubjectTag;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
@@ -28,6 +29,7 @@ import org.junit.jupiter.api.Test;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -47,7 +49,7 @@ class InstanceQuotaAttributionTest extends HohenheimTestBase {
 
     private static final String PREFIX = "quota-attribution-";
 
-    private static Integer tenantId;
+    private static UUID tenantId;
     private static UserPrincipal tenant;
     private static Integer operatorSiteId;
     private static Integer tenantSiteId;
@@ -72,7 +74,7 @@ class InstanceQuotaAttributionTest extends HohenheimTestBase {
 
         operatorBucket = OwnerBudget.INSTANCES.bucketOf("");
         tenantBucket = OwnerBudget.INSTANCES.bucketOf(
-            HohenheimAccess.packSubjects(Set.of("user:" + tenantId)));
+            HohenheimAccess.packSubjects(Set.of(new SubjectTag(GrantSubjectType.USER, tenantId).token())));
     }
 
     @AfterAll
@@ -134,7 +136,7 @@ class InstanceQuotaAttributionTest extends HohenheimTestBase {
     /** A per-OWNER cap on the tenant alone; the operator's ledger stays uncapped. */
     private static void capTenantAt(int maximum) {
         Model quotas = Models.get(InstanceQuotaModel.class);
-        String packed = HohenheimAccess.packSubjects(Set.of("user:" + tenantId));
+        String packed = HohenheimAccess.packSubjects(Set.of(new SubjectTag(GrantSubjectType.USER, tenantId).token()));
         Row row = quotas.find().where(InstanceQuotaModel.SUBJECTS.eq(packed)).first();
         if (row == null) {
             row = quotas.createEmptyRow();

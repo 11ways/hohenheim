@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.proxy.ReleasedClaims;
 import be.elevenways.hohenheim.server.proxy.RouteClaims;
 import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.auth.cms.SubjectTag;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.RecordGrants;
@@ -27,6 +28,7 @@ import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Accountability;
+import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.operation.OperationPipeline;
@@ -41,6 +43,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -524,14 +527,14 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
     }
 
     /** A tenant subject holding manage on the site, so the two sites have different owners. */
-    private static int tenantOf(Row site, String email) {
-        int userId = ApiSupport.user(email);
+    private static UUID tenantOf(Row site, String email) {
+        UUID userId = ApiSupport.user(email);
         grantManage(site, userId);
         return userId;
     }
 
     /** Give an EXISTING tenant subject manage on another site -- the same owner, twice. */
-    private static void grantManage(Row site, int userId) {
+    private static void grantManage(Row site, UUID userId) {
         RecordGrants.grant(GrantSubjectType.USER, userId, SiteModel.MODEL_ID, site.get(SiteModel.ID),
             HohenheimCapabilities.MANAGE, true);
     }
@@ -559,13 +562,13 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
 
         // 1. Tenant A serves the hostname on a live site it holds manage on.
         Row tenantSiteA = site("Quarantine Tenant A", "quarantine-tenant-a", true);
-        int tenantA = tenantOf(tenantSiteA, "quarantine-tenant-a@test");
+        UUID tenantA = tenantOf(tenantSiteA, "quarantine-tenant-a@test");
         domain(tenantSiteA, hostname);
         assertThat(storedClaimsOn(hostname))
             .as("step 1: tenant A holds the live route claim").isEqualTo(1);
         assertThat(HohenheimAccess.manageSubjectsOf(tenantSiteA.get(SiteModel.ID)))
             .as("step 1: and the site's owner is the tenant subject, not the operator")
-            .containsExactly("user:" + tenantA);
+            .containsExactly(new SubjectTag(GrantSubjectType.USER, tenantA).token());
 
         // 2. Tenant A deletes the site through the REAL CMS delete path. The claim is
         //    released -- and the ledger must have captured WHO released it. The subject set
@@ -580,7 +583,7 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         assertThat(quarantine).as("step 2: the release was recorded in the ledger").isNotNull();
         assertThat((String) quarantine.get(ReleasedRouteClaimModel.FORMER_SUBJECTS))
             .as("step 2: the ledger stored the FORMER OWNER, captured before grant cleanup")
-            .isEqualTo("user:" + tenantA);
+            .isEqualTo(new SubjectTag(GrantSubjectType.USER, tenantA).token());
         assertThat((Instant) quarantine.get(ReleasedRouteClaimModel.RELEASED_AT))
             .as("step 2: and when it was released -- the window is measured from here")
             .isNotNull();
@@ -750,7 +753,7 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         String dropped = "dropped.tenant.example.com";
         String renamed = "renamed.tenant.example.com";
         Row tenantSite = site("Partial Release Tenant", "partial-release-tenant", true);
-        int tenant = tenantOf(tenantSite, "partial-release@test");
+        UUID tenant = tenantOf(tenantSite, "partial-release@test");
         Row droppedRow = domain(tenantSite, dropped);
         Row renamedRow = domain(tenantSite, renamed);
         assertThat(storedClaimsOn(dropped) + storedClaimsOn(renamed))
@@ -764,7 +767,7 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
             .as("step 2: deleting the domain row ledgers the release").isNotNull();
         assertThat((String) droppedQuarantine.get(ReleasedRouteClaimModel.FORMER_SUBJECTS))
             .as("step 2: with the owner intact -- the site's grants were never touched")
-            .isEqualTo("user:" + tenant);
+            .isEqualTo(new SubjectTag(GrantSubjectType.USER, tenant).token());
 
         // 3. The tenant renames the other row. The departing key is released just as
         //    completely as a delete: the old hostname stops routing here.
@@ -775,7 +778,8 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         assertThat(renamedQuarantine)
             .as("step 3: renaming a live row ledgers the hostname it left behind").isNotNull();
         assertThat((String) renamedQuarantine.get(ReleasedRouteClaimModel.FORMER_SUBJECTS))
-            .as("step 3: owned by the same tenant").isEqualTo("user:" + tenant);
+            .as("step 3: owned by the same tenant")
+            .isEqualTo(new SubjectTag(GrantSubjectType.USER, tenant).token());
         assertThat(storedClaimsOn("kept.tenant.example.com"))
             .as("step 3: and the row claims its new route").isEqualTo(1);
 
@@ -1039,7 +1043,7 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
 
         // 1. A tenant serves the hostname on a live site it holds manage on.
         Row tenantSite = site("Hard Delete Tenant", "hard-delete-tenant", true);
-        int tenant = tenantOf(tenantSite, "hard-delete-tenant@test");
+        UUID tenant = tenantOf(tenantSite, "hard-delete-tenant@test");
         Integer siteId = tenantSite.get(SiteModel.ID);
         domain(tenantSite, hostname);
         assertThat(storedClaimsOn(hostname))
@@ -1058,7 +1062,7 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         assertThat(quarantine).as("step 3: the hard delete ledgered the release").isNotNull();
         assertThat((String) quarantine.get(ReleasedRouteClaimModel.FORMER_SUBJECTS))
             .as("step 3: with the former owner intact, captured before grant cleanup")
-            .isEqualTo("user:" + tenant);
+            .isEqualTo(new SubjectTag(GrantSubjectType.USER, tenant).token());
 
         // 4. So a different owner is refused, and an OPERATOR site -- the claimant an
         //    emptied owner set would have waved through -- is refused too.
@@ -1099,22 +1103,23 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
 
         // 1. Tenant A releases the hostname; the ledger remembers A.
         Row tenantSiteA = site("Actor Lane Tenant", "actor-lane-tenant", true);
-        int tenantA = tenantOf(tenantSiteA, "actor-lane-tenant@test");
+        UUID tenantA = tenantOf(tenantSiteA, "actor-lane-tenant@test");
         domain(tenantSiteA, hostname);
         PanelResourceCalls.delete(HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, tenantSiteA.get(SiteModel.ID),
             TenantConduits.operator());
         assertThat((String) quarantineOn(hostname).get(ReleasedRouteClaimModel.FORMER_SUBJECTS))
-            .as("step 1: the ledger remembers tenant A").isEqualTo("user:" + tenantA);
+            .as("step 1: the ledger remembers tenant A")
+            .isEqualTo(new SubjectTag(GrantSubjectType.USER, tenantA).token());
 
         // 2. A GRANTLESS site -- empty claimant set, the operator shape -- is the vehicle for
         //    all three attempts, so only the acting identity differs between them.
         Row grantless = site("Actor Lane Grantless", "actor-lane-grantless", true);
-        int stranger = tenantOf(site("Actor Lane Stranger Site", "actor-lane-stranger", false),
+        UUID stranger = tenantOf(site("Actor Lane Stranger Site", "actor-lane-stranger", false),
             "actor-lane-stranger@test");
 
         // 3. A stranger driving that site is refused: an empty claimant set is not a pass.
         assertThat(catchThrowable(() -> Accountability.runAs(
-                Accountability.ofActor(String.valueOf(stranger), Accountability.ORIGIN_WEB),
+                Accountability.ofActor(PrincipalRef.account(stranger), Accountability.ORIGIN_WEB),
                 () -> domainModel.save(claimRow(grantless, hostname)))))
             .as("step 3: a stranger acting through a grantless site is refused")
             .isInstanceOfSatisfying(Violations.class, violations ->
@@ -1133,7 +1138,7 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         //    back -- the case the quarantine exists to protect, not to block.
         Row reclaimed = claimRow(grantless, hostname);
         Accountability.runAs(
-            Accountability.ofActor(String.valueOf(tenantA), Accountability.ORIGIN_WEB),
+            Accountability.ofActor(PrincipalRef.account(tenantA), Accountability.ORIGIN_WEB),
             () -> domainModel.save(reclaimed));
         assertThat((String) domainModel.findById(reclaimed.get(SiteDomainModel.ID))
                 .get(SiteDomainModel.LIVE_ROUTE_KEY))
@@ -1156,7 +1161,7 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         String exactHost = "shop.wildzone-a.test";
         String wildcardHost = "*.wildzone-b.test";
         Row exactSite = site("Wildzone Exact", "wildzone-exact", true);
-        int tenantA = tenantOf(exactSite, "wildzone-a@test");
+        UUID tenantA = tenantOf(exactSite, "wildzone-a@test");
         domain(exactSite, exactHost);
         Row wildcardSite = site("Wildzone Wildcard", "wildzone-wild", true);
         grantManage(wildcardSite, tenantA);
@@ -1242,7 +1247,7 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         String exactHost = "shop.regexzone-a.test";
         String regexSpace = "^(shop|www)\\.regexzone-b\\.test$";
         Row exactSite = site("Regexzone Exact", "regexzone-exact", true);
-        int tenantA = tenantOf(exactSite, "regexzone-a@test");
+        UUID tenantA = tenantOf(exactSite, "regexzone-a@test");
         domain(exactSite, exactHost);
         Row regexSite = site("Regexzone Regex", "regexzone-regex", true);
         grantManage(regexSite, tenantA);
@@ -1255,7 +1260,7 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         assertThat(exactLedger).as("step 1: the exact release is ledgered").isNotNull();
         assertThat((String) exactLedger.get(ReleasedRouteClaimModel.FORMER_SUBJECTS))
             .as("step 1: with the TENANT as former owner, not an empty operator set")
-            .isEqualTo("user:" + tenantA);
+            .isEqualTo(new SubjectTag(GrantSubjectType.USER, tenantA).token());
         Row regexLedger = Models.get(ReleasedRouteClaimModel.class).find()
             .where(ReleasedRouteClaimModel.CLAIM_KEY.eq(
                 RouteClaims.keyOf(regexSpace, SiteDomainModel.MATCH_REGEX, null, null)))

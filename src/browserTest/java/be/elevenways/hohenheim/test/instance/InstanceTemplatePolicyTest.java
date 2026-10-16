@@ -37,6 +37,7 @@ import org.junit.jupiter.api.Test;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -52,7 +53,7 @@ class InstanceTemplatePolicyTest extends HohenheimTestBase {
 
     private static final String PREFIX = "tpl-policy-";
 
-    private static Integer tenantId;
+    private static UUID tenantId;
     private static UserPrincipal tenantPrincipal;
     private static UserPrincipal adminPrincipal;
 
@@ -245,7 +246,7 @@ class InstanceTemplatePolicyTest extends HohenheimTestBase {
         row.set(InstanceTemplateModel.SETTINGS, settings);
         if (approved) {
             row.set(InstanceTemplateModel.APPROVED_AT, Now.instant());
-            row.set(InstanceTemplateModel.APPROVED_BY_USER_ID, 1L);
+            row.set(InstanceTemplateModel.APPROVED_BY_USER_ID, TenantConduits.operatorUser().get(UserModel.ID));
         }
         templates.save(row);
         return row.get(InstanceTemplateModel.ID);

@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -57,7 +58,7 @@ class PortConflictDisclosureTest extends HohenheimTestBase {
         HostFixtures.makeLocalPlaceable(16 * 1024);
         holderId = instance(HOLDER_NAME);
         deployerId = instance(PREFIX + "deployer");
-        int delegateId = ApiSupport.user("delegate@portdisclose.test", "Port Delegate");
+        UUID delegateId = ApiSupport.user("delegate@portdisclose.test", "Port Delegate");
         delegate = new UserPrincipal(delegateId, "Port Delegate");
         // B's delegate may deploy B (power implies view) and holds nothing on A.
         RecordGrants.grant(GrantSubjectType.USER, delegateId, InstanceModel.MODEL_ID, deployerId,

@@ -21,6 +21,7 @@ import be.elevenways.pepperglass.wire.MainMessages;
 import be.elevenways.pepperglass.wire.Rect;
 import be.elevenways.pepperglass.wire.WireWriter;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.util.Uuids;
 import be.elevenways.zenit.common.routing.EndpointRoute;
 import be.elevenways.zenit.common.routing.WebSocketEndpoint;
 import be.elevenways.zenit.common.security.PrincipalRef;
@@ -63,7 +64,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class SpiceScreenSourceTest {
 
-    private static final PrincipalRef ANN = PrincipalRef.account(61);
+    private static final PrincipalRef ANN = PrincipalRef.account(Uuids.v7());
     private static final Duration WAIT = Duration.ofSeconds(10);
 
     private static final ScreenAccessTable ACCESS = new ScreenAccessTable();

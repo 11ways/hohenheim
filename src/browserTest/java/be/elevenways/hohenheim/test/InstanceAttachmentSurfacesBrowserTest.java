@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 
 import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
 import static be.elevenways.hohenheim.HohenheimSlugs.MANAGE;
@@ -52,8 +53,8 @@ class InstanceAttachmentSurfacesBrowserTest extends HohenheimTestBase {
 
     @BeforeAll
     static void seed() {
-        int outsiderUser = ApiSupport.user(PREFIX + "outsider@hohenheim.local", "B14 Attachments Outsider");
-        int databasesUser = ApiSupport.user(PREFIX + "databases@hohenheim.local", "B14 Databases Tenant");
+        UUID outsiderUser = ApiSupport.user(PREFIX + "outsider@hohenheim.local", "B14 Attachments Outsider");
+        UUID databasesUser = ApiSupport.user(PREFIX + "databases@hohenheim.local", "B14 Databases Tenant");
 
         int instance = instance(PREFIX + "instance");
         instanceId = String.valueOf(instance);

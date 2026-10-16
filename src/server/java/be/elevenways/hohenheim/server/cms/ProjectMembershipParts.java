@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.protoblast.common.typed.CoreTypes;
+import be.elevenways.zenit.auth.cms.SubjectTag;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceForm;
@@ -33,6 +34,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Read-only direct membership roster over the visible projects, with no second membership store.
@@ -43,7 +45,7 @@ import java.util.Map;
  */
 public final class ProjectMembershipParts {
     public record Membership(@NonNull String key, int projectId, @NonNull String projectName,
-                             @NonNull String subjectType, int subjectId, @NonNull String member) {}
+                             @NonNull String subjectType, @NonNull UUID subjectId, @NonNull String member) {}
 
     private static final StringField PROJECT = StringField.builder("project")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("project")).build();
@@ -100,9 +102,9 @@ public final class ProjectMembershipParts {
             if (id == null) continue;
             String name = String.valueOf((Object) project.get(ProjectModel.NAME));
             // AIDEV-NOTE: nested groups stay as direct members; expanding them would disclose unrelated rosters.
-            for (Projects.Member member : Projects.directMembersOf(project)) {
-                String subject = member.subjectType() + ":" + member.subjectId();
-                rows.add(new Membership(id + ":" + subject, id, name, member.subjectType(), member.subjectId(),
+            for (SubjectTag member : Projects.directMembersOf(project)) {
+                String subject = member.token();
+                rows.add(new Membership(id + ":" + subject, id, name, member.type().key(), member.id(),
                     labels.computeIfAbsent(subject, HohenheimAccess::subjectLabel)));
             }
         }

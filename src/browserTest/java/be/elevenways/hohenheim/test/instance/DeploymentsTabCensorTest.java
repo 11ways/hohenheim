@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -42,7 +43,7 @@ class DeploymentsTabCensorTest extends HohenheimTestBase {
     private static final String DAEMON_TEXT = "dial unix /var/run/docker.sock: connect: refused";
     private static final String STEP_TEXT = "WARNING: artifact prune failed: /srv/hohenheim/secret-path";
 
-    private static Integer tenantId;
+    private static UUID tenantId;
     private static TestSession tenant;
     private static Integer applicationId;
     private static final List<Integer> operationIds = new ArrayList<>();

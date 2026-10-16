@@ -19,6 +19,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * The refusals every {@code /api/v1} route shares -- the uniform 404, no or an unknown key, a browser session, the
@@ -51,7 +52,7 @@ class ApiWireSharedRefusalsTest extends HohenheimTestBase {
         savedMaxUploadMb = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Builds.MAX_UPLOAD_MB);
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Builds.MAX_UPLOAD_MB, 1);
 
-        int operatorId = ApiWire.operatorId();
+        UUID operatorId = ApiWire.operatorId();
         Row application = Models.get(InstanceModel.class).createEmptyRow();
         application.set(InstanceModel.NAME, "wire-refusals-app");
         application.set(InstanceModel.KIND, ApplicationKind.ID.toString());

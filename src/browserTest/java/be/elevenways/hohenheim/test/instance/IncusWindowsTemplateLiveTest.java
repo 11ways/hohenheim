@@ -22,7 +22,6 @@ import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
 import be.elevenways.hohenheim.test.live.LiveLane;
-import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -44,6 +43,7 @@ import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -153,7 +153,7 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
         String absentHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, absentId);
         String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, id);
         String agentlessHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, agentlessId);
-        int userId = user("win-live");
+        UUID userId = user("win-live");
         RecordingScreenSocket viewer = null;
 
         try {
@@ -407,7 +407,7 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
         return row.get(InstanceModel.ID);
     }
 
-    private static int user(String label) {
+    private static UUID user(String label) {
         return ApiSupport.user(label + "@hohenheim.local", "Windows " + label);
     }
 

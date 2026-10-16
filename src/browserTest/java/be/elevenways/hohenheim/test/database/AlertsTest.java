@@ -43,6 +43,7 @@ import java.net.InetSocketAddress;
 import java.net.InetAddress;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -223,9 +224,9 @@ class AlertsTest {
     @Test
     void alertsAlwaysReachEveryAdministratorsInbox() {
         // 1. One enabled administrator and one disabled one, and NOT ONE channel row.
-        int admin = seedUser("inbox-admin@hohenheim.local", true, true);
-        int disabled = seedUser("inbox-disabled@hohenheim.local", false, true);
-        int bystander = seedUser("inbox-bystander@hohenheim.local", true, false);
+        UUID admin = seedUser("inbox-admin@hohenheim.local", true, true);
+        UUID disabled = seedUser("inbox-disabled@hohenheim.local", false, true);
+        UUID bystander = seedUser("inbox-bystander@hohenheim.local", true, false);
 
         assertThat(Alerts.administrators())
             .as("only the enabled holder of the admin permission is an alert recipient")
@@ -315,7 +316,7 @@ class AlertsTest {
      *
      * @return the new user's id
      */
-    private static int seedUser(@NonNull String email, boolean enabled, boolean administrator) {
+    private static UUID seedUser(@NonNull String email, boolean enabled, boolean administrator) {
         Row user = Models.get(UserModel.class).createEmptyRow();
         user.set(UserModel.EMAIL, email);
         user.set(UserModel.DISPLAY_NAME, email);
@@ -324,7 +325,7 @@ class AlertsTest {
         user.set(UserModel.UPDATED_AT, Now.instant());
         Models.get(UserModel.class).save(user);
 
-        Integer id = user.get(UserModel.ID);
+        UUID id = user.get(UserModel.ID);
 
         if (administrator) {
             Row grant = Models.get(GrantModel.class).createEmptyRow();

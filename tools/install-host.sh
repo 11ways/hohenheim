@@ -84,7 +84,7 @@ Required:
   --roles <a,b,c>           any of: proxy,dns,firewall,stacks,databases,instances
 
 Options:
-  --main-url <url>          public URL of this panel (network.main_url + auth.external_base_url)
+  --main-url <url>          public URL of this panel (network.main_url)
   --admin-email <address>   Let's Encrypt registration address
   --with-docker             install Docker CE from Docker's apt repo (implied by
                             the instances/databases/stacks roles)
@@ -974,18 +974,6 @@ else
     }"
 fi
 
-# zenit-auth reads auth.* from the framework's own settings chain; a separate
-# settings/auth.dry is a retired name the server adopts into local.dry at boot.
-LOCAL_AUTH_BLOCK=""
-if [ -n "$MAIN_URL" ]; then
-    LOCAL_AUTH_BLOCK=",
-    \"auth\": {
-        \"external_base_url\": \"$MAIN_URL\"
-    }"
-else
-    skip "auth.external_base_url needs --main-url"
-fi
-
 seed_settings "$SETTINGS_DIR/local.dry" 0600 "{
     \"environment\": \"live\",$LOCAL_DATABASE_BLOCK
     \"network\": {
@@ -996,7 +984,7 @@ seed_settings "$SETTINGS_DIR/local.dry" 0600 "{
     },
     \"debugging\": {
         \"expose_error_details\": false
-    }$LOCAL_AUTH_BLOCK$LOCAL_HOHENHEIM_BLOCK
+    }$LOCAL_HOHENHEIM_BLOCK
 }
 "
 

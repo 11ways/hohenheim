@@ -46,6 +46,7 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -111,10 +112,10 @@ class PlacedConsoleCommandTest {
             assertThat(consoleRows(instanceId)).as("step 2: one activity row per line").isEqualTo(2);
 
             // 3. A schedule step sends its stored line through the same operation, recorded the same way.
-            int runAs = ApiSupport.user("placed-console-runner@test", "Console Runner");
+            UUID runAs = ApiSupport.user("placed-console-runner@test", "Console Runner");
             RecordGrants.grant(GrantSubjectType.USER, runAs, InstanceModel.MODEL_ID, instanceId,
                 HohenheimCapabilities.MANAGE, true);
-            int schedule = schedule(instanceId, (long) runAs);
+            int schedule = schedule(instanceId, runAs);
             step(schedule, Map.of(InstanceOperations.COMMAND.getName(), "say scheduled"));
             Row run = new RecordSchedules(datasource).runNow(schedule);
             Row stepRun = Models.get(RecordScheduleStepRunModel.class).findForRun(run.get(RecordScheduleRunModel.ID))
@@ -184,7 +185,7 @@ class PlacedConsoleCommandTest {
         return id[0];
     }
 
-    private static int schedule(int instanceId, Long runAs) {
+    private static int schedule(int instanceId, UUID runAs) {
         Model schedules = Models.get(RecordScheduleModel.class);
         Row schedule = schedules.createEmptyRow();
         schedule.set(RecordScheduleModel.MODEL, InstanceModel.MODEL_ID.toString());

@@ -79,6 +79,7 @@ import java.lang.reflect.Proxy;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -101,7 +102,7 @@ class InstancePowerOperationsTest {
 
     private static SqlDatasource datasource;
     private static BackupLaneFixture fixture;
-    private static int tenantId;
+    private static UUID tenantId;
 
     @BeforeAll
     static void setUp() throws Exception {
@@ -299,7 +300,7 @@ class InstancePowerOperationsTest {
             new InstanceService().deploy(instanceId);
             int stoppedBefore = activity(instanceId, HohenheimActivityAction.STOPPED);
             int deployedBefore = activity(instanceId, HohenheimActivityAction.DEPLOYED);
-            int restartSchedule = schedule(instanceId, "scheduled restart", (long) tenantId);
+            int restartSchedule = schedule(instanceId, "scheduled restart", tenantId);
             step(restartSchedule, InstanceOperations.RESTART, null, StepFailurePolicy.ABORT);
             Row restartRun = new RecordSchedules(datasource).runNow(restartSchedule);
             Row restartStep = stepRuns(restartRun).get(0);
@@ -374,7 +375,7 @@ class InstancePowerOperationsTest {
             assertThat(api(InstanceOperations.STOP, tenant, instanceId).value())
                 .as("step 6: a second stop answers already stopped")
                 .isEqualTo(new PowerResult(InstanceModel.STATUS_STOPPED, null, true));
-            int stopSchedule = schedule(instanceId, "scheduled stop", (long) tenantId);
+            int stopSchedule = schedule(instanceId, "scheduled stop", tenantId);
             step(stopSchedule, InstanceOperations.STOP, null, StepFailurePolicy.ABORT);
             Row stopStep = stepRuns(new RecordSchedules(datasource).runNow(stopSchedule)).get(0);
             assertThat(stopStep.get(RecordScheduleStepRunModel.STATUS))
@@ -396,7 +397,7 @@ class InstancePowerOperationsTest {
             assertThat(activity(instanceId, HohenheimActivityAction.BACKUP) - backupsBefore)
                 .as("step 7: one backup row, written by the service").isEqualTo(1);
             int snapshotsBefore = activity(instanceId, HohenheimActivityAction.SNAPSHOT);
-            int snapshotSchedule = schedule(instanceId, "scheduled snapshot", (long) tenantId);
+            int snapshotSchedule = schedule(instanceId, "scheduled snapshot", tenantId);
             step(snapshotSchedule, InstanceOperations.SNAPSHOT, Map.of("note", "nightly"), StepFailurePolicy.ABORT);
             Row snapshotRun = stepRuns(new RecordSchedules(datasource).runNow(snapshotSchedule)).get(0);
             assertThat(snapshotRun.get(RecordScheduleStepRunModel.STATUS)).as("step 7: the scheduled snapshot ran")
@@ -434,7 +435,7 @@ class InstancePowerOperationsTest {
                 .isEqualTo(service.get());
             assertThat(String.valueOf(((Map<?, ?>) adapted.get()).get("code")))
                 .as("step 8: code database_not_ready").isEqualTo("database_not_ready");
-            int waitingSchedule = schedule(waiting, "waiting start", (long) tenantId);
+            int waitingSchedule = schedule(waiting, "waiting start", tenantId);
             step(waitingSchedule, InstanceOperations.START, null, StepFailurePolicy.RETRY);
             Row waitingStep = stepRuns(new RecordSchedules(datasource).runNow(waitingSchedule)).get(0);
             assertThat(waitingStep.get(RecordScheduleStepRunModel.STATUS))
@@ -450,7 +451,7 @@ class InstancePowerOperationsTest {
             .subjects(List.of(row)));
     }
 
-    private static int schedule(int instanceId, String name, @Nullable Long runAs) {
+    private static int schedule(int instanceId, String name, @Nullable UUID runAs) {
         Model schedules = Models.get(RecordScheduleModel.class);
         Row schedule = schedules.createEmptyRow();
         schedule.set(RecordScheduleModel.MODEL, InstanceModel.MODEL_ID.toString());

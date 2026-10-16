@@ -71,6 +71,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -188,11 +189,11 @@ class SftpJourneyTest {
         new InstanceService().deploy(id);
         inContainer(docker, handle, "printf 'hello\\n' > /data/hello.txt && ln -sfn /etc /data/etcdir");
 
-        int reader = ApiSupport.user("sftp-reader@live.test");
-        int writer = ApiSupport.user("sftp-writer@live.test");
-        int stranger = ApiSupport.user("sftp-stranger@live.test");
+        UUID reader = ApiSupport.user("sftp-reader@live.test");
+        UUID writer = ApiSupport.user("sftp-writer@live.test");
+        UUID stranger = ApiSupport.user("sftp-stranger@live.test");
         // An operator holds every permission through the wildcard and no grant on this instance at all.
-        int operator = ApiSupport.user("sftp-operator@live.test");
+        UUID operator = ApiSupport.user("sftp-operator@live.test");
         GrantService.createDirectGrant(GrantSubjectType.USER, operator, "*", true);
         grant(reader, id, HohenheimCapabilities.FILES_READ);
         grant(writer, id, HohenheimCapabilities.FILES_READ);
@@ -339,8 +340,8 @@ class SftpJourneyTest {
         }
 
         // 9b. The Files tab lists a viewer's own open session and no one else's; End closes it at once.
-        AccessContext readerAccess = AccessContext.detached(new UserPrincipal((long) reader, "user-" + reader));
-        AccessContext writerAccess = AccessContext.detached(new UserPrincipal((long) writer, "user-" + writer));
+        AccessContext readerAccess = AccessContext.detached(new UserPrincipal(reader, "user-" + reader));
+        AccessContext writerAccess = AccessContext.detached(new UserPrincipal(writer, "user-" + writer));
         try (Connection read = signIn(client, port, InstanceSftpRealm.username("sftp-reader@live.test", id),
             readerPassword)) {
             List<SftpSessionInfo> own = HohenheimSftp.openOn(readerAccess, id);
@@ -400,19 +401,19 @@ class SftpJourneyTest {
         return row.get(InstanceModel.ID);
     }
 
-    private static void grant(int userId, int instanceId, String capability) {
+    private static void grant(UUID userId, int instanceId, String capability) {
         RecordGrants.grant(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, instanceId, capability, true);
     }
 
     /** An SFTP password minted the way the Files tab's card mints one: by its holder, narrowed to what it holds. */
-    private static String password(int userId, boolean write) {
+    private static String password(UUID userId, boolean write) {
         return ApiKeyService.create(holder(userId), userId, "SFTP", InstanceSftpRealm.passwordScopes(holder(userId),
             write), null).plaintext();
     }
 
     /** The account's own session, as the Files tab reads it. */
-    private static AccessContext holder(int userId) {
-        return AccessContext.detached(new UserPrincipal((long) userId, "user-" + userId));
+    private static AccessContext holder(UUID userId) {
+        return AccessContext.detached(new UserPrincipal(userId, "user-" + userId));
     }
 
     private static Connection signIn(SshClient client, int port, String username, String password) throws IOException {

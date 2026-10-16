@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
@@ -37,8 +38,8 @@ class TenantAccessListSecurityTest extends HohenheimTestBase {
 
     private static UserPrincipal alice;
     private static UserPrincipal bob;
-    private static Integer aliceId;
-    private static Integer bobId;
+    private static UUID aliceId;
+    private static UUID bobId;
     private static Integer aliceSiteId;
     private static Integer bobSiteId;
     private static Integer aliceListId;

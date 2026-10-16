@@ -26,6 +26,7 @@ import java.net.http.HttpResponse;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static be.elevenways.hohenheim.test.ApiSupport.codeOf;
 import static be.elevenways.hohenheim.test.ApiSupport.form;
@@ -52,7 +53,7 @@ class InstanceApiTest extends HohenheimTestBase {
     /** The same tenant, with a key wide enough to carry a `destroy` grant once one exists. */
     private static String keyTenantDestroy;
 
-    private static int tenantId;
+    private static UUID tenantId;
 
     /** A Docker host the application kind's picker rules accept. */
     private static Integer hostId;
@@ -67,7 +68,7 @@ class InstanceApiTest extends HohenheimTestBase {
         hostId = host(PREFIX + "docker-host");
         tenantId = user("instance-api-tenant@surface.test", "Instance Api Tenant");
 
-        int adminId = Models.get(UserModel.class).find()
+        UUID adminId = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first().get(UserModel.ID);
         keyAdmin = ApiKeyService.create(adminId, PREFIX + "admin", List.of("hohenheim.*"), null)
             .plaintext();

@@ -15,6 +15,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.test.source.TestSources;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.zenit.auth.cms.SubjectTag;
 import be.elevenways.zenit.auth.model.GrantModel;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.PermissionGroupModel;
@@ -37,6 +38,7 @@ import java.net.http.HttpResponse;
 import java.util.Objects;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
@@ -62,7 +64,7 @@ class ManagePanelTest extends HohenheimTestBase {
     private Integer siteBId;
     private Integer domainAId;
     private String managedHost;
-    private Integer operatorId;
+    private UUID operatorId;
     private String operatorSession;
     private String operatorCsrf;
 
@@ -173,7 +175,8 @@ class ManagePanelTest extends HohenheimTestBase {
         HttpResponse<String> pageView = adminGet("/admin/sites/" + siteAId + "/page/access");
         assertThat(pageView.statusCode()).isEqualTo(200);
         assertThat(pageView.body()).contains("<za-record-sharing");
-        assertThat(pageView.body()).contains("data-subject=\"user:" + operatorId + "\"");
+        assertThat(pageView.body())
+            .contains("data-subject=\"" + new SubjectTag(GrantSubjectType.USER, operatorId).token() + "\"");
         assertThat(pageView.body()).contains("Site Operator");
 
         // Panel eligibility is derived from the effective record grant; no
@@ -435,14 +438,15 @@ class ManagePanelTest extends HohenheimTestBase {
 
         GrantService.createDirectGrant(GrantSubjectType.USER, operatorId, "hohenheim.manage.access", true);
         HttpResponse<String> remove = adminPostForm(saveAccessPath(),
-            SAVE_ACCESS_FIELDS + "access.__removed=" + java.net.URLEncoder.encode("user:" + operatorId,
-                java.nio.charset.StandardCharsets.UTF_8));
+            SAVE_ACCESS_FIELDS + "access.__removed=" + java.net.URLEncoder.encode(
+                new SubjectTag(GrantSubjectType.USER, operatorId).token(), java.nio.charset.StandardCharsets.UTF_8));
         assertThat(remove.statusCode()).isIn(302, 303);
 
         // The matrix has no subject row for the operator anymore.
         HttpResponse<String> pageView = adminGet("/admin/sites/" + siteAId + "/page/access");
         assertThat(pageView.statusCode()).isEqualTo(200);
-        assertThat(pageView.body()).doesNotContain("data-subject=\"user:" + operatorId + "\"");
+        assertThat(pageView.body())
+            .doesNotContain("data-subject=\"" + new SubjectTag(GrantSubjectType.USER, operatorId).token() + "\"");
 
         // The independently administered panel grant remains untouched.
         assertThat(GrantService.listDirectGrants(GrantSubjectType.USER, operatorId))
@@ -477,7 +481,7 @@ class ManagePanelTest extends HohenheimTestBase {
         group.set(PermissionGroupModel.SLUG, "manage-operators");
         group.set(PermissionGroupModel.TITLE, "Manage Operators");
         Models.get(PermissionGroupModel.class).save(group);
-        Integer groupId = group.get(PermissionGroupModel.ID);
+        UUID groupId = group.get(PermissionGroupModel.ID);
 
         GrantService.createDirectGrant(GrantSubjectType.USER, operatorId, "group.manage-operators", true);
         RecordGrants.grant(GrantSubjectType.GROUP, groupId, SiteModel.MODEL_ID, siteBId,
@@ -619,7 +623,7 @@ class ManagePanelTest extends HohenheimTestBase {
      */
     @Test
     void managedSiteIdsStaysWithinItsPerRequestQueryBudget() throws Exception {
-        Integer tenantId = ApiSupport.user("budget@hohenheim.local", "Budget Tenant");
+        UUID tenantId = ApiSupport.user("budget@hohenheim.local", "Budget Tenant");
         TestSession session = sessionFor(tenantId);
 
         RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteAId,

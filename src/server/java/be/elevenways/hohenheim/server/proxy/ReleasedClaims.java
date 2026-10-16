@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.auth.cms.SubjectTag;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.PermissionResolver;
 import be.elevenways.zenit.common.Zenit;
@@ -22,6 +23,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * THE release quarantine: remembers which owner gave up a route claim, and refuses a
@@ -265,21 +267,16 @@ public final class ReleasedClaims {
         if (former.isEmpty()) {
             return false;
         }
-        String actor = Accountability.current().actor();
-        if (actor == null) {
-            // System/unattended work has no identity to match; it is never "the former owner".
-            return false;
-        }
-        int userId;
-        try {
-            userId = Integer.parseInt(actor);
-        } catch (NumberFormatException notAUserId) {
+        UUID accountId = Accountability.current().accountId();
+        if (accountId == null) {
+            // System/unattended work, or an actor that is no account, has no subject to match: never "the former
+            // owner".
             return false;
         }
         try {
             for (PermissionResolver.Subject subject
-                    : PermissionResolver.expandSubjects(GrantSubjectType.USER, userId)) {
-                if (former.contains(subject.type().key() + ":" + subject.id())) {
+                    : PermissionResolver.expandSubjects(GrantSubjectType.USER, accountId)) {
+                if (former.contains(new SubjectTag(subject.type(), subject.id()).token())) {
                     return true;
                 }
             }

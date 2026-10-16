@@ -54,7 +54,7 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
     private static Integer instanceId;
     private static Integer strangerHostId;
     private static Integer unpinnedHostId;
-    private static Integer tenantId;
+    private static UUID tenantId;
     private static String tenantSession;
     private static String tenantCsrf;
 

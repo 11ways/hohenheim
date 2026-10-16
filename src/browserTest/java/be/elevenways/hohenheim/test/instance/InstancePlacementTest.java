@@ -24,6 +24,7 @@ import be.elevenways.hohenheim.test.TestAccessContexts;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.common.util.Uuids;
 import be.elevenways.zenit.auth.model.GrantModel;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -871,7 +872,7 @@ class InstancePlacementTest {
             // 5. THE TENANT PATH IS UNCHANGED: a submitted host is ignored outright and
             //    the chooser answers, so the cordoned daemon is not reachable by asking.
             AccessContext tenant = TestAccessContexts.contextFor(
-                new UserPrincipal(987654L, "Placement Tenant"));
+                new UserPrincipal(Uuids.v7(), "Placement Tenant"));
             assertThat(HohenheimAccess.isAdmin(tenant))
                 .as("fixture: the tenant holds no operator permission")
                 .isFalse();
@@ -909,7 +910,6 @@ class InstancePlacementTest {
         grant.set(GrantModel.PERMISSION, "*");
         grant.set(GrantModel.VALUE, true);
         Models.get(GrantModel.class).save(grant);
-        return TestAccessContexts.contextFor(new UserPrincipal(
-            ((Integer) user.get(UserModel.ID)).longValue(), "Placement Operator"));
+        return TestAccessContexts.contextFor(new UserPrincipal(user.get(UserModel.ID), "Placement Operator"));
     }
 }

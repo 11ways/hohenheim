@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.source.GiteaProviderKind;
 import be.elevenways.hohenheim.server.upstream.TenantUpstreams;
+import be.elevenways.protoblast.common.util.Uuids;
 import be.elevenways.zenit.auth.AuthEndpoints;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -27,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -43,12 +45,12 @@ class OperatorTrustedTargetsTest extends HohenheimTestBase {
 
     @Test
     void onlyTheSystemTierAimsAnOperatorOwnedRecordJourney() throws Exception {
-        int adminId = ApiSupport.user("trusted-target-admin@hohenheim.local", "Delegated Admin");
+        UUID adminId = ApiSupport.user("trusted-target-admin@hohenheim.local", "Delegated Admin");
         // zenit-auth's own /admin prefix baseline demands auth.admin.access on top of the panel grant.
         GrantService.createDirectGrant(GrantSubjectType.USER, adminId, AuthEndpoints.PERM_ADMIN_ACCESS.value(), true);
         GrantService.createDirectGrant(GrantSubjectType.USER, adminId, HohenheimSources.ADMIN_ACCESS.value(), true);
         UserPrincipal delegated = new UserPrincipal(adminId, "Delegated Admin");
-        int tenantId = ApiSupport.user("trusted-target-tenant@hohenheim.local", "Site Tenant");
+        UUID tenantId = ApiSupport.user("trusted-target-tenant@hohenheim.local", "Site Tenant");
         Model sites = Models.get(SiteModel.class);
         Model providers = Models.get(GitProviderModel.class);
         int operatorSite = site("trusted-target-operator");
@@ -144,10 +146,10 @@ class OperatorTrustedTargetsTest extends HohenheimTestBase {
 
     @Test
     void aSiteUpstreamNobodyTrustedNeverGainsAnyAddressReachJourney() {
-        int adminId = ApiSupport.user("provenance-admin@hohenheim.local", "Provenance Delegate");
+        UUID adminId = ApiSupport.user("provenance-admin@hohenheim.local", "Provenance Delegate");
         GrantService.createDirectGrant(GrantSubjectType.USER, adminId, HohenheimSources.ADMIN_ACCESS.value(), true);
         UserPrincipal delegated = new UserPrincipal(adminId, "Provenance Delegate");
-        int tenantId = ApiSupport.user("provenance-tenant@hohenheim.local", "Provenance Tenant");
+        UUID tenantId = ApiSupport.user("provenance-tenant@hohenheim.local", "Provenance Tenant");
         Model sites = Models.get(SiteModel.class);
         int siteId = site("provenance-site");
         try {
@@ -203,7 +205,7 @@ class OperatorTrustedTargetsTest extends HohenheimTestBase {
     void mapConstructedTargetUsesActualChangesJourney() {
         Model providers = Models.get(GitProviderModel.class);
         int id = provider("map-target-provenance");
-        int admin = ApiSupport.user("map-target-admin@hohenheim.local", "Map Delegate");
+        UUID admin = ApiSupport.user("map-target-admin@hohenheim.local", "Map Delegate");
         GrantService.createDirectGrant(GrantSubjectType.USER, admin, HohenheimSources.ADMIN_ACCESS.value(), true);
         UserPrincipal delegated = new UserPrincipal(admin, "Map Delegate");
         try {
@@ -241,8 +243,8 @@ class OperatorTrustedTargetsTest extends HohenheimTestBase {
     void inPlaceSettingsChangeUsesActualChangesJourney() {
         Model sites = Models.get(SiteModel.class);
         int id = site("in-place-target-provenance");
-        int tenant = ApiSupport.user("in-place-owner@hohenheim.local", "In-place Owner");
-        int admin = ApiSupport.user("in-place-admin@hohenheim.local", "In-place Delegate");
+        UUID tenant = ApiSupport.user("in-place-owner@hohenheim.local", "In-place Owner");
+        UUID admin = ApiSupport.user("in-place-admin@hohenheim.local", "In-place Delegate");
         GrantService.createDirectGrant(GrantSubjectType.USER, admin, HohenheimSources.ADMIN_ACCESS.value(), true);
         UserPrincipal delegated = new UserPrincipal(admin, "In-place Delegate");
         try {
@@ -276,7 +278,7 @@ class OperatorTrustedTargetsTest extends HohenheimTestBase {
     void batchSaveThenNameOnlyDoesNotVouchJourney() {
         Model sites = Models.get(SiteModel.class);
         int id = site("batch-target-provenance");
-        int admin = ApiSupport.user("batch-target-admin@hohenheim.local", "Batch Delegate");
+        UUID admin = ApiSupport.user("batch-target-admin@hohenheim.local", "Batch Delegate");
         GrantService.createDirectGrant(GrantSubjectType.USER, admin, HohenheimSources.ADMIN_ACCESS.value(), true);
         UserPrincipal delegated = new UserPrincipal(admin, "Batch Delegate");
         try {
@@ -302,7 +304,7 @@ class OperatorTrustedTargetsTest extends HohenheimTestBase {
     @Test
     void rollbackRetainsIntentAndCommitClearsItJourney() {
         Model users = Models.get(UserModel.class);
-        int id = ApiSupport.user("rollback-intent@hohenheim.local", "Before rollback");
+        UUID id = ApiSupport.user("rollback-intent@hohenheim.local", "Before rollback");
         Row row = users.findById(id);
         row.set(UserModel.DISPLAY_NAME, "Pending rollback");
         // 1. An inner successful save cannot clear the outer transaction's intent on rollback.
@@ -324,7 +326,7 @@ class OperatorTrustedTargetsTest extends HohenheimTestBase {
     @Test
     void upsertAndAfterSaveStagingCompleteOnlyPersistedIntentJourney() {
         Model users = Models.get(UserModel.class);
-        int id = ApiSupport.user("after-save-intent@hohenheim.local", "Original");
+        UUID id = ApiSupport.user("after-save-intent@hohenheim.local", "Original");
         Row row = users.findById(id);
         // 1. Successful upsert and upsertAll complete the same lifetime as save.
         row.set(UserModel.DISPLAY_NAME, "Upserted");
@@ -334,8 +336,9 @@ class OperatorTrustedTargetsTest extends HohenheimTestBase {
         users.upsertAll(List.of(row));
         assertThat(row.isWritten(UserModel.DISPLAY_NAME)).as("step 1: upsertAll completed intent").isFalse();
         // 1b. Insert-if-absent consumes intent only when a row was actually inserted.
+        UUID insertedId = Uuids.v7();
         Row inserted = users.createEmptyRow();
-        inserted.set(UserModel.ID, id + 1_000_000);
+        inserted.set(UserModel.ID, insertedId);
         inserted.set(UserModel.EMAIL, "insert-intent@hohenheim.local");
         inserted.set(UserModel.DISPLAY_NAME, "Inserted intent");
         try {
@@ -345,7 +348,7 @@ class OperatorTrustedTargetsTest extends HohenheimTestBase {
             assertThat(users.insertIfAbsent(inserted)).as("step 1b: existing key was not overwritten").isFalse();
             assertThat(inserted.isWritten(UserModel.DISPLAY_NAME)).as("step 1b: unapplied intent is retained").isTrue();
         } finally {
-            HardDeletes.byId(users, id + 1_000_000);
+            HardDeletes.byId(users, insertedId);
         }
         // 2. An after-save hook's next write, even to the same field, remains staged after commit.
         ModelHook<SaveToDatasource> hook = context -> {
@@ -423,7 +426,7 @@ class OperatorTrustedTargetsTest extends HohenheimTestBase {
 
     /** The seeded operator account (it holds "*"), as a request caller rather than the test body's system work. */
     private static UserPrincipal operator() {
-        int id = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first()
+        UUID id = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first()
             .get(UserModel.ID);
         return new UserPrincipal(id, "Test Admin");
     }

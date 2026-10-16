@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
 import be.elevenways.hohenheim.server.cms.AuthProviderParts;
 import be.elevenways.hohenheim.server.cms.ReleasedClaimParts;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.auth.cms.SubjectTag;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
@@ -34,6 +35,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
 import static be.elevenways.hohenheim.HohenheimSlugs.MANAGE;
@@ -55,7 +57,7 @@ class AccessSurfacesBrowserTest extends HohenheimTestBase {
     private static final String PROVIDERS = "auth-providers";
     private static final String CLAIMS = "released-claims";
 
-    private static int tenantId;
+    private static UUID tenantId;
     private static String siteId;
     private static String sharedListId;
     private static String tenantListId;
@@ -70,7 +72,7 @@ class AccessSurfacesBrowserTest extends HohenheimTestBase {
     @BeforeAll
     static void seed() {
         tenantId = ApiSupport.user(PREFIX + "tenant@hohenheim.local", "Access Surfaces Tenant");
-        int emptyId = ApiSupport.user(PREFIX + "empty@hohenheim.local", "Access Surfaces Empty");
+        UUID emptyId = ApiSupport.user(PREFIX + "empty@hohenheim.local", "Access Surfaces Empty");
         sharedListId = String.valueOf(accessList(PREFIX + "shared", true));
         int tenantList = accessList(PREFIX + "tenant", false);
         tenantListId = String.valueOf(tenantList);
@@ -217,7 +219,8 @@ class AccessSurfacesBrowserTest extends HohenheimTestBase {
         Row row = claims.createEmptyRow();
         row.set(ReleasedRouteClaimModel.CLAIM_KEY, PREFIX + "claim-key");
         row.set(ReleasedRouteClaimModel.HOSTNAME, hostname);
-        row.set(ReleasedRouteClaimModel.FORMER_SUBJECTS, HohenheimAccess.packSubjects(Set.of("user:" + tenantId)));
+        row.set(ReleasedRouteClaimModel.FORMER_SUBJECTS,
+            HohenheimAccess.packSubjects(Set.of(new SubjectTag(GrantSubjectType.USER, tenantId).token())));
         row.set(ReleasedRouteClaimModel.RELEASED_AT, Now.instant());
         claims.save(row);
         return row.get(ReleasedRouteClaimModel.ID);

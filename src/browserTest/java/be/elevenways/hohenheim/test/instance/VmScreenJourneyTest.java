@@ -47,6 +47,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -83,7 +84,7 @@ class VmScreenJourneyTest extends HohenheimTestBase {
     @Test
     void aViewerSeesAndDrivesTheScreenAWatcherWaitsForControlAndRevocationEndsTheView() throws Exception {
         int instanceId = vm("screen-journey-vm", InstanceModel.STATUS_RUNNING);
-        int tenantId = ApiSupport.user("screen-tenant@hohenheim.local", "Screen tenant");
+        UUID tenantId = ApiSupport.user("screen-tenant@hohenheim.local", "Screen tenant");
         RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, instanceId,
             HohenheimCapabilities.CONSOLE, true);
         VmSpice previous = VmSpice.SEAM.installed();
@@ -155,8 +156,8 @@ class VmScreenJourneyTest extends HohenheimTestBase {
 
     @Test
     void theScreenSocketAdmitsExactlyTheScreenModesAudience() throws Exception {
-        int viewerId = ApiSupport.user("screen-viewer@hohenheim.local", "Screen viewer");
-        int consoleId = ApiSupport.user("screen-console@hohenheim.local", "Screen console");
+        UUID viewerId = ApiSupport.user("screen-viewer@hohenheim.local", "Screen viewer");
+        UUID consoleId = ApiSupport.user("screen-console@hohenheim.local", "Screen console");
         int running = vm("screen-gate-vm", InstanceModel.STATUS_RUNNING);
         int stopped = vm("screen-gate-stopped", InstanceModel.STATUS_STOPPED);
         int container = instance("screen-gate-container", "hohenheim:docker_container",
@@ -164,18 +165,18 @@ class VmScreenJourneyTest extends HohenheimTestBase {
         int[] generated = new int[1];
         OwnedInstances.inScopeUnchecked("site", SiteModel.MODEL_ID, 424243,
             () -> generated[0] = vm("screen-gate-generated", InstanceModel.STATUS_RUNNING));
-        List<int[]> grants = new ArrayList<>();
+        List<Map.Entry<UUID, Integer>> grants = new ArrayList<>();
         VmSpice previous = VmSpice.SEAM.installed();
         try (ScriptedSpiceServer spice = this.spice()) {
             VmSpice.SEAM.install((serverName,
                     handle, takeOver) -> VmSpice.Link.direct(SessionOptions.builder("127.0.0.1",
                 spice.port())));
             for (int instanceId : new int[] {running, stopped, container, generated[0]}) {
-                grants.add(new int[] {consoleId, instanceId});
+                grants.add(Map.entry(consoleId, instanceId));
                 RecordGrants.grant(GrantSubjectType.USER, consoleId, InstanceModel.MODEL_ID, instanceId,
                     HohenheimCapabilities.CONSOLE, true);
             }
-            grants.add(new int[] {viewerId, running});
+            grants.add(Map.entry(viewerId, running));
             RecordGrants.grant(GrantSubjectType.USER, viewerId, InstanceModel.MODEL_ID, running,
                 HohenheimCapabilities.VIEW, true);
 
@@ -206,9 +207,9 @@ class VmScreenJourneyTest extends HohenheimTestBase {
             console.disconnect();
         } finally {
             VmSpice.SEAM.restoreInstalled(previous);
-            for (int[] grant : grants) {
-                RecordGrants.revoke(GrantSubjectType.USER, grant[0], InstanceModel.MODEL_ID, grant[1],
-                    grant[0] == viewerId ? HohenheimCapabilities.VIEW : HohenheimCapabilities.CONSOLE);
+            for (Map.Entry<UUID, Integer> grant : grants) {
+                RecordGrants.revoke(GrantSubjectType.USER, grant.getKey(), InstanceModel.MODEL_ID, grant.getValue(),
+                    grant.getKey().equals(viewerId) ? HohenheimCapabilities.VIEW : HohenheimCapabilities.CONSOLE);
             }
             for (int instanceId : new int[] {running, stopped, container}) {
                 HardDeletes.byId(Models.get(InstanceModel.class), instanceId);
@@ -222,7 +223,7 @@ class VmScreenJourneyTest extends HohenheimTestBase {
 
     @Test
     void oneConsoleServesAVmsViewersUpToItsCapAndEndsWithTheLastOneOrAFailedSource() throws Exception {
-        int consoleId = ApiSupport.user("screen-console-op@hohenheim.local", "Screen console op");
+        UUID consoleId = ApiSupport.user("screen-console-op@hohenheim.local", "Screen console op");
         int instanceId = vm("screen-console-vm", InstanceModel.STATUS_RUNNING);
         RecordGrants.grant(GrantSubjectType.USER, consoleId, InstanceModel.MODEL_ID, instanceId,
             HohenheimCapabilities.CONSOLE, true);
@@ -368,7 +369,7 @@ class VmScreenJourneyTest extends HohenheimTestBase {
         return false;
     }
 
-    private static RecordingScreenSocket open(int userId, int instanceId) {
+    private static RecordingScreenSocket open(UUID userId, int instanceId) {
         return RecordingScreenSocket.as(new UserPrincipal(userId, "Screen user " + userId)).autoAck(true)
             .with(HohenheimEndpoints.INSTANCE_ID, instanceId).open(HohenheimEndpoints.VM_FRAMEBUFFER);
     }

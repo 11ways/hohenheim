@@ -166,7 +166,7 @@ public final class InstanceTemplateHandlers {
             "update script");
         template.set(InstanceTemplateModel.APPROVED_AT, Now.instant());
         template.set(InstanceTemplateModel.APPROVED_BY_USER_ID,
-            Objects.requireNonNull(call.access(), "an operator approves").principalId());
+            Objects.requireNonNull(call.access(), "an operator approves").accountId());
         Models.get(InstanceTemplateModel.class).save(template);
         ActivityLog.record(Models.get(InstanceTemplateModel.class), template.get(InstanceTemplateModel.ID),
             HohenheimActivityAction.APPROVED, "operator approval");

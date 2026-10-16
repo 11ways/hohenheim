@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.zenit.auth.cms.SubjectTag;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
@@ -13,6 +14,7 @@ import be.elevenways.zenit.common.security.AccessContext;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -29,7 +31,7 @@ class ConvertedEntryAccessTabTest extends HohenheimTestBase {
 
     @Test
     void aCertificateSharesThroughItsAccessTab() throws Exception {
-        int tenantId = ApiSupport.user(PREFIX + "tenant@hohenheim.local", "Converted Access Tenant");
+        UUID tenantId = ApiSupport.user(PREFIX + "tenant@hohenheim.local", "Converted Access Tenant");
         int certificateId = certificate();
         try {
             // 1. The certificate entry declares no contributions, yet its record offers the Access tab.
@@ -50,7 +52,8 @@ class ConvertedEntryAccessTabTest extends HohenheimTestBase {
 
             // 3. The tab now lists the tenant as a subject of the record.
             assertThat(adminGet("/admin/certificates/" + certificateId + "/page/access").body())
-                .as("step 3: the grant is a subject row of the tab").contains("data-subject=\"user:" + tenantId + "\"");
+                .as("step 3: the grant is a subject row of the tab")
+                .contains("data-subject=\"" + new SubjectTag(GrantSubjectType.USER, tenantId).token() + "\"");
         } finally {
             RecordGrants.revoke(GrantSubjectType.USER, tenantId, CertificateModel.MODEL_ID, certificateId,
                 HohenheimCapabilities.VIEW);
@@ -58,7 +61,7 @@ class ConvertedEntryAccessTabTest extends HohenheimTestBase {
         }
     }
 
-    private static boolean tenantReaches(int tenantId, int certificateId) {
+    private static boolean tenantReaches(UUID tenantId, int certificateId) {
         AccessContext tenant = AccessContext.of(TenantConduits.stubFor(
             new UserPrincipal(tenantId, "Converted Access Tenant")));
         return HohenheimAccess.reachesRecord(tenant, CertificateModel.MODEL_ID, certificateId,

@@ -41,6 +41,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -72,7 +73,7 @@ class LocalNetworkGuestTest extends HohenheimTestBase {
         Row adminUser = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         UserPrincipal admin = new UserPrincipal(adminUser.get(UserModel.ID), "Test Admin");
-        Integer tenantId = ApiSupport.user("lan-tenant@hohenheim.local", "LAN Tenant");
+        UUID tenantId = ApiSupport.user("lan-tenant@hohenheim.local", "LAN Tenant");
         UserPrincipal tenant = new UserPrincipal(tenantId, "LAN Tenant");
 
         // 1. An operator's VM on the local network that also declares published ports is refused at the write, on the

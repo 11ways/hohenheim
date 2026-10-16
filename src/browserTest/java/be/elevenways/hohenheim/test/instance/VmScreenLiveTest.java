@@ -34,6 +34,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -58,7 +59,7 @@ class VmScreenLiveTest extends HohenheimTestBase {
         LiveIncusHost remote = LiveIncusHost.requirePrimary();
         String enrolledFingerprint = remote.enrollThroughProduct(HOST, "hohenheim-live-screen");
         int hostId = Models.get(ServerModel.class).findByName(HOST).get(ServerModel.ID);
-        int userId = ApiSupport.user("screen-live@hohenheim.local", "Screen live");
+        UUID userId = ApiSupport.user("screen-live@hohenheim.local", "Screen live");
         int templateId = consoleTemplate();
         int instanceId = vmRecord("vm-screen-probe", hostId, templateId);
         String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);

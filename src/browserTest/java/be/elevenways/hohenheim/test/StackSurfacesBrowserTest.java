@@ -26,6 +26,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.UUID;
 
 import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
 
@@ -55,7 +56,7 @@ class StackSurfacesBrowserTest extends HohenheimTestBase {
 
     @BeforeAll
     static void seed() {
-        int tenantId = ApiSupport.user(PREFIX + "tenant@hohenheim.local", "Batch7 Stack Tenant");
+        UUID tenantId = ApiSupport.user(PREFIX + "tenant@hohenheim.local", "Batch7 Stack Tenant");
         int active = stack(PREFIX + "active", StackModel.STATUS_ACTIVE);
         activeStackId = String.valueOf(active);
         deployment(active);

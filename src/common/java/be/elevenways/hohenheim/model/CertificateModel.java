@@ -170,8 +170,8 @@ public class CertificateModel extends Model {
      * Never a permission SNAPSHOT -- a stored decision goes stale silently; a stored subject
      * is re-decided every sweep.
      */
-    public static final IntegerField REQUESTED_BY_USER_ID = SCHEMA.addField(
-        IntegerField.builder().name("requested_by_user_id").build());
+    public static final UuidField REQUESTED_BY_USER_ID = SCHEMA.addField(
+        UuidField.builder().name("requested_by_user_id").nullable(true).build());
 
     /** The kind of {@link #REQUESTED_BY_USER_ID}'s principal; together they are the certificate's owner. */
     public static final StringField REQUESTED_BY_KIND = SCHEMA.addField(PrincipalKinds.kindField("requested_by_kind"));

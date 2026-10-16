@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import java.net.http.HttpResponse;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -70,7 +71,7 @@ class TenantHostnameTierTest extends HohenheimTestBase {
         // is exactly the name a swallowing wildcard would hand to the tenant.
         domain(domainModel, victimSiteId, VICTIM_APEX);
 
-        Integer tenantId = ApiSupport.user("tenant-tier@hohenheim.local", "Tier Tenant");
+        UUID tenantId = ApiSupport.user("tenant-tier@hohenheim.local", "Tier Tenant");
         tenantPrincipal = new UserPrincipal(tenantId, "Tier Tenant");
 
         Row admin = Models.get(UserModel.class).find()

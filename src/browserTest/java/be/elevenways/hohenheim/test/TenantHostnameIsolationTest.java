@@ -34,6 +34,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -55,7 +56,7 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
 
     private static UserPrincipal alice;
     private static UserPrincipal admin;
-    private static Integer aliceId;
+    private static UUID aliceId;
     private static Integer aliceSiteId;
     private static Integer aliceDomainId;
     private static Integer bobSiteId;
@@ -79,7 +80,7 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
 
         aliceId = ApiSupport.user("alice-iso@hohenheim.local", "Alice Iso");
         alice = new UserPrincipal(aliceId, "Alice Iso");
-        int bobId = ApiSupport.user("bob-iso@hohenheim.local", "Bob Iso");
+        UUID bobId = ApiSupport.user("bob-iso@hohenheim.local", "Bob Iso");
         RecordGrants.grant(GrantSubjectType.USER, aliceId, SiteModel.MODEL_ID,
             aliceSiteId, HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, bobId, SiteModel.MODEL_ID,

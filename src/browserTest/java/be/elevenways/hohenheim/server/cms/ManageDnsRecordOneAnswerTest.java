@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -50,7 +51,7 @@ class ManageDnsRecordOneAnswerTest extends HohenheimTestBase {
         zones.save(zone);
         DnsZoneStore.INSTANCE.reload();
 
-        int userId = ApiSupport.user("one-answer-tenant@hohenheim.local", "One Answer Tenant");
+        UUID userId = ApiSupport.user("one-answer-tenant@hohenheim.local", "One Answer Tenant");
         tenant = new UserPrincipal(userId, "One Answer Tenant");
 
         Row admin = Models.get(UserModel.class).find()

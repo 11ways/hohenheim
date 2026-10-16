@@ -359,7 +359,7 @@ public final class CertificateParts {
             .defaultSort(SortSpec.desc(CertificateModel.EXPIRES_ON.getName())).build();
         // A Domains cluster member: certificates are readable to any signed-in tenant.
         return ManageTwin.listed(entry(ManageTwin.id("certificate")), TenantScopes.CERTIFICATES, ResourceTabs.none(),
-                access -> HohenheimAccess.isAdmin(access) || access.principalId() != null
+                access -> HohenheimAccess.isAdmin(access) || access.accountId() != null
                     || HohenheimAccess.reachesAny(access, CertificateModel.MODEL_ID, HohenheimCapabilities.VIEW))
             .reads(ResourceReads.rows().mapCells(CertificateParts::namesCell))
             .list(ResourceList.rows(table).chrome(CmsSupport.WIDE_LIST).facets().ruleFilters()

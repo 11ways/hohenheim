@@ -1,9 +1,23 @@
 package be.elevenways.hohenheim.test.migration;
 
 import be.elevenways.hohenheim.test.LegacyStepPayloads;
+import be.elevenways.hohenheim.migration.HohenheimMigration;
 import be.elevenways.hohenheim.migration.InitialMigration;
 import be.elevenways.hohenheim.migration.M011_ReviewHardening;
+import be.elevenways.hohenheim.server.migration.M015_ServerLanParent;
+import be.elevenways.hohenheim.model.InstanceTemplateModel;
+import be.elevenways.hohenheim.model.ProjectModel;
+import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.project.Projects;
+import be.elevenways.hohenheim.server.quota.OwnerBudget;
+import be.elevenways.zenit.auth.cms.SubjectTag;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
+import be.elevenways.zenit.auth.model.PermissionGroupModel;
 import be.elevenways.zenit.common.orm.migration.MigrationException;
+import be.elevenways.zenit.common.orm.migration.MigrationKey;
+import be.elevenways.zenit.common.orm.migration.PrincipalColumns;
+import be.elevenways.zenit.notifications.server.NotificationInboxOwners;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import be.elevenways.zenit.common.security.ZenitPrincipalKind;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -82,9 +96,11 @@ import java.sql.Statement;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -130,6 +146,26 @@ class HohenheimUpgradeJourneyTest {
     private static final String LEGACY_WILDCARD = "*.wild.upgrade.test";
     private static final String RELEASED_WILDCARD = "*.gone.upgrade.test";
 
+    /** The projects and quota overrides step 0 writes at their M010 shape: numeric group and account ids. */
+    private static final int OPERATORS_PROJECT = 901;
+    private static final int ORPHANED_PROJECT = 902;
+    private static final int OPERATOR_QUOTA = 901;
+    private static final int SHARED_QUOTA = 902;
+    /** An account and a permission group no row holds any more, which an id column still names. */
+    private static final int DELETED_ACCOUNT = 777;
+    private static final int DELETED_GROUP = 555;
+
+    /** The quota override of a crowd of owners, the first of them deleted, whose bucket stamp is folded already. */
+    private static final int CROWD_QUOTA = 903;
+    private static final int FIRST_DELETED_OWNER = 801;
+    private static final int CROWD_DELETED_OWNERS = 18;
+    /** A deleted group only owner tokens name, beside a deleted account and group only a record's grants name. */
+    private static final int DELETED_OWNER_GROUP = 557;
+    private static final int GRANTED_DELETED_GROUP = 556;
+    private static final int GRANTED_DELETED_ACCOUNT = 779;
+    /** The record whose manage grants hold the five owners of the root disk's stamp; it was never stored. */
+    private static final int GRANTED_INSTANCE = 901;
+
     private static ClockOffset.Pin seedClock;
 
     @AfterAll
@@ -159,6 +195,7 @@ class HohenheimUpgradeJourneyTest {
 
         int adminId = Integer.parseInt(facts.getProperty("admin.id"));
         int operatorId = Integer.parseInt(facts.getProperty("operator.id"));
+        int roleId = Integer.parseInt(facts.getProperty("role.id"));
         int siteId = Integer.parseInt(facts.getProperty("site.id"));
         int instanceId = Integer.parseInt(facts.getProperty("instance.id"));
         String url = "jdbc:sqlite:" + database.toAbsolutePath();
@@ -205,6 +242,65 @@ class HohenheimUpgradeJourneyTest {
         execute(url, "INSERT INTO released_route_claims (id, claim_key, hostname, match_type, former_site_id,"
             + " released_at) VALUES (" + RELEASED_CLAIM + ", '" + RELEASED_WILDCARD + "' || char(10) || char(10), '"
             + RELEASED_WILDCARD + "', 'wildcard', " + siteId + ", " + seededAt.toEpochMilli() + ")");
+        // Every account and permission group Hohenheim stores, by the numbers M010 knew: the posture acknowledger,
+        // two template approvers (one account since deleted), two projects' groups (one deleted), packed owner sets
+        // in two quota overrides and the released claim, and the owner tokens behind the bucket stamps; plus their
+        // history: a project revision, a template's approval and a site's stamp change.
+        execute(url, "UPDATE servers SET acknowledged_by = '" + operatorId + "', acknowledged_by_label = 'Operator'"
+            + " WHERE id = 1");
+        execute(url, "UPDATE instance_templates SET approved_by_user_id = " + operatorId + " WHERE id = 1");
+        execute(url, "UPDATE instance_templates SET approved_by_user_id = " + DELETED_ACCOUNT + " WHERE id = 2");
+        execute(url, "INSERT INTO projects (id, name, group_id) VALUES (" + OPERATORS_PROJECT + ", 'Operators', "
+            + roleId + "), (" + ORPHANED_PROJECT + ", 'Orphaned', " + DELETED_GROUP + ")");
+        execute(url, "INSERT INTO instance_quotas (id, subjects, max_instances) VALUES (" + OPERATOR_QUOTA + ", 'user:"
+            + operatorId + "', 3), (" + SHARED_QUOTA + ", 'group:" + roleId + "' || char(10) || 'user:" + operatorId
+            + "', 5)");
+        execute(url, "UPDATE released_route_claims SET former_subjects = 'user:" + operatorId + "' WHERE id = "
+            + RELEASED_CLAIM);
+        // Shared owners behind the bucket stamps: the site's pair under the limit, naming a deleted account and group
+        // that only owner tokens name; the instance's crowd, folded already, its set readable in a quota override;
+        // the root disk's five, under the limit until they are UUIDs, their set held by a record's manage grants.
+        List<String> crowdOwners = new ArrayList<>(List.of("group:" + roleId, "group:" + DELETED_OWNER_GROUP,
+            "user:" + operatorId));
+        for (int owner = FIRST_DELETED_OWNER; owner < FIRST_DELETED_OWNER + CROWD_DELETED_OWNERS; owner++) {
+            crowdOwners.add("user:" + owner);
+        }
+        String crowd = HohenheimAccess.packSubjects(Set.copyOf(crowdOwners));
+        String pair = HohenheimAccess.packSubjects(Set.of("group:" + roleId, "group:" + DELETED_OWNER_GROUP,
+            "user:" + operatorId, "user:" + FIRST_DELETED_OWNER));
+        String five = HohenheimAccess.packSubjects(Set.of("group:" + roleId, "group:" + GRANTED_DELETED_GROUP,
+            "user:" + adminId, "user:" + operatorId, "user:" + GRANTED_DELETED_ACCOUNT));
+        String pairStamp = OwnerBudget.SITES.bucketOf(pair);
+        String crowdStamp = OwnerBudget.INSTANCES.bucketOf(crowd);
+        String fiveStamp = OwnerBudget.DISK_GB.bucketOf(five);
+        assertThat(List.of(pairStamp, crowdStamp, fiveStamp))
+            .as("step 0: the crowd's stamp is folded, the pair's and the five's are not")
+            .extracting(stamp -> stamp.contains("sha256:")).containsExactly(false, true, false);
+        execute(url, "INSERT INTO instance_quotas (id, subjects, max_instances) VALUES (" + CROWD_QUOTA + ", "
+            + literal(crowd) + ", 7)");
+        execute(url, "UPDATE sites SET quota_bucket = " + literal(pairStamp) + " WHERE id = " + siteId);
+        execute(url, "UPDATE instances SET quota_bucket = " + literal(crowdStamp) + ", root_disk_bucket = "
+            + literal(fiveStamp) + " WHERE id = " + instanceId);
+        int grant = 0;
+        for (String owner : five.split("\n")) {
+            String[] subject = owner.split(":");
+            execute(url, "INSERT INTO auth_record_grants (id, subject_type, subject_id, model, record_id, capability,"
+                + " value) VALUES ('upgrade-owner-" + ++grant + "', '" + subject[0] + "', " + subject[1] + ", '"
+                + InstanceModel.MODEL_ID + "', '" + GRANTED_INSTANCE + "', 'manage', 1)");
+        }
+        execute(url, "INSERT INTO zenit_activity (model, record_id, action, origin, delta, created_at) VALUES"
+            + " ('hohenheim:instance', '" + instanceId + "', 'update', 'system', '{\"quota_bucket\":{\"before\":null,"
+            + "\"after\":\"" + crowdStamp + "\"},\"root_disk_bucket\":{\"before\":\"" + OwnerBudget.DISK_GB.bucketOf(
+            "user:" + operatorId) + "\",\"after\":\"" + fiveStamp.replace("\n", "\\n") + "\"}}', "
+            + seededAt.toEpochMilli() + ")");
+        execute(url, "INSERT INTO zenit_revisions (model, record_id, revision, snapshot, origin) VALUES"
+            + " ('hohenheim:project', '" + OPERATORS_PROJECT + "', 1, '{\"fields\":{\"id\":i" + OPERATORS_PROJECT
+            + ",\"name\":\"Operators\",\"group_id\":i" + roleId + "}}', 'system')");
+        execute(url, "INSERT INTO zenit_activity (model, record_id, action, origin, delta, created_at) VALUES"
+            + " ('hohenheim:instance_template', '1', 'update', 'system', '{\"approved_by_user_id\":{\"before\":null,"
+            + "\"after\":i" + operatorId + "}}', " + seededAt.toEpochMilli() + "), ('hohenheim:site', '" + siteId
+            + "', 'update', 'system', '{\"quota_bucket\":{\"before\":null,\"after\":\"hohenheim:sites:user:"
+            + operatorId + "\"}}', " + seededAt.toEpochMilli() + ")");
 
         // 1. The deploy lane: the framework's --run-migrations over Hohenheim's datasource, exactly as ServerMain
         //    dispatches it, applies everything above the fixture and then reconciles the stored ids.
@@ -224,6 +320,8 @@ class HohenheimUpgradeJourneyTest {
         Files.copy(database, rehearsalDatabase);
         String rehearsalUrl = "jdbc:sqlite:" + rehearsalDatabase.toAbsolutePath();
         TestDatabases.releaseHandBoundDefault();
+        // The rehearsal opens its own copy; step 1 points the path back at the install itself.
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.PATH, rehearsalDatabase.toAbsolutePath().toString());
         var rehearsal = HohenheimDatabase.openDatasource();
         Models.get(SiteModel.class);
         var withoutCreationSource = MigrationRunner.discoverMigrations(rehearsal.getDatasourceIdentifier()).stream()
@@ -239,6 +337,45 @@ class HohenheimUpgradeJourneyTest {
         assertThat(scalar(rehearsalUrl, "SELECT created_at FROM sites WHERE id = " + siteId))
             .as("step 1a: M011's frozen owner scope preserves the pre-epoch microseconds without creation source")
             .isEqualTo(Now.instantText(retainedInstant));
+        // 1b. M015 stored every account and group the rehearsal copy names by the UUID zenit-auth gave it; its down
+        //     writes the numbers back exactly, and a rerun reaches the same UUIDs.
+        String rehearsedOperator = accountUuid(rehearsalUrl, operatorId);
+        assertThat(scalar(rehearsalUrl, "SELECT requested_by_user_id FROM certificates WHERE id = " + OPERATOR_CERT))
+            .as("step 1b: the requester is the operator's UUID").isEqualTo(rehearsedOperator);
+        MigrationKey rekey = MigrationKey.of(HohenheimMigration.STREAM, "015");
+        MigrationRunner.overCompleteSet(rehearsal, withoutCreationSource).acknowledgeMissingMigrationVersions("001")
+            .rollback(rekey).requireSuccess();
+        assertThat(strings(rehearsalUrl, "SELECT requested_by_user_id FROM certificates WHERE id = " + OPERATOR_CERT
+                + " UNION ALL SELECT approved_by_user_id FROM instance_templates WHERE id IN (1, 2)"
+                + " UNION ALL SELECT group_id FROM projects WHERE id IN (" + OPERATORS_PROJECT + ", " + ORPHANED_PROJECT
+                + ") UNION ALL SELECT acknowledged_by FROM servers WHERE id = 1"))
+            .as("step 1b: the down restores every number, a deleted account's and group's included")
+            .containsExactlyInAnyOrder(String.valueOf(operatorId), String.valueOf(operatorId),
+                String.valueOf(DELETED_ACCOUNT), String.valueOf(roleId), String.valueOf(DELETED_GROUP),
+                String.valueOf(operatorId));
+        assertThat(strings(rehearsalUrl, "SELECT subjects FROM instance_quotas WHERE id IN (" + OPERATOR_QUOTA + ", "
+                + SHARED_QUOTA + ", " + CROWD_QUOTA + ") UNION ALL SELECT quota_bucket FROM sites WHERE id = " + siteId
+                + " UNION ALL SELECT quota_bucket FROM instances WHERE id = " + instanceId
+                + " UNION ALL SELECT root_disk_bucket FROM instances WHERE id = " + instanceId))
+            .as("step 1b: and every owner token's number, a folded stamp's and one the rekey folded included")
+            .containsExactlyInAnyOrder("user:" + operatorId, "group:" + roleId + "\nuser:" + operatorId, crowd,
+                pairStamp, crowdStamp, fiveStamp);
+        assertThat(instanceStamps(rehearsalUrl, instanceId))
+            .as("step 1b: and the stamps in the instance's history")
+            .containsExactly(crowdStamp, OwnerBudget.DISK_GB.bucketOf("user:" + operatorId), fiveStamp);
+        assertThat(scalar(rehearsalUrl, "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = "
+                + "'instance_quotas'"))
+            .as("step 1b: the quota owner column is the 400 characters it was").contains("VARCHAR(400)");
+        MigrationRunner.overCompleteSet(rehearsal, withoutCreationSource).acknowledgeMissingMigrationVersions("001")
+            .migrate().requireSuccess();
+        assertThat(scalar(rehearsalUrl, "SELECT requested_by_user_id FROM certificates WHERE id = " + OPERATOR_CERT))
+            .as("step 1b: the rerun reaches the same UUID").isEqualTo(rehearsedOperator);
+        String rehearsedCrowd = rekeyed(rehearsalUrl, crowd);
+        assertThat(strings(rehearsalUrl, "SELECT quota_bucket FROM instances WHERE id = " + instanceId
+                + " UNION ALL SELECT root_disk_bucket FROM instances WHERE id = " + instanceId))
+            .as("step 1b: and the same stamps")
+            .containsExactly(OwnerBudget.INSTANCES.bucketOf(rehearsedCrowd),
+                OwnerBudget.DISK_GB.bucketOf(rekeyed(rehearsalUrl, five)));
         HohenheimDatabase.closeDatasource();
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.PATH, database.toAbsolutePath().toString());
         assertThat(ServerZenitRuntime.runMigrationsIfRequested(new String[] {"--run-migrations"},
@@ -257,27 +394,101 @@ class HohenheimUpgradeJourneyTest {
         TestDatabases.adoptCurrentDatabase();
 
         // 3. The role grant and both record grants decide as before, and each certificate keeps its owner.
+        UUID adminUuid = UUID.fromString(accountUuid(url, adminId));
+        UUID operatorUuid = UUID.fromString(accountUuid(url, operatorId));
+        UUID role = UUID.fromString(scalar(url, "SELECT new_id FROM zenit_record_rekeys WHERE model = '"
+            + PermissionGroupModel.MODEL_ID + "' AND old_id = '" + roleId + "'"));
         assertThat(PermissionHolders.userIdsHolding(HohenheimSources.ADMIN_ACCESS))
             .as("step 3: the admin's * grant and the operator's role both hold the admin permission")
-            .contains(adminId, operatorId);
-        UserPrincipal operator = new UserPrincipal(operatorId, "Upgrade Operator");
+            .contains(adminUuid, operatorUuid);
+        UserPrincipal operator = new UserPrincipal(operatorUuid, "Upgrade Operator");
         assertThat(RecordGrants.recordIds(operator, SiteModel.MODEL_ID, "manage"))
             .as("step 3: the operator still manages the site").contains(String.valueOf(siteId));
         assertThat(RecordGrants.recordIds(operator, InstanceModel.MODEL_ID, "power"))
             .as("step 3: and still powers the instance").contains(String.valueOf(instanceId));
         CertificateModel certificates = Models.get(CertificateModel.class);
         Row operatorCert = certificates.findById(OPERATOR_CERT);
-        assertThat((Integer) operatorCert.get(CertificateModel.REQUESTED_BY_USER_ID))
-            .as("step 3: the operator's certificate keeps its stored requester id").isEqualTo(operatorId);
+        assertThat((UUID) operatorCert.get(CertificateModel.REQUESTED_BY_USER_ID))
+            .as("step 3: the operator's certificate stores its requester's UUID").isEqualTo(operatorUuid);
         assertThat(CertificateModel.requesterOf(operatorCert))
-            .as("step 3: and reads it back as the operator's account").isEqualTo(PrincipalRef.account(operatorId));
+            .as("step 3: and reads it back as the operator's account").isEqualTo(PrincipalRef.account(operatorUuid));
         assertThat(RecordOwnership.ownerOf(CertificateModel.MODEL_ID, OPERATOR_CERT))
-            .as("step 3: whom the owner rule names as its owner").isEqualTo(PrincipalRef.account(operatorId));
+            .as("step 3: whom the owner rule names as its owner").isEqualTo(PrincipalRef.account(operatorUuid));
         Row unattendedCert = certificates.findById(UNATTENDED_CERT);
         assertThat(CertificateModel.requesterOf(unattendedCert))
             .as("step 3: an unattended certificate still has no requester").isNull();
         assertThat((String) unattendedCert.get(CertificateModel.REQUESTED_BY_KIND))
             .as("step 3: and no kind was invented for it").isNull();
+
+        // 3b. Every other account and group Hohenheim stores is its UUID too: the posture acknowledger, the template
+        //     approvers and the project groups (a deleted one's a fresh UUID nothing else carries), every owner token
+        //     and every history value naming them.
+        assertThat(ServerModel.ACKNOWLEDGER.read(Models.get(ServerModel.class).findById(1)))
+            .as("step 3b: the acknowledger is the operator's account").isEqualTo(PrincipalRef.account(operatorUuid));
+        InstanceTemplateModel templates = Models.get(InstanceTemplateModel.class);
+        assertThat((UUID) templates.findById(1).get(InstanceTemplateModel.APPROVED_BY_USER_ID))
+            .as("step 3b: the approver is the operator").isEqualTo(operatorUuid);
+        UUID deletedApprover = templates.findById(2).get(InstanceTemplateModel.APPROVED_BY_USER_ID);
+        assertThat(deletedApprover).as("step 3b: a deleted approver is adopted, never dropped").isNotNull()
+            .isNotIn(adminUuid, operatorUuid)
+            .isEqualTo(UUID.fromString(accountUuid(url, DELETED_ACCOUNT)));
+        ProjectModel projects = Models.get(ProjectModel.class);
+        assertThat((UUID) projects.findById(OPERATORS_PROJECT).get(ProjectModel.GROUP_ID))
+            .as("step 3b: the project's group is the role's UUID").isEqualTo(role);
+        assertThat(Projects.membershipPermissionOf(projects.findById(OPERATORS_PROJECT)))
+            .as("step 3b: and still names its membership").isEqualTo("group.upgrade_operators");
+        assertThat((UUID) projects.findById(ORPHANED_PROJECT).get(ProjectModel.GROUP_ID))
+            .as("step 3b: a deleted group is adopted").isNotNull().isNotEqualTo(role);
+        String operatorToken = new SubjectTag(GrantSubjectType.USER, operatorUuid).token();
+        String roleToken = new SubjectTag(GrantSubjectType.GROUP, role).token();
+        String crowdNow = rekeyed(url, crowd);
+        String pairNow = rekeyed(url, pair);
+        String fiveNow = rekeyed(url, five);
+        assertThat(List.of(accountUuid(url, FIRST_DELETED_OWNER),
+                accountUuid(url, FIRST_DELETED_OWNER + CROWD_DELETED_OWNERS - 1), groupUuid(url, DELETED_OWNER_GROUP)))
+            .as("step 3b: the deleted owners only owner tokens name are adopted").doesNotContainNull();
+        assertThat(scalar(url, "SELECT subjects FROM instance_quotas WHERE id = " + CROWD_QUOTA))
+            .as("step 3b: the crowd's override holds its UUID tokens, past the 400 characters the column had")
+            .isEqualTo(crowdNow).hasSizeGreaterThan(400);
+        assertThat(scalar(url, "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'instance_quotas'"))
+            .as("step 3b: the quota owner column is text now").doesNotContain("VARCHAR(400)");
+        assertThat(scalar(url, "SELECT name FROM sqlite_master WHERE type = 'index'"
+                + " AND name = 'instance_quotas_subjects_unique'"))
+            .as("step 3b: one override per owner still").isNotNull();
+        assertThat(strings(url, "SELECT subjects FROM instance_quotas WHERE id IN (" + OPERATOR_QUOTA + ", "
+                + SHARED_QUOTA + ") UNION ALL SELECT former_subjects FROM released_route_claims WHERE id = "
+                + RELEASED_CLAIM))
+            .as("step 3b: every packed owner set holds UUID tokens, sorted as they are packed")
+            .containsExactlyInAnyOrder(operatorToken, HohenheimAccess.packSubjects(Set.of(roleToken, operatorToken)),
+                operatorToken);
+        Row stamped = Models.get(InstanceModel.class).findById(instanceId);
+        assertThat(List.of(Models.get(SiteModel.class).findById(siteId).get(SiteModel.QUOTA_BUCKET),
+                stamped.get(InstanceModel.QUOTA_BUCKET), stamped.get(InstanceModel.ROOT_DISK_BUCKET)))
+            .as("step 3b: every bucket stamp is the bucket today's code charges its owners")
+            .containsExactly(OwnerBudget.SITES.bucketOf(pairNow), OwnerBudget.INSTANCES.bucketOf(crowdNow),
+                OwnerBudget.DISK_GB.bucketOf(fiveNow));
+        assertThat(List.of(OwnerBudget.SITES.bucketOf(pairNow), OwnerBudget.INSTANCES.bucketOf(crowdNow),
+                OwnerBudget.DISK_GB.bucketOf(fiveNow)))
+            .as("step 3b: the pair stays under the limit, the crowd stays folded, the five fold now")
+            .extracting(bucket -> bucket.contains("sha256:")).containsExactly(false, true, true);
+        assertThat(instanceStamps(url, instanceId))
+            .as("step 3b: the stamps in the instance's history follow, the folded ones included")
+            .containsExactly(OwnerBudget.INSTANCES.bucketOf(crowdNow), OwnerBudget.DISK_GB.bucketOf(operatorToken),
+                OwnerBudget.DISK_GB.bucketOf(fiveNow));
+        assertThat(List.of(M015_ServerLanParent.SITES, M015_ServerLanParent.DATABASES, M015_ServerLanParent.INSTANCES,
+                M015_ServerLanParent.DISK_GB, M015_ServerLanParent.NICS, M015_ServerLanParent.PREVIEWS))
+            .as("step 3b: M015 froze the very prefixes the budgets spell")
+            .containsExactly(OwnerBudget.SITES.prefix(), OwnerBudget.DATABASES.prefix(),
+                OwnerBudget.INSTANCES.prefix(), OwnerBudget.DISK_GB.prefix(), OwnerBudget.NICS.prefix(),
+                OwnerBudget.PREVIEWS.prefix());
+        assertThat(scalar(url, "SELECT snapshot FROM zenit_revisions WHERE model = 'hohenheim:project' AND record_id = '"
+                + OPERATORS_PROJECT + "'"))
+            .as("step 3b: the project's revision names the role's UUID").contains(role.toString());
+        assertThat(strings(url, "SELECT delta FROM zenit_activity WHERE (model = 'hohenheim:instance_template'"
+                + " AND record_id = '1' AND delta LIKE '%approved_by_user_id%') OR (model = 'hohenheim:site'"
+                + " AND delta LIKE '%quota_bucket%')"))
+            .as("step 3b: the approval and the stamp change in history name the operator's UUID")
+            .hasSize(2).allSatisfy(delta -> assertThat(delta).contains(operatorUuid.toString()));
 
         // 4. M011 ran on production data: the operator-owned address site is marked a trusted upstream.
         Row site = Models.get(SiteModel.class).findById(siteId);
@@ -326,12 +537,12 @@ class HohenheimUpgradeJourneyTest {
         ApiKeyPrincipal keyPrincipal = ApiKeyService.authenticate(facts.getProperty("api_key.plaintext"));
         assertThat(keyPrincipal).as("step 5: the old key still authenticates").isNotNull();
         assertThat(keyPrincipal.reference()).as("step 5: as its owner")
-            .isEqualTo(new PrincipalRef(ZenitPrincipalKind.ACCOUNT, operatorId));
+            .isEqualTo(new PrincipalRef(ZenitPrincipalKind.ACCOUNT, operatorUuid));
         assertThat(keyPrincipal.scopes()).as("step 5: with the same scopes")
             .containsExactly("cap:hohenheim:instance#power", "cap:zenit:user#read", "hohenheim.admin.access");
 
         // 6. Activity on framework models reads through today's model ids; no old spelling is left behind.
-        List<ActivityEntry> userHistory = history(Models.get(UserModel.class), operatorId);
+        List<ActivityEntry> userHistory = history(Models.get(UserModel.class), operatorUuid);
         assertThat(userHistory).as("step 6: the operator's creation is in its history")
             .anySatisfy(entry -> assertThat(entry.action()).isEqualTo(ZenitActivityAction.CREATE.id().toString()));
         assertThat(strings(url, "SELECT DISTINCT model FROM zenit_activity"))
@@ -361,7 +572,7 @@ class HohenheimUpgradeJourneyTest {
         Row viewRow = Models.get(SavedViewModel.class).find().noCache().where(SavedViewModel.ID.eq(viewId)).first();
         assertThat(viewRow.get(SavedViewModel.SOURCE_ID)).as("step 8: the view row names today's source")
             .isEqualTo(MEDIA_SOURCE.toString());
-        AccessContext admin = AccessContext.of(TenantConduits.stubFor(new UserPrincipal(adminId, "Upgrade Admin")));
+        AccessContext admin = AccessContext.of(TenantConduits.stubFor(new UserPrincipal(adminUuid, "Upgrade Admin")));
         SavedView view = SavedViews.find(admin, SavedViews.hostOf(MEDIA_SOURCE), viewId);
         assertThat(view).as("step 8: the owner finds the view on the media list").isNotNull();
         assertThat(view.name()).as("step 8: under its name").isEqualTo("Recent uploads");
@@ -444,7 +655,9 @@ class HohenheimUpgradeJourneyTest {
             assertThat(type).as("step 10: history is stored under the task id").doesNotStartWith("be.elevenways.");
         }
 
-        // 11. A receipt claimed under the old type key replays: the hub send, then the saved view's command.
+        // 11. A receipt claimed under the old type key replays: the hub send, which bound no actor. The saved view's
+        //     command was bound to the admin's pre-UUID number, which core unbinds (M012: a kindless number cannot
+        //     say whose it was), so replaying it is refused rather than granted to whoever holds that number now.
         assertThat(scalar(url,
                 "SELECT type_key FROM zenit_command_receipts WHERE command_key = 'comms_hub:1:upgrade-journey'"))
             .as("step 11: the receipt keeps the type key it was claimed under").isEqualTo("zenit-comms:hub_send");
@@ -453,16 +666,19 @@ class HohenheimUpgradeJourneyTest {
         assertThat(hub).as("step 11: the same hub send replays").isInstanceOf(HubIdempotency.Outcome.Replay.class);
         assertThat(((HubIdempotency.Outcome.Replay) hub).response()).as("step 11: with its stored response")
             .isEqualTo(facts.getProperty("hub.response"));
-        SavedView replayed = SavedViews.save(admin, SavedViews.hostOf(MEDIA_SOURCE),
-            UUID.fromString(facts.getProperty("saved_view.command")),
-            SavedView.Draft.of("Recent uploads", false, SavedQuery.EMPTY), 0);
-        assertThat(replayed.id()).as("step 11: the saved view's command replays to the view it created")
-            .isEqualTo(viewId);
+        assertThat(scalar(url, "SELECT actor FROM zenit_command_receipts WHERE command_key = '"
+                + facts.getProperty("saved_view.command") + "'"))
+            .as("step 11: the saved view's receipt binds no principal any more")
+            .startsWith(PrincipalColumns.UNBOUND_PREFIX);
+        assertThatThrownBy(() -> SavedViews.save(admin, SavedViews.hostOf(MEDIA_SOURCE),
+                UUID.fromString(facts.getProperty("saved_view.command")),
+                SavedView.Draft.of("Recent uploads", false, SavedQuery.EMPTY), 0))
+            .as("step 11: so its command no longer replays").hasMessageContaining("already bound");
 
         // 12. The operator's session still signs them in.
         Session session = Zenit.getSessionStore().get(SessionToken.of(facts.getProperty("session.secret")));
         assertThat(session).as("step 12: the session resolves").isNotNull();
-        assertThat(session.get(AuthKeys.USER_ID)).as("step 12: to the operator").isEqualTo((long) operatorId);
+        assertThat(session.get(AuthKeys.USER_ID)).as("step 12: to the operator").isEqualTo(operatorUuid);
 
         // 13. The rows Hohenheim's alert wrote, in today's notifications_ tables: both inboxes, both deliveries on
         //     today's inbox channel, and no comms_ table left behind.
@@ -476,7 +692,9 @@ class HohenheimUpgradeJourneyTest {
         Db.run(HohenheimDatabase.datasource(), () -> {
             List<Row> inbox = Models.get(NotificationInboxModel.class).find().noCache().all();
             assertThat(inbox).extracting(row -> row.get(NotificationInboxModel.RECIPIENT))
-                .as("step 13: each administrator's inbox item").containsExactlyInAnyOrder("user:1", "user:2");
+                .as("step 13: each administrator's inbox item")
+                .containsExactlyInAnyOrder(NotificationInboxOwners.userKey(adminUuid),
+                    NotificationInboxOwners.userKey(operatorUuid));
             assertThat(inbox).extracting(row -> row.get(NotificationInboxModel.NOTIFICATION_KEY))
                 .as("step 13: for the certificate alert").containsOnly("hohenheim:cert_expiring");
             List<Row> deliveries = Models.get(DeliveryModel.class).find().noCache().all();
@@ -513,11 +731,51 @@ class HohenheimUpgradeJourneyTest {
         }
     }
 
+    /** @return {@code value} as an SQLite string literal, its newlines spelled with char(10) */
+    private static String literal(String value) {
+        return "'" + value.replace("'", "''").replace("\n", "' || char(10) || '") + "'";
+    }
+
+    /** @return the packed owner set {@code pack} names once every owner is its UUID, as the rekey maps store them */
+    private static String rekeyed(String url, String pack) throws SQLException {
+        Set<String> owners = new HashSet<>();
+        for (String owner : pack.split("\n")) {
+            String[] subject = owner.split(":");
+            int old = Integer.parseInt(subject[1]);
+            String id = subject[0].equals(GrantSubjectType.USER.key()) ? accountUuid(url, old) : groupUuid(url, old);
+            assertThat(id).as("the owner %s is mapped", owner).isNotNull();
+            owners.add(subject[0] + ":" + id);
+        }
+        return HohenheimAccess.packSubjects(owners);
+    }
+
+    /** @return the instance's stamp change in history: the quota bucket after, the root disk's before and after */
+    private static List<String> instanceStamps(String url, int instanceId) throws SQLException {
+        Map<?, ?> delta = (Map<?, ?>) Zenit.DRY.parse(scalar(url, "SELECT delta FROM zenit_activity WHERE model ="
+            + " 'hohenheim:instance' AND record_id = '" + instanceId + "' AND delta LIKE '%root_disk_bucket%'"));
+        Map<?, ?> quota = (Map<?, ?>) delta.get("quota_bucket");
+        Map<?, ?> rootDisk = (Map<?, ?>) delta.get("root_disk_bucket");
+        return List.of(String.valueOf(quota.get("after")), String.valueOf(rootDisk.get("before")),
+            String.valueOf(rootDisk.get("after")));
+    }
+
+    /** @return the UUID zenit-auth renumbered permission group {@code old} to, as the rekey map stores it */
+    private static String groupUuid(String url, int old) throws SQLException {
+        return scalar(url, "SELECT new_id FROM zenit_record_rekeys WHERE model = '" + PermissionGroupModel.MODEL_ID
+            + "' AND old_id = '" + old + "'");
+    }
+
     private static void execute(String url, String sql) throws SQLException {
         try (Connection connection = DriverManager.getConnection(url);
              Statement statement = connection.createStatement()) {
             statement.executeUpdate(sql);
         }
+    }
+
+    /** @return the UUID zenit-auth renumbered account {@code old} to, as the rekey map stores it */
+    private static String accountUuid(String url, int old) throws SQLException {
+        return scalar(url, "SELECT new_id FROM zenit_principal_rekeys WHERE kind = '" + ZenitPrincipalKind.ACCOUNT.id()
+            + "' AND old_id = '" + old + "'");
     }
 
     private static String scalar(String url, String sql) throws SQLException {

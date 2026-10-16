@@ -15,6 +15,8 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import org.junit.jupiter.api.Test;
 
+import java.util.UUID;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -30,7 +32,7 @@ class ManageEligibilityTest extends HohenheimTestBase {
 
     @Test
     void aTenantManagingOnlyAnAccessListIsEligible() {
-        int tenantId = ApiSupport.user(PREFIX + "tenant@hohenheim.local", "Manage Eligibility Tenant");
+        UUID tenantId = ApiSupport.user(PREFIX + "tenant@hohenheim.local", "Manage Eligibility Tenant");
         Model lists = Models.get(AccessListModel.class);
         Row list = lists.createEmptyRow();
         list.set(AccessListModel.NAME, PREFIX + "list");
@@ -60,7 +62,7 @@ class ManageEligibilityTest extends HohenheimTestBase {
     }
 
     /** A fresh caller each step: the walk's scope memo belongs to one request. */
-    private static AccessContext tenant(int tenantId) {
+    private static AccessContext tenant(UUID tenantId) {
         return AccessContext.of(TenantConduits.stubFor(new UserPrincipal(tenantId, "Manage Eligibility Tenant")));
     }
 }

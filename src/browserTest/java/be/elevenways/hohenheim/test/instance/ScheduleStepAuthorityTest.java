@@ -30,6 +30,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -47,8 +48,8 @@ class ScheduleStepAuthorityTest extends HohenheimTestBase {
 
     private static final String PREFIX = "stepauth-";
 
-    private static Integer powerOnlyId;
-    private static Integer ownerId;
+    private static UUID powerOnlyId;
+    private static UUID ownerId;
     private static Integer instanceId;
     private static Integer otherInstanceId;
     private static Integer scheduleId;
@@ -116,7 +117,7 @@ class ScheduleStepAuthorityTest extends HohenheimTestBase {
         return schedule.get(RecordScheduleModel.ID);
     }
 
-    private static AccessContext contextOf(int userId, String name) {
+    private static AccessContext contextOf(UUID userId, String name) {
         return AccessContext.of(TenantConduits.stubFor(new UserPrincipal(userId, name)));
     }
 

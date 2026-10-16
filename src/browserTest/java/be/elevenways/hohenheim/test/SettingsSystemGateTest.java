@@ -11,6 +11,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -31,7 +32,7 @@ class SettingsSystemGateTest extends HohenheimTestBase {
 
     @BeforeAll
     static void seedDelegatedAdmin() {
-        Integer userId = ApiSupport.user("delegated-admin@hohenheim.local", "Delegated Admin");
+        UUID userId = ApiSupport.user("delegated-admin@hohenheim.local", "Delegated Admin");
         // zenit-auth's own /admin prefix baseline demands auth.admin.access on top of the panel grant.
         GrantService.createDirectGrant(GrantSubjectType.USER, userId, AuthEndpoints.PERM_ADMIN_ACCESS.value(), true);
         GrantService.createDirectGrant(GrantSubjectType.USER, userId, HohenheimSources.ADMIN_ACCESS.value(), true);

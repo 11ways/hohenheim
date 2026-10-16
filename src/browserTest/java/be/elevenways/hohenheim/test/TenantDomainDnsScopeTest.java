@@ -38,6 +38,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -60,7 +61,7 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
     private static Integer foreignCertificateId;
     private static Integer zoneId;
     private static Integer foreignRecordId;
-    private static Integer tenantId;
+    private static UUID tenantId;
     private static String tenantSession;
     private static String tenantCsrf;
     private static UserPrincipal tenantPrincipal;

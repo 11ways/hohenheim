@@ -61,6 +61,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -183,10 +184,10 @@ class InstanceShellLiveTest {
                 mark("deploy");
                 new InstanceService().deploy(id);
 
-                int userId = ApiSupport.user("shell-live@hohenheim.test");
+                UUID userId = ApiSupport.user("shell-live@hohenheim.test");
                 RecordGrants.grant(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, id,
                     HohenheimCapabilities.SHELL, true);
-                Principal tenant = new UserPrincipal((long) userId, "Shell Live Tenant");
+                Principal tenant = new UserPrincipal(userId, "Shell Live Tenant");
 
                 StringBuilder output = new StringBuilder();
                 AtomicInteger ended = new AtomicInteger();
@@ -347,10 +348,10 @@ class InstanceShellLiveTest {
                 handle[0] = ControllerScope.handle(ControllerScope.KIND_INSTANCE, id);
                 new InstanceService().deploy(id);
 
-                int userId = ApiSupport.user("shell-fallback@hohenheim.test");
+                UUID userId = ApiSupport.user("shell-fallback@hohenheim.test");
                 RecordGrants.grant(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, id,
                     HohenheimCapabilities.SHELL, true);
-                Principal tenant = new UserPrincipal((long) userId, "Fallback Tenant");
+                Principal tenant = new UserPrincipal(userId, "Fallback Tenant");
 
                 // 1. COUNTERFACTUAL at the driver: the daemon ACCEPTS an exec for an
                 //    interpreter that does not exist (101 + a hijacked stream), so

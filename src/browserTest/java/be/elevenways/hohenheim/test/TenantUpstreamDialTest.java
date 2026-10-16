@@ -18,6 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static be.elevenways.hohenheim.test.ProxyTestSupport.addDomain;
@@ -71,7 +72,7 @@ class TenantUpstreamDialTest {
     @Timeout(60)
     void aTenantOwnedSiteNeverDialsPastThePublicInternet() throws Exception {
         int backendPort = upstream.getAddress().getPort();
-        int tenantId = tenantUser();
+        UUID tenantId = tenantUser();
 
         // Operator-owned: the reverse-proxy-to-loopback use case the product ships.
         Row operator = setupSite("hohenheim:address", "Dial Operator", "dial-operator",
@@ -140,7 +141,7 @@ class TenantUpstreamDialTest {
                     RoutingProblem.Reason.HANDLER_FAULTED));
     }
 
-    private static Row tenantSite(int tenantId, String kind, String name, String slug,
+    private static Row tenantSite(UUID tenantId, String kind, String name, String slug,
                                   Map<String, Object> settings, String hostname) {
         Row site = setupSite(kind, name, slug, settings);
         RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, site.get(SiteModel.ID),
@@ -149,7 +150,7 @@ class TenantUpstreamDialTest {
         return site;
     }
 
-    private static int tenantUser() {
+    private static UUID tenantUser() {
         return ApiSupport.user("dial-tenant@hohenheim.local", "Dial Tenant");
     }
 }

@@ -112,7 +112,7 @@ class InstanceScheduleJourneyTest extends HohenheimTestBase {
         Row admin = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         assertThat(schedule.get(RecordScheduleModel.RUN_AS))
             .as("step 3: the chain runs as the editor")
-            .isEqualTo(((Integer) admin.get(UserModel.ID)).longValue());
+            .isEqualTo(admin.get(UserModel.ID));
         Instant nextFire = schedule.get(RecordScheduleModel.NEXT_FIRE_AT);
         assertThat(nextFire).as("step 3: the first fire is computed on save").isNotNull();
         assertThat(nextFire).as("step 3: and lies in the future, never 'due now'").isAfter(Now.instant());

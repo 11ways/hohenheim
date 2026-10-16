@@ -221,7 +221,7 @@ class InstanceBackupsTest {
                 .where(InstanceModel.ID.eq(instanceId))
                 .assign(InstanceModel.BACKUP_TARGET_ID, broken.get(BackupTargetModel.ID))
                 .updateAll();
-            int viewerId = ApiSupport.user("viewer@backup-gate.test", "Viewer");
+            UUID viewerId = ApiSupport.user("viewer@backup-gate.test", "Viewer");
             RecordGrants.grant(GrantSubjectType.USER, viewerId, InstanceModel.MODEL_ID, instanceId,
                 HohenheimCapabilities.VIEW, true);
             UserPrincipal viewer = new UserPrincipal(viewerId, "Viewer");
@@ -272,7 +272,7 @@ class InstanceBackupsTest {
             int backupId = backups.backupNow(instanceId, targetId, target);
             Row backup = Models.get(InstanceBackupModel.class).findById(backupId);
 
-            int managerId = ApiSupport.user("manager@backup-restore.test", "Manager");
+            UUID managerId = ApiSupport.user("manager@backup-restore.test", "Manager");
             RecordGrants.grant(GrantSubjectType.USER, managerId, InstanceModel.MODEL_ID, instanceId,
                 HohenheimCapabilities.MANAGE, true);
             UserPrincipal manager = new UserPrincipal(managerId, "Manager");

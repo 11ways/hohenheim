@@ -1,6 +1,9 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.cms.InstanceQuotaParts;
 import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -8,6 +11,10 @@ import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.thread.ExecutionContext;
+import be.elevenways.zenit.auth.cms.SubjectTag;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
+import be.elevenways.zenit.auth.model.PermissionGroupModel;
+import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -17,8 +24,12 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -37,10 +48,16 @@ class InstanceDeviceQuotaTest extends HohenheimTestBase {
     private static final String DISK_BUCKET = OwnerBudget.DISK_GB.bucketOf("");
     private static final String NIC_BUCKET = OwnerBudget.NICS.bucketOf("");
     private static final String NAME_PREFIX = "devq-";
-    private static final String FORM_OWNER = "devq-form-owner";
+    /** The slug of the role this test's override names: the owner picker offers only real accounts and groups. */
+    private static final String FORM_OWNER_ROLE = "devq-form-owner";
+    /** The slug prefix of the groups that share the owner this test's shared override names. */
+    private static final String SHARED_OWNER_ROLE = "devq-shared-owner";
 
     private Integer instanceId;
     private Integer quotaRowId;
+    private Integer quickQuotaRowId;
+    private UUID ownerGroupId;
+    private final List<UUID> sharedGroupIds = new ArrayList<>();
     private Integer previousDiskCap;
     private Integer previousNicCap;
 
@@ -50,6 +67,19 @@ class InstanceDeviceQuotaTest extends HohenheimTestBase {
             Models.get(InstanceQuotaModel.class).delete(this.quotaRowId);
             this.quotaRowId = null;
         }
+        if (this.quickQuotaRowId != null) {
+            Models.get(InstanceQuotaModel.class).delete(this.quickQuotaRowId);
+            this.quickQuotaRowId = null;
+        }
+        if (this.ownerGroupId != null) {
+            Models.get(PermissionGroupModel.class).delete(this.ownerGroupId);
+            this.ownerGroupId = null;
+        }
+        for (UUID group : this.sharedGroupIds) {
+            RecordGrants.revokeAllForSubject(GrantSubjectType.GROUP, group);
+            Models.get(PermissionGroupModel.class).delete(group);
+        }
+        this.sharedGroupIds.clear();
         Model devices = Models.get(InstanceDeviceModel.class);
         for (Row row : devices.find().where(InstanceDeviceModel.NAME.startsWith(NAME_PREFIX)).all()) {
             devices.delete(row.get(InstanceDeviceModel.ID));
@@ -267,14 +297,20 @@ class InstanceDeviceQuotaTest extends HohenheimTestBase {
     @Test
     void perOwnerCapsSubmittedThroughTheAdminFormAreWhatTheReserveHooksRead() throws Exception {
         Model quotas = Models.get(InstanceQuotaModel.class);
+        Row role = Models.get(PermissionGroupModel.class).createEmptyRow();
+        role.set(PermissionGroupModel.SLUG, FORM_OWNER_ROLE);
+        role.set(PermissionGroupModel.TITLE, FORM_OWNER_ROLE);
+        Models.get(PermissionGroupModel.class).save(role);
+        this.ownerGroupId = role.get(PermissionGroupModel.ID);
+        String owner = new SubjectTag(GrantSubjectType.GROUP, this.ownerGroupId).token();
 
-        // 1. Create through the resource form, with both device caps.
+        // 1. Create through the resource form, the owner picked, with both device caps.
         var created = adminPostForm("/admin/instance-quotas/new",
-            "subjects=" + FORM_OWNER + "&max_instances=3&max_disk_gb=7&max_nics=2");
+            "subjects=" + owner + "&max_instances=3&max_disk_gb=7&max_nics=2");
         assertThat(created.statusCode())
             .as("step 1: the quota form accepted the submission").isIn(200, 302, 303);
 
-        Row row = quotas.find().where(InstanceQuotaModel.SUBJECTS.eq(FORM_OWNER)).first();
+        Row row = quotas.find().where(InstanceQuotaModel.SUBJECTS.eq(owner)).first();
         assertThat(row).as("step 1: the override row landed").isNotNull();
         this.quotaRowId = row.get(InstanceQuotaModel.ID);
         assertThat((Integer) row.get(InstanceQuotaModel.MAX_DISK_GB))
@@ -285,24 +321,129 @@ class InstanceDeviceQuotaTest extends HohenheimTestBase {
             .isEqualTo(2);
 
         // 2. The enforcement half reads exactly what the operator submitted.
-        assertThat(OwnerBudget.DISK_GB.limitFor(FORM_OWNER))
+        assertThat(OwnerBudget.DISK_GB.limitFor(owner))
             .as("step 2: the disk reserve hook honours the form-written override")
             .isEqualTo(7);
-        assertThat(OwnerBudget.NICS.limitFor(FORM_OWNER))
+        assertThat(OwnerBudget.NICS.limitFor(owner))
             .as("step 2: the NIC reserve hook honours the form-written override")
             .isEqualTo(2);
 
         // 3. An UPDATE to 0 must survive as 0 -- "this owner gets nothing" is a
         //    different answer from "no override, fall through to the global default".
         var updated = adminPostForm("/admin/instance-quotas/" + this.quotaRowId,
-            "subjects=" + FORM_OWNER + "&max_instances=3&max_disk_gb=0&max_nics=0");
+            "subjects=" + owner + "&max_instances=3&max_disk_gb=0&max_nics=0");
         assertThat(updated.statusCode())
             .as("step 3: the quota form accepted the update").isIn(200, 302, 303);
-        assertThat(OwnerBudget.DISK_GB.limitFor(FORM_OWNER))
+        assertThat(OwnerBudget.DISK_GB.limitFor(owner))
             .as("step 3: an override of 0 stays 0 and does not fall through to the default")
             .isEqualTo(0);
-        assertThat(OwnerBudget.NICS.limitFor(FORM_OWNER))
+        assertThat(OwnerBudget.NICS.limitFor(owner))
             .as("step 3: the NIC override of 0 stays 0")
             .isEqualTo(0);
+    }
+
+    /**
+     * An owner several subjects share is ONE override: picked as two groups on the admin form's multi-select, stored as
+     * the pack every bucket stamp is built from, read back as both subjects, and the cap its devices are charged
+     * against. The single-subject picker this replaced could not name such an owner at all, and the list's quick add
+     * picks one through the same multi-select.
+     */
+    @Test
+    void aSharedOwnerPickedOnTheAdminFormIsTheCapItsDevicesAreChargedAgainst() throws Exception {
+        String first = new SubjectTag(GrantSubjectType.GROUP, this.sharedGroup("a")).token();
+        String second = new SubjectTag(GrantSubjectType.GROUP, this.sharedGroup("b")).token();
+        String pack = HohenheimAccess.packSubjects(Set.of(first, second));
+        Model quotas = Models.get(InstanceQuotaModel.class);
+
+        // 1. Create with both subjects picked: the multi-select's repeated values and its always-present blank marker.
+        var created = adminPostForm("/admin/instance-quotas/new", owners(first, second) + "&max_disk_gb=3");
+        assertThat(created.statusCode())
+            .as("step 1: the quota form accepted two owners").isIn(200, 302, 303);
+        Row row = quotas.find().where(InstanceQuotaModel.SUBJECTS.eq(pack)).first();
+        assertThat(row).as("step 1: the override stores the shared owner's one pack").isNotNull();
+        this.quotaRowId = row.get(InstanceQuotaModel.ID);
+
+        // 2. The edit form shows the stored owner as both subjects.
+        assertThat(InstanceQuotaParts.admin().formValues(row).get(InstanceQuotaModel.SUBJECTS.getName()))
+            .as("step 2: the edit form reads the shared owner back as its two subjects")
+            .asList().containsExactlyInAnyOrder(first, second);
+
+        // 3. A record both groups manage is charged in the shared owner's bucket, capped by the override.
+        int instanceId = instanceRecord();
+        RecordGrants.grant(GrantSubjectType.GROUP, this.sharedGroupIds.get(0), InstanceModel.MODEL_ID, instanceId,
+            HohenheimCapabilities.MANAGE, true);
+        RecordGrants.grant(GrantSubjectType.GROUP, this.sharedGroupIds.get(1), InstanceModel.MODEL_ID, instanceId,
+            HohenheimCapabilities.MANAGE, true);
+        String bucket = OwnerBudget.DISK_GB.bucketOf(pack);
+        long usedBefore = Quotas.usedOf(bucket);
+        Row disk = diskRow(instanceId, NAME_PREFIX + "shared1", 2);
+        Models.get(InstanceDeviceModel.class).save(disk);
+        assertThat((String) disk.get(InstanceDeviceModel.QUOTA_BUCKET))
+            .as("step 3: the disk is stamped with the shared owner's bucket").isEqualTo(bucket);
+        assertThat(Quotas.usedOf(bucket)).as("step 3: the shared owner is charged 2 GB").isEqualTo(usedBefore + 2);
+        Throwable over = catchThrowable(() ->
+            Models.get(InstanceDeviceModel.class).save(diskRow(instanceId, NAME_PREFIX + "shared2", 2)));
+        assertThat(violationKeyOf(over))
+            .as("step 3: 2 GB more passes the override's 3 GB: the named refusal").isEqualTo("disk_quota_reached");
+
+        // 4. Editing the cap through the form keeps the shared owner, and the raised cap is what the next charge meets.
+        var updated = adminPostForm("/admin/instance-quotas/" + this.quotaRowId,
+            owners(first, second) + "&max_disk_gb=4");
+        assertThat(updated.statusCode()).as("step 4: the quota form accepted the edit").isIn(200, 302, 303);
+        assertThat((String) quotas.findById(this.quotaRowId).get(InstanceQuotaModel.SUBJECTS))
+            .as("step 4: the edit kept the shared owner's pack").isEqualTo(pack);
+        Models.get(InstanceDeviceModel.class).save(diskRow(instanceId, NAME_PREFIX + "shared3", 2));
+        assertThat(Quotas.usedOf(bucket))
+            .as("step 4: the raised cap admitted 2 GB more").isEqualTo(usedBefore + 4);
+
+        // 5. The list's quick add picks a shared owner on the same multi-select: two subjects, one cap, one pack, and
+        //    the picks kept on the list it returns to.
+        String third = new SubjectTag(GrantSubjectType.GROUP, this.sharedGroup("c")).token();
+        String quickPack = HohenheimAccess.packSubjects(Set.of(first, third));
+        navigateToApp("/admin/instance-quotas");
+        page.locator("pl-button[data-cms-quick-add-open]").click();
+        String quick = "[data-cms-quick-add] ";
+        page.locator(quick + "[data-zf-create-field='subjects'] .pl-select-field").click();
+        String popup = "he-bottom .pl-select-popup[data-open] [role='option']";
+        page.locator(popup + "[data-value='" + first + "']").click();
+        page.locator(popup + "[data-value='" + third + "']").click();
+        assertThat(page.locator(quick + "[data-zf-create-field='subjects'] pl-select-chip").count())
+            .as("step 5: both picked subjects are chips").isEqualTo(2);
+        // A multiple pick keeps its popup open over the sheet; Escape closes that topmost layer, not the sheet.
+        page.keyboard().press("Escape");
+        page.waitForCondition(() -> page.locator("he-bottom .pl-select-popup[data-open]").count() == 0);
+        assertThat(page.locator(quick + "[data-zf-create-field='subjects'] pl-select-chip").count())
+            .as("step 5: closing the picker keeps both picks").isEqualTo(2);
+        page.locator(quick + "[data-zf-create-field='max_instances'] input").fill("5");
+        page.locator(quick + "[data-cms-quick-add-submit]").click();
+        page.waitForCondition(() -> quotas.find().where(InstanceQuotaModel.SUBJECTS.eq(quickPack)).first() != null);
+        Row quick5 = quotas.find().where(InstanceQuotaModel.SUBJECTS.eq(quickPack)).first();
+        this.quickQuotaRowId = quick5.get(InstanceQuotaModel.ID);
+        assertThat((Integer) quick5.get(InstanceQuotaModel.MAX_INSTANCES))
+            .as("step 5: the quick add stored its cap on the shared owner's override").isEqualTo(5);
+        page.waitForCondition(() -> page.url().contains("qa.subjects="));
+        assertThat(page.url()).as("step 5: both picks ride the list URL the add returns to")
+            .contains("qa.subjects=" + URLEncoder.encode(first, StandardCharsets.UTF_8))
+            .contains("qa.subjects=" + URLEncoder.encode(third, StandardCharsets.UTF_8));
+    }
+
+    /** @return a fresh permission group, removed with its grants after the test */
+    private UUID sharedGroup(String suffix) {
+        Row group = Models.get(PermissionGroupModel.class).createEmptyRow();
+        group.set(PermissionGroupModel.SLUG, SHARED_OWNER_ROLE + "-" + suffix);
+        group.set(PermissionGroupModel.TITLE, SHARED_OWNER_ROLE + "-" + suffix);
+        Models.get(PermissionGroupModel.class).save(group);
+        UUID id = group.get(PermissionGroupModel.ID);
+        this.sharedGroupIds.add(id);
+        return id;
+    }
+
+    /** @return the owner picker's transport: one value per picked subject, then the blank marker */
+    private static String owners(String... subjects) {
+        StringBuilder body = new StringBuilder();
+        for (String subject : subjects) {
+            body.append("subjects=").append(URLEncoder.encode(subject, StandardCharsets.UTF_8)).append('&');
+        }
+        return body.append("subjects=").toString();
     }
 }

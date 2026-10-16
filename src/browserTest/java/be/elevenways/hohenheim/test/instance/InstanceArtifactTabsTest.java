@@ -29,6 +29,7 @@ import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -51,7 +52,7 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
     private static Integer snapshotId;
     private static Integer backupId;
     private static String consoleSession;
-    private static Integer consoleUserId;
+    private static UUID consoleUserId;
 
     @BeforeAll
     static void seed() {
@@ -322,7 +323,7 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
         backup.set(InstanceBackupModel.CREATED_AT, Instant.parse("2026-08-11T09:30:00Z"));
         Models.get(InstanceBackupModel.class).save(backup);
         int backupRowId = backup.get(InstanceBackupModel.ID);
-        Integer tenantId = ApiSupport.user("artifact-backups@hohenheim.local", "Backups Only");
+        UUID tenantId = ApiSupport.user("artifact-backups@hohenheim.local", "Backups Only");
         RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, hiddenId,
             HohenheimCapabilities.BACKUPS, true);
         String tenantSession = sessionFor(tenantId).token();

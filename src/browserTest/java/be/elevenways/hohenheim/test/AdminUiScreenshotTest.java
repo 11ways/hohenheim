@@ -39,6 +39,7 @@ import java.nio.file.Paths;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -148,7 +149,7 @@ class AdminUiScreenshotTest extends HohenheimTestBase {
         // A tenant delegated the workspace, so the /manage twin of its Volumes tab can be captured beside /admin's.
         String tenantEmail = "screenshot-tenant@hohenheim.test";
         Row tenant = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq(tenantEmail)).first();
-        int tenantId = tenant != null ? tenant.get(UserModel.ID) : ApiSupport.user(tenantEmail, "Tenant");
+        UUID tenantId = tenant != null ? tenant.get(UserModel.ID) : ApiSupport.user(tenantEmail, "Tenant");
         for (String capability : List.of(HohenheimCapabilities.MANAGE, HohenheimCapabilities.CONFIG)) {
             RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, workspaceId, capability, true);
         }

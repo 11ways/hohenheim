@@ -57,6 +57,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiPredicate;
 import java.util.stream.Stream;
@@ -80,8 +81,8 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
 
     private static final String PREFIX = "affparity-";
 
-    private static Integer viewerId;
-    private static Integer holderId;
+    private static UUID viewerId;
+    private static UUID holderId;
 
     private static Integer instanceId;
     private static Integer databaseId;
@@ -580,7 +581,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
         schedule.set(RecordScheduleModel.NAME, PREFIX + "budget-schedule");
         schedule.set(RecordScheduleModel.CRON, "0 4 * * *");
         schedule.set(RecordScheduleModel.ENABLED, true);
-        schedule.set(RecordScheduleModel.RUN_AS, holderId.longValue());
+        schedule.set(RecordScheduleModel.RUN_AS, holderId);
         schedules.save(schedule);
         Integer scheduleId = schedule.get(RecordScheduleModel.ID);
         try {
@@ -685,7 +686,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
             schedule.set(RecordScheduleModel.NAME, PREFIX + "list-schedule-" + i);
             schedule.set(RecordScheduleModel.CRON, "0 4 * * *");
             schedule.set(RecordScheduleModel.ENABLED, true);
-            schedule.set(RecordScheduleModel.RUN_AS, holderId.longValue());
+            schedule.set(RecordScheduleModel.RUN_AS, holderId);
             schedules.save(schedule);
             ids.add(schedule.get(RecordScheduleModel.ID));
         }

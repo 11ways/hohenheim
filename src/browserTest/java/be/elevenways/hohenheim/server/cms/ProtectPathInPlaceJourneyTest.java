@@ -103,8 +103,8 @@ class ProtectPathInPlaceJourneyTest extends HohenheimTestBase {
         // 5. A tenant managing the site protects a path: the dedicated list answers to that tenant, so it can open and
         //    edit it later; another tenant cannot reach it.
         Row tenantSite = site("protect-tenant-" + suffix, "hohenheim:static");
-        int tenantId = ApiSupport.user("protect-tenant-" + suffix + "@hohenheim.local", "Protect Tenant");
-        int outsiderId = ApiSupport.user("protect-outsider-" + suffix + "@hohenheim.local", "Protect Outsider");
+        UUID tenantId = ApiSupport.user("protect-tenant-" + suffix + "@hohenheim.local", "Protect Tenant");
+        UUID outsiderId = ApiSupport.user("protect-outsider-" + suffix + "@hohenheim.local", "Protect Outsider");
         RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, tenantSite.get(SiteModel.ID),
             HohenheimCapabilities.MANAGE, true);
         AccessContext tenant = AccessContext.of(TenantConduits.stubFor(new UserPrincipal(tenantId, "Protect Tenant")));

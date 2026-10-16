@@ -33,6 +33,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static be.elevenways.hohenheim.test.ApiSupport.form;
 
@@ -67,8 +68,8 @@ class ApiWireFilesLiveTest extends HohenheimTestBase {
         HostFixtures.admitLocal();
 
         ApiWire.operatorId();
-        int tenantId = ApiSupport.user("wire-files-tenant@surface.test", "Wire Files Tenant");
-        int viewerId = ApiSupport.user("wire-files-viewer@surface.test", "Wire Files Viewer");
+        UUID tenantId = ApiSupport.user("wire-files-tenant@surface.test", "Wire Files Tenant");
+        UUID viewerId = ApiSupport.user("wire-files-viewer@surface.test", "Wire Files Viewer");
 
         Map<String, Object> settings = new LinkedHashMap<>();
         settings.put("image", TestImages.ALPINE);

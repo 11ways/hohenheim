@@ -21,6 +21,7 @@ import be.elevenways.hohenheim.server.game.VelocityConfigs;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.zenit.auth.cms.SubjectTag;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
@@ -33,6 +34,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
+import java.util.UUID;
 
 import static be.elevenways.hohenheim.test.TestAccessContexts.contextFor;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -59,8 +61,8 @@ class GameDomainAuthorityTest extends HohenheimTestBase {
     private static int backendId;
     private static int secondBackendId;
     private static int proxyId;
-    private static int tenantInstancesId;
-    private static int tenantDomainId;
+    private static UUID tenantInstancesId;
+    private static UUID tenantDomainId;
     private static int zoneId;
 
     @BeforeAll
@@ -469,7 +471,7 @@ class GameDomainAuthorityTest extends HohenheimTestBase {
         victimSite.set(SiteModel.ENABLED, true);
         sites.save(victimSite);
         int victimSiteId = victimSite.get(SiteModel.ID);
-        int arenaTenant = ApiSupport.user("tenant-arena@gamedomain.test");
+        UUID arenaTenant = ApiSupport.user("tenant-arena@gamedomain.test");
         RecordGrants.grant(GrantSubjectType.USER, arenaTenant, SiteModel.MODEL_ID, victimSiteId,
             HohenheimCapabilities.MANAGE, true);
         Row victimDomain = domains.createEmptyRow();
@@ -483,7 +485,7 @@ class GameDomainAuthorityTest extends HohenheimTestBase {
         assertThat(ledgered).as("step 1: abandoning the domain row is ledgered").isNotNull();
         assertThat((String) ledgered.get(ReleasedRouteClaimModel.FORMER_SUBJECTS))
             .as("step 1: under the TENANT, not an empty operator set")
-            .isEqualTo("user:" + arenaTenant);
+            .isEqualTo(new SubjectTag(GrantSubjectType.USER, arenaTenant).token());
 
         // 2. The game tier owns no hostname of its own: a mapping can only point at a
         //    site_domain row, and pointing at one that does not exist is refused by name.

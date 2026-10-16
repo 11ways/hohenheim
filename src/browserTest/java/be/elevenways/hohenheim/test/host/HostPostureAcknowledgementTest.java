@@ -20,6 +20,7 @@ import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.common.util.Uuids;
 import be.elevenways.zenit.cms.common.action.ActionContext;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -30,6 +31,7 @@ import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Accountability;
 import be.elevenways.zenit.common.security.PrincipalRef;
+import be.elevenways.zenit.common.security.SystemPrincipal;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -49,6 +51,7 @@ import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -99,9 +102,13 @@ class HostPostureAcknowledgementTest {
      * Its OWN database: the chooser walks EVERY host row, so a neighbouring class's
      * leftover admitted host would silently change what "refused" means here.
      */
+    /** The accepting operator's account id. */
+    private static final UUID OPERATOR_ID = Uuids.v7();
+
     /** The accepting operator: an account principal, stored with its kind. */
-    private static final Accountability OPERATOR = new Accountability("7", PrincipalRef.account(7).storedKind(),
-        "Ada Operator", "203.0.113.9", "test-agent", Accountability.ORIGIN_WEB);
+    private static final Accountability OPERATOR = new Accountability(OPERATOR_ID.toString(),
+        PrincipalRef.account(OPERATOR_ID).storedKind(), "Ada Operator", "203.0.113.9", "test-agent",
+        Accountability.ORIGIN_WEB);
 
     @BeforeAll
     static void setUp() throws Exception {
@@ -114,7 +121,7 @@ class HostPostureAcknowledgementTest {
         Db.run(datasource, () -> {
             Row host = Models.get(ServerModel.class).findById(admittedSharedHost("system-probe"));
             Throwable refused = catchThrowable(() -> Accountability.runAs(
-                new Accountability("1", "zenit:system", "internal posture sweep", null, null,
+                new Accountability(SystemPrincipal.ID.toString(), "zenit:system", "internal posture sweep", null, null,
                     Accountability.ORIGIN_SYSTEM), () -> HostPostureAcknowledgement.record(host)));
             assertThat(refused).as("step 1: an identified system actor is still not an accepting operator")
                 .isInstanceOf(Violations.class);
@@ -187,7 +194,7 @@ class HostPostureAcknowledgementTest {
             //    beside them carries a real actor.
             Row unacknowledged = servers.findById(hostId);
             PanelAction<Row> action = acknowledgeAction();
-            var principal = TestAccessContexts.authenticated(7, "Ada Operator");
+            var principal = TestAccessContexts.authenticated(OPERATOR_ID, "Ada Operator");
             AccessContext operator = AccessContext.of(TenantConduits.stubFor(principal), principal,
                     TestAccessContexts.allowAll());
             @SuppressWarnings("unchecked")
@@ -209,7 +216,7 @@ class HostPostureAcknowledgementTest {
                     + " the RECORD -- the authority a gate can still read in a year")
                 .isEqualTo(Map.of("posture", ServerModel.POSTURE_SHARED_CONTAINER,
                     "version", String.valueOf(ServerModel.POSTURE_WARNING_VERSION),
-                    "by", String.valueOf(PrincipalRef.account(7)), "label", "Ada Operator"));
+                    "by", String.valueOf(PrincipalRef.account(OPERATOR_ID)), "label", "Ada Operator"));
             assertThat((Instant) acknowledged.get(ServerModel.ACKNOWLEDGED_AT))
                 .as("step 4: with a timestamp").isNotNull();
             assertThat(OperationPipeline.offer(operation, operator, acknowledged))
@@ -224,7 +231,7 @@ class HostPostureAcknowledgementTest {
                 .isNotNull();
             assertThat(ActivityModel.ACTOR_PRINCIPAL.read(activity))
                 .as("step 4: and it names a real actor, not system work")
-                .isEqualTo(PrincipalRef.account(7));
+                .isEqualTo(PrincipalRef.account(OPERATOR_ID));
 
             // 5. Now BOTH hostile-tenant fixtures place, and they CO-LOCATE: this is the
             //    plan's gate step, with the divergence stated in the class docblock -- the
@@ -338,7 +345,7 @@ class HostPostureAcknowledgementTest {
             assertThat(ServerModel.ACKNOWLEDGER.read(stale))
                 .as("step 7: and going stale wrote nothing -- the record of who accepted"
                     + " what is still there to read")
-                .isEqualTo(PrincipalRef.account(7));
+                .isEqualTo(PrincipalRef.account(OPERATOR_ID));
             assertThat(keyOf(catchThrowable(() ->
                     HostAdmission.requireInstancePlacement(hostId,
                         WorkloadIsolation.SHARED_KERNEL, BUCKET_A))))

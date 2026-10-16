@@ -22,6 +22,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -139,7 +140,7 @@ public final class Alerts {
         List<NotificationRecipient> recipients = new ArrayList<>();
 
         try {
-            for (Integer id : PermissionHolders.userIdsHolding(HohenheimSources.ADMIN_ACCESS)) {
+            for (UUID id : PermissionHolders.userIdsHolding(HohenheimSources.ADMIN_ACCESS)) {
                 recipients.add(new AdHocRecipient()
                     .route(DeliveryChannel.INBOX, NotificationInboxOwners.userKey(id)));
             }

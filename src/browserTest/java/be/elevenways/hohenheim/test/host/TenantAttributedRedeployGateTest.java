@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -59,7 +60,7 @@ class TenantAttributedRedeployGateTest extends HohenheimTestBase {
         //    operator-authored, generated-only kind. This is the exact shape the old gate
         //    skipped, and the ownership lives on the SITE, never on the instance row.
         int siteId = site();
-        int tenantId = ApiSupport.user("redeploy-tenant@hohenheim.local");
+        UUID tenantId = ApiSupport.user("redeploy-tenant@hohenheim.local");
         RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteId,
             HohenheimCapabilities.MANAGE, true);
         int instanceId = releaseContainer(siteId, hostId);

@@ -107,7 +107,7 @@ public final class ReleasedClaimParts {
             // stored row instead.
             .column(ColumnSpec.virtual(FORMER_SITE_COLUMN,
                 FieldLabels.labelFor(ReleasedRouteClaimModel.FORMER_SITE_ID)).build())
-            // NOT the stored column: it holds the packed "user:5" grant subjects, a storage key nobody reads.
+            // NOT the stored column: it holds the packed "user:<uuid>" grant subjects, a storage key nobody reads.
             .column(ColumnSpec.virtual(FORMER_OWNER_COLUMN,
                 FieldLabels.labelFor(ReleasedRouteClaimModel.FORMER_SUBJECTS)).build())
             .column(ColumnSpec.fromField(ReleasedRouteClaimModel.RELEASED_AT).build())

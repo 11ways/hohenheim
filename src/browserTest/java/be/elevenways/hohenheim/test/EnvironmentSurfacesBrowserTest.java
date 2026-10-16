@@ -21,6 +21,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Frozen environment and variable surfaces, including both value carriers and a used environment's delete gate.
@@ -47,7 +48,7 @@ class EnvironmentSurfacesBrowserTest extends HohenheimTestBase {
     @BeforeAll
     static void seed() {
         operator = TenantConduits.operator();
-        int user = ApiSupport.user("environment-surfaces@hohenheim.local", "Environment Surfaces Tenant");
+        UUID user = ApiSupport.user("environment-surfaces@hohenheim.local", "Environment Surfaces Tenant");
         tenant = AccessContext.of(TenantConduits.stubFor(new UserPrincipal(user, "Environment Surfaces Tenant")));
         Model projects = Models.get(ProjectModel.class);
         Row project = projects.createEmptyRow();

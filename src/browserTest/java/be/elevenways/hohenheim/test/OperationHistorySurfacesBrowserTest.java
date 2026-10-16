@@ -20,6 +20,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.UUID;
 
 import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
 
@@ -43,7 +44,7 @@ class OperationHistorySurfacesBrowserTest extends HohenheimTestBase {
 
     @BeforeAll
     static void seed() {
-        int tenantId = ApiSupport.user(PREFIX + "tenant@hohenheim.local", "Batch7 History Tenant");
+        UUID tenantId = ApiSupport.user(PREFIX + "tenant@hohenheim.local", "Batch7 History Tenant");
         buildId = String.valueOf(build());
         releaseId = String.valueOf(release());
         operator = access(operatorPrincipal());

@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.zenit.auth.cms.RoleOwnership;
 import be.elevenways.zenit.auth.model.PermissionGroupModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.util.Uuids;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -25,6 +26,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * The project tier's write-funnel invariants, on EVERY writer (forms, services,
@@ -72,7 +74,7 @@ public final class ProjectGuards {
                 }
                 return;
             }
-            Integer storedGroup = stored.get(ProjectModel.GROUP_ID);
+            UUID storedGroup = stored.get(ProjectModel.GROUP_ID);
             if (row.has(ProjectModel.GROUP_ID.getName())
                     && storedGroup != null
                     && !storedGroup.equals(row.get(ProjectModel.GROUP_ID))) {
@@ -303,11 +305,21 @@ public final class ProjectGuards {
         }
     }
 
-    /** A permission group a live project still points at cannot be deleted on its own. */
+    /**
+     * A permission group a live project still points at cannot be deleted on its own.
+     *
+     * AIDEV-NOTE: fails CLOSED: a doomed key that names no group id (neither a UUID nor its canonical text) refuses
+     * the whole delete. Skipping it, as the pre-UUID integer check did for every key once group ids became UUIDs,
+     * lets a project's own group be deleted out from under it.
+     *
+     * @throws IllegalStateException when a doomed key is no group id
+     */
     private static void refuseProjectOwnedGroup(@NonNull RemoveFromDatasource context) {
         for (Object key : context.doomedPrimaryKeys()) {
-            if (!(key instanceof Integer groupId)) {
-                continue;
+            UUID groupId = key instanceof UUID uuid ? uuid : key instanceof String text ? Uuids.canonical(text) : null;
+            if (groupId == null) {
+                throw new IllegalStateException("Refusing to delete permission group " + key
+                    + ": its key is no group id, so whether a project owns it cannot be decided");
             }
             Row project = Projects.projectForGroup(groupId);
             if (project != null) {
@@ -321,11 +333,11 @@ public final class ProjectGuards {
      * @return the auth groups of the doomed projects, torn down once they are gone
      * @throws Violations {@code project_not_empty}
      */
-    private static @Nullable List<Integer> refuseNonEmptyAndCapture(@NonNull RemoveFromDatasource context) {
-        List<Integer> doomedGroups = new ArrayList<>();
+    private static @Nullable List<UUID> refuseNonEmptyAndCapture(@NonNull RemoveFromDatasource context) {
+        List<UUID> doomedGroups = new ArrayList<>();
         context.eachDoomedRow(project -> {
             Integer id = project.get(ProjectModel.ID);
-            Integer groupId = project.get(ProjectModel.GROUP_ID);
+            UUID groupId = project.get(ProjectModel.GROUP_ID);
             if (groupId != null && Projects.ownedRecordCount(groupId) > 0) {
                 throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("project_not_empty"));
             }
@@ -340,8 +352,8 @@ public final class ProjectGuards {
     }
 
     private static void removeDoomedGroups(@NonNull RemoveFromDatasource context,
-                                           @NonNull List<Integer> doomedGroups) {
-        for (Integer groupId : doomedGroups) {
+                                           @NonNull List<UUID> doomedGroups) {
+        for (UUID groupId : doomedGroups) {
             Projects.removeGroupFor(groupId);
         }
     }

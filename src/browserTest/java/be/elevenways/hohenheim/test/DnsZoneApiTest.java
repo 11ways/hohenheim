@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
 import java.util.List;
+import java.util.UUID;
 
 import static be.elevenways.hohenheim.test.ApiSupport.codeOf;
 import static be.elevenways.hohenheim.test.ApiSupport.form;
@@ -49,7 +50,7 @@ class DnsZoneApiTest extends HohenheimTestBase {
     static void seed() {
         previousDeclared = DnsNameservers.declared();
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Dns.NAMESERVERS, DECLARED);
-        int adminId = Models.get(UserModel.class).find()
+        UUID adminId = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first().get(UserModel.ID);
         keyAdmin = ApiKeyService.create(adminId, "zone-api-admin", List.of("hohenheim.*"), null)
             .plaintext();

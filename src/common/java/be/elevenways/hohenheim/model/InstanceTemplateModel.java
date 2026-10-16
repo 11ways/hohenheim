@@ -211,8 +211,8 @@ public class InstanceTemplateModel extends Model {
             .build());
 
     /** The approving operator's principal id (accountability beside the timestamp). */
-    public static final LongField APPROVED_BY_USER_ID = SCHEMA.addField(
-        LongField.builder("approved_by_user_id").filterable(false).build());
+    public static final UuidField APPROVED_BY_USER_ID = SCHEMA.addField(
+        UuidField.builder().name("approved_by_user_id").nullable(true).filterable(false).build());
 
     /** The {@link #SOURCE} the starter seeders stamp on the templates Hohenheim ships. */
     public static final String SOURCE_STARTER = "hohenheim:starter";

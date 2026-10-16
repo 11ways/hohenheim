@@ -20,8 +20,10 @@ import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.auth.cms.SubjectTag;
 import be.elevenways.zenit.auth.model.GrantModel;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
+import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.auth.server.RecordGrants;
@@ -40,6 +42,7 @@ import java.net.http.HttpResponse;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -57,8 +60,8 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
 
     private static final String PREFIX = "tenant-surface-";
 
-    private static Integer tenantAId;
-    private static Integer tenantBId;
+    private static UUID tenantAId;
+    private static UUID tenantBId;
     private static String sessionA;
     private static String csrfA;
     private static UserPrincipal principalA;
@@ -173,7 +176,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
             Map.of("image", "alpine", "tag", "latest", "command", "sleep 300")));
         if (approved) {
             row.set(InstanceTemplateModel.APPROVED_AT, Now.instant());
-            row.set(InstanceTemplateModel.APPROVED_BY_USER_ID, 1L);
+            row.set(InstanceTemplateModel.APPROVED_BY_USER_ID, TenantConduits.operatorUser().get(UserModel.ID));
         }
         templates.save(row);
         return row.get(InstanceTemplateModel.ID);
@@ -515,7 +518,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
             assertThat(HohenheimAccess.manageSubjectsOf(InstanceModel.MODEL_ID,
                     instance.get(InstanceModel.ID)))
                 .as("step 5: the creator holds manage on what it created")
-                .contains("user:" + tenantAId);
+                .contains(new SubjectTag(GrantSubjectType.USER, tenantAId).token());
             assertThat(tenantGet("/manage/instances").body())
                 .as("step 5: and it shows up in the tenant's own list")
                 .contains(PREFIX + "created");
@@ -523,7 +526,8 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
             // 6. The QUOTA charged the TENANT's bucket, not the operator's -- the whole
             //    reason a per-owner cap can bind a self-service create at all.
             String tenantBucket = OwnerBudget.INSTANCES.bucketOf(
-                HohenheimAccess.packSubjects(java.util.Set.of("user:" + tenantAId)));
+                HohenheimAccess.packSubjects(java.util.Set.of(
+                    new SubjectTag(GrantSubjectType.USER, tenantAId).token())));
             assertThat((String) instance.get(InstanceModel.QUOTA_BUCKET))
                 .as("step 6: the create is charged to the creating tenant's bucket")
                 .isEqualTo(tenantBucket);
@@ -535,7 +539,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
             //    next create is refused by name.
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Quota.MAX_INSTANCES_PER_OWNER,
                 (int) OwnerBudget.INSTANCES.usedBy(HohenheimAccess.packSubjects(
-                    java.util.Set.of("user:" + tenantAId))));
+                    java.util.Set.of(new SubjectTag(GrantSubjectType.USER, tenantAId).token()))));
             HttpResponse<String> capped = tenantPost(createUrl, "name=" + PREFIX + "over-cap"
                 + "&" + ApiSupport.fromTemplateTransport());
             assertThat(capped.body())
@@ -729,7 +733,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
         // 1b. A delegated AUTH admin (user management authority, auth.admin.access)
         //     passes the /admin baseline but must still hit the endpoint's own
         //     hohenheim.admin.access -- the layer this endpoint declares for itself.
-        int authAdminId = ApiSupport.user("auth-admin@surface.test", "Auth Admin");
+        UUID authAdminId = ApiSupport.user("auth-admin@surface.test", "Auth Admin");
         GrantService.createDirectGrant(GrantSubjectType.USER, authAdminId, "auth.admin.access", true);
         TestSession authSession = sessionFor(authAdminId);
         HttpResponse<String> authRefused = httpPostForm("/admin/instance-templates-import",

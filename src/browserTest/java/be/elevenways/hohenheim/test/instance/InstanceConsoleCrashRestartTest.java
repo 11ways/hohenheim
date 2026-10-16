@@ -31,6 +31,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -87,7 +88,7 @@ class InstanceConsoleCrashRestartTest {
                 .as("step 2: changing the policy alone does not open a session").isNull();
 
             // 3. A tenant holding CONSOLE and not POWER opens the console: THIS session is the watch.
-            int viewerId = ApiSupport.user("crash-viewer@hohenheim.local", "Crash Viewer");
+            UUID viewerId = ApiSupport.user("crash-viewer@hohenheim.local", "Crash Viewer");
             UserPrincipal viewer = new UserPrincipal(viewerId, "Crash Viewer");
             RecordGrants.grant(GrantSubjectType.USER, viewerId, InstanceModel.MODEL_ID, instanceId,
                 HohenheimCapabilities.CONSOLE, true);

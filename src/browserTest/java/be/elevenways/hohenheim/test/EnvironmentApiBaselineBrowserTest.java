@@ -30,6 +30,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -54,7 +55,7 @@ class EnvironmentApiBaselineBrowserTest extends HohenheimTestBase {
     private static final String VAR_PREFIX = "ENV_API_BASELINE_";
     private static final String STORED = "/api-v1/environments.txt";
 
-    private static int memberId;
+    private static UUID memberId;
     private static int projectId;
     private static int environmentId;
     private static int emptyEnvironmentId;
@@ -83,7 +84,7 @@ class EnvironmentApiBaselineBrowserTest extends HohenheimTestBase {
         memberKey = ApiKeyService.create(memberId, PREFIX + "member",
             List.of(CapabilityScopes.format(SiteModel.MODEL_ID, HohenheimCapabilities.MANAGE),
                 CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimCapabilities.MANAGE)), null).plaintext();
-        int admin = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first()
+        UUID admin = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first()
             .get(UserModel.ID);
         adminKey = ApiKeyService.create(admin, PREFIX + "admin", List.of("hohenheim.*"), null).plaintext();
     }

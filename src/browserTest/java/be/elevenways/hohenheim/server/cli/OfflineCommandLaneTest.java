@@ -41,6 +41,7 @@ import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -124,7 +125,7 @@ class OfflineCommandLaneTest {
 
         // 3. THE recovery path this whole lane exists for: an installation whose only
         //    administrator password is lost, with no HTTP server and no mail lane.
-        int userId = createUser();
+        UUID userId = createUser();
         PasswordService.setPassword(userId, FORGOTTEN);
         assertThat(PasswordService.verifyPassword(userId, FORGOTTEN))
             .as("step 3: the fixture password must be installed before recovery")
@@ -378,7 +379,7 @@ class OfflineCommandLaneTest {
         }
     }
 
-    private static int createUser() {
+    private static UUID createUser() {
         return ApiSupport.user(EMAIL, "Locked Out Admin");
     }
 }

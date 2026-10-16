@@ -41,6 +41,7 @@ import org.junit.jupiter.api.BeforeEach;
 
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -125,7 +126,7 @@ public abstract class HohenheimTestBase extends ZenitBrowserTestBase {
         Row user = TenantConduits.operatorUser();
 
         Session session = Zenit.getSessionStore().create();
-        session.set(AuthKeys.USER_ID, ((Integer) user.get(UserModel.ID)).longValue());
+        session.set(AuthKeys.USER_ID, user.get(UserModel.ID));
         csrfToken = ZenitAuth.randomToken();
         session.set(CsrfTokens.TOKEN, csrfToken);   // so direct-POST tests can send X-Csrf-Token
         Zenit.getSessionStore().save(session);
@@ -184,9 +185,9 @@ public abstract class HohenheimTestBase extends ZenitBrowserTestBase {
     }
 
     /** Mint an authenticated session (with CSRF token) for an existing user id. */
-    protected static TestSession sessionFor(int userId) {
+    protected static TestSession sessionFor(@NonNull UUID userId) {
         Session session = Zenit.getSessionStore().create();
-        session.set(AuthKeys.USER_ID, (long) userId);
+        session.set(AuthKeys.USER_ID, userId);
         String csrf = ZenitAuth.randomToken();
         session.set(CsrfTokens.TOKEN, csrf);
         Zenit.getSessionStore().save(session);

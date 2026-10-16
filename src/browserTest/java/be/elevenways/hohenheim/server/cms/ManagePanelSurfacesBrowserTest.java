@@ -42,6 +42,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -95,8 +96,8 @@ class ManagePanelSurfacesBrowserTest extends HohenheimTestBase {
     @BeforeAll
     static void seed() throws Exception {
         freshSeededDatabase();
-        int oneId = ApiSupport.user(PREFIX + "one@hohenheim.local", "Surfaces Tenant One");
-        int emptyId = ApiSupport.user(PREFIX + "empty@hohenheim.local", "Surfaces Tenant Empty");
+        UUID oneId = ApiSupport.user(PREFIX + "one@hohenheim.local", "Surfaces Tenant One");
+        UUID emptyId = ApiSupport.user(PREFIX + "empty@hohenheim.local", "Surfaces Tenant Empty");
         int site = site(PREFIX + "site", true);
         siteId = String.valueOf(site);
         domainId = String.valueOf(domain(site, PREFIX + "site.surfaces.test"));
@@ -113,8 +114,8 @@ class ManagePanelSurfacesBrowserTest extends HohenheimTestBase {
         RecordGrants.grant(GrantSubjectType.USER, oneId, SiteModel.MODEL_ID, site, HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, oneId, SiteModel.MODEL_ID, disabled, HohenheimCapabilities.MANAGE,
             true);
-        int viewId = ApiSupport.user(PREFIX + "view@hohenheim.local", "Surfaces Instance Viewer");
-        int configId = ApiSupport.user(PREFIX + "config@hohenheim.local", "Surfaces Instance Configurer");
+        UUID viewId = ApiSupport.user(PREFIX + "view@hohenheim.local", "Surfaces Instance Viewer");
+        UUID configId = ApiSupport.user(PREFIX + "config@hohenheim.local", "Surfaces Instance Configurer");
         int instance = instance(PREFIX + "instance");
         instanceId = String.valueOf(instance);
         diskId = String.valueOf(device(instance, InstanceDeviceModel.TYPE_DISK, "data"));

@@ -36,6 +36,7 @@ import java.net.http.HttpResponse;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -52,10 +53,10 @@ class TenantInstanceApiTest extends HohenheimTestBase {
 
     private static final String PREFIX = "tenant-api-";
 
-    private static Integer tenantAId;
-    private static Integer tenantBId;
-    private static Integer tenantConsoleId;
-    private static Integer tenantViewId;
+    private static UUID tenantAId;
+    private static UUID tenantBId;
+    private static UUID tenantConsoleId;
+    private static UUID tenantViewId;
     private static Integer instanceAId;
     private static Integer instanceBId;
     private static Integer instanceCId;

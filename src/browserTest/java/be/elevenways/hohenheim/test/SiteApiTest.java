@@ -24,6 +24,7 @@ import java.net.http.HttpResponse;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 import static be.elevenways.hohenheim.test.ApiSupport.codeOf;
@@ -45,7 +46,7 @@ class SiteApiTest extends HohenheimTestBase {
     private static final String PREFIX = "site-api-";
     private static final String ZONE = "site-api.test";
 
-    private static Integer tenantId;
+    private static UUID tenantId;
     private static Integer tenantSiteId;
     private static Integer catchAllSiteId;
     private static String keyAdmin;
@@ -63,7 +64,7 @@ class SiteApiTest extends HohenheimTestBase {
         catchAllSiteId = site(PREFIX + "catch-all", true);
         domain(catchAllSiteId, "**." + ZONE, SiteDomainModel.MATCH_WILDCARD);
 
-        int adminId = Models.get(UserModel.class).find()
+        UUID adminId = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first().get(UserModel.ID);
         keyAdmin = ApiKeyService.create(adminId, PREFIX + "admin", List.of("hohenheim.*"), null)
             .plaintext();

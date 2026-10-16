@@ -3,12 +3,16 @@ package be.elevenways.hohenheim.test.project;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.protoblast.common.util.Uuids;
+import be.elevenways.zenit.auth.cms.SubjectTag;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.PermissionGroupModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.Test;
 
 import java.util.Set;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -32,7 +36,7 @@ class ProjectIdentityTest extends HohenheimTestBase {
         int projectId = row.get(ProjectModel.ID);
         try {
             Row project = projects.findById(projectId);
-            int groupId = project.get(ProjectModel.GROUP_ID);
+            UUID groupId = project.get(ProjectModel.GROUP_ID);
 
             // 1. A NEW group's slug is the shared fold: the sharp s becomes "ss" instead of a
             //    separator, which is what the old NFD-stripping slugifier produced.
@@ -43,19 +47,20 @@ class ProjectIdentityTest extends HohenheimTestBase {
             // 2. The owner token keeps the stored group:<id> shape and round-trips.
             String token = Projects.subjectOf(project);
             assertThat(token).as("step 2: the owner token is group:<id>")
-                .isEqualTo("group:" + groupId);
+                .isEqualTo(new SubjectTag(GrantSubjectType.GROUP, groupId).token());
             assertThat((Integer) Projects.projectForSubjects(Set.of(token)).get(ProjectModel.ID))
                 .as("step 2: and resolves back to its project").isEqualTo(projectId);
 
             // 3. Any other subject shape is not a project owner: a user, a malformed id, an
             //    unknown type, a set of two.
-            assertThat(Projects.projectForSubjects(Set.of("user:" + groupId)))
+            assertThat(Projects.projectForSubjects(Set.of(new SubjectTag(GrantSubjectType.USER, groupId).token())))
                 .as("step 3: a user token names no project").isNull();
-            assertThat(Projects.projectForSubjects(Set.of("group:not-a-number")))
+            assertThat(Projects.projectForSubjects(Set.of("group:not-a-uuid")))
                 .as("step 3: a malformed group token names no project").isNull();
             assertThat(Projects.projectForSubjects(Set.of("robot:" + groupId)))
                 .as("step 3: an unknown subject type names no project").isNull();
-            assertThat(Projects.projectForSubjects(Set.of(token, "user:1")))
+            String stranger = new SubjectTag(GrantSubjectType.USER, Uuids.v7()).token();
+            assertThat(Projects.projectForSubjects(Set.of(token, stranger)))
                 .as("step 3: a mixed owner set is not a project owner").isNull();
 
             // 4. A rename moves the group's title, never its slug: existing slugs are identities.
@@ -70,7 +75,7 @@ class ProjectIdentityTest extends HohenheimTestBase {
         }
     }
 
-    private static String slugOf(int groupId) {
+    private static String slugOf(UUID groupId) {
         return Models.get(PermissionGroupModel.class).findById(groupId).get(PermissionGroupModel.SLUG);
     }
 }

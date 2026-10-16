@@ -31,6 +31,7 @@ import org.junit.jupiter.api.Test;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -72,7 +73,7 @@ class InstanceVariablesSectionTest extends HohenheimTestBase {
         variable(foreignInstance, null, "FOREIGN_KEY", InstanceVariableModel.KIND_PLAIN, "foreign-value");
         variable(null, environment(), "ENVIRONMENT_KEY", InstanceVariableModel.KIND_PLAIN, "environment-value");
 
-        int viewerId = ApiSupport.user(PREFIX + "viewer@hohenheim.local", "Variables Viewer");
+        UUID viewerId = ApiSupport.user(PREFIX + "viewer@hohenheim.local", "Variables Viewer");
         RecordGrants.grant(GrantSubjectType.USER, viewerId, InstanceModel.MODEL_ID, ownInstance,
             HohenheimCapabilities.VIEW, true);
         viewer = new UserPrincipal(viewerId, "Variables Viewer");

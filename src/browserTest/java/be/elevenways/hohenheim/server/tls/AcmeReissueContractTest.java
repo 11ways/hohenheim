@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.test.tls.RecordingTxtPublisher;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.thread.ScheduledJob;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.common.util.Uuids;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -118,7 +119,7 @@ class AcmeReissueContractTest {
             Row cert = certModel.findById(certId);
             String firstPem = cert.get(CertificateModel.CERTIFICATE_PEM);
             // A stored requester the re-issue must overwrite with the actor that re-issued.
-            CertificateModel.setRequester(cert, PrincipalRef.account(4242));
+            CertificateModel.setRequester(cert, PrincipalRef.account(Uuids.v7()));
             certModel.save(cert);
 
             // 2. RE-ISSUE WITH AN ADDED NAME: same row, new material, new name list.

@@ -32,6 +32,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -69,8 +70,8 @@ class SitesManageAllTest extends HohenheimTestBase {
     private static Integer betaSiteId;
     private static Integer instanceId;
     private static Integer databaseId;
-    private static Integer holderId;
-    private static Integer peerId;
+    private static UUID holderId;
+    private static UUID peerId;
     private static String holderSession;
 
     @BeforeAll
@@ -334,7 +335,7 @@ class SitesManageAllTest extends HohenheimTestBase {
             // 6. THE CONTROL, so step 5 is a narrowing and not a shutdown: a RECORD-LEVEL
             //    manage holder still delegates manage on the site it actually holds. That
             //    is the delegation this lane exists for and it is untouched.
-            Integer ownerId = ApiSupport.user("manage-all-owner@hohenheim.local", "Site Owner");
+            UUID ownerId = ApiSupport.user("manage-all-owner@hohenheim.local", "Site Owner");
             RecordGrants.grant(GrantSubjectType.USER, ownerId, SiteModel.MODEL_ID, alphaSiteId,
                 HohenheimCapabilities.MANAGE, true);
             AccessContext owner = TestAccessContexts.contextFor(
@@ -368,7 +369,7 @@ class SitesManageAllTest extends HohenheimTestBase {
             .toList();
     }
 
-    private static void deleteGrants(int userId, String... permissions) {
+    private static void deleteGrants(UUID userId, String... permissions) {
         List<String> wanted = List.of(permissions);
         for (Row grant : GrantService.listDirectGrants(GrantSubjectType.USER, userId)) {
             if (wanted.contains(grant.get(GrantModel.PERMISSION))) {

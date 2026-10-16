@@ -53,6 +53,7 @@ import java.util.function.BooleanSupplier;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.Tag;
 
 import static be.elevenways.hohenheim.test.TestAccessContexts.contextFor;
@@ -156,7 +157,7 @@ class GameDomainLiveTest {
                 .as("step 1: the Velocity template MINTED a forwarding secret")
                 .isNotBlank();
 
-            int tenantId = tenant();
+            UUID tenantId = tenant();
             RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteId,
                 HohenheimCapabilities.MANAGE, true);
             RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, proxyId,
@@ -353,7 +354,7 @@ class GameDomainLiveTest {
         return domain.get(SiteDomainModel.ID);
     }
 
-    private static int tenant() {
+    private static UUID tenant() {
         return ApiSupport.user("game-live@hohenheim.local", "Game Live Tenant");
     }
 

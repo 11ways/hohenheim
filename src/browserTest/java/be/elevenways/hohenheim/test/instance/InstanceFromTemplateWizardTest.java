@@ -8,7 +8,9 @@ import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -49,7 +51,7 @@ class InstanceFromTemplateWizardTest extends HohenheimTestBase {
         template.set(InstanceTemplateModel.SETTINGS, new LinkedHashMap<>(
             Map.of("image", "alpine", "tag", "latest", "command", "sleep 300")));
         template.set(InstanceTemplateModel.APPROVED_AT, Now.instant());
-        template.set(InstanceTemplateModel.APPROVED_BY_USER_ID, 1L);
+        template.set(InstanceTemplateModel.APPROVED_BY_USER_ID, TenantConduits.operatorUser().get(UserModel.ID));
         templates.save(template);
         templateId = template.get(InstanceTemplateModel.ID);
         variable("SITE_TITLE", "hohenheim:string", "");

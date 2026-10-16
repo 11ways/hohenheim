@@ -6266,11 +6266,11 @@
   },
   "quota_subjects": [
     {
-      "text": "Eigenaar-subjecten",
+      "text": "Eigenaar",
       "scope": "hohenheim_field"
     },
     {
-      "text": "De manage-grant-subjecten van de eigenaar, een \"type:id\"-token per regel (gesorteerd); laat leeg voor de operator",
+      "text": "De eigenaar die deze uitzondering begrenst: kies een account of een rechtengroep, of meerdere voor een eigenaar die ze delen; laat leeg voor de operator",
       "scope": "help"
     }
   ],

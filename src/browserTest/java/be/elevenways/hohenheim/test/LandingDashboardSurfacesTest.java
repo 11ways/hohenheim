@@ -47,6 +47,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -112,8 +113,8 @@ class LandingDashboardSurfacesTest extends HohenheimTestBase {
     @BeforeAll
     static void seed() throws Exception {
         freshSeededDatabase();
-        int tenantId = ApiSupport.user("landing-tenant@hohenheim.local", "Landing Tenant");
-        int outsiderId = ApiSupport.user("landing-outsider@hohenheim.local", "Landing Outsider");
+        UUID tenantId = ApiSupport.user("landing-tenant@hohenheim.local", "Landing Tenant");
+        UUID outsiderId = ApiSupport.user("landing-outsider@hohenheim.local", "Landing Outsider");
         Model sites = Models.get(SiteModel.class);
         Row site = sites.createEmptyRow();
         site.set(SiteModel.NAME, "landing-site");
@@ -194,7 +195,7 @@ class LandingDashboardSurfacesTest extends HohenheimTestBase {
             if (AccountabilityOrigin.SYSTEM.token().equals(fixture[2])) {
                 var system = SystemPrincipal.INSTANCE.reference();
                 row.set(ActivityModel.ACTOR_KIND, system.storedKind());
-                row.set(ActivityModel.ACTOR, Long.toString(system.id()));
+                row.set(ActivityModel.ACTOR, system.id().toString());
             }
             row.set(ActivityModel.ORIGIN, fixture[2]);
             activity.save(row);
@@ -214,12 +215,13 @@ class LandingDashboardSurfacesTest extends HohenheimTestBase {
         }
         String current = String.join("\n", live) + "\n";
 
-        // 2. The live set equals the stored one exactly; without a stored set it is written for review and fails.
+        // 2. The live set equals the stored one exactly; without a stored set it is written for review and fails. The
+        //    live set is always written beside the build, so a changed surface can be compared against it.
+        Path written = Path.of("build", "panel-surfaces", RESOURCE);
+        Files.createDirectories(written.getParent());
+        Files.writeString(written, current, StandardCharsets.UTF_8);
         String stored = stored();
         if (stored == null) {
-            Path written = Path.of("build", "panel-surfaces", RESOURCE);
-            Files.createDirectories(written.getParent());
-            Files.writeString(written, current, StandardCharsets.UTF_8);
             throw new AssertionError("step 2: no stored landing dashboards; the live set is at "
                 + written.toAbsolutePath());
         }

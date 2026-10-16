@@ -14,6 +14,9 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.common.util.Uuids;
+import be.elevenways.zenit.auth.cms.SubjectTag;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.hohenheim.AttentionItem;
@@ -31,6 +34,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.cms.server.page.SettingsBackend;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
+import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.test.support.TestAccessContexts;
 import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
@@ -48,6 +52,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -977,12 +982,13 @@ class AdminPagesTest extends HohenheimTestBase {
     @Test
     void theQuotaListNamesItsOwnerInsteadOfThePackedSubjectKey() throws Exception {
 
-        int ownerId = ApiSupport.user("quota-owner@label.test", "Quota Label Owner");
-        String packed = "user:" + ownerId;
+        UUID ownerId = ApiSupport.user("quota-owner@label.test", "Quota Label Owner");
+        String packed = new SubjectTag(GrantSubjectType.USER, ownerId).token();
         Row quota = quotaFor(packed);
         // A subject nobody can resolve, so step 3 can tell a real lookup from a surface
         // that simply prints something friendlier than what it stored.
-        Row dangling = quotaFor("user:99000001");
+        String unknown = new SubjectTag(GrantSubjectType.USER, Uuids.v7()).token();
+        Row dangling = quotaFor(unknown);
 
         try {
             // 1. POSITIVE ANCHOR: the shared home resolves the packed key to a person.
@@ -998,7 +1004,7 @@ class AdminPagesTest extends HohenheimTestBase {
             // 3. FALSIFIED: an unresolvable subject keeps its raw token -- the home's
             //    deliberate answer for a deleted user, and proof this is a lookup.
             assertThat(body).as("step 3: an unresolvable subject renders as itself")
-                .contains("user:99000001");
+                .contains(unknown);
 
             // 4. The record's own TITLE is the same name, so the delete confirmation asks
             //    about a person rather than about a storage key.
@@ -1026,12 +1032,13 @@ class AdminPagesTest extends HohenheimTestBase {
     @Test
     void theActivityListNamesAnActorThatStoredNoLabel() throws Exception {
 
-        int actorId = ApiSupport.user("activity-actor@label.test", "Activity Label Actor");
+        UUID actorId = ApiSupport.user("activity-actor@label.test", "Activity Label Actor");
         Row entry = Models.get(ActivityModel.class).createEmptyRow();
         entry.set(ActivityModel.MODEL, "hohenheim:label-probe");
         entry.set(ActivityModel.RECORD_ID, "1");
         entry.set(ActivityModel.ACTION, "update");
         entry.set(ActivityModel.ACTOR, String.valueOf(actorId));
+        entry.set(ActivityModel.ACTOR_KIND, PrincipalRef.account(actorId).storedKind());
         entry.set(ActivityModel.ORIGIN, "web");
         entry.set(ActivityModel.CREATED_AT, Now.instant());
         Models.get(ActivityModel.class).save(entry);
@@ -1046,7 +1053,7 @@ class AdminPagesTest extends HohenheimTestBase {
             //    vocabulary, so the operator reads a name and not a bare id.
             assertThat(adminGet("/admin/activity").body())
                 .as("step 2: the activity list names the actor")
-                .contains(HohenheimAccess.subjectLabel("user:" + actorId))
+                .contains(HohenheimAccess.subjectLabel(new SubjectTag(GrantSubjectType.USER, actorId).token()))
                 .contains("Activity Label Actor");
         } finally {
             Models.get(ActivityModel.class).delete(entry.get(ActivityModel.ID));

@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import java.net.http.HttpResponse;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static be.elevenways.hohenheim.test.ApiSupport.codeOf;
 import static be.elevenways.hohenheim.test.ApiSupport.form;
@@ -45,12 +46,12 @@ class AccessListApiTest extends HohenheimTestBase {
 
     @BeforeAll
     static void seed() {
-        int tenantId = user("access-list-api-tenant@surface.test", "Access List Tenant");
+        UUID tenantId = user("access-list-api-tenant@surface.test", "Access List Tenant");
         // The tenant's own door: the /manage panel permission plus a key whose scopes
         // cover both it and the access-list capability vocabulary.
         GrantService.createDirectGrant(GrantSubjectType.USER, tenantId, MANAGE_ACCESS, true);
 
-        int adminId = Models.get(UserModel.class).find()
+        UUID adminId = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first().get(UserModel.ID);
         keyAdmin = ApiKeyService.create(adminId, PREFIX + "admin", List.of("hohenheim.*"), null)
             .plaintext();

@@ -67,7 +67,7 @@ public final class ApiSupport {
     }
 
     /** An enabled user row; returns its id. */
-    public static int user(String email, String name) {
+    public static UUID user(String email, String name) {
         Row user = Models.get(UserModel.class).createEmptyRow();
         user.set(UserModel.EMAIL, email);
         user.set(UserModel.DISPLAY_NAME, name);
@@ -79,7 +79,7 @@ public final class ApiSupport {
     }
 
     /** An enabled user row whose display name is its email; returns its id. */
-    public static int user(String email) {
+    public static UUID user(String email) {
         return user(email, email);
     }
 

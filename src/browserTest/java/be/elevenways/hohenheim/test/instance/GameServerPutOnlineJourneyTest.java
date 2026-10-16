@@ -27,6 +27,7 @@ import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
 import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.operation.OperationRunStatus;
@@ -793,7 +794,7 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
         web.set(InstanceTemplateModel.KIND, "hohenheim:docker_container");
         web.set(InstanceTemplateModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "nginx", "container_port", 80)));
         web.set(InstanceTemplateModel.APPROVED_AT, Now.instant());
-        web.set(InstanceTemplateModel.APPROVED_BY_USER_ID, 1L);
+        web.set(InstanceTemplateModel.APPROVED_BY_USER_ID, TenantConduits.operatorUser().get(UserModel.ID));
         Models.get(InstanceTemplateModel.class).save(web);
         try {
             // 1. Its wizard is the website flow: Where, then HTTPS with the address, and no Ports step.

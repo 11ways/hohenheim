@@ -96,8 +96,9 @@ What each step does, in order:
    handed out by the helper, and a root the service user owned would let it swap
    an entry between the helper's check and its act.
 9. **Settings** -- seeds `settings/local.dry` (0600, secrets): Hohenheim's role
-   and security declaration under `hohenheim`, and `auth.external_base_url` when
-   `--main-url` is given. Every group is read from `local.dry` (or
+   and security declaration under `hohenheim`, and `network.main_url` from
+   `--main-url`, the base of every link that leaves the site (mails, inbox
+   links, the dyndns update URL). Every group is read from `local.dry` (or
    `ZENIT__<GROUP>__*`); a `settings/auth.dry`, `settings/comms.dry` or
    `settings/hohenheim.dry` from an older install is moved under its group
    (`auth`, `comms`, `hohenheim`) in `local.dry` on the first boot (kept as

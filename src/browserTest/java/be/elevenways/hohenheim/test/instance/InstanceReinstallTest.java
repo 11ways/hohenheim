@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
@@ -26,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -54,7 +56,7 @@ class InstanceReinstallTest extends HohenheimTestBase {
     private static final String SCRIPT = "echo install >> /data/runs";
 
     private static int hostId;
-    private static int configOnlyUserId;
+    private static UUID configOnlyUserId;
     private static UserPrincipal configOnlyPrincipal;
 
     @BeforeAll
@@ -292,7 +294,7 @@ class InstanceReinstallTest extends HohenheimTestBase {
         row.set(InstanceTemplateModel.INSTALL_SCRIPT, SCRIPT);
         row.set(InstanceTemplateModel.REINSTALL_POLICY, reinstallPolicy);
         row.set(InstanceTemplateModel.APPROVED_AT, Now.instant());
-        row.set(InstanceTemplateModel.APPROVED_BY_USER_ID, 1L);
+        row.set(InstanceTemplateModel.APPROVED_BY_USER_ID, TenantConduits.operatorUser().get(UserModel.ID));
         Models.get(InstanceTemplateModel.class).save(row);
         return row.get(InstanceTemplateModel.ID);
     }

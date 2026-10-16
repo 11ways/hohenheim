@@ -6,10 +6,12 @@ import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.auth.GrantSubjects;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.auth.cms.SubjectTag;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -143,14 +145,13 @@ public final class ProjectAdoption {
         projects.save(project);
         Row saved = projects.findById(project.get(ProjectModel.ID));
 
-        for (String subject : subjects) {
-            int separator = subject.indexOf(':');
-            String type = subject.substring(0, separator);
-            int id = Integer.parseInt(subject.substring(separator + 1));
-            if ("user".equals(type)) {
-                Projects.addMember(saved, id);
-            } else if ("group".equals(type)) {
-                Projects.addMemberGroup(saved, id);
+        for (String token : subjects) {
+            // A subject that is no known grant subject refuses the adoption: a project missing one of the owners
+            // would hand the record to fewer people than owned it.
+            SubjectTag subject = GrantSubjects.require(token);
+            switch (subject.type()) {
+                case USER -> Projects.addMember(saved, subject.id());
+                case GROUP -> Projects.addMemberGroup(saved, subject.id());
             }
         }
         return saved;

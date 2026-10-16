@@ -6,7 +6,6 @@ import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.Secrets;
-import be.elevenways.hohenheim.server.auth.GrantSubjects;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
@@ -15,7 +14,6 @@ import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstancePlacement;
 import be.elevenways.protoblast.common.util.BlastString;
-import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -95,6 +93,11 @@ public final class TenantDatabases {
      * OPERATOR allocations keep the bare label, so every existing record and the admin
      * panel are unaffected -- an operator is the one owner whose namespace is the
      * installation.
+     *
+     * AIDEV-NOTE: every other owner, one account or a project, is namespaced by a short stable digest of its packed
+     * subject set, because the readable spelling (a UUID) is no legal object name within the Docker and MySQL limits.
+     * Names are STORED and never renamed: a database allocated before account ids were UUIDs keeps its
+     * {@code u<number>-} prefix, and only a new allocation takes the digest.
      */
     public static @NonNull String storedNameFor(@Nullable AccessContext ctx,
                                                 @NonNull String label) {
@@ -102,17 +105,6 @@ public final class TenantDatabases {
         if (owner.isEmpty()) {
             return label;
         }
-        if (owner.size() == 1) {
-            // AIDEV-NOTE: the "u<id>-" spelling is STORED (every tenant database name a
-            // running installation holds), so it never changes shape; only the reading of
-            // the token moved onto GrantSubjects.
-            GrantSubjects.Subject subject = GrantSubjects.parse(owner.iterator().next());
-            if (subject != null && subject.type() == GrantSubjectType.USER) {
-                return "u" + subject.id() + "-" + label;
-            }
-        }
-        // A project (or any multi-subject) owner: a short stable digest of the packed set,
-        // because the readable spelling of a subject set is not a legal object name.
         return "o" + SecureTokens.sha256Hex(HohenheimAccess.packSubjects(owner))
             .substring(0, 8) + "-" + label;
     }

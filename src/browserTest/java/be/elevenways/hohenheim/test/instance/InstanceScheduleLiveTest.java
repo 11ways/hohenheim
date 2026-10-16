@@ -45,6 +45,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
@@ -138,7 +139,7 @@ class InstanceScheduleLiveTest {
         return row.get(InstanceModel.ID);
     }
 
-    private static int schedule(int instanceId, String name, Long runAs) {
+    private static int schedule(int instanceId, String name, UUID runAs) {
         Row row = Models.get(RecordScheduleModel.class).createEmptyRow();
         row.set(RecordScheduleModel.MODEL, InstanceModel.MODEL_ID.toString());
         row.set(RecordScheduleModel.RECORD_ID, String.valueOf(instanceId));
@@ -226,7 +227,7 @@ class InstanceScheduleLiveTest {
         DockerClient docker = new DockerClient();
 
         // The schedule's OWNER: a real user with a real manage grant, both revocable.
-        long tenantId = ApiSupport.user("schedule-tenant@hohenheim.local", "Schedule Tenant");
+        UUID tenantId = ApiSupport.user("schedule-tenant@hohenheim.local", "Schedule Tenant");
 
         Db.run(datasource, () -> {
             HostFixtures.admitLocal();
@@ -235,9 +236,9 @@ class InstanceScheduleLiveTest {
             InstanceService service = new InstanceService();
             RecordSchedules recordSchedules = new RecordSchedules(datasource);
 
-            RecordGrants.grant(GrantSubjectType.USER, (int) tenantId, InstanceModel.MODEL_ID, id,
+            RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, id,
                 HohenheimCapabilities.MANAGE, true);
-            RecordGrants.grant(GrantSubjectType.USER, (int) tenantId, InstanceModel.MODEL_ID, id,
+            RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, id,
                 HohenheimCapabilities.BACKUPS, true);
 
             try {
@@ -280,7 +281,7 @@ class InstanceScheduleLiveTest {
 
                 // 4. REVOKE the manage grant. The stored schedule must stop working:
                 //    no console line, no restart -- host state, not a log line.
-                RecordGrants.revoke(GrantSubjectType.USER, (int) tenantId, InstanceModel.MODEL_ID, id,
+                RecordGrants.revoke(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, id,
                     HohenheimCapabilities.MANAGE);
                 String beforeRevoked = containerId(docker, handle);
 

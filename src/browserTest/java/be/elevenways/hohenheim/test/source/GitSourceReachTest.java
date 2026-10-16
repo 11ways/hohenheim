@@ -35,6 +35,7 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -264,7 +265,7 @@ class GitSourceReachTest extends HohenheimTestBase {
             }
         });
         server.start();
-        int tenantId = ApiSupport.user("provenance-forge@hohenheim.local");
+        UUID tenantId = ApiSupport.user("provenance-forge@hohenheim.local");
         UserPrincipal tenant = new UserPrincipal(tenantId, "Provenance Forge");
         var providers = Models.get(GitProviderModel.class);
         var instances = Models.get(InstanceModel.class);
@@ -322,7 +323,7 @@ class GitSourceReachTest extends HohenheimTestBase {
                 .as("step 4: the operator's local source clones").matches("[0-9a-f]{40}");
             RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, applicationId,
                 HohenheimCapabilities.MANAGE, true);
-            int delegateId = ApiSupport.user("provenance-delegate@hohenheim.local");
+            UUID delegateId = ApiSupport.user("provenance-delegate@hohenheim.local");
             GrantService.createDirectGrant(GrantSubjectType.USER, delegateId, HohenheimSources.ADMIN_ACCESS.value(),
                 true);
             TenantConduits.as(new UserPrincipal(delegateId, "Provenance Delegate"), () -> {
@@ -386,7 +387,7 @@ class GitSourceReachTest extends HohenheimTestBase {
 
     /** The seeded operator account (it holds "*"), as a request caller rather than the test body's system work. */
     private static UserPrincipal operator() {
-        int id = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first()
+        UUID id = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first()
             .get(UserModel.ID);
         return new UserPrincipal(id, "Test Admin");
     }

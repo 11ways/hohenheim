@@ -34,6 +34,7 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -58,8 +59,8 @@ class PaasApiTest extends HohenheimTestBase {
     private static final String ATTACKER_VALUE = "attacker-injected-value";
     private static final String ADMIN_VALUE = "admin-authored-value";
 
-    private static Integer tenantAId;
-    private static Integer tenantBId;
+    private static UUID tenantAId;
+    private static UUID tenantBId;
 
     private static Integer siteAId;
     private static Integer siteBId;
@@ -569,7 +570,7 @@ class PaasApiTest extends HohenheimTestBase {
         //    instance cannot be placed into an environment in one move. It is grouped
         //    while the project owns it...
         Row project = Models.get(ProjectModel.class).findById(projectOneId);
-        int projectGroupId = project.get(ProjectModel.GROUP_ID);
+        UUID projectGroupId = project.get(ProjectModel.GROUP_ID);
         Row unadopted = Models.get(InstanceModel.class).createEmptyRow();
         unadopted.set(InstanceModel.NAME, PREFIX + "unadopted");
         unadopted.set(InstanceModel.KIND, "hohenheim:docker_container");

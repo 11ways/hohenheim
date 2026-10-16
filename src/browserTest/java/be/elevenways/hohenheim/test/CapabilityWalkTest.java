@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.protoblast.common.util.Uuids;
 import be.elevenways.zenit.auth.CapabilityScopes;
 import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
 import be.elevenways.zenit.auth.model.GrantModel;
@@ -25,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -39,7 +41,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class CapabilityWalkTest extends HohenheimTestBase {
 
     private static Integer walkSiteId;
-    private static Integer walkOperatorId;
+    private static UUID walkOperatorId;
 
     @BeforeAll
     static void seedWalkFixtures() {
@@ -160,7 +162,7 @@ class CapabilityWalkTest extends HohenheimTestBase {
             // 3. The minted key exercises the capability through the SAME walk,
             //    on the principal-only face terminals use.
             ApiKeyPrincipal key = new ApiKeyPrincipal(walkOperatorId, "Walk Operator",
-                1, "walk-ci", List.of(scope));
+                Uuids.v7(), "walk-ci", List.of(scope));
             assertThat(AccessContext.detached(key)
                     .hasCapability(SiteModel.MODEL_ID, walkSiteId, HohenheimCapabilities.MANAGE))
                 .as("step 3: the minted key must hold manage on the granted site").isTrue();
@@ -188,7 +190,7 @@ class CapabilityWalkTest extends HohenheimTestBase {
      */
     @Test
     void manageEligibilityIsOneAnswerOnTheRequestAndTheDetachedLane() {
-        int tenantId = ApiSupport.user("walk-eligible@hohenheim.local", "Walk Eligible");
+        UUID tenantId = ApiSupport.user("walk-eligible@hohenheim.local", "Walk Eligible");
         UserPrincipal tenant = new UserPrincipal(tenantId, "Walk Eligible");
 
         try {
@@ -207,13 +209,13 @@ class CapabilityWalkTest extends HohenheimTestBase {
 
             // 3. The account's key scoped only to that record capability is not admitted: the computation answers
             //    for the account, and the key's scopes do not cover the permission (review 10 D02).
-            ApiKeyPrincipal narrowKey = new ApiKeyPrincipal(tenantId, "Walk Eligible", 7, "walk-narrow",
+            ApiKeyPrincipal narrowKey = new ApiKeyPrincipal(tenantId, "Walk Eligible", Uuids.v7(), "walk-narrow",
                 List.of(CapabilityScopes.format(SiteModel.MODEL_ID, HohenheimCapabilities.MANAGE)));
             assertThat(List.of(contextFor(narrowKey).hasPermission(HohenheimSources.MANAGE_ACCESS),
                     AccessContext.detached(narrowKey).hasPermission(HohenheimSources.MANAGE_ACCESS)))
                 .as("step 3: a key scoped below the permission is eligible on neither lane")
                 .containsExactly(false, false);
-            ApiKeyPrincipal manageKey = new ApiKeyPrincipal(tenantId, "Walk Eligible", 8, "walk-manage",
+            ApiKeyPrincipal manageKey = new ApiKeyPrincipal(tenantId, "Walk Eligible", Uuids.v7(), "walk-manage",
                 List.of("hohenheim.manage.access",
                     CapabilityScopes.format(SiteModel.MODEL_ID, HohenheimCapabilities.MANAGE)));
             assertThat(List.of(contextFor(manageKey).hasPermission(HohenheimSources.MANAGE_ACCESS),
@@ -246,7 +248,7 @@ class CapabilityWalkTest extends HohenheimTestBase {
         instance.set(InstanceModel.STATUS, "stopped");
         Models.get(InstanceModel.class).save(instance);
         int instanceId = instance.get(InstanceModel.ID);
-        int viewerId = ApiSupport.user("walk-instance-viewer@hohenheim.local", "Walk Instance Viewer");
+        UUID viewerId = ApiSupport.user("walk-instance-viewer@hohenheim.local", "Walk Instance Viewer");
         UserPrincipal viewer = new UserPrincipal(viewerId, "Walk Instance Viewer");
 
         try {
@@ -259,7 +261,7 @@ class CapabilityWalkTest extends HohenheimTestBase {
                 .containsExactly(true, true);
 
             // 2. Its key scoped only to instance view is refused the computed permission on both lanes.
-            ApiKeyPrincipal viewKey = new ApiKeyPrincipal(viewerId, "Walk Instance Viewer", 9, "walk-view",
+            ApiKeyPrincipal viewKey = new ApiKeyPrincipal(viewerId, "Walk Instance Viewer", Uuids.v7(), "walk-view",
                 List.of(CapabilityScopes.format(InstanceModel.MODEL_ID, "view")));
             assertThat(viewKey.coversCapability(InstanceModel.MODEL_ID, HohenheimCapabilities.VIEW))
                 .as("step 2: the key does cover the instance view it was minted for").isTrue();
@@ -274,7 +276,7 @@ class CapabilityWalkTest extends HohenheimTestBase {
         }
     }
 
-    private static void deleteManageAccessGrants(int userId) {
+    private static void deleteManageAccessGrants(UUID userId) {
         for (Row grant : GrantService.listDirectGrants(GrantSubjectType.USER, userId)) {
             if ("hohenheim.manage.access".equals(grant.get(GrantModel.PERMISSION))) {
                 GrantService.deleteDirectGrant(GrantSubjectType.USER, userId, grant.get(GrantModel.ID));

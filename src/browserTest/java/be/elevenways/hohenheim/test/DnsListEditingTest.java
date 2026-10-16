@@ -24,6 +24,7 @@ import java.net.URLEncoder;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -251,7 +252,7 @@ class DnsListEditingTest extends HohenheimTestBase {
         int ownName = createRecord(zoneId, "own", DnsRecordModel.TYPE_A, "192.0.2.30");
         int foreignName = createRecord(zoneId, "foreign", DnsRecordModel.TYPE_A, "192.0.2.31");
 
-        int tenantId = ApiSupport.user("dns-tenant@hohenheim.local", "Dns Tenant");
+        UUID tenantId = ApiSupport.user("dns-tenant@hohenheim.local", "Dns Tenant");
 
         // The tenant manages a site serving own.tenant.example, which is what gives it
         // hostname authority over that ONE name (and manage-panel access).

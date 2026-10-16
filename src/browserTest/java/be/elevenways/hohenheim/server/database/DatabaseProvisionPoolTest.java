@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.database;
 
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.protoblast.common.util.Uuids;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.common.security.Accountability;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
@@ -32,7 +33,7 @@ class DatabaseProvisionPoolTest {
     @Test
     void poolWorkIsSystemAuthorityAttributedToWhoeverSubmittedIt() throws Exception {
         // 1. A tenant submits: the task runs with system authority, attributed to the tenant.
-        UserPrincipal tenant = new UserPrincipal(4242, "Pool Tenant");
+        UserPrincipal tenant = new UserPrincipal(Uuids.v7(), "Pool Tenant");
         CompletableFuture<List<Object>> tenantTask = new CompletableFuture<>();
         TenantConduits.as(tenant, () -> DatabaseService.submit(() -> tenantTask.complete(observed())));
         assertThat(tenantTask.get(10, TimeUnit.SECONDS))

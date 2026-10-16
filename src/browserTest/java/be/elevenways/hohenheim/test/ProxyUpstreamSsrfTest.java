@@ -19,6 +19,7 @@ import java.net.InetAddress;
 import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -47,7 +48,7 @@ class ProxyUpstreamSsrfTest extends HohenheimTestBase {
     /** A public address the tenant's site is seeded with; judging it resolves no DNS. */
     private static final String PUBLIC_IP = "93.184.216.34";
 
-    private static Integer tenantId;
+    private static UUID tenantId;
     private static Integer tenantSiteId;
     private static UserPrincipal tenantPrincipal;
     private static UserPrincipal adminPrincipal;

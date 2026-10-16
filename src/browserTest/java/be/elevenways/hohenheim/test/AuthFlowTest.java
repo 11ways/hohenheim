@@ -69,7 +69,7 @@ class AuthFlowTest extends HohenheimTestBase {
         // for every later test class in this JVM.
         Row user = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         Session throwaway = Zenit.getSessionStore().create();
-        throwaway.set(AuthKeys.USER_ID, ((Integer) user.get(UserModel.ID)).longValue());
+        throwaway.set(AuthKeys.USER_ID, user.get(UserModel.ID));
         throwaway.set(CsrfTokens.TOKEN, ZenitAuth.randomToken());
         Zenit.getSessionStore().save(throwaway);
         context.addCookies(java.util.List.of(new com.microsoft.playwright.options.Cookie(

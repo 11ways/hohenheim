@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
 import static be.elevenways.hohenheim.HohenheimSlugs.MANAGE;
@@ -47,7 +48,7 @@ class AccessRuleSurfacesBrowserTest extends HohenheimTestBase {
     private static final String LISTS = HohenheimSlugs.ACCESS_LISTS;
     private static final String RULES = "access-rules";
 
-    private static int tenantId;
+    private static UUID tenantId;
     private static int siteId;
     private static String tenantListId;
     private static String sharedListId;
@@ -63,7 +64,7 @@ class AccessRuleSurfacesBrowserTest extends HohenheimTestBase {
     @BeforeAll
     static void seed() {
         tenantId = ApiSupport.user(PREFIX + "tenant@hohenheim.local", "Access Rule Surfaces Tenant");
-        int emptyId = ApiSupport.user(PREFIX + "empty@hohenheim.local", "Access Rule Surfaces Empty");
+        UUID emptyId = ApiSupport.user(PREFIX + "empty@hohenheim.local", "Access Rule Surfaces Empty");
         int tenantList = accessList(PREFIX + "tenant");
         int sharedList = accessList(PREFIX + "shared");
         tenantListId = String.valueOf(tenantList);

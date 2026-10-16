@@ -41,6 +41,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.Accountability;
 import be.elevenways.zenit.common.security.AccountabilityOrigin;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.SystemPrincipal;
 import be.elevenways.zenit.common.security.ZenitPrincipalKind;
 import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import org.junit.jupiter.api.Test;
@@ -71,19 +72,19 @@ class AdminActivityListTest extends HohenheimTestBase {
     void actorFilterReadsDisplayedNamesRatherThanNumericFragments() throws Exception {
         String first = "hh-actor-name-zelda";
         String second = "hh-actor-name-alpha";
-        int zeldaId = TestAccounts.create("zelda-" + UUID.randomUUID() + "@example.com", "Zelda Actor", true, false);
-        int alphaId = TestAccounts.create("alpha-" + UUID.randomUUID() + "@example.com", "Alpha Actor", true, true);
+        UUID zeldaId = TestAccounts.create("zelda-" + UUID.randomUUID() + "@example.com", "Zelda Actor", true, false);
+        UUID alphaId = TestAccounts.create("alpha-" + UUID.randomUUID() + "@example.com", "Alpha Actor", true, true);
         write(ServerModel.MODEL_ID.toString(), first, first, "updated", Accountability.ORIGIN_WEB,
             Instant.parse("2998-01-01T00:00:00Z"));
         write(ServerModel.MODEL_ID.toString(), second, second, "updated", Accountability.ORIGIN_WEB,
             Instant.parse("2998-01-02T00:00:00Z"));
         Row zelda = rowFor(first);
-        zelda.set(ActivityModel.ACTOR, Integer.toString(zeldaId));
+        zelda.set(ActivityModel.ACTOR, zeldaId.toString());
         zelda.set(ActivityModel.ACTOR_KIND, ZenitPrincipalKind.ACCOUNT.id().toString());
         zelda.set(ActivityModel.ACTOR_LABEL, null);
         new ActivityModel().save(zelda);
         Row alpha = rowFor(second);
-        alpha.set(ActivityModel.ACTOR, Integer.toString(alphaId));
+        alpha.set(ActivityModel.ACTOR, alphaId.toString());
         alpha.set(ActivityModel.ACTOR_KIND, ZenitPrincipalKind.ACCOUNT.id().toString());
         alpha.set(ActivityModel.ACTOR_LABEL, null);
         new ActivityModel().save(alpha);
@@ -135,11 +136,15 @@ class AdminActivityListTest extends HohenheimTestBase {
 
     @Test
     void principalPickerDoesNotMatchNumericFragmentsOrAnotherKind() throws Exception {
+        // Ids sharing every leading character but their last: a fragment of one must never select another.
+        UUID one = UUID.fromString("01a00000-0000-7000-8000-000000000001");
+        UUID ten = UUID.fromString("01a00000-0000-7000-8000-000000000010");
+        UUID twentyOne = UUID.fromString("01a00000-0000-7000-8000-000000000021");
         Map<String, String[]> actors = Map.of(
-            "hh-principal-fragment-one", new String[]{"zenit:account", "1"},
-            "hh-principal-fragment-ten", new String[]{"zenit:account", "10"},
-            "hh-principal-fragment-twenty-one", new String[]{"zenit:account", "21"},
-            "hh-principal-fragment-system", new String[]{"zenit:system", "1"});
+            "hh-principal-fragment-one", new String[]{"zenit:account", one.toString()},
+            "hh-principal-fragment-ten", new String[]{"zenit:account", ten.toString()},
+            "hh-principal-fragment-twenty-one", new String[]{"zenit:account", twentyOne.toString()},
+            "hh-principal-fragment-system", new String[]{"zenit:system", SystemPrincipal.ID.toString()});
         for (var actor : actors.entrySet()) {
             write(ServerModel.MODEL_ID.toString(), actor.getKey(), actor.getKey(), "updated", Accountability.ORIGIN_WEB,
                 Instant.parse("2997-01-01T00:00:00Z"));
@@ -149,13 +154,14 @@ class AdminActivityListTest extends HohenheimTestBase {
             row.set(ActivityModel.ACTOR_LABEL, null);
             new ActivityModel().save(row);
         }
-        var one = adminGet("/admin/activity?filter.record_id=hh-principal-fragment&filter.actor="
-            + URLEncoder.encode("zenit:account#1", StandardCharsets.UTF_8));
-        assertThat(one.body()).as("step 1: account 1 is not account 10, account 21 or system 1")
+        var first = adminGet("/admin/activity?filter.record_id=hh-principal-fragment&filter.actor="
+            + URLEncoder.encode(PrincipalRef.account(one).key(), StandardCharsets.UTF_8));
+        assertThat(first.body()).as("step 1: one account is not another sharing its leading digits, nor the system")
             .contains("hh-principal-fragment-one").doesNotContain("hh-principal-fragment-ten",
                 "hh-principal-fragment-twenty-one", "hh-principal-fragment-system");
         var system = adminGet("/admin/activity?filter.record_id=hh-principal-fragment&filter.actor="
-            + URLEncoder.encode("zenit:system#1", StandardCharsets.UTF_8));
+            + URLEncoder.encode(new PrincipalRef(ZenitPrincipalKind.SYSTEM, SystemPrincipal.ID).key(),
+                StandardCharsets.UTF_8));
         assertThat(system.body()).as("step 2: the system's complete reference selects only its rows")
             .contains("hh-principal-fragment-system").doesNotContain("hh-principal-fragment-one",
                 "hh-principal-fragment-ten", "hh-principal-fragment-twenty-one");
@@ -167,17 +173,17 @@ class AdminActivityListTest extends HohenheimTestBase {
         write(ServerModel.MODEL_ID.toString(), record, record, "updated", Accountability.ORIGIN_SYSTEM,
             Instant.parse("2999-01-02T00:00:00Z"));
         Row row = rowFor(record);
-        row.set(ActivityModel.ACTOR, "1");
+        row.set(ActivityModel.ACTOR, SystemPrincipal.ID.toString());
         row.set(ActivityModel.ACTOR_KIND, ZenitPrincipalKind.SYSTEM.id().toString());
         row.set(ActivityModel.ACTOR_LABEL, "work wait sweep");
         new ActivityModel().save(row);
 
-        // 1. The host preserves the core projection instead of resolving system id 1 as a user.
+        // 1. The host preserves the core projection instead of resolving the system's id as a user.
         PanelResource<Row> resource = adminActivityResource();
         Object cell = PartsReads.cellValue(null, resource, null, row, column(resource, ActivityModel.ACTOR.getName()));
         assertThat(cell).as("step 1: the localized core actor name is preserved").isInstanceOf(Microcopy.class);
         assertThat(((Microcopy) cell).resolve(LocaleChain.ofTags("en"), new ShippedCatalogs()))
-            .as("step 1: system work is not account #1").isEqualTo("System");
+            .as("step 1: system work is not an account").isEqualTo("System");
 
         // 2. The live admin list carries that name and never the internal reason.
         HttpResponse<String> response = adminGet("/admin/activity?filter.origin=system&filter.record_id=" + record);
@@ -185,7 +191,8 @@ class AdminActivityListTest extends HohenheimTestBase {
         assertThat(response.body()).as("step 2: the system row has its public name")
             .contains(record, "System").doesNotContain("work wait sweep");
         HttpResponse<String> selected = adminGet("/admin/activity?filter.origin.__cleared=1&filter.actor="
-            + URLEncoder.encode("zenit:system#1", StandardCharsets.UTF_8));
+            + URLEncoder.encode(new PrincipalRef(ZenitPrincipalKind.SYSTEM, SystemPrincipal.ID).key(),
+                StandardCharsets.UTF_8));
         assertThat(selected.body()).as("step 3: the principal picker selects the declared system identity")
             .contains(record).doesNotContain("work wait sweep");
     }

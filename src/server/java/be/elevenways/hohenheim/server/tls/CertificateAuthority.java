@@ -19,6 +19,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static be.elevenways.hohenheim.RawValues.trimmed;
 
@@ -178,7 +179,7 @@ public final class CertificateAuthority {
          *         non-account work (nothing to re-authorize against later)
          */
         public @Nullable PrincipalRef subject() {
-            Long id = this.context != null ? this.context.principalId() : null;
+            UUID id = this.context != null ? this.context.accountId() : null;
             if (id != null) {
                 return PrincipalRef.account(id);
             }

@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static be.elevenways.hohenheim.test.ApiSupport.form;
 
@@ -59,9 +60,9 @@ class ApiWireInstancesTest extends HohenheimTestBase {
         BackupLaneFixture fixture = BackupLaneFixture.install();
         FakeDeviceDaemon.Kind.register();
 
-        int operatorId = ApiWire.operatorId();
-        int tenantId = ApiSupport.user("wire-instances-tenant@surface.test", "Wire Instances Tenant");
-        int viewerId = ApiSupport.user("wire-instances-viewer@surface.test", "Wire Instances Viewer");
+        UUID operatorId = ApiWire.operatorId();
+        UUID tenantId = ApiSupport.user("wire-instances-tenant@surface.test", "Wire Instances Tenant");
+        UUID viewerId = ApiSupport.user("wire-instances-viewer@surface.test", "Wire Instances Viewer");
         dockerHostId = sshDockerHost("wire-docker-host");
 
         instanceId = instance("wire-instance", FakeNativeDaemons.FakeNativeKind.ID.toString(), fixture.hostId);

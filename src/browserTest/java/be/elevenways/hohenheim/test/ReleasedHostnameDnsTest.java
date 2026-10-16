@@ -21,6 +21,7 @@ import org.xbill.DNS.Type;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static be.elevenways.hohenheim.test.DnsFixtures.createZone;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -149,7 +150,7 @@ class ReleasedHostnameDnsTest extends HohenheimTestBase {
         Row record = enabledRecord(zoneId, "g", "10.0.0.1");
         int recordId = record.get(DnsRecordModel.ID);
 
-        int userId = ApiSupport.user("release-grant@hohenheim.local", "Grant Holder");
+        UUID userId = ApiSupport.user("release-grant@hohenheim.local", "Grant Holder");
         RecordGrants.grant(GrantSubjectType.USER, userId, DnsRecordModel.MODEL_ID, recordId,
             HohenheimCapabilities.EDIT, true);
         assertThat(grantCount(recordId)).as("the grant landed").isGreaterThan(0);
@@ -175,7 +176,7 @@ class ReleasedHostnameDnsTest extends HohenheimTestBase {
         int recordId = record.get(DnsRecordModel.ID);
         DnsZoneStore.INSTANCE.reload();
 
-        int tenantId = ApiSupport.user("release-arm-tenant@hohenheim.local", "Arm Tenant");
+        UUID tenantId = ApiSupport.user("release-arm-tenant@hohenheim.local", "Arm Tenant");
         // The tenant MANAGES the site, so it has hostname authority over "arm." -- exactly
         // the authority the /manage DNS surface grants, and the one that used to reach the
         // dynamic columns because only the form omitted them.

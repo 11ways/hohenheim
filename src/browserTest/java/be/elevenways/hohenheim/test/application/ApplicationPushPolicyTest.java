@@ -36,6 +36,7 @@ import be.elevenways.zenit.common.security.Accountability;
 import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.test.support.OutboundFixture;
+import be.elevenways.zenit.test.support.TestAccessContexts;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -47,6 +48,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -276,7 +278,8 @@ class ApplicationPushPolicyTest {
                 PanelAction<Row> deploy = PlacedActionClicks.placed(
                     InstanceParts.admin(), "start_instance");
                 Row row = Models.get(InstanceModel.class).findById(applicationId);
-                Accountability.runAs(operator("42"), () -> PlacedActionClicks.click(deploy, row));
+                UUID operatorId = TestAccessContexts.TEST_ACCOUNT;
+                Accountability.runAs(operator(operatorId), () -> PlacedActionClicks.click(deploy, row));
 
                 // 2. The deploy is recorded as MANUAL -- the trigger that describes a
                 //    person standing there asking, and the one whose permission to start
@@ -292,7 +295,7 @@ class ApplicationPushPolicyTest {
                     .isNotEqualTo(DeployTrigger.SYSTEM.word());
                 assertThat((String) deployed.get(0).get(ActivityModel.ACTOR))
                     .as("step 2: attributed to the operator who clicked")
-                    .isEqualTo("42");
+                    .isEqualTo(operatorId.toString());
             } finally {
                 ApplicationReleases.destroyFor(applicationId);
             }
@@ -449,8 +452,8 @@ class ApplicationPushPolicyTest {
             .all();
     }
 
-    private static Accountability operator(String id) {
-        return new Accountability(id, PrincipalRef.account(Long.parseLong(id)).storedKind(), "Operator " + id,
+    private static Accountability operator(UUID id) {
+        return new Accountability(id.toString(), PrincipalRef.account(id).storedKind(), "Operator " + id,
             "10.0.0.1", "junit", Accountability.ORIGIN_WEB);
     }
 }

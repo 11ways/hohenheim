@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -74,7 +75,7 @@ class InstanceFilesTabGateTest extends HohenheimTestBase {
     }
 
     private static String delegate(String email, String capability) {
-        int userId = ApiSupport.user(email);
+        UUID userId = ApiSupport.user(email);
         RecordGrants.grant(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, dockerInstanceId,
             capability, true);
         return sessionFor(userId).token();

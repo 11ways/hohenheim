@@ -31,6 +31,7 @@ import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -46,8 +47,8 @@ class TenantReferencePolicyTest extends HohenheimTestBase {
 
     @BeforeAll
     static void seed() {
-        int tenantId = ApiSupport.user("reference-tenant@hohenheim.local", "Reference Tenant");
-        int strangerId = ApiSupport.user("reference-stranger@hohenheim.local", "Reference Stranger");
+        UUID tenantId = ApiSupport.user("reference-tenant@hohenheim.local", "Reference Tenant");
+        UUID strangerId = ApiSupport.user("reference-stranger@hohenheim.local", "Reference Stranger");
         tenant = new UserPrincipal(tenantId, "Reference Tenant");
 
         int ownList = list("Reference Own List", false);

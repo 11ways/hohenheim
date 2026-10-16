@@ -13,7 +13,9 @@ import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.instance.InstanceChildDeletes;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.auth.cms.SubjectTag;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
+import be.elevenways.zenit.auth.model.PermissionGroupModel;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
@@ -41,6 +43,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
 import static be.elevenways.hohenheim.HohenheimSlugs.MANAGE;
@@ -79,8 +82,8 @@ class InstanceChildSurfacesBrowserTest extends HohenheimTestBase {
 
     @BeforeAll
     static void seed() {
-        int backupsUser = ApiSupport.user(PREFIX + "backups@hohenheim.local", "B14 Backups Tenant");
-        int schedulesUser = ApiSupport.user(PREFIX + "schedules@hohenheim.local", "B14 Schedules Tenant");
+        UUID backupsUser = ApiSupport.user(PREFIX + "backups@hohenheim.local", "B14 Backups Tenant");
+        UUID schedulesUser = ApiSupport.user(PREFIX + "schedules@hohenheim.local", "B14 Schedules Tenant");
 
         int instance = instance(PREFIX + "instance");
         instanceId = String.valueOf(instance);
@@ -96,7 +99,7 @@ class InstanceChildSurfacesBrowserTest extends HohenheimTestBase {
         completeBackupId = String.valueOf(backup(instance, target, InstanceBackupModel.STATUS_COMPLETE,
             PREFIX + "complete.tar.zst"));
         failedBackupId = String.valueOf(backup(instance, target, InstanceBackupModel.STATUS_FAILED, null));
-        quotaId = String.valueOf(quota("user:" + backupsUser));
+        quotaId = String.valueOf(quota(new SubjectTag(GrantSubjectType.USER, backupsUser).token()));
         fileId = String.valueOf(file(instance, "/etc/b14/surfaces.conf"));
 
         int schedule = schedule(instance, schedulesUser);
@@ -194,9 +197,19 @@ class InstanceChildSurfacesBrowserTest extends HohenheimTestBase {
             "/panel-surfaces/instance-children/" + entry + ".txt");
     }
 
-    /** A capture with every generated fixture id declared at the bindings a destination carries it. */
+    /**
+     * A capture with every generated fixture id declared at the bindings a destination carries it, and the owners the
+     * quota form offers (every account and group the shared database holds) as the host's choices.
+     */
     private static PanelSurfaces capture(SurfaceCase fixture) {
-        return PanelSurfaces.capture(fixture
+        List<String> owners = new ArrayList<>();
+        for (Row user : Models.get(UserModel.class).find().all()) {
+            owners.add(new SubjectTag(GrantSubjectType.USER, user.get(UserModel.ID)).token());
+        }
+        for (Row group : Models.get(PermissionGroupModel.class).find().all()) {
+            owners.add(new SubjectTag(GrantSubjectType.GROUP, group.get(PermissionGroupModel.ID)).token());
+        }
+        return PanelSurfaces.capture(fixture.hostOptions(InstanceQuotaModel.SUBJECTS.getName(), owners)
             .key(HohenheimSlugs.INSTANCES, "instance", instanceId)
             .key(HohenheimParams.INSTANCE_ID_PREFILL.getName(), "instance", instanceId)
             .key("backup-targets", "target", targetId)
@@ -271,7 +284,7 @@ class InstanceChildSurfacesBrowserTest extends HohenheimTestBase {
         return row.get(InstanceFileModel.ID);
     }
 
-    private static int schedule(int instance, int runAs) {
+    private static int schedule(int instance, UUID runAs) {
         Model schedules = Models.get(RecordScheduleModel.class);
         Row row = schedules.createEmptyRow();
         row.set(RecordScheduleModel.MODEL, InstanceModel.MODEL_ID.toString());
@@ -279,7 +292,7 @@ class InstanceChildSurfacesBrowserTest extends HohenheimTestBase {
         row.set(RecordScheduleModel.NAME, PREFIX + "nightly");
         row.set(RecordScheduleModel.CRON, "0 4 * * *");
         row.set(RecordScheduleModel.ENABLED, false);
-        row.set(RecordScheduleModel.RUN_AS, (long) runAs);
+        row.set(RecordScheduleModel.RUN_AS, runAs);
         schedules.save(row);
         return row.get(RecordScheduleModel.ID);
     }

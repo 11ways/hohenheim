@@ -3,6 +3,8 @@ package be.elevenways.hohenheim.server.auth;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.auth.cms.SubjectTag;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.PermissionGroupModel;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -19,6 +21,7 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.UUID;
 
 import static be.elevenways.hohenheim.HohenheimCapabilities.MANAGE;
 import static be.elevenways.hohenheim.server.auth.HohenheimAccess.SUBJECT_SEPARATOR;
@@ -168,7 +171,7 @@ final class RecordOwners {
      * former owner is usually exactly that.
      */
     static @NonNull String subjectLabel(@NonNull String subject) {
-        GrantSubjects.Subject parsed = GrantSubjects.parse(subject);
+        SubjectTag parsed = SubjectTag.parse(subject);
         if (parsed == null) {
             return subject;
         }
@@ -244,8 +247,8 @@ final class RecordOwners {
         if (ctx == null || HohenheimAccess.isAdmin(ctx) || !ctx.isAccount()) {
             return Set.of();
         }
-        Long principalId = ctx.principalId();
-        return principalId == null ? Set.of() : Set.of(GrantSubjects.userToken(principalId));
+        UUID accountId = ctx.accountId();
+        return accountId == null ? Set.of() : Set.of(new SubjectTag(GrantSubjectType.USER, accountId).token());
     }
 
     /**
@@ -261,7 +264,7 @@ final class RecordOwners {
     static void grantCreatorManage(@NonNull Identifier model, @NonNull Object recordId,
                                    @Nullable AccessContext ctx) {
         for (String token : creationOwnerSubjects(ctx)) {
-            GrantSubjects.Subject subject = GrantSubjects.require(token);
+            SubjectTag subject = GrantSubjects.require(token);
             RecordGrants.grant(subject.type(), subject.id(), model, recordId, MANAGE, true);
         }
     }
@@ -276,7 +279,7 @@ final class RecordOwners {
     static void revokeCreatorManage(@NonNull Identifier model, @NonNull Object recordId,
                                     @Nullable AccessContext ctx) {
         for (String token : creationOwnerSubjects(ctx)) {
-            GrantSubjects.Subject subject = GrantSubjects.require(token);
+            SubjectTag subject = GrantSubjects.require(token);
             RecordGrants.revoke(subject.type(), subject.id(), model, recordId, MANAGE);
         }
     }

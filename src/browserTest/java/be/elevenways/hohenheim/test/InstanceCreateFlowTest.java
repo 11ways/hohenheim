@@ -626,8 +626,8 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
         Row user = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         assertThat(user).as("the harness seeded its admin").isNotNull();
-        return TestAccessContexts.contextFor(new UserPrincipal(
-            ((Integer) user.get(UserModel.ID)).longValue(), user.get(UserModel.DISPLAY_NAME)));
+        return TestAccessContexts.contextFor(new UserPrincipal(user.get(UserModel.ID),
+            user.get(UserModel.DISPLAY_NAME)));
     }
 
     /** The kind settings sub-form: the one fieldset whose path is the settings field. */

@@ -4,12 +4,14 @@ import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.common.util.Uuids;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.Test;
 
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -77,7 +79,8 @@ class NoIdentityGateTest {
 
         // 4. Work a tenant's request schedules runs as that tenant on its new thread -- the
         //    continuation used to read as system there and pass every gate.
-        UserPrincipal tenant = new UserPrincipal(987_654, "Tenant");
+        UUID tenantId = Uuids.v7();
+        UserPrincipal tenant = new UserPrincipal(tenantId, "Tenant");
         AtomicReference<AccessContext> continuationCaller = new AtomicReference<>();
         AtomicReference<Boolean> continuationTenant = new AtomicReference<>();
         AtomicReference<String> continuationAnswer = new AtomicReference<>();
@@ -90,8 +93,8 @@ class NoIdentityGateTest {
         }));
         assertThat(continued.await(10, TimeUnit.SECONDS)).isTrue();
         assertThat(continuationCaller.get()).as("step 4: the continuation has a caller").isNotNull();
-        assertThat(continuationCaller.get().principalId())
-            .as("step 4: and it is the tenant who scheduled it").isEqualTo(987_654L);
+        assertThat(continuationCaller.get().accountId())
+            .as("step 4: and it is the tenant who scheduled it").isEqualTo(tenantId);
         assertThat(continuationTenant.get()).as("step 4: judged as the tenant").isTrue();
         assertThat(continuationAnswer.get()).as("step 4: an operator-only act refuses the tenant's continuation")
             .isEqualTo("operator=refused");

@@ -39,6 +39,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static be.elevenways.hohenheim.test.ApiSupport.form;
 
@@ -105,8 +106,8 @@ class ApiWireSitesTest extends HohenheimTestBase {
         dataRoot.toFile().deleteOnExit();
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, dataRoot.toString());
 
-        int operatorId = ApiWire.operatorId();
-        int tenantId = ApiSupport.user("wire-sites-tenant@surface.test", "Wire Sites Tenant");
+        UUID operatorId = ApiWire.operatorId();
+        UUID tenantId = ApiSupport.user("wire-sites-tenant@surface.test", "Wire Sites Tenant");
         HostFixtures.admitLocal();
 
         alphaApplicationId = application("wire-alpha-app", "v1");

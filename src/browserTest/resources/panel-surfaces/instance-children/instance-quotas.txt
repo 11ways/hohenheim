@@ -10,7 +10,7 @@ column max_nics at=4 shown=true hidden=false sortable=false filterable=false cop
 column max_sites at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column max_databases at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 tab history at=0 landing=false view=false
-control CREATE%20subjects at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20subjects at=0 kind=zenitforms:form/array input=text required=false readonly=false options=<host> binding=min:0,max:-1,tags:false,closed:true
 control CREATE%20max_instances at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20max_memory_mb at=2 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20max_disk_gb at=3 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
@@ -44,14 +44,14 @@ inline max_nics
 inline max_sites
 inline max_databases
 tab history at=0 landing=false view=false
-control CREATE%20subjects at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20subjects at=0 kind=zenitforms:form/array input=text required=false readonly=false options=<host> binding=min:0,max:-1,tags:false,closed:true
 control CREATE%20max_instances at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20max_memory_mb at=2 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20max_disk_gb at=3 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20max_nics at=4 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20max_sites at=5 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20max_databases at=6 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
-control EDIT%20subjects at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20subjects at=0 kind=zenitforms:form/array input=text required=false readonly=false options=<host> binding=min:0,max:-1,tags:false,closed:true
 control EDIT%20max_instances at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control EDIT%20max_memory_mb at=2 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control EDIT%20max_disk_gb at=3 kind=zenitforms:control/number input=number required=false readonly=false options= binding=

@@ -22,8 +22,10 @@ import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.auth.cms.SubjectTag;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.PermissionGroupModel;
+import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.cms.server.panel.PartsWrites;
@@ -42,6 +44,7 @@ import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -62,8 +65,8 @@ class ProjectOwnershipTest extends HohenheimTestBase {
 
     private static final String PREFIX = "proj-own-";
 
-    private static Integer memberAId;
-    private static Integer memberBId;
+    private static UUID memberAId;
+    private static UUID memberBId;
     private static String sessionA;
     private static String csrfA;
     private static UserPrincipal principalA;
@@ -184,7 +187,7 @@ class ProjectOwnershipTest extends HohenheimTestBase {
         row.set(InstanceTemplateModel.SETTINGS, new LinkedHashMap<>(
             Map.of("image", "alpine", "tag", "latest", "command", "sleep 300")));
         row.set(InstanceTemplateModel.APPROVED_AT, Now.instant());
-        row.set(InstanceTemplateModel.APPROVED_BY_USER_ID, 1L);
+        row.set(InstanceTemplateModel.APPROVED_BY_USER_ID, TenantConduits.operatorUser().get(UserModel.ID));
         Models.get(InstanceTemplateModel.class).save(row);
         return row.get(InstanceTemplateModel.ID);
     }
@@ -342,7 +345,7 @@ class ProjectOwnershipTest extends HohenheimTestBase {
         assertThat((String) instance.get(InstanceModel.QUOTA_BUCKET))
             .as("step 4: and not the member's personal bucket")
             .isNotEqualTo(OwnerBudget.INSTANCES.bucketOf(
-                HohenheimAccess.packSubjects(Set.of("user:" + memberAId))));
+                HohenheimAccess.packSubjects(Set.of(new SubjectTag(GrantSubjectType.USER, memberAId).token()))));
 
         // 5. And the creator still REACHES it -- through membership, not a direct grant.
         assertThat(memberGet("/manage/instances").body())
@@ -781,7 +784,7 @@ class ProjectOwnershipTest extends HohenheimTestBase {
         // 2. Empty a THROWAWAY project and delete it: its auth group disappears.
         int throwawayId = project(PREFIX + "throwaway");
         Row throwaway = Models.get(ProjectModel.class).findById(throwawayId);
-        Integer groupId = throwaway.get(ProjectModel.GROUP_ID);
+        UUID groupId = throwaway.get(ProjectModel.GROUP_ID);
         assertThat(groupId).as("step 2: the write hook created the backing group").isNotNull();
         assertThat(Models.get(PermissionGroupModel.class).findById(groupId))
             .as("step 2: and the group row exists").isNotNull();
@@ -825,7 +828,7 @@ class ProjectOwnershipTest extends HohenheimTestBase {
     void projectOwnedRolesAreNamedAndUndeletableOnTheRolesSurface() throws Exception {
         int ownedProjectId = project(PREFIX + "surface");
         Row surfaceProject = Models.get(ProjectModel.class).findById(ownedProjectId);
-        Integer ownedGroupId = surfaceProject.get(ProjectModel.GROUP_ID);
+        UUID ownedGroupId = surfaceProject.get(ProjectModel.GROUP_ID);
         assertThat(ownedGroupId).as("step 0: the project has its backing group").isNotNull();
 
         // A hand-made role is the counterfactual: everything asserted below must be
@@ -834,7 +837,7 @@ class ProjectOwnershipTest extends HohenheimTestBase {
         plain.set(PermissionGroupModel.SLUG, PREFIX + "plain");
         plain.set(PermissionGroupModel.TITLE, PREFIX + "plain");
         Models.get(PermissionGroupModel.class).save(plain);
-        Integer plainGroupId = plain.get(PermissionGroupModel.ID);
+        UUID plainGroupId = plain.get(PermissionGroupModel.ID);
 
         // 1. The list declares the managed-by column and names the owning project.
         HttpResponse<String> list = adminGet("/admin/roles");
@@ -882,8 +885,8 @@ class ProjectOwnershipTest extends HohenheimTestBase {
     }
 
     /** The roles resource's delete: zenit-auth's delete_role operation placed on the record, invoked by its id. */
-    private static Pattern roleDelete(int roleId) {
-        return Pattern.compile(Pattern.quote("/admin/roles/invoke/zenit.delete_role?ids=" + roleId) + "(?!\\d)");
+    private static Pattern roleDelete(UUID roleId) {
+        return Pattern.compile(Pattern.quote("/admin/roles/invoke/zenit.delete_role?ids=" + roleId) + "(?![0-9a-f-])");
     }
 
     private static void variable(Integer instanceId, Integer envId, String key, String value) {

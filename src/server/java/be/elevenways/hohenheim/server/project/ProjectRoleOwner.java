@@ -10,6 +10,8 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.UUID;
+
 /**
  * Declares the project tier's ownership of the auth groups it synthesizes, so the roles
  * surface hides and refuses the Delete instead of offering one that the
@@ -28,7 +30,7 @@ final class ProjectRoleOwner implements RoleOwner {
 
     @Override
     public @Nullable Microcopy managedBy(@NonNull Row group) {
-        Integer groupId = group.get(PermissionGroupModel.ID);
+        UUID groupId = group.get(PermissionGroupModel.ID);
         if (groupId == null) {
             return null;
         }

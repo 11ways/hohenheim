@@ -28,6 +28,9 @@ import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.server.instance.variable.StringVariableType;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.common.util.Uuids;
+import be.elevenways.zenit.auth.cms.SubjectTag;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.panel.PanelEntryKinds;
@@ -445,7 +448,7 @@ class InlineCellIsolationTest extends HohenheimTestBase {
     private static int quota() {
         Model quotas = Models.get(InstanceQuotaModel.class);
         Row row = quotas.createEmptyRow();
-        row.set(InstanceQuotaModel.SUBJECTS, "user:" + PREFIX + "subject");
+        row.set(InstanceQuotaModel.SUBJECTS, new SubjectTag(GrantSubjectType.USER, Uuids.v7()).token());
         row.set(InstanceQuotaModel.MAX_INSTANCES, 3);
         row.set(InstanceQuotaModel.MAX_MEMORY_MB, 2048);
         row.set(InstanceQuotaModel.MAX_DISK_GB, 20);

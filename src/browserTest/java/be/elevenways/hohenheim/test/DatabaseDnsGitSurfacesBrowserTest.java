@@ -41,6 +41,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
 import static be.elevenways.hohenheim.HohenheimSlugs.MANAGE;
@@ -87,7 +88,7 @@ class DatabaseDnsGitSurfacesBrowserTest extends HohenheimTestBase {
     private static AccessContext tenantDatabaseCredentials;
     private static AccessContext tenantEmpty;
 
-    private static int gitId;
+    private static UUID gitId;
 
     /**
      * The git providers leave with the class: their rows are options of every git provider pick, so a later class in
@@ -105,9 +106,9 @@ class DatabaseDnsGitSurfacesBrowserTest extends HohenheimTestBase {
     @BeforeAll
     static void seed() {
         gitId = ApiSupport.user(PREFIX + "git@hohenheim.local", "B13 Git Tenant");
-        int viewId = ApiSupport.user(PREFIX + "db-view@hohenheim.local", "B13 Database Viewer");
-        int credentialsId = ApiSupport.user(PREFIX + "db-credentials@hohenheim.local", "B13 Database Credentials");
-        int emptyId = ApiSupport.user(PREFIX + "empty@hohenheim.local", "B13 Empty Tenant");
+        UUID viewId = ApiSupport.user(PREFIX + "db-view@hohenheim.local", "B13 Database Viewer");
+        UUID credentialsId = ApiSupport.user(PREFIX + "db-credentials@hohenheim.local", "B13 Database Credentials");
+        UUID emptyId = ApiSupport.user(PREFIX + "empty@hohenheim.local", "B13 Empty Tenant");
 
         sharedProviderId = String.valueOf(provider(PREFIX + "shared", true));
         int tenantProvider = provider(PREFIX + "tenant", false);

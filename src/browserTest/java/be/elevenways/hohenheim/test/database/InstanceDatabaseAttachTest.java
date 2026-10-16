@@ -7,7 +7,6 @@ import be.elevenways.hohenheim.test.PanelEntryViews;
 import be.elevenways.hohenheim.server.cms.InstanceAttachmentParts;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.test.ApiSupport;
-import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -51,6 +50,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -83,9 +83,9 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
 
     // The cast and the hosts are read-only for every test; the records they act on are
     // each test's own (see Pairing).
-    private static Integer tenantAId;
-    private static Integer tenantBId;
-    private static Integer viewerId;
+    private static UUID tenantAId;
+    private static UUID tenantBId;
+    private static UUID viewerId;
     private static Principal principalA;
     private static Principal principalB;
     private static Principal principalViewer;
@@ -100,7 +100,7 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
         tenantAId = ApiSupport.user("a@" + PREFIX + "test", "Attach Tenant A");
         tenantBId = ApiSupport.user("b@" + PREFIX + "test", "Attach Tenant B");
         viewerId = ApiSupport.user("viewer@" + PREFIX + "test", "Attach Viewer");
-        int authAdminId = ApiSupport.user("authadmin@" + PREFIX + "test", "Auth Admin Only");
+        UUID authAdminId = ApiSupport.user("authadmin@" + PREFIX + "test", "Auth Admin Only");
         principalA = new UserPrincipal(tenantAId, "Attach Tenant A");
         principalB = new UserPrincipal(tenantBId, "Attach Tenant B");
         principalViewer = new UserPrincipal(viewerId, "Attach Viewer");

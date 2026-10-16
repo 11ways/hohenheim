@@ -13,6 +13,7 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
@@ -45,7 +46,7 @@ class TenantDomainDeleteOrderTest extends HohenheimTestBase {
         domain.set(SiteDomainModel.FORCE_SSL, false);
         domains.save(domain);
         int domainId = domain.get(SiteDomainModel.ID);
-        int tenantId = ApiSupport.user("delete-order-tenant@hohenheim.local", "Delete Order Tenant");
+        UUID tenantId = ApiSupport.user("delete-order-tenant@hohenheim.local", "Delete Order Tenant");
         UserPrincipal tenant = new UserPrincipal(tenantId, "Delete Order Tenant");
         RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, own.get(SiteModel.ID),
             HohenheimCapabilities.MANAGE, true);

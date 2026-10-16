@@ -6,6 +6,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.IntegerField;
+import be.elevenways.zenit.common.orm.field.UuidField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.TextField;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -48,8 +49,8 @@ public class ProjectModel extends Model {
      * the server-side write hook at create (ProjectGuards) and immutable afterwards --
      * membership grants reference the group's slug, so it may never be swapped.
      */
-    public static final IntegerField GROUP_ID = SCHEMA.addField(
-        IntegerField.builder().name("group_id").build());
+    public static final UuidField GROUP_ID = SCHEMA.addField(
+        UuidField.builder().name("group_id").build());
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());

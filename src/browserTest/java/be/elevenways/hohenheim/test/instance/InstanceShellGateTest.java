@@ -25,6 +25,7 @@ import java.net.http.HttpResponse;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -55,9 +56,9 @@ class InstanceShellGateTest extends HohenheimTestBase {
     /** A workspace on an Incus host: a non-root uid, on a runtime with no shell lane. */
     private static int incusWorkspaceId;
 
-    private static int shellUserId;
-    private static int consoleUserId;
-    private static int strangerUserId;
+    private static UUID shellUserId;
+    private static UUID consoleUserId;
+    private static UUID strangerUserId;
     private static Principal shellPrincipal;
     private static Principal strangerPrincipal;
     private static String shellSession;
@@ -245,7 +246,7 @@ class InstanceShellGateTest extends HohenheimTestBase {
      */
     @Test
     void manageDoesNotImplyShell() {
-        int managerId = ApiSupport.user("manager@shellgate.test", "Manager");
+        UUID managerId = ApiSupport.user("manager@shellgate.test", "Manager");
         RecordGrants.grant(GrantSubjectType.USER, managerId, InstanceModel.MODEL_ID,
             rootWorkloadId, HohenheimCapabilities.MANAGE, true);
         Principal manager = new UserPrincipal(managerId, "Manager");

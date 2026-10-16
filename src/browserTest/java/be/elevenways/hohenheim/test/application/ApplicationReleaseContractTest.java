@@ -58,6 +58,7 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BooleanSupplier;
 
@@ -529,7 +530,7 @@ class ApplicationReleaseContractTest {
                 // 1. v1 serves; a tenant holds POWER on the application and nothing else.
                 converge(applicationId, settingsFor("v1"));
                 int firstId = servingOf(applicationId).get(InstanceModel.ID);
-                int tenantId = ApiSupport.user("drain-tenant@hohenheim.local", "Drain Tenant");
+                UUID tenantId = ApiSupport.user("drain-tenant@hohenheim.local", "Drain Tenant");
                 UserPrincipal tenant = new UserPrincipal(tenantId, "Drain Tenant");
                 RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, applicationId,
                     HohenheimCapabilities.POWER, true);

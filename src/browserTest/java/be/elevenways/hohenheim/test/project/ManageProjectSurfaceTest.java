@@ -9,8 +9,11 @@ import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.protoblast.common.util.Uuids;
 import be.elevenways.zenit.auth.CapabilityScopes;
+import be.elevenways.zenit.auth.cms.SubjectTag;
 import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.ApiKeyService;
@@ -24,6 +27,7 @@ import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -41,9 +45,9 @@ class ManageProjectSurfaceTest extends HohenheimTestBase {
 
     private static final String PREFIX = "mps-";
 
-    private static Integer memberAId;
-    private static Integer memberBId;
-    private static Integer outsiderId;
+    private static UUID memberAId;
+    private static UUID memberBId;
+    private static UUID outsiderId;
     private static String sessionA;
     private static String csrfA;
     private static String sessionB;
@@ -121,14 +125,15 @@ class ManageProjectSurfaceTest extends HohenheimTestBase {
         //     not a lookup this resource spells for itself -- the roster, the quota list
         //     and the released-claim list all render subjects out of the one home.
         assertThat(members.body()).as("step 2b: the roster renders the shared subject label")
-            .contains(HohenheimAccess.subjectLabel("user:" + memberAId));
+            .contains(HohenheimAccess.subjectLabel(new SubjectTag(GrantSubjectType.USER, memberAId).token()));
 
         // 2c. A membership opens as its own record by its packed key, and another project's membership does not.
-        HttpResponse<String> membership = httpGet("/manage/project-members/" + projectOneId + ":user:" + memberAId,
-            sessionA);
+        HttpResponse<String> membership = httpGet("/manage/project-members/" + projectOneId + ":"
+            + new SubjectTag(GrantSubjectType.USER, memberAId).token(), sessionA);
         assertThat(membership.statusCode()).as("step 2c: the member's own membership record opens").isEqualTo(200);
         assertThat(membership.body()).as("step 2c: naming the project").contains(PREFIX + "one");
-        assertThat(httpGet("/manage/project-members/" + projectTwoId + ":user:" + memberBId, sessionA).statusCode())
+        assertThat(httpGet("/manage/project-members/" + projectTwoId + ":"
+            + new SubjectTag(GrantSubjectType.USER, memberBId).token(), sessionA).statusCode())
             .as("step 2c: another project's membership reads as missing").isEqualTo(404);
 
         // 3. The mirror image, so step 2 is not just "A sees the first row of everything":
@@ -199,8 +204,8 @@ class ManageProjectSurfaceTest extends HohenheimTestBase {
     }
 
     private static ApiKeyPrincipal key(List<String> scopes) {
-        return new ApiKeyPrincipal(memberAId.longValue(), PREFIX + "Member Alpha",
-            1, PREFIX + "probe", scopes);
+        return new ApiKeyPrincipal(memberAId, PREFIX + "Member Alpha",
+            Uuids.v7(), PREFIX + "probe", scopes);
     }
 
     private static AccessContext contextOf(be.elevenways.zenit.common.security.Principal principal) {

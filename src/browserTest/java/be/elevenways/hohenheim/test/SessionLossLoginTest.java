@@ -37,12 +37,12 @@ class SessionLossLoginTest extends HohenheimTestBase {
         // Give the seeded admin a real password to log back in with.
         Row user = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
-        PasswordService.setPassword((Integer) user.get(UserModel.ID), "hunter2-session-test");
+        PasswordService.setPassword(user.get(UserModel.ID), "hunter2-session-test");
 
         // A dedicated session: revoking it cannot break the shared one other
         // test classes ride.
         Session session = Zenit.getSessionStore().create();
-        session.set(AuthKeys.USER_ID, ((Integer) user.get(UserModel.ID)).longValue());
+        session.set(AuthKeys.USER_ID, user.get(UserModel.ID));
         session.set(CsrfTokens.TOKEN, ZenitAuth.randomToken());
         Zenit.getSessionStore().save(session);
 

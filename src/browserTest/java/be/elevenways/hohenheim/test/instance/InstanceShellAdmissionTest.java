@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -40,7 +41,7 @@ class InstanceShellAdmissionTest extends HohenheimTestBase {
 
     @Test
     void theShellSocketAdmitsOnlyWhereTheShellOperationIsOffered() {
-        int userId = ApiSupport.user("shell-admission@hohenheim.local", "Shell Admission");
+        UUID userId = ApiSupport.user("shell-admission@hohenheim.local", "Shell Admission");
         Principal viewer = new UserPrincipal(userId, "Shell Admission");
         int authored = instance("shell-authored");
         int[] id = new int[1];

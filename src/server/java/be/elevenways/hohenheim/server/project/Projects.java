@@ -18,6 +18,7 @@ import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.GroupMembershipToken;
 import be.elevenways.zenit.auth.model.PermissionGroupModel;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
+import be.elevenways.zenit.auth.cms.SubjectTag;
 import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.auth.server.PermissionResolver;
 import be.elevenways.zenit.auth.server.RecordGrants;
@@ -37,6 +38,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.function.Supplier;
 
 /**
@@ -64,12 +66,12 @@ public final class Projects {
 
     /** The owner subject token of a project ({@code group:<id>}). */
     public static @NonNull String subjectOf(@NonNull Row project) {
-        Integer groupId = project.get(ProjectModel.GROUP_ID);
+        UUID groupId = project.get(ProjectModel.GROUP_ID);
         if (groupId == null) {
             throw new IllegalStateException("Project " + project.get(ProjectModel.ID)
                 + " carries no owner group; the ProjectGuards write hook did not run");
         }
-        return GrantSubjects.token(GrantSubjectType.GROUP, groupId);
+        return new SubjectTag(GrantSubjectType.GROUP, groupId).token();
     }
 
     /** The owner subject SET a record owned by this project answers with. */
@@ -86,7 +88,7 @@ public final class Projects {
         if (subjects == null || subjects.size() != 1) {
             return null;
         }
-        GrantSubjects.Subject subject = GrantSubjects.parse(subjects.iterator().next());
+        SubjectTag subject = SubjectTag.parse(subjects.iterator().next());
         if (subject == null || subject.type() != GrantSubjectType.GROUP) {
             return null;
         }
@@ -102,7 +104,7 @@ public final class Projects {
 
     /** The membership permission of a project's group ({@code group.<slug>}). */
     public static @NonNull String membershipPermissionOf(@NonNull Row project) {
-        Integer groupId = project.get(ProjectModel.GROUP_ID);
+        UUID groupId = project.get(ProjectModel.GROUP_ID);
         Row group = Models.get(PermissionGroupModel.class).findById(groupId);
         String slug = group == null ? null : group.get(PermissionGroupModel.SLUG);
         if (slug == null) {
@@ -125,14 +127,14 @@ public final class Projects {
         if (HohenheimAccess.isAdmin(ctx)) {
             return true;
         }
-        Long principalId = ctx.principalId();
-        if (principalId == null || !ctx.isAccount()) {
+        UUID accountId = ctx.accountId();
+        if (accountId == null) {
             return false;
         }
         String subject = subjectOf(project);
         for (PermissionResolver.Subject expanded
-                : PermissionResolver.expandSubjects(GrantSubjectType.USER, principalId.intValue())) {
-            if (subject.equals(expanded.type().key() + ":" + expanded.id())) {
+                : PermissionResolver.expandSubjects(GrantSubjectType.USER, accountId)) {
+            if (subject.equals(new SubjectTag(expanded.type(), expanded.id()).token())) {
                 return true;
             }
         }
@@ -193,13 +195,13 @@ public final class Projects {
     }
 
     /** Add a user as a project member (a positive membership grant on its group). */
-    public static void addMember(@NonNull Row project, int userId) {
+    public static void addMember(@NonNull Row project, @NonNull UUID userId) {
         GrantService.createDirectGrant(GrantSubjectType.USER, userId,
             membershipPermissionOf(project), true);
     }
 
     /** Add a whole permission group as a member (groups nest through the same walk). */
-    public static void addMemberGroup(@NonNull Row project, int groupId) {
+    public static void addMemberGroup(@NonNull Row project, @NonNull UUID groupId) {
         GrantService.createDirectGrant(GrantSubjectType.GROUP, groupId,
             membershipPermissionOf(project), true);
     }
@@ -223,11 +225,11 @@ public final class Projects {
             return Models.get(ProjectModel.class).find()
                 .orderBy(ProjectModel.ID, SortOrder.ASC).all();
         }
-        Long principalId = ctx.principalId();
-        if (principalId == null || !ctx.isAccount() || !coversOwnedVocabulary(ctx)) {
+        UUID accountId = ctx.accountId();
+        if (accountId == null || !coversOwnedVocabulary(ctx)) {
             return List.of();
         }
-        return projectsOf(principalId.intValue());
+        return projectsOf(accountId);
     }
 
     /**
@@ -271,8 +273,8 @@ public final class Projects {
      * is {@link #visibleTo}. Widening this back to public re-opens the hole by making
      * the unguarded derivation reachable again.
      */
-    static @NonNull List<Row> projectsOf(int userId) {
-        Set<Integer> groupIds = new LinkedHashSet<>();
+    static @NonNull List<Row> projectsOf(@NonNull UUID userId) {
+        Set<UUID> groupIds = new LinkedHashSet<>();
         for (PermissionResolver.Subject expanded
                 : PermissionResolver.expandSubjects(GrantSubjectType.USER, userId)) {
             if (expanded.type() == GrantSubjectType.GROUP) {
@@ -286,24 +288,21 @@ public final class Projects {
             .where(ProjectModel.GROUP_ID.in(groupIds)).all();
     }
 
-    /** One direct membership of a project: the subject the positive grant names. */
-    public record Member(@NonNull String subjectType, int subjectId) {
-    }
-
     /**
      * The DIRECT members of a project: every subject holding a positive membership grant,
      * users and nested groups alike (a group's own members are not expanded -- they reach
-     * the project through the resolver's walk, not through a row here).
+     * the project through the resolver's walk, not through a row here). A grant naming a
+     * subject type this build does not know is no member it can name, and is left out.
      */
-    public static @NonNull List<Member> directMembersOf(@NonNull Row project) {
-        List<Member> members = new ArrayList<>();
+    public static @NonNull List<SubjectTag> directMembersOf(@NonNull Row project) {
+        List<SubjectTag> members = new ArrayList<>();
         for (Row grant : Models.get(GrantModel.class).find()
                 .where(GrantModel.PERMISSION.eq(membershipPermissionOf(project)))
                 .all()) {
-            String type = grant.get(GrantModel.SUBJECT_TYPE);
-            Integer id = grant.get(GrantModel.SUBJECT_ID);
+            GrantSubjectType type = GrantSubjectType.fromStored(grant.get(GrantModel.SUBJECT_TYPE));
+            UUID id = grant.get(GrantModel.SUBJECT_ID);
             if (Boolean.TRUE.equals(grant.get(GrantModel.VALUE)) && type != null && id != null) {
-                members.add(new Member(type, id));
+                members.add(new SubjectTag(type, id));
             }
         }
         return members;
@@ -325,24 +324,24 @@ public final class Projects {
                 continue;
             }
             String type = grant.get(RecordGrantModel.SUBJECT_TYPE);
-            Integer id = grant.get(RecordGrantModel.SUBJECT_ID);
+            UUID id = grant.get(RecordGrantModel.SUBJECT_ID);
             // The project's own row survives only when it is an ALLOW (provenance
             // intact). A stored DENY must be revoked like any other row: a deny is
             // STICKY (grant(true) over one is a documented silent no-op), so keeping
             // it would report adoption while the project cannot manage the record.
-            if (subject.equals(type + ":" + id)
+            if (subject.equals(GrantSubjects.tokenOf(grant))
                     && Boolean.TRUE.equals(grant.get(RecordGrantModel.VALUE))) {
                 continue;
             }
             GrantSubjectType subjectType = GrantSubjectType.fromStored(type);
-            if (subjectType == null) {
+            if (subjectType == null || id == null) {
                 // A stored type this build does not know: leave it exactly where it is
                 // rather than guess what revoking it would mean.
                 continue;
             }
             RecordGrants.revoke(subjectType, id, model, recordId, HohenheimCapabilities.MANAGE);
         }
-        Integer groupId = project.get(ProjectModel.GROUP_ID);
+        UUID groupId = project.get(ProjectModel.GROUP_ID);
         Row planted = RecordGrants.grant(GrantSubjectType.GROUP, groupId, model, recordId,
             HohenheimCapabilities.MANAGE, true);
         // grant() reports a refused allow by RETURNING the winning deny row rather
@@ -358,7 +357,7 @@ public final class Projects {
     // -- group lifecycle (called by ProjectGuards hooks) ----------------------
 
     /** Create the project's backing permission group; slug from the name, unique. */
-    static int createGroupFor(@NonNull String projectName) {
+    static @NonNull UUID createGroupFor(@NonNull String projectName) {
         Model groups = Models.get(PermissionGroupModel.class);
         String base = GROUP_SLUG_PREFIX + safeSlug(projectName);
         String slug = base;
@@ -375,7 +374,7 @@ public final class Projects {
     }
 
     /** Keep the group's TITLE and provenance mirroring a renamed project (the slug never moves). */
-    static void syncGroupTitle(int groupId, @NonNull String projectName) {
+    static void syncGroupTitle(@NonNull UUID groupId, @NonNull String projectName) {
         Row group = Models.get(PermissionGroupModel.class).findById(groupId);
         if (group == null) {
             return;
@@ -422,7 +421,7 @@ public final class Projects {
     }
 
     /** The project whose backing auth group this is, if any. */
-    static @Nullable Row projectForGroup(int groupId) {
+    static @Nullable Row projectForGroup(@NonNull UUID groupId) {
         return Models.get(ProjectModel.class).findFirst(ProjectModel.GROUP_ID, groupId);
     }
 
@@ -432,18 +431,18 @@ public final class Projects {
      * would -- the InstanceService.destroy lesson: cleanup that must happen needs a
      * call, never an assumed hook.
      */
-    static void removeGroupFor(int groupId) {
+    static void removeGroupFor(@NonNull UUID groupId) {
         Row group = Models.get(PermissionGroupModel.class).findById(groupId);
         String slug = group == null ? null : group.get(PermissionGroupModel.SLUG);
         // A slug-less group names no membership token, so there is nothing to sweep.
         if (slug != null) {
             String permission = GroupMembershipToken.of(slug);
-            List<Integer> doomed = new ArrayList<>();
+            List<UUID> doomed = new ArrayList<>();
             for (Row grant : Models.get(GrantModel.class).find()
                     .where(GrantModel.PERMISSION.eq(permission)).all()) {
                 doomed.add(grant.get(GrantModel.ID));
             }
-            for (Integer grantId : doomed) {
+            for (UUID grantId : doomed) {
                 Models.get(GrantModel.class).delete(grantId);
             }
         }
@@ -456,7 +455,7 @@ public final class Projects {
     /**
      * The records a project still owns, per model: used by the delete guard.
      */
-    static int ownedRecordCount(int groupId) {
+    static int ownedRecordCount(@NonNull UUID groupId) {
         int count = 0;
         for (Row grant : RecordGrants.listForSubject(GrantSubjectType.GROUP, groupId)) {
             if (HohenheimCapabilities.MANAGE.equals(grant.get(RecordGrantModel.CAPABILITY))) {

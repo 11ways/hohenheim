@@ -17,6 +17,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -52,8 +53,8 @@ class TenantHostnameClaimTest extends HohenheimTestBase {
 
     @BeforeAll
     static void seed() {
-        int userA = ApiSupport.user("claim-a@hohenheim.local", "Claim Tenant A");
-        int userB = ApiSupport.user("claim-b@hohenheim.local", "Claim Tenant B");
+        UUID userA = ApiSupport.user("claim-a@hohenheim.local", "Claim Tenant A");
+        UUID userB = ApiSupport.user("claim-b@hohenheim.local", "Claim Tenant B");
         tenantA = new UserPrincipal(userA, "Claim Tenant A");
         tenantB = new UserPrincipal(userB, "Claim Tenant B");
         Row adminRow = Models.get(UserModel.class).find()

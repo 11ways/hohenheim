@@ -64,6 +64,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -114,8 +115,8 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
     /** A step action nothing registers: the operation pipeline records its failed attempt without a daemon. */
     private static final String UNKNOWN_ACTION = "hohenheim:schedsurf_no_such_action";
 
-    private static Integer ownerId;
-    private static Integer viewerId;
+    private static UUID ownerId;
+    private static UUID viewerId;
     private static TestSession viewerHttp;
 
     private static Integer instanceId;
@@ -151,7 +152,7 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
         schedule.set(RecordScheduleModel.NAME, PREFIX + "nightly");
         schedule.set(RecordScheduleModel.CRON, "0 4 * * *");
         schedule.set(RecordScheduleModel.ENABLED, true);
-        schedule.set(RecordScheduleModel.RUN_AS, ownerId.longValue());
+        schedule.set(RecordScheduleModel.RUN_AS, ownerId);
         schedules.save(schedule);
         scheduleId = schedule.get(RecordScheduleModel.ID);
 
@@ -182,7 +183,7 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
         }
     }
 
-    private static AccessContext contextOf(int userId, String name) {
+    private static AccessContext contextOf(UUID userId, String name) {
         return AccessContext.of(TenantConduits.stubFor(new UserPrincipal(userId, name)));
     }
 
@@ -335,7 +336,7 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
         schedule.set(RecordScheduleModel.NAME, PREFIX + "steps-read");
         schedule.set(RecordScheduleModel.CRON, "0 4 * * *");
         schedule.set(RecordScheduleModel.ENABLED, true);
-        schedule.set(RecordScheduleModel.RUN_AS, ownerId.longValue());
+        schedule.set(RecordScheduleModel.RUN_AS, ownerId);
         scheduleModel.save(schedule);
         int readScheduleId = schedule.get(RecordScheduleModel.ID);
 

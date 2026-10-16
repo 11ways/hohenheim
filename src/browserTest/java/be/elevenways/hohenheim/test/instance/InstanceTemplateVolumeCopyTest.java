@@ -9,6 +9,8 @@ import be.elevenways.hohenheim.server.instance.InstanceTemplates;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -225,7 +227,7 @@ class InstanceTemplateVolumeCopyTest extends HohenheimTestBase {
         row.set(InstanceTemplateModel.KIND, kind);
         row.set(InstanceTemplateModel.SETTINGS, new LinkedHashMap<String, Object>());
         row.set(InstanceTemplateModel.APPROVED_AT, Now.instant());
-        row.set(InstanceTemplateModel.APPROVED_BY_USER_ID, 1L);
+        row.set(InstanceTemplateModel.APPROVED_BY_USER_ID, TenantConduits.operatorUser().get(UserModel.ID));
         templates.save(row);
         return row.get(InstanceTemplateModel.ID);
     }

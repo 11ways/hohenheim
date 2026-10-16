@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -48,7 +49,7 @@ class AdminApiDeclarationTest extends HohenheimTestBase {
 
         // 3. On the wire: a key whose owner holds no admin permission is refused at the
         //    door for a host read, a zone list and a site create alike.
-        int tenantId = ApiSupport.user("admin-api-declaration@surface.test", "Admin Api Declaration");
+        UUID tenantId = ApiSupport.user("admin-api-declaration@surface.test", "Admin Api Declaration");
         String key = ApiKeyService.create(tenantId, "admin-api-declaration",
             List.of("hohenheim.*"), null).plaintext();
         HttpResponse<String> hosts = keyGet(key, "/api/v1/hosts");

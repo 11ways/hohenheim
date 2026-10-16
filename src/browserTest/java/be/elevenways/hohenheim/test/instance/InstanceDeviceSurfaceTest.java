@@ -46,6 +46,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -71,7 +72,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
     private static final String NAME_PREFIX = "devsurf-";
 
     /** A real delegated tenant plus its API key: the /api/v1 lane speaks keys only. */
-    private static Integer tenantId;
+    private static UUID tenantId;
     private static String tenantKey;
 
     /**
@@ -80,7 +81,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
      * so key narrowing can never be the thing that refuses and the RECORD-capability gate
      * is what the authorization journey measures.
      */
-    private static Integer viewerId;
+    private static UUID viewerId;
     private static String viewerKey;
 
     /** An admitted INCUS host, because the fake device kind declares that runtime. */

@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -34,7 +35,7 @@ class SiteAccessControlTest extends HohenheimTestBase {
     private static Integer siteBId;
     private static Integer instanceAId;
     private static Integer instanceBId;
-    private static Integer limitedUserId;
+    private static UUID limitedUserId;
     private static String limitedSession;
     private static String limitedCsrf;
 

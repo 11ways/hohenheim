@@ -10,6 +10,9 @@ import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.quota.QuotaReconciler;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.protoblast.common.util.Uuids;
+import be.elevenways.zenit.auth.cms.SubjectTag;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -38,7 +41,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class QuotaDimensionsReconcileTest {
 
     private static final AtomicBoolean FAIL_NEXT_DATABASE_WRITE = new AtomicBoolean();
-    private static final String STRANGER = "user:424242";
+    private static final String STRANGER = new SubjectTag(GrantSubjectType.USER, Uuids.v7()).token();
 
     @BeforeAll
     static void setUp() throws Exception {

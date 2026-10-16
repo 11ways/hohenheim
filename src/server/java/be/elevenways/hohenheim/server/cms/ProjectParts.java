@@ -41,6 +41,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.Objects;
+import java.util.UUID;
 
 /**
  * Project owner-tier parts. User names/descriptions stay verbatim; generated labels and refusals are localized.
@@ -141,18 +142,18 @@ public final class ProjectParts {
                 HohenheimMicrocopy.PROJECT.of("instance_quota")).build()).build();
     }
 
-    private static @Nullable Integer groupOf(@NonNull Row project) {
+    private static @Nullable UUID groupOf(@NonNull Row project) {
         return project.get(ProjectModel.GROUP_ID);
     }
 
-    private static String quota(Row row, @Nullable Integer group) {
+    private static String quota(Row row, @Nullable UUID group) {
         if (group == null) return "-";
         String packed = HohenheimAccess.packSubjects(Projects.ownerSubjectsOf(row));
         Integer limit = OwnerBudget.INSTANCES.limitFor(packed);
         return OwnerBudget.INSTANCES.usedBy(packed) + " / " + (limit == null ? "-" : String.valueOf(limit));
     }
 
-    private static long ownedCount(@Nullable Integer group, Identifier model) {
+    private static long ownedCount(@Nullable UUID group, Identifier model) {
         if (group == null) return 0;
         return RecordGrants.listForSubject(GrantSubjectType.GROUP, group).stream()
             .filter(grant -> HohenheimCapabilities.MANAGE.equals(grant.get(RecordGrantModel.CAPABILITY))

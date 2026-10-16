@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.server.cms.InstanceAttention;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.util.Uuids;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.host.HostLeases;
@@ -36,6 +37,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -56,6 +58,10 @@ class InstancePowerAuditTest {
 
     private static SqlDatasource datasource;
     private static int hostId;
+    private static final UUID RESTART_OPERATOR = Uuids.v7();
+    private static final UUID SERVICE_OPERATOR = Uuids.v7();
+    /** The panel's row actions run as the all-allowed test caller, so its account is who clicked. */
+    private static final UUID PANEL_OPERATOR = TestAccessContexts.TEST_ACCOUNT;
 
     @BeforeAll
     static void setUp() throws Exception {
@@ -86,8 +92,8 @@ class InstancePowerAuditTest {
             .all();
     }
 
-    private static Accountability operator(String id) {
-        return new Accountability(id, PrincipalRef.account(Long.parseLong(id)).storedKind(), "Operator " + id,
+    private static Accountability operator(UUID id) {
+        return new Accountability(id.toString(), PrincipalRef.account(id).storedKind(), "Operator " + id,
             "10.0.0.1", "junit", Accountability.ORIGIN_WEB);
     }
 
@@ -108,7 +114,7 @@ class InstancePowerAuditTest {
             // 1. A running workload: the state a restart is asked for from.
             int id = instanceRecord("audit-restart");
             InstanceService service = new InstanceService();
-            Accountability.runAs(operator("9"), () -> service.deploy(id));
+            Accountability.runAs(operator(RESTART_OPERATOR), () -> service.deploy(id));
             String handle = FakeNativeDaemons.handleOf(id);
             assertThat(FakeNativeDaemons.daemonOf(hostId).get(handle).running)
                 .as("step 1: the workload runs before the restart").isTrue();
@@ -119,7 +125,7 @@ class InstancePowerAuditTest {
             // 2. ONE verb: restart stops and deploys again, and BOTH halves are recorded
             //    -- the composition is the service's, so the audit trail shows the pair
             //    rather than a single unexplained "restarted" row nobody can reconcile.
-            Accountability.runAs(operator("9"), () -> service.restart(id));
+            Accountability.runAs(operator(RESTART_OPERATOR), () -> service.restart(id));
             assertThat(activityFor(id, HohenheimActivityAction.STOPPED.id().toString()))
                 .as("step 2: the restart's stop half is recorded")
                 .hasSize(1);
@@ -144,7 +150,7 @@ class InstancePowerAuditTest {
                 FakeNativeDaemons.daemonOf(hostId).get(handle).ownerId = "999999999";
             });
             Throwable refused = catchThrowable(
-                () -> Accountability.runAs(operator("9"), () -> sabotaged.restart(id)));
+                () -> Accountability.runAs(operator(RESTART_OPERATOR), () -> sabotaged.restart(id)));
             assertThat(refused)
                 .as("step 3: a restart whose deploy fails refuses by name, never silently")
                 .isInstanceOfSatisfying(Violations.class, violations ->
@@ -207,7 +213,7 @@ class InstancePowerAuditTest {
             //    to whoever was acting, naming the daemon handle it settled against.
             int serviceId = instanceRecord("audit-service");
             InstanceService service = new InstanceService();
-            Accountability.runAs(operator("7"), () -> service.deploy(serviceId));
+            Accountability.runAs(operator(SERVICE_OPERATOR), () -> service.deploy(serviceId));
 
             List<Row> deployed = activityFor(serviceId, HohenheimActivityAction.DEPLOYED.id().toString());
             assertThat(deployed)
@@ -217,7 +223,7 @@ class InstancePowerAuditTest {
             Row deployRow = deployed.get(0);
             assertThat((String) deployRow.get(ActivityModel.ACTOR))
                 .as("step 1: the row names the acting principal")
-                .isEqualTo("7");
+                .isEqualTo(SERVICE_OPERATOR.toString());
             assertThat((String) deployRow.get(ActivityModel.ORIGIN))
                 .as("step 1: and the surface it came from")
                 .isEqualTo(Accountability.ORIGIN_WEB);
@@ -226,7 +232,7 @@ class InstancePowerAuditTest {
                 .isEqualTo(FakeNativeDaemons.handleOf(serviceId));
 
             // 2. Stop is the same contract, not a second policy.
-            Accountability.runAs(operator("7"), () -> service.stop(serviceId));
+            Accountability.runAs(operator(SERVICE_OPERATOR), () -> service.stop(serviceId));
             List<Row> stopped = activityFor(serviceId, HohenheimActivityAction.STOPPED.id().toString());
             assertThat(stopped).as("step 2: a settled stop records once").hasSize(1);
             assertThat((String) stopped.get(0).get(ActivityModel.ORIGIN))
@@ -243,7 +249,7 @@ class InstancePowerAuditTest {
             PanelAction<Row> deployAction = PlacedActionClicks.placed(panel, "start_instance");
             PanelAction<Row> stopAction = PlacedActionClicks.placed(panel, "stop_instance");
 
-            Accountability.runAs(operator("42"), () -> PlacedActionClicks.click(deployAction, panelRow));
+            Accountability.runAs(operator(PANEL_OPERATOR), () -> PlacedActionClicks.click(deployAction, panelRow));
             List<Row> panelDeploy = activityFor(panelId, HohenheimActivityAction.DEPLOYED.id().toString());
             assertThat(panelDeploy)
                 .withFailMessage("step 3: the PANEL deploy row action must be as answerable"
@@ -251,9 +257,9 @@ class InstancePowerAuditTest {
                 .hasSize(1);
             assertThat((String) panelDeploy.get(0).get(ActivityModel.ACTOR))
                 .as("step 3: attributed to the operator who clicked, not to the system")
-                .isEqualTo("42");
+                .isEqualTo(PANEL_OPERATOR.toString());
 
-            Accountability.runAs(operator("42"), () -> PlacedActionClicks.click(stopAction, panelRow));
+            Accountability.runAs(operator(PANEL_OPERATOR), () -> PlacedActionClicks.click(stopAction, panelRow));
             List<Row> panelStop = activityFor(panelId, HohenheimActivityAction.STOPPED.id().toString());
             assertThat(panelStop)
                 .withFailMessage("step 3: the PANEL stop row action must record too;"
@@ -265,7 +271,7 @@ class InstancePowerAuditTest {
             //    (the release engine, preview expiry, database teardown) says the same
             //    thing as one an operator clicked.
             int destroyId = instanceRecord("audit-destroy");
-            Accountability.runAs(operator("7"), () -> {
+            Accountability.runAs(operator(SERVICE_OPERATOR), () -> {
                 service.deploy(destroyId);
                 new InstanceService().destroy(destroyId);
             });
@@ -285,7 +291,7 @@ class InstancePowerAuditTest {
             //    its own: one destroy, one delete row, whoever asked for it.
             int panelDestroyId = instanceRecord("audit-panel-destroy");
             Row toDelete = Models.get(InstanceModel.class).findById(panelDestroyId);
-            Accountability.runAs(operator("42"), () -> {
+            Accountability.runAs(operator(PANEL_OPERATOR), () -> {
                 service.deploy(panelDestroyId);
                 OperationWrites.delete(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN), panel, toDelete,
                     TestAccessContexts.allAllowed());
@@ -299,7 +305,7 @@ class InstancePowerAuditTest {
                 .isEqualTo(InstanceService.ACTIVITY_DESTROY_DETAIL);
             assertThat((String) panelDestroyed.get(0).get(ActivityModel.ACTOR))
                 .as("step 5: attributed to the operator, not the system")
-                .isEqualTo("42");
+                .isEqualTo(PANEL_OPERATOR.toString());
         });
     }
 }

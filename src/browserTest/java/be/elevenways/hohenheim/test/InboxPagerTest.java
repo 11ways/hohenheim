@@ -10,6 +10,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -65,10 +66,10 @@ class InboxPagerTest extends HohenheimTestBase {
         }
     }
 
-    private static long harnessAdminId() {
+    private static UUID harnessAdminId() {
         Row admin = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         assertThat(admin).as("the harness admin exists").isNotNull();
-        return ((Integer) admin.get(UserModel.ID)).longValue();
+        return admin.get(UserModel.ID);
     }
 
     private static void seed(String owner, int count) {

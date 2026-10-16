@@ -36,6 +36,7 @@ import java.net.http.HttpResponse;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -59,9 +60,9 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
 
     private static final String PREFIX = "capsplit-";
 
-    private static int consoleUserId;
-    private static int powerUserId;
-    private static int managerUserId;
+    private static UUID consoleUserId;
+    private static UUID powerUserId;
+    private static UUID managerUserId;
     private static UserPrincipal consolePrincipal;
     private static UserPrincipal powerPrincipal;
     private static UserPrincipal managerPrincipal;

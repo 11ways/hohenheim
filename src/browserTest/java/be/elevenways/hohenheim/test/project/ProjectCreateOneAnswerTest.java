@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
+import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -27,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -55,7 +57,7 @@ class ProjectCreateOneAnswerTest extends HohenheimTestBase {
 
     @BeforeAll
     static void seed() {
-        int memberId = ApiSupport.user("member@one-answer.test", "One Answer Member");
+        UUID memberId = ApiSupport.user("member@one-answer.test", "One Answer Member");
         // May create instances at all, so the refusal below is the PROJECT gate, not the
         // create-authority one in front of it.
         GrantService.createDirectGrant(GrantSubjectType.USER, memberId,
@@ -78,7 +80,7 @@ class ProjectCreateOneAnswerTest extends HohenheimTestBase {
         row.set(InstanceTemplateModel.SETTINGS, new LinkedHashMap<>(
             Map.of("image", "alpine", "tag", "latest", "command", "sleep 300")));
         row.set(InstanceTemplateModel.APPROVED_AT, Now.instant());
-        row.set(InstanceTemplateModel.APPROVED_BY_USER_ID, 1L);
+        row.set(InstanceTemplateModel.APPROVED_BY_USER_ID, TenantConduits.operatorUser().get(UserModel.ID));
         Models.get(InstanceTemplateModel.class).save(row);
         template = row;
     }

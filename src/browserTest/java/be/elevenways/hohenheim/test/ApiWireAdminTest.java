@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static be.elevenways.hohenheim.test.ApiSupport.form;
 
@@ -66,8 +67,8 @@ class ApiWireAdminTest extends HohenheimTestBase {
         savedNameservers = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Dns.NAMESERVERS);
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Dns.NAMESERVERS, List.of("ns1.wire.test", "ns2.wire.test"));
 
-        int operatorId = ApiWire.operatorId();
-        int tenantId = ApiSupport.user("wire-admin-tenant@surface.test", "Wire Admin Tenant");
+        UUID operatorId = ApiWire.operatorId();
+        UUID tenantId = ApiSupport.user("wire-admin-tenant@surface.test", "Wire Admin Tenant");
 
         dockerHostId = host("wire-docker-host", ServerModel.RUNTIME_DOCKER);
         int incusHostId = host("wire-incus-host", ServerModel.RUNTIME_INCUS);

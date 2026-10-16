@@ -35,6 +35,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -48,7 +49,7 @@ class GitProviderTenantSurfaceTest extends HohenheimTestBase {
 
     private static final String PREFIX = "gp-tenant-surface-";
 
-    private static int tenantId;
+    private static UUID tenantId;
 
     @BeforeAll
     static void seed() {

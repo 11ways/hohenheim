@@ -29,6 +29,8 @@ import be.elevenways.hohenheim.test.InstanceRowCleanup;
 import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.hohenheim.test.TestAccessContexts;
+import be.elevenways.zenit.auth.cms.SubjectTag;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.GrantService;
@@ -49,6 +51,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -157,7 +160,7 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
      * never leave another without its database. This class used to thread tenant A's
      * database through eight @Order-ed tests in static fields.
      */
-    private record Tenancy(int tenantA, int tenantB, int viewer,
+    private record Tenancy(UUID tenantA, UUID tenantB, UUID viewer,
                            UserPrincipal principalA, UserPrincipal principalB,
                            TestSession sessionA, TestSession sessionB, TestSession sessionViewer,
                            int applicationA, int applicationB) {
@@ -166,9 +169,9 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
     /** @param mayAllocate whether both tenants already hold the database-create permission */
     private static Tenancy tenancy(boolean mayAllocate) {
         int n = FIXTURES.incrementAndGet();
-        int tenantA = ApiSupport.user("tenant-a-" + n + "@" + PREFIX + "test", "Database Tenant A");
-        int tenantB = ApiSupport.user("tenant-b-" + n + "@" + PREFIX + "test", "Database Tenant B");
-        int viewer = ApiSupport.user("viewer-" + n + "@" + PREFIX + "test", "Database Viewer");
+        UUID tenantA = ApiSupport.user("tenant-a-" + n + "@" + PREFIX + "test", "Database Tenant A");
+        UUID tenantB = ApiSupport.user("tenant-b-" + n + "@" + PREFIX + "test", "Database Tenant B");
+        UUID viewer = ApiSupport.user("viewer-" + n + "@" + PREFIX + "test", "Database Viewer");
 
         int siteA = site(PREFIX + n + "-site-a");
         int siteB = site(PREFIX + n + "-site-b");
@@ -197,20 +200,25 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
             applicationA, applicationB);
     }
 
-    private static void grantAllocation(int userId) {
+    private static void grantAllocation(UUID userId) {
         GrantService.createDirectGrant(GrantSubjectType.USER, userId,
             TenantDatabases.DATABASES_CREATE.value(), true);
     }
 
     /** Allocate {@code label} as a tenant through the manage surface; the stored record. */
-    private Row allocate(TestSession session, int tenantId, String label) throws Exception {
+    private Row allocate(TestSession session, UserPrincipal tenant, String label) throws Exception {
         HttpResponse<String> created = httpPostForm(CREATE_URL,
             "name=" + label + "&engine=postgres", session.token(), session.csrf());
         assertThat(created.statusCode())
-            .as("fixture: tenant " + tenantId + " allocates " + label).isIn(302, 303);
-        Row database = databaseNamed("u" + tenantId + "-" + label);
+            .as("fixture: tenant " + tenant.displayName() + " allocates " + label).isIn(302, 303);
+        Row database = databaseNamed(storedNameOf(tenant, label));
         assertThat(database).as("fixture: the allocation of " + label + " is stored").isNotNull();
         return database;
+    }
+
+    /** The namespaced stored name the allocation funnel derives for {@code tenant}'s {@code label}. */
+    private static String storedNameOf(UserPrincipal tenant, String label) {
+        return TenantDatabases.storedNameFor(TestAccessContexts.contextFor(tenant), label);
     }
 
     private static int site(String name) {
@@ -275,17 +283,17 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         return keys.toString();
     }
 
-    private static String packedOf(int userId) {
-        return HohenheimAccess.packSubjects(Set.of("user:" + userId));
+    private static String packedOf(UUID userId) {
+        return HohenheimAccess.packSubjects(Set.of(new SubjectTag(GrantSubjectType.USER, userId).token()));
     }
 
     /** The tenant's INSTANCE (workload) bucket, which a shared database never spends. */
-    private static String instanceBucketOf(int userId) {
+    private static String instanceBucketOf(UUID userId) {
         return OwnerBudget.INSTANCES.bucketOf(packedOf(userId));
     }
 
     /** The tenant's DATABASE bucket, the one a shared record is charged to. */
-    private static String databaseBucketOf(int userId) {
+    private static String databaseBucketOf(UUID userId) {
         return OwnerBudget.DATABASES.bucketOf(packedOf(userId));
     }
 
@@ -307,8 +315,8 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
     @Test
     void allocationDerivesNamePlacementOwnershipAndChargesTheTenantsOwnQuota() throws Exception {
         Tenancy cast = tenancy(false);
-        int tenantAId = cast.tenantA();
-        int tenantBId = cast.tenantB();
+        UUID tenantAId = cast.tenantA();
+        UUID tenantBId = cast.tenantB();
         String sessionA = cast.sessionA().token();
         String csrfA = cast.sessionA().csrf();
         String sessionB = cast.sessionB().token();
@@ -320,7 +328,7 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         //    holds a site grant, so this is the CREATE gate answering, not the panel.)
         HttpResponse<String> unauthorized = post(sessionA, csrfA, createUrl,
             "name=blog&engine=postgres");
-        assertThat(databaseNamed("u" + tenantAId + "-blog"))
+        assertThat(databaseNamed(storedNameOf(cast.principalA(), "blog")))
             .as("step 1: a tenant without allocation authority persisted NOTHING").isNull();
         assertThat(unauthorized.statusCode())
             .as("step 1: and was refused rather than redirected to a created record")
@@ -336,7 +344,7 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         // 3. THE NAME IS NAMESPACED. The tenant asked for "blog"; the stored name -- which
         //    is also the container handle, the data volume and the backup directory -- is
         //    private to this owner.
-        String databaseAName = "u" + tenantAId + "-blog";
+        String databaseAName = storedNameOf(cast.principalA(), "blog");
         Row database = databaseNamed(databaseAName);
         assertThat(database).as("step 3: the record is stored under the namespaced name")
             .isNotNull();
@@ -353,7 +361,7 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         //    on the very surface that created it.
         assertThat(HohenheimAccess.manageSubjectsOf(DatabaseModel.MODEL_ID, databaseAId))
             .as("step 5: the creator owns what it allocated")
-            .containsExactly("user:" + tenantAId);
+            .containsExactly(new SubjectTag(GrantSubjectType.USER, tenantAId).token());
         assertThat(get(sessionA, "/manage/databases").body())
             .as("step 5: and it shows up in the tenant's own list")
             .contains(databaseAName);
@@ -400,18 +408,19 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         HttpResponse<String> other = post(sessionB, csrfB, createUrl, "name=blog&engine=postgres");
         assertThat(other.statusCode())
             .as("step 7: tenant B allocates the same label successfully").isIn(302, 303);
-        Row databaseB = databaseNamed("u" + tenantBId + "-blog");
+        String databaseBName = storedNameOf(cast.principalB(), "blog");
+        Row databaseB = databaseNamed(databaseBName);
         assertThat(databaseB).as("step 7: under ITS OWN namespaced name").isNotNull();
         assertThat((Integer) databaseB.get(DatabaseModel.ENGINE_ID))
             .as("step 7: on the very same shared engine").isEqualTo(sharedEngineId);
         assertThat((String) databaseB.get(DatabaseModel.DB_NAME))
             .as("step 7: as its OWN logical database -- the bare label used to make both"
                 + " tenants' \"blog\" one database on that engine")
-            .isEqualTo("u" + tenantBId + "_blog")
+            .isEqualTo(databaseBName.replace('-', '_'))
             .isNotEqualTo(database.get(DatabaseModel.DB_NAME));
         assertThat((String) databaseB.get(DatabaseModel.DB_USER))
             .as("step 7: with its own engine-unique user")
-            .isEqualTo("u" + tenantBId + "_blog");
+            .isEqualTo(databaseBName.replace('-', '_'));
         assertThat((String) databaseB.get(DatabaseModel.QUOTA_BUCKET))
             .as("step 7: charged to tenant B's own database bucket")
             .isEqualTo(databaseBucketOf(tenantBId));
@@ -421,11 +430,10 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
     @Test
     void anotherTenantsDatabaseIsIndistinguishableFromOneThatDoesNotExist() throws Exception {
         Tenancy cast = tenancy(true);
-        int tenantBId = cast.tenantB();
         String sessionB = cast.sessionB().token();
-        int databaseAId = allocate(cast.sessionA(), cast.tenantA(), "blog").get(DatabaseModel.ID);
-        String databaseAName = "u" + cast.tenantA() + "-blog";
-        allocate(cast.sessionB(), tenantBId, "blog");
+        int databaseAId = allocate(cast.sessionA(), cast.principalA(), "blog").get(DatabaseModel.ID);
+        String databaseAName = storedNameOf(cast.principalA(), "blog");
+        allocate(cast.sessionB(), cast.principalB(), "blog");
 
         int absentId = 900_000_000;
         assertThat(Models.get(DatabaseModel.class).findById(absentId))
@@ -436,7 +444,7 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         assertThat(list.statusCode()).as("step 1: the scoped list renders").isEqualTo(200);
         assertThat(list.body())
             .as("step 1: tenant B sees its own database")
-            .contains("u" + tenantBId + "-blog");
+            .contains(storedNameOf(cast.principalB(), "blog"));
         assertThat(list.body())
             .as("step 1: and NEVER tenant A's")
             .doesNotContain(databaseAName);
@@ -463,10 +471,10 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
     @Test
     void aViewOnlyTeammateSeesTheRecordButNeverTheCredentials() throws Exception {
         Tenancy cast = tenancy(true);
-        int viewerId = cast.viewer();
+        UUID viewerId = cast.viewer();
         String sessionA = cast.sessionA().token();
         String sessionViewer = cast.sessionViewer().token();
-        int databaseAId = allocate(cast.sessionA(), cast.tenantA(), "blog").get(DatabaseModel.ID);
+        int databaseAId = allocate(cast.sessionA(), cast.principalA(), "blog").get(DatabaseModel.ID);
 
         String credentialsUrl = "/manage/databases/" + databaseAId + "/page/credentials";
         String password = String.valueOf(
@@ -524,8 +532,8 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         String sessionA = cast.sessionA().token();
         String sessionB = cast.sessionB().token();
         String sessionViewer = cast.sessionViewer().token();
-        int databaseAId = allocate(cast.sessionA(), cast.tenantA(), "blog").get(DatabaseModel.ID);
-        String databaseAName = "u" + cast.tenantA() + "-blog";
+        int databaseAId = allocate(cast.sessionA(), cast.principalA(), "blog").get(DatabaseModel.ID);
+        String databaseAName = storedNameOf(cast.principalA(), "blog");
         // The teammate holds VIEW on the record, so step 4's "not offered" is judged on a
         // list that really shows them the row.
         RecordGrants.grant(GrantSubjectType.USER, cast.viewer(), DatabaseModel.MODEL_ID,
@@ -578,7 +586,7 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
     void aTenantCannotWriteThePlacementTheImageTheCapsOrTheEphemeralFlag() throws Exception {
         Tenancy cast = tenancy(true);
         UserPrincipal principalA = cast.principalA();
-        int databaseAId = allocate(cast.sessionA(), cast.tenantA(), "blog").get(DatabaseModel.ID);
+        int databaseAId = allocate(cast.sessionA(), cast.principalA(), "blog").get(DatabaseModel.ID);
 
         Model databases = Models.get(DatabaseModel.class);
         Row stored = databases.findById(databaseAId);
@@ -647,7 +655,7 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         UserPrincipal principalB = cast.principalB();
         int applicationAId = cast.applicationA();
         int applicationBId = cast.applicationB();
-        int databaseAId = allocate(cast.sessionA(), cast.tenantA(), "blog").get(DatabaseModel.ID);
+        int databaseAId = allocate(cast.sessionA(), cast.principalA(), "blog").get(DatabaseModel.ID);
 
         InstanceDatabaseModel links = Models.get(InstanceDatabaseModel.class);
 
@@ -713,14 +721,15 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
     @Test
     void racingAllocationsCannotOverspendTheTenantsLastSlot() throws Exception {
         Tenancy cast = tenancy(true);
-        int tenantAId = cast.tenantA();
+        UUID tenantAId = cast.tenantA();
         String sessionA = cast.sessionA().token();
         String csrfA = cast.sessionA().csrf();
         // The tenant's first database: the race must JOIN its engine, not mint a second.
-        Integer sharedEngineId = allocate(cast.sessionA(), tenantAId, "blog")
+        Integer sharedEngineId = allocate(cast.sessionA(), cast.principalA(), "blog")
             .get(DatabaseModel.ENGINE_ID);
 
         String packed = packedOf(tenantAId);
+        String racePrefix = storedNameOf(cast.principalA(), "race");
         long used = Quotas.usedOf(databaseBucketOf(tenantAId));
         long instancesUsed = Quotas.usedOf(instanceBucketOf(tenantAId));
         capTenantAt(tenantAId, (int) used + 1);   // EXACTLY one remaining slot
@@ -752,7 +761,7 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         List<Row> raced = new ArrayList<>();
         for (Row row : Models.get(DatabaseModel.class).find().all()) {
             String name = String.valueOf((Object) row.get(DatabaseModel.NAME));
-            if (name.startsWith("u" + tenantAId + "-race")) {
+            if (name.startsWith(racePrefix)) {
                 raced.add(row);
             }
         }
@@ -772,7 +781,7 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         //    winner joined the existing engine rather than minting a second one.
         assertThat(Models.get(DatabaseModel.class).find().all().stream()
                 .filter(row -> String.valueOf((Object) row.get(DatabaseModel.NAME))
-                    .startsWith("u" + tenantAId + "-race"))
+                    .startsWith(racePrefix))
                 .count())
             .as("step 3: the refused allocation rolled its record back").isEqualTo(1);
         assertThat((Integer) raced.get(0).get(DatabaseModel.ENGINE_ID))
@@ -786,12 +795,12 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         Tenancy cast = tenancy(true);
         UserPrincipal principalA = cast.principalA();
         UserPrincipal principalB = cast.principalB();
-        int tenantAId = cast.tenantA();
-        Row databaseA = allocate(cast.sessionA(), tenantAId, "blog");
-        String databaseAName = "u" + tenantAId + "-blog";
+        UUID tenantAId = cast.tenantA();
+        Row databaseA = allocate(cast.sessionA(), cast.principalA(), "blog");
+        String databaseAName = storedNameOf(cast.principalA(), "blog");
         Integer sharedEngineId = databaseA.get(DatabaseModel.ENGINE_ID);
         // Tenant B's database keeps the shared engine serving someone after A's destroy.
-        allocate(cast.sessionB(), cast.tenantB(), "blog");
+        allocate(cast.sessionB(), cast.principalB(), "blog");
 
         // 1. THE ATTACK: tenant B destroys tenant A's database through the service every
         //    surface funnels into.
@@ -836,9 +845,9 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
             .as("step 3: and so does its instance row").isNotNull();
     }
 
-    private static void capTenantAt(int userId, int maximum) {
+    private static void capTenantAt(UUID userId, int maximum) {
         Model quotas = Models.get(InstanceQuotaModel.class);
-        String packed = HohenheimAccess.packSubjects(Set.of("user:" + userId));
+        String packed = packedOf(userId);
         Row row = quotas.find().where(InstanceQuotaModel.SUBJECTS.eq(packed)).first();
         if (row == null) {
             row = quotas.createEmptyRow();

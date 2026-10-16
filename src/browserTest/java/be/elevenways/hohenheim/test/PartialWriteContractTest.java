@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -57,13 +58,13 @@ class PartialWriteContractTest extends HohenheimTestBase {
     private static Integer scheduleId;
     private static Integer stepId;
     private static Integer deviceId;
-    private static Long adminId;
+    private static UUID adminId;
 
     @BeforeAll
     static void seed() throws Exception {
         Row admin = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
-        adminId = ((Integer) admin.get(UserModel.ID)).longValue();
+        adminId = admin.get(UserModel.ID);
 
         Model sites = Models.get(SiteModel.class);
         Row site = sites.createEmptyRow();

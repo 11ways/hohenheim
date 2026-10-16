@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
@@ -47,7 +48,7 @@ class CertificateSurfacesBrowserTest extends HohenheimTestBase {
 
     @BeforeAll
     static void seed() {
-        int tenantId = ApiSupport.user("certificate-surfaces@hohenheim.local", "Certificate Surfaces Tenant");
+        UUID tenantId = ApiSupport.user("certificate-surfaces@hohenheim.local", "Certificate Surfaces Tenant");
         // A certificate requester enters /manage through an actual site grant, not installation authority.
         Model sites = Models.get(SiteModel.class);
         Row site = sites.createEmptyRow();
@@ -109,7 +110,7 @@ class CertificateSurfacesBrowserTest extends HohenheimTestBase {
             .key("cert_id", "issued", issuedId));
     }
 
-    private static String certificate(String name, String provider, String domains, Integer requester) {
+    private static String certificate(String name, String provider, String domains, UUID requester) {
         Model model = Models.get(CertificateModel.class);
         Row certificate = model.createEmptyRow();
         certificate.set(CertificateModel.NICE_NAME, name);

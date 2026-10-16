@@ -28,6 +28,7 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
@@ -78,7 +79,7 @@ class TrustedUpstreamTest extends HohenheimTestBase {
         domain.set(SiteDomainModel.FORCE_SSL, false);
         domainModel.save(domain);
 
-        int tenantId = ApiSupport.user("trusted-upstream-tenant@hohenheim.local",
+        UUID tenantId = ApiSupport.user("trusted-upstream-tenant@hohenheim.local",
             "Trusted Upstream Tenant");
         UserPrincipal tenantPrincipal = new UserPrincipal(tenantId, "Trusted Upstream Tenant");
 

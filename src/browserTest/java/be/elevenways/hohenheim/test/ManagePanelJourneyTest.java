@@ -38,6 +38,7 @@ import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.security.AccountabilityOrigin;
 import be.elevenways.zenit.common.security.SystemPrincipal;
+import be.elevenways.zenit.common.security.ZenitPrincipalKind;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
@@ -62,6 +63,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -80,7 +82,7 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
     private static final Pattern NAV_LINK =
             Pattern.compile("<pl-nav-item\\b[^>]*>\\s*<a\\b[^>]*href=\"(/manage/[^\"]*)\"");
 
-    private int tenantId;
+    private UUID tenantId;
     private int appId;
     private int siteId;
     private int domainId;
@@ -619,11 +621,12 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
         row.set(ActivityModel.CREATED_AT, at);
         if (accountId != null) {
             row.set(ActivityModel.ACTOR, accountId);
+            row.set(ActivityModel.ACTOR_KIND, ZenitPrincipalKind.ACCOUNT.id().toString());
             row.set(ActivityModel.ORIGIN, AccountabilityOrigin.WEB.token());
         } else {
             var system = SystemPrincipal.INSTANCE.reference();
             row.set(ActivityModel.ACTOR_KIND, system.storedKind());
-            row.set(ActivityModel.ACTOR, Long.toString(system.id()));
+            row.set(ActivityModel.ACTOR, system.id().toString());
             row.set(ActivityModel.ORIGIN, AccountabilityOrigin.SYSTEM.token());
         }
         activity.save(row);

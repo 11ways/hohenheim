@@ -28,6 +28,7 @@ import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.security.SystemPurpose;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.auth.cms.SubjectTag;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
@@ -57,6 +58,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -452,7 +454,7 @@ class PreviewMechanicsTest extends HohenheimTestBase {
             //    an owner to record that is not the operator's empty set. The domain row
             //    hangs off the SITE, which is why the grant stays site-keyed here while
             //    the preview's own quota charge follows the APPLICATION.
-            int owner = ApiSupport.user("preview-owner@test");
+            UUID owner = ApiSupport.user("preview-owner@test");
             RecordGrants.grant(GrantSubjectType.USER, owner, SiteModel.MODEL_ID, siteId,
                 HohenheimCapabilities.MANAGE, true);
 
@@ -480,7 +482,7 @@ class PreviewMechanicsTest extends HohenheimTestBase {
                 .as("step 3: the reclaimed preview hostname is ledgered").isNotNull();
             assertThat((String) ledgered.get(ReleasedRouteClaimModel.FORMER_SUBJECTS))
                 .as("step 3: under the site's owner, not an empty operator set")
-                .isEqualTo("user:" + owner);
+                .isEqualTo(new SubjectTag(GrantSubjectType.USER, owner).token());
 
             // 4. A stranger's site cannot take the freed preview hostname.
             Row raider = sites.createEmptyRow();

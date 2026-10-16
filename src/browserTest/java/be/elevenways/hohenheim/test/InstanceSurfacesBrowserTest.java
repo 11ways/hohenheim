@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 
 import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
 import static be.elevenways.hohenheim.HohenheimSlugs.MANAGE;
@@ -59,7 +60,7 @@ class InstanceSurfacesBrowserTest extends HohenheimTestBase {
     static void seed() throws Exception {
         // The immutable capture assumes this fixture's inventory, not another class's git providers.
         freshSeededDatabase();
-        int tenantId = ApiSupport.user(PREFIX + "tenant@hohenheim.local", "B14 Instance Tenant");
+        UUID tenantId = ApiSupport.user(PREFIX + "tenant@hohenheim.local", "B14 Instance Tenant");
         int template = template(PREFIX + "template");
         templateId = String.valueOf(template);
         int instance = instance(PREFIX + "instance", template);

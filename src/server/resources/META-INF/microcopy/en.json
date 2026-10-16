@@ -6266,11 +6266,11 @@
   },
   "quota_subjects": [
     {
-      "text": "Owner subjects",
+      "text": "Owner",
       "scope": "hohenheim_field"
     },
     {
-      "text": "The owner's manage-grant subjects, one \"type:id\" token per line (sorted); leave empty for the operator",
+      "text": "The owner this override caps: pick an account or a permission group, or several for an owner they share; leave empty for the operator",
       "scope": "help"
     }
   ],

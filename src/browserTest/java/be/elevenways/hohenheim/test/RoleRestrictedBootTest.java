@@ -46,6 +46,7 @@ import java.net.http.HttpResponse;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -149,7 +150,7 @@ class RoleRestrictedBootTest {
             //     answer their panel routes give above -- never a 500 from looking up an entry
             //     the role left out. Each target row EXISTS and is visible to the admin key (the
             //     reads answer 200), so the 404 is the missing entry, not the row lookup.
-            int adminId = TenantConduits.operatorUser().get(UserModel.ID);
+            UUID adminId = TenantConduits.operatorUser().get(UserModel.ID);
             String key = ApiKeyService.create(adminId, "role-restricted-admin", List.of("hohenheim.*"), null)
                 .plaintext();
             int siteId = site();

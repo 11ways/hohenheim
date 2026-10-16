@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import java.net.http.HttpResponse;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -35,7 +36,7 @@ class DnsEditGrantReadWireTest extends HohenheimTestBase {
 
     @Test
     void anEditOnlyRecordGrantReadsExactlyItsRecordAndNeverTheAdminZoneList() throws Exception {
-        int account = ApiSupport.user("dns-edit-wire@fixture.test", "DNS edit wire reader");
+        UUID account = ApiSupport.user("dns-edit-wire@fixture.test", "DNS edit wire reader");
         int zone = DnsFixtures.createZone("dns-edit-wire.fixture.test");
         int editable = DnsFixtures.record(zone, "editable", DnsRecordModel.TYPE_A, "192.0.2.41");
         int hidden = DnsFixtures.record(zone, "hidden", DnsRecordModel.TYPE_A, "192.0.2.42");

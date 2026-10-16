@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.auth.cms.SubjectTag;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
@@ -27,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -44,9 +46,9 @@ class ProjectAdoptionTest extends HohenheimTestBase {
 
     private static final String PREFIX = "proj-adopt-";
 
-    private static Integer userXId;
-    private static Integer userYId;
-    private static Integer userZId;
+    private static UUID userXId;
+    private static UUID userYId;
+    private static UUID userZId;
     private static UserPrincipal principalX;
     private static UserPrincipal principalY;
 
@@ -98,7 +100,7 @@ class ProjectAdoptionTest extends HohenheimTestBase {
         // A per-owner quota override keyed on the OLD packing.
         Row cap = Models.get(InstanceQuotaModel.class).createEmptyRow();
         cap.set(InstanceQuotaModel.SUBJECTS,
-            HohenheimAccess.packSubjects(Set.of("user:" + userXId)));
+            HohenheimAccess.packSubjects(Set.of(new SubjectTag(GrantSubjectType.USER, userXId).token())));
         cap.set(InstanceQuotaModel.MAX_INSTANCES, 7);
         Models.get(InstanceQuotaModel.class).save(cap);
         quotaOverrideId = cap.get(InstanceQuotaModel.ID);
@@ -109,7 +111,7 @@ class ProjectAdoptionTest extends HohenheimTestBase {
         claim.set(ReleasedRouteClaimModel.HOSTNAME, PREFIX + "released.test");
         claim.set(ReleasedRouteClaimModel.FORMER_SITE_ID, siteXId);
         claim.set(ReleasedRouteClaimModel.FORMER_SUBJECTS,
-            HohenheimAccess.packSubjects(Set.of("user:" + userXId)));
+            HohenheimAccess.packSubjects(Set.of(new SubjectTag(GrantSubjectType.USER, userXId).token())));
         claim.set(ReleasedRouteClaimModel.RELEASED_AT, Now.instant());
         Models.get(ReleasedRouteClaimModel.class).save(claim);
         claimId = claim.get(ReleasedRouteClaimModel.ID);

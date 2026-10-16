@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -58,7 +59,7 @@ class ManageScopeParityTest extends HohenheimTestBase {
 
     private static final String PREFIX = "scope-parity-";
 
-    private static int tenantId;
+    private static UUID tenantId;
     private static int authoredInstanceId;
     private static int generatedInstanceId;
     private static int deletedSiteDomainId;
@@ -159,10 +160,10 @@ class ManageScopeParityTest extends HohenheimTestBase {
                 Set<Object> offered = sourceIds(resource, ctx);
                 assertThat(offered)
                     .as("step 3: %s's record source reads its declared picker scope for %s",
-                        resource.id(), ctx.principalId())
+                        resource.id(), ctx.accountId())
                     .isEqualTo(scopedIds(resource.model(), resource.picker(), ctx));
                 assertThat(resourceIds(resource, ctx))
-                    .as("step 3: %s's list holds every row its picker offers for %s", resource.id(), ctx.principalId())
+                    .as("step 3: %s's list holds every row its picker offers for %s", resource.id(), ctx.accountId())
                     .containsAll(offered);
             }
         }

@@ -1,10 +1,10 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.auth.GrantSubjects;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.auth.cms.SubjectTag;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 import static be.elevenways.hohenheim.test.ApiSupport.user;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -46,7 +47,7 @@ class OwnerSubjectsTest extends HohenheimTestBase {
 
     @Test
     void anExpiredManageGrantNoLongerMakesItsHolderTheOwner() {
-        int holder = user("owner-subjects@hohenheim.local", "Owner Subjects Holder");
+        UUID holder = user("owner-subjects@hohenheim.local", "Owner Subjects Holder");
         int tenantSite = site("owner-subjects-tenant");
         int operatorSite = site("owner-subjects-operator");
 
@@ -56,7 +57,7 @@ class OwnerSubjectsTest extends HohenheimTestBase {
             HohenheimCapabilities.MANAGE, true, Now.instant().plusSeconds(3_600));
         assertThat(HohenheimAccess.manageSubjectsOf(tenantSite))
             .as("step 1: a live grant is ownership").containsExactly("user:" + holder);
-        assertThat(GrantSubjects.userToken(holder)).as("step 1: the token format never moves")
+        assertThat(new SubjectTag(GrantSubjectType.USER, holder).token()).as("step 1: the token format never moves")
             .isEqualTo("user:" + holder);
         assertThat(HohenheimAccess.sameOwner(tenantSite, operatorSite))
             .as("step 1: a tenant-held site is not the operator's").isFalse();
@@ -72,10 +73,10 @@ class OwnerSubjectsTest extends HohenheimTestBase {
 
     @Test
     void subjectTokensReadThroughTheSubjectVocabularyAndFailClosed() {
-        int named = user("owner-subjects-label@hohenheim.local", "Labelled Subject");
+        UUID named = user("owner-subjects-label@hohenheim.local", "Labelled Subject");
 
         // 1. A known token parses to its member and labels as the subject's display name.
-        GrantSubjects.Subject subject = GrantSubjects.parse("user:" + named);
+        SubjectTag subject = SubjectTag.parse("user:" + named);
         assertThat(subject).as("step 1: a stored token parses").isNotNull();
         assertThat(subject.type()).isEqualTo(GrantSubjectType.USER);
         assertThat(subject.id()).isEqualTo(named);
@@ -83,21 +84,21 @@ class OwnerSubjectsTest extends HohenheimTestBase {
             .as("step 1: and labels as the subject").isEqualTo("Labelled Subject");
 
         // 1b. A person without a name labels as zenit-auth names them everywhere: by their address.
-        int unnamed = user("owner-subjects-unnamed@hohenheim.local", "");
+        UUID unnamed = user("owner-subjects-unnamed@hohenheim.local", "");
         assertThat(HohenheimAccess.subjectLabel("user:" + unnamed))
             .as("step 1b: the subject's label is zenit-auth's person name, their address when they have no name")
             .isEqualTo("owner-subjects-unnamed@hohenheim.local");
 
         // 2. An unknown type or a malformed id parses to nothing and labels as its raw token.
-        assertThat(GrantSubjects.parse("robot:1")).as("step 2: an unknown type").isNull();
-        assertThat(GrantSubjects.parse("group:x")).as("step 2: a malformed id").isNull();
+        assertThat(SubjectTag.parse("robot:1")).as("step 2: an unknown type").isNull();
+        assertThat(SubjectTag.parse("group:x")).as("step 2: a malformed id").isNull();
         assertThat(HohenheimAccess.subjectLabel("robot:1")).as("step 2: shown raw")
             .isEqualTo("robot:1");
     }
 
     @Test
     void theCreatorGrantFunnelPlantsTheCreationOwner() {
-        int creator = user("owner-subjects-creator@hohenheim.local", "Creator");
+        UUID creator = user("owner-subjects-creator@hohenheim.local", "Creator");
         int created = site("owner-subjects-created");
         AccessContext ctx = AccessContext.of(TenantConduits.stubFor(
             new UserPrincipal(creator, "Creator")));
@@ -107,7 +108,7 @@ class OwnerSubjectsTest extends HohenheimTestBase {
         HohenheimAccess.grantCreatorManage(SiteModel.MODEL_ID, created, ctx);
         assertThat(HohenheimAccess.manageSubjectsOf(created))
             .as("step 1: the creation owner owns the record")
-            .isEqualTo(Set.of(GrantSubjects.userToken(creator)));
+            .isEqualTo(Set.of(new SubjectTag(GrantSubjectType.USER, creator).token()));
 
         // 2. The creator reaches its record through the walk.
         AccessContext next = AccessContext.of(TenantConduits.stubFor(new UserPrincipal(creator, "Creator")));

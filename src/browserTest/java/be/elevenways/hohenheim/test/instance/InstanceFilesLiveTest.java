@@ -40,6 +40,7 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Tag;
 
@@ -283,9 +284,9 @@ class InstanceFilesLiveTest {
      * counterfactual 5 (another tenant's instance is indistinguishable from a missing one).
      */
     private static void capabilityAndTenancyMatrix(int instanceId, InstanceFiles files) {
-        int reader = ApiSupport.user("files-reader@live.test");
-        int writer = ApiSupport.user("files-writer@live.test");
-        int stranger = ApiSupport.user("files-stranger@live.test");
+        UUID reader = ApiSupport.user("files-reader@live.test");
+        UUID writer = ApiSupport.user("files-writer@live.test");
+        UUID stranger = ApiSupport.user("files-stranger@live.test");
         RecordGrants.grant(GrantSubjectType.USER, reader, InstanceModel.MODEL_ID, instanceId,
             HohenheimCapabilities.FILES_READ, true);
         RecordGrants.grant(GrantSubjectType.USER, writer, InstanceModel.MODEL_ID, instanceId,
@@ -366,8 +367,8 @@ class InstanceFilesLiveTest {
         return row.get(InstanceModel.ID);
     }
 
-    private static Principal principal(int userId) {
-        return new UserPrincipal((long) userId, "user-" + userId);
+    private static Principal principal(UUID userId) {
+        return new UserPrincipal(userId, "user-" + userId);
     }
 
     /** The content and the two escapes the containment steps are asked to stop. */

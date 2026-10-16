@@ -52,8 +52,7 @@ class DnsRecordTypeSurfaceTest extends HohenheimTestBase {
         Row admin = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         AccessContext operator = AccessContext.of(TenantConduits.stubFor(
-            new UserPrincipal(((Integer) admin.get(UserModel.ID)).longValue(),
-                "Test Admin")));
+            new UserPrincipal(admin.get(UserModel.ID), "Test Admin")));
 
         var mint = DnsOperations.MINT_DYNAMIC_TOKEN;
         var revoke = DnsOperations.REVOKE_DYNAMIC_TOKEN;

@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.protoblast.common.util.Uuids;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -26,6 +27,7 @@ import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -43,7 +45,7 @@ class CertificateAuthorityTest extends HohenheimTestBase {
 
     private static Integer ownedSiteId;
     private static Integer foreignSiteId;
-    private static Integer tenantUserId;
+    private static UUID tenantUserId;
     private static CertificateAuthority.Requester tenant;
     private static ProxyServer adoptedProxy;
 
@@ -271,7 +273,7 @@ class CertificateAuthorityTest extends HohenheimTestBase {
     @Test
     void aDisabledOrDeletedRequesterRenewsNothing() {
         // 1. An account holding manage on the owned site renews its name.
-        int requesterId = ApiSupport.user("certauth-renewer@hohenheim.local", "Certauth Renewer");
+        UUID requesterId = ApiSupport.user("certauth-renewer@hohenheim.local", "Certauth Renewer");
         RecordGrants.grant(GrantSubjectType.USER, requesterId, SiteModel.MODEL_ID, ownedSiteId,
             HohenheimCapabilities.MANAGE, true);
         PrincipalRef stored = PrincipalRef.account(requesterId);
@@ -294,13 +296,13 @@ class CertificateAuthorityTest extends HohenheimTestBase {
 
         // 4. An id that names no account at all (deleted) renews nothing either.
         assertThatThrownBy(() -> CertificateAuthority.authorize(
-                CertificateAuthority.Requester.ofSubject(PrincipalRef.account(987_654_321L)),
+                CertificateAuthority.Requester.ofSubject(PrincipalRef.account(Uuids.v7())),
                 List.of("owned." + ZONE)))
             .describedAs("step 4: a deleted requester's renewal is refused")
             .isInstanceOf(CertificateAuthority.Refused.class);
     }
 
-    private static void setEnabled(int userId, boolean enabled) {
+    private static void setEnabled(UUID userId, boolean enabled) {
         Models.get(UserModel.class).find().where(UserModel.ID.eq(userId))
             .assign(UserModel.ENABLED, enabled).updateAll();
     }

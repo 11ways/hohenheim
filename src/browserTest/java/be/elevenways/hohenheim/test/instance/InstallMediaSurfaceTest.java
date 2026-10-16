@@ -84,6 +84,7 @@ import java.util.Set;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -105,7 +106,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
     private static final Map<String, FakeMediaWorkload> DAEMON = new ConcurrentHashMap<>();
 
     private static Integer hostId;
-    private static Integer tenantId;
+    private static UUID tenantId;
 
     private final List<Integer> instances = new ArrayList<>();
 
@@ -868,7 +869,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
      */
     @Test
     void installMediaIsItsOwnPermissionSeparateFromBeingAnAdmin() throws Exception {
-        Integer operatorId = ApiSupport.user("media-surf-operator@hohenheim.local", "Media Operator");
+        UUID operatorId = ApiSupport.user("media-surf-operator@hohenheim.local", "Media Operator");
         GrantService.createDirectGrant(GrantSubjectType.USER, operatorId, "*", true);
         Row denial = GrantService.createDirectGrant(GrantSubjectType.USER, operatorId,
             HohenheimSources.MEDIA_MANAGE.value(), false);

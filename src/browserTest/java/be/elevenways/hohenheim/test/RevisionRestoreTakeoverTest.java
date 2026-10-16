@@ -33,6 +33,7 @@ import java.net.Socket;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -153,7 +154,7 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
             .as("exactly one enabled owner of the hostname: B").isEqualTo(1);
 
         // 4. A delegated operator is granted MANAGE over A (a tenant's own staged site).
-        int operatorId = ApiSupport.user("restore-operator@hohenheim.local", "Restore Operator");
+        UUID operatorId = ApiSupport.user("restore-operator@hohenheim.local", "Restore Operator");
         TestSession operatorSession = sessionFor(operatorId);
         String operatorCsrf = operatorSession.csrf();
         RecordGrants.grant(GrantSubjectType.USER, operatorId, SiteModel.MODEL_ID, aId, HohenheimCapabilities.MANAGE,
@@ -329,7 +330,7 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
         site.set(SiteModel.ACCESS_LIST_ID, accessListId);
         siteModel.save(site);
 
-        int operatorId = ApiSupport.user("restore-gate-operator@hohenheim.local",
+        UUID operatorId = ApiSupport.user("restore-gate-operator@hohenheim.local",
             "Restore Gate Operator");
         TestSession tenantSession = sessionFor(operatorId);
         String tenantCsrf = tenantSession.csrf();

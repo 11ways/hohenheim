@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
 
@@ -54,7 +55,7 @@ class SystemSurfacesBrowserTest extends HohenheimTestBase {
     @BeforeAll
     static void seed() throws Exception {
         freshSeededDatabase();
-        int tenantId = ApiSupport.user(PREFIX + "tenant@hohenheim.local", "System Surfaces Tenant");
+        UUID tenantId = ApiSupport.user(PREFIX + "tenant@hohenheim.local", "System Surfaces Tenant");
         channelId = String.valueOf(channel(PREFIX + "channel"));
         targetId = String.valueOf(target(PREFIX + "target"));
         activeBanId = String.valueOf(ban("203.0.113.231", true));

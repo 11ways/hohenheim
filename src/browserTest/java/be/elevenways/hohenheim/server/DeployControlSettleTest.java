@@ -23,6 +23,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -80,7 +81,7 @@ class DeployControlSettleTest extends HohenheimTestBase {
 
         // 3b. The background verb writes its activity as whoever asked: the attribution rides the hop.
         Row admin = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
-        int adminId = admin.get(UserModel.ID);
+        UUID adminId = admin.get(UserModel.ID);
         TenantConduits.as(new UserPrincipal(adminId, "Test Admin"), () -> SiteControlHandlers.settleWithin(
             Duration.ofSeconds(5), "test verb",
             () -> ActivityLog.record(Models.get(InstanceModel.class), SETTLE_RECORD,

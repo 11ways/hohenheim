@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -26,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * That disjunct ({@code REQUESTED_BY_USER_ID.eq(principalId)}) was a second, WIDER
  * spelling of the walk's owner row: it consulted no credential scope, so an API key
- * narrowed to an unrelated capability -- whose {@code principalId()} is its OWNING
+ * narrowed to an unrelated capability -- whose {@code accountId()} is its OWNING
  * USER -- could enumerate every certificate that user ever requested through the open
  * {@code /zn/records/.../query} endpoint. The walk's own owner row demands
  * {@code Principal.coversCapability} first, which is exactly what these journeys pin:
@@ -39,7 +40,7 @@ class CertificateOwnerScopeTest extends HohenheimTestBase {
     private static final String OWN_NAME = "Owner scope own certificate";
     private static final String FOREIGN_NAME = "Owner scope foreign certificate";
 
-    private static Integer tenantId;
+    private static UUID tenantId;
     private static TestSession tenant;
     private static Integer ownCertId;
     private static Integer foreignCertId;

@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.source.GithubProviderKind;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.auth.cms.SubjectTag;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
@@ -23,6 +24,7 @@ import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -40,11 +42,11 @@ class GitProviderOwnershipTest extends HohenheimTestBase {
     private static Integer tenantProviderId;
     private static Integer strangerProviderId;
 
-    private static Integer tenantUserId;
+    private static UUID tenantUserId;
     private static String tenantSession;
     private static String tenantCsrf;
 
-    private static Integer strangerUserId;
+    private static UUID strangerUserId;
     private static String strangerSession;
     private static String strangerCsrf;
 
@@ -222,7 +224,7 @@ class GitProviderOwnershipTest extends HohenheimTestBase {
         assertThat(HohenheimAccess.manageSubjectsOf(GitProviderModel.MODEL_ID,
                 row.get(GitProviderModel.ID)))
             .as("creating adopts the row: the creator holds manage on what it registered")
-            .containsExactly("user:" + tenantUserId);
+            .containsExactly(new SubjectTag(GrantSubjectType.USER, tenantUserId).token());
 
         assertThat(httpGet("/manage/git-providers/" + row.get(GitProviderModel.ID), strangerSession)
                 .statusCode())

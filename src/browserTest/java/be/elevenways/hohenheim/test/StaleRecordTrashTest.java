@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -69,7 +70,7 @@ class StaleRecordTrashTest {
                 // 2. The grouping drifts the way it does in production: an owner grant moves
                 //    and the row is not touched. PLACING it anywhere is still refused -- the
                 //    anchor that the guard is alive and would judge a whole-row save.
-                int userId = ApiSupport.user(PREFIX + "user@stale.test", "Stale User");
+                UUID userId = ApiSupport.user(PREFIX + "user@stale.test", "Stale User");
                 RecordGrants.grant(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, instanceId,
                     HohenheimCapabilities.MANAGE, true);
                 Throwable moved = catchThrowable(() -> {

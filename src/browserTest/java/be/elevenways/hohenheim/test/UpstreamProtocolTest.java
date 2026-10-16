@@ -55,6 +55,7 @@ import java.security.cert.X509Certificate;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
@@ -226,7 +227,7 @@ class UpstreamProtocolTest {
             "forward_host", upstreamHost,
             "forward_port", 443));
         addDomain(site, "tenant-tls.test", "exact", null, false);
-        int owner = ApiSupport.user("tenant-tls@hohenheim.local");
+        UUID owner = ApiSupport.user("tenant-tls@hohenheim.local");
         RecordGrants.grant(GrantSubjectType.USER, owner, SiteModel.MODEL_ID, site.get(SiteModel.ID),
             HohenheimCapabilities.MANAGE, true);
         assertThat(TenantUpstreams.publicOnly(site)).as("step 1: the site is tenant-owned").isTrue();
@@ -266,7 +267,7 @@ class UpstreamProtocolTest {
                 "forward_host", upstreamHost,
                 "forward_port", 80));
             addDomain(site, "tenant-plain.front.test", "exact", null, false);
-            int owner = ApiSupport.user("tenant-plain@hohenheim.local");
+            UUID owner = ApiSupport.user("tenant-plain@hohenheim.local");
             RecordGrants.grant(GrantSubjectType.USER, owner, SiteModel.MODEL_ID, site.get(SiteModel.ID),
                 HohenheimCapabilities.MANAGE, true);
             assertThat(TenantUpstreams.publicOnly(site)).as("step 1: the site is tenant-owned").isTrue();

@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.security;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.common.util.Uuids;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.common.security.Accountability;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
@@ -39,7 +40,7 @@ class BanWriterIdentityTest {
         Executor writer = BanService.backgroundWriter();
 
         // 1. Work queued while a tenant request is in flight runs as system, attributed to the system.
-        UserPrincipal tenant = new UserPrincipal(4343, "Ban Tripper");
+        UserPrincipal tenant = new UserPrincipal(Uuids.v7(), "Ban Tripper");
         CompletableFuture<List<Object>> tripped = new CompletableFuture<>();
         TenantConduits.as(tenant, () -> writer.execute(() -> tripped.complete(observed())));
         assertThat(tripped.get(10, TimeUnit.SECONDS))

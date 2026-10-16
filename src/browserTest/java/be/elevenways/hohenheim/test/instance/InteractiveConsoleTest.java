@@ -33,6 +33,7 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -223,7 +224,7 @@ class InteractiveConsoleTest {
 
     /** A user holding {@code manage} on the record, which implies {@code console}. */
     private static Principal grantedViewer(String label, int instanceId) {
-        int userId = ApiSupport.user(label + "@hohenheim.local", "Console " + label);
+        UUID userId = ApiSupport.user(label + "@hohenheim.local", "Console " + label);
         RecordGrants.grant(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, instanceId,
             HohenheimCapabilities.MANAGE, true);
         return new UserPrincipal(userId, "Console " + label);

@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.auth.cms.SubjectTag;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -72,19 +74,19 @@ class InstanceOwnershipTest extends HohenheimTestBase {
         //    without the KnownCapabilities/declareGrantable registration for
         //    InstanceModel, the grant cannot exist, both sets stay empty, and this check
         //    CANNOT fail -- exactly security theater.
-        int tenantA = ApiSupport.user("instance-tenant-a@test");
+        UUID tenantA = ApiSupport.user("instance-tenant-a@test");
         RecordGrants.grant(GrantSubjectType.USER, tenantA, InstanceModel.MODEL_ID, firstId,
             HohenheimCapabilities.MANAGE, true);
         assertThat(HohenheimAccess.manageSubjectsOf(InstanceModel.MODEL_ID, firstId))
             .as("step 2: the manage-grant subject IS the owner identity")
-            .containsExactly("user:" + tenantA);
+            .containsExactly(new SubjectTag(GrantSubjectType.USER, tenantA).token());
         assertThat(HohenheimAccess.sameOwner(InstanceModel.MODEL_ID, firstId, secondId))
             .as("step 2: a tenant-held instance and an operator-owned one differ in owner")
             .isFalse();
 
         // 3. A second tenant on the second instance: still different owners (equality of
         //    sets, never overlap).
-        int tenantB = ApiSupport.user("instance-tenant-b@test");
+        UUID tenantB = ApiSupport.user("instance-tenant-b@test");
         RecordGrants.grant(GrantSubjectType.USER, tenantB, InstanceModel.MODEL_ID, secondId,
             HohenheimCapabilities.MANAGE, true);
         assertThat(HohenheimAccess.sameOwner(InstanceModel.MODEL_ID, firstId, secondId))

@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import java.net.http.HttpResponse;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -62,14 +63,14 @@ class DatabaseCapacityApiTest extends HohenheimTestBase {
         defaultedId = database(PREFIX + "defaulted", hostId, null, null);
         sharedId = database(PREFIX + "shared", hostId, engineId, null);
 
-        int adminId = Models.get(UserModel.class).find()
+        UUID adminId = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first().get(UserModel.ID);
         keyAdmin = ApiKeyService.create(adminId, PREFIX + "admin", List.of("hohenheim.*"), null)
             .plaintext();
 
         // A key whose SCOPES claim everything but whose owner holds nothing: scopes narrow
         // authority, they never grant it, so the engine detail must still refuse it.
-        int outsiderId = ApiSupport.user(PREFIX + "outsider@surface.test", "Capacity API Outsider");
+        UUID outsiderId = ApiSupport.user(PREFIX + "outsider@surface.test", "Capacity API Outsider");
         keyOutsider = ApiKeyService.create(outsiderId, PREFIX + "outsider",
             List.of("hohenheim.*"), null).plaintext();
     }

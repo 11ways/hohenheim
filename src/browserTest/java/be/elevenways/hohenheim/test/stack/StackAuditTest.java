@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.ApiSupport;
+import be.elevenways.protoblast.common.util.Uuids;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -39,6 +40,7 @@ import java.nio.file.Files;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
@@ -62,6 +64,9 @@ class StackAuditTest {
 
     private static SqlDatasource datasource;
     private static StackRuntime runtime;
+    private static final UUID DEPLOY_OPERATOR = Uuids.v7();
+    private static final UUID ROLLBACK_OPERATOR = Uuids.v7();
+    private static final UUID TENANT = Uuids.v7();
 
     @BeforeAll
     static void setUp() throws Exception {
@@ -83,19 +88,19 @@ class StackAuditTest {
 
         // 1. The SYNCHRONOUS door (adoption, scripts, tests). It hops onto the stack's
         //    worker exactly like the panel does, so it is the same carry under test.
-        Accountability.runAs(operator("7"), () -> deployQuietly(stackId, "manual"));
+        Accountability.runAs(operator(DEPLOY_OPERATOR), () -> deployQuietly(stackId, "manual"));
         Row deployed = onlyActivity(stackId, HohenheimActivityAction.DEPLOYED.id().toString());
         assertThat(Map.of(
                 "actor", String.valueOf((Object) deployed.get(ActivityModel.ACTOR)),
                 "origin", String.valueOf((Object) deployed.get(ActivityModel.ORIGIN)),
                 "detail", String.valueOf((Object) deployed.get(ActivityModel.DETAIL))))
             .as("step 1: a settled deploy names the operator, the surface and the reason")
-            .isEqualTo(Map.of("actor", "7", "origin", Accountability.ORIGIN_WEB,
+            .isEqualTo(Map.of("actor", DEPLOY_OPERATOR.toString(), "origin", Accountability.ORIGIN_WEB,
                 "detail", "manual"));
 
         // 2. A rollback is its OWN verb, not a second deploy row: an operator reading the
         //    trail must be able to tell "released forward" from "put back".
-        Accountability.runAs(operator("42"), () -> {
+        Accountability.runAs(operator(ROLLBACK_OPERATOR), () -> {
             try {
                 runtime.rollback(stackId);
             } catch (IOException e) {
@@ -105,14 +110,14 @@ class StackAuditTest {
         Row rolledBack = onlyActivity(stackId, HohenheimActivityAction.ROLLED_BACK.id().toString());
         assertThat((String) rolledBack.get(ActivityModel.ACTOR))
             .as("step 2: attributed to whoever rolled back, not to whoever deployed")
-            .isEqualTo("42");
+            .isEqualTo(ROLLBACK_OPERATOR.toString());
         assertThat(activityFor(stackId, HohenheimActivityAction.DEPLOYED.id().toString()))
             .as("step 2: and a rollback does NOT also count as a forward deploy")
             .hasSize(1);
 
         // 3. Stop is the same contract, not a second policy, and it names the stack it
         //    settled against (the instance tier's detail convention).
-        Accountability.runAs(operator("42"), () -> {
+        Accountability.runAs(operator(ROLLBACK_OPERATOR), () -> {
             try {
                 runtime.stop(stackId);
             } catch (IOException e) {
@@ -128,13 +133,13 @@ class StackAuditTest {
         //    attribution must survive the queue AND the worker thread, or the row lands as system work with no
         //    actor -- an accountability-shaped no-op.
         int panelId = stackRecord("audit-panel-stack");
-        int clicker = Db.supply(datasource, () -> {
+        UUID clicker = Db.supply(datasource, () -> {
             TenantConduits.operatorUser();
-            int id = ApiSupport.user("stack-clicker@hohenheim.local", "Stack Clicker");
+            UUID id = ApiSupport.user("stack-clicker@hohenheim.local", "Stack Clicker");
             GrantService.createDirectGrant(GrantSubjectType.USER, id, "*", true);
             return id;
         });
-        Db.run(datasource, () -> Accountability.runAs(operator(String.valueOf(clicker)),
+        Db.run(datasource, () -> Accountability.runAs(operator(clicker),
                 () -> PanelResourceCalls.invoke(
             HohenheimSlugs.ADMIN, HohenheimSlugs.STACKS, StackOperations.DEPLOY.id(), panelId,
             CmsConfirmation.PLAIN_PROOF,
@@ -151,8 +156,8 @@ class StackAuditTest {
         // 5. ORIGIN is what tells the surfaces apart, so an unattended caller (stack
         //    adoption, boot recovery) must record as system rather than borrow an actor.
         //    The unattended work is declared the way a boot thread is: system work that is
-        //    nobody's action. Its actor is the system principal, told apart from the
-        //    operator account (also id 1 in this suite) by its kind.
+        //    nobody's action. Its actor is the system principal, told apart from an
+        //    operator account by its own id and kind.
         int systemId = stackRecord("audit-system-stack");
         ExecutionIdentity.runDetachedAsSystem("adoption", () -> deployQuietly(systemId, "adoption"));
         Row systemDeploy = onlyActivity(systemId, HohenheimActivityAction.DEPLOYED.id().toString());
@@ -171,12 +176,12 @@ class StackAuditTest {
         // 6. A TENANT's request, whose attribution is its caller identity rather than an
         //    entered scope: the worker runs it as system work on that tenant's behalf.
         int tenantStackId = stackRecord("audit-tenant-stack");
-        TenantConduits.as(new UserPrincipal(4343, "Stack Tenant"),
+        TenantConduits.as(new UserPrincipal(TENANT, "Stack Tenant"),
             () -> deployQuietly(tenantStackId, "manual"));
         assertThat((String) onlyActivity(tenantStackId, HohenheimActivityAction.DEPLOYED.id().toString())
                 .get(ActivityModel.ACTOR))
             .as("step 6: a tenant-started stack deploy is the tenant's action, never SYSTEM")
-            .isEqualTo("4343");
+            .isEqualTo(TENANT.toString());
     }
 
     // -- fixture --------------------------------------------------------------
@@ -189,8 +194,8 @@ class StackAuditTest {
         }
     }
 
-    private static Accountability operator(String id) {
-        return new Accountability(id, PrincipalRef.account(Long.parseLong(id)).storedKind(), "Operator " + id,
+    private static Accountability operator(UUID id) {
+        return new Accountability(id.toString(), PrincipalRef.account(id).storedKind(), "Operator " + id,
             "10.0.0.1", "junit", Accountability.ORIGIN_WEB);
     }
 

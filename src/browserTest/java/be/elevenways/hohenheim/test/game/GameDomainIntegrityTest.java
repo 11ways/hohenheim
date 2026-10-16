@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static be.elevenways.hohenheim.test.TestAccessContexts.contextFor;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -64,7 +65,7 @@ class GameDomainIntegrityTest extends HohenheimTestBase {
     private static int backendId;
     private static int proxyId;
     private static int secondProxyId;
-    private static int tenantId;
+    private static UUID tenantId;
 
     @BeforeAll
     static void fixtures() {

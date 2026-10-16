@@ -46,6 +46,7 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -187,8 +188,8 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
      */
     @Test
     void manualCreationFromManageRequiresManageOnTheChosenApplication() throws Exception {
-        int strangerId = ApiSupport.user("preview-stranger@test");
-        int managerId = ApiSupport.user("preview-manager@test");
+        UUID strangerId = ApiSupport.user("preview-stranger@test");
+        UUID managerId = ApiSupport.user("preview-manager@test");
         RecordGrants.grant(GrantSubjectType.USER, managerId, InstanceModel.MODEL_ID,
             applicationId, HohenheimCapabilities.MANAGE, true);
         AccessContext stranger = contextOf(strangerId, "Stranger");
@@ -264,7 +265,7 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
      */
     @Test
     void aPreviewIsNeverRemovedByTheGenericDelete() throws Exception {
-        int operatorId = ApiSupport.user("preview-delete@test");
+        UUID operatorId = ApiSupport.user("preview-delete@test");
         Map<String, Object> coerced = new LinkedHashMap<>();
         coerced.put(PreviewDeploymentModel.APPLICATION_ID.getName(), applicationId);
         coerced.put(PreviewDeploymentModel.REF.getName(), "delete-ref");
@@ -347,8 +348,8 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
         Integer savedCap = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Previews.MAX_PER_OWNER);
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Previews.MAX_PER_OWNER, 10);
         try {
-            int managerId = ApiSupport.user("preview-expire-manager@test");
-            int strangerId = ApiSupport.user("preview-expire-stranger@test");
+            UUID managerId = ApiSupport.user("preview-expire-manager@test");
+            UUID strangerId = ApiSupport.user("preview-expire-stranger@test");
             RecordGrants.grant(GrantSubjectType.USER, managerId, InstanceModel.MODEL_ID, applicationId,
                 HohenheimCapabilities.MANAGE, true);
             AccessContext manager = contextOf(managerId, "Expire Manager");
@@ -426,7 +427,7 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
         return row.get(InstanceModel.ID);
     }
 
-    private static AccessContext contextOf(int userId, String name) {
+    private static AccessContext contextOf(UUID userId, String name) {
         return AccessContext.of(TenantConduits.stubFor(new UserPrincipal(userId, name)));
     }
 

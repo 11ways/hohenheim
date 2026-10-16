@@ -19,6 +19,7 @@ import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
+import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
@@ -53,6 +54,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.function.BooleanSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -84,11 +86,11 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
         row.set(InstanceTemplateModel.KIND, FakeNativeDaemons.FakeNativeKind.ID.toString());
         row.set(InstanceTemplateModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "fake/image")));
         row.set(InstanceTemplateModel.APPROVED_AT, Now.instant());
-        row.set(InstanceTemplateModel.APPROVED_BY_USER_ID, 1L);
+        row.set(InstanceTemplateModel.APPROVED_BY_USER_ID, TenantConduits.operatorUser().get(UserModel.ID));
         Models.get(InstanceTemplateModel.class).save(row);
         template = row;
 
-        int tenantId = ApiSupport.user("tenant@" + PREFIX + "test", "Put Online Tenant");
+        UUID tenantId = ApiSupport.user("tenant@" + PREFIX + "test", "Put Online Tenant");
         GrantService.createDirectGrant(GrantSubjectType.USER, tenantId, HohenheimAccess.INSTANCES_CREATE.value(), true);
         tenant = AccessContext.of(TenantConduits.stubFor(new UserPrincipal(tenantId, "Put Online Tenant")));
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Ssl.LETSENCRYPT_ENABLED, false);
@@ -153,7 +155,7 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
         starter.set(InstanceTemplateModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "fake/image")));
         starter.set(InstanceTemplateModel.SOURCE, InstanceTemplateModel.SOURCE_STARTER);
         starter.set(InstanceTemplateModel.APPROVED_AT, Now.instant());
-        starter.set(InstanceTemplateModel.APPROVED_BY_USER_ID, 1L);
+        starter.set(InstanceTemplateModel.APPROVED_BY_USER_ID, TenantConduits.operatorUser().get(UserModel.ID));
         Models.get(InstanceTemplateModel.class).save(starter);
         try {
             String shipped = adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE).body();

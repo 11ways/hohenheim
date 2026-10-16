@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import java.net.http.HttpResponse;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -51,14 +52,14 @@ class HostApiTest extends HohenheimTestBase {
         hostId = host(PREFIX + "host");
         instanceId = instance(PREFIX + "web", hostId);
 
-        int adminId = Models.get(UserModel.class).find()
+        UUID adminId = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first().get(UserModel.ID);
         keyAdmin = ApiKeyService.create(adminId, PREFIX + "admin", List.of("hohenheim.*"), null)
             .plaintext();
 
         // Scopes NARROW authority, they never grant it: a wildcard-scoped key whose owner
         // holds no admin permission must still be refused.
-        int outsiderId = ApiSupport.user(PREFIX + "outsider@surface.test", "Host API Outsider");
+        UUID outsiderId = ApiSupport.user(PREFIX + "outsider@surface.test", "Host API Outsider");
         keyOutsider = ApiKeyService.create(outsiderId, PREFIX + "outsider",
             List.of("hohenheim.*"), null).plaintext();
     }
