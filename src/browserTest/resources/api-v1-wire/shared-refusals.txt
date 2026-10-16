@@ -76,4 +76,4 @@
 ## a form body over the request cap
 > POST /api/v1/sites (application/x-www-form-urlencoded, 20971521 bytes)
 < 413 application/json; charset=utf-8
-{"code":"PAYLOAD_TOO_LARGE","message":"Request body exceeds the configured limit of 20971520 bytes","status":413}
+{"code":"PAYLOAD_TOO_LARGE","message":"This is larger than allowed.","status":413}

@@ -199,9 +199,10 @@ class ServerAdminTest extends HohenheimTestBase {
             .where(ServerModel.NAME.eq("local")).first();
         assertThat(local).isNotNull();
         Integer localId = local.get(ServerModel.ID);
-        assertThat((String) local.get(ServerModel.POSTURE))
-            .as("step 2 precondition: the local host still carries the default posture")
-            .isEqualTo(ServerModel.POSTURE_TRUSTED_ONLY);
+        // A class earlier in this JVM may have admitted the shared local row (HostFixtures.admitLocal leaves it
+        // shared_container); start from the default posture, which the caller's restore hands back afterwards.
+        local.set(ServerModel.POSTURE, ServerModel.POSTURE_TRUSTED_ONLY);
+        Models.get(ServerModel.class).save(local);
 
         var update = adminPostForm("/admin/servers/" + localId,
             "name=local&ssh_target=evil%40intruder.example&posture=shared_container");

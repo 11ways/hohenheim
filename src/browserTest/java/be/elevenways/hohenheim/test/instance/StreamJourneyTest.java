@@ -16,6 +16,7 @@ import be.elevenways.hohenheim.server.cms.SiteWrites;
 import be.elevenways.hohenheim.server.proxy.ProxyReloadHooks;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
@@ -32,6 +33,7 @@ import be.elevenways.zenit.server.http.RateLimitMiddleware;
 import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.zenit.server.operation.OperationRequest;
 import be.elevenways.zenit.server.operation.OperationRun;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -46,6 +48,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -230,8 +233,10 @@ class StreamJourneyTest extends HohenheimTestBase {
         //     item goes.
         edit(site, publicPort, "tcp", null);
         switchOn(siteId, false);
-        try (ServerSocket squatter = new ServerSocket()) {
-            squatter.bind(new InetSocketAddress("0.0.0.0", publicPort));
+        // The supervisor closes a switched-off stream's listener after the save, not inside it: take the port once
+        // it is free, never in a race with that close.
+        try (ServerSocket squatter = Poll.value("the switched-off stream frees port " + publicPort,
+                Duration.ofSeconds(10), () -> boundTo(publicPort))) {
             switchOn(siteId, true);
             List<AttentionItem> failing = streamItems();
             assertThat(failing).as("step 7b: one item, an error").hasSize(1)
@@ -326,6 +331,25 @@ class StreamJourneyTest extends HohenheimTestBase {
         Row stored = Models.get(SiteModel.class).findById(siteId);
         stored.set(SiteModel.ENABLED, enabled);
         Models.get(SiteModel.class).save(stored);
+    }
+
+    /** @return a socket bound to the port on every address, null while something else still holds it */
+    private static @Nullable ServerSocket boundTo(int port) {
+        ServerSocket socket = null;
+        try {
+            socket = new ServerSocket();
+            socket.bind(new InetSocketAddress("0.0.0.0", port));
+            return socket;
+        } catch (IOException taken) {
+            if (socket != null) {
+                try {
+                    socket.close();
+                } catch (IOException ignored) {
+                    // Never bound, nothing to release.
+                }
+            }
+            return null;
+        }
     }
 
     private static OperationRequest request(Map<String, Object> form) {
