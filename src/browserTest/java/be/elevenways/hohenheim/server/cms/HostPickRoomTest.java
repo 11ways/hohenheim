@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.edit.EditContext;
@@ -103,6 +104,12 @@ class HostPickRoomTest extends HohenheimTestBase {
             .isEqualTo(ServerParts.sizeOfMegabytes(3) + " free of " + budget);
         assertThat(bookableFact(ledger, "nl")).as("step 1c: in Dutch too")
             .isEqualTo(ServerParts.sizeOfMegabytes(3) + " vrij van " + budget);
+        LocaleChain english = LocaleChain.ofTags("en");
+        MessageResolver resolver = Zenit.getMessageResolver();
+        assertThat(ServerOverviewState.capacityFacts(ledger, english, resolver).stream().map(fact -> fact.label())
+            .toList()).as("step 1c: Booked and Bookable, no Budget fact repeating its figure").containsExactly(
+                HohenheimMicrocopy.SERVER_OVERVIEW.of("booked").resolve(english, resolver),
+                HohenheimMicrocopy.SERVER_OVERVIEW.of("bookable").resolve(english, resolver));
 
         // 2. The kind-led Where step judges the full host by the run's own booking rule at the kind's default memory:
         //    refused, naming the host, what is needed and what is free.

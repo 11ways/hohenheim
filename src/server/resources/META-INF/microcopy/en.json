@@ -10716,10 +10716,6 @@
     "text": "Booked",
     "scope": "server_overview"
   },
-  "budget": {
-    "text": "Budget",
-    "scope": "server_overview"
-  },
   "bookable": {
     "text": "Bookable",
     "scope": "server_overview"
