@@ -86,7 +86,7 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
             //     a second row of the same actions under the verdict.
             assertThat(page).as("step 1b: the overview draws the record heading")
                 .contains("data-cms-record-head")
-                .containsPattern("<h1[^>]*>app-journey-healthy</h1>");
+                .containsPattern("<h1[^>]*>app-journey-healthy(<wbr>)?</h1>");
             assertThat(page.split("data-cms-record-actions", -1).length - 1)
                 .as("step 1b: exactly one action band on the page").isEqualTo(1);
             assertThat(page).as("step 1b: and no record-actions widget repeating it")
