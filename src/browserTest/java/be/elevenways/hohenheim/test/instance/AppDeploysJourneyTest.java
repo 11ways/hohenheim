@@ -17,6 +17,8 @@ import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.zenit.common.orm.model.Models;
+import com.microsoft.playwright.Locator;
+import com.microsoft.playwright.assertions.PlaywrightAssertions;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -277,9 +279,11 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
             waitForHydration();
             click("[data-hh-rollback]");
             assertIsVisible(".pl-alertdialog-modal[data-open]", "step 2c: the button asks first");
-            assertThat(this.page.locator(".pl-alertdialog-modal[data-open]").textContent())
-                .as("step 2c: and the dialog goes forward too")
-                .contains("Go forward to release aaaa1111? The live release stops serving.")
+            // The dialog's words land after it opens: wait for them rather than reading the first frame.
+            Locator dialog = this.page.locator(".pl-alertdialog-modal[data-open]");
+            PlaywrightAssertions.assertThat(dialog)
+                .containsText("Go forward to release aaaa1111? The live release stops serving.");
+            assertThat(dialog.textContent()).as("step 2c: and the dialog goes forward too")
                 .doesNotContain("Go back to release");
             click("[data-cms-confirm-cancel]");
         } finally {
