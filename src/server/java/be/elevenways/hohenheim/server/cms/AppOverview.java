@@ -18,7 +18,6 @@ import be.elevenways.hohenheim.server.tls.CertificateExpiry;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.typed.rule.Condition;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
@@ -30,8 +29,6 @@ import be.elevenways.zenit.cms.server.panel.PanelGate;
 import be.elevenways.zenit.cms.server.panel.PartsReads;
 import be.elevenways.zenit.cms.server.panel.RecordTabGate;
 import be.elevenways.zenit.common.conduit.Conduit;
-import be.elevenways.zenit.common.orm.history.ActionModel;
-import be.elevenways.zenit.common.orm.activity.ActivityRules;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -39,7 +36,7 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.WidgetTree;
 import be.elevenways.zenit.widget.common.builtin.CardWidget;
-import be.elevenways.zenit.widget.common.builtin.RecordsWidget;
+import be.elevenways.zenit.widget.common.builtin.ItemListWidget;
 import be.elevenways.zenit.widget.common.builtin.SectionWidget;
 import be.elevenways.zenit.widget.common.builtin.UsageBarWidget;
 import be.elevenways.zenit.widget.common.data.UsageData;
@@ -100,7 +97,7 @@ final class AppOverview {
         List<WidgetInstance> side = new ArrayList<>();
         side.add(details(siteFacts(site, access)));
         if (!delegated) {
-            side.add(recent(Models.get(SiteModel.class), site.get(SiteModel.ID)));
+            side.add(recent(Models.get(SiteModel.class), site.get(SiteModel.ID), access));
         }
         return compose(List.of(), main, side);
     }
@@ -252,19 +249,12 @@ final class AppOverview {
     }
 
     /**
-     * The record's latest activity through the shared activity source; operator-only by omission (see
-     * InstanceOverview's note on the audit log's audience).
+     * The record's latest activity: what people did to it or filed on it ({@link AdminActivityResource#recentFor});
+     * operator-only by omission (see InstanceOverview's note on the audit log's audience).
      */
-    static @NonNull WidgetInstance recent(@NonNull Model model, @NonNull Integer id) {
-        return CardWidget.of(HohenheimMicrocopy.APP_OVERVIEW.of("recent"),
-            new WidgetTree(List.of(new WidgetInstance(RecordsWidget.ID, Map.of(
-            "source", CmsSupport.ACTIVITY_SOURCE,
-            // What people did (no bookkeeping such as a reconcile's correction), one row per action: an SFTP
-            // session's 312 uploads read as one "Uploaded 312 files".
-            "rules", Condition.all(ActivityRules.forRecord(model, id), ActivitySources.recent()),
-            "sort", ActionModel.CREATED_AT.getName(),
-            "descending", true,
-            "limit", 6)))));
+    static @NonNull WidgetInstance recent(@NonNull Model model, @NonNull Integer id, @NonNull AccessContext access) {
+        return CardWidget.of(HohenheimMicrocopy.APP_OVERVIEW.of("recent"), new WidgetTree(List.of(ItemListWidget.of(
+            AdminActivityResource.recentFor(model, id, ActivitySources.recent(), access, 6), null))));
     }
 
     /**

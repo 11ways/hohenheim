@@ -12,7 +12,16 @@ import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.cms.server.resource.ActivityAdmin;
-import be.elevenways.zenit.common.orm.activity.ActivityRules;
+import be.elevenways.plumage.component.ViewerFieldValueText;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.i18n.MessageResolver;
+import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.data.DataItem;
+import be.elevenways.zenit.common.data.RecordSource;
+import be.elevenways.zenit.common.data.RecordSourceRegistry;
+import be.elevenways.zenit.common.orm.history.History;
+import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.widget.common.data.WidgetItem;
 import be.elevenways.zenit.common.orm.history.ActionModel;
 import be.elevenways.zenit.common.orm.history.HistoryEntry;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -24,6 +33,7 @@ import be.elevenways.zenit.common.security.AccountabilityOrigin;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -110,18 +120,52 @@ public final class AdminActivityResource {
     }
 
     /**
-     * What a person did to one record: the host page's recent activity.
+     * What happened to one record, the newest first, as the record pages' Recent cards list it: the actions of the
+     * record's own history and the changes filed on it ({@link History#inContext}, reader-gated), narrowed by
+     * {@code rules} over the shared activity source, each the source's item (its heading, its record noun, its link).
      *
-     * AIDEV-NOTE: a host's bookkeeping writes (the hourly heartbeat HostProbe stamps) run under
-     * ActivityLog.suppressed now, but the rows they wrote before stay in the log, and a host nobody touches kept
-     * them as its ten newest rows forever (Starfleet's local host, hourly "System changed local Server" rows
-     * up to the deploy that suppressed them). Reading what a person did leaves those rows in the log and off the card.
+     * AIDEV-NOTE: the per-record selection is core's inContext read, never a per-record rule on the source (ActionModel
+     * projects no record variable). The rules narrow only the actions of that read's window, so a record whose
+     * {@link #RECENT_WINDOW} newest actions are all bookkeeping shows fewer rows, never another record's. A host's
+     * hourly heartbeat writes nothing (HostProbe), so its rows no longer crowd that window.
      *
-     * @return the rule tree selecting what a person did to this record
+     * @param rules the source rules an action must also meet ({@link ActivitySources#recent()}, {@link #peopleOnly()})
+     * @return the items, empty for a reader the source refuses
      */
-    public static @NonNull Condition peopleOnlyFor(@NonNull Model model, @NonNull Object recordId) {
-        return Condition.all(ActivityRules.forRecord(model, recordId), peopleOnly());
+    public static @NonNull List<WidgetItem> recentFor(@NonNull Model model, @NonNull Object recordId,
+                                                      @NonNull Condition rules, @NonNull AccessContext reader,
+                                                      int limit) {
+        RecordSource<?> source = RecordSourceRegistry.INSTANCE.byToken(CmsSupport.ACTIVITY_SOURCE);
+        if (source == null || !source.authorizes(reader)) {
+            return List.of();
+        }
+        List<String> window = new ArrayList<>();
+        for (HistoryEntry entry : History.inContext(model, recordId, reader, null, RECENT_WINDOW).entries()) {
+            window.add(entry.action().id());
+        }
+        if (window.isEmpty()) {
+            return List.of();
+        }
+        Conduit conduit = reader.conduit();
+        LocaleChain locales = conduit == null ? LocaleChain.empty() : conduit.getLocales();
+        MessageResolver resolver = conduit == null ? null : conduit.getMessageResolver();
+        List<WidgetItem> items = new ArrayList<>();
+        for (Row action : source.buildQuery(null, rules, ActionModel.CREATED_AT, SortOrder.DESC, locales, reader)
+                .where(ActionModel.ID.in(window)).limit(limit).all()) {
+            DataItem item = source.item(action, locales, reader);
+            List<String> lines = new ArrayList<>();
+            if (item.subtitle() != null && !item.subtitle().isBlank()) {
+                lines.add(item.subtitle());
+            }
+            lines.add(ViewerFieldValueText.CELL.text(null, ActionModel.CREATED_AT, action.get(ActionModel.CREATED_AT),
+                locales, resolver));
+            items.add(new WidgetItem(item.title() == null ? item.value() : item.title(), item.editUrl(), lines));
+        }
+        return items;
     }
+
+    /** How many of a record's newest actions a Recent card narrows (see {@link #recentFor}). */
+    private static final int RECENT_WINDOW = 50;
 
     /** @return the tokens as a RuleText list literal ({@code ["a", "b"]}) */
     private static @NonNull String quotedList(@NonNull List<String> tokens) {
@@ -147,18 +191,25 @@ public final class AdminActivityResource {
     }
 
     /**
-     * The sentence links the action's subject record inside /admin and the subject model reads as its bare name;
+     * The sentence links the record the action names inside /admin and the subject model reads as its bare name;
      * every other column keeps the framework's cell (its actor and verb names).
      *
      * AIDEV-NOTE: the admin-panel walk (AdminRecordLinks): this list lives in /admin, so the record links into /admin
-     * -- never into the /manage narrowing of the same model, which the panel-aware walk would fall back to.
+     * -- never into the /manage narrowing of the same model, which the panel-aware walk would fall back to. The record
+     * is the framework's (ActivityAdmin.recordTarget): the action's subject, else its one change's record, since only
+     * an operation stamps a subject and a plain save is no less a record's action.
      */
     private static @Nullable Object cell(@NonNull Row action, @NonNull HistoryEntry entry, @NonNull ColumnSpec column,
                                          @NonNull AccessContext reader) {
         String name = column.name();
         if (column.source() == null && ActivityAdmin.SUMMARY_COLUMN.equals(name)) {
-            return ActivityAdmin.sentenceCell(entry, reader, AdminRecordLinks.detailForToken(
-                action.get(ActionModel.SUBJECT_MODEL), action.get(ActionModel.SUBJECT_ID)));
+            String model = action.get(ActionModel.SUBJECT_MODEL);
+            String record = action.get(ActionModel.SUBJECT_ID);
+            if ((model == null || record == null) && entry.changes().size() == 1) {
+                model = entry.changes().get(0).model().toString();
+                record = entry.changes().get(0).recordId();
+            }
+            return ActivityAdmin.sentenceCell(entry, reader, AdminRecordLinks.detailForToken(model, record));
         }
         if (ActionModel.SUBJECT_MODEL.getName().equals(name)) {
             String humanized = HistoryText.humanizeModelToken(action.get(ActionModel.SUBJECT_MODEL));

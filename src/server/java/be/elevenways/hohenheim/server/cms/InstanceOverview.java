@@ -169,11 +169,9 @@ public final class InstanceOverview {
 
         List<WidgetInstance> side = new ArrayList<>();
         side.add(AppOverview.details(facts(instance, runtime, serverId, panelSlug, delegated, accessContext)));
-        // AIDEV-NOTE: the per-record RECENT ACTIVITY card. It was blocked until zenit-cms's
-        // `zenit.activity` source started PROJECTING record_id: a source's rule vocabulary is
-        // derived from its projection, so `ActivityRules.forRecord` failed validation with
-        // `unknown_variable: record_id` and every render 500'd.
-        //
+        // AIDEV-NOTE: the per-record RECENT ACTIVITY card, read through core's per-record history
+        // (AdminActivityResource.recentFor over History.inContext), narrowed by the shared
+        // `zenit.activity` source's rules.
         // AIDEV-NOTE: OPERATOR-ONLY, and deliberately by omission rather than by an empty
         // list. The shared source is registered with HohenheimSources.ADMIN_ACCESS
         // (HohenheimSources.register -> ActivitySources.register("admin", ADMIN_ACCESS)), so
@@ -181,7 +179,7 @@ public final class InstanceOverview {
         // a censoring that looks like a bug. Widening the audience is a decision about the AUDIT
         // LOG, not about this page: the log carries every operator's actions on every record.
         if (!delegated) {
-            side.add(AppOverview.recent(Models.get(InstanceModel.class), instanceId));
+            side.add(AppOverview.recent(Models.get(InstanceModel.class), instanceId, accessContext));
         } else {
             side.add(yourPart(instanceId, accessContext, locales, resolver));
         }

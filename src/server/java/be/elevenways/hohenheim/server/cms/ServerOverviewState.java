@@ -42,7 +42,6 @@ import be.elevenways.protoblast.common.time.RelativeTimeWording;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.render.table.EnumBadgeState;
 import be.elevenways.zenit.common.conduit.Conduit;
-import be.elevenways.zenit.common.orm.history.ActionModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -53,7 +52,7 @@ import be.elevenways.zenit.widget.common.WidgetTree;
 import be.elevenways.zenit.widget.common.builtin.AlertVariant;
 import be.elevenways.zenit.widget.common.builtin.AlertWidget;
 import be.elevenways.zenit.widget.common.builtin.FactListWidget;
-import be.elevenways.zenit.widget.common.builtin.RecordsWidget;
+import be.elevenways.zenit.widget.common.builtin.ItemListWidget;
 import be.elevenways.zenit.widget.common.builtin.SectionWidget;
 import be.elevenways.zenit.widget.common.builtin.StatusWidget;
 import be.elevenways.zenit.widget.common.builtin.UsageBarWidget;
@@ -230,13 +229,10 @@ public final class ServerOverviewState {
         // appears it must take the instance page's !delegated branch, because the shared
         // `zenit.activity` source is gated on ADMIN_ACCESS and would render empty.
         bands.add(band(new WidgetTree(List.of(
-            new WidgetInstance(RecordsWidget.ID, Map.of(
-                "title", HohenheimWidgetCopy.localized(HohenheimMicrocopy.SERVER_OVERVIEW.of("recent_activity")),
-                "source", CmsSupport.ACTIVITY_SOURCE,
-                "rules", AdminActivityResource.peopleOnlyFor(Models.get(ServerModel.class), serverId),
-                "sort", ActionModel.CREATED_AT.getName(),
-                "descending", true,
-                "limit", 10))))));
+            new WidgetInstance(ItemListWidget.ID, Map.of(
+                "label", HohenheimWidgetCopy.localized(HohenheimMicrocopy.SERVER_OVERVIEW.of("recent_activity"))))
+                .withData(AdminActivityResource.recentFor(Models.get(ServerModel.class), serverId,
+                    AdminActivityResource.peopleOnly(), accessContext, 10))))));
 
         return new WidgetTree(List.of(new WidgetInstance(SectionWidget.ID,
             Map.of("css_class", "hh-server-overview"), new WidgetTree(bands))));

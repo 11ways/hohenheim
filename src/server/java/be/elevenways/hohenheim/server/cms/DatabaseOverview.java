@@ -71,7 +71,7 @@ final class DatabaseOverview {
         side.add(CardWidget.ofFacts(HohenheimMicrocopy.DATABASE_OVERVIEW.of("backups"),
             backupFacts(database, locales, resolver)));
         if (id != null) {
-            side.add(AppOverview.recent(Models.get(DatabaseModel.class), id));
+            side.add(AppOverview.recent(Models.get(DatabaseModel.class), id, access));
         }
         return AppOverview.compose(List.of(), main, side);
     }
