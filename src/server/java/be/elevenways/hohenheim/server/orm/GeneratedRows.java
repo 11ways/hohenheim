@@ -5,6 +5,11 @@ import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.behaviour.SoftDeleteBehaviour;
+import be.elevenways.zenit.common.orm.command.CommandScope;
+import be.elevenways.zenit.common.orm.datasource.Datasource;
+import be.elevenways.zenit.common.orm.datasource.Datasources;
+import be.elevenways.zenit.common.orm.datasource.Db;
+import be.elevenways.zenit.common.orm.datasource.HookedTransaction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
 import be.elevenways.zenit.common.orm.field.IntegerField;
@@ -79,15 +84,22 @@ public final class GeneratedRows {
 
     /**
      * AIDEV-NOTE: the scope is a ThreadLocal, so a generated write that hops threads must
-     * re-enter it, exactly like {@link Accountability}. Entering it also enters the
+     * re-enter it, exactly like {@link Accountability}. Entering it outside any act also enters the
      * source's accountability origin, because a system write on a tenant's behalf must
      * attribute to the system and not to whoever happens to be logged in on another thread.
+     * Inside an act (a running transaction or an outside-transaction command) the generated write is
+     * part of that act: one action keeps one attribution (history v3 refuses a write attributed otherwise,
+     * ATTRIBUTION_CHANGED), and the row's own attribution columns still say it was generated.
      */
     private static void enter(@NonNull Scope scope, @NonNull String origin,
                               @NonNull Body body) throws Exception {
         Scope outer = ACTIVE.get();
         ACTIVE.set(scope);
         try {
+            if (inAct()) {
+                body.run();
+                return;
+            }
             Exception[] failure = new Exception[1];
             Accountability.runAs(new Accountability(null, null, null, null, null, origin), () -> {
                 try {
@@ -106,6 +118,17 @@ public final class GeneratedRows {
                 ACTIVE.set(outer);
             }
         }
+    }
+
+    /** @return whether this thread's writes already belong to an act whose attribution they must keep */
+    private static boolean inAct() {
+        if (CommandScope.current().map(CommandScope::actionId).isPresent()) {
+            return true;
+        }
+        Datasource bound = Db.current();
+        Datasource datasource = bound != null ? bound : Datasources.getDefault();
+        HookedTransaction transaction = datasource == null ? null : datasource.hookedTransaction();
+        return transaction != null && transaction.isActive();
     }
 
     /** @return true when a system scope over generated rows is active on this thread */
