@@ -28,6 +28,8 @@ import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
+import be.elevenways.zenit.cms.common.render.inline.InlineEditState;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
@@ -461,6 +463,103 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
             HardDeletes.byId(Models.get(SiteModel.class), own);
             HardDeletes.byId(Models.get(SiteModel.class), foreign);
         }
+    }
+
+    /**
+     * A stored domain under a TLS passthrough site shows force_ssl and the ACME exclusion fixed at their stored values
+     * on every edit surface (the edit form, the inline cells both domain lists ask), by the rule its save applies; a
+     * domain under any other site keeps them editable.
+     */
+    @Test
+    void aDomainUnderAPassthroughSiteShowsItsTlsSwitchesFixedOnEveryEditSurface() throws Exception {
+        int site = passthroughSite("edit");
+        RecordGrants.grant(GrantSubjectType.USER, holderId, SiteModel.MODEL_ID, site, HohenheimCapabilities.MANAGE,
+            true);
+        Model domains = Models.get(SiteDomainModel.class);
+        Row stored = domains.createEmptyRow();
+        stored.set(SiteDomainModel.SITE_ID, site);
+        stored.set(SiteDomainModel.HOSTNAME, PREFIX + "edit.example.test");
+        stored.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+        domains.save(stored);
+        Object fixedId = stored.get(SiteDomainModel.ID);
+        try {
+            // 1. The edit form draws both switches as read-only values, at what the save stored; HSTS stays a switch.
+            String form = adminGet("/admin/domains/" + fixedId).body();
+            assertThat(readonlyValue(form, SiteDomainModel.FORCE_SSL.getName()))
+                .as("step 1: the edit form shows force_ssl fixed off").isEqualTo("No");
+            assertThat(readonlyValue(form, SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName()))
+                .as("step 1: and the ACME exclusion fixed on").isEqualTo("Yes");
+            assertThat(readonlyValue(form, SiteDomainModel.HSTS_ENABLED.getName()))
+                .as("step 1: HSTS stays the operator's switch").isNull();
+
+            // 2. The inline cells (the Domains list and the site's Domains tab ask the same per-record state) offer
+            //    only HSTS, and carry the stored switch values.
+            InlineEditState cells = cellState("/admin/domains/" + fixedId + "/cell-state");
+            assertThat(cells.editableFields()).as("step 2: only HSTS is editable in place")
+                .containsExactly(SiteDomainModel.HSTS_ENABLED.getName(), SiteDomainModel.HSTS_SUBDOMAINS.getName());
+            assertThat(String.valueOf(cells.values().get(SiteDomainModel.FORCE_SSL.getName())))
+                .as("step 2: the force_ssl cell shows the stored value").isEqualTo("false");
+            assertThat(String.valueOf(cells.values().get(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName())))
+                .as("step 2: the ACME cell shows the stored value").isEqualTo("true");
+
+            // 3. The delegated twin answers the same for the site's manage holder.
+            Row domain = domains.findById(fixedId);
+            assertThat(recordSwitchAccess(holder(), HohenheimSlugs.MANAGE, domain))
+                .as("step 3: /manage fixes the same switches").containsExactly(FieldAccess.Decision.READONLY,
+                    FieldAccess.Decision.READONLY, FieldAccess.Decision.EDITABLE);
+
+            // 4. A domain under a site that terminates TLS keeps every switch editable on every surface.
+            String normal = adminGet("/admin/domains/" + domainId).body();
+            assertThat(readonlyValue(normal, SiteDomainModel.FORCE_SSL.getName()))
+                .as("step 4: a normal site's domain keeps its force_ssl switch").isNull();
+            assertThat(readonlyValue(normal, SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName()))
+                .as("step 4: and its ACME switch").isNull();
+            assertThat(cellState("/admin/domains/" + domainId + "/cell-state").editableFields())
+                .as("step 4: and every inline cell").containsExactly(SiteDomainModel.FORCE_SSL.getName(),
+                    SiteDomainModel.HSTS_ENABLED.getName(), SiteDomainModel.HSTS_SUBDOMAINS.getName(),
+                    SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName());
+            assertThat(recordSwitchAccess(holder(), HohenheimSlugs.MANAGE, domains.findById(domainId)))
+                .as("step 4: on /manage too").containsOnly(FieldAccess.Decision.EDITABLE);
+        } finally {
+            domains.delete(fixedId);
+            RecordGrants.revoke(GrantSubjectType.USER, holderId, SiteModel.MODEL_ID, site,
+                HohenheimCapabilities.MANAGE);
+            HardDeletes.byId(Models.get(SiteModel.class), site);
+        }
+    }
+
+    /** How an edit of {@code domain} on {@code panel} draws force_ssl, the ACME exclusion and HSTS. */
+    private static List<FieldAccess.Decision> recordSwitchAccess(AccessContext ctx, String panel, Row domain) {
+        Map<String, FieldAccess> access = PartsForms.fieldAccessByPath(domainResource(panel));
+        List<FieldAccess.Decision> decisions = new ArrayList<>();
+        for (var field : List.of(SiteDomainModel.FORCE_SSL, SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT,
+                SiteDomainModel.HSTS_ENABLED)) {
+            decisions.add(access.getOrDefault(field.getName(), FieldAccess.ALWAYS_EDITABLE).decide(ctx, domain));
+        }
+        return decisions;
+    }
+
+    /** The text a form draws for entry {@code path} when it is read-only, null when the entry is an input. */
+    private static String readonlyValue(String html, String path) {
+        int start = html.indexOf("data-path=\"" + path + "\"");
+        assertThat(start).as("the form draws entry " + path).isNotNegative();
+        int end = html.indexOf("data-path=\"", start + 1);
+        String entry = html.substring(start, end < 0 ? html.length() : end);
+        String marker = "class=\"zf-field-readonly\">";
+        int value = entry.indexOf(marker);
+        if (value < 0) {
+            return null;
+        }
+        int from = value + marker.length();
+        // The shown value is microcopy markup inside the read-only box: its text is what the reader sees.
+        return entry.substring(from, entry.indexOf("</div>", from)).replaceAll("<[^>]+>", "").trim();
+    }
+
+    /** The inline editor's state for one domain, as the harness admin. */
+    private InlineEditState cellState(String path) throws Exception {
+        var response = adminGet(path);
+        assertThat(response.statusCode()).as("the cell state answered").isEqualTo(200);
+        return (InlineEditState) Zenit.DRY.parse(response.body());
     }
 
     /**

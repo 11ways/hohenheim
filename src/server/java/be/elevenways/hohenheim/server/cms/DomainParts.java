@@ -434,7 +434,8 @@ public final class DomainParts {
 
     /**
      * A twin's form part around its own spec: the quick-add bar with its site preset, the TLS switches as inline
-     * cells, and a create under a TLS passthrough site opening with those switches fixed as the save stores them.
+     * cells, and under a TLS passthrough site those switches fixed as the save stores them, on a create, an edit and
+     * an inline cell alike.
      *
      * AIDEV-NOTE: every inline write is correct on a ONE-ENTRY map by construction, because the route invariant reads
      * its inputs through {@code Row.afterWrite} rather than off the coerced map. HOSTNAME, PATH, LISTEN_ON
@@ -442,7 +443,7 @@ public final class DomainParts {
      * quarantine a hostname the operator still believes they own; that belongs on a form, next to the refusals that
      * explain it.
      *
-     * AIDEV-NOTE: the create form only PREVIEWS the passthrough switches (fixedOnCreate); SiteDomainModel's write
+     * AIDEV-NOTE: the forms and inline cells only PREVIEW the passthrough switches (fixedFor); SiteDomainModel's write
      * hook decides them on every lane, and both ask the one rule, SiteDomainModel.fixedTlsSwitches.
      *
      * @param panelSlug the panel the twin is placed in, whose own site entry the preview reads its site through
@@ -473,13 +474,43 @@ public final class DomainParts {
         return Map.copyOf(values);
     }
 
-    /** A switch read-only on a create its parent site fixes it on, editable everywhere else. */
+    /** A switch read-only wherever the domain's site fixes it, on a create and on an edit or inline cell alike. */
     private static @NonNull ResourceFieldBinding switchAccess(@NonNull BooleanField field,
                                                               @NonNull String panelSlug) {
         return ResourceFieldBinding.of(field.getName(), FieldAccess.customRecordAware((access, record) ->
-                record == null && fixedOnCreate(access, PanelRegistry.getBySlug(panelSlug)).containsKey(field)
+                fixedFor(access, record, panelSlug).containsKey(field)
                     ? FieldAccess.Decision.READONLY : FieldAccess.Decision.EDITABLE)
             .acrossRecords(access -> FieldAccess.Decision.EDITABLE));
+    }
+
+    /**
+     * The switches the save will store whatever is submitted (SiteDomainModel.fixedTlsSwitches): a stored domain's
+     * by its own site, a create's by the request's parent site.
+     *
+     * AIDEV-NOTE: a stored domain's site is read off the request memo the list's App cells share, so a list page asks
+     * one site read for every row and cell; an edit that also moves the domain to another site shows the stored
+     * site's answer, and the write hook stores the destination's.
+     *
+     * @param record the domain an edit form or inline cell writes, null on a create
+     */
+    private static @NonNull Map<BooleanField, Boolean> fixedFor(@NonNull AccessContext access,
+                                                                @Nullable Object record,
+                                                                @NonNull String panelSlug) {
+        if (record instanceof Row domain) {
+            return SiteDomainModel.fixedTlsSwitches(siteOf(domain, access));
+        }
+        return fixedOnCreate(access, PanelRegistry.getBySlug(panelSlug));
+    }
+
+    /** A stored domain's site, through the request's site memo when there is a request; null for none. */
+    private static @Nullable Row siteOf(@NonNull Row domain, @NonNull AccessContext access) {
+        Integer siteId = domain.get(SiteDomainModel.SITE_ID);
+        if (siteId == null) {
+            return null;
+        }
+        Conduit conduit = access.conduit();
+        return conduit != null ? conduit.memo(SITES_BY_ID, DomainParts::sitesById).get(siteId)
+            : Models.get(SiteModel.class).findById(siteId);
     }
 
     /**
