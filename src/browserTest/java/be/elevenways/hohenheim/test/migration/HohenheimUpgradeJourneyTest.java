@@ -49,11 +49,9 @@ import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.data.view.SavedQuery;
 import be.elevenways.zenit.common.data.view.SavedView;
 import be.elevenways.zenit.common.data.view.SavedViewModel;
-import be.elevenways.zenit.common.orm.activity.ActivityEntry;
-import be.elevenways.zenit.common.orm.activity.ActivityGroup;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.activity.ActivityPageRequest;
-import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
+import be.elevenways.zenit.common.orm.history.ChangeModel;
+import be.elevenways.zenit.common.orm.history.ChangeOp;
+import be.elevenways.zenit.test.support.HistoryTestSupport;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -491,7 +489,8 @@ class HohenheimUpgradeJourneyTest {
         assertThat(scalar(url, "SELECT snapshot FROM zenit_revisions WHERE model = 'hohenheim:project' AND record_id = '"
                 + OPERATORS_PROJECT + "'"))
             .as("step 3b: the project's revision names the role's UUID").contains(role.toString());
-        assertThat(strings(url, "SELECT delta FROM zenit_activity WHERE (model = 'hohenheim:instance_template'"
+        assertThat(strings(url, "SELECT delta FROM " + ChangeModel.TABLE_NAME
+                + " WHERE (model = 'hohenheim:instance_template'"
                 + " AND record_id = '1' AND delta LIKE '%approved_by_user_id%') OR (model = 'hohenheim:site'"
                 + " AND delta LIKE '%quota_bucket%')"))
             .as("step 3b: the approval and the stamp change in history name the operator's UUID")
@@ -548,28 +547,30 @@ class HohenheimUpgradeJourneyTest {
         assertThat(keyPrincipal.scopes()).as("step 5: with the same scopes")
             .containsExactly("cap:hohenheim:instance#power", "cap:zenit:user#read", "hohenheim.admin.access");
 
-        // 6. Activity on framework models reads through today's model ids; no old spelling is left behind.
-        List<ActivityEntry> userHistory = history(Models.get(UserModel.class), operatorUuid);
-        assertThat(userHistory).as("step 6: the operator's creation is in its history")
-            .anySatisfy(entry -> assertThat(entry.action()).isEqualTo(ZenitActivityAction.CREATE.id().toString()));
-        assertThat(strings(url, "SELECT DISTINCT model FROM zenit_activity"))
-            .as("step 6: every activity row names today's model id")
+        // 6. History on framework models reads through today's model ids; no old spelling is left behind.
+        assertThat(HistoryTestSupport.changesOf(Models.get(UserModel.class), operatorUuid))
+            .as("step 6: the operator's creation is in its history")
+            .anySatisfy(change -> assertThat(ChangeOp.fromStored(change.get(ChangeModel.OP)))
+                .isEqualTo(ChangeOp.CREATE));
+        assertThat(strings(url, "SELECT DISTINCT model FROM " + ChangeModel.TABLE_NAME))
+            .as("step 6: every converted change names today's model id")
             .contains("zenit:user", "zenit:grant", "zenit:permission_group", "zenit:record_grant", "zenit:api_key",
                 "zenit:notification_inbox_item", "zenit:notification_delivery", "zenit:saved_view",
                 "zenit:record_schedule_step")
             .noneMatch(model -> model.startsWith("zenit-auth:") || model.startsWith("zenit-comms:")
                 || model.startsWith("zenit:comms_"));
 
-        // 7. The site's revision and the activity row linked to it read as before.
+        // 7. The site's revision and the change linked to it read as before: one action wrote both.
         List<Row> revisions = new RevisionModel(HohenheimDatabase.datasource()).find().noCache()
             .where(RevisionModel.MODEL.eq(SiteModel.MODEL_ID.toString()))
             .and(RevisionModel.RECORD_ID.eq(String.valueOf(siteId))).all();
         assertThat(revisions).as("step 7: the site's revision is there").hasSize(1);
-        assertThat(history(Models.get(SiteModel.class), siteId))
-            .as("step 7: the site's update is in its history, linked to revision 1")
-            .anySatisfy(entry -> {
-                assertThat(entry.action()).isEqualTo(ZenitActivityAction.UPDATE.id().toString());
-                assertThat(entry.revision()).isEqualTo(1);
+        String revisionAction = revisions.getFirst().get(RevisionModel.ACTION_ID);
+        assertThat(HistoryTestSupport.changesOf(Models.get(SiteModel.class), siteId))
+            .as("step 7: the site's update is in its history, written by revision 1's action")
+            .anySatisfy(change -> {
+                assertThat(ChangeOp.fromStored(change.get(ChangeModel.OP))).isEqualTo(ChangeOp.UPDATE);
+                assertThat((String) change.get(ChangeModel.ACTION_ID)).isEqualTo(revisionAction);
             });
 
         // 8. The saved view names today's source and its owner still finds it there.
@@ -717,15 +718,6 @@ class HohenheimUpgradeJourneyTest {
             .noneMatch(value -> value.startsWith("zenit-") || value.startsWith("be.elevenways."));
     }
 
-    private static List<ActivityEntry> history(be.elevenways.zenit.common.orm.model.Model model, Object recordId) {
-        List<ActivityEntry> entries = new ArrayList<>();
-        for (ActivityGroup group : ActivityLog.forRecord(model, recordId, ActivityPageRequest.first(50), null)
-                .groups()) {
-            entries.addAll(group.entries());
-        }
-        return entries;
-    }
-
     private static InputStream resource(String path) {
         InputStream stream = HohenheimUpgradeJourneyTest.class.getClassLoader().getResourceAsStream(path);
         assertThat(stream).as("the fixture resource %s", path).isNotNull();
@@ -758,12 +750,19 @@ class HohenheimUpgradeJourneyTest {
 
     /** @return the instance's stamp change in history: the quota bucket after, the root disk's before and after */
     private static List<String> instanceStamps(String url, int instanceId) throws SQLException {
-        Map<?, ?> delta = (Map<?, ?>) Zenit.DRY.parse(scalar(url, "SELECT delta FROM zenit_activity WHERE model ="
-            + " 'hohenheim:instance' AND record_id = '" + instanceId + "' AND delta LIKE '%root_disk_bucket%'"));
+        Map<?, ?> delta = (Map<?, ?>) Zenit.DRY.parse(scalar(url, "SELECT delta FROM " + historyTable(url)
+            + " WHERE model = 'hohenheim:instance' AND record_id = '" + instanceId
+            + "' AND delta LIKE '%root_disk_bucket%'"));
         Map<?, ?> quota = (Map<?, ?>) delta.get("quota_bucket");
         Map<?, ?> rootDisk = (Map<?, ?>) delta.get("root_disk_bucket");
         return List.of(String.valueOf(quota.get("after")), String.valueOf(rootDisk.get("before")),
             String.valueOf(rootDisk.get("after")));
+    }
+
+    /** @return where the instance's history is stored: the v1 log before core's conversion, its changes after */
+    private static String historyTable(String url) throws SQLException {
+        return strings(url, "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'zenit_activity'")
+            .isEmpty() ? ChangeModel.TABLE_NAME : "zenit_activity";
     }
 
     /** @return the UUID zenit-auth renumbered permission group {@code old} to, as the rekey map stores it */

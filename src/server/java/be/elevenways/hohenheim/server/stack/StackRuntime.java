@@ -56,8 +56,8 @@ import java.util.function.Supplier;
  * AIDEV-NOTE: stack accountability lives HERE, in the one funnel, for the reason
  * {@link be.elevenways.hohenheim.server.instance.InstanceService} states for instance
  * power: the surfaces would each need their own copy, and the status write is a
- * set-based {@code updateAll} that fires no model hooks, so {@code
- * ActivityLog.withAction} has nothing to rename and would record literally nothing.
+ * set-based {@code updateAll} that records nothing, so only an explicit
+ * {@code History.event} makes the operation answerable.
  * What made the stack tier the LAST silent tier is the thread hop: every operation runs
  * on the stack's own worker and {@code Accountability} is a ThreadLocal, so a row
  * written there is unattributed system work unless the dispatching thread's execution

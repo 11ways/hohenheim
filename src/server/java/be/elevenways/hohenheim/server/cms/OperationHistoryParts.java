@@ -21,6 +21,11 @@ import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
+import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
+import be.elevenways.zenit.common.orm.history.HistoryDeclarations;
+import be.elevenways.zenit.common.orm.history.HistoryRecording;
+import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -88,8 +93,7 @@ public final class OperationHistoryParts {
             .column(ColumnSpec.fromField(BuildOperationModel.STARTED_AT).sortable().build())
             .build();
         // A build is traced back from a commit, an image, a tag, or the reason it failed.
-        return history(HohenheimMicrocopy.BUILD_OPERATION, HohenheimSlugs.BUILDS, SubjectType
-            .record(BuildOperationModel.MODEL_ID),
+        return history(HohenheimMicrocopy.BUILD_OPERATION, HohenheimSlugs.BUILDS, Models.get(BuildOperationModel.class),
             form, table,
             List.of(BuildOperationModel.SOURCE_REF, BuildOperationModel.IMAGE_ID, BuildOperationModel.TAG,
                 BuildOperationModel.FAILURE_REASON))
@@ -132,7 +136,7 @@ public final class OperationHistoryParts {
             .build();
         // A release is traced back from the image it shipped or the reason it did not.
         return history(HohenheimMicrocopy.RELEASE_OPERATION, HohenheimSlugs.RELEASES,
-            SubjectType.record(ReleaseOperationModel.MODEL_ID), form,
+            Models.get(ReleaseOperationModel.class), form,
             table, List.of(ReleaseOperationModel.IMAGE_ID, ReleaseOperationModel.FAILURE_REASON))
             .navOrder(18)
             .icon(Icon.of("rocket"))
@@ -144,19 +148,20 @@ public final class OperationHistoryParts {
      * create.
      *
      * AIDEV-NOTE: the update and delete stay offered, as on the legacy history: the update over an all-read-only form
-     * writes nothing, and the delete is the operator's cleanup of a history row.
+     * writes nothing, and the delete is the operator's cleanup of a history row. The History tab is offered only on a
+     * model that records its changes: a release operation is itself the history surface and records nothing.
      *
      * @param scope the microcopy scope, which is also the identifier path
      */
     private static PanelResource.@NonNull Builder<Row> history(@NonNull HohenheimMicrocopy scope, @NonNull String slug,
-                                                               @NonNull SubjectType<Row> subject,
+                                                               @NonNull Model model,
                                                                @NonNull FormSpec form, @NonNull TableSpec<Row> table,
                                                                @NonNull List<Field<?, ?>> search) {
         List<ResourceFieldBinding> readOnly = new ArrayList<>();
         for (FormEntry entry : form.entries()) {
             readOnly.add(ResourceFieldBinding.of(entry.name(), FieldAccess.alwaysReadonly()));
         }
-        return PanelResource.builder(HohenheimIds.id(scope.scope()), slug, subject)
+        return PanelResource.builder(HohenheimIds.id(scope.scope()), slug, SubjectType.record(model.getModelId()))
             .label(scope.of("plural"))
             .recordLabel(scope.of("singular"))
             // Demoted out of the sidebar, so this sentence reaches a reader through the panel index and the
@@ -170,6 +175,13 @@ public final class OperationHistoryParts {
                 .search(search.toArray(Field<?, ?>[]::new)).build())
             .form(ResourceForm.<Row>of(form).bindings(readOnly).build())
             .writes(ResourceMutations.rows().update().delete().build())
-            .tabs(ResourceTabs.<Row>none().withHistory().withContributions());
+            .tabs(keepsHistory(model) ? ResourceTabs.<Row>none().withHistory().withContributions()
+                : ResourceTabs.<Row>none().withContributions());
+    }
+
+    /** @return whether the model's declaration records its changes at all, whatever the optional switch says now */
+    private static boolean keepsHistory(@NonNull Model model) {
+        HistoryBehaviour declaration = HistoryDeclarations.of(model);
+        return declaration != null && declaration.recording() != HistoryRecording.NOT_RECORDED;
     }
 }

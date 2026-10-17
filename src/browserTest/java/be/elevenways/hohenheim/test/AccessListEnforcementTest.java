@@ -9,7 +9,8 @@ import be.elevenways.hohenheim.server.auth.AccessRuleNodes;
 import be.elevenways.hohenheim.server.auth.BasicCredentials;
 import be.elevenways.hohenheim.server.proxy.ProxyReloadHooks;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.zenit.common.orm.history.ChangeOp;
+import be.elevenways.zenit.test.support.HistoryTestSupport;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -270,18 +271,16 @@ class AccessListEnforcementTest {
                 .as("step 13: a rule saved through the model alone reloads the proxy itself")
                 .contains("403").doesNotContain("guarded-content");
 
-            // Step 14: the birth funnel records WHAT was created. The origin column is
-            // Accountability's ("system" outside a request), never an argument the caller
-            // invents, so the rule type is the activity DETAIL.
+            // Step 14: the birth funnel records the rule's create, its type among the fields it set; the origin is
+            // Accountability's ("system" outside a request), never an argument the caller invents.
             Row born = AccessRuleNodes.add(accessList.get(AccessListModel.ID), null,
                 AccessRuleModel.TYPE_IP_ALLOW);
-            List<Row> recorded = new ActivityModel().find()
-                .where(ActivityModel.MODEL.eq(AccessRuleModel.MODEL_ID.toString()))
-                .and(ActivityModel.RECORD_ID.eq(String.valueOf(born.get(AccessRuleModel.ID))))
-                .all();
-            assertThat(recorded.stream().map(entry -> entry.get(ActivityModel.DETAIL)))
-                .as("step 14: the recorded detail is the rule type, not a surface token")
-                .contains(AccessRuleModel.TYPE_IP_ALLOW);
+            List<RecordedChanges.Recorded> recorded = RecordedChanges.of(Models.get(AccessRuleModel.class),
+                born.get(AccessRuleModel.ID), ChangeOp.CREATE);
+            assertThat(recorded).as("step 14: the birth is recorded once").hasSize(1);
+            assertThat(HistoryTestSupport.changedFields(recorded.get(0).change()))
+                .as("step 14: the recorded create names the rule type among what it set")
+                .contains(AccessRuleModel.TYPE.getName());
         } finally {
             ServerMain.adoptProxyServer(null);
         }

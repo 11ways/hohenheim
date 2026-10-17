@@ -21,7 +21,7 @@ import be.elevenways.zenit.notifications.DeliveryChannel;
 import be.elevenways.zenit.notifications.NotificationRecipient;
 import be.elevenways.zenit.notifications.NotificationSettings;
 import be.elevenways.zenit.notifications.server.*;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.zenit.common.orm.history.ChangeModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
@@ -298,12 +298,12 @@ class AlertsTest {
 
         // 7. The same event about another host is its own item, and an alert writes no activity: its delivery rows
         //    and inbox items are bookkeeping, never a row a person's command is headed by.
-        long activity = Models.get(ActivityModel.class).find().count();
+        long activity = new ChangeModel(Models.get(ServerModel.class).getResolvedDatasource()).find().count();
         Alerts.send(NotificationEvents.HOST_UNREACHABLE, Alerts.about(ServerModel.MODEL_ID, 42),
             HohenheimMicrocopy.ALERT.of("host_unreachable_subject").withArg("name", "kumulus"), null);
         assertThat(Models.get(NotificationInboxModel.class).find().all())
             .as("step 7: another host's alert stands beside it").hasSize(4);
-        assertThat(Models.get(ActivityModel.class).find().count())
+        assertThat(new ChangeModel(Models.get(ServerModel.class).getResolvedDatasource()).find().count())
             .as("step 7: sending it recorded no activity").isEqualTo(activity);
     }
 

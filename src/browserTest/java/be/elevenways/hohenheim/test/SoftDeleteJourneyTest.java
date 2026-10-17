@@ -21,8 +21,10 @@ import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.panel.PartsReads;
 import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.zenit.common.orm.activity.ActivityAction;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
+import be.elevenways.zenit.common.orm.history.ChangeOp;
+import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -112,16 +114,16 @@ class SoftDeleteJourneyTest {
                 .as("step 2: stamped trashed").isNotNull();
             assertThat(Quotas.usedOf(SITE_BUCKET))
                 .as("step 2: the trash transition handed the slot back").isEqualTo(beforeTrash - 1);
-            List<Row> deletes = activityFor(SiteModel.MODEL_ID.toString(), siteId,
-                ZenitActivityAction.DELETE.id().toString());
-            assertThat(deletes).as("step 2: the trash is recorded as one delete").hasSize(1);
-            assertThat((String) deletes.get(0).get(ActivityModel.DETAIL))
-                .as("step 2: named as the soft delete it is").isEqualTo("soft-delete");
+            List<RecordedChanges.Recorded> deletes = activityFor(Models.get(SiteModel.class), siteId,
+                ZenitActivityAction.TRASHED);
+            assertThat(deletes).as("step 2: the trash is recorded as one trashed fact").hasSize(1);
+            assertThat(deletes.get(0).op())
+                .as("step 2: on the soft delete's own update").isEqualTo(ChangeOp.UPDATE);
 
-            // 3. A set-based update is scoped like a find: it cannot reach the trashed row.
-            assertThat(sites.find().where(SiteModel.ID.eq(siteId))
-                    .assign(SiteModel.DESCRIPTION, "touched").bypassBehaviours().updateAll())
-                .as("step 3: an updateAll matches no trashed row").isZero();
+            // 3. A find is scoped: it cannot reach the trashed row. (A set-based update of a site is refused outright
+            //    now: every site field is a revision snapshot field, so each record is saved on its own.)
+            assertThat(sites.find().where(SiteModel.ID.eq(siteId)).count())
+                .as("step 3: a find matches no trashed row").isZero();
 
             // 4. BUG FIXED: a trashed site gates nothing, so the list's dialog stops naming it.
             assertThat(gatingKey(lists, listId))
@@ -149,7 +151,7 @@ class SoftDeleteJourneyTest {
                 .as("step 6: no longer stamped").isNull();
             assertThat(Quotas.usedOf(SITE_BUCKET))
                 .as("step 6: the restore re-booked its slot").isEqualTo(beforeRestore + 1);
-            assertThat(activityFor(SiteModel.MODEL_ID.toString(), siteId, ZenitActivityAction.RESTORE.id().toString()))
+            assertThat(activityFor(Models.get(SiteModel.class), siteId, ZenitActivityAction.UNTRASHED))
                 .as("step 6: the restore is recorded as one").hasSize(1);
             assertThat(gatingKey(lists, listId))
                 .as("step 6: the restored site is gated by the list again")
@@ -201,14 +203,11 @@ class SoftDeleteJourneyTest {
 
             // 2. BUG FIXED: the application lane saved deleted_at bare, recorded as an
             //    "update"; it now takes the one trash write every destroy shares.
-            List<Row> deletes = activityFor(InstanceModel.MODEL_ID.toString(), applicationId,
-                ZenitActivityAction.DELETE.id().toString());
-            assertThat(deletes).as("step 2: the destroy is recorded as one delete").hasSize(1);
-            assertThat((String) deletes.get(0).get(ActivityModel.DETAIL))
-                .as("step 2: named as the verified destroy it is")
-                .isEqualTo(InstanceService.ACTIVITY_DESTROY_DETAIL);
-            assertThat(activityFor(InstanceModel.MODEL_ID.toString(), applicationId,
-                    ZenitActivityAction.UPDATE.id().toString()))
+            List<RecordedChanges.Recorded> deletes = activityFor(Models.get(InstanceModel.class), applicationId,
+                ZenitActivityAction.TRASHED);
+            assertThat(deletes).as("step 2: the destroy is recorded as one trash").hasSize(1);
+            assertThat(RecordedChanges.of(Models.get(InstanceModel.class), applicationId, ChangeOp.UPDATE).stream()
+                    .filter(recorded -> recorded.facts().isEmpty()).toList())
                 .as("step 2: and never as a bare update").isEmpty();
 
             // 3. BUG FIXED: the plain (soft) delete removes the git checkout, which used to stay on the
@@ -220,8 +219,8 @@ class SoftDeleteJourneyTest {
             assertThat(catchThrowable(() -> new InstanceService().destroy(applicationId)))
                 .as("step 4: a trashed record is not destroyed twice")
                 .isInstanceOf(Violations.class);
-            assertThat(activityFor(InstanceModel.MODEL_ID.toString(), applicationId,
-                    ZenitActivityAction.DELETE.id().toString()))
+            assertThat(activityFor(Models.get(InstanceModel.class), applicationId,
+                    ZenitActivityAction.TRASHED))
                 .as("step 4: and nothing more is recorded").hasSize(1);
 
             // 5. Delete with data on a record an older controller trashed with its checkout left behind
@@ -294,11 +293,7 @@ class SoftDeleteJourneyTest {
         return lists.forRow(Models.get(AccessListModel.class).findById(listId), request).body().key();
     }
 
-    private static List<Row> activityFor(String model, int recordId, String action) {
-        return Models.get(ActivityModel.class).find()
-            .where(ActivityModel.MODEL.eq(model))
-            .where(ActivityModel.RECORD_ID.eq(String.valueOf(recordId)))
-            .where(ActivityModel.ACTION.eq(action))
-            .all();
+    private static List<RecordedChanges.Recorded> activityFor(Model model, int recordId, ActivityAction kind) {
+        return RecordedChanges.withFact(model, recordId, kind);
     }
 }

@@ -21,6 +21,7 @@ import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
+import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.zenit.common.ui.ColorHue;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -703,6 +704,13 @@ public class InstanceModel extends Model {
             case NONE, PLAIN, HOST_ISOLATION -> null;
         };
         return Texts.blankAsNull(kept == null ? null : kept.strip().lines().findFirst().orElse(null));
+    }
+
+    /** @return the cause's history fact, its body the first line of the detail the cause declares, else none */
+    public static @NonNull Change stoppageFact(@NonNull HohenheimActivityAction cause, @Nullable String detail) {
+        String line = stoppageDetailOf(cause, detail);
+        String key = cause.causeDetailKey();
+        return key == null || line == null ? Change.fact(cause) : Change.fact(cause, Map.of(key, line));
     }
 
     /** @return whether a verb can be a {@link #STOPPAGE_CAUSE}: every ERROR cause, and the legacy correction */

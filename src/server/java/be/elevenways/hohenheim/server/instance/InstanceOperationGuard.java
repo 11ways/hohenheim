@@ -421,13 +421,9 @@ final class InstanceOperationGuard {
         }
     }
 
-    /** Records the cause on the record's history, its body the first line of what the cause declares. */
+    /** Records the cause on the record's history ({@link InstanceModel#stoppageFact}). */
     private static void recordCause(int instanceId, @NonNull HohenheimActivityAction cause, @Nullable String detail) {
-        // The fact carries the detail its cause's shape declares, and nothing where it declares none.
-        String line = Texts.blankAsNull(InstanceModel.stoppageDetailOf(cause, detail));
-        String key = cause.causeDetailKey();
-        History.event(Models.get(InstanceModel.class), instanceId, key == null || line == null
-            ? Change.fact(cause) : Change.fact(cause, Map.of(key, line)));
+        History.event(Models.get(InstanceModel.class), instanceId, InstanceModel.stoppageFact(cause, detail));
     }
 
     /**

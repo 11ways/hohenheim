@@ -22,7 +22,9 @@ import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.util.Uuids;
 import be.elevenways.zenit.cms.common.action.ActionContext;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.test.RecordedChanges;
+import be.elevenways.zenit.common.orm.history.ActionModel;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -223,13 +225,17 @@ class HostPostureAcknowledgementTest {
                 .as("step 4: and the action stops offering itself once it is done")
                 .isInstanceOf(OperationPipeline.Offer.Hidden.class);
 
-            Row activity = latestAcknowledgementActivity();
-            assertThat(activity)
-                .as("step 4: the activity row is written BESIDE the columns, as history --"
-                    + " activity retention prunes at 90 days, so it can never be the"
-                    + " authority a gate reads")
-                .isNotNull();
-            assertThat(ActivityModel.ACTOR_PRINCIPAL.read(activity))
+            List<RecordedChanges.Recorded> accepted = RecordedChanges.withFact(servers, hostId,
+                HohenheimActivityAction.POSTURE_RISK_ACCEPTED);
+            assertThat(accepted)
+                .as("step 4: the typed acceptance is written BESIDE the columns, as history --"
+                    + " history retention prunes, so it can never be the authority a gate reads")
+                .hasSize(1);
+            assertThat(accepted.get(0).fact(HohenheimActivityAction.POSTURE_RISK_ACCEPTED))
+                .as("step 4: naming the posture and the warning version accepted")
+                .isEqualTo(Map.of(HohenheimActivityAction.POSTURE_KEY, ServerModel.POSTURE_SHARED_CONTAINER,
+                    HohenheimActivityAction.WARNING_VERSION_KEY, ServerModel.POSTURE_WARNING_VERSION));
+            assertThat(ActionModel.ACTOR_PRINCIPAL.read(accepted.get(0).action()))
                 .as("step 4: and it names a real actor, not system work")
                 .isEqualTo(PrincipalRef.account(OPERATOR_ID));
 
@@ -405,13 +411,6 @@ class HostPostureAcknowledgementTest {
             }
         }
         throw new AssertionError("acknowledge_posture placed operation not found on ServerParts");
-    }
-
-    private static Row latestAcknowledgementActivity() {
-        return Models.get(ActivityModel.class).find()
-            .where(ActivityModel.MODEL.eq(ServerModel.MODEL_ID.toString()))
-            .where(ActivityModel.DETAIL.eq(HostPostureAcknowledgement.ACTIVITY_DETAIL))
-            .orderBy(ActivityModel.ID, SortOrder.DESC).first();
     }
 
     private static String keyOf(Throwable thrown) {

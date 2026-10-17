@@ -49,7 +49,7 @@ import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.HealthTone;
 import be.elevenways.zenit.cms.common.resource.RecordHealth;
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -1106,8 +1106,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
     private static void stopped(int instanceId, HohenheimActivityAction cause, String detail) {
         InstanceModel.withStoppage(Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(instanceId))
             .assign(InstanceModel.STATUS, InstanceModel.STATUS_ERROR), cause, detail).bypassBehaviours().updateAll();
-        ActivityLog.record(Models.get(InstanceModel.class), instanceId, cause,
-            InstanceModel.stoppageDetailOf(cause, detail));
+        History.event(Models.get(InstanceModel.class), instanceId, InstanceModel.stoppageFact(cause, detail));
     }
 
     private static AttentionItem titled(List<AttentionItem> items, String title) {

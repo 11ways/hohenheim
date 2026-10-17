@@ -70,8 +70,8 @@ import java.util.function.Supplier;
  * Two reasons, both structural. First, the outcome write is {@code stampGuarded}, a
  * set-based updateAll that fires NO model hooks -- so nothing is recorded unless it is
  * recorded explicitly (the same trap {@link InstanceMigrations#recordMigration} and
- * {@link InstanceSnapshots#recordRestore} document; {@code ActivityLog.withAction} only
- * RENAMES hook-written rows and would record literally nothing here). Second, until
+ * {@link InstanceSnapshots#recordRestore} document: a {@code Change} declares what a write
+ * records, and a write that is no recorded save has nothing to declare it on). Second, until
  * 2026-08-08 only the automation API recorded power actions, so the SAME operation was
  * audited over /api/v1 and silent from the admin panel and from /manage -- an audit
  * trail with a hole in it, read by operators as complete. Recording in the service

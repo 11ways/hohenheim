@@ -15,7 +15,10 @@ import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.zenit.common.orm.history.ChangeFactModel;
+import be.elevenways.zenit.common.orm.history.ChangeModel;
+import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.test.support.HistoryTestSupport;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -109,13 +112,13 @@ class HostHealthFromRecordTest {
                 .doesNotEndWith("@null");
 
             // 5. Their history is emptied: every reading is the same.
-            emptyHistory(InstanceModel.MODEL_ID.toString(), crashed);
-            emptyHistory(InstanceModel.MODEL_ID.toString(), failed);
-            emptyHistory(CertificateModel.MODEL_ID.toString(), certId);
-            assertThat(Models.get(ActivityModel.class).find()
-                .where(ActivityModel.RECORD_ID.in(List.of(String.valueOf(crashed), String.valueOf(failed))))
-                .where(ActivityModel.MODEL.eq(InstanceModel.MODEL_ID.toString())).all())
-                .as("step 5: the workloads keep no history").isEmpty();
+            emptyHistory(Models.get(InstanceModel.class), crashed);
+            emptyHistory(Models.get(InstanceModel.class), failed);
+            emptyHistory(Models.get(CertificateModel.class), certId);
+            assertThat(HistoryTestSupport.changesOf(Models.get(InstanceModel.class), crashed))
+                .as("step 5: the crashed workload keeps no history").isEmpty();
+            assertThat(HistoryTestSupport.changesOf(Models.get(InstanceModel.class), failed))
+                .as("step 5: nor the failed one").isEmpty();
             assertThat(readings(crashed, failed, certId)).as("step 5: health reads exactly as before")
                 .isEqualTo(before);
 
@@ -125,12 +128,16 @@ class HostHealthFromRecordTest {
         });
     }
 
-    /** Deletes every activity row of one record. */
-    private static void emptyHistory(String model, int recordId) {
-        Models.get(ActivityModel.class).find()
-            .where(ActivityModel.MODEL.eq(model))
-            .where(ActivityModel.RECORD_ID.eq(String.valueOf(recordId)))
+    /** Deletes every recorded change of one record and its facts, as retention would. */
+    private static void emptyHistory(Model model, int recordId) {
+        List<Long> changes = HistoryTestSupport.changesOf(model, recordId).stream()
+            .map(change -> (Long) change.get(ChangeModel.ID)).toList();
+        if (changes.isEmpty()) {
+            return;
+        }
+        new ChangeFactModel(model.getResolvedDatasource()).find().where(ChangeFactModel.CHANGE_ID.in(changes))
             .delete();
+        new ChangeModel(model.getResolvedDatasource()).find().where(ChangeModel.ID.in(changes)).delete();
     }
 
     /** @return each subject's health as the dashboard and the certificate pages read it, in English */

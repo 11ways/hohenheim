@@ -5,7 +5,17 @@ import be.elevenways.hohenheim.server.cms.PutOnline;
 import be.elevenways.zenit.common.orm.activity.ActivityText;
 import be.elevenways.zenit.cms.common.render.activity.ActivitySentenceCell;
 import be.elevenways.hohenheim.server.cms.AdminActivityResource;
-import be.elevenways.hohenheim.server.HohenheimActivity;
+import be.elevenways.hohenheim.model.ControllerIdentityModel;
+import be.elevenways.hohenheim.model.InstallMediaFetchModel;
+import be.elevenways.hohenheim.model.InstanceQuotaModel;
+import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
+import be.elevenways.hohenheim.model.SiteSessionModel;
+import be.elevenways.hohenheim.model.SystemUserModel;
+import be.elevenways.hohenheim.model.WebhookDeliveryModel;
+import be.elevenways.zenit.auth.model.GrantModel;
+import be.elevenways.zenit.auth.model.RecordGrantModel;
+import be.elevenways.zenit.common.orm.history.HistoryDeclarations;
+import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
@@ -52,6 +62,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.Objects;
 import java.util.regex.Pattern;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -427,16 +438,20 @@ class AdminActivityListTest extends HohenheimTestBase {
         String plumbing = "hh-people-plumbing-" + suffix;
 
         // 1. Hohenheim's plumbing models are declared internal; a model people also write is not.
-        for (var model : HohenheimActivity.INTERNAL) {
-            assertThat(ActivityLog.visibilityFor(model))
-                .as("step 1: " + model + " is declared internal").isEqualTo(ActivityVisibility.INTERNAL);
+        for (Model model : List.<Model>of(Models.get(PortAllocationModel.class), Models.get(InstanceQuotaModel.class),
+                Models.get(ReleasedRouteClaimModel.class), Models.get(SiteSessionModel.class),
+                Models.get(ControllerIdentityModel.class), Models.get(InstallMediaFetchModel.class),
+                Models.get(WebhookDeliveryModel.class), Models.get(SystemUserModel.class))) {
+            assertThat(Objects.requireNonNull(HistoryDeclarations.of(model)).visibility())
+                .as("step 1: " + model.getModelId() + " is declared internal").isEqualTo(ActivityVisibility.INTERNAL);
         }
-        assertThat(ActivityLog.visibilityFor(PortAllocationModel.MODEL_ID))
-            .as("step 1: port claims are plumbing").isEqualTo(ActivityVisibility.INTERNAL);
-        assertThat(ActivityLog.internalModelTokens())
+        assertThat(Objects.requireNonNull(HistoryDeclarations.of(Models.get(GrantModel.class))).visibility())
             .as("step 1: zenit-auth's grants are declared internal in this runtime too")
-            .contains("zenit:grant", "zenit:record_grant");
-        assertThat(ActivityLog.visibilityFor(ServerModel.MODEL_ID))
+            .isEqualTo(ActivityVisibility.INTERNAL);
+        assertThat(Objects.requireNonNull(HistoryDeclarations.of(Models.get(RecordGrantModel.class)))
+                .visibility())
+            .as("step 1: and its record grants").isEqualTo(ActivityVisibility.INTERNAL);
+        assertThat(Objects.requireNonNull(HistoryDeclarations.of(Models.get(ServerModel.class))).visibility())
             .as("step 1: hosts stay listed, operators admit and edit them").isEqualTo(ActivityVisibility.LISTED);
 
         // 2. A heartbeat is bookkeeping, never activity: a probe success writes no row for its host.

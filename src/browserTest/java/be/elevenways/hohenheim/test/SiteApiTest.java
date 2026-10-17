@@ -11,8 +11,7 @@ import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ApiKeyService;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.auth.server.ZenitAuth;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
-import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
+import be.elevenways.zenit.common.orm.history.ChangeOp;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -120,14 +119,10 @@ class SiteApiTest extends HohenheimTestBase {
         return Models.get(SiteDomainModel.class).findBySiteId(siteId);
     }
 
-    /** The newest activity entry the site lane wrote for one site and action. */
-    private static Row activityOf(int siteId, String action) {
-        return new ActivityModel(Models.get(SiteModel.class).getResolvedDatasource()).find()
-            .where(ActivityModel.MODEL.eq(SiteModel.MODEL_ID.toString()))
-            .where(ActivityModel.RECORD_ID.eq(String.valueOf(siteId)))
-            .where(ActivityModel.ACTION.eq(action))
-            .orderBy(ActivityModel.ID, SortOrder.DESC)
-            .first();
+    /** The newest change the site lane recorded for one site with this op. */
+    private static RecordedChanges.Recorded activityOf(int siteId, ChangeOp op) {
+        List<RecordedChanges.Recorded> recorded = RecordedChanges.of(Models.get(SiteModel.class), siteId, op);
+        return recorded.isEmpty() ? null : recorded.getLast();
     }
 
     // -- the journeys ----------------------------------------------------------
@@ -160,16 +155,14 @@ class SiteApiTest extends HohenheimTestBase {
         assertThat(String.valueOf(proxySite.get(SiteModel.SETTINGS)))
             .as("step 1: the settings were coerced against the address kind's schema")
             .contains("forward_port=8080").contains("rewrite_location=false");
-        // The accountability of an API write is TWO columns, never one: zenit-auth's
-        // resolver stamps the origin off the ApiKeyPrincipal, so the detail slot is free
-        // to name the site instead of repeating the origin token.
-        Row logged = activityOf(proxySiteId, ZenitActivityAction.CREATE.id().toString());
+        // The accountability of an API write is the action's origin; the create's delta names the site.
+        RecordedChanges.Recorded logged = activityOf(proxySiteId, ChangeOp.CREATE);
         assertThat(logged).as("step 1: the API create is recorded").isNotNull();
-        assertThat((Object) logged.get(ActivityModel.ORIGIN))
-            .as("step 1: an API key stamps the origin column").isEqualTo(ZenitAuth.ORIGIN_API);
-        assertThat((Object) logged.get(ActivityModel.DETAIL))
-            .as("step 1: the detail names the site, never the origin again")
-            .isEqualTo(PREFIX + "proxy");
+        assertThat(logged.origin())
+            .as("step 1: an API key stamps the origin").isEqualTo(ZenitAuth.ORIGIN_API);
+        assertThat(logged.delta().get(SiteModel.NAME.getName()))
+            .as("step 1: the create names the site")
+            .containsValue(PREFIX + "proxy");
 
         HttpResponse<String> earl = keyPost(keyAdmin, "/api/v1/sites/" + proxySiteId + "/domains",
             form("hostname", "Earl." + ZONE + ".", "custom_headers.0.key", "Host",

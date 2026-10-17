@@ -44,10 +44,9 @@ import static be.elevenways.hohenheim.RawValues.parsedInt;
  * mutation-driven reloads ride {@code ProxyReloadHooks}.
  *
  * AIDEV-NOTE: this used to state "audit writes ride the framework activity log" as an
- * invariant. It is a CONVENTION, not a guarantee: an action whose whole effect is a
- * {@code updateAll()} or a daemon call writes no activity row at all, however it is
- * wrapped (ActivityLog.withAction only RENAMES rows the model hooks already write).
- * An action that must be accountable records itself explicitly.
+ * invariant. It is a CONVENTION, not a guarantee: an action whose whole effect is an
+ * unrecorded {@code updateAll()} or a daemon call records nothing at all. An action that
+ * must be accountable records itself explicitly ({@code History.event} or its save's {@code Change}).
  */
 public final class CmsSupport {
 

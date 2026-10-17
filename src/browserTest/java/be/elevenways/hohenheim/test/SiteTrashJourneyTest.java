@@ -12,7 +12,8 @@ import be.elevenways.hohenheim.server.cms.SiteWrites;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.common.flash.FlashNotice;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.zenit.common.orm.activity.ActivityAction;
+import be.elevenways.zenit.common.orm.history.ChangeOp;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -83,9 +84,9 @@ class SiteTrashJourneyTest extends HohenheimTestBase {
         assertThat((Object) stored(oak).get(SiteModel.DELETED_AT)).as("step 2: the restore untrashed the site")
             .isNull();
         assertThat(Quotas.usedOf(SITE_BUCKET)).as("step 2: its slot is booked again").isEqualTo(beforeTrash);
-        Row restore = lastActivity(oak, ZenitActivityAction.RESTORE.id().toString());
+        RecordedChanges.Recorded restore = lastActivity(oak, ZenitActivityAction.UNTRASHED);
         assertThat(restore).as("step 2: the restore is recorded").isNotNull();
-        assertThat((String) restore.get(ActivityModel.ACTOR)).as("step 2: attributed to the administrator")
+        assertThat(restore.actor()).as("step 2: attributed to the administrator")
             .isEqualTo(adminId());
 
         // 3. Trashed again and deleted for good: the row is gone and the purge moves no quota.
@@ -95,10 +96,11 @@ class SiteTrashJourneyTest extends HohenheimTestBase {
         assertThat(stored(oak)).as("step 3: the permanent delete removed the row").isNull();
         assertThat(Quotas.usedOf(SITE_BUCKET)).as("step 3: a purge of a trashed site releases nothing twice")
             .isEqualTo(beforePurge);
-        Row purge = lastActivity(oak, ZenitActivityAction.DELETE.id().toString());
-        assertThat((String) purge.get(ActivityModel.DETAIL)).as("step 3: recorded as the hard delete it is")
-            .isNull();
-        assertThat((String) purge.get(ActivityModel.ACTOR)).as("step 3: attributed to the administrator")
+        List<RecordedChanges.Recorded> purges = RecordedChanges.of(Models.get(SiteModel.class), oak, ChangeOp.DELETE);
+        assertThat(purges).as("step 3: recorded as the hard delete it is").hasSize(1);
+        RecordedChanges.Recorded purge = purges.getLast();
+        assertThat(purge.facts()).as("step 3: a plain delete, no other act").isEmpty();
+        assertThat(purge.actor()).as("step 3: attributed to the administrator")
             .isEqualTo(adminId());
 
         // 4. In bulk: two trashed sites come back together, then go for good together.
@@ -279,13 +281,9 @@ class SiteTrashJourneyTest extends HohenheimTestBase {
         return Models.get(SiteModel.class).find().withTrashed().where(SiteModel.ID.eq(siteId)).first();
     }
 
-    private static Row lastActivity(int siteId, String action) {
-        return Models.get(ActivityModel.class).find()
-            .where(ActivityModel.MODEL.eq(SiteModel.MODEL_ID.toString()))
-            .where(ActivityModel.RECORD_ID.eq(String.valueOf(siteId)))
-            .where(ActivityModel.ACTION.eq(action))
-            .orderBy(ActivityModel.ID, SortOrder.DESC)
-            .first();
+    private static RecordedChanges.Recorded lastActivity(int siteId, ActivityAction kind) {
+        List<RecordedChanges.Recorded> recorded = RecordedChanges.withFact(Models.get(SiteModel.class), siteId, kind);
+        return recorded.isEmpty() ? null : recorded.getLast();
     }
 
     private static String adminId() {
