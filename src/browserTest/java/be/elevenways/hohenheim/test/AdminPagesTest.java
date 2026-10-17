@@ -319,17 +319,17 @@ class AdminPagesTest extends HohenheimTestBase {
         // trip bought only latency (~1.6s). What the list proves for hohenheim is that the
         // zenit-cms activity log (ActivityAdmin) is MOUNTED here; the row's content is asserted straight
         // off the model, which is stronger than a substring of the whole body.
-        // AIDEV-NOTE: the list is narrowed to this site's history and asserted to carry the
-        // logged ENTRY's own detail link. It used to assert the raw "hohenheim:site" token,
-        // which the model column stopped rendering when it was humanized ("Site"); that
-        // substring only kept passing when some unrelated row elsewhere in the shared
-        // browser-test database happened to carry it.
+        // AIDEV-NOTE: the list is asserted to carry the logged ACTION's own detail link. It used to assert the raw
+        // "hohenheim:site" token, which the model column stopped rendering when it was humanized ("Site"); that
+        // substring only kept passing when some unrelated row elsewhere in the shared browser-test database happened
+        // to carry it. The list is read unfiltered, newest first, where the action just written leads: a plain form
+        // create names no action subject (only an operation stamps one), so the subject_id filter cannot reach it.
         Integer siteId = site.get(SiteModel.ID);
         List<RecordedChanges.Recorded> created = RecordedChanges.of(Models.get(SiteModel.class), siteId,
             ChangeOp.CREATE);
         assertThat(created).as("the site creation was recorded").hasSize(1);
         String createAction = created.get(0).actionId();
-        assertThat(adminGet("/admin/activity?filter.subject_id=" + siteId).body())
+        assertThat(adminGet("/admin/activity").body())
             .as("the activity resource is mounted in the hohenheim panel and lists the creation")
             .contains("/admin/activity/" + createAction);
 

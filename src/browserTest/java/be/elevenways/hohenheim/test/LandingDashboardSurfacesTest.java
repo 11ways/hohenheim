@@ -167,12 +167,13 @@ class LandingDashboardSurfacesTest extends HohenheimTestBase {
     /**
      * Seed a fixed mixed-provenance history instead of capturing boot seeders and the host's OS accounts.
      *
-     * AIDEV-NOTE: each action names its model by the model's own id, never a literal token: the literals spelled the
-     * pre-sweep 'zenit-auth:' namespace, so the role grant escaped the activity scope's internal models and the
-     * baseline recorded a row production no longer shows. The one web action is the only person's, so the band shows
-     * it and nothing else; it creates the landing site, because a history line names its record by the live title.
-     * The rows are written straight into the history tables (HistoryFixtureRows) because their origins and actors
-     * must be chosen, which the writer derives from whatever lane calls it.
+     * AIDEV-NOTE: each action names its model by the model's own id and its origin by the origin's own token, never a
+     * literal: the literals spelled the pre-sweep 'zenit-auth:' namespace and the v1 origins ("web", not "zenit:web"),
+     * so the role grant escaped the activity scope's internal models and the person's action left the people-only
+     * feed. The one web action is the only person's, so the band shows it and nothing else; it creates the landing
+     * site, because a history line names its record by the live title. The rows are written straight into the
+     * history tables (HistoryFixtureRows) because their origins and actors must be chosen, which the writer derives
+     * from whatever lane calls it.
      */
     private static void seedRecentActivity(@NonNull Object siteId) {
         Datasource datasource = Models.get(SiteModel.class).getResolvedDatasource();
@@ -181,24 +182,24 @@ class LandingDashboardSurfacesTest extends HohenheimTestBase {
         new ActionModel(datasource).find().delete();
         var now = Now.instant();
         Object[][] records = {
-            {SiteModel.MODEL_ID, siteId, "web"},
-            {RecordGrantModel.MODEL_ID, null, "system"},
-            {SiteModel.MODEL_ID, null, "system"},
-            {InstanceQuotaModel.MODEL_ID, null, "system"},
-            {UserModel.MODEL_ID, null, "system"},
-            {UserModel.MODEL_ID, null, "system"},
-            {GrantModel.MODEL_ID, null, "unattributed"},
-            {UserModel.MODEL_ID, null, "unattributed"},
-            {SystemUserModel.MODEL_ID, null, "system"},
-            {SystemUserModel.MODEL_ID, null, "system"},
-            {SystemUserModel.MODEL_ID, null, "system"}
+            {SiteModel.MODEL_ID, siteId, AccountabilityOrigin.WEB},
+            {RecordGrantModel.MODEL_ID, null, AccountabilityOrigin.SYSTEM},
+            {SiteModel.MODEL_ID, null, AccountabilityOrigin.SYSTEM},
+            {InstanceQuotaModel.MODEL_ID, null, AccountabilityOrigin.SYSTEM},
+            {UserModel.MODEL_ID, null, AccountabilityOrigin.SYSTEM},
+            {UserModel.MODEL_ID, null, AccountabilityOrigin.SYSTEM},
+            {GrantModel.MODEL_ID, null, AccountabilityOrigin.UNATTRIBUTED},
+            {UserModel.MODEL_ID, null, AccountabilityOrigin.UNATTRIBUTED},
+            {SystemUserModel.MODEL_ID, null, AccountabilityOrigin.SYSTEM},
+            {SystemUserModel.MODEL_ID, null, AccountabilityOrigin.SYSTEM},
+            {SystemUserModel.MODEL_ID, null, AccountabilityOrigin.SYSTEM}
         };
         for (int index = 0; index < records.length; index++) {
             Object[] fixture = records[index];
-            String origin = (String) fixture[2];
+            AccountabilityOrigin origin = (AccountabilityOrigin) fixture[2];
             HistoryFixtureRows.Action action = HistoryFixtureRows.action(datasource).at(now.minusSeconds(index))
-                .origin(origin);
-            if (AccountabilityOrigin.SYSTEM.token().equals(origin)) {
+                .origin(origin.token());
+            if (origin == AccountabilityOrigin.SYSTEM) {
                 action.by(SystemPrincipal.INSTANCE.reference());
             }
             action.change((Identifier) fixture[0], fixture[1] == null ? "landing-fixture-" + index : fixture[1],

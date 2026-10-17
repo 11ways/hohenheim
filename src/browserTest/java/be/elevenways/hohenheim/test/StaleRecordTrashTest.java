@@ -114,10 +114,9 @@ class StaleRecordTrashTest {
             SiteModel sites = Models.get(SiteModel.class);
             int siteId = staticSite(PREFIX + "legacy");
             try {
-                // 1. The stored shape predates the rule: a static site naming an instance,
-                //    written around the save pipeline the way an older release's data sits.
-                sites.find().where(SiteModel.ID.eq(siteId))
-                    .assign(SiteModel.INSTANCE_ID, 424242).bypassBehaviours().updateAll();
+                // 1. The stored shape predates the rule: a static site naming an instance, stored raw the way an
+                //    older release's data sits.
+                StaleSiteRows.instanceId(siteId, 424242);
                 Throwable edit = catchThrowable(() -> {
                     Row row = sites.findById(siteId);
                     row.set(SiteModel.DESCRIPTION, "an unrelated edit");

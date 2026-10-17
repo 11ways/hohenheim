@@ -24,6 +24,7 @@ import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
+import be.elevenways.hohenheim.test.RecordedChanges;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
@@ -459,9 +460,16 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
             assertThat(HohenheimActivityAction.DEPLOYED.batchLabel())
                 .as("step 4: a verb written one at a time has none")
                 .isNull();
+            List<String> uploads = RecordedChanges.withFact(Models.get(InstanceModel.class),
+                instance.get(InstanceModel.ID), HohenheimActivityAction.FILES_UPLOAD).stream()
+                .map(RecordedChanges.Recorded::actionId).distinct().toList();
+            assertThat(uploads).as("step 4: the two uploads are two actions").hasSize(2);
             String recent = adminGet("/admin/instances/" + instance.get(InstanceModel.ID) + "/page/overview").body();
-            assertThat(recent.split("uploaded a file to", -1).length - 1)
-                .as("step 4: the Recent card lists each upload as its own row").isEqualTo(2);
+            for (String upload : uploads) {
+                assertThat(recent.split("href=\"/admin/activity/" + upload + "\"", -1).length - 1)
+                    .as("step 4: the Recent card lists each upload as its own row").isEqualTo(1);
+            }
+            assertThat(recent).as("step 4: in the file verb's own sentence").contains("uploaded a file to");
         } finally {
             for (int i = cleanup.size() - 1; i >= 0; i--) {
                 cleanup.get(i).run();

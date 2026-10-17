@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.StaleSiteRows;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -56,12 +57,11 @@ class SiteRefusalVerdictJourneyTest extends HohenheimTestBase {
         Row site = setupInstanceSite(PREFIX + "site", PREFIX + "site", instance.get(InstanceModel.ID));
         Row down = setupInstanceSite(PREFIX + "down", PREFIX + "down", instance.get(InstanceModel.ID));
         try {
-            // 1. A stored site whose app is gone: its upstream names no instance any more (written past validation,
-            //    which refuses it, because this is a row an older state left behind).
+            // 1. A stored site whose app is gone: its upstream names no instance any more (stored raw past
+            //    validation, which refuses it, because this is a row an older state left behind).
             addDomain(site, "refusal.d7d.test", "exact", null, false);
             addDomain(down, "down.d7d.test", "exact", null, false);
-            Models.get(SiteModel.class).find().where(SiteModel.ID.eq(site.get(SiteModel.ID)))
-                .assign(SiteModel.INSTANCE_ID, null).bypassBehaviours().updateAll();
+            StaleSiteRows.instanceId(site.get(SiteModel.ID), null);
             proxy = startProxy();
             ServerMain.adoptProxyServer(proxy);
 

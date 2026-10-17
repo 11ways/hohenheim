@@ -52,7 +52,12 @@ import be.elevenways.zenit.common.data.view.SavedView;
 import be.elevenways.zenit.common.data.view.SavedViewModel;
 import be.elevenways.zenit.common.orm.history.ChangeModel;
 import be.elevenways.zenit.common.orm.history.ChangeOp;
+import be.elevenways.zenit.common.orm.history.History;
+import be.elevenways.zenit.common.orm.history.HistoryChange;
+import be.elevenways.zenit.common.orm.storedid.StoredIdCodec;
+import be.elevenways.zenit.common.registry.Registries;
 import be.elevenways.zenit.test.support.HistoryTestSupport;
+import be.elevenways.zenit.test.support.TestAccessContexts;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -100,6 +105,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
@@ -391,8 +397,15 @@ class HohenheimUpgradeJourneyTest {
             .as("step 1: Hohenheim's stream moved past the production level").isNotEqualTo("010");
         assertThat(strings(url, "SELECT stored_value FROM zenit_stored_id_reconciliation"))
             .as("step 1: the reconciler rewrote the old spellings it found")
-            .contains("zenit-auth:user", "zenitmedia:media",
-                "be.elevenways.hohenheim.server.task.SuperviseProxyListeners");
+            .contains("zenitmedia:media", "be.elevenways.hohenheim.server.task.SuperviseProxyListeners");
+        // The fixture's zenit-auth:user rows lived in zenit_activity only: core M015 converted them into history,
+        // which keeps every stored spelling (its reads match them all), so the reconciler never rewrites them.
+        assertThat(strings(url, "SELECT table_name FROM zenit_stored_id_reconciliation"))
+            .as("step 1: the reconciler leaves the history tables as stored")
+            .doesNotContain("zenit_actions", "zenit_changes", "zenit_change_facts");
+        assertThat(strings(url, "SELECT DISTINCT model FROM zenit_changes WHERE model = 'zenit-auth:user'"))
+            .as("step 1: the converted account history keeps the spelling it was stored under")
+            .containsExactly("zenit-auth:user");
 
         // 2. Today's code boots over the upgraded file, its datasource-bound services on it whatever ran before.
         HohenheimDatabase.init();
@@ -548,13 +561,17 @@ class HohenheimUpgradeJourneyTest {
         assertThat(keyPrincipal.scopes()).as("step 5: with the same scopes")
             .containsExactly("cap:hohenheim:instance#power", "cap:zenit:user#read", "hohenheim.admin.access");
 
-        // 6. History on framework models reads through today's model ids; no old spelling is left behind.
-        assertThat(HistoryTestSupport.changesOf(Models.get(UserModel.class), operatorUuid))
-            .as("step 6: the operator's creation is in its history")
-            .anySatisfy(change -> assertThat(ChangeOp.fromStored(change.get(ChangeModel.OP)))
-                .isEqualTo(ChangeOp.CREATE));
-        assertThat(strings(url, "SELECT DISTINCT model FROM " + ChangeModel.TABLE_NAME))
-            .as("step 6: every converted change names today's model id")
+        // 6. History on framework models reads through today's model ids. The converted rows keep the spelling they
+        //    were stored under (history rows are never rewritten, DESIGN-v3.2 OP-5); every one resolves to today's id
+        //    through its chain, and the record's history reads them.
+        assertThat(History.ofRecord(Models.get(UserModel.class), operatorUuid, TestAccessContexts.allAllowed(),
+                null, 50).entries().stream().flatMap(entry -> entry.changes().stream()).map(HistoryChange::op)
+                .toList())
+            .as("step 6: the operator's creation is in its history").contains(ChangeOp.CREATE);
+        StoredIdCodec models = StoredIdCodec.plain(Registries.MODELS);
+        assertThat(strings(url, "SELECT DISTINCT model FROM " + ChangeModel.TABLE_NAME).stream()
+                .map(stored -> Objects.requireNonNullElse(models.currentSpelling(stored), stored)).toList())
+            .as("step 6: every converted change resolves to today's model id")
             .contains("zenit:user", "zenit:grant", "zenit:permission_group", "zenit:record_grant", "zenit:api_key",
                 "zenit:notification_inbox_item", "zenit:notification_delivery", "zenit:saved_view",
                 "zenit:record_schedule_step")

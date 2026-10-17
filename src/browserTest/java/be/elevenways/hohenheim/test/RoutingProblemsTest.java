@@ -63,16 +63,13 @@ class RoutingProblemsTest {
             Map.of("target_url", "https://example.com/"));
         addDomain(healthy, "healthy.problems.test", "exact", null, false);
 
-        // A site whose kind this build no longer knows (a stored row from another build);
-        // written past validation, which would refuse it, and past the revision behaviour,
-        // because this simulates a stored row rather than an edit anyone made.
+        // A site whose kind this build no longer knows (a stored row from another build); stored raw past
+        // validation, which would refuse it, and past the revision behaviour, because this simulates a stored row
+        // rather than an edit anyone made.
         Row unknown = setupSite("hohenheim:redirect", "Problems Unknown", "problems-unknown",
             Map.of("target_url", "https://example.com/"));
         addDomain(unknown, "unknown.problems.test", "exact", null, false);
-        siteModel.find().where(SiteModel.ID.eq(unknown.get(SiteModel.ID)))
-            .assign(SiteModel.UPSTREAM_KIND, "hohenheim:retired_kind")
-            .bypassBehaviours()
-            .updateAll();
+        StaleSiteRows.upstreamKind(unknown.get(SiteModel.ID), "hohenheim:retired_kind");
 
         // A site whose handler cannot be built: an upstream protocol token this build does
         // not know now fails closed instead of silently dialing HTTP/1.1.
@@ -83,13 +80,11 @@ class RoutingProblemsTest {
         broken.put("forward_host", "127.0.0.1");
         broken.put("forward_port", 9);
         broken.put("upstream_protocol", "h3");
-        siteModel.find().where(SiteModel.ID.eq(failing.get(SiteModel.ID)))
-            .assign(SiteModel.SETTINGS, broken)
-            .bypassBehaviours()
-            .updateAll();
+        StaleSiteRows.settings(failing.get(SiteModel.ID), broken);
 
         // A site whose access list holds an ip_deny rule stored in a spelling this build's
-        // parser refuses (an older parser accepted it); written past validation like the rest.
+        // parser refuses (an older parser accepted it): the site takes the list in a save while the rule is
+        // still valid, then the rule's data is written past validation like the rest.
         Row guarded = setupSite("hohenheim:redirect", "Problems Broken Rule", "problems-broken-rule",
             Map.of("target_url", "https://example.com/"));
         addDomain(guarded, "broken-rule.problems.test", "exact", null, false);
@@ -103,13 +98,12 @@ class RoutingProblemsTest {
         denyRule.set(AccessRuleModel.DATA, new LinkedHashMap<>(Map.of("network", "203.0.113.0/24")));
         denyRule.set(AccessRuleModel.ENABLED, true);
         Models.get(AccessRuleModel.class).save(denyRule);
+        Row guardedSite = siteModel.findById(guarded.get(SiteModel.ID));
+        guardedSite.set(SiteModel.ACCESS_LIST_ID, list.get(AccessListModel.ID));
+        siteModel.save(guardedSite);
         Models.get(AccessRuleModel.class).find()
             .where(AccessRuleModel.ID.eq(denyRule.get(AccessRuleModel.ID)))
             .assign(AccessRuleModel.DATA, new LinkedHashMap<>(Map.of("network", "1.2.3.4::1")))
-            .bypassBehaviours()
-            .updateAll();
-        siteModel.find().where(SiteModel.ID.eq(guarded.get(SiteModel.ID)))
-            .assign(SiteModel.ACCESS_LIST_ID, list.get(AccessListModel.ID))
             .bypassBehaviours()
             .updateAll();
 

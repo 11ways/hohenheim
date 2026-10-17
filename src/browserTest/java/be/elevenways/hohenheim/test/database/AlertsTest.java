@@ -22,6 +22,7 @@ import be.elevenways.zenit.notifications.NotificationRecipient;
 import be.elevenways.zenit.notifications.NotificationSettings;
 import be.elevenways.zenit.notifications.server.*;
 import be.elevenways.zenit.common.orm.history.ChangeModel;
+import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
@@ -296,15 +297,20 @@ class AlertsTest {
             .as("step 6: the raw ssh error stays available as the detail after the words")
             .endsWith(": kex_exchange_identification: read: Connection reset by peer");
 
-        // 7. The same event about another host is its own item, and an alert writes no activity: its delivery rows
-        //    and inbox items are bookkeeping, never a row a person's command is headed by.
-        long activity = new ChangeModel(Models.get(ServerModel.class).getResolvedDatasource()).find().count();
+        // 7. The same event about another host is its own item, and an alert changes no record of Hohenheim's: what it
+        //    records is the notifications module's own bookkeeping (its inbox item and delivery rows, OPTIONAL as that
+        //    module declares them), never a change on the host it is about.
+        ChangeModel changes = new ChangeModel(Models.get(ServerModel.class).getResolvedDatasource());
+        Row newest = changes.find().orderBy(ChangeModel.ID, SortOrder.DESC).first();
+        long before = newest == null ? 0L : newest.get(ChangeModel.ID);
         Alerts.send(NotificationEvents.HOST_UNREACHABLE, Alerts.about(ServerModel.MODEL_ID, 42),
             HohenheimMicrocopy.ALERT.of("host_unreachable_subject").withArg("name", "kumulus"), null);
         assertThat(Models.get(NotificationInboxModel.class).find().all())
             .as("step 7: another host's alert stands beside it").hasSize(4);
-        assertThat(new ChangeModel(Models.get(ServerModel.class).getResolvedDatasource()).find().count())
-            .as("step 7: sending it recorded no activity").isEqualTo(activity);
+        assertThat(changes.find().where(ChangeModel.ID.gt(before)).all().stream()
+                .map(change -> (String) change.get(ChangeModel.MODEL)).toList())
+            .as("step 7: sending it changed no record but the notifications module's own")
+            .isSubsetOf(NotificationInboxModel.MODEL_ID.toString(), DeliveryModel.MODEL_ID.toString());
     }
 
     private static Microcopy lit(String text) {
