@@ -3,11 +3,10 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.zenit.common.orm.history.ChangeModel;
 import be.elevenways.zenit.common.orm.history.ChangeOp;
 import be.elevenways.zenit.common.orm.history.History;
-import be.elevenways.zenit.common.orm.history.HistoryChange;
+import be.elevenways.zenit.common.orm.history.HistoryEntry;
 import be.elevenways.zenit.common.orm.history.HistoryText;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -214,9 +213,10 @@ class EnvironmentSecretsTest extends HohenheimTestBase {
             .as("3. its value withheld").contains("withheld")
             .as("3. and never a value").doesNotContain(GREETING_V1).doesNotContain(GREETING_V2);
         AccessContext reader = TestAccessContexts.allAllowed();
-        HistoryChange update = History.ofRecord(instances, appId, reader, null, 1).entries().get(0).changes().get(0);
-        assertThat(HistoryText.change(update, reader).resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
-            .as("3. the history line names the changed key").contains("SITE_GREETING")
+        HistoryEntry update = History.ofRecord(instances, appId, reader, null, 1).entries().get(0);
+        assertThat(HistoryText.detail(update, reader))
+            .as("3. the history detail line names the changed key").contains("SITE_GREETING")
+            .as("3. as withheld").contains("withheld")
             .as("3. and never a value").doesNotContain(GREETING_V1).doesNotContain(GREETING_V2);
     }
 
