@@ -275,8 +275,7 @@ public final class InstanceOverview {
         String words = Texts.factRun(
             usage(OwnerBudget.INSTANCES, owner, "quota_workloads").resolve(locales, resolver),
             usage(OwnerBudget.OWNER_MEMORY, owner, "quota_memory").resolve(locales, resolver));
-        Row override = Models.get(InstanceQuotaModel.class).find()
-            .where(InstanceQuotaModel.SUBJECTS.eq(owner)).first();
+        Row override = OwnerBudget.INSTANCES.overrideIn(charge.bucket());
         String url = override != null
             ? CmsRoutes.open(panelSlug, HohenheimSlugs.INSTANCE_QUOTAS, override.get(InstanceQuotaModel.ID)).toUrl()
             : CmsRoutes.list(panelSlug, HohenheimSlugs.INSTANCE_QUOTAS).toUrl();

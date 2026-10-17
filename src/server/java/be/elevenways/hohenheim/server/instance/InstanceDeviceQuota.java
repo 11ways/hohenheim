@@ -109,8 +109,8 @@ public final class InstanceDeviceQuota {
 
     /**
      * The owner pack of one instance as derived NOW; unreadable grants fall back to the pack
-     * behind the instance's own charged bucket (which may be a fold -- a fold reserves
-     * correctly, it only cannot match an override row, exactly like the instance bucket).
+     * behind the instance's own charged bucket (the digest spelling for a fold, which re-folds
+     * to the same key and whose override is matched by that key, exactly like the instance bucket).
      */
     private static @NonNull String ownerPackOf(@Nullable Integer instanceId) {
         if (instanceId != null) {

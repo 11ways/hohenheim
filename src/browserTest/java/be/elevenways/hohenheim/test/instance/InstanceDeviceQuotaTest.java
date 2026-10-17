@@ -427,6 +427,55 @@ class InstanceDeviceQuotaTest extends HohenheimTestBase {
             .contains("qa.subjects=" + URLEncoder.encode(third, StandardCharsets.UTF_8));
     }
 
+    /**
+     * A shared owner of five UUID subjects packs past the ledger's 191-character key, so its disks are stamped with the
+     * folded digest bucket; its override still caps them, because an override is matched by that same bucket.
+     */
+    @Test
+    void anOverrideOfAFiveSubjectOwnerCapsTheDisksChargedToItsFoldedBucket() {
+        List<String> subjects = new ArrayList<>();
+        for (String suffix : List.of("f1", "f2", "f3", "f4", "f5")) {
+            subjects.add(new SubjectTag(GrantSubjectType.GROUP, this.sharedGroup(suffix)).token());
+        }
+        String pack = HohenheimAccess.packSubjects(Set.copyOf(subjects));
+        String bucket = OwnerBudget.DISK_GB.bucketOf(pack);
+
+        // 1. Five UUID subjects fold: the bucket is the digest spelling, not the readable pack.
+        assertThat(bucket).as("step 1: the five-subject owner's disk bucket is folded")
+            .startsWith(OwnerBudget.DISK_GB.prefix() + "sha256:");
+
+        // 2. The owner's override, stored under its readable pack, is the cap read through the digest spelling its
+        //    folded bucket names (what a charge knows of its owner).
+        Model quotas = Models.get(InstanceQuotaModel.class);
+        Row quota = quotas.createEmptyRow();
+        quota.set(InstanceQuotaModel.SUBJECTS, pack);
+        quota.set(InstanceQuotaModel.MAX_DISK_GB, 3);
+        quotas.save(quota);
+        this.quotaRowId = quota.get(InstanceQuotaModel.ID);
+        assertThat(OwnerBudget.DISK_GB.limitFor(OwnerBudget.DISK_GB.packOf(bucket)))
+            .as("step 2: the folded bucket reads the owner's 3 GB override").isEqualTo(3);
+
+        // 3. A disk of a record all five manage is stamped with, and charged to, the folded bucket.
+        int instanceId = instanceRecord();
+        for (UUID group : this.sharedGroupIds) {
+            RecordGrants.grant(GrantSubjectType.GROUP, group, InstanceModel.MODEL_ID, instanceId,
+                HohenheimCapabilities.MANAGE, true);
+        }
+        long usedBefore = Quotas.usedOf(bucket);
+        Row disk = diskRow(instanceId, NAME_PREFIX + "fold1", 2);
+        Models.get(InstanceDeviceModel.class).save(disk);
+        assertThat((String) disk.get(InstanceDeviceModel.QUOTA_BUCKET))
+            .as("step 3: the disk is stamped with the folded bucket").isEqualTo(bucket);
+        assertThat(Quotas.usedOf(bucket)).as("step 3: the owner is charged 2 GB").isEqualTo(usedBefore + 2);
+
+        // 4. 2 GB more passes the override's 3 GB: refused by name, nothing booked.
+        Throwable over = catchThrowable(() ->
+            Models.get(InstanceDeviceModel.class).save(diskRow(instanceId, NAME_PREFIX + "fold2", 2)));
+        assertThat(violationKeyOf(over))
+            .as("step 4: the override caps the folded bucket").isEqualTo("disk_quota_reached");
+        assertThat(Quotas.usedOf(bucket)).as("step 4: the refused disk booked nothing").isEqualTo(usedBefore + 2);
+    }
+
     /** @return a fresh permission group, removed with its grants after the test */
     private UUID sharedGroup(String suffix) {
         Row group = Models.get(PermissionGroupModel.class).createEmptyRow();
