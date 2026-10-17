@@ -20,11 +20,13 @@ import be.elevenways.hohenheim.server.stack.StackRuntime;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.hohenheim.test.RecordedChanges;
+import be.elevenways.zenit.auth.test.TestAccounts;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.Accountability;
+import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
 import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
 import org.junit.jupiter.api.AfterAll;
@@ -37,6 +39,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -260,7 +263,9 @@ class StackRuntimeFlowTest {
         // 2. Purge: container and volume both go, the stack reads inactive.
         //    This is the one stack operation that destroys DATA, so it is also the one
         //    that must be answerable: it records who purged, on the stack record.
-        Accountability.runAs(new Accountability("purger", null, "The purger", null, "junit",
+        UUID purger = Db.supply(datasource, () -> TestAccounts.create("purger@stack.test", "The purger", true, true));
+        Accountability.runAs(new Accountability(purger.toString(), PrincipalRef.account(purger).storedKind(),
+                "The purger", null, "junit",
                 Accountability.ORIGIN_WEB), () -> {
             try {
                 runtime.purgeVolumes(stackId);
@@ -282,7 +287,7 @@ class StackRuntimeFlowTest {
                 .hasSize(1);
             assertThat(purged.get(0).actor())
                 .as("step 2: attributed to the operator, not to the system")
-                .isEqualTo("purger");
+                .isEqualTo(purger.toString());
         });
 
         // 3. The next deploy rebuilds from the records, with an EMPTY volume.
