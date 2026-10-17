@@ -3320,6 +3320,10 @@
       "scope": "help"
     }
   ],
+  "tls_passthrough_switch": {
+    "text": "Deze site geeft TLS door aan de app, dus HTTPS wordt daar afgehandeld.",
+    "scope": "help"
+  },
   "database_name": {
     "text": "Unieke naam voor deze beheerde database; benoemt ook de container en het volume. Letters, cijfers, punten, streepjes en liggende streepjes, beginnend met een letter of cijfer.",
     "scope": "help"

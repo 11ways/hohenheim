@@ -427,6 +427,97 @@ class InstanceDeviceQuotaTest extends HohenheimTestBase {
             .contains("qa.subjects=" + URLEncoder.encode(third, StandardCharsets.UTF_8));
     }
 
+    /**
+     * A shared owner of five UUID subjects packs past the ledger's 191-character key, so its disks are stamped with the
+     * folded digest bucket; its override still caps them, because an override is matched by that same bucket.
+     */
+    @Test
+    void anOverrideOfAFiveSubjectOwnerCapsTheDisksChargedToItsFoldedBucket() {
+        List<String> subjects = new ArrayList<>();
+        for (String suffix : List.of("f1", "f2", "f3", "f4", "f5")) {
+            subjects.add(new SubjectTag(GrantSubjectType.GROUP, this.sharedGroup(suffix)).token());
+        }
+        String pack = HohenheimAccess.packSubjects(Set.copyOf(subjects));
+        String bucket = OwnerBudget.DISK_GB.bucketOf(pack);
+
+        // 1. Five UUID subjects fold: the bucket is the digest spelling, not the readable pack.
+        assertThat(bucket).as("step 1: the five-subject owner's disk bucket is folded")
+            .startsWith(OwnerBudget.DISK_GB.prefix() + "sha256:");
+
+        // 2. The owner's override, stored under its readable pack, is the cap read through the digest spelling its
+        //    folded bucket names (what a charge knows of its owner).
+        Model quotas = Models.get(InstanceQuotaModel.class);
+        Row quota = quotas.createEmptyRow();
+        quota.set(InstanceQuotaModel.SUBJECTS, pack);
+        quota.set(InstanceQuotaModel.MAX_DISK_GB, 3);
+        quotas.save(quota);
+        this.quotaRowId = quota.get(InstanceQuotaModel.ID);
+        assertThat(OwnerBudget.DISK_GB.limitFor(OwnerBudget.DISK_GB.packOf(bucket)))
+            .as("step 2: the folded bucket reads the owner's 3 GB override").isEqualTo(3);
+
+        // 3. A disk of a record all five manage is stamped with, and charged to, the folded bucket.
+        int instanceId = instanceRecord();
+        for (UUID group : this.sharedGroupIds) {
+            RecordGrants.grant(GrantSubjectType.GROUP, group, InstanceModel.MODEL_ID, instanceId,
+                HohenheimCapabilities.MANAGE, true);
+        }
+        long usedBefore = Quotas.usedOf(bucket);
+        Row disk = diskRow(instanceId, NAME_PREFIX + "fold1", 2);
+        Models.get(InstanceDeviceModel.class).save(disk);
+        assertThat((String) disk.get(InstanceDeviceModel.QUOTA_BUCKET))
+            .as("step 3: the disk is stamped with the folded bucket").isEqualTo(bucket);
+        assertThat(Quotas.usedOf(bucket)).as("step 3: the owner is charged 2 GB").isEqualTo(usedBefore + 2);
+
+        // 4. 2 GB more passes the override's 3 GB: refused by name, nothing booked.
+        Throwable over = catchThrowable(() ->
+            Models.get(InstanceDeviceModel.class).save(diskRow(instanceId, NAME_PREFIX + "fold2", 2)));
+        assertThat(violationKeyOf(over))
+            .as("step 4: the override caps the folded bucket").isEqualTo("disk_quota_reached");
+        assertThat(Quotas.usedOf(bucket)).as("step 4: the refused disk booked nothing").isEqualTo(usedBefore + 2);
+    }
+
+    /**
+     * A pack the instance stamp folds folds under every budget: a 172 or 173 character pack reads back from the
+     * instance's folded stamp (what a device charge falls back to when the instance's grants cannot be read) as the
+     * very disk and NIC buckets the owner's own charges use, while a pack of four UUID subjects keeps its spelling.
+     */
+    @Test
+    void aPackTheInstanceStampFoldsFoldsUnderEveryBudget() {
+        for (int length : List.of(172, 173)) {
+            String pack = "user:" + "a".repeat(length - 5);
+
+            // 1. The instance spelling folds the pack.
+            String instanceBucket = OwnerBudget.INSTANCES.bucketOf(pack);
+            assertThat(instanceBucket).as("step 1: the %d-character pack folds under the instance prefix", length)
+                .startsWith(OwnerBudget.INSTANCES.prefix() + "sha256:");
+
+            // 2. Every budget folds it too, so the instance stamp's spelling names the owner's own bucket in each.
+            String stamped = OwnerBudget.INSTANCES.packOf(instanceBucket);
+            for (OwnerBudget budget : OwnerBudget.values()) {
+                assertThat(budget.bucketOf(stamped))
+                    .as("step 2: %s reads the %d-character owner's bucket back from the stamp", budget, length)
+                    .isEqualTo(budget.bucketOf(pack));
+            }
+        }
+
+        // 3. Below the boundary the stamp round trip holds too, every key stays within the ledger's 191 characters,
+        //    and a 171-character pack (four UUID subjects at most) is still spelled out where it always was.
+        for (int length = 166; length <= 176; length++) {
+            String pack = "user:" + "a".repeat(length - 5);
+            String stamped = OwnerBudget.INSTANCES.packOf(OwnerBudget.INSTANCES.bucketOf(pack));
+            for (OwnerBudget budget : OwnerBudget.values()) {
+                assertThat(budget.bucketOf(stamped))
+                    .as("step 3: %s reads a %d-character owner back from the stamp", budget, length)
+                    .isEqualTo(budget.bucketOf(pack));
+                assertThat(budget.bucketOf(pack).length()).as("step 3: %s keeps the key within 191", budget)
+                    .isLessThanOrEqualTo(191);
+            }
+        }
+        String fourSubjects = "user:" + "a".repeat(166);
+        assertThat(OwnerBudget.DISK_GB.bucketOf(fourSubjects)).as("step 3: a 171-character pack keeps its spelling")
+            .isEqualTo(OwnerBudget.DISK_GB.prefix() + fourSubjects);
+    }
+
     /** @return a fresh permission group, removed with its grants after the test */
     private UUID sharedGroup(String suffix) {
         Row group = Models.get(PermissionGroupModel.class).createEmptyRow();

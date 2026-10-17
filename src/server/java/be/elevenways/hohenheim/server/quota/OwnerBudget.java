@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.quota;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
+import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.quota.Quotas;
 import be.elevenways.zenit.common.setting.SettingDefinition;
@@ -80,7 +81,7 @@ public enum OwnerBudget {
         return this.violationKey;
     }
 
-    /** The bucket of one packed subject set (the 191-char fold, one owner). */
+    /** The bucket of one packed subject set (one owner, folded by OwnerQuota's one pack rule). */
     public @NonNull String bucketOf(@NonNull String packedSubjects) {
         return OwnerQuota.bucketOf(this.prefix, packedSubjects);
     }
@@ -97,7 +98,17 @@ public enum OwnerBudget {
 
     /** The cap of one owner; override 0 = nothing allowed, global 0-or-less = uncapped. */
     public @Nullable Integer limitFor(@NonNull String packedSubjects) {
-        return OwnerQuota.limitOf(packedSubjects, this.overrideColumn, this.fallback);
+        return this.limitIn(this.bucketOf(packedSubjects));
+    }
+
+    /** The cap of the owner behind one of this budget's buckets, a folded one included. */
+    public @Nullable Integer limitIn(@NonNull String bucket) {
+        return OwnerQuota.limitOf(this.prefix, bucket, this.overrideColumn, this.fallback);
+    }
+
+    /** The override row of the owner behind one of this budget's buckets, or null when it has none. */
+    public @Nullable Row overrideIn(@NonNull String bucket) {
+        return OwnerQuota.overrideRowOf(this.prefix, bucket);
     }
 
     /** How much of an owner's budget is spent (admin surfaces, tests). */
@@ -111,6 +122,6 @@ public enum OwnerBudget {
      * @throws Violations this budget's violation key
      */
     public void reserve(@NonNull String bucket, long amount) {
-        OwnerQuota.reserve(bucket, amount, this.limitFor(this.packOf(bucket)), this.violationKey);
+        OwnerQuota.reserve(bucket, amount, this.limitIn(bucket), this.violationKey);
     }
 }

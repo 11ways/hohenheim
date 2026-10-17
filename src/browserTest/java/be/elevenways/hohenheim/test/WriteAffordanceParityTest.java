@@ -27,6 +27,9 @@ import be.elevenways.zenit.auth.model.RecordGrantModel;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.cms.server.page.ResourceWrites;
+import be.elevenways.zenit.cms.common.render.inline.InlineEditState;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
@@ -36,7 +39,9 @@ import be.elevenways.zenit.cms.common.render.panel.ChildListSectionState;
 import be.elevenways.zenit.cms.common.render.table.TableState;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceVerb;
+import be.elevenways.zenit.cms.server.panel.PartsForms;
 import be.elevenways.zenit.cms.server.panel.ResourceVerbs;
+import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.conduit.ConduitAttributes;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -80,6 +85,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 class WriteAffordanceParityTest extends HohenheimTestBase {
 
     private static final String PREFIX = "affparity-";
+
+    /** Why a passthrough site's domain cannot change its TLS switches, as the forms say it in English. */
+    private static final String PASSTHROUGH_REASON =
+        "This site passes TLS through to the app, so its HTTPS is handled there.";
 
     private static UUID viewerId;
     private static UUID holderId;
@@ -383,41 +392,86 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
     }
 
     /**
-     * A domain create under a site opens with that site's TLS defaults only where the caller may read the site: a
-     * TLS passthrough site the caller cannot reach opens the create exactly as no site does, so the form is no probe
-     * of another tenant's configuration (GPT review 25 D03).
+     * A domain created under a TLS passthrough site stores HTTPS forcing and ACME off on every create lane, a create
+     * without a request included, because the rule is the domain write's, read off the written site. The create form
+     * previews those switches fixed, at the values the save stores, only under a site the caller may read, so it is
+     * no probe of another tenant's configuration (GPT review 25 D03).
      */
     @Test
-    void aDomainCreateUnderAnUnreachableSiteOpensAsUnderNone() {
+    void aDomainCreateUnderAPassthroughSiteStoresItsTlsSwitchesOnEveryLane() throws Exception {
         int own = passthroughSite("own");
         int foreign = passthroughSite("foreign");
         RecordGrants.grant(GrantSubjectType.USER, holderId, SiteModel.MODEL_ID, own, HohenheimCapabilities.MANAGE,
             true);
+        Model domains = Models.get(SiteDomainModel.class);
+        List<Object> created = new ArrayList<>();
         try {
+            // 1. Under the holder's own passthrough site the create form shows both switches fixed, at the values
+            //    the save stores; HSTS stays the caller's choice.
             Map<String, Object> none = createDefaults(holder(), HohenheimSlugs.MANAGE, null);
-
-            // 1. Under the holder's own passthrough site, the create opens with HTTPS forcing and ACME off.
+            Map<String, Object> fixed = new LinkedHashMap<>(none);
+            fixed.put(SiteDomainModel.FORCE_SSL.getName(), false);
+            fixed.put(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName(), true);
             assertThat(createDefaults(holder(), HohenheimSlugs.MANAGE, own))
-                .as("step 1: the holder's own passthrough site sets its TLS defaults")
+                .as("step 1: the holder's own passthrough site previews the stored switches").isEqualTo(fixed);
+            assertThat(switchAccess(holder(), HohenheimSlugs.MANAGE, own))
+                .as("step 1: and shows them read-only, HSTS editable")
+                .containsExactly(FieldAccess.Decision.READONLY, FieldAccess.Decision.READONLY,
+                    FieldAccess.Decision.EDITABLE);
+
+            // 1b. A site the holder cannot read previews exactly as no site: editable, at the spec's defaults.
+            assertThat(createDefaults(holder(), HohenheimSlugs.MANAGE, foreign))
+                .as("step 1b: an unreachable site prefills nothing").isEqualTo(none);
+            assertThat(switchAccess(holder(), HohenheimSlugs.MANAGE, foreign))
+                .as("step 1b: and fixes nothing").containsOnly(FieldAccess.Decision.EDITABLE);
+
+            // 1c. The operator reads every site, so the same site previews its switches on /admin.
+            assertThat(createDefaults(operator(), HohenheimSlugs.ADMIN, foreign))
+                .as("step 1c: the operator's create form previews the stored switches")
                 .containsEntry(SiteDomainModel.FORCE_SSL.getName(), false)
                 .containsEntry(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName(), true);
+            assertThat(switchAccess(operator(), HohenheimSlugs.ADMIN, foreign))
+                .as("step 1c: and shows them read-only").containsExactly(FieldAccess.Decision.READONLY,
+                    FieldAccess.Decision.READONLY, FieldAccess.Decision.EDITABLE);
 
-            // 2. Under a passthrough site outside the holder's scope, the create opens exactly as under none.
-            assertThat(createDefaults(holder(), HohenheimSlugs.MANAGE, foreign))
-                .as("step 2: an unreachable site's configuration is never read into the form")
-                .isEqualTo(none);
+            // 1d. The create form says why both switches are fixed, in place of their own help; HSTS keeps its own.
+            String createForm = adminGet("/admin/domains/new?parent=" + foreign).body();
+            assertThat(entryHelp(createForm, SiteDomainModel.FORCE_SSL.getName()))
+                .as("step 1d: the create form says why force_ssl is fixed").isEqualTo(PASSTHROUGH_REASON);
+            assertThat(entryHelp(createForm, SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName()))
+                .as("step 1d: and why the ACME exclusion is").isEqualTo(PASSTHROUGH_REASON);
+            assertThat(entryHelp(createForm, SiteDomainModel.HSTS_ENABLED.getName()))
+                .as("step 1d: HSTS keeps its own help").isNotEqualTo(PASSTHROUGH_REASON);
 
-            // 3. The operator reaches every site, so the same site sets its defaults on /admin.
-            assertThat(createDefaults(operator(), HohenheimSlugs.ADMIN, foreign))
-                .as("step 3: the operator's create under that site reads it")
-                .containsEntry(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName(), true);
+            // 2. A create without a request (a job, an MCP call) under the passthrough site stores both switches.
+            Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN));
+            Object detachedId = ResourceWrites.create(admin, DomainParts.admin(),
+                Map.of(SiteDomainModel.SITE_ID.getName(), String.valueOf(own),
+                    SiteDomainModel.HOSTNAME.getName(), PREFIX + "detached.example.test"),
+                operator().detach());
+            created.add(detachedId);
+            Row detached = domains.findById(detachedId);
+            assertThat((Boolean) detached.get(SiteDomainModel.FORCE_SSL))
+                .as("step 2: the detached create does not force HTTPS").isFalse();
+            assertThat((Boolean) detached.get(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT))
+                .as("step 2: the detached create asks no ACME certificate").isTrue();
 
-            // 4. A create without a request (a task) has no create link naming a parent site, so even handed the
-            //    panel it starts exactly as under none.
-            assertThat(DomainParts.manage().form().createDefaults(holder().detach(),
-                    PanelRegistry.getBySlug(HohenheimSlugs.MANAGE)))
-                .as("step 4: no conduit, no parent site to read").isEqualTo(none);
+            // 3. The create form keeps storing them, whatever its switches submitted.
+            String hostname = PREFIX + "form.example.test";
+            var response = adminPostForm("/admin/domains/new?parent=" + own,
+                "site_id=" + own + "&hostname=" + hostname + "&match_type=exact&force_ssl=true");
+            assertThat(response.statusCode()).as("step 3: the form create is accepted").isIn(200, 302, 303);
+            Row viaForm = domains.find().where(SiteDomainModel.HOSTNAME.eq(hostname)).first();
+            assertThat(viaForm).as("step 3: the form create is stored").isNotNull();
+            created.add(viaForm.get(SiteDomainModel.ID));
+            assertThat((Boolean) viaForm.get(SiteDomainModel.FORCE_SSL))
+                .as("step 3: the form create does not force HTTPS").isFalse();
+            assertThat((Boolean) viaForm.get(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT))
+                .as("step 3: the form create asks no ACME certificate").isTrue();
         } finally {
+            for (Object id : created) {
+                domains.delete(id);
+            }
             RecordGrants.revoke(GrantSubjectType.USER, holderId, SiteModel.MODEL_ID, own, HohenheimCapabilities.MANAGE);
             HardDeletes.byId(Models.get(SiteModel.class), own);
             HardDeletes.byId(Models.get(SiteModel.class), foreign);
@@ -425,19 +479,158 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
     }
 
     /**
+     * A stored domain under a TLS passthrough site shows force_ssl and the ACME exclusion fixed at their stored values
+     * on every edit surface (the edit form, the inline cells both domain lists ask), by the rule its save applies; a
+     * domain under any other site keeps them editable.
+     */
+    @Test
+    void aDomainUnderAPassthroughSiteShowsItsTlsSwitchesFixedOnEveryEditSurface() throws Exception {
+        int site = passthroughSite("edit");
+        RecordGrants.grant(GrantSubjectType.USER, holderId, SiteModel.MODEL_ID, site, HohenheimCapabilities.MANAGE,
+            true);
+        Model domains = Models.get(SiteDomainModel.class);
+        Row stored = domains.createEmptyRow();
+        stored.set(SiteDomainModel.SITE_ID, site);
+        stored.set(SiteDomainModel.HOSTNAME, PREFIX + "edit.example.test");
+        stored.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+        domains.save(stored);
+        Object fixedId = stored.get(SiteDomainModel.ID);
+        try {
+            // 1. The edit form draws both switches as read-only values, at what the save stored; HSTS stays a switch.
+            String form = adminGet("/admin/domains/" + fixedId).body();
+            assertThat(readonlyValue(form, SiteDomainModel.FORCE_SSL.getName()))
+                .as("step 1: the edit form shows force_ssl fixed off").isEqualTo("No");
+            assertThat(readonlyValue(form, SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName()))
+                .as("step 1: and the ACME exclusion fixed on").isEqualTo("Yes");
+            assertThat(readonlyValue(form, SiteDomainModel.HSTS_ENABLED.getName()))
+                .as("step 1: HSTS stays the operator's switch").isNull();
+            assertThat(entryHelp(form, SiteDomainModel.FORCE_SSL.getName()))
+                .as("step 1: the edit form says why force_ssl is fixed").isEqualTo(PASSTHROUGH_REASON);
+            assertThat(entryHelp(form, SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName()))
+                .as("step 1: and why the ACME exclusion is").isEqualTo(PASSTHROUGH_REASON);
+
+            // 2. The inline cells (the Domains list and the site's Domains tab ask the same per-record state) offer
+            //    only HSTS, and carry the stored switch values.
+            InlineEditState cells = cellState("/admin/domains/" + fixedId + "/cell-state");
+            assertThat(cells.editableFields()).as("step 2: only HSTS is editable in place")
+                .containsExactly(SiteDomainModel.HSTS_ENABLED.getName(), SiteDomainModel.HSTS_SUBDOMAINS.getName());
+            assertThat(String.valueOf(cells.values().get(SiteDomainModel.FORCE_SSL.getName())))
+                .as("step 2: the force_ssl cell shows the stored value").isEqualTo("false");
+            assertThat(String.valueOf(cells.values().get(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName())))
+                .as("step 2: the ACME cell shows the stored value").isEqualTo("true");
+
+            // 3. The delegated twin answers the same for the site's manage holder.
+            Row domain = domains.findById(fixedId);
+            assertThat(recordSwitchAccess(holder(), HohenheimSlugs.MANAGE, domain))
+                .as("step 3: /manage fixes the same switches").containsExactly(FieldAccess.Decision.READONLY,
+                    FieldAccess.Decision.READONLY, FieldAccess.Decision.EDITABLE);
+
+            // 4. A domain under a site that terminates TLS keeps every switch editable on every surface.
+            String normal = adminGet("/admin/domains/" + domainId).body();
+            assertThat(readonlyValue(normal, SiteDomainModel.FORCE_SSL.getName()))
+                .as("step 4: a normal site's domain keeps its force_ssl switch").isNull();
+            assertThat(readonlyValue(normal, SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName()))
+                .as("step 4: and its ACME switch").isNull();
+            assertThat(entryHelp(normal, SiteDomainModel.FORCE_SSL.getName()))
+                .as("step 4: a normal site's force_ssl keeps its own help").isNotNull()
+                .isNotEqualTo(PASSTHROUGH_REASON);
+            assertThat(cellState("/admin/domains/" + domainId + "/cell-state").editableFields())
+                .as("step 4: and every inline cell").containsExactly(SiteDomainModel.FORCE_SSL.getName(),
+                    SiteDomainModel.HSTS_ENABLED.getName(), SiteDomainModel.HSTS_SUBDOMAINS.getName(),
+                    SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName());
+            assertThat(recordSwitchAccess(holder(), HohenheimSlugs.MANAGE, domains.findById(domainId)))
+                .as("step 4: on /manage too").containsOnly(FieldAccess.Decision.EDITABLE);
+        } finally {
+            domains.delete(fixedId);
+            RecordGrants.revoke(GrantSubjectType.USER, holderId, SiteModel.MODEL_ID, site,
+                HohenheimCapabilities.MANAGE);
+            HardDeletes.byId(Models.get(SiteModel.class), site);
+        }
+    }
+
+    /** How an edit of {@code domain} on {@code panel} draws force_ssl, the ACME exclusion and HSTS. */
+    private static List<FieldAccess.Decision> recordSwitchAccess(AccessContext ctx, String panel, Row domain) {
+        Map<String, FieldAccess> access = PartsForms.fieldAccessByPath(domainResource(panel));
+        List<FieldAccess.Decision> decisions = new ArrayList<>();
+        for (var field : List.of(SiteDomainModel.FORCE_SSL, SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT,
+                SiteDomainModel.HSTS_ENABLED)) {
+            decisions.add(access.getOrDefault(field.getName(), FieldAccess.ALWAYS_EDITABLE).decide(ctx, domain));
+        }
+        return decisions;
+    }
+
+    /** The text a form draws for entry {@code path} when it is read-only, null when the entry is an input. */
+    private static String readonlyValue(String html, String path) {
+        int start = html.indexOf("data-path=\"" + path + "\"");
+        assertThat(start).as("the form draws entry " + path).isNotNegative();
+        int end = html.indexOf("data-path=\"", start + 1);
+        String entry = html.substring(start, end < 0 ? html.length() : end);
+        String marker = "class=\"zf-field-readonly\">";
+        int value = entry.indexOf(marker);
+        if (value < 0) {
+            return null;
+        }
+        int from = value + marker.length();
+        // The shown value is microcopy markup inside the read-only box: its text is what the reader sees.
+        return entry.substring(from, entry.indexOf("</div>", from)).replaceAll("<[^>]+>", "").trim();
+    }
+
+    /** The help a form draws under entry {@code path}, null when it draws none. */
+    private static String entryHelp(String html, String path) {
+        int start = html.indexOf("data-path=\"" + path + "\"");
+        assertThat(start).as("the form draws entry " + path).isNotNegative();
+        int end = html.indexOf("data-path=\"", start + 1);
+        String entry = html.substring(start, end < 0 ? html.length() : end);
+        String marker = "<pl-field-description>";
+        int help = entry.indexOf(marker);
+        if (help < 0) {
+            return null;
+        }
+        int from = help + marker.length();
+        return entry.substring(from, entry.indexOf("</pl-field-description>", from)).replaceAll("<[^>]+>", "").trim();
+    }
+
+    /** The inline editor's state for one domain, as the harness admin. */
+    private InlineEditState cellState(String path) throws Exception {
+        var response = adminGet(path);
+        assertThat(response.statusCode()).as("the cell state answered").isEqualTo(200);
+        return (InlineEditState) Zenit.DRY.parse(response.body());
+    }
+
+    /**
      * The defaults a domain create form opens with on {@code panel}, under {@code parent} when given; the panel is
      * the hook's argument only, never a conduit parameter.
      */
     private static Map<String, Object> createDefaults(AccessContext ctx, String panel, Integer parent) {
+        return domainResource(panel).form().createDefaults(createAccess(ctx, parent),
+            Objects.requireNonNull(PanelRegistry.getBySlug(panel)));
+    }
+
+    /** How a domain create form on {@code panel} under {@code parent} draws force_ssl, the ACME exclusion and HSTS. */
+    private static List<FieldAccess.Decision> switchAccess(AccessContext ctx, String panel, Integer parent) {
+        Map<String, FieldAccess> access = PartsForms.fieldAccessByPath(domainResource(panel));
+        AccessContext create = createAccess(ctx, parent);
+        List<FieldAccess.Decision> decisions = new ArrayList<>();
+        for (var field : List.of(SiteDomainModel.FORCE_SSL, SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT,
+                SiteDomainModel.HSTS_ENABLED)) {
+            decisions.add(access.getOrDefault(field.getName(), FieldAccess.ALWAYS_EDITABLE).decide(create, null));
+        }
+        return decisions;
+    }
+
+    private static PanelResource<Row> domainResource(String panel) {
+        return HohenheimSlugs.ADMIN.equals(panel) ? DomainParts.admin() : DomainParts.manage();
+    }
+
+    /** The caller on a domain create request, under {@code parent} when given. */
+    private static AccessContext createAccess(AccessContext ctx, Integer parent) {
         EndpointConduit conduit = new EndpointConduit()
             .withAttribute(ConduitAttributes.PRINCIPAL, ctx.principal())
             .setParameter(CmsEndpoints.RESOURCE_PARAM, HohenheimSlugs.DOMAINS);
         if (parent != null) {
             conduit.setQueryParam(CmsEndpoints.PARENT_PARAM.getName(), String.valueOf(parent));
         }
-        PanelResource<Row> resource = HohenheimSlugs.ADMIN.equals(panel) ? DomainParts.admin() : DomainParts.manage();
-        return resource.form().createDefaults(AccessContext.of(conduit),
-            Objects.requireNonNull(PanelRegistry.getBySlug(panel)));
+        return AccessContext.of(conduit);
     }
 
     private static int passthroughSite(String name) {

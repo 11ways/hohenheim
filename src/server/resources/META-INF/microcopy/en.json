@@ -3320,6 +3320,10 @@
       "scope": "help"
     }
   ],
+  "tls_passthrough_switch": {
+    "text": "This site passes TLS through to the app, so its HTTPS is handled there.",
+    "scope": "help"
+  },
   "database_name": {
     "text": "Unique name for this managed database; also names its container and volume. Letters, digits, dots, dashes and underscores, starting with a letter or digit.",
     "scope": "help"
