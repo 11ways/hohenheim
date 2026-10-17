@@ -81,7 +81,7 @@ public enum OwnerBudget {
         return this.violationKey;
     }
 
-    /** The bucket of one packed subject set (the 191-char fold, one owner). */
+    /** The bucket of one packed subject set (one owner, folded by OwnerQuota's one pack rule). */
     public @NonNull String bucketOf(@NonNull String packedSubjects) {
         return OwnerQuota.bucketOf(this.prefix, packedSubjects);
     }

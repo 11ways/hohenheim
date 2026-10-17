@@ -476,6 +476,48 @@ class InstanceDeviceQuotaTest extends HohenheimTestBase {
         assertThat(Quotas.usedOf(bucket)).as("step 4: the refused disk booked nothing").isEqualTo(usedBefore + 2);
     }
 
+    /**
+     * A pack the instance stamp folds folds under every budget: a 172 or 173 character pack reads back from the
+     * instance's folded stamp (what a device charge falls back to when the instance's grants cannot be read) as the
+     * very disk and NIC buckets the owner's own charges use, while a pack of four UUID subjects keeps its spelling.
+     */
+    @Test
+    void aPackTheInstanceStampFoldsFoldsUnderEveryBudget() {
+        for (int length : List.of(172, 173)) {
+            String pack = "user:" + "a".repeat(length - 5);
+
+            // 1. The instance spelling folds the pack.
+            String instanceBucket = OwnerBudget.INSTANCES.bucketOf(pack);
+            assertThat(instanceBucket).as("step 1: the %d-character pack folds under the instance prefix", length)
+                .startsWith(OwnerBudget.INSTANCES.prefix() + "sha256:");
+
+            // 2. Every budget folds it too, so the instance stamp's spelling names the owner's own bucket in each.
+            String stamped = OwnerBudget.INSTANCES.packOf(instanceBucket);
+            for (OwnerBudget budget : OwnerBudget.values()) {
+                assertThat(budget.bucketOf(stamped))
+                    .as("step 2: %s reads the %d-character owner's bucket back from the stamp", budget, length)
+                    .isEqualTo(budget.bucketOf(pack));
+            }
+        }
+
+        // 3. Below the boundary the stamp round trip holds too, every key stays within the ledger's 191 characters,
+        //    and a 171-character pack (four UUID subjects at most) is still spelled out where it always was.
+        for (int length = 166; length <= 176; length++) {
+            String pack = "user:" + "a".repeat(length - 5);
+            String stamped = OwnerBudget.INSTANCES.packOf(OwnerBudget.INSTANCES.bucketOf(pack));
+            for (OwnerBudget budget : OwnerBudget.values()) {
+                assertThat(budget.bucketOf(stamped))
+                    .as("step 3: %s reads a %d-character owner back from the stamp", budget, length)
+                    .isEqualTo(budget.bucketOf(pack));
+                assertThat(budget.bucketOf(pack).length()).as("step 3: %s keeps the key within 191", budget)
+                    .isLessThanOrEqualTo(191);
+            }
+        }
+        String fourSubjects = "user:" + "a".repeat(166);
+        assertThat(OwnerBudget.DISK_GB.bucketOf(fourSubjects)).as("step 3: a 171-character pack keeps its spelling")
+            .isEqualTo(OwnerBudget.DISK_GB.prefix() + fourSubjects);
+    }
+
     /** @return a fresh permission group, removed with its grants after the test */
     private UUID sharedGroup(String suffix) {
         Row group = Models.get(PermissionGroupModel.class).createEmptyRow();

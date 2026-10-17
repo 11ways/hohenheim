@@ -36,6 +36,14 @@ import java.util.Set;
  * (about 42 characters each) a shared owner of five passes the fold, so its override
  * silently capped nothing.
  *
+ * AIDEV-NOTE: ONE rule decides whether a pack folds ({@link #spelledPack}): past its own key ceiling, and wherever
+ * the instance stamp folds it. Device and memory charges read their owner back from the instance's stamp (unreadable
+ * grants), and a folded stamp names only a digest, so a budget that still spelled such a pack out charged it to a
+ * bucket the owner's own charges never use: the per-key rule folded a 172-173 character pack under
+ * {@code hohenheim:instances:} but not under the shorter {@code hohenheim:disk_gb:}. Only packs of 172 characters
+ * and more spell differently than before (never four UUID subjects, at most 171); such a stamp keeps its spelling,
+ * a release hands back the stamp it charged and the boot's QuotaReconciler rebuilds the ledger from the stamps.
+ *
  * AIDEV-NOTE: 0-or-less means UNCAPPED for the global default and NOTHING ALLOWED for an
  * override row. That asymmetry is deliberate and predates this class: a global 0 is the
  * shipped "no policy yet" value, while a 0 someone typed into one owner's row is a
@@ -45,7 +53,7 @@ import java.util.Set;
  */
 public final class OwnerQuota {
 
-    /** The ledger's primary-key ceiling; a longer key folds through a digest. */
+    /** The ledger's primary-key ceiling. */
     private static final int MAX_KEY_LENGTH = 191;
 
     /** What a folded key carries after its prefix, ahead of the digest. */
@@ -56,11 +64,17 @@ public final class OwnerQuota {
 
     /** The bucket key of one packed subject set under {@code prefix}. */
     public static @NonNull String bucketOf(@NonNull String prefix, @NonNull String packedSubjects) {
-        String key = prefix + packedSubjects;
-        if (key.length() > MAX_KEY_LENGTH) {
-            key = prefix + FOLD_MARK + SecureTokens.sha256Hex(packedSubjects);
-        }
-        return key;
+        return prefix + spelledPack(prefix, packedSubjects);
+    }
+
+    /**
+     * THE fold: how a pack is spelled inside a bucket key under {@code prefix}, itself while both that key and the
+     * instance stamp spell it out, its digest beyond, so a pack the instance stamp folds folds under every budget.
+     */
+    private static @NonNull String spelledPack(@NonNull String prefix, @NonNull String packedSubjects) {
+        int longest = MAX_KEY_LENGTH - Math.max(prefix.length(), OwnerBudget.INSTANCES.prefix().length());
+        return packedSubjects.length() > longest
+            ? FOLD_MARK + SecureTokens.sha256Hex(packedSubjects) : packedSubjects;
     }
 
     /**
