@@ -22,6 +22,7 @@ import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
+import be.elevenways.zenit.cms.common.resource.ActivitySources;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -32,7 +33,6 @@ import be.elevenways.zenit.common.routing.RouteLocales;
 import be.elevenways.zenit.common.routing.RouteScope;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
-import be.elevenways.zenit.common.orm.history.ActionModel;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -55,16 +55,17 @@ public final class CmsSupport {
 
     /**
      * The framework activity record source {@code ActivitySources.register} declares over {@code ActionModel}, under
-     * that model's id. One home here because three surfaces read it (the admin dashboard feed plus the per-record
-     * Recent cards).
+     * its public token {@link ActivitySources#SOURCE}. One home here because three surfaces read it (the admin
+     * dashboard feed plus the per-record Recent cards).
      *
-     * AIDEV-NOTE: never a literal token: the source was "zenit.activity" while it read ActivityModel, and the literal
-     * outlived the move to ActionModel ("zenit.action"), resolving no source once ActivityModel left the registry.
+     * AIDEV-NOTE: never a literal token or a model id: the source was "zenit.activity" while it read ActivityModel,
+     * then ActionModel's id, which the activity log resource's own source answers to since the feed got its public
+     * token, titling every row by the action's command type.
      *
      * @throws IllegalStateException when the boot registered no activity source
      */
     public static @NonNull RecordSource<?> activitySource() {
-        return RecordSourceRegistry.INSTANCE.requireById(ActionModel.MODEL_ID);
+        return RecordSourceRegistry.INSTANCE.requireById(ActivitySources.SOURCE);
     }
 
     // AIDEV-NOTE: the small operator-declared sets (hosts, DNS peers, git providers, access

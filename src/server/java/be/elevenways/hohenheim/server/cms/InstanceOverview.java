@@ -171,7 +171,7 @@ public final class InstanceOverview {
         side.add(AppOverview.details(facts(instance, runtime, serverId, panelSlug, delegated, accessContext)));
         // AIDEV-NOTE: the per-record RECENT ACTIVITY card, read through core's per-record history
         // (AdminActivityResource.recentFor over History.inContext), narrowed by the shared
-        // `zenit.activity` source's rules.
+        // `zenit:activity` source's rules.
         // AIDEV-NOTE: OPERATOR-ONLY, and deliberately by omission rather than by an empty
         // list. The shared source is registered with HohenheimSources.ADMIN_ACCESS
         // (HohenheimSources.register -> ActivitySources.register("admin", ADMIN_ACCESS)), so
