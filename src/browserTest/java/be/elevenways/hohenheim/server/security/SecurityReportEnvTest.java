@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.revision.RevisionModel;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -109,6 +110,18 @@ class SecurityReportEnvTest {
         // And it was provisioned as a TRUSTED client named after the site slug.
         assertThat(ensured).containsExactly("hohenheim:site:" + siteId
             + "|site:env-mint|true|" + key);
+
+        // A later save of the site writes a revision, and no revision snapshot holds the reporting key: it is a
+        // credential, never a value a restore could put back.
+        Row saved = Models.get(SiteModel.class).findById(siteId);
+        saved.set(SiteModel.NAME, "Env Mint renamed");
+        Models.get(SiteModel.class).save(saved);
+        List<Row> revisions = new RevisionModel(Models.get(SiteModel.class).getResolvedDatasource()).find().noCache()
+            .where(RevisionModel.MODEL.eq(SiteModel.MODEL_ID.toString()))
+            .and(RevisionModel.RECORD_ID.eq(String.valueOf(siteId))).all();
+        assertThat(revisions).as("the rename wrote a revision").isNotEmpty();
+        assertThat(revisions).allSatisfy(revision -> assertThat(String.valueOf((Object) revision.get(
+            RevisionModel.SNAPSHOT))).doesNotContain(key));
     }
 
     @Test

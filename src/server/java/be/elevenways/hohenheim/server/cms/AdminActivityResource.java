@@ -12,8 +12,10 @@ import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.cms.server.resource.ActivityAdmin;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.activity.ActivityRules;
+import be.elevenways.zenit.common.orm.history.ActionModel;
+import be.elevenways.zenit.common.orm.history.HistoryEntry;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.orm.history.HistoryText;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -49,8 +51,8 @@ public final class AdminActivityResource {
      * origin was never stamped visible: unknown provenance is not background provenance, and IS_EMPTY on a TEXT
      * variable matches null as well as "".
      */
-    private static final String HIDE_BACKGROUND_EXPRESSION = ActivityModel.ORIGIN.getName() + " in "
-        + quotedList(AccountabilityOrigin.personTokens()) + " or " + ActivityModel.ORIGIN.getName() + " is empty";
+    private static final String HIDE_BACKGROUND_EXPRESSION = ActionModel.ORIGIN.getName() + " in "
+        + quotedList(AccountabilityOrigin.personTokens()) + " or " + ActionModel.ORIGIN.getName() + " is empty";
 
 
     /** The app filter's name, which keys its URL parameter ({@code filter.app=<instance id>}). */
@@ -58,18 +60,18 @@ public final class AdminActivityResource {
 
     /**
      * The framework's own columns and filters, plus every filter an operator needs to reach one record: the app it is
-     * about, the record id and the origin that flips the default scope. The row draws only who, the app and internal
-     * records (board Activity); the rest keep narrowing through their chips and a link's parameters.
+     * about, the subject record id and the origin that flips the default scope. The row draws only who, the app and
+     * internal records (board Activity); the rest keep narrowing through their chips and a link's parameters.
      *
      * AIDEV-NOTE: an app is its workload's record, so the app filter offers instances through the
      * instance record source, whose row scope decides which a reader is offered; a site-only app has no workload and is
-     * not offered. Its rows stay reachable through the record filter.
+     * not offered. Its actions stay reachable through the record filter.
      */
     private static final TableSpec<Row> TABLE = ActivityAdmin.table().toBuilder()
         .filter(ActivityAdmin.subjectFilter(APP_FILTER, InstanceModel.MODEL_ID,
             HohenheimMicrocopy.HOHENHEIM.of("app_filter"), HohenheimMicrocopy.HOHENHEIM.of("app_filter_all")))
-        .filter(FilterSpec.leaf(ActivityModel.RECORD_ID, CoreTypes.CONTAINS).build())
-        .filter(FilterSpec.leaf(ActivityModel.ORIGIN, CoreTypes.CONTAINS).build())
+        .filter(FilterSpec.leaf(ActionModel.SUBJECT_ID, CoreTypes.CONTAINS).build())
+        .filter(FilterSpec.leaf(ActionModel.ORIGIN, CoreTypes.CONTAINS).build())
         .filterRow(ActivityAdmin.ACTOR_FILTER, APP_FILTER, ActivityAdmin.INTERNAL_FILTER)
         .build();
 
@@ -87,9 +89,9 @@ public final class AdminActivityResource {
             .reads(ActivityAdmin.reads(AdminActivityResource::cell))
             .list(ActivityAdmin.list(TABLE)
                 .chrome(CmsSupport.WIDE_LIST.withFiltersOpen(true))
-                .defaultFilter(ActivityAdmin.defaultFilter().with(ActivityModel.ORIGIN.getName(),
+                .defaultFilter(ActivityAdmin.defaultFilter().with(ActionModel.ORIGIN.getName(),
                         HIDE_BACKGROUND_EXPRESSION),
-                    filter -> ActivityModel.ORIGIN.getName().equals(filter)
+                    filter -> ActionModel.ORIGIN.getName().equals(filter)
                         ? HohenheimMicrocopy.HOHENHEIM.of("people_only")
                         : ActivityAdmin.defaultFilterChip(filter))
                 .build())
@@ -97,17 +99,14 @@ public final class AdminActivityResource {
     }
 
     /**
-     * What a person did, as one rule tree: the list's default origin scope plus the internal rows (a model or a verb
-     * declared internal, such as a sign-in) left out. The dashboard's recent activity reads THIS, so it never shows
-     * rows the list opens without.
-     *
-     * AIDEV-NOTE: the internal half is core's feed rule ({@link ActivityRules#listed()}) over the zenit.activity
-     * source's own variables, the same declarations the list's "internal" filter reads (ActivityLog.internalRows).
+     * What a person did, as one rule tree: the list's default origin scope plus the actions holding a listed change
+     * (core's listed criteria, {@link ActivitySources#recent()}). The dashboard's recent activity reads THIS, so it
+     * never shows actions the list opens without.
      *
      * @return the rule tree selecting what a person did
      */
     public static @NonNull Condition peopleOnly() {
-        return Condition.all(RuleText.parse(HIDE_BACKGROUND_EXPRESSION).require(), ActivityRules.listed());
+        return Condition.all(RuleText.parse(HIDE_BACKGROUND_EXPRESSION).require(), ActivitySources.recent());
     }
 
     /**
@@ -139,30 +138,30 @@ public final class AdminActivityResource {
     }
 
     /**
-     * The recent-activity feed of the dashboard: what a person did ({@link #peopleOnly()}), one row per action, the
-     * reading the activity list opens on.
+     * The recent-activity feed of the dashboard: what a person did ({@link #peopleOnly()}); one row is one action.
      *
      * @return the rule tree the dashboard's recent activity reads
      */
     public static @NonNull Condition recentActions() {
-        return Condition.all(peopleOnly(), ActivitySources.onePerCommand());
+        return peopleOnly();
     }
 
     /**
-     * The sentence links the record it names inside /admin and the model token reads as its bare name; every other
-     * column keeps the framework's cell (its actor and verb names).
+     * The sentence links the action's subject record inside /admin and the subject model reads as its bare name;
+     * every other column keeps the framework's cell (its actor and verb names).
      *
      * AIDEV-NOTE: the admin-panel walk (AdminRecordLinks): this list lives in /admin, so the record links into /admin
      * -- never into the /manage narrowing of the same model, which the panel-aware walk would fall back to.
      */
-    private static @Nullable Object cell(@NonNull Row row, @NonNull ColumnSpec column) {
+    private static @Nullable Object cell(@NonNull Row action, @NonNull HistoryEntry entry, @NonNull ColumnSpec column,
+                                         @NonNull AccessContext reader) {
         String name = column.name();
         if (column.source() == null && ActivityAdmin.SUMMARY_COLUMN.equals(name)) {
-            return ActivityAdmin.sentenceCell(row,
-                AdminRecordLinks.detailForToken(row.get(ActivityModel.MODEL), row.get(ActivityModel.RECORD_ID)));
+            return ActivityAdmin.sentenceCell(entry, reader, AdminRecordLinks.detailForToken(
+                action.get(ActionModel.SUBJECT_MODEL), action.get(ActionModel.SUBJECT_ID)));
         }
-        if (ActivityModel.MODEL.getName().equals(name)) {
-            String humanized = HistoryText.humanizeModelToken(row.get(ActivityModel.MODEL));
+        if (ActionModel.SUBJECT_MODEL.getName().equals(name)) {
+            String humanized = HistoryText.humanizeModelToken(action.get(ActionModel.SUBJECT_MODEL));
             return humanized.isEmpty() ? null : humanized;
         }
         return null;

@@ -52,7 +52,7 @@ public final class CmsSupport {
 
     /**
      * The framework activity record source's token, as {@code ActivitySources} derives it
-     * from {@code ActivityModel}. One home here because three surfaces name it (the admin
+     * over {@code ActionModel}. One home here because three surfaces name it (the admin
      * dashboard feed plus the per-record bands on the instance and server overviews) and a
      * typo in any of them degrades to an empty widget with only a log line to show for it.
      */

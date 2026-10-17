@@ -42,7 +42,7 @@ import be.elevenways.protoblast.common.time.RelativeTimeWording;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.render.table.EnumBadgeState;
 import be.elevenways.zenit.common.conduit.Conduit;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.zenit.common.orm.history.ActionModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -234,7 +234,7 @@ public final class ServerOverviewState {
                 "title", HohenheimWidgetCopy.localized(HohenheimMicrocopy.SERVER_OVERVIEW.of("recent_activity")),
                 "source", CmsSupport.ACTIVITY_SOURCE,
                 "rules", AdminActivityResource.peopleOnlyFor(Models.get(ServerModel.class), serverId),
-                "sort", ActivityModel.CREATED_AT.getName(),
+                "sort", ActionModel.CREATED_AT.getName(),
                 "descending", true,
                 "limit", 10))))));
 

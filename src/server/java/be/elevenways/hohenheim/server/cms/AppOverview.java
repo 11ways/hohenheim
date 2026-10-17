@@ -30,7 +30,7 @@ import be.elevenways.zenit.cms.server.panel.PanelGate;
 import be.elevenways.zenit.cms.server.panel.PartsReads;
 import be.elevenways.zenit.cms.server.panel.RecordTabGate;
 import be.elevenways.zenit.common.conduit.Conduit;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.zenit.common.orm.history.ActionModel;
 import be.elevenways.zenit.common.orm.activity.ActivityRules;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -259,10 +259,10 @@ final class AppOverview {
         return CardWidget.of(HohenheimMicrocopy.APP_OVERVIEW.of("recent"),
             new WidgetTree(List.of(new WidgetInstance(RecordsWidget.ID, Map.of(
             "source", CmsSupport.ACTIVITY_SOURCE,
-            // What people did (no bookkeeping verb such as a reconcile's correction), one row per command or batch:
-            // an SFTP session's 312 uploads read as one "Uploaded 312 files".
+            // What people did (no bookkeeping such as a reconcile's correction), one row per action: an SFTP
+            // session's 312 uploads read as one "Uploaded 312 files".
             "rules", Condition.all(ActivityRules.forRecord(model, id), ActivitySources.recent()),
-            "sort", ActivityModel.CREATED_AT.getName(),
+            "sort", ActionModel.CREATED_AT.getName(),
             "descending", true,
             "limit", 6)))));
     }

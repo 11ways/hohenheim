@@ -174,8 +174,9 @@ public class SiteModel extends Model {
 
     // Sites are the proxy's central config records: keep full snapshots so
     // admins can diff and restore them from the CMS history tab.
+    // The Spamservice reporting key is a credential, never a value a revision keeps or a restore puts back.
     public static final RevisionableBehaviour REVISIONABLE =
-        SCHEMA.addBehaviour(RevisionableBehaviour.create(50));
+        SCHEMA.addBehaviour(RevisionableBehaviour.create(50).except(SECURITY_REPORT_TOKEN));
 
     static {
         // Every site save is ONE write transaction by DECLARATION: the enable scan

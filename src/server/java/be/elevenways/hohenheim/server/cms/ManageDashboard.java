@@ -18,7 +18,7 @@ import be.elevenways.zenit.cms.common.render.action.LinkActionState;
 import be.elevenways.zenit.cms.common.resource.ActivitySources;
 import be.elevenways.zenit.cms.common.resource.RecordHealth;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.zenit.common.orm.history.ActionModel;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.widget.common.WidgetInstance;
@@ -97,13 +97,13 @@ public final class ManageDashboard extends PanelDashboard {
         return new WidgetTree(widgets);
     }
 
-    /** What happened lately to what this reader may see, one row per command, the newest first. */
+    /** What happened lately to what this reader may see, one row per action, the newest first. */
     private static @NonNull WidgetInstance recent() {
         return new WidgetInstance(RecordsWidget.ID, Map.of(
             "title", HohenheimWidgetCopy.localized(HohenheimMicrocopy.MANAGE_DASHBOARD.of("recent")),
             "source", RecordSourceRegistry.INSTANCE.requireById(ActivitySources.VIEWABLE).idToken(),
             "rules", ActivitySources.recent(),
-            "sort", ActivityModel.CREATED_AT.getName(),
+            "sort", ActionModel.CREATED_AT.getName(),
             "descending", true,
             "limit", 6));
     }
