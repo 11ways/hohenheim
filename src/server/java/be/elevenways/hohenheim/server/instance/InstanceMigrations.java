@@ -504,8 +504,8 @@ public final class InstanceMigrations {
      * AIDEV-NOTE: explicit, and in the authority rather than in the CMS row action, for
      * the same reason {@link InstanceSnapshots#recordRestore} is: a migration writes its
      * whole state through {@code InstanceOperationGuard.stampMigrating}/{@code handoff},
-     * which are set-based {@code updateAll} calls on fields no change captures (or, for the host,
-     * one change per record without saying why). Traced 2026-08-07.
+     * which are set-based {@code updateAll} calls whose captured fields (the status, the host) are recorded as
+     * changes without saying why. Traced 2026-08-07.
      */
     private static void recordMigration(int instanceId, String sourceName, String targetName) {
         History.event(Models.get(InstanceModel.class), instanceId, Change.fact(HohenheimActivityAction.MIGRATED,

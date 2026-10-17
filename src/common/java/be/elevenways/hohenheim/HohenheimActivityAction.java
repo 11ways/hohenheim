@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.InstanceStatus;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
@@ -18,6 +19,7 @@ import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.typed.CoreTypes;
+import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.common.orm.activity.ActivityAction;
 import be.elevenways.zenit.common.orm.activity.ActivityActions;
 import be.elevenways.zenit.common.orm.activity.ActivitySeverity;
@@ -182,6 +184,7 @@ public enum HohenheimActivityAction implements ActivityAction {
     public static final String TO_KEY = "to";
     public static final String PATH_KEY = "path";
     public static final String REMOVED_KEY = "removed";
+    /** What a correction's host reported of the workload, an {@link ObservedWorkload} token. */
     public static final String DAEMON_STATE_KEY = "daemon_state";
     public static final String CRASH_LOOP_KEY = "crash_loop";
     public static final String SHELL_KEY = "shell";
@@ -243,6 +246,36 @@ public enum HohenheimActivityAction implements ActivityAction {
 
         /** It never started: the start itself failed or was refused. */
         START
+    }
+
+    /** What a status correction's host reported of the workload, stored under {@link #DAEMON_STATE_KEY}. */
+    public enum ObservedWorkload {
+
+        /** The host holds no workload under the record's handle. */
+        ABSENT,
+
+        /** The host holds the workload, stopped. */
+        STOPPED;
+
+        /** @return the stored token */
+        public @NonNull String token() {
+            return BlastString.lower(this.name());
+        }
+
+        /** @return the report in the reader's words */
+        public @NonNull Microcopy label() {
+            return HohenheimMicrocopy.HOHENHEIM.of("workload_" + this.token(), DAEMON_STATE_KEY);
+        }
+
+        /** @return the words of a stored token, null for one no member stores */
+        static @Nullable Microcopy labelOf(@NonNull String token) {
+            for (ObservedWorkload observed : values()) {
+                if (observed.token().equals(token)) {
+                    return observed.label();
+                }
+            }
+            return null;
+        }
     }
 
     /** Why no automatic restart followed the stop a cause verb records. */
@@ -388,13 +421,14 @@ public enum HohenheimActivityAction implements ActivityAction {
                 FactShape.optionalKey(NATIVE_SNAPSHOT_KEY, CoreTypes.TEXT));
             case DRAINED -> FactShape.of(FactShape.key(MOVED_KEY, CoreTypes.INTEGER),
                 FactShape.key(REFUSED_KEY, CoreTypes.INTEGER), FactShape.key(COMPLETE_KEY, CoreTypes.BOOLEAN));
-            case MIGRATED, SETTLED_INTERRUPTED -> FactShape.of(FactShape.key(FROM_KEY, CoreTypes.TEXT),
+            case MIGRATED -> FactShape.of(FactShape.key(FROM_KEY, CoreTypes.TEXT),
                 FactShape.key(TO_KEY, CoreTypes.TEXT));
+            case SETTLED_INTERRUPTED -> FactShape.of(statusKey(FROM_KEY), statusKey(TO_KEY));
             case FILES_SAVE, FILES_UPLOAD, FILES_MKDIR, FILES_RENAME, FILES_DELETE, FILES_WRITE ->
                 FactShape.of(FactShape.key(PATH_KEY, CoreTypes.TEXT));
             case DELETED_DATA -> FactShape.of(FactShape.key(REMOVED_KEY, CoreTypes.LIST));
-            case RECONCILED -> FactShape.of(FactShape.key(FROM_KEY, CoreTypes.TEXT), FactShape.key(TO_KEY,
-                CoreTypes.TEXT), FactShape.optionalKey(DAEMON_STATE_KEY, CoreTypes.TEXT),
+            case RECONCILED -> FactShape.of(statusKey(FROM_KEY), statusKey(TO_KEY),
+                FactShape.wordedKey(DAEMON_STATE_KEY, ObservedWorkload::labelOf),
                 FactShape.key(CRASH_LOOP_KEY, CoreTypes.BOOLEAN));
             case BACKUP -> FactShape.of(FactShape.key(BACKUP_KEY, CoreTypes.INTEGER));
             case SNAPSHOT -> FactShape.of(FactShape.key(SNAPSHOT_KEY, CoreTypes.INTEGER));
@@ -415,6 +449,14 @@ public enum HohenheimActivityAction implements ActivityAction {
                 case NONE, PLAIN, HOST_ISOLATION -> FactShape.NONE;
             };
         };
+    }
+
+    /** @return a required key holding an instance status token, read as the status badge's label */
+    private static FactShape.@NonNull Key statusKey(@NonNull String name) {
+        return FactShape.wordedKey(name, token -> {
+            InstanceStatus status = InstanceStatus.forToken(token);
+            return status == null ? null : status.label();
+        });
     }
 
     /**

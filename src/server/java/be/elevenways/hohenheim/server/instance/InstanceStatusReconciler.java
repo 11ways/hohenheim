@@ -283,7 +283,9 @@ public final class InstanceStatusReconciler {
     private static @NonNull Map<String, Object> correctionFact(@NonNull String stored, @NonNull String settled,
                                                                @Nullable ContainerState state, boolean flapping) {
         return Map.of(HohenheimActivityAction.FROM_KEY, stored, HohenheimActivityAction.TO_KEY, settled,
-            HohenheimActivityAction.DAEMON_STATE_KEY, state == ContainerState.ABSENT ? "absent" : "stopped",
+            HohenheimActivityAction.DAEMON_STATE_KEY, (state == ContainerState.ABSENT
+                ? HohenheimActivityAction.ObservedWorkload.ABSENT
+                : HohenheimActivityAction.ObservedWorkload.STOPPED).token(),
             HohenheimActivityAction.CRASH_LOOP_KEY, flapping);
     }
 

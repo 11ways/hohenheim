@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.test;
 
-import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.hohenheim.server.auth.types.ProteusAuthProviderType;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.security.CallerChannel;

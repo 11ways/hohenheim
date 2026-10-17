@@ -5,6 +5,7 @@ import be.elevenways.hawkeye.common.annotation.HawkeyeFunction;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.ports.PortLedger;
@@ -27,9 +28,11 @@ import be.elevenways.zenit.common.ui.ColorHue;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * A single managed runtime unit (the instance tier's record): one container today,
@@ -640,6 +643,13 @@ public class InstanceModel extends Model {
         MIGRATE_RESERVED_MB, STOPPAGE_CAUSE, STOPPAGE_DETAIL, STOPPAGE_AT, RESTART_WITHHELD, STARTED_AT);
 
     /**
+     * The {@link #OPERATION_OWNED} columns a change records: every create carried their first values, and a
+     * configuration save that changes the image clears the pin ({@code InstanceImagePin}).
+     */
+    public static final List<Field<?, ?>> RECORDED_OPERATION_STATE = List.of(STATUS, INSTALL_STATE, RUNTIME_ROLE,
+        IMAGE_FINGERPRINT);
+
+    /**
      * @return the verb whose stoppage this record's ERROR status is, null when none is stored or the stored key names
      *         no verb that records one
      */
@@ -888,9 +898,20 @@ public class InstanceModel extends Model {
     public Schema getSchema() { return SCHEMA; }
 
     /**
-     * Values are captured, an app's configuration changes included; the {@link #OPERATION_OWNED} stamps are not,
-     * because only fenced statements write them and a cause or correction is recorded as its own fact.
+     * How long one actor's consecutive same-kind actions on a record read as one entry: an SFTP client's uploads
+     * folded for as long as its run lasted, and the idle timeout is what ends a run.
+     */
+    private static final Duration SESSION_QUIET = Duration.ofMinutes(Objects.requireNonNull(
+        HohenheimSettings.Sftp.IDLE_TIMEOUT_MINUTES.getDefaultValue(), "the SFTP idle timeout's default"));
+
+    /**
+     * Values are captured, an app's configuration changes included, and {@link #RECORDED_OPERATION_STATE} with them;
+     * a cause or correction is recorded as its own fact.
      */
     public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.optional().values()
-        .except(OPERATION_OWNED.toArray(new Field<?, ?>[0])));
+        // The other operation-owned stamps were never recorded: the old code wrote them only through
+        // InstanceOperationGuard's hook-free fenced updateAll.
+        .except(OPERATION_OWNED.stream().filter(field -> !RECORDED_OPERATION_STATE.contains(field))
+            .toArray(Field<?, ?>[]::new))
+        .foldingSessionsWithin(SESSION_QUIET));
 }

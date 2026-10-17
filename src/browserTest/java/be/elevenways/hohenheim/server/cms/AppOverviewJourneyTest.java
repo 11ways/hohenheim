@@ -516,7 +516,9 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
             History.event(Models.get(InstanceModel.class), id, Change.fact(HohenheimActivityAction.RECONCILED,
                 Map.of(HohenheimActivityAction.FROM_KEY, InstanceModel.STATUS_RUNNING,
                     HohenheimActivityAction.TO_KEY, InstanceModel.STATUS_STOPPED,
-                    HohenheimActivityAction.DAEMON_STATE_KEY, "stopped", HohenheimActivityAction.CRASH_LOOP_KEY, false)));
+                    HohenheimActivityAction.DAEMON_STATE_KEY,
+                    HohenheimActivityAction.ObservedWorkload.STOPPED.token(),
+                    HohenheimActivityAction.CRASH_LOOP_KEY, false)));
             String recent = adminGet("/admin/instances/" + id + "/page/overview").body();
             assertThat(recent).as("step 3: Recent leaves the correction out")
                 .doesNotContain("in line with its host")

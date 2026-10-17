@@ -2949,6 +2949,12 @@
       "target": "history_fact"
     },
     {
+      "text": "Backup #{$backup} made",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_backup": "true"
+    },
+    {
       "text": "{$actor} made a backup of {$subject}",
       "scope": "hohenheim",
       "target": "happened"
@@ -5808,7 +5814,7 @@
       "scope": "stack_services"
     },
     {
-      "text": "Disabled",
+      "text": ".match {$stranded :string}\ntrue {{Disabled: the instance it served was destroyed}}\n* {{Disabled}}",
       "scope": "hohenheim",
       "target": "history_fact"
     },
@@ -6801,6 +6807,12 @@
       "text": "Snapshot made",
       "scope": "hohenheim",
       "target": "history_fact"
+    },
+    {
+      "text": "Snapshot #{$snapshot} made",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_snapshot": "true"
     },
     {
       "text": "{$actor} took a snapshot of {$subject}",
@@ -13467,6 +13479,12 @@
       "target": "history_fact"
     },
     {
+      "text": "Removed leftover controller objects: {$objects}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_objects": "true"
+    },
+    {
       "text": "{$actor} cleaned up leftover objects on {$subject}",
       "scope": "hohenheim",
       "target": "happened"
@@ -13609,6 +13627,12 @@
       "text": "Cloned",
       "scope": "hohenheim",
       "target": "history_fact"
+    },
+    {
+      "text": "Copied from {$original}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_original": "true"
     },
     {
       "text": "{$actor} copied {$subject}",
@@ -13882,7 +13906,7 @@
   ],
   "requested": [
     {
-      "text": "Requested",
+      "text": ".match {$manual :string}\ntrue {{Requested through manual DNS-01}}\n* {{Requested}}",
       "scope": "hohenheim",
       "target": "history_fact"
     },
@@ -13897,6 +13921,19 @@
       "text": "Reissued",
       "scope": "hohenheim",
       "target": "history_fact"
+    },
+    {
+      "text": "Reissued for {$hostnames}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_hostnames": "true"
+    },
+    {
+      "text": "Reissued for {$hostnames}; it covered {$previous} before",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_hostnames": "true",
+      "has_previous": "true"
     },
     {
       "text": "{$actor} reissued certificate {$subject}",
@@ -13996,6 +14033,34 @@
       "target": "history_fact"
     },
     {
+      "text": "Restored from backup #{$backup}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_backup": "true"
+    },
+    {
+      "text": "Restored from backup #{$backup}, except: {$losses}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_backup": "true",
+      "has_losses": "true"
+    },
+    {
+      "text": "Restored from backup #{$backup}; host ports this host already held, now picked by it: {$moved_ports}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_backup": "true",
+      "has_moved_ports": "true"
+    },
+    {
+      "text": "Restored from backup #{$backup}, except: {$losses}; host ports this host already held, now picked by it: {$moved_ports}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_backup": "true",
+      "has_losses": "true",
+      "has_moved_ports": "true"
+    },
+    {
       "text": "{$actor} restored {$subject} from a backup",
       "scope": "hohenheim",
       "target": "happened"
@@ -14008,6 +14073,18 @@
       "target": "history_fact"
     },
     {
+      "text": "Restored from snapshot #{$snapshot}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_snapshot": "true"
+    },
+    {
+      "text": "Restored from native snapshot {$native_snapshot}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_native_snapshot": "true"
+    },
+    {
       "text": "{$actor} restored {$subject} from a snapshot",
       "scope": "hohenheim",
       "target": "happened"
@@ -14018,6 +14095,12 @@
       "text": "Interrupted run settled",
       "scope": "hohenheim",
       "target": "history_fact"
+    },
+    {
+      "text": "Settled from {$from} to {$to}: a controller restart interrupted it",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_from": "true"
     },
     {
       "text": "Hohenheim settled the interrupted work on {$subject}",
@@ -14056,16 +14139,38 @@
       "target": "history_fact"
     },
     {
+      "text": ".match {$crash_loop :string}\ntrue {{Corrected from {$from} to {$to}: it died without an observed stop, and its host reports the workload {$daemon_state}; crash loop, automatic restarts suspended}}\n* {{Corrected from {$from} to {$to}: it died without an observed stop, and its host reports the workload {$daemon_state}}}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_from": "true"
+    },
+    {
       "text": "Hohenheim brought the stored state of {$subject} in line with its host",
       "scope": "hohenheim",
       "target": "happened"
     }
   ],
+  "workload_absent": {
+    "text": "absent",
+    "scope": "hohenheim",
+    "target": "daemon_state"
+  },
+  "workload_stopped": {
+    "text": "stopped",
+    "scope": "hohenheim",
+    "target": "daemon_state"
+  },
   "drained": [
     {
       "text": "Drained",
       "scope": "hohenheim",
       "target": "history_fact"
+    },
+    {
+      "text": ".match {$complete :string}\ntrue {{Drained: {$moved} moved, {$refused} refused; the host holds none}}\n* {{Drain incomplete: {$moved} moved, {$refused} refused; the host still holds some}}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_moved": "true"
     },
     {
       "text": "{$actor} moved the workloads off {$subject}",
@@ -14080,6 +14185,12 @@
       "target": "history_fact"
     },
     {
+      "text": "Moved from {$from} to {$to}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_from": "true"
+    },
+    {
       "text": "{$actor} moved {$subject} to another host",
       "scope": "hohenheim",
       "target": "happened"
@@ -14092,6 +14203,12 @@
       "target": "history_fact"
     },
     {
+      "text": "Opened {$shell} as uid {$run_user}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_shell": "true"
+    },
+    {
       "text": "{$actor} opened a shell in {$subject}",
       "scope": "hohenheim",
       "target": "happened"
@@ -14102,6 +14219,12 @@
       "text": "Shell closed",
       "scope": "hohenheim",
       "target": "history_fact"
+    },
+    {
+      "text": ".match {$closed_by :string}\nclient {{Closed {$shell} as uid {$run_user}: the viewer left the terminal}}\nexited {{Closed {$shell} as uid {$run_user}: the shell exited}}\nidle {{Closed {$shell} as uid {$run_user}: no keystroke for too long}}\nrevoked {{Closed {$shell} as uid {$run_user}: its access was revoked}}\nworkload_ended {{Closed {$shell} as uid {$run_user}: the workload stopped}}\n* {{Closed {$shell} as uid {$run_user}}}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_shell": "true"
     },
     {
       "text": "{$actor} closed a shell in {$subject}",

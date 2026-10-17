@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.migration;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.migration.HohenheimMigration;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.activity.LegacyFacts;
 import be.elevenways.zenit.common.orm.activity.M015_ConvertActivity;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
@@ -17,7 +19,9 @@ import java.util.Set;
  *
  * AIDEV-NOTE: until history v3 Hohenheim registered its own spellings "created", "updated" and "deleted" as legacy
  * keys of core's CREATE, UPDATE and DELETE verbs. Those keys are gone, so core M015 keeps such a row as a
- * {@code legacy_kind} fact, and the change's op already says what happened. Every write goes through
+ * {@code legacy_kind} fact, and the change's op already says what happened. Only a row of a Hohenheim model is
+ * Hohenheim's: another module stored the same bare spellings for rows of its own ({@code zenit:settings}'s
+ * "updated", its changed paths the detail), which that module's conversion reads. Every write goes through
  * {@link LegacyFacts}, so the provenance columns stay in step; a rerun finds no legacy fact left to convert.
  * Irreversible (W4): its rollback is the backup taken before the upgrade.
  *
@@ -53,9 +57,15 @@ public class M018_ConvertHohenheimHistory extends HohenheimMigration {
 
     /** @return the legacy facts converted */
     public static int plainRowVerbs(@NonNull Datasource datasource) {
-        int converted = LegacyFacts.convert(datasource,
-            fact -> PLAIN_ROW_VERBS.contains(fact.kind()) ? LegacyFacts.Outcome.copy() : null);
+        int converted = LegacyFacts.convert(datasource, fact -> PLAIN_ROW_VERBS.contains(fact.kind())
+            && hohenheims(fact.model()) ? LegacyFacts.Outcome.copy() : null);
         Blast.slog(EVENT, Map.of("converted", converted));
         return converted;
+    }
+
+    /** @return whether the stored model token names one of Hohenheim's own models */
+    private static boolean hohenheims(@NonNull String model) {
+        Identifier id = Identifier.tryParse(model);
+        return id != null && HohenheimIds.PRODUCT.namespace().equals(id.getNamespace());
     }
 }

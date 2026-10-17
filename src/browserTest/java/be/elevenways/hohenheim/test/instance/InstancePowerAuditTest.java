@@ -35,9 +35,11 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -89,10 +91,16 @@ class InstancePowerAuditTest {
         return RecordedChanges.withFact(Models.get(InstanceModel.class), instanceId, kind);
     }
 
-    /** @return the instance's UPDATE changes that name no act: a bare field update */
+    /**
+     * @return the instance's UPDATE changes that name no act, beyond the operation state a fenced stamp records
+     *         ({@link InstanceModel#RECORDED_OPERATION_STATE}): a bare field update
+     */
     private static List<RecordedChanges.Recorded> bareUpdates(int instanceId) {
+        Set<String> stamped = new HashSet<>();
+        InstanceModel.RECORDED_OPERATION_STATE.forEach(field -> stamped.add(field.getName()));
         return RecordedChanges.of(Models.get(InstanceModel.class), instanceId, ChangeOp.UPDATE).stream()
-            .filter(recorded -> recorded.facts().isEmpty()).toList();
+            .filter(recorded -> recorded.facts().isEmpty() && !stamped.containsAll(recorded.delta().keySet()))
+            .toList();
     }
 
     private static Accountability operator(UUID id) {

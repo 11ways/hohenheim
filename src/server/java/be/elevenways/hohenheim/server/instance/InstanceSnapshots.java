@@ -347,9 +347,9 @@ public final class InstanceSnapshots {
      * AIDEV-NOTE: explicit, and in the authority rather than the CMS row action, because
      * an in-place restore is a REPLACE that destroys everything written since the
      * snapshot and writes its whole state through InstanceOperationGuard.stamp -- an
-     * updateAll on fields no change captures. The wrapper that used to be the only
-     * "accountability" here recorded literally nothing, the same silent-success shape as
-     * the OrphanActions claim.
+     * updateAll whose one captured field, the status, is recorded without saying why.
+     * The wrapper that used to be the only "accountability" here recorded literally
+     * nothing, the same silent-success shape as the OrphanActions claim.
      */
     private static void recordRestore(int instanceId, @NonNull Map<String, ?> body) {
         History.event(Models.get(InstanceModel.class), instanceId,

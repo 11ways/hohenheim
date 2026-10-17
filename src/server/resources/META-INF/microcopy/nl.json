@@ -2949,6 +2949,12 @@
       "target": "history_fact"
     },
     {
+      "text": "Back-up #{$backup} gemaakt",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_backup": "true"
+    },
+    {
       "text": "{$actor} maakte een back-up van {$subject}",
       "scope": "hohenheim",
       "target": "happened"
@@ -5808,7 +5814,7 @@
       "scope": "stack_services"
     },
     {
-      "text": "Uitgeschakeld",
+      "text": ".match {$stranded :string}\ntrue {{Uitgeschakeld: de instantie erachter werd verwijderd}}\n* {{Uitgeschakeld}}",
       "scope": "hohenheim",
       "target": "history_fact"
     },
@@ -6801,6 +6807,12 @@
       "text": "Momentopname gemaakt",
       "scope": "hohenheim",
       "target": "history_fact"
+    },
+    {
+      "text": "Momentopname #{$snapshot} gemaakt",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_snapshot": "true"
     },
     {
       "text": "{$actor} nam een snapshot van {$subject}",
@@ -13467,6 +13479,12 @@
       "target": "history_fact"
     },
     {
+      "text": "Achtergebleven controllerobjecten verwijderd: {$objects}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_objects": "true"
+    },
+    {
       "text": "{$actor} ruimde achtergebleven objecten op {$subject} op",
       "scope": "hohenheim",
       "target": "happened"
@@ -13609,6 +13627,12 @@
       "text": "Gekloond",
       "scope": "hohenheim",
       "target": "history_fact"
+    },
+    {
+      "text": "Gekopieerd van {$original}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_original": "true"
     },
     {
       "text": "{$actor} kopieerde {$subject}",
@@ -13882,7 +13906,7 @@
   ],
   "requested": [
     {
-      "text": "Aangevraagd",
+      "text": ".match {$manual :string}\ntrue {{Aangevraagd via handmatige DNS-01}}\n* {{Aangevraagd}}",
       "scope": "hohenheim",
       "target": "history_fact"
     },
@@ -13897,6 +13921,19 @@
       "text": "Opnieuw uitgegeven",
       "scope": "hohenheim",
       "target": "history_fact"
+    },
+    {
+      "text": "Opnieuw uitgegeven voor {$hostnames}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_hostnames": "true"
+    },
+    {
+      "text": "Opnieuw uitgegeven voor {$hostnames}; eerder voor {$previous}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_hostnames": "true",
+      "has_previous": "true"
     },
     {
       "text": "{$actor} vroeg certificaat {$subject} opnieuw aan",
@@ -13996,6 +14033,34 @@
       "target": "history_fact"
     },
     {
+      "text": "Teruggezet uit back-up #{$backup}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_backup": "true"
+    },
+    {
+      "text": "Teruggezet uit back-up #{$backup}, behalve: {$losses}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_backup": "true",
+      "has_losses": "true"
+    },
+    {
+      "text": "Teruggezet uit back-up #{$backup}; hostpoorten die deze host al gebruikte, kiest hij nu zelf: {$moved_ports}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_backup": "true",
+      "has_moved_ports": "true"
+    },
+    {
+      "text": "Teruggezet uit back-up #{$backup}, behalve: {$losses}; hostpoorten die deze host al gebruikte, kiest hij nu zelf: {$moved_ports}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_backup": "true",
+      "has_losses": "true",
+      "has_moved_ports": "true"
+    },
+    {
       "text": "{$actor} zette {$subject} terug uit een back-up",
       "scope": "hohenheim",
       "target": "happened"
@@ -14008,6 +14073,18 @@
       "target": "history_fact"
     },
     {
+      "text": "Teruggezet uit momentopname #{$snapshot}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_snapshot": "true"
+    },
+    {
+      "text": "Teruggezet uit native momentopname {$native_snapshot}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_native_snapshot": "true"
+    },
+    {
       "text": "{$actor} zette {$subject} terug uit een snapshot",
       "scope": "hohenheim",
       "target": "happened"
@@ -14018,6 +14095,12 @@
       "text": "Onderbroken run afgehandeld",
       "scope": "hohenheim",
       "target": "history_fact"
+    },
+    {
+      "text": "Afgehandeld van {$from} naar {$to}: een herstart van de controller onderbrak het",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_from": "true"
     },
     {
       "text": "Hohenheim rondde het onderbroken werk aan {$subject} af",
@@ -14056,16 +14139,38 @@
       "target": "history_fact"
     },
     {
+      "text": ".match {$crash_loop :string}\ntrue {{Gecorrigeerd van {$from} naar {$to}: de workload viel weg zonder waargenomen stop, en zijn host meldt hem {$daemon_state}; crashlus, automatische herstarts opgeschort}}\n* {{Gecorrigeerd van {$from} naar {$to}: de workload viel weg zonder waargenomen stop, en zijn host meldt hem {$daemon_state}}}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_from": "true"
+    },
+    {
       "text": "Hohenheim bracht de bewaarde staat van {$subject} in lijn met zijn host",
       "scope": "hohenheim",
       "target": "happened"
     }
   ],
+  "workload_absent": {
+    "text": "afwezig",
+    "scope": "hohenheim",
+    "target": "daemon_state"
+  },
+  "workload_stopped": {
+    "text": "gestopt",
+    "scope": "hohenheim",
+    "target": "daemon_state"
+  },
   "drained": [
     {
       "text": "Leeggehaald",
       "scope": "hohenheim",
       "target": "history_fact"
+    },
+    {
+      "text": ".match {$complete :string}\ntrue {{Leeggehaald: {$moved} verhuisd, {$refused} geweigerd; de host heeft er geen meer}}\n* {{Leeghalen onvolledig: {$moved} verhuisd, {$refused} geweigerd; de host heeft er nog}}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_moved": "true"
     },
     {
       "text": "{$actor} verhuisde de workloads weg van {$subject}",
@@ -14080,6 +14185,12 @@
       "target": "history_fact"
     },
     {
+      "text": "Verhuisd van {$from} naar {$to}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_from": "true"
+    },
+    {
       "text": "{$actor} verhuisde {$subject} naar een andere host",
       "scope": "hohenheim",
       "target": "happened"
@@ -14092,6 +14203,12 @@
       "target": "history_fact"
     },
     {
+      "text": "{$shell} geopend als uid {$run_user}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_shell": "true"
+    },
+    {
       "text": "{$actor} opende een shell in {$subject}",
       "scope": "hohenheim",
       "target": "happened"
@@ -14102,6 +14219,12 @@
       "text": "Shell gesloten",
       "scope": "hohenheim",
       "target": "history_fact"
+    },
+    {
+      "text": ".match {$closed_by :string}\nclient {{{$shell} als uid {$run_user} gesloten: de gebruiker verliet de terminal}}\nexited {{{$shell} als uid {$run_user} gesloten: de shell stopte}}\nidle {{{$shell} als uid {$run_user} gesloten: te lang geen toetsaanslag}}\nrevoked {{{$shell} als uid {$run_user} gesloten: de toegang werd ingetrokken}}\nworkload_ended {{{$shell} als uid {$run_user} gesloten: de workload stopte}}\n* {{{$shell} als uid {$run_user} gesloten}}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_shell": "true"
     },
     {
       "text": "{$actor} sloot een shell in {$subject}",
