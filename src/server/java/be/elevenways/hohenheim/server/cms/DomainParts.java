@@ -23,7 +23,10 @@ import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.typed.CoreTypes;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.render.CmsTemplateIds;
 import be.elevenways.zenit.cms.common.render.table.RecordLink;
@@ -32,6 +35,7 @@ import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.RecordLead;
+import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import be.elevenways.zenit.cms.common.resource.ResourceForm;
 import be.elevenways.zenit.cms.common.resource.ResourceList;
 import be.elevenways.zenit.cms.common.resource.ResourceMutations;
@@ -41,8 +45,10 @@ import be.elevenways.zenit.cms.common.resource.ResourceTabs;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.cms.server.panel.PartsReads;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.data.RowScope;
+import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FieldOption;
@@ -58,6 +64,7 @@ import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.BooleanField;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -151,7 +158,7 @@ public final class DomainParts {
     public static @NonNull PanelResource<Row> admin() {
         return entry(HohenheimIds.id("site_domain"))
             .scope(ROWS)
-            .form(form(adminFormSpec()))
+            .form(form(adminFormSpec(), HohenheimSlugs.ADMIN))
             // Requesting a certificate stays installation administration (an issued certificate is authority over a
             // name), so only the admin twin offers it.
             .actions(List.of(CertificateOperations.requestForDomainAction(), checkReachAction()))
@@ -173,7 +180,7 @@ public final class DomainParts {
         // A Domains cluster member, shown while the tenant may read an address.
         return ManageTwin.listed(entry(ManageTwin.id("site_domain")), TenantScopes.DOMAINS, ResourceTabs.none(),
                 HohenheimAccess::readsAnyAddress)
-            .form(form(manageFormSpec()))
+            .form(form(manageFormSpec(), HohenheimSlugs.MANAGE))
             .build();
     }
 
@@ -426,8 +433,8 @@ public final class DomainParts {
     }
 
     /**
-     * A twin's form part around its own spec: the quick-add bar with its site preset and the TLS switches as inline
-     * cells.
+     * A twin's form part around its own spec: the quick-add bar with its site preset, the TLS switches as inline
+     * cells, and a create under a TLS passthrough site opening with those switches fixed as the save stores them.
      *
      * AIDEV-NOTE: every inline write is correct on a ONE-ENTRY map by construction, because the route invariant reads
      * its inputs through {@code Row.afterWrite} rather than off the coerced map. HOSTNAME, PATH, LISTEN_ON
@@ -435,12 +442,16 @@ public final class DomainParts {
      * quarantine a hostname the operator still believes they own; that belongs on a form, next to the refusals that
      * explain it.
      *
-     * AIDEV-NOTE: no create defaults read the parent site. A TLS passthrough site's HTTPS forcing and ACME switches
-     * are SiteDomainModel's write rule, which reads the written site_id on every lane (form, API, MCP, jobs); a
-     * prefill from the create link's parent was a second home that a create without a request never reached.
+     * AIDEV-NOTE: the create form only PREVIEWS the passthrough switches (fixedOnCreate); SiteDomainModel's write
+     * hook decides them on every lane, and both ask the one rule, SiteDomainModel.fixedTlsSwitches.
+     *
+     * @param panelSlug the panel the twin is placed in, whose own site entry the preview reads its site through
      */
-    private static @NonNull ResourceForm<Row> form(@NonNull FormSpec spec) {
+    private static @NonNull ResourceForm<Row> form(@NonNull FormSpec spec, @NonNull String panelSlug) {
         return ResourceForm.<Row>of(spec)
+            .createDefaults((access, panel) -> createDefaults(spec, access, panel))
+            .bindings(List.of(switchAccess(SiteDomainModel.FORCE_SSL, panelSlug),
+                switchAccess(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT, panelSlug)))
             .quickCreate(QUICK_CREATE)
             .quickCreatePresets(access -> CmsSupport.parentPreset(access, SiteDomainModel.SITE_ID.getName(),
                 HohenheimSlugs.SITES))
@@ -448,6 +459,48 @@ public final class DomainParts {
                 SiteDomainModel.HSTS_SUBDOMAINS, SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT)
             .lead(DomainParts::lead)
             .build();
+    }
+
+    /** The create form's values: the spec's defaults, with each switch its parent site fixes at the stored value. */
+    private static @NonNull Map<String, Object> createDefaults(@NonNull FormSpec spec, @NonNull AccessContext access,
+                                                               @NonNull Panel panel) {
+        Map<String, Object> values = new LinkedHashMap<>(spec.defaultValues());
+        fixedOnCreate(access, panel).forEach((field, value) -> {
+            if (spec.findEntry(field.getName()) != null) {
+                values.put(field.getName(), value);
+            }
+        });
+        return Map.copyOf(values);
+    }
+
+    /** A switch read-only on a create its parent site fixes it on, editable everywhere else. */
+    private static @NonNull ResourceFieldBinding switchAccess(@NonNull BooleanField field,
+                                                              @NonNull String panelSlug) {
+        return ResourceFieldBinding.of(field.getName(), FieldAccess.customRecordAware((access, record) ->
+                record == null && fixedOnCreate(access, PanelRegistry.getBySlug(panelSlug)).containsKey(field)
+                    ? FieldAccess.Decision.READONLY : FieldAccess.Decision.EDITABLE)
+            .acrossRecords(access -> FieldAccess.Decision.EDITABLE));
+    }
+
+    /**
+     * The switches a create under the request's parent site will be stored with (SiteDomainModel.fixedTlsSwitches),
+     * empty without a request or a parent site.
+     *
+     * AIDEV-NOTE: the site is read through the panel's own site entry, in the caller's scope: a site the caller cannot
+     * read previews exactly as no site does, so the form is no probe of another tenant's configuration. A create
+     * without a request names no parent and previews nothing; the write hook still stores the switches.
+     */
+    private static @NonNull Map<BooleanField, Boolean> fixedOnCreate(@NonNull AccessContext access,
+                                                                     @Nullable Panel panel) {
+        Conduit conduit = access.conduit();
+        Integer siteId = conduit == null ? null
+            : CmsSupport.scopedParentId(conduit, CmsEndpoints.PARENT_PARAM.getName(), HohenheimSlugs.SITES);
+        if (siteId == null || panel == null
+                || !(panel.entryBySlug(HohenheimSlugs.SITES) instanceof PanelResource<?> sites)) {
+            return Map.of();
+        }
+        return SiteDomainModel.fixedTlsSwitches(
+            PartsReads.loadRow(panel, sites, siteId, access) instanceof Row site ? site : null);
     }
 
     /**

@@ -37,7 +37,9 @@ import be.elevenways.zenit.cms.common.render.panel.ChildListSectionState;
 import be.elevenways.zenit.cms.common.render.table.TableState;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceVerb;
+import be.elevenways.zenit.cms.server.panel.PartsForms;
 import be.elevenways.zenit.cms.server.panel.ResourceVerbs;
+import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.conduit.ConduitAttributes;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -386,7 +388,8 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
     /**
      * A domain created under a TLS passthrough site stores HTTPS forcing and ACME off on every create lane, a create
      * without a request included, because the rule is the domain write's, read off the written site. The create form
-     * reads no parent site at all, so it is no probe of another tenant's configuration (GPT review 25 D03).
+     * previews those switches fixed, at the values the save stores, only under a site the caller may read, so it is
+     * no probe of another tenant's configuration (GPT review 25 D03).
      */
     @Test
     void aDomainCreateUnderAPassthroughSiteStoresItsTlsSwitchesOnEveryLane() throws Exception {
@@ -397,15 +400,33 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
         Model domains = Models.get(SiteDomainModel.class);
         List<Object> created = new ArrayList<>();
         try {
-            // 1. The create form opens the same under any parent, reachable or not: no site is read into it.
+            // 1. Under the holder's own passthrough site the create form shows both switches fixed, at the values
+            //    the save stores; HSTS stays the caller's choice.
             Map<String, Object> none = createDefaults(holder(), HohenheimSlugs.MANAGE, null);
+            Map<String, Object> fixed = new LinkedHashMap<>(none);
+            fixed.put(SiteDomainModel.FORCE_SSL.getName(), false);
+            fixed.put(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName(), true);
             assertThat(createDefaults(holder(), HohenheimSlugs.MANAGE, own))
-                .as("step 1: the holder's own passthrough site prefills nothing").isEqualTo(none);
+                .as("step 1: the holder's own passthrough site previews the stored switches").isEqualTo(fixed);
+            assertThat(switchAccess(holder(), HohenheimSlugs.MANAGE, own))
+                .as("step 1: and shows them read-only, HSTS editable")
+                .containsExactly(FieldAccess.Decision.READONLY, FieldAccess.Decision.READONLY,
+                    FieldAccess.Decision.EDITABLE);
+
+            // 1b. A site the holder cannot read previews exactly as no site: editable, at the spec's defaults.
             assertThat(createDefaults(holder(), HohenheimSlugs.MANAGE, foreign))
-                .as("step 1: an unreachable site prefills nothing either").isEqualTo(none);
+                .as("step 1b: an unreachable site prefills nothing").isEqualTo(none);
+            assertThat(switchAccess(holder(), HohenheimSlugs.MANAGE, foreign))
+                .as("step 1b: and fixes nothing").containsOnly(FieldAccess.Decision.EDITABLE);
+
+            // 1c. The operator reads every site, so the same site previews its switches on /admin.
             assertThat(createDefaults(operator(), HohenheimSlugs.ADMIN, foreign))
-                .as("step 1: the operator's create form reads no site").isEqualTo(
-                    createDefaults(operator(), HohenheimSlugs.ADMIN, null));
+                .as("step 1c: the operator's create form previews the stored switches")
+                .containsEntry(SiteDomainModel.FORCE_SSL.getName(), false)
+                .containsEntry(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName(), true);
+            assertThat(switchAccess(operator(), HohenheimSlugs.ADMIN, foreign))
+                .as("step 1c: and shows them read-only").containsExactly(FieldAccess.Decision.READONLY,
+                    FieldAccess.Decision.READONLY, FieldAccess.Decision.EDITABLE);
 
             // 2. A create without a request (a job, an MCP call) under the passthrough site stores both switches.
             Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN));
@@ -447,15 +468,35 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
      * the hook's argument only, never a conduit parameter.
      */
     private static Map<String, Object> createDefaults(AccessContext ctx, String panel, Integer parent) {
+        return domainResource(panel).form().createDefaults(createAccess(ctx, parent),
+            Objects.requireNonNull(PanelRegistry.getBySlug(panel)));
+    }
+
+    /** How a domain create form on {@code panel} under {@code parent} draws force_ssl, the ACME exclusion and HSTS. */
+    private static List<FieldAccess.Decision> switchAccess(AccessContext ctx, String panel, Integer parent) {
+        Map<String, FieldAccess> access = PartsForms.fieldAccessByPath(domainResource(panel));
+        AccessContext create = createAccess(ctx, parent);
+        List<FieldAccess.Decision> decisions = new ArrayList<>();
+        for (var field : List.of(SiteDomainModel.FORCE_SSL, SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT,
+                SiteDomainModel.HSTS_ENABLED)) {
+            decisions.add(access.getOrDefault(field.getName(), FieldAccess.ALWAYS_EDITABLE).decide(create, null));
+        }
+        return decisions;
+    }
+
+    private static PanelResource<Row> domainResource(String panel) {
+        return HohenheimSlugs.ADMIN.equals(panel) ? DomainParts.admin() : DomainParts.manage();
+    }
+
+    /** The caller on a domain create request, under {@code parent} when given. */
+    private static AccessContext createAccess(AccessContext ctx, Integer parent) {
         EndpointConduit conduit = new EndpointConduit()
             .withAttribute(ConduitAttributes.PRINCIPAL, ctx.principal())
             .setParameter(CmsEndpoints.RESOURCE_PARAM, HohenheimSlugs.DOMAINS);
         if (parent != null) {
             conduit.setQueryParam(CmsEndpoints.PARENT_PARAM.getName(), String.valueOf(parent));
         }
-        PanelResource<Row> resource = HohenheimSlugs.ADMIN.equals(panel) ? DomainParts.admin() : DomainParts.manage();
-        return resource.form().createDefaults(AccessContext.of(conduit),
-            Objects.requireNonNull(PanelRegistry.getBySlug(panel)));
+        return AccessContext.of(conduit);
     }
 
     private static int passthroughSite(String name) {

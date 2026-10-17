@@ -11,6 +11,7 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import java.util.List;
+import java.util.Map;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.ColorHue;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -314,16 +315,28 @@ public class SiteDomainModel extends Model {
                 row.set(MATCH_TYPE, effectiveMatchType(canonical, matchType));
             }
             disarmOnExplicitChoice(row, stored);
-            // AIDEV-NOTE: THE home of a TLS passthrough site's HTTPS switches: forcing and ACME off on every write
-            // of every lane (form, API, MCP, jobs), read off the written site_id. No create form prefills them.
-            Row site = StoredRows.byId(Models.get(SiteModel.class), row.afterWrite(SITE_ID, stored));
-            if (site == null || !SiteModel.UPSTREAM_TLS_PASSTHROUGH
-                    .equals(site.get(SiteModel.UPSTREAM_KIND))) return;
-            row.set(FORCE_SSL, false);
-            row.set(FORCE_SSL_AUTO, false);
-            row.set(EXCLUDE_FROM_LETSENCRYPT, true);
+            // AIDEV-NOTE: the write half of fixedTlsSwitches, THE home of a TLS passthrough site's HTTPS switches:
+            // stored on every write of every lane (form, API, MCP, jobs), read off the written site_id. The create
+            // form previews the same answer (DomainParts); it never decides it.
+            Map<BooleanField, Boolean> fixed =
+                fixedTlsSwitches(StoredRows.byId(Models.get(SiteModel.class), row.afterWrite(SITE_ID, stored)));
+            if (fixed.isEmpty()) return;
+            fixed.forEach((field, value) -> row.set(field, value));
             validateTlsPassthroughValues(row, stored);
         });
+    }
+
+    /**
+     * The HTTPS switches a domain under {@code site} is stored with whatever its write states, empty when the site
+     * fixes none; a TLS passthrough site terminates no TLS here, so forcing and its latch are off and ACME excluded.
+     *
+     * @param site the domain's site, null for none
+     */
+    public static @NonNull Map<BooleanField, Boolean> fixedTlsSwitches(@Nullable Row site) {
+        if (site == null || !SiteModel.UPSTREAM_TLS_PASSTHROUGH.equals(site.get(SiteModel.UPSTREAM_KIND))) {
+            return Map.of();
+        }
+        return Map.of(FORCE_SSL, false, FORCE_SSL_AUTO, false, EXCLUDE_FROM_LETSENCRYPT, true);
     }
 
     /**
