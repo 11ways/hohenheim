@@ -47,31 +47,32 @@ class SiteHistoryTest extends HohenheimTestBase {
         waitForSelector(".cms-record-history-page");
 
         // Create + update, both revision-linked (sites are Revisionable).
-        assertThat(page.locator("pl-timeline-item[data-activity-action='zenit:create']").count()).isEqualTo(1);
-        assertThat(page.locator("pl-timeline-item[data-activity-action='zenit:update']").count()).isEqualTo(1);
+        assertThat(page.locator("pl-timeline-item[data-activity-op='create']").count()).isEqualTo(1);
+        assertThat(page.locator("pl-timeline-item[data-activity-op='update']").count()).isEqualTo(1);
         assertThat(page.locator(
-            "pl-timeline-item[data-activity-action='zenit:update'] pl-badge[data-activity-revision='2']").count())
+            "pl-timeline-item[data-activity-op='update'] pl-badge[data-activity-revision='2']").count())
             .isEqualTo(1);
 
-        // Expanding the update entry reveals the name delta (ALL policy).
-        click("pl-timeline-item[data-activity-action='zenit:update'] pl-collapsible-trigger button");
-        waitForSelector("pl-timeline-item[data-activity-action='zenit:update'] pl-table-row[data-diff-field='name']");
+        // Expanding the update entry reveals the name delta (sites record every value).
+        click("pl-timeline-item[data-activity-op='update'] pl-collapsible-trigger[data-activity-toggle-changes]"
+            + " button");
+        waitForSelector("pl-timeline-item[data-activity-op='update'] pl-table-row[data-diff-field='name']");
         assertThat(page.locator(
-                "pl-timeline-item[data-activity-action='zenit:update'] pl-table-row[data-diff-field='name'] "
+                "pl-timeline-item[data-activity-op='update'] pl-table-row[data-diff-field='name'] "
                 + ".cms-diff-before")
             .textContent()).contains("History Site");
         assertThat(page.locator(
-                "pl-timeline-item[data-activity-action='zenit:update'] pl-table-row[data-diff-field='name'] "
+                "pl-timeline-item[data-activity-op='update'] pl-table-row[data-diff-field='name'] "
                 + ".cms-diff-after")
             .textContent()).contains("Renamed Site");
 
         // Restoring revision 1 from the same feed render brings the old name back.
-        click("pl-timeline-item[data-activity-action='zenit:create'] pl-button[data-cms-restore-revision='1']");
+        click("pl-timeline-item[data-activity-op='create'] pl-button[data-cms-restore-revision='1']");
         waitForSelector("pl-button[data-cms-confirm-ok]");
         click("pl-button[data-cms-confirm-ok]");
 
         waitForSelector(".cms-record-history-page");
-        waitForSelector("pl-timeline-item[data-activity-action='zenit:restore']");
+        waitForSelector("pl-timeline-item[data-activity-facts*='zenit:restore']");
 
         Row restored = Models.get(SiteModel.class).find()
             .where(SiteModel.ID.eq(siteId)).first();

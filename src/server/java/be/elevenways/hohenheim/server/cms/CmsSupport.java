@@ -30,6 +30,9 @@ import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.routing.ParameterDefinition;
 import be.elevenways.zenit.common.routing.RouteLocales;
 import be.elevenways.zenit.common.routing.RouteScope;
+import be.elevenways.zenit.common.data.RecordSource;
+import be.elevenways.zenit.common.data.RecordSourceRegistry;
+import be.elevenways.zenit.common.orm.history.ActionModel;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -51,12 +54,18 @@ import static be.elevenways.hohenheim.RawValues.parsedInt;
 public final class CmsSupport {
 
     /**
-     * The framework activity record source's token, as {@code ActivitySources} derives it
-     * over {@code ActionModel}. One home here because three surfaces name it (the admin
-     * dashboard feed plus the per-record bands on the instance and server overviews) and a
-     * typo in any of them degrades to an empty widget with only a log line to show for it.
+     * The framework activity record source {@code ActivitySources.register} declares over {@code ActionModel}, under
+     * that model's id. One home here because three surfaces read it (the admin dashboard feed plus the per-record
+     * Recent cards).
+     *
+     * AIDEV-NOTE: never a literal token: the source was "zenit.activity" while it read ActivityModel, and the literal
+     * outlived the move to ActionModel ("zenit.action"), resolving no source once ActivityModel left the registry.
+     *
+     * @throws IllegalStateException when the boot registered no activity source
      */
-    public static final String ACTIVITY_SOURCE = "zenit.activity";
+    public static @NonNull RecordSource<?> activitySource() {
+        return RecordSourceRegistry.INSTANCE.requireById(ActionModel.MODEL_ID);
+    }
 
     // AIDEV-NOTE: the small operator-declared sets (hosts, DNS peers, git providers, access
     // lists, auth providers, backup targets) are plain ListChrome.MINIMAL, NOT a fourth

@@ -21,6 +21,7 @@ import be.elevenways.zenit.common.orm.migration.MigrationKey;
 import be.elevenways.zenit.common.orm.migration.PrincipalColumns;
 import be.elevenways.zenit.notifications.server.NotificationInboxOwners;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
+import be.elevenways.zenit.test.support.MigrationTestSupport;
 import be.elevenways.zenit.common.security.ZenitPrincipalKind;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSources;
@@ -337,8 +338,8 @@ class HohenheimUpgradeJourneyTest {
             .acknowledgeMissingMigrationVersions("001").migrate().requireSuccess())
             .as("step 1a: missing creation history cannot silently omit the declared sites instant scope")
             .isInstanceOf(MigrationException.class).hasMessageContaining("sites").hasMessageContaining("FrozenModel");
-        MigrationRunner.overCompleteSet(rehearsal, throughM015)
-            .acknowledgeMissingMigrationVersions("001").migrate().requireSuccess();
+        MigrationTestSupport.migrateBefore(rehearsal, M016_CertificateKeysOutOfPlainText.class, withoutCreationSource,
+            "001");
         assertThat(scalar(rehearsalUrl, "SELECT created_at FROM sites WHERE id = " + siteId))
             .as("step 1a: M011's frozen owner scope preserves the pre-epoch microseconds without creation source")
             .isEqualTo(Now.instantText(retainedInstant));
@@ -371,7 +372,7 @@ class HohenheimUpgradeJourneyTest {
         assertThat(scalar(rehearsalUrl, "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = "
                 + "'instance_quotas'"))
             .as("step 1b: the quota owner column is the 400 characters it was").contains("VARCHAR(400)");
-        MigrationRunner.overCompleteSet(rehearsal, withoutCreationSource).acknowledgeMissingMigrationVersions("001")
+        new MigrationRunner(rehearsal, withoutCreationSource).acknowledgeMissingMigrationVersions("001")
             .migrate().requireSuccess();
         assertThat(scalar(rehearsalUrl, "SELECT requested_by_user_id FROM certificates WHERE id = " + OPERATOR_CERT))
             .as("step 1b: the rerun reaches the same UUID").isEqualTo(rehearsedOperator);

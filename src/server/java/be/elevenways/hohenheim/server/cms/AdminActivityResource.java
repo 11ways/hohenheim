@@ -18,7 +18,6 @@ import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.data.DataItem;
 import be.elevenways.zenit.common.data.RecordSource;
-import be.elevenways.zenit.common.data.RecordSourceRegistry;
 import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.widget.common.data.WidgetItem;
@@ -135,8 +134,8 @@ public final class AdminActivityResource {
     public static @NonNull List<WidgetItem> recentFor(@NonNull Model model, @NonNull Object recordId,
                                                       @NonNull Condition rules, @NonNull AccessContext reader,
                                                       int limit) {
-        RecordSource<?> source = RecordSourceRegistry.INSTANCE.byToken(CmsSupport.ACTIVITY_SOURCE);
-        if (source == null || !source.authorizes(reader)) {
+        RecordSource<?> source = CmsSupport.activitySource();
+        if (!source.authorizes(reader)) {
             return List.of();
         }
         List<String> window = new ArrayList<>();

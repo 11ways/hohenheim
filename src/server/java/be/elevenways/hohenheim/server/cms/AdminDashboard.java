@@ -211,7 +211,7 @@ public final class AdminDashboard extends PanelDashboard {
 
         band.add(new WidgetInstance(RecordsWidget.ID, Map.of(
             "title", HohenheimWidgetCopy.localized(HohenheimMicrocopy.DASHBOARD.of("recent_activity")),
-            "source", CmsSupport.ACTIVITY_SOURCE,
+            "source", CmsSupport.activitySource().idToken(),
             "rules", AdminActivityResource.recentActions(),
             "sort", "created_at",
             "descending", true,

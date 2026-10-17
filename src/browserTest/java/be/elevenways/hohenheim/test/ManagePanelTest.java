@@ -551,7 +551,7 @@ class ManagePanelTest extends HohenheimTestBase {
         List<String> adminOnly = List.of(
             "hohenheim.site_auth_provider", "hohenheim.system_user",
             "hohenheim.spamservice_system_users", "hohenheim.dns_zone",
-            "hohenheim.ban", "zenit.activity");
+            "hohenheim.ban", "zenit.action");
         for (String token : adminOnly) {
             assertThat(dryPost("/zn/records/" + token + "/query", query, outsiderSession, csrf).statusCode())
                 .as("query on %s", token).isEqualTo(404);

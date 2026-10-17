@@ -31,7 +31,8 @@ class HistoryDeclarationsDriftTest extends HohenheimTestBase {
     @Test
     void everyModelDeclaresItsHistoryAndEveryReadModelRecords() {
         // 1. Every model under Hohenheim's packages declares required, optional or untracked history.
-        assertThat(HistoryDeclarationsDrift.ownedModels("be.elevenways.hohenheim."))
+        assertThat(HistoryDeclarationsDrift.ownedModels(HistoryDeclarationsDriftTest.class,
+                "be.elevenways.hohenheim."))
             .as("step 1: the walk really sees Hohenheim's models").hasSizeGreaterThan(40);
         HistoryDeclarationsDrift.assertDeclared("be.elevenways.hohenheim.");
 

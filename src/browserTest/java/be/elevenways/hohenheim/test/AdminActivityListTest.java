@@ -226,8 +226,9 @@ class AdminActivityListTest extends HohenheimTestBase {
             false);
         String operatorAction = act(HistoryFixtureRows.action(datasource()).origin(Accountability.ORIGIN_WEB),
             ServerModel.MODEL_ID, operatorHost, ChangeOp.CREATE);
-        act(HistoryFixtureRows.action(datasource()).by(SystemPrincipal.INSTANCE.reference())
-            .origin(Accountability.ORIGIN_SYSTEM), ServerModel.MODEL_ID, backgroundHost, ChangeOp.UPDATE);
+        String backgroundAction = act(HistoryFixtureRows.action(datasource())
+                .by(SystemPrincipal.INSTANCE.reference()).origin(Accountability.ORIGIN_SYSTEM),
+            ServerModel.MODEL_ID, backgroundHost, ChangeOp.UPDATE);
         act(HistoryFixtureRows.action(datasource()).origin(Accountability.ORIGIN_WEB), ServerModel.MODEL_ID,
             narrowedHost, ChangeOp.UPDATE);
         act(HistoryFixtureRows.action(datasource()).origin(Accountability.ORIGIN_WEB), SiteModel.MODEL_ID, siteId,
@@ -281,16 +282,17 @@ class AdminActivityListTest extends HohenheimTestBase {
             .contains("filter.internal.__cleared");
 
         // 4. The origin filter genuinely flips it: naming the system origin shows the background action, so the
-        //    default is a starting point and never a cage.
+        //    default is a starting point and never a cage. (Each host's own creation is the test's system work, so the
+        //    actions are told apart by their detail links, not by the hosts' names.)
         HttpResponse<String> systemList = adminGet("/admin/activity?filter.origin="
             + Accountability.ORIGIN_SYSTEM);
         assertThat(systemList.statusCode()).as("step 4: the filtered list renders").isEqualTo(200);
         assertThat(systemList.body())
             .as("step 4: the origin filter reveals background activity")
-            .contains(backgroundTitle);
+            .contains("/admin/activity/" + backgroundAction);
         assertThat(systemList.body())
             .as("step 4: the origin filter narrows to that origin")
-            .doesNotContain(operatorTitle);
+            .doesNotContain("/admin/activity/" + operatorAction);
 
         // 5. An action is marked by what it did, in core's own mark: a creation reads as created.
         AccessContext reader = TestAccessContexts.allAllowed();
@@ -462,16 +464,16 @@ class AdminActivityListTest extends HohenheimTestBase {
         //    has no actor and names a site titled with its marker.
         String unattributed = "hh-people-unattributed-" + suffix;
         int siteId = site("hh-people-site-" + suffix);
-        act(HistoryFixtureRows.action(datasource()).by(PrincipalRef.account(account(person)))
+        String personAction = act(HistoryFixtureRows.action(datasource()).by(PrincipalRef.account(account(person)))
             .origin(Accountability.ORIGIN_WEB), SiteModel.MODEL_ID, siteId, ChangeOp.UPDATE);
-        act(HistoryFixtureRows.action(datasource()).by(PrincipalRef.account(account(seeded)))
+        String seededAction = act(HistoryFixtureRows.action(datasource()).by(PrincipalRef.account(account(seeded)))
             .origin(AccountabilityOrigin.SEED.token()), SiteModel.MODEL_ID, siteId, ChangeOp.UPDATE);
         UUID plumber = account(plumbing);
-        act(HistoryFixtureRows.action(datasource()).by(PrincipalRef.account(plumber))
+        String plumbingAction = act(HistoryFixtureRows.action(datasource()).by(PrincipalRef.account(plumber))
             .origin(Accountability.ORIGIN_WEB), PortAllocationModel.MODEL_ID, "hh-people-port-" + suffix,
             ChangeOp.CREATE);
-        act(HistoryFixtureRows.action(datasource()).origin(Accountability.ORIGIN_UNATTRIBUTED), SiteModel.MODEL_ID,
-            site(unattributed), ChangeOp.UPDATE);
+        String unattributedAction = act(HistoryFixtureRows.action(datasource())
+            .origin(Accountability.ORIGIN_UNATTRIBUTED), SiteModel.MODEL_ID, site(unattributed), ChangeOp.UPDATE);
         // A sign-in is bookkeeping by its fact (core's LOGIN is internal): it reads "<who> signed in", so the marker is
         // the actor's name.
         String signedIn = "hh-people-signin-" + suffix;
@@ -496,11 +498,14 @@ class AdminActivityListTest extends HohenheimTestBase {
             .as("step 4: and so are sign-ins").contains(signedIn);
 
         // 5. The dashboard's recent activity reads the SAME scope as the list's opening. An empty install shows no
-        //    activity band at all; the sites above already put apps on it.
+        //    activity band at all; the sites above already put apps on it. Its Apps band names every site, so the
+        //    feed's rows are told apart by the action each links.
         String dashboard = adminGet("/admin/dashboard").body();
-        assertThat(dashboard).as("step 5: the dashboard shows what a person did").contains(person);
+        assertThat(dashboard).as("step 5: the dashboard shows what a person did")
+            .contains("/admin/activity/" + personAction);
         assertThat(dashboard).as("step 5: and neither seeds, plumbing nor unattributed work")
-            .doesNotContain(seeded).doesNotContain(plumbing).doesNotContain(unattributed).doesNotContain(signedIn);
+            .doesNotContain("/admin/activity/" + seededAction).doesNotContain("/admin/activity/" + plumbingAction)
+            .doesNotContain("/admin/activity/" + unattributedAction).doesNotContain("/admin/activity/" + signIn.id());
     }
 
     // -- fixtures ---------------------------------------------------------------
