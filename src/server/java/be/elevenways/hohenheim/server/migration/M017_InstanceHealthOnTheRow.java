@@ -5,6 +5,8 @@ import be.elevenways.hohenheim.migration.HohenheimMigration;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.zenit.common.orm.activity.LegacyFacts;
+import be.elevenways.zenit.common.orm.activity.M015_ConvertActivity;
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -20,8 +22,11 @@ import be.elevenways.zenit.common.orm.query.SortOrder;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -35,7 +40,9 @@ import java.util.function.Consumer;
  * exactly as the readers chose them before: the newest cause row, else the newest reconciler correction when it
  * settled to {@code error} (stored as the stoppage {@code reconciled}); the newest of a deploy and a failed start,
  * when it is the deploy; the newest renewal failure. Only empty columns are filled, so running it again changes
- * nothing. Reversible: the down drops the new columns, and the older readers read the activity rows again.
+ * nothing. Reversible: the down drops the new columns, and the older readers read the activity rows again. The rows
+ * are read where the install keeps them: {@code zenit_activity} before core M015, its frozen v1 copy through
+ * {@link LegacyFacts#rows} after, as an upgrade may apply the two in either order.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -114,9 +121,9 @@ public class M017_InstanceHealthOnTheRow extends HohenheimMigration {
         List<String> actions = new ArrayList<>(causes.keySet());
         actions.addAll(starts.keySet());
         actions.add(reconciled);
-        Map<String, Row> newestCause = new HashMap<>();
-        Map<String, Row> newestCorrection = new HashMap<>();
-        Map<String, Row> newestStart = new HashMap<>();
+        Map<String, Stored> newestCause = new HashMap<>();
+        Map<String, Stored> newestCorrection = new HashMap<>();
+        Map<String, Stored> newestStart = new HashMap<>();
         IntegerField id = IntegerField.builder("id").build();
         StringField cause = StringField.builder(STOPPAGE_CAUSE).nullable(true).build();
         TextField detail = TextField.builder(STOPPAGE_DETAIL).nullable(true).build();
@@ -125,38 +132,37 @@ public class M017_InstanceHealthOnTheRow extends HohenheimMigration {
         DateTimeField startedAt = DateTimeField.builder(STARTED_AT).nullable(true).build();
         int[] counts = new int[3];
         Db.run(datasource, () -> {
-            newestPerRecord(InstanceModel.MODEL_ID.toString(), actions, row -> {
-                String action = row.get(Activity.ACTION);
-                if (causes.containsKey(action)) {
-                    newestCause.putIfAbsent(row.get(Activity.RECORD_ID), row);
+            newestPerRecord(datasource, InstanceModel.MODEL_ID.toString(), actions, row -> {
+                if (causes.containsKey(row.action())) {
+                    newestCause.putIfAbsent(row.recordId(), row);
                 }
-                if (starts.containsKey(action)) {
-                    newestStart.putIfAbsent(row.get(Activity.RECORD_ID), row);
+                if (starts.containsKey(row.action())) {
+                    newestStart.putIfAbsent(row.recordId(), row);
                 }
-                if (reconciled.equals(action)) {
-                    newestCorrection.putIfAbsent(row.get(Activity.RECORD_ID), row);
+                if (reconciled.equals(row.action())) {
+                    newestCorrection.putIfAbsent(row.recordId(), row);
                 }
             });
             FrozenModel instances = new FrozenModel(INSTANCES, id, cause, detail, at, withheld, startedAt);
             for (Row instance : instances.find().all()) {
                 String key = String.valueOf((Object) instance.get(id));
                 if (instance.get(cause) == null) {
-                    Row stopped = newestCause.get(key);
+                    Stored stopped = newestCause.get(key);
                     Correction correction = stopped != null || !newestCorrection.containsKey(key) ? null
-                        : correctionOf(newestCorrection.get(key).get(Activity.DETAIL));
+                        : correctionOf(newestCorrection.get(key).detail());
                     if (stopped != null) {
-                        HohenheimActivityAction verb = causes.get(stopped.get(Activity.ACTION));
+                        HohenheimActivityAction verb = causes.get(stopped.action());
                         instances.find().where(id.eq(instance.get(id)))
                             .assign(cause, verb.id().getPath())
-                            .assign(detail, stopped.get(Activity.DETAIL))
-                            .assign(at, stopped.get(Activity.CREATED_AT))
+                            .assign(detail, stopped.detail())
+                            .assign(at, stopped.createdAt())
                             .assign(withheld, InstanceModel.keyOf(verb.restartWithheld()))
                             .updateAll();
                         counts[0]++;
                     } else if (correction != null && InstanceModel.STATUS_ERROR.equals(correction.settled())) {
                         instances.find().where(id.eq(instance.get(id)))
                             .assign(cause, HohenheimActivityAction.RECONCILED.id().getPath())
-                            .assign(at, newestCorrection.get(key).get(Activity.CREATED_AT))
+                            .assign(at, newestCorrection.get(key).createdAt())
                             .assign(withheld, InstanceModel.keyOf(correction.crashLoop()
                                 ? HohenheimActivityAction.RestartWithheld.BY_CRASH_LOOP
                                 : HohenheimActivityAction.RestartWithheld.BY_POLICY))
@@ -164,11 +170,11 @@ public class M017_InstanceHealthOnTheRow extends HohenheimMigration {
                         counts[1]++;
                     }
                 }
-                Row start = newestStart.get(key);
+                Stored start = newestStart.get(key);
                 if (instance.get(startedAt) == null && start != null
-                        && HohenheimActivityAction.DEPLOYED.id().toString().equals(start.get(Activity.ACTION))) {
+                        && HohenheimActivityAction.DEPLOYED.id().toString().equals(start.action())) {
                     instances.find().where(id.eq(instance.get(id)))
-                        .assign(startedAt, start.get(Activity.CREATED_AT))
+                        .assign(startedAt, start.createdAt())
                         .updateAll();
                     counts[2]++;
                 }
@@ -181,18 +187,18 @@ public class M017_InstanceHealthOnTheRow extends HohenheimMigration {
     public static void fillCertificates(@NonNull Datasource datasource) {
         IntegerField id = IntegerField.builder("id").build();
         DateTimeField failedAt = DateTimeField.builder(RENEWAL_FAILED_AT).nullable(true).build();
-        Map<String, Row> newest = new HashMap<>();
+        Map<String, Stored> newest = new HashMap<>();
         int[] count = new int[1];
         Db.run(datasource, () -> {
-            newestPerRecord(CertificateModel.MODEL_ID.toString(),
+            newestPerRecord(datasource, CertificateModel.MODEL_ID.toString(),
                 List.of(HohenheimActivityAction.RENEWAL_FAILED.id().toString()),
-                row -> newest.putIfAbsent(row.get(Activity.RECORD_ID), row));
+                row -> newest.putIfAbsent(row.recordId(), row));
             FrozenModel certificates = new FrozenModel(CERTIFICATES, id, failedAt);
             for (Row certificate : certificates.find().where(failedAt.isNull()).all()) {
-                Row failure = newest.get(String.valueOf((Object) certificate.get(id)));
+                Stored failure = newest.get(String.valueOf((Object) certificate.get(id)));
                 if (failure != null) {
                     certificates.find().where(id.eq(certificate.get(id)))
-                        .assign(failedAt, failure.get(Activity.CREATED_AT))
+                        .assign(failedAt, failure.createdAt())
                         .updateAll();
                     count[0]++;
                 }
@@ -225,9 +231,32 @@ public class M017_InstanceHealthOnTheRow extends HohenheimMigration {
     record Correction(@NonNull String settled, boolean crashLoop) {
     }
 
+    /**
+     * One stored activity row as this migration reads it, from either table.
+     *
+     * @param recordId  the record it is about
+     * @param action    the verb as stored
+     * @param detail    the detail as stored
+     * @param createdAt when it was recorded
+     */
+    private record Stored(@NonNull String recordId, @NonNull String action, @Nullable String detail,
+                          @Nullable Instant createdAt) {
+    }
+
     /** Hands every activity row of one model and these actions to the visitor, newest first per record. */
-    private static void newestPerRecord(@NonNull String model, @NonNull List<String> actions,
-                                        @NonNull Consumer<Row> visitor) {
+    private static void newestPerRecord(@NonNull Datasource datasource, @NonNull String model,
+                                        @NonNull List<String> actions, @NonNull Consumer<Stored> visitor) {
+        if (M015_ConvertActivity.appliedOn(datasource)) {
+            List<LegacyFacts.LegacyRow> rows = new ArrayList<>();
+            for (String action : new LinkedHashSet<>(actions)) {
+                rows.addAll(LegacyFacts.rows(datasource, model, action));
+            }
+            rows.sort(Comparator.comparingLong(LegacyFacts.LegacyRow::id).reversed());
+            for (LegacyFacts.LegacyRow row : rows) {
+                visitor.accept(new Stored(row.recordId(), row.kind(), row.detail(), row.createdAt()));
+            }
+            return;
+        }
         FrozenModel activity = Activity.ROWS;
         Long cursor = null;
         while (true) {
@@ -239,7 +268,10 @@ public class M017_InstanceHealthOnTheRow extends HohenheimMigration {
             if (batch.isEmpty()) {
                 return;
             }
-            batch.forEach(visitor);
+            for (Row row : batch) {
+                visitor.accept(new Stored(row.get(Activity.RECORD_ID), row.get(Activity.ACTION),
+                    row.get(Activity.DETAIL), row.get(Activity.CREATED_AT)));
+            }
             cursor = batch.getLast().get(Activity.ID);
         }
     }

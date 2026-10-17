@@ -5,11 +5,12 @@ import be.elevenways.hohenheim.migration.HohenheimMigration;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.migration.M017_InstanceHealthOnTheRow;
+import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.orm.activity.M015_ConvertActivity;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
 import be.elevenways.zenit.common.orm.field.IntegerField;
-import be.elevenways.zenit.common.orm.field.LongField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.TextField;
 import be.elevenways.zenit.common.orm.migration.FrozenModel;
@@ -18,6 +19,9 @@ import be.elevenways.zenit.common.orm.migration.MigrationResult;
 import be.elevenways.zenit.common.orm.migration.MigrationRunnerResult;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
+import be.elevenways.zenit.test.support.HistoryRows;
+import be.elevenways.zenit.test.support.MigrationTestSupport;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
@@ -31,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * An install through M016 whose workloads' health lives only in their activity upgrades to rows that carry it: the
  * newest cause, else a correction to error from before causes (its English parsed once), the last start, and a
- * certificate's last failure moment.
+ * certificate's last failure moment, whether core M015 converted the activity before M017 reads it or after.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -65,52 +69,18 @@ class InstanceHealthMigrationTest {
         DateTimeField.builder().name("renewal_failed_at").nullable(true).build();
     private static final FrozenModel CERTIFICATES = new FrozenModel("certificates", CERT_ID, FAILED_AT);
 
-    private static final LongField ACTIVITY_ID = LongField.builder().name("id").build();
-    private static final StringField MODEL = StringField.builder().name("model").build();
-    private static final StringField RECORD = StringField.builder().name("record_id").build();
-    private static final StringField ACTION = StringField.builder().name("action").build();
-    private static final StringField ORIGIN = StringField.builder().name("origin").nullable(true).build();
-    private static final TextField ACTIVITY_DETAIL = TextField.builder("detail").nullable(true).build();
-    private static final DateTimeField CREATED = DateTimeField.builder().name("created_at").nullable(true).build();
-    private static final FrozenModel ACTIVITY = new FrozenModel("zenit_activity", ACTIVITY_ID, MODEL, RECORD, ACTION,
-        ORIGIN, ACTIVITY_DETAIL, CREATED);
-
     @Test
-    void anInstallThroughM016KeepsEveryHealthReadingOnItsRows() throws Exception {
-        File file = File.createTempFile("hohenheim-instance-health", ".db");
-        file.delete();
-        file.deleteOnExit();
+    void anInstallThatConvertedItsActivityFirstKeepsEveryHealthReadingOnItsRows() throws Exception {
+        // 1. An install through M016 that has not converted its activity yet holds the seeded rows (see seed).
+        SqliteDatasource datasource = beforeConversion("hohenheim-instance-health-converted");
+        Seeded seeded = seed(datasource);
 
-        // 1. An install through M016: a workload whose only fact is a correction to error with crash-loop protection
-        //    (after a deploy), one with an exit cause newer than an old correction, one whose start failed after a
-        //    deploy, one corrected to stopped, one with no history, and a certificate that failed twice.
-        InstallsAt.migrateThrough(file.toPath(), "016");
-        SqliteDatasource datasource = new SqliteDatasource("jdbc:sqlite:" + file.getAbsolutePath());
-        int legacy = instance(datasource, "legacy");
-        int caused = instance(datasource, "caused");
-        int failed = instance(datasource, "failed");
-        int stopped = instance(datasource, "stopped");
-        int quiet = instance(datasource, "quiet");
-        int cert = certificate(datasource);
-        activity(datasource, InstanceModel.MODEL_ID.toString(), legacy, HohenheimActivityAction.DEPLOYED, "h", 0);
-        activity(datasource, InstanceModel.MODEL_ID.toString(), legacy, HohenheimActivityAction.RECONCILED,
-            "running -> error (died without an observed stop; the daemon reports the workload absent;"
-                + " crash loop, automatic restarts suspended)", 5);
-        activity(datasource, InstanceModel.MODEL_ID.toString(), caused, HohenheimActivityAction.RECONCILED,
-            "running -> error (died without an observed stop; the daemon reports the workload stopped)", 1);
-        activity(datasource, InstanceModel.MODEL_ID.toString(), caused, HohenheimActivityAction.WORKLOAD_EXITED,
-            "137", 2);
-        activity(datasource, InstanceModel.MODEL_ID.toString(), failed, HohenheimActivityAction.DEPLOYED, "h", 3);
-        activity(datasource, InstanceModel.MODEL_ID.toString(), failed,
-            HohenheimActivityAction.WORKLOAD_START_FAILED, "image missing", 4);
-        activity(datasource, InstanceModel.MODEL_ID.toString(), stopped, HohenheimActivityAction.RECONCILED,
-            "running -> stopped (died without an observed stop; the daemon reports the workload stopped)", 6);
-        activity(datasource, CertificateModel.MODEL_ID.toString(), cert, HohenheimActivityAction.RENEWAL_FAILED,
-            "boom", 7);
-        activity(datasource, CertificateModel.MODEL_ID.toString(), cert, HohenheimActivityAction.RENEWAL_FAILED,
-            "boom again", 8);
-
-        // 2. The upgrade under integrity=fail applies M017 alone.
+        // 2. Core M015 converts the activity first; the upgrade under integrity=fail then applies M017 alone,
+        //    reading the frozen v1 copy.
+        withIntegrityMode("fail", () -> new MigrationRunner(datasource,
+            InstallsAt.discoveredThrough(datasource.getDatasourceIdentifier(), "016")).migrate().requireSuccess());
+        assertThat(M015_ConvertActivity.appliedOn(datasource)).as("step 2: core M015 converted the activity")
+            .isTrue();
         withIntegrityMode("fail", () -> {
             MigrationRunnerResult upgrade = new MigrationRunner(datasource,
                 InstallsAt.discoveredThrough(datasource.getDatasourceIdentifier(), "017")).migrate();
@@ -119,6 +89,111 @@ class InstanceHealthMigrationTest {
                 .map(MigrationResult::getVersion).toList()).as("step 2: it applies exactly M017")
                 .containsExactly("017");
         });
+
+        // 3-7. Every health reading is on its row.
+        assertHealthOnTheRows(datasource, seeded);
+
+        // 8. Running the fill again overwrites nothing already stored, and the rollback drops the columns.
+        Db.run(datasource, () -> INSTANCES.find().where(ID.eq(seeded.caused()))
+            .assign(CAUSE, "workload_never_ready").updateAll());
+        M017_InstanceHealthOnTheRow.fillInstances(datasource);
+        M017_InstanceHealthOnTheRow.fillCertificates(datasource);
+        assertThat((String) row(datasource, seeded.caused()).get(CAUSE)).as("step 8: a stored stoppage stays")
+            .isEqualTo("workload_never_ready");
+        assertThat(List.of(row(datasource, seeded.legacy()).get(CAUSE), row(datasource, seeded.legacy()).get(AT)))
+            .as("step 8: and the converted one is the same").containsExactly("reconciled", at(5));
+        assertThat(new M017_InstanceHealthOnTheRow().getIrreversibleReason())
+            .as("step 8: the migration is reversible").isNull();
+        withIntegrityMode("fail", () -> new MigrationRunner(datasource,
+                InstallsAt.discoveredThrough(datasource.getDatasourceIdentifier(), "017"))
+            .rollback(MigrationKey.of(HohenheimMigration.STREAM, "017")).requireSuccess());
+        assertThat(datasource.liveColumnNames("instances")).as("step 8: the rollback drops the columns")
+            .doesNotContain("stoppage_cause", "stoppage_detail", "stoppage_at", "restart_withheld", "started_at");
+        assertThat(datasource.liveColumnNames("certificates")).as("step 8: on certificates too")
+            .doesNotContain("renewal_failed_at");
+        datasource.close();
+    }
+
+    @Test
+    void anInstallThatReadsItsActivityBeforeConvertingItKeepsEveryHealthReadingOnItsRows() throws Exception {
+        // 1. The same install through M016, its activity not converted yet.
+        SqliteDatasource datasource = beforeConversion("hohenheim-instance-health-unconverted");
+        Seeded seeded = seed(datasource);
+
+        // 2. One upgrade under integrity=fail applies M017 while zenit_activity is still the live table, then core
+        //    M015 converts it.
+        withIntegrityMode("fail", () -> {
+            MigrationRunnerResult upgrade = new MigrationRunner(datasource,
+                InstallsAt.discoveredThrough(datasource.getDatasourceIdentifier(), "017")).migrate();
+            assertThat(upgrade.isSuccess()).as("step 2: the upgrade from 016 succeeds").isTrue();
+            List<String> applied = upgrade.getResults().stream().filter(MigrationResult::isApplied)
+                .map(MigrationResult::getVersion).toList();
+            String conversion = new M015_ConvertActivity().getVersion();
+            assertThat(applied).as("step 2: it applies M017 and core M015").contains("017", conversion);
+            assertThat(applied.indexOf("017")).as("step 2: M017 before core M015")
+                .isLessThan(applied.indexOf(conversion));
+        });
+
+        // 3-7. Every health reading is on its row.
+        assertHealthOnTheRows(datasource, seeded);
+        datasource.close();
+    }
+
+    /** The seeded records' ids. */
+    private record Seeded(int legacy, int caused, int failed, int stopped, int quiet, int cert) {
+    }
+
+    /** A new SQLite install through Hohenheim's M016 that stopped right before core M015. */
+    private static SqliteDatasource beforeConversion(@NonNull String name) throws Exception {
+        File file = File.createTempFile(name, ".db");
+        file.delete();
+        file.deleteOnExit();
+        SqliteDatasource datasource = new SqliteDatasource("jdbc:sqlite:" + file.getAbsolutePath());
+        MigrationTestSupport.migrateBefore(datasource, M015_ConvertActivity.class,
+            InstallsAt.discoveredThrough(datasource.getDatasourceIdentifier(), "016"));
+        assertThat(datasource.liveColumnNames("instances")).as("step 1: Hohenheim's tables are there before M015")
+            .contains("status");
+        return datasource;
+    }
+
+    /**
+     * Seeds a workload whose only fact is a correction to error with crash-loop protection (after a deploy), one with
+     * an exit cause newer than an old correction, one whose start failed after a deploy, one corrected to stopped,
+     * one with no history, and a certificate that failed twice, as v1 activity rows.
+     */
+    private static Seeded seed(@NonNull SqliteDatasource datasource) {
+        int legacy = instance(datasource, "legacy");
+        int caused = instance(datasource, "caused");
+        int failed = instance(datasource, "failed");
+        int stopped = instance(datasource, "stopped");
+        int quiet = instance(datasource, "quiet");
+        int cert = certificate(datasource);
+        activity(datasource, InstanceModel.MODEL_ID, legacy, HohenheimActivityAction.DEPLOYED, "h", 0);
+        activity(datasource, InstanceModel.MODEL_ID, legacy, HohenheimActivityAction.RECONCILED,
+            "running -> error (died without an observed stop; the daemon reports the workload absent;"
+                + " crash loop, automatic restarts suspended)", 5);
+        activity(datasource, InstanceModel.MODEL_ID, caused, HohenheimActivityAction.RECONCILED,
+            "running -> error (died without an observed stop; the daemon reports the workload stopped)", 1);
+        activity(datasource, InstanceModel.MODEL_ID, caused, HohenheimActivityAction.WORKLOAD_EXITED, "137", 2);
+        activity(datasource, InstanceModel.MODEL_ID, failed, HohenheimActivityAction.DEPLOYED, "h", 3);
+        activity(datasource, InstanceModel.MODEL_ID, failed, HohenheimActivityAction.WORKLOAD_START_FAILED,
+            "image missing", 4);
+        activity(datasource, InstanceModel.MODEL_ID, stopped, HohenheimActivityAction.RECONCILED,
+            "running -> stopped (died without an observed stop; the daemon reports the workload stopped)", 6);
+        activity(datasource, CertificateModel.MODEL_ID, cert, HohenheimActivityAction.RENEWAL_FAILED, "boom", 7);
+        activity(datasource, CertificateModel.MODEL_ID, cert, HohenheimActivityAction.RENEWAL_FAILED,
+            "boom again", 8);
+        return new Seeded(legacy, caused, failed, stopped, quiet, cert);
+    }
+
+    /** Steps 3 to 7: what the upgrade stored on each seeded row. */
+    private static void assertHealthOnTheRows(@NonNull SqliteDatasource datasource, @NonNull Seeded seeded) {
+        int legacy = seeded.legacy();
+        int caused = seeded.caused();
+        int failed = seeded.failed();
+        int stopped = seeded.stopped();
+        int quiet = seeded.quiet();
+        int cert = seeded.cert();
 
         // 3. The correction from before causes is the stoppage it records, crash-loop protection as why; the deploy
         //    before it is the last start.
@@ -149,26 +224,6 @@ class InstanceHealthMigrationTest {
 
         // 7. The certificate's moment is its newest failure.
         assertThat(certificateFailedAt(datasource, cert)).as("step 7: the newest failure").isEqualTo(at(8));
-
-        // 8. Running the fill again overwrites nothing already stored, and the rollback drops the columns.
-        Db.run(datasource, () -> INSTANCES.find().where(ID.eq(caused))
-            .assign(CAUSE, "workload_never_ready").updateAll());
-        M017_InstanceHealthOnTheRow.fillInstances(datasource);
-        M017_InstanceHealthOnTheRow.fillCertificates(datasource);
-        assertThat((String) row(datasource, caused).get(CAUSE)).as("step 8: a stored stoppage stays")
-            .isEqualTo("workload_never_ready");
-        assertThat(List.of(row(datasource, legacy).get(CAUSE), row(datasource, legacy).get(AT)))
-            .as("step 8: and the converted one is the same").containsExactly("reconciled", at(5));
-        assertThat(new M017_InstanceHealthOnTheRow().getIrreversibleReason())
-            .as("step 8: the migration is reversible").isNull();
-        withIntegrityMode("fail", () -> new MigrationRunner(datasource,
-                InstallsAt.discoveredThrough(datasource.getDatasourceIdentifier(), "017"))
-            .rollback(MigrationKey.of(HohenheimMigration.STREAM, "017")).requireSuccess());
-        assertThat(datasource.liveColumnNames("instances")).as("step 8: the rollback drops the columns")
-            .doesNotContain("stoppage_cause", "stoppage_detail", "stoppage_at", "restart_withheld", "started_at");
-        assertThat(datasource.liveColumnNames("certificates")).as("step 8: on certificates too")
-            .doesNotContain("renewal_failed_at");
-        datasource.close();
     }
 
     private static Instant at(int minutes) {
@@ -196,18 +251,10 @@ class InstanceHealthMigrationTest {
         return ids.get(0);
     }
 
-    private static void activity(SqliteDatasource datasource, String model, int recordId,
+    private static void activity(SqliteDatasource datasource, Identifier model, int recordId,
                                  HohenheimActivityAction action, String detail, int minutes) {
-        Db.run(datasource, () -> {
-            Row row = ACTIVITY.createEmptyRow();
-            row.set(MODEL, model);
-            row.set(RECORD, String.valueOf(recordId));
-            row.set(ACTION, action.id().toString());
-            row.set(ORIGIN, "system");
-            row.set(ACTIVITY_DETAIL, detail);
-            row.set(CREATED, at(minutes));
-            ACTIVITY.save(row);
-        });
+        HistoryRows.legacyRow(model, String.valueOf(recordId)).action(action.id().toString()).origin("system")
+            .detail(detail).createdAt(at(minutes)).insert(datasource);
     }
 
     private static Row row(SqliteDatasource datasource, int id) {
