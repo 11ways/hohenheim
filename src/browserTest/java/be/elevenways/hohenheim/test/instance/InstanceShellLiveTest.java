@@ -34,8 +34,9 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.hohenheim.test.RecordedChanges;
+import be.elevenways.zenit.common.orm.history.ChangeModel;
+import be.elevenways.zenit.test.support.HistoryTestSupport;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -173,8 +174,8 @@ class InstanceShellLiveTest {
         String[] handle = new String[1];
         try {
             Db.run(datasource, () -> {
-                assertThat(ActivityLog.isInstalled())
-                    .as("the activity log must be installed or the audit steps prove nothing")
+                assertThat(HistoryTestSupport.recordsOptional())
+                    .as("optional history must be recording or the audit steps prove nothing")
                     .isTrue();
                 mark("admitLocal");
                 HostFixtures.admitLocal();
@@ -236,26 +237,26 @@ class InstanceShellLiveTest {
 
                 // 5. Opening the session was audited, attributed to the tenant.
                 mark("step5-activity");
-                List<Row> opened = activityFor(id, HohenheimActivityAction.SHELL_OPEN.id().toString());
+                List<RecordedChanges.Recorded> opened = activityFor(id, HohenheimActivityAction.SHELL_OPEN);
                 assertThat(opened)
-                    .as("step 5: opening a shell writes EXACTLY ONE activity row")
+                    .as("step 5: opening a shell records EXACTLY ONE fact")
                     .hasSize(1);
-                assertThat((String) opened.get(0).get(ActivityModel.ACTOR))
-                    .as("step 5: the row names the acting principal, not the system")
+                assertThat(opened.get(0).actor())
+                    .as("step 5: the action names the acting principal, not the system")
                     .isEqualTo(String.valueOf(userId));
-                assertThat((String) opened.get(0).get(ActivityModel.RECORD_ID))
+                assertThat((String) opened.get(0).change().get(ChangeModel.RECORD_ID))
                     .as("step 5: and the instance it was opened on")
                     .isEqualTo(String.valueOf(id));
-                assertThat((String) opened.get(0).get(ActivityModel.DETAIL))
-                    .as("step 5: and the interpreter and uid it ran as")
-                    .contains("as uid " + RUN_USER);
+                assertThat(opened.get(0).fact(HohenheimActivityAction.SHELL_OPEN))
+                    .as("step 5: and the uid it ran as")
+                    .containsEntry(HohenheimActivityAction.RUN_USER_KEY, String.valueOf(RUN_USER));
 
                 // 6. Teardown is EXACTLY ONCE: one close, one audit row, one onEnd.
                 mark("step6-close");
                 session.close(InstanceShell.EndReason.CLIENT);
                 assertThat(session.isOpen()).as("step 6: a closed session reports closed")
                     .isFalse();
-                assertThat(activityFor(id, HohenheimActivityAction.SHELL_CLOSE.id().toString()))
+                assertThat(activityFor(id, HohenheimActivityAction.SHELL_CLOSE))
                     .as("step 6: closing writes exactly one activity row")
                     .hasSize(1);
                 assertThat(ended.get())
@@ -272,7 +273,7 @@ class InstanceShellLiveTest {
                 session.close(InstanceShell.EndReason.EXITED);
                 session.write("echo after-close\n");
                 session.resize(80, 24);
-                assertThat(activityFor(id, HohenheimActivityAction.SHELL_CLOSE.id().toString()))
+                assertThat(activityFor(id, HohenheimActivityAction.SHELL_CLOSE))
                     .withFailMessage("step 7: a second close wrote a SECOND close entry --"
                         + " teardown must be exactly-once whichever end fires it")
                     .hasSize(1);
@@ -393,12 +394,13 @@ class InstanceShellLiveTest {
                     assertThat(session.isOpen())
                         .as("step 2: the session opened despite the declared shell missing")
                         .isTrue();
-                    List<Row> opened = activityFor(id, HohenheimActivityAction.SHELL_OPEN.id().toString());
+                    List<RecordedChanges.Recorded> opened = activityFor(id, HohenheimActivityAction.SHELL_OPEN);
                     assertThat(opened).as("step 2: and it was audited").hasSize(1);
-                    assertThat((String) opened.get(0).get(ActivityModel.DETAIL))
+                    assertThat(String.valueOf(opened.get(0).fact(HohenheimActivityAction.SHELL_OPEN)
+                            .get(HohenheimActivityAction.SHELL_KEY)))
                         .withFailMessage("step 2: the audit names the shell that was NOT"
                             + " started; the fallback must be the one recorded")
-                        .startsWith("/bin/sh ");
+                        .isEqualTo("/bin/sh");
                     session.write("echo fallback-alive\n");
                     awaitOutput(output, "fallback-alive",
                         "step 2: the fallback shell is not a working terminal");
@@ -463,12 +465,8 @@ class InstanceShellLiveTest {
         }
     }
 
-    private static List<Row> activityFor(int instanceId, String action) {
-        return Models.get(ActivityModel.class).find()
-            .where(ActivityModel.MODEL.eq(InstanceModel.MODEL_ID.toString()))
-            .and(ActivityModel.RECORD_ID.eq(String.valueOf(instanceId)))
-            .and(ActivityModel.ACTION.eq(action))
-            .all();
+    private static List<RecordedChanges.Recorded> activityFor(int instanceId, HohenheimActivityAction action) {
+        return RecordedChanges.withFact(Models.get(InstanceModel.class), instanceId, action);
     }
 
     private static int instanceRecord(String name) {

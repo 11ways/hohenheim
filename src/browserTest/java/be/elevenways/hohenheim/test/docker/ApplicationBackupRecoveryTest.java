@@ -30,7 +30,7 @@ import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.hohenheim.test.RecordedChanges;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -153,13 +153,12 @@ class ApplicationBackupRecoveryTest {
                             && error.length() > restartPrefix.length()))
                         .as("the failed row names the restart's own reason")
                         .hasSize(1);
-                    assertThat(new ActivityModel(Models.get(InstanceModel.class).getResolvedDatasource()).find()
-                        .where(ActivityModel.RECORD_ID.eq(String.valueOf(appId)))
-                        .where(ActivityModel.ACTION.eq(HohenheimActivityAction.BACKUP_FAILED.id().toString()))
-                        .all().stream()
-                        .map(row -> String.valueOf((Object) row.get(ActivityModel.DETAIL))))
-                        .as("the activity log names the failure with its reason")
-                        .anyMatch(detail -> detail.contains("could not be started again after the capture ("));
+                    assertThat(RecordedChanges.withFact(Models.get(InstanceModel.class), appId,
+                            HohenheimActivityAction.BACKUP_FAILED).stream()
+                        .map(recorded -> String.valueOf(recorded.fact(HohenheimActivityAction.BACKUP_FAILED)
+                            .get(HohenheimActivityAction.REASON_KEY))))
+                        .as("the history names the failure with its reason")
+                        .anyMatch(reason -> reason.contains("could not be started again after the capture ("));
                     runtime.failStart = false;
                     ApplicationReleases.inScopeUnchecked(appId, () -> new InstanceService().deploy(servingId));
                     Row backup = Models.get(InstanceBackupModel.class).findById(backupId);

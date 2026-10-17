@@ -44,7 +44,7 @@ import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationResult;
 import be.elevenways.zenit.common.operation.PlacementSurface;
 import be.elevenways.zenit.common.operation.ZenitPlacementSurface;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.hohenheim.test.RecordedChanges;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -509,11 +509,7 @@ class InstancePowerOperationsTest {
     }
 
     private static int activity(int instanceId, HohenheimActivityAction action) {
-        return (int) Models.get(ActivityModel.class).find()
-            .where(ActivityModel.MODEL.eq(InstanceModel.MODEL_ID.toString()))
-            .where(ActivityModel.RECORD_ID.eq(String.valueOf(instanceId)))
-            .where(ActivityModel.ACTION.eq(action.id().toString()))
-            .count();
+        return RecordedChanges.withFact(Models.get(InstanceModel.class), instanceId, action).size();
     }
 
     /** A database still provisioning, attached to the instance: what a deploy must not start without. */

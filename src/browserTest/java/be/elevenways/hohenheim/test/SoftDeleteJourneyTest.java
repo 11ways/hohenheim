@@ -24,11 +24,12 @@ import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityAction;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.history.ChangeOp;
+import be.elevenways.zenit.common.orm.history.HistoryRefusalReason;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
-import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.quota.Quotas;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -47,6 +48,7 @@ import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 /**
  * Sites and instances soft-delete through zenit's SoftDeleteBehaviour: a trashed record leaves
@@ -120,10 +122,23 @@ class SoftDeleteJourneyTest {
             assertThat(deletes.get(0).op())
                 .as("step 2: on the soft delete's own update").isEqualTo(ChangeOp.UPDATE);
 
-            // 3. A find is scoped: it cannot reach the trashed row. (A set-based update of a site is refused outright
-            //    now: every site field is a revision snapshot field, so each record is saved on its own.)
+            // 3. A set-based update of a site's content is refused outright: every content field is a revision
+            //    snapshot field, so no revision would hold the value and each record must be saved on its own.
+            //    What a set-based update may still assign (the reporting key, kept out of revisions and history)
+            //    is scoped like a find: neither reaches the trashed row.
+            DomainRefusal refused = catchThrowableOfType(DomainRefusal.class, () -> sites.find()
+                .where(SiteModel.ID.eq(siteId)).assign(SiteModel.DESCRIPTION, "touched").bypassBehaviours()
+                .updateAll());
+            assertThat(refused).as("step 3: a set-based update of a snapshot field is refused").isNotNull();
+            assertThat(refused.reason())
+                .as("step 3: as a snapshot assignment").isEqualTo(HistoryRefusalReason.SNAPSHOT_ASSIGNMENT);
+            assertThat(StoredRows.byId(sites, siteId).get(SiteModel.DESCRIPTION))
+                .as("step 3: and the refused update wrote nothing").isNotEqualTo("touched");
             assertThat(sites.find().where(SiteModel.ID.eq(siteId)).count())
                 .as("step 3: a find matches no trashed row").isZero();
+            assertThat(sites.find().where(SiteModel.ID.eq(siteId)).assign(SiteModel.SECURITY_REPORT_TOKEN, null)
+                    .bypassBehaviours().updateAll())
+                .as("step 3: a set-based update it allows matches no trashed row either").isZero();
 
             // 4. BUG FIXED: a trashed site gates nothing, so the list's dialog stops naming it.
             assertThat(gatingKey(lists, listId))

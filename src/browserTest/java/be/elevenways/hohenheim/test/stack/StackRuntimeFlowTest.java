@@ -19,7 +19,7 @@ import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.hohenheim.test.RecordedChanges;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -274,16 +274,13 @@ class StackRuntimeFlowTest {
             assertThat(stack.get(StackModel.STATUS))
                 .as("step 2: nothing of the stack remains")
                 .isEqualTo(StackModel.STATUS_INACTIVE);
-            List<Row> purged = Models.get(ActivityModel.class).find()
-                .where(ActivityModel.MODEL.eq(StackModel.MODEL_ID.toString()))
-                .where(ActivityModel.RECORD_ID.eq(String.valueOf(stackId)))
-                .where(ActivityModel.ACTION.eq(HohenheimActivityAction.VOLUMES_PURGED.id().toString()))
-                .all();
+            List<RecordedChanges.Recorded> purged = RecordedChanges.withFact(Models.get(StackModel.class), stackId,
+                HohenheimActivityAction.VOLUMES_PURGED);
             assertThat(purged)
                 .withFailMessage("step 2: the volume purge must name who destroyed the"
-                    + " data; found %s activity rows", purged.size())
+                    + " data; found %s purge facts", purged.size())
                 .hasSize(1);
-            assertThat((String) purged.get(0).get(ActivityModel.ACTOR))
+            assertThat(purged.get(0).actor())
                 .as("step 2: attributed to the operator, not to the system")
                 .isEqualTo("purger");
         });

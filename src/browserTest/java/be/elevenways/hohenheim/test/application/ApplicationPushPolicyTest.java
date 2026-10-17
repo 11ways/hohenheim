@@ -25,8 +25,8 @@ import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.dry.Dry;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.hohenheim.test.RecordedChanges;
+import be.elevenways.zenit.test.support.HistoryTestSupport;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -269,8 +269,8 @@ class ApplicationPushPolicyTest {
     @Test
     void theDeployRowActionRecordsTheOperatorWhoPressedIt() {
         Db.run(datasource, () -> {
-            assertThat(ActivityLog.isInstalled())
-                .as("the activity log must be installed or this test proves nothing")
+            assertThat(HistoryTestSupport.recordsOptional())
+                .as("optional history must be recording or this test proves nothing")
                 .isTrue();
             int applicationId = application("row-action-app");
             try {
@@ -284,16 +284,17 @@ class ApplicationPushPolicyTest {
                 // 2. The deploy is recorded as MANUAL -- the trigger that describes a
                 //    person standing there asking, and the one whose permission to start
                 //    a stopped workload is a decision rather than a default.
-                List<Row> deployed = activityFor(applicationId,
-                    HohenheimActivityAction.DEPLOYED.id().toString());
+                List<RecordedChanges.Recorded> deployed = RecordedChanges.withFact(Models.get(InstanceModel.class),
+                    applicationId, HohenheimActivityAction.DEPLOYED);
                 assertThat(deployed)
                     .as("step 2: the row action recorded the deploy")
                     .isNotEmpty();
-                assertThat((String) deployed.get(0).get(ActivityModel.DETAIL))
+                RecordedChanges.Recorded latest = deployed.get(deployed.size() - 1);
+                assertThat(latest.fact(HohenheimActivityAction.DEPLOYED))
                     .as("step 2: as MANUAL, never as the control plane's own default")
-                    .isEqualTo(DeployTrigger.MANUAL.word())
-                    .isNotEqualTo(DeployTrigger.SYSTEM.word());
-                assertThat((String) deployed.get(0).get(ActivityModel.ACTOR))
+                    .containsEntry(HohenheimActivityAction.TRIGGER_KEY, DeployTrigger.MANUAL.word())
+                    .doesNotContainEntry(HohenheimActivityAction.TRIGGER_KEY, DeployTrigger.SYSTEM.word());
+                assertThat(latest.actor())
                     .as("step 2: attributed to the operator who clicked")
                     .isEqualTo(operatorId.toString());
             } finally {
@@ -441,15 +442,6 @@ class ApplicationPushPolicyTest {
         List<Row> rows = operationsOf(applicationId);
         assertThat(rows).as("the deploy recorded a build operation").isNotEmpty();
         return rows.get(0);
-    }
-
-    private static List<Row> activityFor(int instanceId, String action) {
-        return Models.get(ActivityModel.class).find()
-            .where(ActivityModel.MODEL.eq(InstanceModel.MODEL_ID.toString()))
-            .where(ActivityModel.RECORD_ID.eq(String.valueOf(instanceId)))
-            .where(ActivityModel.ACTION.eq(action))
-            .orderBy(ActivityModel.ID, SortOrder.DESC)
-            .all();
     }
 
     private static Accountability operator(UUID id) {

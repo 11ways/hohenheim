@@ -10,16 +10,16 @@ import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.routing.RouteLocales;
 import be.elevenways.zenit.common.security.Accountability;
 import be.elevenways.zenit.common.security.AccountabilityOrigin;
 import be.elevenways.zenit.common.security.CallerChannel;
 import be.elevenways.zenit.common.security.Principal;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
@@ -235,25 +235,25 @@ class ServerOverviewTest extends HohenheimTestBase {
         assertThat(body).as("step 4: a measured fact renders").contains("docker_version");
         assertThat(body).as("step 4: with its value").contains("27.1.1");
 
-        // 5. And the host's own history: what a PERSON did to this host. The band is filtered on (model, record id),
-        //    so an entry about ANOTHER host never lands here (the decoy makes this a filter assertion rather than a
-        //    "band exists" one), and the system's own bookkeeping on it stays in the log and off the card (hourly
-        //    "System changed local Server" heartbeat rows once filled it). The fixture verb is a listed one: a
-        //    reconcile's correction is internal and no feed lists it whoever made it.
+        // 5. And the host's own history: what a PERSON did to this host. The band reads this host's history (core's
+        //    per-record read), so an action about ANOTHER host never lands here (the decoy makes this a filter
+        //    assertion rather than a "band exists" one), and work no person did stays in the log and off the card
+        //    (hourly "System changed local Server" heartbeat rows once filled it). The fixture verb is a listed one:
+        //    a reconcile's correction is internal and no feed lists it whoever made it.
         var servers = Models.get(ServerModel.class);
-        ActivityLog.record(servers, hostId, HohenheimActivityAction.TESTED, "system bookkeeping fixture");
-        Object bookkeeping = latestActivityId(String.valueOf(hostId));
+        History.event(servers, hostId, mediaFact("system bookkeeping fixture"));
+        Object bookkeeping = latestActionId(hostId);
         Principal operator = TenantConduits.operator().principal();
         Accountability person = Accountability.of(operator.reference(), operator.attributionLabel(),
             new CallerChannel(AccountabilityOrigin.OFFLINE, null, null));
         Accountability.runAs(person, () -> {
-            ActivityLog.record(servers, hostId, HohenheimActivityAction.TESTED, "overview band fixture");
-            ActivityLog.record(servers, hostId + 100000, HohenheimActivityAction.TESTED, "decoy fixture");
+            History.event(servers, hostId, mediaFact("overview band fixture"));
+            History.event(servers, hostId + 100000, mediaFact("decoy fixture"));
         });
-        Object mine = latestActivityId(String.valueOf(hostId));
-        Object theirs = latestActivityId(String.valueOf(hostId + 100000));
-        assertThat(mine).as("step 5: this host has an activity row").isNotNull();
-        assertThat(bookkeeping).as("step 5: and a bookkeeping row before it").isNotNull().isNotEqualTo(mine);
+        Object mine = latestActionId(hostId);
+        Object theirs = latestActionId(hostId + 100000);
+        assertThat(mine).as("step 5: this host has an action").isNotNull();
+        assertThat(bookkeeping).as("step 5: and a bookkeeping action before it").isNotNull().isNotEqualTo(mine);
 
         String withBand = adminGet("/admin/servers/" + hostId + "/page/overview").body();
         assertThat(withBand).as("step 5: the overview carries a recent-activity band")
@@ -266,14 +266,14 @@ class ServerOverviewTest extends HohenheimTestBase {
             .doesNotContain("/admin/activity/" + bookkeeping + "\"");
     }
 
-    /** The newest activity row id written about one server id, or null. */
-    private static Object latestActivityId(String recordId) {
-        Row entry = Models.get(ActivityModel.class).find()
-            .where(ActivityModel.MODEL.eq(ServerModel.MODEL_ID.toString()))
-            .where(ActivityModel.RECORD_ID.eq(recordId))
-            .orderBy(ActivityModel.ID, SortOrder.DESC)
-            .first();
-        return entry == null ? null : entry.get(ActivityModel.ID);
+    /** The newest action id written about one server id, or null. */
+    private static @Nullable String latestActionId(int recordId) {
+        List<RecordedChanges.Recorded> history = RecordedChanges.of(Models.get(ServerModel.class), recordId);
+        return history.isEmpty() ? null : history.get(history.size() - 1).actionId();
+    }
+
+    private static Change mediaFact(String name) {
+        return Change.fact(HohenheimActivityAction.MEDIA_UPLOADED, Map.of(HohenheimActivityAction.NAME_KEY, name));
     }
 
     /**

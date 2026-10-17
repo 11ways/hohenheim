@@ -8,10 +8,8 @@ import be.elevenways.hohenheim.server.dns.InternalDnsTxtPublisher;
 import be.elevenways.hohenheim.server.tls.DnsTxtRecord;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ApiKeyService;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -133,12 +131,10 @@ class GeneratedDnsRecordsTest extends HohenheimTestBase {
         assertThat((Integer) row.get(DnsRecordModel.GENERATED_FOR_ID)).isEqualTo(7);
 
         // The write is attributed to the SYSTEM, not to whoever is logged in.
-        Row activity = Models.get(ActivityModel.class).find()
-            .where(ActivityModel.MODEL.eq(DnsRecordModel.MODEL_ID.toString()))
-            .where(ActivityModel.RECORD_ID.eq(String.valueOf(row.get(DnsRecordModel.ID))))
-            .orderBy(ActivityModel.ID, SortOrder.DESC).first();
-        assertThat(activity).describedAs("the generated write is logged").isNotNull();
-        assertThat((String) activity.get(ActivityModel.ORIGIN))
+        List<RecordedChanges.Recorded> history = RecordedChanges.of(Models.get(DnsRecordModel.class),
+            row.get(DnsRecordModel.ID));
+        assertThat(history).describedAs("the generated write is recorded").isNotEmpty();
+        assertThat(history.get(history.size() - 1).origin())
             .describedAs("a system write on a tenant's behalf attributes to the system")
             .isEqualTo(GeneratedDnsRecords.ORIGIN_ACME);
     }

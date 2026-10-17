@@ -12,12 +12,11 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OrphanActions;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.hohenheim.test.RecordedChanges;
+import be.elevenways.zenit.test.support.HistoryTestSupport;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -82,26 +81,23 @@ class OrphanActionsTest {
                         .findById(orphanFinding.get(ReconcileFindingModel.ID)))
                     .as("step 2: and the acted-on finding row is gone").isNull();
 
-                // 2b. The removal is ACCOUNTABLE: an activity row on the HOST record
+                // 2b. The removal is ACCOUNTABLE: a history fact on the HOST record
                 //     naming what was destroyed. The class docblock claimed
                 //     "ActivityLog-recorded" while the only trace was a Blast.log line,
                 //     and the CMS row action's withAction wrapper recorded nothing about
-                //     the container at all -- withAction only renames rows the model
-                //     hooks already write.
-                assertThat(ActivityLog.isInstalled())
-                    .as("step 2b: the activity log must be installed or this proves nothing")
+                //     the container at all -- withAction only renamed rows the model
+                //     hooks already wrote.
+                assertThat(HistoryTestSupport.recordsOptional())
+                    .as("step 2b: optional history must be recording or this proves nothing")
                     .isTrue();
-                Row removal = Models.get(ActivityModel.class).find()
-                    .where(ActivityModel.MODEL.eq(ServerModel.MODEL_ID.toString()))
-                    .where(ActivityModel.ACTION.eq(HohenheimActivityAction.REMOVED_ORPHAN.id().toString()))
-                    .orderBy(ActivityModel.ID, SortOrder.DESC).first();
-                assertThat(removal)
+                List<RecordedChanges.Recorded> removals = RecordedChanges.withFact(Models.get(ServerModel.class),
+                    ServerModel.localServerId(), HohenheimActivityAction.REMOVED_ORPHAN);
+                assertThat(removals)
                     .as("step 2b: the daemon-side removal is recorded on the host record")
-                    .isNotNull();
-                assertThat((String) removal.get(ActivityModel.DETAIL))
-                    .withFailMessage("step 2b: the record must name WHAT was removed;"
-                        + " detail was '%s'", removal.get(ActivityModel.DETAIL))
-                    .contains(orphanName);
+                    .isNotEmpty();
+                assertThat(removals.get(removals.size() - 1).fact(HohenheimActivityAction.REMOVED_ORPHAN))
+                    .as("step 2b: the record must name WHAT was removed")
+                    .containsEntry(HohenheimActivityAction.NAME_KEY, orphanName);
 
                 // 3. A VOLUME finding is refused categorically -- the one unrecoverable
                 //    resource never gets a delete button.

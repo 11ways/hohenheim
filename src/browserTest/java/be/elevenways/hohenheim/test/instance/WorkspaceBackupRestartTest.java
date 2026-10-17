@@ -11,7 +11,7 @@ import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.WorkspaceBuilds;
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.hohenheim.test.RecordedChanges;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -122,15 +122,14 @@ class WorkspaceBackupRestartTest {
                     .startsWith(restartPrefix)
                     .contains("scripted start failure"));
 
-            // 5. ... and in the activity log, where a scheduled backup's failure is read.
-            assertThat(new ActivityModel(Models.get(InstanceModel.class).getResolvedDatasource()).find()
-                .where(ActivityModel.RECORD_ID.eq(String.valueOf(id)))
-                .where(ActivityModel.ACTION.eq(HohenheimActivityAction.BACKUP_FAILED.id().toString()))
-                .all().stream()
-                .map(row -> String.valueOf((Object) row.get(ActivityModel.DETAIL))))
-                .as("step 5: the activity log names the failed restart with its reason")
-                .anyMatch(detail -> detail.contains("could not be started again after the capture (")
-                    && detail.contains("scripted start failure"));
+            // 5. ... and in the history, where a scheduled backup's failure is read.
+            assertThat(RecordedChanges.withFact(Models.get(InstanceModel.class), id,
+                    HohenheimActivityAction.BACKUP_FAILED).stream()
+                .map(recorded -> String.valueOf(recorded.fact(HohenheimActivityAction.BACKUP_FAILED)
+                    .get(HohenheimActivityAction.REASON_KEY))))
+                .as("step 5: the history names the failed restart with its reason")
+                .anyMatch(reason -> reason.contains("could not be started again after the capture (")
+                    && reason.contains("scripted start failure"));
         });
     }
 

@@ -20,7 +20,7 @@ import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
 import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -718,16 +718,16 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
             .isIn(200, 302, 303);
         assertThat(quarantineOn(hostname)).as("step 5: the quarantine row is gone").isNull();
 
-        // 5b. An override nobody can attribute is not an override: the lift must be in the
-        //     activity log, naming the hostname AND the administrator who freed it.
-        Row entry = Models.get(ActivityModel.class).find()
-            .where(ActivityModel.ACTION.eq("hohenheim:quarantine_lifted"))
-            .and(ActivityModel.DETAIL.eq(hostname))
-            .orderBy(ActivityModel.ID, SortOrder.DESC).first();
-        assertThat(entry).as("step 5b: the lift is recorded as its own action").isNotNull();
+        // 5b. An override nobody can attribute is not an override: the lift must be in the claim's
+        //     history, naming the hostname AND the administrator who freed it.
+        List<RecordedChanges.Recorded> lifts = RecordedChanges.withFact(Models.get(ReleasedRouteClaimModel.class),
+            quarantine.get(ReleasedRouteClaimModel.ID), HohenheimActivityAction.QUARANTINE_LIFTED);
+        assertThat(lifts).as("step 5b: the lift is recorded as its own fact").hasSize(1);
+        assertThat(lifts.get(0).fact(HohenheimActivityAction.QUARANTINE_LIFTED))
+            .as("step 5b: naming the hostname").containsEntry(HohenheimActivityAction.HOSTNAME_KEY, hostname);
         Row admin = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
-        assertThat((String) entry.get(ActivityModel.ACTOR))
+        assertThat(lifts.get(0).actor())
             .as("step 5b: attributed to the administrator that invoked it")
             .isEqualTo(String.valueOf(admin.get(UserModel.ID)));
 

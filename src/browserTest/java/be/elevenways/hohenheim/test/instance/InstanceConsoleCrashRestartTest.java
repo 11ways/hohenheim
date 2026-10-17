@@ -16,12 +16,12 @@ import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.zenit.common.orm.history.ActionModel;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.hohenheim.test.RecordedChanges;
 import be.elevenways.zenit.common.security.Accountability;
 import be.elevenways.zenit.common.security.ZenitPrincipalKind;
 import org.junit.jupiter.api.AfterEach;
@@ -112,11 +112,12 @@ class InstanceConsoleCrashRestartTest {
             assertThat((String) Models.get(InstanceModel.class).findById(instanceId).get(InstanceModel.STATUS))
                 .as("step 5: the record is running again, never left down by a refused restart")
                 .isEqualTo(InstanceModel.STATUS_RUNNING);
-            Row restart = deploys(instanceId).get(0);
+            List<RecordedChanges.Recorded> restarts = deploys(instanceId);
+            RecordedChanges.Recorded restart = restarts.get(restarts.size() - 1);
             // System work names the system principal as its actor (zenit 133dccf4), never the viewer.
             assertThat(Map.of(
-                    "actorKind", String.valueOf((Object) restart.get(ActivityModel.ACTOR_KIND)),
-                    "origin", String.valueOf((Object) restart.get(ActivityModel.ORIGIN))))
+                    "actorKind", String.valueOf((Object) restart.action().get(ActionModel.ACTOR_KIND)),
+                    "origin", String.valueOf(restart.origin())))
                 .as("step 5: the restart is the system's action, never the viewer's")
                 .isEqualTo(Map.of("actorKind", ZenitPrincipalKind.SYSTEM.id().toString(),
                     "origin", Accountability.ORIGIN_SYSTEM));
@@ -165,13 +166,8 @@ class InstanceConsoleCrashRestartTest {
         });
     }
 
-    private static List<Row> deploys(int instanceId) {
-        return Models.get(ActivityModel.class).find()
-            .where(ActivityModel.MODEL.eq(InstanceModel.MODEL_ID.toString()))
-            .where(ActivityModel.RECORD_ID.eq(String.valueOf(instanceId)))
-            .where(ActivityModel.ACTION.eq(HohenheimActivityAction.DEPLOYED.id().toString()))
-            .orderBy(ActivityModel.ID, SortOrder.DESC)
-            .all();
+    private static List<RecordedChanges.Recorded> deploys(int instanceId) {
+        return RecordedChanges.withFact(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.DEPLOYED);
     }
 
     private static int instanceRecord(String name) {

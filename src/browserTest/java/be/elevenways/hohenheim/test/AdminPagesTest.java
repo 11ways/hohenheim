@@ -27,11 +27,15 @@ import be.elevenways.hohenheim.server.cms.AdminActivityResource;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
-import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
+import be.elevenways.zenit.cms.common.ZenitCmsActivityAction;
+import be.elevenways.zenit.common.orm.history.ActionModel;
+import be.elevenways.zenit.common.orm.history.ChangeOp;
+import be.elevenways.zenit.common.orm.history.HistorySubjects;
+import be.elevenways.zenit.common.security.Accountability;
+import be.elevenways.zenit.test.support.HistoryFixtureRows;
+import be.elevenways.zenit.test.support.HistoryTestSupport;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.cms.server.page.SettingsBackend;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.security.PrincipalRef;
@@ -218,13 +222,14 @@ class AdminPagesTest extends HohenheimTestBase {
         assertThat(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.NEVER_BAN))
             .isEqualTo(List.of("203.0.113.7", "198.51.100.0/24"));
 
-        // Settings edits are accountable: the touched keys land in the activity log.
-        Row entry = Models.get(ActivityModel.class).find()
-            .where(ActivityModel.MODEL.eq("zenit:settings"))
-            .orderBy(ActivityModel.ID, SortOrder.DESC)
-            .first();
-        assertThat(entry).isNotNull();
-        assertThat(entry.get(ActivityModel.DETAIL)).contains("security.domain_miss_threshold");
+        // Settings edits are accountable: the touched keys land in the settings' history.
+        List<RecordedChanges.Recorded> settingsHistory = RecordedChanges.about(
+            Models.get(SiteModel.class).getResolvedDatasource(), HistorySubjects.SETTINGS);
+        assertThat(settingsHistory).isNotEmpty();
+        Map<String, Object> saved = settingsHistory.get(settingsHistory.size() - 1)
+            .fact(ZenitCmsActivityAction.SETTINGS_CHANGED);
+        assertThat(saved).as("the settings save carries its paths").isNotNull();
+        assertThat(String.valueOf(saved.get("paths"))).contains("security.domain_miss_threshold");
 
         // Reset ARMS a clear that applies on save; it no longer empties the editor
         // client-side (the settings page's inline script, which clicked every remove
@@ -320,16 +325,13 @@ class AdminPagesTest extends HohenheimTestBase {
         // substring only kept passing when some unrelated row elsewhere in the shared
         // browser-test database happened to carry it.
         Integer siteId = site.get(SiteModel.ID);
-        Row logged = Models.get(ActivityModel.class).find()
-            .where(ActivityModel.MODEL.eq("hohenheim:site"))
-            .where(ActivityModel.RECORD_ID.eq(String.valueOf(siteId)))
-            .orderBy(ActivityModel.ID, SortOrder.DESC)
-            .first();
-        assertThat(logged).as("the site creation was logged").isNotNull();
-        assertThat((String) logged.get(ActivityModel.ACTION)).isEqualTo(ZenitActivityAction.CREATE.id().toString());
-        assertThat(adminGet("/admin/activity?filter.record_id=" + siteId).body())
+        List<RecordedChanges.Recorded> created = RecordedChanges.of(Models.get(SiteModel.class), siteId,
+            ChangeOp.CREATE);
+        assertThat(created).as("the site creation was recorded").hasSize(1);
+        String createAction = created.get(0).actionId();
+        assertThat(adminGet("/admin/activity?filter.subject_id=" + siteId).body())
             .as("the activity resource is mounted in the hohenheim panel and lists the creation")
-            .contains("/admin/activity/" + logged.get(ActivityModel.ID));
+            .contains("/admin/activity/" + createAction);
 
         navigateToApp("/admin/dashboard");
         waitForHydration();
@@ -358,12 +360,7 @@ class AdminPagesTest extends HohenheimTestBase {
         var padding = firstEntry.evaluate("el => getComputedStyle(el).paddingLeft");
         assertThat(String.valueOf(padding)).isNotEqualTo("0px");
 
-        Row activity = Models.get(ActivityModel.class).find()
-            .orderBy(ActivityModel.ID, SortOrder.DESC)
-            .first();
-        assertThat(activity).isNotNull();
-
-        navigateToApp("/admin/activity/" + activity.get(ActivityModel.ID));
+        navigateToApp("/admin/activity/" + createAction);
         waitForHydration();
 
         var heading = page.locator(".cms-activity-detail-heading");
@@ -1028,27 +1025,24 @@ class AdminPagesTest extends HohenheimTestBase {
     }
 
     /**
-     * An activity entry that stored no actor label still names the person who acted.
+     * An action stores no actor label, yet the list names the person who acted.
      */
     @Test
     void theActivityListNamesAnActorThatStoredNoLabel() throws Exception {
 
         UUID actorId = ApiSupport.user("activity-actor@label.test", "Activity Label Actor");
-        Row entry = Models.get(ActivityModel.class).createEmptyRow();
-        entry.set(ActivityModel.MODEL, "hohenheim:label-probe");
-        entry.set(ActivityModel.RECORD_ID, "1");
-        entry.set(ActivityModel.ACTION, "update");
-        entry.set(ActivityModel.ACTOR, String.valueOf(actorId));
-        entry.set(ActivityModel.ACTOR_KIND, PrincipalRef.account(actorId).storedKind());
-        entry.set(ActivityModel.ORIGIN, "web");
-        entry.set(ActivityModel.CREATED_AT, Now.instant());
-        Models.get(ActivityModel.class).save(entry);
+        HistoryFixtureRows.Action action = HistoryFixtureRows.action(Models.get(ServerModel.class)
+                .getResolvedDatasource()).by(PrincipalRef.account(actorId)).origin(Accountability.ORIGIN_WEB)
+            .change(ServerModel.MODEL_ID, "label-probe-1", ChangeOp.UPDATE).done();
+        action.write();
 
         try {
-            // 1. The row genuinely carries no label -- otherwise step 2 proves nothing.
-            Row stored = Models.get(ActivityModel.class).findById(entry.get(ActivityModel.ID));
-            assertThat((String) stored.get(ActivityModel.ACTOR_LABEL))
-                .as("step 1: the entry stored no actor label").isNull();
+            // 1. The action genuinely carries no label -- otherwise step 2 proves nothing.
+            Row stored = HistoryTestSupport.actionOf(Models.get(ServerModel.class).getResolvedDatasource(),
+                action.id());
+            assertThat(stored).as("step 1: the action is stored").isNotNull();
+            assertThat((String) stored.get(ActionModel.LEGACY_LABEL))
+                .as("step 1: the action stored no actor label").isNull();
 
             // 2. The list resolves it through the one home that knows the subject
             //    vocabulary, so the operator reads a name and not a bare id.
@@ -1057,7 +1051,7 @@ class AdminPagesTest extends HohenheimTestBase {
                 .contains(HohenheimAccess.subjectLabel(new SubjectTag(GrantSubjectType.USER, actorId).token()))
                 .contains("Activity Label Actor");
         } finally {
-            Models.get(ActivityModel.class).delete(entry.get(ActivityModel.ID));
+            RecordedChanges.forget(Models.get(ServerModel.class).getResolvedDatasource(), action.id());
             Models.get(UserModel.class).delete(actorId);
         }
     }

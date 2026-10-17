@@ -20,7 +20,7 @@ import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.common.operation.PlacementSurface;
 import be.elevenways.zenit.common.operation.ZenitPlacementSurface;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.hohenheim.test.RecordedChanges;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -156,11 +156,8 @@ class PlacedConsoleCommandTest {
     }
 
     private static int consoleRows(int instanceId) {
-        return (int) Models.get(ActivityModel.class).find()
-            .where(ActivityModel.MODEL.eq(InstanceModel.MODEL_ID.toString()))
-            .where(ActivityModel.RECORD_ID.eq(String.valueOf(instanceId)))
-            .where(ActivityModel.ACTION.eq(HohenheimActivityAction.CONSOLE_COMMAND.id().toString()))
-            .count();
+        return RecordedChanges.withFact(Models.get(InstanceModel.class), instanceId,
+            HohenheimActivityAction.CONSOLE_COMMAND).size();
     }
 
     private static int instanceRecord(String name) {

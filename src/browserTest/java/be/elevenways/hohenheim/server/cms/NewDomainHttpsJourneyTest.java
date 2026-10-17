@@ -7,7 +7,7 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.site.SiteTls;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.hohenheim.test.RecordedChanges;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.Test;
@@ -49,17 +49,15 @@ class NewDomainHttpsJourneyTest extends HohenheimTestBase {
         assertThat((Boolean) chosen.get(SiteDomainModel.FORCE_SSL_AUTO)).as("step 2: an explicit choice disarms")
             .isFalse();
 
-        // 3. A working certificate covering both arrives: the armed address is forced and disarmed, with an activity
-        //    entry; the operator's explicit "off" is left alone.
+        // 3. A working certificate covering both arrives: the armed address is forced and disarmed, with a history
+        //    fact; the operator's explicit "off" is left alone.
         Row cert = certificate("https-journey", "fresh.https-journey.test,chosen.https-journey.test");
         fresh = domains.findById(fresh.get(SiteDomainModel.ID));
         assertThat((Boolean) fresh.get(SiteDomainModel.FORCE_SSL)).as("step 3: the armed address is forced").isTrue();
         assertThat((Boolean) fresh.get(SiteDomainModel.FORCE_SSL_AUTO)).as("step 3: once: the latch cleared").isFalse();
-        assertThat(Models.get(ActivityModel.class).find()
-                .where(ActivityModel.MODEL.eq(SiteDomainModel.MODEL_ID.toString()))
-                .where(ActivityModel.RECORD_ID.eq(String.valueOf((Object) fresh.get(SiteDomainModel.ID))))
-                .where(ActivityModel.ACTION.eq(HohenheimActivityAction.HTTPS_FORCED.id().toString())).all())
-            .as("step 3: the switch is recorded in the address's activity").hasSize(1);
+        assertThat(RecordedChanges.withFact(domains, fresh.get(SiteDomainModel.ID),
+                HohenheimActivityAction.HTTPS_FORCED))
+            .as("step 3: the switch is recorded in the address's history").hasSize(1);
         assertThat((Boolean) domains.findById(chosen.get(SiteDomainModel.ID)).get(SiteDomainModel.FORCE_SSL))
             .as("step 3: an explicit off stays off").isFalse();
         assertThat(SiteParts.tlsOf(site)).as("step 3: every exact address works").isEqualTo(SiteTls.WORKS);

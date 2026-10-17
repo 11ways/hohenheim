@@ -18,12 +18,11 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.hohenheim.test.RecordedChanges;
+import be.elevenways.zenit.test.support.HistoryTestSupport;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import org.junit.jupiter.api.BeforeAll;
@@ -495,39 +494,33 @@ class InstanceMigrationTest {
                     .isNotEqualTo(gammaId);
             }
 
-            // 2b. The drain is ACCOUNTABLE, and that cannot ride on the model hooks:
-            //     every write a migration makes is a fenced updateAll, which fires none.
-            //     So each MOVED workload carries its own row naming both hosts, and the
+            // 2b. The drain is ACCOUNTABLE, and that cannot ride on the plain change capture:
+            //     every write a migration makes is a fenced updateAll.
+            //     So each MOVED workload carries its own fact naming both hosts, and the
             //     host carries one for the drain -- an INCOMPLETE drain included.
-            assertThat(ActivityLog.isInstalled())
-                .as("step 2b: the activity log must be installed or this proves nothing")
+            assertThat(HistoryTestSupport.recordsOptional())
+                .as("step 2b: optional history must be recording or this proves nothing")
                 .isTrue();
             String gammaName = ServerModel.nameOf(gammaId);
             for (int id : List.of(movable1, movable2)) {
-                Row moveRow = Models.get(ActivityModel.class).find()
-                    .where(ActivityModel.MODEL.eq(InstanceModel.MODEL_ID.toString()))
-                    .where(ActivityModel.RECORD_ID.eq(String.valueOf(id)))
-                    .where(ActivityModel.ACTION.eq(HohenheimActivityAction.MIGRATED.id().toString()))
-                    .orderBy(ActivityModel.ID, SortOrder.DESC).first();
-                assertThat(moveRow)
+                List<RecordedChanges.Recorded> moves = RecordedChanges.withFact(Models.get(InstanceModel.class), id,
+                    HohenheimActivityAction.MIGRATED);
+                assertThat(moves)
                     .as("step 2b: the move of instance %s is recorded on its own record", id)
-                    .isNotNull();
-                assertThat((String) moveRow.get(ActivityModel.DETAIL))
-                    .withFailMessage("step 2b: the record must name where the workload came"
-                        + " FROM; detail was '%s'", moveRow.get(ActivityModel.DETAIL))
-                    .contains(gammaName);
+                    .isNotEmpty();
+                assertThat(moves.get(moves.size() - 1).fact(HohenheimActivityAction.MIGRATED))
+                    .as("step 2b: the record must name where the workload came FROM")
+                    .containsEntry(HohenheimActivityAction.FROM_KEY, gammaName);
             }
-            Row drainRow = Models.get(ActivityModel.class).find()
-                .where(ActivityModel.MODEL.eq(ServerModel.MODEL_ID.toString()))
-                .where(ActivityModel.RECORD_ID.eq(String.valueOf(gammaId)))
-                .where(ActivityModel.ACTION.eq(HohenheimActivityAction.DRAINED.id().toString()))
-                .orderBy(ActivityModel.ID, SortOrder.DESC).first();
-            assertThat(drainRow)
-                .as("step 2b: the drain itself is recorded on the host record").isNotNull();
-            assertThat((String) drainRow.get(ActivityModel.DETAIL))
-                .withFailMessage("step 2b: an incomplete drain must SAY it left something"
-                    + " behind; detail was '%s'", drainRow.get(ActivityModel.DETAIL))
-                .contains("refused 1").contains("INCOMPLETE");
+            List<RecordedChanges.Recorded> drains = RecordedChanges.withFact(Models.get(ServerModel.class), gammaId,
+                HohenheimActivityAction.DRAINED);
+            assertThat(drains)
+                .as("step 2b: the drain itself is recorded on the host record").isNotEmpty();
+            Map<String, Object> drain = drains.get(drains.size() - 1).fact(HohenheimActivityAction.DRAINED);
+            assertThat(((Number) drain.get(HohenheimActivityAction.REFUSED_KEY)).intValue())
+                .as("step 2b: an incomplete drain must SAY it left something behind").isEqualTo(1);
+            assertThat(drain.get(HohenheimActivityAction.COMPLETE_KEY))
+                .as("step 2b: and that it is incomplete").isEqualTo(false);
 
             // 3. Detach the device and drain again: the host ends holding NONE.
             Models.get(InstanceDeviceModel.class).find()

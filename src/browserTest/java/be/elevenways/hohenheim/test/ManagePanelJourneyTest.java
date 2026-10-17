@@ -34,11 +34,15 @@ import be.elevenways.zenit.cms.server.panel.PartsLists;
 import be.elevenways.zenit.cms.server.panel.ResourceVerbs;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.brand.Brands;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
-import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
+import be.elevenways.zenit.common.orm.datasource.Datasource;
+import be.elevenways.zenit.common.orm.history.ActionModel;
+import be.elevenways.zenit.common.orm.history.ChangeFactModel;
+import be.elevenways.zenit.common.orm.history.ChangeModel;
+import be.elevenways.zenit.common.orm.history.ChangeOp;
+import be.elevenways.zenit.common.security.PrincipalRef;
+import be.elevenways.zenit.test.support.HistoryFixtureRows;
 import be.elevenways.zenit.common.security.AccountabilityOrigin;
 import be.elevenways.zenit.common.security.SystemPrincipal;
-import be.elevenways.zenit.common.security.ZenitPrincipalKind;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
@@ -562,21 +566,21 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
      */
     @Test
     void theLandingTellsTheTenantWhatHappenedToTheirAppsAndWhoRunsTheInstallation() throws Exception {
-        // 1. Three entries: the tenant created their app, the system restarted it, and someone else's app was
+        // 1. Three actions: the tenant created their app, the system restarted it, and someone else's app was
         //    created where the tenant holds nothing.
-        Model activity = Models.get(ActivityModel.class);
-        activity.find().delete();
+        Datasource datasource = Models.get(InstanceModel.class).getResolvedDatasource();
+        new ChangeFactModel(datasource).find().delete();
+        new ChangeModel(datasource).find().delete();
+        new ActionModel(datasource).find().delete();
         Instant now = Now.instant();
         Row other = Models.get(InstanceModel.class).createEmptyRow();
         other.set(InstanceModel.NAME, "someone-elses-app");
         other.set(InstanceModel.KIND, "hohenheim:docker_container");
         other.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "alpine")));
         Models.get(InstanceModel.class).save(other);
-        acted(activity, this.appId, "tenant-survival", ZenitActivityAction.CREATE, String.valueOf(this.tenantId),
-            now.minusSeconds(30));
-        acted(activity, this.appId, "tenant-survival", ZenitActivityAction.UPDATE, null, now.minusSeconds(20));
-        acted(activity, other.get(InstanceModel.ID), "someone-elses-app", ZenitActivityAction.CREATE, null,
-            now.minusSeconds(10));
+        acted(datasource, this.appId, ChangeOp.CREATE, this.tenantId, now.minusSeconds(30));
+        acted(datasource, this.appId, ChangeOp.UPDATE, null, now.minusSeconds(20));
+        acted(datasource, other.get(InstanceModel.ID), ChangeOp.CREATE, null, now.minusSeconds(10));
 
         // 2. The band lists the two entries about the tenant's app, their own act worded for them.
         String home = page("/manage/dashboard");
@@ -610,26 +614,18 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
         }
     }
 
-    /** One activity entry about an instance, by an account (its id) or by the system (null). */
-    private static void acted(Model activity, Object instanceId, String title, ZenitActivityAction action,
-                              String accountId, Instant at) {
-        Row row = activity.createEmptyRow();
-        row.set(ActivityModel.MODEL, InstanceModel.MODEL_ID.toString());
-        row.set(ActivityModel.RECORD_ID, String.valueOf(instanceId));
-        row.set(ActivityModel.RECORD_TITLE, title);
-        row.set(ActivityModel.ACTION, action.id().toString());
-        row.set(ActivityModel.CREATED_AT, at);
+    /**
+     * One action about an instance, by an account (its id) or by the system (null), written straight into the history
+     * tables so its actor and origin are the ones chosen.
+     */
+    private static void acted(Datasource datasource, Object instanceId, ChangeOp op, UUID accountId, Instant at) {
+        HistoryFixtureRows.Action action = HistoryFixtureRows.action(datasource).at(at);
         if (accountId != null) {
-            row.set(ActivityModel.ACTOR, accountId);
-            row.set(ActivityModel.ACTOR_KIND, ZenitPrincipalKind.ACCOUNT.id().toString());
-            row.set(ActivityModel.ORIGIN, AccountabilityOrigin.WEB.token());
+            action.by(PrincipalRef.account(accountId)).origin(AccountabilityOrigin.WEB.token());
         } else {
-            var system = SystemPrincipal.INSTANCE.reference();
-            row.set(ActivityModel.ACTOR_KIND, system.storedKind());
-            row.set(ActivityModel.ACTOR, system.id().toString());
-            row.set(ActivityModel.ORIGIN, AccountabilityOrigin.SYSTEM.token());
+            action.by(SystemPrincipal.INSTANCE.reference()).origin(AccountabilityOrigin.SYSTEM.token());
         }
-        activity.save(row);
+        action.change(InstanceModel.MODEL_ID, instanceId, op).done().write();
     }
 
     /** @return the usage card's line of one budget, up to its end */

@@ -12,8 +12,9 @@ import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.common.flash.FlashLevel;
 import be.elevenways.zenit.common.flash.FlashNotice;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.hohenheim.test.RecordedChanges;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -22,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -41,7 +43,7 @@ class DeployControlSettleTest extends HohenheimTestBase {
 
     private static final String NAME = "deploy-control-settle-app";
 
-    /** A record id no instance holds, carrying only this test's attribution row. */
+    /** A record id no instance holds, carrying only this test's attribution change. */
     private static final int SETTLE_RECORD = 987_654_321;
 
     @Test
@@ -79,18 +81,17 @@ class DeployControlSettleTest extends HohenheimTestBase {
             release.countDown();
         }
 
-        // 3b. The background verb writes its activity as whoever asked: the attribution rides the hop.
+        // 3b. The background verb writes its history as whoever asked: the attribution rides the hop.
         Row admin = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         UUID adminId = admin.get(UserModel.ID);
         TenantConduits.as(new UserPrincipal(adminId, "Test Admin"), () -> SiteControlHandlers.settleWithin(
             Duration.ofSeconds(5), "test verb",
-            () -> ActivityLog.record(Models.get(InstanceModel.class), SETTLE_RECORD,
-                HohenheimActivityAction.TESTED, null)));
-        Row attributed = new ActivityModel(Models.get(InstanceModel.class).getResolvedDatasource()).find()
-            .where(ActivityModel.RECORD_ID.eq(String.valueOf(SETTLE_RECORD)))
-            .where(ActivityModel.ACTION.eq(HohenheimActivityAction.TESTED.id().toString())).first();
-        assertThat(attributed).as("step 3b: the background verb recorded its activity").isNotNull();
-        assertThat((String) attributed.get(ActivityModel.ACTOR))
+            () -> History.event(Models.get(InstanceModel.class), SETTLE_RECORD,
+                Change.fact(HohenheimActivityAction.ROLLED_BACK))));
+        List<RecordedChanges.Recorded> attributed = RecordedChanges.withFact(Models.get(InstanceModel.class),
+            SETTLE_RECORD, HohenheimActivityAction.ROLLED_BACK);
+        assertThat(attributed).as("step 3b: the background verb recorded its history").hasSize(1);
+        assertThat(attributed.get(0).actor())
             .as("step 3b: naming the caller who asked, not the system").isEqualTo(String.valueOf(adminId));
 
         // 4. Over HTTP: rolling back an application with no retained release used to escape

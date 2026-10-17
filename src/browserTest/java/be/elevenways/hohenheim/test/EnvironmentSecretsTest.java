@@ -3,13 +3,15 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
-import be.elevenways.zenit.common.orm.activity.ActivityText;
-import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.zenit.common.orm.history.ChangeModel;
+import be.elevenways.zenit.common.orm.history.ChangeOp;
+import be.elevenways.zenit.common.orm.history.History;
+import be.elevenways.zenit.common.orm.history.HistoryChange;
+import be.elevenways.zenit.common.orm.history.HistoryText;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.narration.FieldValueText;
-import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.orm.revision.RevisionModel;
 import be.elevenways.zenit.test.support.TestAccessContexts;
 import org.junit.jupiter.api.Test;
@@ -95,28 +97,25 @@ class EnvironmentSecretsTest extends HohenheimTestBase {
             .as("3. the snapshot's settings map must omit the secret leaf entirely")
             .doesNotContainKey("registration_token");
 
-        // 4. NO activity delta may contain the credential; the update delta must still
+        // 4. NO history delta may contain the credential; the update delta must still
         //    SHOW that the settings changed ([redacted] pair) and keep the ordinary
         //    changes readable.
-        List<Row> activity = activityRows(siteId);
-        assertThat(activity).as("4. create + update must both be logged (ALL policy)")
-            .hasSizeGreaterThanOrEqualTo(2);
-        for (Row entry : activity) {
-            String deltaText = entry.get(ActivityModel.DELTA);
+        List<RecordedChanges.Recorded> changes = RecordedChanges.of(sites, siteId);
+        assertThat(changes).as("4. create + update must both be recorded").hasSizeGreaterThanOrEqualTo(2);
+        for (RecordedChanges.Recorded change : changes) {
+            String deltaText = change.change().get(ChangeModel.DELTA);
             if (deltaText == null) {
                 continue;
             }
             assertThat(deltaText)
-                .as("4. activity delta of action '%s' must not contain any credential plaintext",
-                    entry.get(ActivityModel.ACTION))
+                .as("4. history delta of change '%s' must not contain any credential plaintext", change.op())
                 .doesNotContain(TOKEN_V1)
                 .doesNotContain(TOKEN_V2);
         }
-        Row updateEntry = activity.stream()
-            .filter(entry -> ZenitActivityAction.UPDATE.id().toString().equals(entry.get(ActivityModel.ACTION)))
+        RecordedChanges.Recorded updateEntry = changes.stream().filter(change -> change.op() == ChangeOp.UPDATE)
             .reduce((first, second) -> second).orElse(null);
-        assertThat(updateEntry).as("4. the update activity entry must exist").isNotNull();
-        Map<?, ?> delta = (Map<?, ?>) Zenit.DRY.parse(updateEntry.get(ActivityModel.DELTA));
+        assertThat(updateEntry).as("4. the update change must exist").isNotNull();
+        Map<?, ?> delta = updateEntry.delta();
         Map<?, ?> settingsChange = (Map<?, ?>) delta.get("settings");
         assertThat(settingsChange).as("4. the delta must record that settings changed").isNotNull();
         Map<?, ?> settingsAfter = (Map<?, ?>) settingsChange.get("after");
@@ -196,26 +195,27 @@ class EnvironmentSecretsTest extends HohenheimTestBase {
         app.set(InstanceModel.SETTINGS, environment(GREETING_V1));
         instances.save(app);
         int appId = app.get(InstanceModel.ID);
-        int recorded = instanceActivityRows(appId).size();
+        int recorded = RecordedChanges.of(instances, appId).size();
         assertThat(recorded).as("1. the create is recorded").isGreaterThanOrEqualTo(1);
 
-        // 2. Saving it unchanged only stamps the ORM's own timestamp: no activity entry.
+        // 2. Saving it unchanged only stamps the ORM's own timestamp: no history change.
         Row saved = instances.findById(appId);
         saved.set(InstanceModel.NAME, "env-activity-app");
         instances.save(saved);
-        assertThat(instanceActivityRows(appId)).as("2. an unchanged save is no event").hasSize(recorded);
+        assertThat(RecordedChanges.of(instances, appId)).as("2. an unchanged save is no event").hasSize(recorded);
 
         // 3. Changing the greeting records an update whose line names the key, and no value anywhere.
         saved.set(InstanceModel.SETTINGS, environment(GREETING_V2));
         instances.save(saved);
-        List<Row> entries = instanceActivityRows(appId);
+        List<RecordedChanges.Recorded> entries = RecordedChanges.of(instances, appId);
         assertThat(entries).as("3. the change is recorded once").hasSize(recorded + 1);
-        Row update = entries.get(entries.size() - 1);
-        assertThat((String) update.get(ActivityModel.DELTA))
+        assertThat((String) entries.get(entries.size() - 1).change().get(ChangeModel.DELTA))
             .as("3. the delta names the key").contains("SITE_GREETING")
             .as("3. and never a value").doesNotContain(GREETING_V1).doesNotContain(GREETING_V2);
-        assertThat(ActivityText.detail(update, FieldValueText.standard(), TestAccessContexts.allAllowed()))
-            .as("3. the activity line names the changed key").contains("SITE_GREETING")
+        AccessContext reader = TestAccessContexts.allAllowed();
+        HistoryChange update = History.ofRecord(instances, appId, reader, null, 1).entries().get(0).changes().get(0);
+        assertThat(HistoryText.change(update, reader).resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
+            .as("3. the history line names the changed key").contains("SITE_GREETING")
             .as("3. and never a value").doesNotContain(GREETING_V1).doesNotContain(GREETING_V2);
     }
 
@@ -225,16 +225,6 @@ class EnvironmentSecretsTest extends HohenheimTestBase {
         Map<String, Object> settings = new LinkedHashMap<>();
         settings.put("environment_variables", new LinkedHashMap<>(Map.of("SITE_GREETING", greeting)));
         return settings;
-    }
-
-    private static List<Row> instanceActivityRows(int instanceId) {
-        ActivityModel activity = new ActivityModel(
-            Models.get(InstanceModel.class).getResolvedDatasource());
-        return activity.find()
-            .where(ActivityModel.MODEL.eq(InstanceModel.MODEL_ID.toString()))
-            .where(ActivityModel.RECORD_ID.eq(String.valueOf(instanceId)))
-            .orderBy(ActivityModel.ID, SortOrder.ASC)
-            .all();
     }
 
     @SuppressWarnings("unchecked")
@@ -254,15 +244,6 @@ class EnvironmentSecretsTest extends HohenheimTestBase {
         return revisions.find()
             .where(RevisionModel.MODEL.eq(SiteModel.MODEL_ID.toString()))
             .where(RevisionModel.RECORD_ID.eq(String.valueOf(siteId)))
-            .all();
-    }
-
-    private static List<Row> activityRows(int siteId) {
-        ActivityModel activity = new ActivityModel(
-            Models.get(SiteModel.class).getResolvedDatasource());
-        return activity.find()
-            .where(ActivityModel.MODEL.eq(SiteModel.MODEL_ID.toString()))
-            .where(ActivityModel.RECORD_ID.eq(String.valueOf(siteId)))
             .all();
     }
 

@@ -9,16 +9,17 @@ import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.zenit.cms.common.action.PanelAction;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.hohenheim.test.RecordedChanges;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.SortOrder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
 
 import java.net.http.HttpResponse;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -420,13 +421,14 @@ class InstanceOverviewTest extends HohenheimTestBase {
         try {
             // 1. One recorded action per instance, so a band filtered on the model alone
             //    would show both and a correctly filtered one shows exactly one.
-            ActivityLog.record(instances, instance(), HohenheimActivityAction.DEPLOYED, "overview band fixture");
-            ActivityLog.record(instances, decoy.get(InstanceModel.ID), HohenheimActivityAction.DEPLOYED,
-                "decoy fixture");
+            History.event(instances, instance(), Change.fact(HohenheimActivityAction.DEPLOYED,
+                Map.of(HohenheimActivityAction.TRIGGER_KEY, "overview band fixture")));
+            History.event(instances, decoy.get(InstanceModel.ID), Change.fact(HohenheimActivityAction.DEPLOYED,
+                Map.of(HohenheimActivityAction.TRIGGER_KEY, "decoy fixture")));
 
-            Object mine = latestActivityId(String.valueOf(instance()));
-            Object theirs = latestActivityId(String.valueOf(decoy.get(InstanceModel.ID)));
-            assertThat(mine).as("step 1: this instance has an activity row").isNotNull();
+            String mine = latestActionId(instance());
+            String theirs = latestActionId(decoy.get(InstanceModel.ID));
+            assertThat(mine).as("step 1: this instance has an action").isNotNull();
             assertThat(theirs).as("step 1: the decoy has one too").isNotNull();
 
             // 2. The band renders, and links this instance's entry.
@@ -438,7 +440,7 @@ class InstanceOverviewTest extends HohenheimTestBase {
                 .as("step 2: it links this instance's own activity entry")
                 .contains("/admin/activity/" + mine);
 
-            // 3. And NOT the other instance's -- the rule is (model, record id), not model.
+            // 3. And NOT the other instance's -- the read is this record's history, not the model's.
             assertThat(body)
                 .as("step 3: another instance's activity never leaks onto this page")
                 .doesNotContain("/admin/activity/" + theirs);
@@ -447,13 +449,9 @@ class InstanceOverviewTest extends HohenheimTestBase {
         }
     }
 
-    /** The newest activity row id written about one instance id, or null. */
-    private static Object latestActivityId(String recordId) {
-        Row entry = Models.get(ActivityModel.class).find()
-            .where(ActivityModel.MODEL.eq(InstanceModel.MODEL_ID.toString()))
-            .where(ActivityModel.RECORD_ID.eq(recordId))
-            .orderBy(ActivityModel.ID, SortOrder.DESC)
-            .first();
-        return entry == null ? null : entry.get(ActivityModel.ID);
+    /** The newest action id written about one instance, or null. */
+    private static String latestActionId(Object recordId) {
+        List<RecordedChanges.Recorded> history = RecordedChanges.of(Models.get(InstanceModel.class), recordId);
+        return history.isEmpty() ? null : history.get(history.size() - 1).actionId();
     }
 }

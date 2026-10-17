@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.ports.PublishedPort;
 import be.elevenways.hohenheim.server.instance.InstanceSnapshots;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.hohenheim.test.RecordedChanges;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.InstanceBackupOperations;
 import be.elevenways.hohenheim.model.BackupTargetModel;
@@ -498,14 +498,13 @@ class InstanceBackupsTest {
                     .extracting(PublishedPort::spec).as("step 2: game on a free port, query as it was")
                     .containsExactly("25565/tcp", "30411:25565/udp");
 
-                // 3. The copy's activity entry says which ports changed.
-                Row logged = new ActivityModel(Models.get(InstanceModel.class).getResolvedDatasource()).find()
-                    .where(ActivityModel.RECORD_ID.eq(String.valueOf(copy.instanceId())))
-                    .where(ActivityModel.ACTION.eq(HohenheimActivityAction.RESTORED_BACKUP.id().toString()))
-                    .first();
-                assertThat(logged).as("step 3: the restore is recorded on the copy").isNotNull();
-                assertThat((String) logged.get(ActivityModel.DETAIL)).as("step 3: naming the moved port")
-                    .contains("now picked by it: game 30410/tcp");
+                // 3. The copy's history says which ports changed.
+                List<RecordedChanges.Recorded> restores = RecordedChanges.withFact(Models.get(InstanceModel.class),
+                    copy.instanceId(), HohenheimActivityAction.RESTORED_BACKUP);
+                assertThat(restores).as("step 3: the restore is recorded on the copy").isNotEmpty();
+                assertThat(String.valueOf(restores.get(0).fact(HohenheimActivityAction.RESTORED_BACKUP)
+                        .get(HohenheimActivityAction.MOVED_PORTS_KEY)))
+                    .as("step 3: naming the moved port").contains("game 30410/tcp");
 
                 // 4. The original keeps its own fixed ports.
                 assertThat(PublishedPort.of(InstanceModel.settingsOf(Models.get(InstanceModel.class)

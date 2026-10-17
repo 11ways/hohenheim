@@ -18,7 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * browser-test harness, while the audit-row-on-success half additionally needs a live engine
  * (the Docker-gated DatabaseServiceTest exercises the dump path itself). The wiring -- the
  * guard runs at the TOP of the DATABASES_BACKUP handler, before the existence check, the dump
- * and the ActivityLog.record -- is in HohenheimHandlers.initDatabases.
+ * and the history event -- is in HohenheimHandlers.initDatabases.
  */
 class CrossSiteFetchGuardTest {
 

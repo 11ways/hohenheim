@@ -24,8 +24,13 @@ import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
-import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
+import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.orm.datasource.Datasource;
+import be.elevenways.zenit.common.orm.history.ActionModel;
+import be.elevenways.zenit.common.orm.history.ChangeFactModel;
+import be.elevenways.zenit.common.orm.history.ChangeModel;
+import be.elevenways.zenit.common.orm.history.ChangeOp;
+import be.elevenways.zenit.test.support.HistoryFixtureRows;
 import be.elevenways.zenit.common.security.AccountabilityOrigin;
 import be.elevenways.zenit.common.security.SystemPrincipal;
 import be.elevenways.plumage.icon.IconRegistry;
@@ -128,7 +133,7 @@ class LandingDashboardSurfacesTest extends HohenheimTestBase {
             HohenheimCapabilities.MANAGE, true);
         tenant = sessionFor(tenantId);
         outsider = sessionFor(outsiderId);
-        seedRecentActivity();
+        seedRecentActivity(site.get(SiteModel.ID));
         pinAttentionInputs();
     }
 
@@ -162,43 +167,42 @@ class LandingDashboardSurfacesTest extends HohenheimTestBase {
     /**
      * Seed a fixed mixed-provenance history instead of capturing boot seeders and the host's OS accounts.
      *
-     * AIDEV-NOTE: each row names its model by the model's own id, never a literal token: the literals spelled the
+     * AIDEV-NOTE: each action names its model by the model's own id, never a literal token: the literals spelled the
      * pre-sweep 'zenit-auth:' namespace, so the role grant escaped the activity scope's internal models and the
-     * baseline recorded a row production no longer shows. The one web row is the only person's action, so the band
-     * shows it and nothing else: "Unattributed created Test Admin" is work that declared no identity, no person's.
+     * baseline recorded a row production no longer shows. The one web action is the only person's, so the band shows
+     * it and nothing else; it creates the landing site, because a history line names its record by the live title.
+     * The rows are written straight into the history tables (HistoryFixtureRows) because their origins and actors
+     * must be chosen, which the writer derives from whatever lane calls it.
      */
-    private static void seedRecentActivity() {
-        Model activity = Models.get(ActivityModel.class);
-        activity.find().delete();
+    private static void seedRecentActivity(@NonNull Object siteId) {
+        Datasource datasource = Models.get(SiteModel.class).getResolvedDatasource();
+        new ChangeFactModel(datasource).find().delete();
+        new ChangeModel(datasource).find().delete();
+        new ActionModel(datasource).find().delete();
         var now = Now.instant();
-        String[][] records = {
-            {SiteModel.MODEL_ID.toString(), "Landing Shop", "web"},
-            {RecordGrantModel.MODEL_ID.toString(), "manage", "system"},
-            {SiteModel.MODEL_ID.toString(), "landing-site", "system"},
-            {InstanceQuotaModel.MODEL_ID.toString(), "", "system"},
-            {UserModel.MODEL_ID.toString(), "Landing Outsider", "system"},
-            {UserModel.MODEL_ID.toString(), "Landing Tenant", "system"},
-            {GrantModel.MODEL_ID.toString(), "*", "unattributed"},
-            {UserModel.MODEL_ID.toString(), "Test Admin", "unattributed"},
-            {SystemUserModel.MODEL_ID.toString(), "skerit", "system"},
-            {SystemUserModel.MODEL_ID.toString(), "nobody", "system"},
-            {SystemUserModel.MODEL_ID.toString(), "root", "system"}
+        Object[][] records = {
+            {SiteModel.MODEL_ID, siteId, "web"},
+            {RecordGrantModel.MODEL_ID, null, "system"},
+            {SiteModel.MODEL_ID, null, "system"},
+            {InstanceQuotaModel.MODEL_ID, null, "system"},
+            {UserModel.MODEL_ID, null, "system"},
+            {UserModel.MODEL_ID, null, "system"},
+            {GrantModel.MODEL_ID, null, "unattributed"},
+            {UserModel.MODEL_ID, null, "unattributed"},
+            {SystemUserModel.MODEL_ID, null, "system"},
+            {SystemUserModel.MODEL_ID, null, "system"},
+            {SystemUserModel.MODEL_ID, null, "system"}
         };
         for (int index = 0; index < records.length; index++) {
-            String[] fixture = records[index];
-            Row row = activity.createEmptyRow();
-            row.set(ActivityModel.MODEL, fixture[0]);
-            row.set(ActivityModel.RECORD_ID, "landing-fixture-" + index);
-            row.set(ActivityModel.RECORD_TITLE, fixture[1]);
-            row.set(ActivityModel.ACTION, ZenitActivityAction.CREATE.id().toString());
-            row.set(ActivityModel.CREATED_AT, now.minusSeconds(index));
-            if (AccountabilityOrigin.SYSTEM.token().equals(fixture[2])) {
-                var system = SystemPrincipal.INSTANCE.reference();
-                row.set(ActivityModel.ACTOR_KIND, system.storedKind());
-                row.set(ActivityModel.ACTOR, system.id().toString());
+            Object[] fixture = records[index];
+            String origin = (String) fixture[2];
+            HistoryFixtureRows.Action action = HistoryFixtureRows.action(datasource).at(now.minusSeconds(index))
+                .origin(origin);
+            if (AccountabilityOrigin.SYSTEM.token().equals(origin)) {
+                action.by(SystemPrincipal.INSTANCE.reference());
             }
-            row.set(ActivityModel.ORIGIN, fixture[2]);
-            activity.save(row);
+            action.change((Identifier) fixture[0], fixture[1] == null ? "landing-fixture-" + index : fixture[1],
+                ChangeOp.CREATE).done().write();
         }
     }
 

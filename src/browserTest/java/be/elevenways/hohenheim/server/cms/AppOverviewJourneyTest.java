@@ -30,7 +30,8 @@ import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.resource.RecordHealth;
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.activity.ActivityVisibility;
 import be.elevenways.zenit.common.operation.OperationRunModel;
 import be.elevenways.zenit.common.operation.OperationRunStatus;
@@ -443,14 +444,12 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
                 .contains("/admin/databases/" + database.get(DatabaseModel.ID) + "/open");
             assertThat(page).as("step 3: and its backups").contains("No backup target, so none are made");
 
-            // 4. Recent folds one batch to one row (ActivitySources.onePerCommand): an SFTP session's uploads read as
-            //    "Uploaded 2 files", in the file verb's own batch words.
-            ActivityLog.inBatch("sftp:app-journey", () -> {
-                ActivityLog.record(Models.get(InstanceModel.class), instance.get(InstanceModel.ID),
-                    HohenheimActivityAction.FILES_UPLOAD, "/data/a.txt");
-                ActivityLog.record(Models.get(InstanceModel.class), instance.get(InstanceModel.ID),
-                    HohenheimActivityAction.FILES_UPLOAD, "/data/b.txt");
-            });
+            // 4. Recent lists one row per action. An upload is one action since history v3 (an SFTP session keeps no
+            //    batch), so two uploads are two rows, each in the file verb's own sentence.
+            for (String path : List.of("/data/a.txt", "/data/b.txt")) {
+                History.event(Models.get(InstanceModel.class), instance.get(InstanceModel.ID), Change.fact(
+                    HohenheimActivityAction.FILES_UPLOAD, Map.of(HohenheimActivityAction.PATH_KEY, path)));
+            }
             assertThat(HohenheimActivityAction.FILES_UPLOAD.batchLabel().withArg("count", 312)
                 .resolve(en, Zenit.getMessageResolver())).as("step 4: a batch of uploads reads in words")
                 .isEqualTo("Uploaded 312 files");
@@ -461,7 +460,8 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
                 .as("step 4: a verb written one at a time has none")
                 .isNull();
             String recent = adminGet("/admin/instances/" + instance.get(InstanceModel.ID) + "/page/overview").body();
-            assertThat(recent).as("step 4: the Recent card names the batch once").contains("Uploaded 2 files");
+            assertThat(recent.split("uploaded a file to", -1).length - 1)
+                .as("step 4: the Recent card lists each upload as its own row").isEqualTo(2);
         } finally {
             for (int i = cleanup.size() - 1; i >= 0; i--) {
                 cleanup.get(i).run();
@@ -505,8 +505,10 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
             //    them through the internal filter), so Recent reads what happened, the failed start.
             assertThat(HohenheimActivityAction.RECONCILED.visibility()).as("step 3: the reconcile verb is internal")
                 .isEqualTo(ActivityVisibility.INTERNAL);
-            ActivityLog.record(Models.get(InstanceModel.class), id, HohenheimActivityAction.RECONCILED,
-                "running -> stopped");
+            History.event(Models.get(InstanceModel.class), id, Change.fact(HohenheimActivityAction.RECONCILED,
+                Map.of(HohenheimActivityAction.FROM_KEY, InstanceModel.STATUS_RUNNING,
+                    HohenheimActivityAction.TO_KEY, InstanceModel.STATUS_STOPPED,
+                    HohenheimActivityAction.DAEMON_STATE_KEY, "stopped", HohenheimActivityAction.CRASH_LOOP_KEY, false)));
             String recent = adminGet("/admin/instances/" + id + "/page/overview").body();
             assertThat(recent).as("step 3: Recent leaves the correction out")
                 .doesNotContain("in line with its host")
@@ -858,12 +860,11 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
             .assign(InstanceModel.STARTED_AT, Now.instant()).bypassBehaviours().updateAll();
     }
 
-    /** Stamps ERROR with its cause's stoppage as the operation guard's ERROR stamps do: on the row, then in activity. */
+    /** Stamps ERROR with its cause's stoppage as the operation guard's ERROR stamps do: on the row, then in history. */
     private static void stopped(int instanceId, HohenheimActivityAction cause, String detail) {
         InstanceModel.withStoppage(Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(instanceId))
             .assign(InstanceModel.STATUS, InstanceModel.STATUS_ERROR), cause, detail).bypassBehaviours().updateAll();
-        ActivityLog.record(Models.get(InstanceModel.class), instanceId, cause,
-            InstanceModel.stoppageDetailOf(cause, detail));
+        History.event(Models.get(InstanceModel.class), instanceId, InstanceModel.stoppageFact(cause, detail));
     }
 
     /** Stores a reconciler correction to ERROR from before causes, as M017 converts one. */

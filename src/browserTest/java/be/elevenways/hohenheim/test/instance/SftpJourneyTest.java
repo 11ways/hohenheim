@@ -32,7 +32,7 @@ import be.elevenways.zenit.auth.server.ApiKeyService;
 import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.hohenheim.test.RecordedChanges;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -298,14 +298,11 @@ class SftpJourneyTest {
             assertThat(inContainer(docker, handle, "test -e /data/made && echo yes || echo no"))
                 .as("step 6: delete and rmdir removed both").isEqualTo("no\n");
 
-            // 7. Every change wrote the browser's own activity verb, by the writer, with origin sftp.
-            List<Row> rows = Models.get(ActivityModel.class).find()
-                .where(ActivityModel.MODEL.eq(InstanceModel.MODEL_ID.toString()))
-                .where(ActivityModel.RECORD_ID.eq(String.valueOf(id)))
-                .where(ActivityModel.ORIGIN.eq(AccountabilityOrigin.SFTP.token()))
-                .all();
-            assertThat(rows.stream().map(row -> row.get(ActivityModel.ACTION)).toList())
-                .as("step 7: one row per change, under the file manager's verbs")
+            // 7. Every change wrote the browser's own history verb, by the writer, with origin sftp.
+            List<RecordedChanges.Recorded> rows = RecordedChanges.of(Models.get(InstanceModel.class), id).stream()
+                .filter(recorded -> AccountabilityOrigin.SFTP.token().equals(recorded.origin())).toList();
+            assertThat(rows.stream().flatMap(recorded -> recorded.facts().keySet().stream()).toList())
+                .as("step 7: one fact per change, under the file manager's verbs")
                 .containsExactlyInAnyOrder(
                     HohenheimActivityAction.FILES_UPLOAD.id().toString(),
                     HohenheimActivityAction.FILES_MKDIR.id().toString(),
@@ -313,8 +310,7 @@ class SftpJourneyTest {
                     HohenheimActivityAction.FILES_DELETE.id().toString(),
                     HohenheimActivityAction.FILES_DELETE.id().toString());
             assertThat(rows).as("step 7: each names the writer as the actor")
-                .allSatisfy(row -> assertThat(String.valueOf((Object) row.get(ActivityModel.ACTOR_LABEL)))
-                    .contains("sftp-writer@live.test"));
+                .allSatisfy(recorded -> assertThat(recorded.actor()).isEqualTo(writer.toString()));
 
             // 8. No path leaves the volume: a symlinked component, an outside path and a climb are all refused.
             SftpException throughLink = sftpRefusal(catchThrowable(() -> readText(write.sftp, "/data/etcdir/passwd")));

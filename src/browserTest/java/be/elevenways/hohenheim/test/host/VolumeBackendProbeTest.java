@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.test.host;
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.VolumeBackends;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.hohenheim.test.RecordedChanges;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.BeforeAll;
@@ -128,14 +128,12 @@ class VolumeBackendProbeTest {
             .isEqualTo(VolumeBackends.volumeRoot());
 
         // 2. Storing it makes the answer readable without re-probing, which is what
-        //    placement depends on. It is bookkeeping of the check that probed it, so it writes no activity: one
+        //    placement depends on. It is bookkeeping of the check that probed it, so it writes no history: one
         //    Check again is one row on the host's Recent card, the report's.
-        long activity = Models.get(ActivityModel.class).find()
-            .where(ActivityModel.MODEL.eq(ServerModel.MODEL_ID.toString())).count();
+        int changes = RecordedChanges.of(Models.get(ServerModel.class), local.get(ServerModel.ID)).size();
         VolumeBackends.store(local, detection);
-        assertThat(Models.get(ActivityModel.class).find()
-                .where(ActivityModel.MODEL.eq(ServerModel.MODEL_ID.toString())).count())
-            .as("step 2: storing the finding recorded no activity row").isEqualTo(activity);
+        assertThat(RecordedChanges.of(Models.get(ServerModel.class), local.get(ServerModel.ID)))
+            .as("step 2: storing the finding recorded no history change").hasSize(changes);
         Row reread = Models.get(ServerModel.class).findById(ServerModel.localServerId());
         assertThat(ServerModel.volumeBackendOf(reread))
             .as("step 2: the stored token reads back as the same member")
