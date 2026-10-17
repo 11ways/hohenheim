@@ -17,7 +17,6 @@ import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.InstanceParts;
-import be.elevenways.zenit.cms.common.access.AccessRefusedException;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -30,6 +29,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.routing.Endpoint;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -259,9 +259,6 @@ public final class InstanceApi {
                 return ApiConduits.refusal(conduit, refused);
             } catch (DomainRefusal refused) {
                 return ApiConduits.refusal(conduit, refused);
-            } catch (AccessRefusedException refused) {
-                conduit.forbidden();
-                return null;
             }
             ActivityLog.record(Models.get(InstanceModel.class), instanceId, ZenitActivityAction.DELETE, name);
             return ApiConduits.json(Map.of("id", instanceId, "status", "deleted"));
@@ -449,7 +446,8 @@ public final class InstanceApi {
             return ApiConduits.json(projection(created));
         } catch (Violations refused) {
             return ApiConduits.refusal(conduit, refused);
-        } catch (AccessRefusedException refused) {
+        } catch (DomainRefusal refused) {
+            if (!refused.is(ZenitRefusalReason.FORBIDDEN)) throw refused;
             conduit.forbidden();
             return null;
         }

@@ -14,7 +14,6 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.instance.InstanceStats;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.zenit.cms.common.access.AccessRefusedException;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
@@ -160,9 +159,6 @@ public final class DatabaseApi {
                 return ApiConduits.refusal(conduit, refused);
             } catch (DomainRefusal refused) {
                 return ApiConduits.refusal(conduit, refused);
-            } catch (AccessRefusedException refused) {
-                conduit.forbidden();
-                return null;
             }
             ActivityLog.record(Models.get(DatabaseModel.class), databaseId, ZenitActivityAction.DELETE, name);
             return ApiConduits.json(Map.of("id", databaseId, "name", name, "status", "deleted"));

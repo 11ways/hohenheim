@@ -9,7 +9,6 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.DomainParts;
 import be.elevenways.hohenheim.server.cms.SiteParts;
-import be.elevenways.zenit.cms.common.access.AccessRefusedException;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
@@ -78,9 +77,6 @@ public final class SiteApi {
                 return ApiConduits.refusal(conduit, refused);
             } catch (DomainRefusal refused) {
                 return ApiConduits.refusal(conduit, refused);
-            } catch (AccessRefusedException refused) {
-                conduit.forbidden();
-                return null;
             }
         });
 
@@ -109,9 +105,6 @@ public final class SiteApi {
                 return ApiConduits.refusal(conduit, refused);
             } catch (DomainRefusal refused) {
                 return ApiConduits.refusal(conduit, refused);
-            } catch (AccessRefusedException refused) {
-                conduit.forbidden();
-                return null;
             }
         });
 
@@ -162,9 +155,8 @@ public final class SiteApi {
                 return ApiConduits.json(domainProjection(added));
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
-            } catch (AccessRefusedException refused) {
-                conduit.forbidden();
-                return null;
+            } catch (DomainRefusal refused) {
+                return ApiConduits.refusal(conduit, refused);
             }
         });
 
@@ -201,9 +193,8 @@ public final class SiteApi {
                     "status", "deleted"));
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
-            } catch (AccessRefusedException refused) {
-                conduit.forbidden();
-                return null;
+            } catch (DomainRefusal refused) {
+                return ApiConduits.refusal(conduit, refused);
             }
         });
     }
