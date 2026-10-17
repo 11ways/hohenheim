@@ -11,7 +11,6 @@ import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.source.TestSources;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.cms.PreviewParts;
-import be.elevenways.zenit.cms.common.access.AccessRefusedException;
 import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.cms.common.resource.ResourceVerb;
 import be.elevenways.zenit.cms.common.resource.RowWriteCall;
@@ -34,6 +33,7 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.zenit.server.operation.OperationRequest;
@@ -207,7 +207,8 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
             .isNotNull();
         assertThat(catchThrowable(() -> PanelResourceCalls.create("admin", HohenheimSlugs.PREVIEWS, coerced, stranger)))
             .as("step 1: the admin parts' operator permission protects their actual create lane")
-            .isInstanceOf(AccessRefusedException.class);
+            .isInstanceOfSatisfying(DomainRefusal.class, refused -> assertThat(refused.reason())
+                .as("step 1: as core's FORBIDDEN").isEqualTo(ZenitRefusalReason.FORBIDDEN));
         PreviewDeployments.destroy(((Number) ungated).intValue(), "operator");
         assertThat(PreviewDeployments.deployClaimed(((Number) ungated).intValue(), null, DeployTrigger.MANUAL))
             .as("step 1: a delayed queued worker cannot reclaim a destroyed preview").isNull();

@@ -10,7 +10,6 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.cms.common.access.AccessRefusedException;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.render.CmsRefusalCopy;
@@ -26,6 +25,8 @@ import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.test.support.TestPermissions;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -72,8 +73,11 @@ class DnsZoneImportReadOnlyTest extends HohenheimTestBase {
         Models.get(SiteModel.class).delete(site);
         assertThatThrownBy(() -> DnsRecordParts.requireImportable(zonesUnderSites, zoneId, operator))
             .as("step 3: under a trashed owner the import is refused")
-            .isInstanceOfSatisfying(AccessRefusedException.class, refused -> assertThat(refused.code())
-                .as("step 3: with the archived-parent refusal").isEqualTo(CmsRefusalCopy.ARCHIVED_PARENT));
+            .isInstanceOfSatisfying(DomainRefusal.class, refused -> {
+                assertThat(refused.reason()).as("step 3: as core's ARCHIVED").isEqualTo(ZenitRefusalReason.ARCHIVED);
+                assertThat(refused.shown()).as("step 3: worded as the archived-parent refusal")
+                    .isEqualTo(CmsRefusalCopy.ARCHIVED_PARENT);
+            });
     }
 
     private static int site(String slug) {

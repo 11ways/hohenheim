@@ -10,7 +10,6 @@ import be.elevenways.hohenheim.server.cms.DnsRecordParts;
 import be.elevenways.hohenheim.server.cms.DnsZoneParts;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DnsZoneFiles;
-import be.elevenways.zenit.cms.common.access.AccessRefusedException;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
@@ -84,9 +83,6 @@ public final class DnsZoneApi {
                 return ApiConduits.refusal(conduit, refused);
             } catch (DomainRefusal refused) {
                 return ApiConduits.refusal(conduit, refused);
-            } catch (AccessRefusedException refused) {
-                conduit.forbidden();
-                return null;
             }
         });
 
@@ -107,7 +103,7 @@ public final class DnsZoneApi {
             int zoneId = zone.get(DnsZoneModel.ID);
             try {
                 DnsRecordParts.requireImportable(panel, zoneId, ctx);
-            } catch (AccessRefusedException readOnly) {
+            } catch (DomainRefusal readOnly) {
                 ResourceWrites.answer(conduit, readOnly);
                 return null;
             }

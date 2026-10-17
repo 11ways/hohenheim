@@ -12,7 +12,6 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.AccessListParts;
 import be.elevenways.hohenheim.server.cms.AccessRuleParts;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
-import be.elevenways.zenit.cms.common.access.AccessRefusedException;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
@@ -21,6 +20,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
@@ -108,9 +108,8 @@ public final class AccessListApi {
                 return ApiConduits.json(listProjection(created, true));
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
-            } catch (AccessRefusedException refused) {
-                conduit.forbidden();
-                return null;
+            } catch (DomainRefusal refused) {
+                return ApiConduits.refusal(conduit, refused);
             }
         });
 
@@ -136,9 +135,8 @@ public final class AccessListApi {
                     "status", "deleted"));
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
-            } catch (AccessRefusedException refused) {
-                conduit.forbidden();
-                return null;
+            } catch (DomainRefusal refused) {
+                return ApiConduits.refusal(conduit, refused);
             }
         });
 
@@ -199,9 +197,8 @@ public final class AccessListApi {
                 values, ctx);
         } catch (Violations refused) {
             return ApiConduits.refusal(conduit, refused);
-        } catch (AccessRefusedException refused) {
-            conduit.forbidden();
-            return null;
+        } catch (DomainRefusal refused) {
+            return ApiConduits.refusal(conduit, refused);
         }
         return ApiConduits.json(ruleProjection(Objects.requireNonNull(
             Models.get(AccessRuleModel.class).findById(rule.get(AccessRuleModel.ID)))));
