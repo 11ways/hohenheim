@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
@@ -140,28 +141,43 @@ class InstanceRuntimeLiveTest {
                 assertThat(claim).as("step 3: the published port has a ledger row").isNotNull();
                 assertThat(PortLedger.isOwnedBy(claim, InstanceModel.MODEL_ID, id))
                     .as("step 3: and the instance owns it").isTrue();
+                assertThat(PortLedger.claimsOf(InstanceModel.MODEL_ID, id))
+                    .as("step 3: the instance holds exactly that one claim")
+                    .extracting(row -> row.get(PortAllocationModel.PORT))
+                    .containsExactly(deployed.publishedPort());
 
-                // 4. Stop: daemon-confirmed, so the claims are released as OBSERVED; the
-                //    container survives (stopped), its data volume untouched.
+                // 4. Stop: daemon-confirmed; every claim SURVIVES it with its number, so the
+                //    next start asks the daemon for the same port. The container survives
+                //    (stopped), its data volume untouched.
                 service.stop(id);
                 assertThat(service.liveStatus(id).state())
                     .as("step 4: the daemon reports the container STOPPED, not absent")
                     .isEqualTo(ContainerState.STOPPED);
                 assertThat(PortLedger.claimsOf(InstanceModel.MODEL_ID, id))
-                    .as("step 4: a confirmed stop releases the port claims (observed free)")
-                    .isEmpty();
+                    .as("step 4: a confirmed stop keeps the claim, with the number it had before")
+                    .extracting(row -> row.get(PortAllocationModel.PORT))
+                    .containsExactly(deployed.publishedPort());
+                assertThat(PortLedger.isOwnedBy(PortLedger.holderOf(PortLedger.claimKeyOf(
+                        localId, "127.0.0.1", deployed.publishedPort(), "tcp")), InstanceModel.MODEL_ID, id))
+                    .as("step 4: and the stopped instance still owns that tuple").isTrue();
                 assertThat((String) Models.get(InstanceModel.class).findById(id)
                         .get(InstanceModel.STATUS))
                     .as("step 4: the record was stamped stopped")
                     .isEqualTo(InstanceModel.STATUS_STOPPED);
 
                 // 5. Redeploy: replaces the OWN stopped container (verified by label,
-                //    never a blind force-remove) and records a fresh ephemeral port.
+                //    never a blind force-remove) and asks for the remembered number, so
+                //    the host port comes back unchanged and the claim is not duplicated.
                 InstanceStatus redeployed = service.deploy(id);
                 assertThat(redeployed.state())
                     .as("step 5: redeploy runs again").isEqualTo(ContainerState.RUNNING);
+                assertThat(redeployed.publishedPort())
+                    .as("step 5: the redeploy publishes the SAME host port as the first deploy")
+                    .isEqualTo(deployed.publishedPort());
                 assertThat(PortLedger.claimsOf(InstanceModel.MODEL_ID, id))
-                    .as("step 5: exactly one fresh claim").hasSize(1);
+                    .as("step 5: exactly one claim, still on that number")
+                    .extracting(row -> row.get(PortAllocationModel.PORT))
+                    .containsExactly(deployed.publishedPort());
 
                 // 6. Destroy: verified teardown -- container observed gone AT THE DAEMON,
                 //    claims released, record soft-deleted, volume KEPT (an operator
