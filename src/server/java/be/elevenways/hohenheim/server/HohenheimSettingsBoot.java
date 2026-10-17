@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.history.HistorySettings;
 import be.elevenways.zenit.common.setting.SettingGroup;
 import be.elevenways.zenit.server.ServerZenitRuntime;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -47,8 +47,8 @@ public final class HohenheimSettingsBoot {
      * ZENIT__ACTIVITY__RETENTION_DAYS still override it; a value already loaded is kept.
      */
     static void applyFrameworkDefaults() {
-        if (!Zenit.SETTINGS_VALUES.hasValue(ActivityLog.RETENTION_DAYS)) {
-            Zenit.SETTINGS_VALUES.setValue(ActivityLog.RETENTION_DAYS, ACTIVITY_RETENTION_DAYS);
+        if (!Zenit.SETTINGS_VALUES.hasValue(HistorySettings.RETENTION_DAYS)) {
+            Zenit.SETTINGS_VALUES.setValue(HistorySettings.RETENTION_DAYS, ACTIVITY_RETENTION_DAYS);
         }
     }
 

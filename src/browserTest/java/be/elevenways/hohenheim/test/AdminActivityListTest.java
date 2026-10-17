@@ -39,7 +39,7 @@ import be.elevenways.zenit.cms.server.panel.PartsReads;
 import be.elevenways.zenit.cms.server.resource.ActivityAdmin;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.common.orm.activity.ActivitySeverity;
-import be.elevenways.zenit.common.orm.activity.ActivityVisibility;
+import be.elevenways.zenit.common.orm.history.HistoryVisibility;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -414,16 +414,16 @@ class AdminActivityListTest extends HohenheimTestBase {
                 Models.get(ControllerIdentityModel.class), Models.get(InstallMediaFetchModel.class),
                 Models.get(WebhookDeliveryModel.class), Models.get(SystemUserModel.class))) {
             assertThat(Objects.requireNonNull(HistoryDeclarations.of(model)).visibility())
-                .as("step 1: " + model.getModelId() + " is declared internal").isEqualTo(ActivityVisibility.INTERNAL);
+                .as("step 1: " + model.getModelId() + " is declared internal").isEqualTo(HistoryVisibility.INTERNAL);
         }
         assertThat(Objects.requireNonNull(HistoryDeclarations.of(Models.get(GrantModel.class))).visibility())
             .as("step 1: zenit-auth's grants are declared internal in this runtime too")
-            .isEqualTo(ActivityVisibility.INTERNAL);
+            .isEqualTo(HistoryVisibility.INTERNAL);
         assertThat(Objects.requireNonNull(HistoryDeclarations.of(Models.get(RecordGrantModel.class)))
                 .visibility())
-            .as("step 1: and its record grants").isEqualTo(ActivityVisibility.INTERNAL);
+            .as("step 1: and its record grants").isEqualTo(HistoryVisibility.INTERNAL);
         assertThat(Objects.requireNonNull(HistoryDeclarations.of(Models.get(ServerModel.class))).visibility())
-            .as("step 1: hosts stay listed, operators admit and edit them").isEqualTo(ActivityVisibility.LISTED);
+            .as("step 1: hosts stay listed, operators admit and edit them").isEqualTo(HistoryVisibility.LISTED);
 
         // 2. A heartbeat is bookkeeping, never activity: a probe success records no change for its host.
         String hostName = "hh-heartbeat-" + suffix;

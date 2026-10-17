@@ -26,7 +26,7 @@ import be.elevenways.hohenheim.server.cms.ProxyAttention;
 import be.elevenways.hohenheim.server.cms.AdminActivityResource;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.history.HistorySettings;
 import be.elevenways.zenit.cms.common.ZenitCmsActivityAction;
 import be.elevenways.zenit.common.orm.history.ActionModel;
 import be.elevenways.zenit.common.orm.history.ChangeOp;
@@ -911,7 +911,7 @@ class AdminPagesTest extends HohenheimTestBase {
     @Test
     void theDashboardActivityBandSaysWhenRecordingIsSwitchedOff() throws Exception {
 
-        Boolean before = Zenit.SETTINGS_VALUES.getValue(ActivityLog.ENABLED);
+        Boolean before = Zenit.SETTINGS_VALUES.getValue(HistorySettings.ENABLED);
         // The band belongs to the dashboard of an install with apps; a fresh one leads with "Put something online".
         var siteModel = Models.get(SiteModel.class);
         Row site = siteModel.createEmptyRow();
@@ -926,7 +926,7 @@ class AdminPagesTest extends HohenheimTestBase {
         try {
             // 1. Recording off: the notice exists at all, and it is the framework
             //    resource's own -- hohenheim never reads activity.enabled a second time.
-            Zenit.SETTINGS_VALUES.setValue(ActivityLog.ENABLED, false);
+            Zenit.SETTINGS_VALUES.setValue(HistorySettings.ENABLED, false);
             Microcopy notice = AdminActivityResource.recordingNotice();
             assertThat(notice)
                 .as("step 1: the activity resource declares a recording-off notice")
@@ -955,7 +955,7 @@ class AdminPagesTest extends HohenheimTestBase {
 
             // 4. FALSIFIED: with recording on the band is just the list -- an always-on
             //    notice would train operators to ignore the one that matters.
-            Zenit.SETTINGS_VALUES.setValue(ActivityLog.ENABLED, true);
+            Zenit.SETTINGS_VALUES.setValue(HistorySettings.ENABLED, true);
             assertThat(AdminActivityResource.recordingNotice())
                 .as("step 4: nothing to say while recording is on")
                 .isNull();
@@ -965,7 +965,7 @@ class AdminPagesTest extends HohenheimTestBase {
                 .as("step 4: and the dashboard shows no notice")
                 .isZero();
         } finally {
-            Zenit.SETTINGS_VALUES.setValue(ActivityLog.ENABLED, before);
+            Zenit.SETTINGS_VALUES.setValue(HistorySettings.ENABLED, before);
             siteModel.delete(site);
         }
     }

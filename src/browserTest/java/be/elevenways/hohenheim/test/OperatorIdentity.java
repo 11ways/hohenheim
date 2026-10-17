@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.zenit.common.security.SystemPurpose;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
 import org.junit.jupiter.api.extension.DynamicTestInvocationContext;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -25,8 +27,8 @@ import java.lang.reflect.Method;
  */
 public final class OperatorIdentity implements InvocationInterceptor {
 
-    /** The reason the test harness's system identity carries. */
-    public static final String REASON = "test-operator";
+    /** The zero-permission purpose of the test operator harness. */
+    public static final SystemPurpose PURPOSE = SystemPurpose.declare(HohenheimIds.id("test_operator"));
 
     @Override
     public <T> T interceptTestClassConstructor(Invocation<T> invocation,
@@ -94,7 +96,7 @@ public final class OperatorIdentity implements InvocationInterceptor {
     private static <T> T asOperator(Invocation<T> invocation) throws Throwable {
         Object[] result = new Object[1];
         Throwable[] failure = new Throwable[1];
-        ExecutionIdentity.runAsSystem(REASON, () -> {
+        ExecutionIdentity.runAsSystem(PURPOSE, () -> {
             try {
                 result[0] = invocation.proceed();
             } catch (Throwable thrown) {

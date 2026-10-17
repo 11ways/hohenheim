@@ -33,7 +33,7 @@ import be.elevenways.zenit.cms.common.resource.RecordHealth;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.history.History;
-import be.elevenways.zenit.common.orm.activity.ActivityVisibility;
+import be.elevenways.zenit.common.orm.history.HistoryVisibility;
 import be.elevenways.zenit.common.operation.OperationRunModel;
 import be.elevenways.zenit.common.operation.OperationRunStatus;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -512,7 +512,7 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
             // 3. Hohenheim correcting a stored status is bookkeeping: its rows stay out of Recent (the full log lists
             //    them through the internal filter), so Recent reads what happened, the failed start.
             assertThat(HohenheimActivityAction.RECONCILED.visibility()).as("step 3: the reconcile verb is internal")
-                .isEqualTo(ActivityVisibility.INTERNAL);
+                .isEqualTo(HistoryVisibility.INTERNAL);
             History.event(Models.get(InstanceModel.class), id, Change.fact(HohenheimActivityAction.RECONCILED,
                 Map.of(HohenheimActivityAction.FROM_KEY, InstanceModel.STATUS_RUNNING,
                     HohenheimActivityAction.TO_KEY, InstanceModel.STATUS_STOPPED,

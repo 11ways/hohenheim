@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.HohenheimSettingsBoot;
+import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.http.HttpMethod;
@@ -76,7 +77,7 @@ class EmptyDatabaseWalkthroughBrowserTest extends HawkeyeBrowserTestBase {
         Path database = Files.createTempDirectory("hohenheim-empty-walkthrough").resolve("fresh.db");
         assertThat(database).as("step 1: the database does not exist before real boot").doesNotExist();
         String storage = Files.createTempDirectory("hohenheim-empty-storage").toString();
-        ExecutionIdentity.runAsSystem("empty-database-walkthrough-boot", () -> {
+        ExecutionIdentity.runAsSystem(HohenheimSystemPurposes.BOOT, () -> {
             HohenheimSettingsBoot.forceDefinitions();
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Roles.PROXY, true);
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Roles.DNS, true);

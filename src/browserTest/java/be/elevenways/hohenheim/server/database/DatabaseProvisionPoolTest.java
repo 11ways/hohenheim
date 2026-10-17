@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.database;
 
+import be.elevenways.hohenheim.test.OperatorIdentity;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.util.Uuids;
@@ -42,7 +43,7 @@ class DatabaseProvisionPoolTest {
 
         // 2. A thread with no caller submits: the task is attributed to the typed system principal.
         CompletableFuture<List<Object>> systemTask = new CompletableFuture<>();
-        ExecutionIdentity.runDetachedAsSystem("pool-test",
+        ExecutionIdentity.runDetachedAsSystem(OperatorIdentity.PURPOSE,
             () -> DatabaseService.submit(() -> systemTask.complete(observed())));
         assertThat(systemTask.get(10, TimeUnit.SECONDS))
             .as("step 2: system authority, system attribution")

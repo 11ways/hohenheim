@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.auth.types.ProteusAuthProviderType;
 import be.elevenways.zenit.common.Zenit;
@@ -36,7 +37,7 @@ class HostNetworkBootMigrationTest {
                 .setPath("hohenheim.proxy_auth.session_ttl_seconds", 86400).persist();
 
             // 1. Boot carries the stored true into the host file and the real realm guard reads that fact.
-            ExecutionIdentity.runDetachedAsSystem("host boot", () ->
+            ExecutionIdentity.runDetachedAsSystem(HohenheimSystemPurposes.BOOT, () ->
                 PrivateNetworkBoot.loadAndMigrate(root, local, new DryFileSource(local)));
             assertThat(ProteusAuthProviderType.realmGuard()).as("step 1: the existing LAN realm remains reachable")
                 .isSameAs(OutboundUrlGuard.PRIVATE_NETWORKS);

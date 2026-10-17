@@ -212,13 +212,7 @@ class InstancePowerOperationsTest {
                     .isInstanceOfSatisfying(DomainRefusal.class,
                         refusal -> assertThat(refusal.reason()).isSameAs(ZenitRefusalReason.NOT_FOUND));
                 assertThatThrownBy(() -> OperationRequest.of(operation, ZenitPlacementSurface.SCHEDULE_STEP)
-                    .asSystem(ExecutionIdentity.system("record-schedule:" + scheduleId), null)
-                    .subjectKeys(List.of(String.valueOf(instanceId))).loadSubjects())
-                    .as("1: a schedule-shaped label cannot supply authority for %s", operation.id())
-                    .isInstanceOfSatisfying(DomainRefusal.class,
-                        refusal -> assertThat(refusal.reason()).isSameAs(ZenitRefusalReason.NOT_FOUND));
-                assertThatThrownBy(() -> OperationRequest.of(operation, ZenitPlacementSurface.SCHEDULE_STEP)
-                    .asSystem(ExecutionIdentity.system(OTHER_SYSTEM_WORK, "unrelated system work"), null)
+                    .asSystem(ExecutionIdentity.system(OTHER_SYSTEM_WORK), null)
                     .subjectKeys(List.of(String.valueOf(instanceId))).loadSubjects())
                     .as("1: another system purpose gets no subject of %s", operation.id())
                     .isInstanceOfSatisfying(DomainRefusal.class,

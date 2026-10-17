@@ -114,12 +114,7 @@ class PreviewMechanicsTest extends HohenheimTestBase {
             .as("1: anonymous cannot load the expiry subject").isInstanceOfSatisfying(DomainRefusal.class,
                 refusal -> assertThat(refusal.reason()).isSameAs(ZenitRefusalReason.NOT_FOUND));
         assertThatThrownBy(() -> OperationRequest.of(PreviewOperations.EXPIRE, ZenitPlacementSurface.SCHEDULE_STEP)
-            .asSystem(ExecutionIdentity.system("record-schedule:1"), null).subjectKeys(List.of(key)).loadSubjects())
-            .as("1: a schedule-shaped label cannot supply its system purpose")
-            .isInstanceOfSatisfying(DomainRefusal.class,
-                refusal -> assertThat(refusal.reason()).isSameAs(ZenitRefusalReason.NOT_FOUND));
-        assertThatThrownBy(() -> OperationRequest.of(PreviewOperations.EXPIRE, ZenitPlacementSurface.SCHEDULE_STEP)
-            .asSystem(ExecutionIdentity.system(OTHER_SYSTEM_WORK, "unrelated system work"), null)
+            .asSystem(ExecutionIdentity.system(OTHER_SYSTEM_WORK), null)
             .subjectKeys(List.of(key)).loadSubjects())
             .as("1: a different system purpose cannot load the expiry subject")
             .isInstanceOfSatisfying(DomainRefusal.class,

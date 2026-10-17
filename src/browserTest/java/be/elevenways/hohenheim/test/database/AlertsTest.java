@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.test.TestDatabases;
@@ -60,7 +61,7 @@ class AlertsTest {
     @BeforeAll
     static void boot() throws Exception {
         // The test host declares its LAN webhook authority before runtime seals boot declarations.
-        ExecutionIdentity.runDetachedAsSystem("alerts test host boot", () -> {
+        ExecutionIdentity.runDetachedAsSystem(HohenheimSystemPurposes.BOOT, () -> {
             new DrySettingsWriter(ServerZenitRuntime.settingsFile(PrivateNetworkBoot.FILE))
                 .setPath(NotificationSettings.Webhook.ALLOW_PRIVATE_NETWORKS.configurationPath(), true).persist();
             NotificationSettings.Webhook.ALLOW_PRIVATE_NETWORKS.declareAtBoot(true);

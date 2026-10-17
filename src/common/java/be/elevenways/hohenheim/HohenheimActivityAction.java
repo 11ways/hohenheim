@@ -21,7 +21,7 @@ import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.common.orm.activity.ActivityAction;
 import be.elevenways.zenit.common.orm.activity.ActivityActions;
 import be.elevenways.zenit.common.orm.activity.ActivitySeverity;
-import be.elevenways.zenit.common.orm.activity.ActivityVisibility;
+import be.elevenways.zenit.common.orm.history.HistoryVisibility;
 import be.elevenways.zenit.common.orm.activity.FactShape;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -95,7 +95,7 @@ public enum HohenheimActivityAction implements ActivityAction {
     // A correction of a record's stored status to what its host answered is bookkeeping: what followed it (the restart
     // it queued, the cause it recorded) is the row a person reads, and the full log lists it through the internal
     // filter.
-    RECONCILED("reconciled", ActivityVisibility.INTERNAL),
+    RECONCILED("reconciled", HistoryVisibility.INTERNAL),
     BACKUP("backup"),
     /** A backup attempt that stored nothing; the detail is the failure's own reason. */
     BACKUP_FAILED("backup_failed"),
@@ -276,37 +276,37 @@ public enum HohenheimActivityAction implements ActivityAction {
     private final @NonNull ErrorCause errorCause;
     private final @NonNull Grouping grouping;
     private final @NonNull ErrorPhase errorPhase;
-    private final @NonNull ActivityVisibility visibility;
+    private final @NonNull HistoryVisibility visibility;
     private final @NonNull RestartWithheld restartWithheld;
 
     HohenheimActivityAction(@NonNull String value) {
-        this(value, ErrorCause.NONE, ErrorPhase.RUNNING, Grouping.SINGLE, ActivityVisibility.LISTED,
+        this(value, ErrorCause.NONE, ErrorPhase.RUNNING, Grouping.SINGLE, HistoryVisibility.LISTED,
             RestartWithheld.NONE);
     }
 
     HohenheimActivityAction(@NonNull String value, @NonNull ErrorCause errorCause) {
-        this(value, errorCause, ErrorPhase.RUNNING, Grouping.SINGLE, ActivityVisibility.LISTED, RestartWithheld.NONE);
+        this(value, errorCause, ErrorPhase.RUNNING, Grouping.SINGLE, HistoryVisibility.LISTED, RestartWithheld.NONE);
     }
 
     HohenheimActivityAction(@NonNull String value, @NonNull ErrorCause errorCause,
                             @NonNull RestartWithheld restartWithheld) {
-        this(value, errorCause, ErrorPhase.RUNNING, Grouping.SINGLE, ActivityVisibility.LISTED, restartWithheld);
+        this(value, errorCause, ErrorPhase.RUNNING, Grouping.SINGLE, HistoryVisibility.LISTED, restartWithheld);
     }
 
     HohenheimActivityAction(@NonNull String value, @NonNull ErrorCause errorCause, @NonNull ErrorPhase errorPhase) {
-        this(value, errorCause, errorPhase, Grouping.SINGLE, ActivityVisibility.LISTED, RestartWithheld.NONE);
+        this(value, errorCause, errorPhase, Grouping.SINGLE, HistoryVisibility.LISTED, RestartWithheld.NONE);
     }
 
     HohenheimActivityAction(@NonNull String value, @NonNull Grouping grouping) {
-        this(value, ErrorCause.NONE, ErrorPhase.RUNNING, grouping, ActivityVisibility.LISTED, RestartWithheld.NONE);
+        this(value, ErrorCause.NONE, ErrorPhase.RUNNING, grouping, HistoryVisibility.LISTED, RestartWithheld.NONE);
     }
 
-    HohenheimActivityAction(@NonNull String value, @NonNull ActivityVisibility visibility) {
+    HohenheimActivityAction(@NonNull String value, @NonNull HistoryVisibility visibility) {
         this(value, ErrorCause.NONE, ErrorPhase.RUNNING, Grouping.SINGLE, visibility, RestartWithheld.NONE);
     }
 
     HohenheimActivityAction(@NonNull String value, @NonNull ErrorCause errorCause, @NonNull ErrorPhase errorPhase,
-                            @NonNull Grouping grouping, @NonNull ActivityVisibility visibility,
+                            @NonNull Grouping grouping, @NonNull HistoryVisibility visibility,
                             @NonNull RestartWithheld restartWithheld) {
         this.value = value;
         this.id = HohenheimIds.id(value);
@@ -328,7 +328,7 @@ public enum HohenheimActivityAction implements ActivityAction {
     }
 
     @Override
-    public @NonNull ActivityVisibility visibility() {
+    public @NonNull HistoryVisibility visibility() {
         return this.visibility;
     }
 

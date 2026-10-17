@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.OperatorIdentity;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -142,7 +143,7 @@ class DatabaseLimitPartialWriteTest extends HohenheimTestBase {
             "Limit Tenant");
 
         // 1. Declared system work (a task, the operator harness) is the operator lane.
-        assertThat(ExecutionIdentity.supplyAsSystem("withheld-failure-test",
+        assertThat(ExecutionIdentity.supplyAsSystem(OperatorIdentity.PURPOSE,
                 () -> WithheldFailure.operatorDetail(failure)))
             .as("step 1: declared system work keeps the daemon's text").isEqualTo(failure.getMessage());
 
