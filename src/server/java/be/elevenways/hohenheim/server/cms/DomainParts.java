@@ -55,6 +55,7 @@ import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.RelationPick;
+import be.elevenways.zenit.common.edit.Plain;
 import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
@@ -125,6 +126,9 @@ public final class DomainParts {
     /** The create verb in the Domains page's words: the list's button and the form's heading ("Add address"). */
     private static final Microcopy CREATE_TITLE = HohenheimMicrocopy.SITE_DOMAIN.of("create_title");
 
+    /** Why a TLS switch the domain's site fixes cannot change: the site passes TLS through to its app. */
+    private static final Microcopy PASSTHROUGH_FIXED = HohenheimMicrocopy.HELP.of("tls_passthrough_switch");
+
     /**
      * Looks the address's name up again now, past the minute an answer is remembered: the row's way to see a DNS
      * change it just made.
@@ -158,7 +162,7 @@ public final class DomainParts {
     public static @NonNull PanelResource<Row> admin() {
         return entry(HohenheimIds.id("site_domain"))
             .scope(ROWS)
-            .form(form(adminFormSpec(), HohenheimSlugs.ADMIN))
+            .form(form(adminFormSpec(HohenheimSlugs.ADMIN), HohenheimSlugs.ADMIN))
             // Requesting a certificate stays installation administration (an issued certificate is authority over a
             // name), so only the admin twin offers it.
             .actions(List.of(CertificateOperations.requestForDomainAction(), checkReachAction()))
@@ -180,7 +184,7 @@ public final class DomainParts {
         // A Domains cluster member, shown while the tenant may read an address.
         return ManageTwin.listed(entry(ManageTwin.id("site_domain")), TenantScopes.DOMAINS, ResourceTabs.none(),
                 HohenheimAccess::readsAnyAddress)
-            .form(form(manageFormSpec(), HohenheimSlugs.MANAGE))
+            .form(form(manageFormSpec(HohenheimSlugs.MANAGE), HohenheimSlugs.MANAGE))
             .build();
     }
 
@@ -443,8 +447,9 @@ public final class DomainParts {
      * quarantine a hostname the operator still believes they own; that belongs on a form, next to the refusals that
      * explain it.
      *
-     * AIDEV-NOTE: the forms and inline cells only PREVIEW the passthrough switches (fixedFor); SiteDomainModel's write
-     * hook decides them on every lane, and both ask the one rule, SiteDomainModel.fixedTlsSwitches.
+     * AIDEV-NOTE: the forms and inline cells only PREVIEW the passthrough switches (fixedFor), and the forms' switch
+     * help says why through the same answer (fixes); SiteDomainModel's write hook decides them on every lane, and
+     * both ask the one rule, SiteDomainModel.fixedTlsSwitches.
      *
      * @param panelSlug the panel the twin is placed in, whose own site entry the preview reads its site through
      */
@@ -478,9 +483,20 @@ public final class DomainParts {
     private static @NonNull ResourceFieldBinding switchAccess(@NonNull BooleanField field,
                                                               @NonNull String panelSlug) {
         return ResourceFieldBinding.of(field.getName(), FieldAccess.customRecordAware((access, record) ->
-                fixedFor(access, record, panelSlug).containsKey(field)
-                    ? FieldAccess.Decision.READONLY : FieldAccess.Decision.EDITABLE)
+                fixes(field, access, record, panelSlug) ? FieldAccess.Decision.READONLY : FieldAccess.Decision.EDITABLE)
             .acrossRecords(access -> FieldAccess.Decision.EDITABLE));
+    }
+
+    /** A switch's form entry, whose help says why wherever the domain's site fixes it, in place of the field's own. */
+    private static @NonNull Plain tlsSwitch(@NonNull BooleanField field, @NonNull String panelSlug) {
+        return Plain.of(field).withContextHelp(context ->
+            fixes(field, context.accessContext(), context.record(), panelSlug) ? PASSTHROUGH_FIXED : null);
+    }
+
+    /** Whether the save stores {@code field} whatever is submitted: THE answer a switch's access and its help read. */
+    private static boolean fixes(@NonNull BooleanField field, @NonNull AccessContext access, @Nullable Object record,
+                                 @NonNull String panelSlug) {
+        return fixedFor(access, record, panelSlug).containsKey(field);
     }
 
     /**
@@ -567,8 +583,10 @@ public final class DomainParts {
     /**
      * The address form, grouped as an operator reads an address: which requests it answers, what it does about HTTPS,
      * and the headers it changes. The app it serves heads the form, outside any section.
+     *
+     * @param panelSlug the panel the form is placed in, whose site entry the TLS switches' help reads its site through
      */
-    private static @NonNull FormSpec adminFormSpec() {
+    private static @NonNull FormSpec adminFormSpec(@NonNull String panelSlug) {
         return FormSpec.builder()
             .createTitle(CREATE_TITLE)
             .add(RelationPick.of(SiteDomainModel.SITE_ID, SiteModel.MODEL_ID).build())
@@ -580,11 +598,11 @@ public final class DomainParts {
             .add(Select.of(SiteDomainModel.LISTEN_ON)
                 .options(OptionSource.dynamic(ctx -> listenOnOptions()))
                 .build())
-            .add(SiteDomainModel.FORCE_SSL)
+            .add(tlsSwitch(SiteDomainModel.FORCE_SSL, panelSlug))
             .add(RelationPick.of(SiteDomainModel.CERTIFICATE_ID, CertificateModel.MODEL_ID).build())
             .add(SiteDomainModel.HSTS_ENABLED)
             .add(SiteDomainModel.HSTS_SUBDOMAINS)
-            .add(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT)
+            .add(tlsSwitch(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT, panelSlug))
             .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteDomainModel.CUSTOM_HEADERS))
             .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteDomainModel.RESPONSE_HEADERS))
             .section(HohenheimFormSections.open(HohenheimFormSections.ADDRESS_REQUESTS, List.of(
@@ -609,16 +627,18 @@ public final class DomainParts {
     /**
      * The delegated form. A UX affordance ONLY: the fields it omits are frozen by {@code TenantWrites} on the
      * SiteDomainModel write pipeline, which every writer passes and this form does not.
+     *
+     * @param panelSlug the panel the form is placed in, whose site entry the TLS switches' help reads its site through
      */
-    private static @NonNull FormSpec manageFormSpec() {
+    private static @NonNull FormSpec manageFormSpec(@NonNull String panelSlug) {
         return FormSpec.builder()
             .createTitle(CREATE_TITLE)
             .add(RelationPick.of(SiteDomainModel.SITE_ID, SiteModel.MODEL_ID).build())
             .add(SiteDomainModel.HOSTNAME)
-            .add(SiteDomainModel.FORCE_SSL)
+            .add(tlsSwitch(SiteDomainModel.FORCE_SSL, panelSlug))
             .add(SiteDomainModel.HSTS_ENABLED)
             .add(SiteDomainModel.HSTS_SUBDOMAINS)
-            .add(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT)
+            .add(tlsSwitch(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT, panelSlug))
             .build();
     }
 

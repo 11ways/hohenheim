@@ -86,6 +86,10 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
 
     private static final String PREFIX = "affparity-";
 
+    /** Why a passthrough site's domain cannot change its TLS switches, as the forms say it in English. */
+    private static final String PASSTHROUGH_REASON =
+        "This site passes TLS through to the app, so its HTTPS is handled there.";
+
     private static UUID viewerId;
     private static UUID holderId;
 
@@ -430,6 +434,15 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
                 .as("step 1c: and shows them read-only").containsExactly(FieldAccess.Decision.READONLY,
                     FieldAccess.Decision.READONLY, FieldAccess.Decision.EDITABLE);
 
+            // 1d. The create form says why both switches are fixed, in place of their own help; HSTS keeps its own.
+            String createForm = adminGet("/admin/domains/new?parent=" + foreign).body();
+            assertThat(entryHelp(createForm, SiteDomainModel.FORCE_SSL.getName()))
+                .as("step 1d: the create form says why force_ssl is fixed").isEqualTo(PASSTHROUGH_REASON);
+            assertThat(entryHelp(createForm, SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName()))
+                .as("step 1d: and why the ACME exclusion is").isEqualTo(PASSTHROUGH_REASON);
+            assertThat(entryHelp(createForm, SiteDomainModel.HSTS_ENABLED.getName()))
+                .as("step 1d: HSTS keeps its own help").isNotEqualTo(PASSTHROUGH_REASON);
+
             // 2. A create without a request (a job, an MCP call) under the passthrough site stores both switches.
             Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN));
             Object detachedId = ResourceWrites.create(admin, DomainParts.admin(),
@@ -491,6 +504,10 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
                 .as("step 1: and the ACME exclusion fixed on").isEqualTo("Yes");
             assertThat(readonlyValue(form, SiteDomainModel.HSTS_ENABLED.getName()))
                 .as("step 1: HSTS stays the operator's switch").isNull();
+            assertThat(entryHelp(form, SiteDomainModel.FORCE_SSL.getName()))
+                .as("step 1: the edit form says why force_ssl is fixed").isEqualTo(PASSTHROUGH_REASON);
+            assertThat(entryHelp(form, SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName()))
+                .as("step 1: and why the ACME exclusion is").isEqualTo(PASSTHROUGH_REASON);
 
             // 2. The inline cells (the Domains list and the site's Domains tab ask the same per-record state) offer
             //    only HSTS, and carry the stored switch values.
@@ -514,6 +531,9 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
                 .as("step 4: a normal site's domain keeps its force_ssl switch").isNull();
             assertThat(readonlyValue(normal, SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName()))
                 .as("step 4: and its ACME switch").isNull();
+            assertThat(entryHelp(normal, SiteDomainModel.FORCE_SSL.getName()))
+                .as("step 4: a normal site's force_ssl keeps its own help").isNotNull()
+                .isNotEqualTo(PASSTHROUGH_REASON);
             assertThat(cellState("/admin/domains/" + domainId + "/cell-state").editableFields())
                 .as("step 4: and every inline cell").containsExactly(SiteDomainModel.FORCE_SSL.getName(),
                     SiteDomainModel.HSTS_ENABLED.getName(), SiteDomainModel.HSTS_SUBDOMAINS.getName(),
@@ -553,6 +573,21 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
         int from = value + marker.length();
         // The shown value is microcopy markup inside the read-only box: its text is what the reader sees.
         return entry.substring(from, entry.indexOf("</div>", from)).replaceAll("<[^>]+>", "").trim();
+    }
+
+    /** The help a form draws under entry {@code path}, null when it draws none. */
+    private static String entryHelp(String html, String path) {
+        int start = html.indexOf("data-path=\"" + path + "\"");
+        assertThat(start).as("the form draws entry " + path).isNotNegative();
+        int end = html.indexOf("data-path=\"", start + 1);
+        String entry = html.substring(start, end < 0 ? html.length() : end);
+        String marker = "<pl-field-description>";
+        int help = entry.indexOf(marker);
+        if (help < 0) {
+            return null;
+        }
+        int from = help + marker.length();
+        return entry.substring(from, entry.indexOf("</pl-field-description>", from)).replaceAll("<[^>]+>", "").trim();
     }
 
     /** The inline editor's state for one domain, as the harness admin. */
