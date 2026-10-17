@@ -17,16 +17,13 @@ import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.hohenheim.server.tls.CertificateExpiry;
 import be.elevenways.hohenheim.server.tls.HostnameReach;
-import be.elevenways.hohenheim.server.upstream.kinds.TlsPassthroughUpstreamKind;
 import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.typed.CoreTypes;
-import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.render.CmsTemplateIds;
 import be.elevenways.zenit.cms.common.render.table.RecordLink;
@@ -44,7 +41,6 @@ import be.elevenways.zenit.cms.common.resource.ResourceTabs;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
-import be.elevenways.zenit.cms.server.panel.PartsReads;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.data.RowScope;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
@@ -430,18 +426,21 @@ public final class DomainParts {
     }
 
     /**
-     * A twin's form part around its own spec: the quick-add bar with its site preset, the parent prefill and the
-     * TLS switches as inline cells.
+     * A twin's form part around its own spec: the quick-add bar with its site preset and the TLS switches as inline
+     * cells.
      *
      * AIDEV-NOTE: every inline write is correct on a ONE-ENTRY map by construction, because the route invariant reads
      * its inputs through {@code Row.afterWrite} rather than off the coerced map. HOSTNAME, PATH, LISTEN_ON
      * and MATCH_TYPE are excluded on purpose: those four ARE the live route claim, and a one-click cell edit would
      * quarantine a hostname the operator still believes they own; that belongs on a form, next to the refusals that
      * explain it.
+     *
+     * AIDEV-NOTE: no create defaults read the parent site. A TLS passthrough site's HTTPS forcing and ACME switches
+     * are SiteDomainModel's write rule, which reads the written site_id on every lane (form, API, MCP, jobs); a
+     * prefill from the create link's parent was a second home that a create without a request never reached.
      */
     private static @NonNull ResourceForm<Row> form(@NonNull FormSpec spec) {
         return ResourceForm.<Row>of(spec)
-            .createDefaults((access, panel) -> createDefaults(spec, access, panel))
             .quickCreate(QUICK_CREATE)
             .quickCreatePresets(access -> CmsSupport.parentPreset(access, SiteDomainModel.SITE_ID.getName(),
                 HohenheimSlugs.SITES))
@@ -469,32 +468,6 @@ public final class DomainParts {
             .withArg("reach", reach.label().asString(conduit))
             .withArg("https", https.label().asString(conduit))
             .asString(conduit), null);
-    }
-
-    /**
-     * A create under a TLS passthrough site (its Domains tab's add link names the site as the create's parent) opens
-     * with HTTPS forcing and ACME off: that site terminates no TLS here. The parent field itself is the framework's
-     * child create preset.
-     *
-     * AIDEV-NOTE: the site is read through the create's panel's own site entry, the caller's scope: a site the caller
-     * cannot reach opens the create exactly as no site does, so the form is no probe of another tenant's
-     * configuration. The site is the create link's parent, so a caller without a request names none.
-     */
-    private static @NonNull Map<String, Object> createDefaults(@NonNull FormSpec spec, @NonNull AccessContext access,
-                                                               @NonNull Panel panel) {
-        Map<String, Object> values = new LinkedHashMap<>(spec.defaultValues());
-        Conduit conduit = access.conduit();
-        Integer siteId = conduit == null ? null
-            : CmsSupport.scopedParentId(conduit, CmsEndpoints.PARENT_PARAM.getName(), HohenheimSlugs.SITES);
-        if (siteId != null && panel.entryBySlug(HohenheimSlugs.SITES) instanceof PanelResource<?> sites) {
-            Object site = PartsReads.loadRow(panel, sites, siteId, access);
-            if (site instanceof Row row && TlsPassthroughUpstreamKind.ID.toString()
-                    .equals(row.get(SiteModel.UPSTREAM_KIND))) {
-                values.put(SiteDomainModel.FORCE_SSL.getName(), false);
-                values.put(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName(), true);
-            }
-        }
-        return Map.copyOf(values);
     }
 
     /** Discovered local addresses (refreshed hourly by UpdateSystemIpAddresses); blank = all interfaces. */

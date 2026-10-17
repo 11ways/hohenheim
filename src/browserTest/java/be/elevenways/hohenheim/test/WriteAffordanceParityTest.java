@@ -27,6 +27,7 @@ import be.elevenways.zenit.auth.model.RecordGrantModel;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.cms.server.page.ResourceWrites;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
@@ -383,41 +384,58 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
     }
 
     /**
-     * A domain create under a site opens with that site's TLS defaults only where the caller may read the site: a
-     * TLS passthrough site the caller cannot reach opens the create exactly as no site does, so the form is no probe
-     * of another tenant's configuration (GPT review 25 D03).
+     * A domain created under a TLS passthrough site stores HTTPS forcing and ACME off on every create lane, a create
+     * without a request included, because the rule is the domain write's, read off the written site. The create form
+     * reads no parent site at all, so it is no probe of another tenant's configuration (GPT review 25 D03).
      */
     @Test
-    void aDomainCreateUnderAnUnreachableSiteOpensAsUnderNone() {
+    void aDomainCreateUnderAPassthroughSiteStoresItsTlsSwitchesOnEveryLane() throws Exception {
         int own = passthroughSite("own");
         int foreign = passthroughSite("foreign");
         RecordGrants.grant(GrantSubjectType.USER, holderId, SiteModel.MODEL_ID, own, HohenheimCapabilities.MANAGE,
             true);
+        Model domains = Models.get(SiteDomainModel.class);
+        List<Object> created = new ArrayList<>();
         try {
+            // 1. The create form opens the same under any parent, reachable or not: no site is read into it.
             Map<String, Object> none = createDefaults(holder(), HohenheimSlugs.MANAGE, null);
-
-            // 1. Under the holder's own passthrough site, the create opens with HTTPS forcing and ACME off.
             assertThat(createDefaults(holder(), HohenheimSlugs.MANAGE, own))
-                .as("step 1: the holder's own passthrough site sets its TLS defaults")
-                .containsEntry(SiteDomainModel.FORCE_SSL.getName(), false)
-                .containsEntry(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName(), true);
-
-            // 2. Under a passthrough site outside the holder's scope, the create opens exactly as under none.
+                .as("step 1: the holder's own passthrough site prefills nothing").isEqualTo(none);
             assertThat(createDefaults(holder(), HohenheimSlugs.MANAGE, foreign))
-                .as("step 2: an unreachable site's configuration is never read into the form")
-                .isEqualTo(none);
-
-            // 3. The operator reaches every site, so the same site sets its defaults on /admin.
+                .as("step 1: an unreachable site prefills nothing either").isEqualTo(none);
             assertThat(createDefaults(operator(), HohenheimSlugs.ADMIN, foreign))
-                .as("step 3: the operator's create under that site reads it")
-                .containsEntry(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName(), true);
+                .as("step 1: the operator's create form reads no site").isEqualTo(
+                    createDefaults(operator(), HohenheimSlugs.ADMIN, null));
 
-            // 4. A create without a request (a task) has no create link naming a parent site, so even handed the
-            //    panel it starts exactly as under none.
-            assertThat(DomainParts.manage().form().createDefaults(holder().detach(),
-                    PanelRegistry.getBySlug(HohenheimSlugs.MANAGE)))
-                .as("step 4: no conduit, no parent site to read").isEqualTo(none);
+            // 2. A create without a request (a job, an MCP call) under the passthrough site stores both switches.
+            Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN));
+            Object detachedId = ResourceWrites.create(admin, DomainParts.admin(),
+                Map.of(SiteDomainModel.SITE_ID.getName(), String.valueOf(own),
+                    SiteDomainModel.HOSTNAME.getName(), PREFIX + "detached.example.test"),
+                operator().detach());
+            created.add(detachedId);
+            Row detached = domains.findById(detachedId);
+            assertThat((Boolean) detached.get(SiteDomainModel.FORCE_SSL))
+                .as("step 2: the detached create does not force HTTPS").isFalse();
+            assertThat((Boolean) detached.get(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT))
+                .as("step 2: the detached create asks no ACME certificate").isTrue();
+
+            // 3. The create form keeps storing them, whatever its switches submitted.
+            String hostname = PREFIX + "form.example.test";
+            var response = adminPostForm("/admin/domains/new?parent=" + own,
+                "site_id=" + own + "&hostname=" + hostname + "&match_type=exact&force_ssl=true");
+            assertThat(response.statusCode()).as("step 3: the form create is accepted").isIn(200, 302, 303);
+            Row viaForm = domains.find().where(SiteDomainModel.HOSTNAME.eq(hostname)).first();
+            assertThat(viaForm).as("step 3: the form create is stored").isNotNull();
+            created.add(viaForm.get(SiteDomainModel.ID));
+            assertThat((Boolean) viaForm.get(SiteDomainModel.FORCE_SSL))
+                .as("step 3: the form create does not force HTTPS").isFalse();
+            assertThat((Boolean) viaForm.get(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT))
+                .as("step 3: the form create asks no ACME certificate").isTrue();
         } finally {
+            for (Object id : created) {
+                domains.delete(id);
+            }
             RecordGrants.revoke(GrantSubjectType.USER, holderId, SiteModel.MODEL_ID, own, HohenheimCapabilities.MANAGE);
             HardDeletes.byId(Models.get(SiteModel.class), own);
             HardDeletes.byId(Models.get(SiteModel.class), foreign);

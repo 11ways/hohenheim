@@ -314,6 +314,8 @@ public class SiteDomainModel extends Model {
                 row.set(MATCH_TYPE, effectiveMatchType(canonical, matchType));
             }
             disarmOnExplicitChoice(row, stored);
+            // AIDEV-NOTE: THE home of a TLS passthrough site's HTTPS switches: forcing and ACME off on every write
+            // of every lane (form, API, MCP, jobs), read off the written site_id. No create form prefills them.
             Row site = StoredRows.byId(Models.get(SiteModel.class), row.afterWrite(SITE_ID, stored));
             if (site == null || !SiteModel.UPSTREAM_TLS_PASSTHROUGH
                     .equals(site.get(SiteModel.UPSTREAM_KIND))) return;
