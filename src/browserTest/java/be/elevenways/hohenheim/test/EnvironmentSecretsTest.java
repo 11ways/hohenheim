@@ -211,6 +211,7 @@ class EnvironmentSecretsTest extends HohenheimTestBase {
         assertThat(entries).as("3. the change is recorded once").hasSize(recorded + 1);
         assertThat((String) entries.get(entries.size() - 1).change().get(ChangeModel.DELTA))
             .as("3. the delta names the key").contains("SITE_GREETING")
+            .as("3. its value withheld").contains("withheld")
             .as("3. and never a value").doesNotContain(GREETING_V1).doesNotContain(GREETING_V2);
         AccessContext reader = TestAccessContexts.allAllowed();
         HistoryChange update = History.ofRecord(instances, appId, reader, null, 1).entries().get(0).changes().get(0);
