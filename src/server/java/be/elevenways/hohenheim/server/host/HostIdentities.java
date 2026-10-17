@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.host;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.HostTrustSlot;
@@ -9,6 +10,7 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.server.process.ProcessOutcome;
 import be.elevenways.protoblast.server.process.Subprocess;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -80,7 +82,8 @@ public final class HostIdentities {
             String publicKey = trimPublic ? publicText.trim() : publicText;
             server.set(slot.clientPrivate(), privateKey);
             server.set(slot.clientPublic(), publicKey);
-            Models.get(ServerModel.class).save(server);
+            Models.get(ServerModel.class).save(server, Change.fact(HohenheimActivityAction.HOST_IDENTITY_ROTATED,
+                Map.of(HohenheimActivityAction.LANE_KEY, slot.name())));
             Blast.slog("hohenheim.host.identity_rotated", Map.of("server", name));
         } catch (IOException e) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("identity_generation_failed")

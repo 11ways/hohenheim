@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim;
 
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
@@ -22,7 +23,6 @@ import be.elevenways.zenit.common.orm.activity.ActivityActions;
 import be.elevenways.zenit.common.orm.activity.ActivitySeverity;
 import be.elevenways.zenit.common.orm.activity.ActivityVisibility;
 import be.elevenways.zenit.common.orm.activity.FactShape;
-import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -37,17 +37,6 @@ import java.util.List;
  * a sentence too, never as "Jelle: Deployed Instance #3". DeclaredMicrocopyKeysTest requires each one in en and nl.
  * A verb's body is typed ({@link #shape()}) and it is permitted only on the models {@link #subjects()} names.
  * The ids are stored ({@code InstanceModel.STOPPAGE_CAUSE} holds a cause's path), so a member is never renamed.
- *
- * @author Jelle De Loecker
- * @since  0.10.0
- */
-
-/**
- * The activity verbs Hohenheim declares; its created, updated and deleted rows are core's verbs.
- *
- * AIDEV-NOTE: every verb heads its rows with a sentence of its own ({@link #happened()}), so a row written outside an
- * operation (a deploy from a git push, a crash restart, an old row from before operations told what happened) reads as
- * a sentence too, never as "Jelle: Deployed Instance #3". DeclaredMicrocopyKeysTest requires each one in en and nl.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -136,7 +125,28 @@ public enum HohenheimActivityAction implements ActivityAction {
     /** It stopped and the crash policy's automatic restart was refused; the detail is the refusal's own message. */
     WORKLOAD_RESTART_REFUSED("workload_restart_refused", ErrorCause.MESSAGE),
     /** A changed host key quarantined the host: it takes no new workload until an operator re-pins it. */
-    QUARANTINED("quarantined");
+    QUARANTINED("quarantined"),
+
+    // The host trust acts: security audit facts, each its own typed event, because the trust columns it changed do
+    // not say which act changed them (a first-scan pin and an operator's re-pin write the same columns).
+    /** A first scan pinned the identity a trust lane offered, unverified. */
+    HOST_KEY_PINNED("host_key_pinned"),
+    /** An operator confirmed a lane's pinned fingerprint out of band. */
+    HOST_KEY_VERIFIED("host_key_verified"),
+    /** An operator re-pinned a lane to the identity the host now offers, lifting its quarantine. */
+    HOST_KEY_REPINNED("host_key_repinned"),
+    /** A fresh client identity was minted for a lane. */
+    HOST_IDENTITY_ROTATED("host_identity_rotated"),
+    /** An operator accepted the host's shared-container posture risk at a warning version. */
+    POSTURE_RISK_ACCEPTED("posture_risk_accepted"),
+    /** An operator cordoned the host: it takes no new apps. */
+    ADMISSION_CORDONED("admission_cordoned"),
+    /** An operator lifted the cordon: the host takes new apps again. */
+    ADMISSION_UNCORDONED("admission_uncordoned"),
+    /** A check passed and admitted the host for the first time. */
+    ADMISSION_ADMITTED("admission_admitted"),
+    /** A delete that was forced past a failed teardown: the record went, the host may keep leftovers. */
+    FORCED("forced");
 
     /** A text key: a name, path, hostname or command as the act named it. */
     public static final String NAME_KEY = "name";
@@ -183,6 +193,12 @@ public enum HohenheimActivityAction implements ActivityAction {
     public static final String EXIT_CODE_KEY = "exit_code";
     /** A cause's failure message, verbatim. */
     public static final String MESSAGE_KEY = "message";
+    /** The trust lane an act was on ({@code HostTrustSlot.name()}). */
+    public static final String LANE_KEY = "lane";
+    public static final String FINGERPRINT_KEY = "fingerprint";
+    public static final String POSTURE_KEY = "posture";
+    /** The posture warning version an acceptance was given at. */
+    public static final String WARNING_VERSION_KEY = "warning_version";
 
     /** Whether a verb is the cause of a workload's ERROR status, and what its row's detail then holds. */
     public enum ErrorCause {
@@ -217,9 +233,6 @@ public enum HohenheimActivityAction implements ActivityAction {
         for (HohenheimActivityAction action : values()) {
             ActivityActions.legacyKey(action.value, action);
         }
-        ActivityActions.legacyKey("created", ZenitActivityAction.CREATE);
-        ActivityActions.legacyKey("updated", ZenitActivityAction.UPDATE);
-        ActivityActions.legacyKey("deleted", ZenitActivityAction.DELETE);
     }
 
     /** When a cause verb's error came: while the workload ran, or before it ever started. */
@@ -359,6 +372,13 @@ public enum HohenheimActivityAction implements ActivityAction {
             case APP_UPDATE_FAILED, BACKUP_FAILED, RENEWAL_FAILED ->
                 FactShape.of(FactShape.optionalKey(REASON_KEY, CoreTypes.TEXT));
             case QUARANTINED -> FactShape.of(FactShape.optionalKey(REASON_KEY, CoreTypes.TEXT));
+            case HOST_KEY_PINNED, HOST_KEY_VERIFIED -> FactShape.of(FactShape.key(LANE_KEY, CoreTypes.TEXT),
+                FactShape.key(FINGERPRINT_KEY, CoreTypes.TEXT));
+            case HOST_KEY_REPINNED -> FactShape.of(FactShape.key(LANE_KEY, CoreTypes.TEXT),
+                FactShape.key(FINGERPRINT_KEY, CoreTypes.TEXT), FactShape.optionalKey(PREVIOUS_KEY, CoreTypes.TEXT));
+            case HOST_IDENTITY_ROTATED -> FactShape.of(FactShape.key(LANE_KEY, CoreTypes.TEXT));
+            case POSTURE_RISK_ACCEPTED -> FactShape.of(FactShape.key(POSTURE_KEY, CoreTypes.TEXT),
+                FactShape.key(WARNING_VERSION_KEY, CoreTypes.INTEGER));
             case PREVIEW_TRIGGERED -> FactShape.of(FactShape.key(VIA_KEY, CoreTypes.TEXT),
                 FactShape.key(REF_KEY, CoreTypes.TEXT));
             case RESTORED_BACKUP -> FactShape.of(FactShape.optionalKey(BACKUP_KEY, CoreTypes.INTEGER),
@@ -385,7 +405,8 @@ public enum HohenheimActivityAction implements ActivityAction {
             case DISABLED -> FactShape.of(FactShape.optionalKey(STRANDED_KEY, CoreTypes.BOOLEAN));
             case CLONED -> FactShape.of(FactShape.key(ORIGINAL_KEY, FactShape.RECORD));
             case MOVE_SHARED, DYNDNS_TOKEN_MINTED, DYNDNS_TOKEN_REVOKED, ROLLED_BACK, VOLUMES_PURGED, TESTED, APPROVED,
-                 UNAPPROVED, BACKUP_DOWNLOADED, APP_UPDATED, ENABLED, HTTPS_FORCED -> FactShape.NONE;
+                 UNAPPROVED, BACKUP_DOWNLOADED, APP_UPDATED, ENABLED, HTTPS_FORCED, ADMISSION_CORDONED,
+                 ADMISSION_UNCORDONED, ADMISSION_ADMITTED, FORCED -> FactShape.NONE;
             case WORKLOAD_EXITED, WORKLOAD_CRASH_LOOPED, WORKLOAD_START_FAILED, WORKLOAD_ISOLATION_REFUSED,
                  WORKLOAD_NEVER_READY, WORKLOAD_STOP_FAILED, WORKLOAD_REMOVE_FAILED, WORKLOAD_RESTORE_FAILED,
                  WORKLOAD_RESTORE_INTERRUPTED, WORKLOAD_COPY_LOST, WORKLOAD_RESTART_REFUSED -> switch (this.errorCause) {
@@ -414,7 +435,10 @@ public enum HohenheimActivityAction implements ActivityAction {
             case IMPORTED -> List.of(DnsZoneModel.MODEL_ID, InstanceTemplateModel.MODEL_ID);
             case REQUESTED, REISSUED, RENEWAL_FAILED -> List.of(CertificateModel.MODEL_ID);
             case MEDIA_UPLOADED, MEDIA_DELETED, MEDIA_FETCHED, REMOVED_ORPHAN, REAPED_CONTROLLER_OBJECTS, DRAINED,
-                 QUARANTINED -> List.of(ServerModel.MODEL_ID);
+                 QUARANTINED, HOST_KEY_PINNED, HOST_KEY_VERIFIED, HOST_KEY_REPINNED, HOST_IDENTITY_ROTATED,
+                 POSTURE_RISK_ACCEPTED, ADMISSION_CORDONED, ADMISSION_UNCORDONED, ADMISSION_ADMITTED ->
+                List.of(ServerModel.MODEL_ID);
+            case FORCED -> List.of(DatabaseModel.MODEL_ID, DatabaseEngineModel.MODEL_ID);
             case MOVE_SHARED, BACKUP_DOWNLOADED -> List.of(DatabaseModel.MODEL_ID);
             case RESTORED_BACKUP -> List.of(InstanceModel.MODEL_ID, DatabaseModel.MODEL_ID);
             case DYNDNS_UPDATE, DYNDNS_TOKEN_MINTED, DYNDNS_TOKEN_REVOKED, RELEASED_HOSTNAME_DISABLED ->

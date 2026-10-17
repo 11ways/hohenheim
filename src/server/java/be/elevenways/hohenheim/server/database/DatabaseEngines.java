@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.database;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -12,6 +13,7 @@ import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -322,7 +324,7 @@ public final class DatabaseEngines {
         model().find().where(DatabaseEngineModel.ID.eq(engineId)).delete();
     }
 
-    /** The force-destroy escape hatch: abandon the instance, delete the row, no daemon. */
+    /** The force-destroy escape hatch: abandon the instance, delete the row recorded as forced, no daemon. */
     public static void forceDestroy(int engineId) throws IOException {
         Row row = require(engineId);
         List<Row> hosted = databasesOn(engineId);
@@ -332,7 +334,7 @@ public final class DatabaseEngines {
                 .withArg("databases", names(hosted)));
         }
         DatabaseInstances.abandonInstance(EngineHost.ofEngine(row));
-        model().find().where(DatabaseEngineModel.ID.eq(engineId)).delete();
+        model().find().where(DatabaseEngineModel.ID.eq(engineId)).delete(Change.fact(HohenheimActivityAction.FORCED));
     }
 
     /** The names of managed databases, joined for a sentence. */

@@ -13768,6 +13768,114 @@
       "target": "happened"
     }
   ],
+  "host_key_pinned": [
+    {
+      "text": "Hostsleutel vastgezet",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": "{$actor} zette de identiteit die {$subject} aanbood vast, onbevestigd",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "host_key_verified": [
+    {
+      "text": "Hostsleutel bevestigd",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": "{$actor} bevestigde de vastgezette identiteit van {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "host_key_repinned": [
+    {
+      "text": "Hostsleutel opnieuw vastgezet",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": "{$actor} zette {$subject} opnieuw vast op de identiteit die het nu aanbiedt",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "host_identity_rotated": [
+    {
+      "text": "Clientidentiteit vernieuwd",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": "{$actor} maakte een nieuwe clientidentiteit voor {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "posture_risk_accepted": [
+    {
+      "text": "Houdingsrisico aanvaard",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": "{$actor} aanvaardde het houdingsrisico van {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "admission_cordoned": [
+    {
+      "text": "Afgezet",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": "{$actor} zette {$subject} af: het neemt geen nieuwe apps aan",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "admission_uncordoned": [
+    {
+      "text": "Weer vrijgegeven",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": "{$actor} gaf {$subject} weer vrij: het neemt opnieuw nieuwe apps aan",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "admission_admitted": [
+    {
+      "text": "Toegelaten",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": "{$actor} controleerde en liet {$subject} toe",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "forced": [
+    {
+      "text": "Geforceerd",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": "{$actor} verwijderde {$subject} geforceerd na een mislukte afbraak",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
   "requested": [
     {
       "text": "Aangevraagd",

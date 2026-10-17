@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.database;
 
 import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimViolations;
@@ -33,6 +34,7 @@ import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.StringField;
+import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.validation.Violations;
@@ -942,7 +944,8 @@ public class DatabaseService extends DatasourceScoped {
             if (recordId != null) {
                 DatabaseInstances.abandonInstance(recordId);
             }
-            model().find().where(DatabaseModel.NAME.eq(name)).delete();
+            // Recorded as forced: the delete's own change says the teardown was skipped past a failure.
+            model().find().where(DatabaseModel.NAME.eq(name)).delete(Change.fact(HohenheimActivityAction.FORCED));
         });
     }
 

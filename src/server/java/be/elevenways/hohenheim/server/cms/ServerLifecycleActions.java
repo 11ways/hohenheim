@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
@@ -22,6 +23,7 @@ import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
@@ -92,7 +94,7 @@ final class ServerLifecycleActions {
                 // The first inline verb leads by position, not by a filled style (InstanceActions' deploy note).
                 .icon(Icon.of("stethoscope")).build(),
             place("cordon_server", HohenheimMicrocopy.SERVER.of("cordon"), row -> {
-                setAdmission(row, ServerModel.ADMISSION_CORDONED);
+                setAdmission(row, ServerModel.ADMISSION_CORDONED, HohenheimActivityAction.ADMISSION_CORDONED);
                 return HohenheimMicrocopy.SERVER.of("host_cordoned").withArg("name", row.get(ServerModel.NAME));
             }, row -> ServerModel.ADMISSION_ADMITTED.equals(row.get(ServerModel.ADMISSION)))
                 .icon(Icon.of("circle-pause")).style(ActionStyle.DESTRUCTIVE)
@@ -114,7 +116,7 @@ final class ServerLifecycleActions {
                     HohenheimMicrocopy.SERVER.of("drain_confirm"), ActionStyle.DESTRUCTIVE)).build(),
             place("uncordon_server", HohenheimMicrocopy.SERVER.of("uncordon"), row -> {
                 HostAdmission.requireAdmittable(row);
-                setAdmission(row, ServerModel.ADMISSION_ADMITTED);
+                setAdmission(row, ServerModel.ADMISSION_ADMITTED, HohenheimActivityAction.ADMISSION_UNCORDONED);
                 return HohenheimMicrocopy.SERVER.of("host_admitted").withArg("name", row.get(ServerModel.NAME));
             }, row -> ServerModel.ADMISSION_CORDONED.equals(row.get(ServerModel.ADMISSION)))
                 .icon(Icon.of("circle-play")).build(),
@@ -169,7 +171,7 @@ final class ServerLifecycleActions {
         // Admission reads what preflight just stored, never the subject loaded before it ran.
         Row stored = Models.get(ServerModel.class).findById(row.get(ServerModel.ID));
         HostAdmission.requireAdmittable(stored);
-        setAdmission(stored, ServerModel.ADMISSION_ADMITTED);
+        setAdmission(stored, ServerModel.ADMISSION_ADMITTED, HohenheimActivityAction.ADMISSION_ADMITTED);
         return HohenheimMicrocopy.SERVER.of("host_checked_admitted").withArg("name", name);
     }
 
@@ -179,9 +181,10 @@ final class ServerLifecycleActions {
             && !ServerModel.ADMISSION_CORDONED.equals(row.get(ServerModel.ADMISSION));
     }
 
-    private static void setAdmission(Row row, String admission) {
+    /** Writes the admission with the typed act that changed it: a security audit fact the column alone does not name. */
+    private static void setAdmission(Row row, String admission, HohenheimActivityAction act) {
         row.set(ServerModel.ADMISSION, admission);
-        Models.get(ServerModel.class).save(row);
+        Models.get(ServerModel.class).save(row, Change.fact(act));
     }
 
     private static Microcopy formatSummary(ServerService.Summary summary, String label) {

@@ -13768,6 +13768,114 @@
       "target": "happened"
     }
   ],
+  "host_key_pinned": [
+    {
+      "text": "Host key pinned",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": "{$actor} pinned the identity {$subject} offered, unverified",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "host_key_verified": [
+    {
+      "text": "Host key verified",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": "{$actor} verified the pinned identity of {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "host_key_repinned": [
+    {
+      "text": "Host key re-pinned",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": "{$actor} re-pinned {$subject} to the identity it now offers",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "host_identity_rotated": [
+    {
+      "text": "Client identity rotated",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": "{$actor} minted a new client identity for {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "posture_risk_accepted": [
+    {
+      "text": "Posture risk accepted",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": "{$actor} accepted the posture risk of {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "admission_cordoned": [
+    {
+      "text": "Cordoned",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": "{$actor} cordoned {$subject}: it takes no new apps",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "admission_uncordoned": [
+    {
+      "text": "Uncordoned",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": "{$actor} uncordoned {$subject}: it takes new apps again",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "admission_admitted": [
+    {
+      "text": "Admitted",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": "{$actor} checked and admitted {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "forced": [
+    {
+      "text": "Forced",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": "{$actor} force-deleted {$subject} past a failed teardown",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
   "requested": [
     {
       "text": "Requested",

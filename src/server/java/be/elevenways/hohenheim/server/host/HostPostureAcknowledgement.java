@@ -1,10 +1,12 @@
 package be.elevenways.hohenheim.server.host;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.history.HistoryText;
 import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
@@ -19,11 +21,12 @@ import java.util.Map;
 
 /**
  * THE one act by which a host's shared-container risk becomes accepted: it stamps the
- * five acknowledgement columns from the CURRENT attribution, and those columns' change is
- * the history; it refuses everything that is not a human accepting a stated risk.
+ * five acknowledgement columns from the CURRENT attribution, recorded with the typed
+ * {@code posture_risk_accepted} fact; it refuses everything that is not a human accepting a stated risk.
  *
  * The {@code HostPins} shape, deliberately: columns are the authority (a gate reads
- * them), their recorded change is history, and the ceremony has exactly one entry point
+ * them), the act is a typed fact on their recorded change (a security audit fact the
+ * changed columns alone do not name), and the ceremony has exactly one entry point
  * so two callers cannot record two different things.
  */
 public final class HostPostureAcknowledgement {
@@ -69,7 +72,9 @@ public final class HostPostureAcknowledgement {
         server.set(ServerModel.ACKNOWLEDGED_AT, Now.instant());
         ServerModel.ACKNOWLEDGER.write(server, principal);
         server.set(ServerModel.ACKNOWLEDGED_BY_LABEL, label);
-        Models.get(ServerModel.class).save(server);
+        Models.get(ServerModel.class).save(server, Change.fact(HohenheimActivityAction.POSTURE_RISK_ACCEPTED, Map.of(
+            HohenheimActivityAction.POSTURE_KEY, String.valueOf(posture),
+            HohenheimActivityAction.WARNING_VERSION_KEY, ServerModel.POSTURE_WARNING_VERSION)));
         Blast.slog("hohenheim.host.posture_acknowledged", Map.of(
             "server", String.valueOf((Object) server.get(ServerModel.NAME)),
             "posture", String.valueOf(posture),

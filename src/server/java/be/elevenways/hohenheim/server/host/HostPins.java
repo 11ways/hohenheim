@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.host;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -7,9 +8,11 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.UnaryOperator;
 
@@ -88,7 +91,9 @@ public final class HostPins {
             server.set(slot.pinnedAt(), Now.instant());
             server.set(slot.verified(), false);
             server.set(slot.offered(), null);
-            model.save(server);
+            model.save(server, Change.fact(HohenheimActivityAction.HOST_KEY_PINNED, Map.of(
+                HohenheimActivityAction.LANE_KEY, slot.name(),
+                HohenheimActivityAction.FINGERPRINT_KEY, offeredFingerprint)));
             Blast.slog("hohenheim.host.key_pinned", Map.of(
                 "server", name, "lane", slot.name(), "fingerprint", offeredFingerprint));
             return new HostKeys.ScanResult(HostKeys.ScanOutcome.PINNED, offeredFingerprint, null);
@@ -125,7 +130,9 @@ public final class HostPins {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("host_key_not_pinned"));
         }
         server.set(slot.verified(), true);
-        Models.get(ServerModel.class).save(server);
+        Models.get(ServerModel.class).save(server, Change.fact(HohenheimActivityAction.HOST_KEY_VERIFIED, Map.of(
+            HohenheimActivityAction.LANE_KEY, slot.name(),
+            HohenheimActivityAction.FINGERPRINT_KEY, String.valueOf((Object) server.get(slot.fingerprint())))));
         Blast.slog("hohenheim.host.key_verified", Map.of(
             "server", String.valueOf((Object) server.get(ServerModel.NAME)),
             "lane", slot.name(),
@@ -159,7 +166,13 @@ public final class HostPins {
         // operator adopted the material the machine now presents, on purpose.
         server.set(ServerModel.QUARANTINED_AT, null);
         server.set(ServerModel.QUARANTINE_REASON, null);
-        Models.get(ServerModel.class).save(server);
+        Map<String, Object> repinned = new LinkedHashMap<>();
+        repinned.put(HohenheimActivityAction.LANE_KEY, slot.name());
+        repinned.put(HohenheimActivityAction.FINGERPRINT_KEY, fingerprint);
+        if (previous != null) {
+            repinned.put(HohenheimActivityAction.PREVIOUS_KEY, previous);
+        }
+        Models.get(ServerModel.class).save(server, Change.fact(HohenheimActivityAction.HOST_KEY_REPINNED, repinned));
         Blast.slog("hohenheim.host.key_repinned", Map.of(
             "server", String.valueOf((Object) server.get(ServerModel.NAME)),
             "lane", slot.name(),
