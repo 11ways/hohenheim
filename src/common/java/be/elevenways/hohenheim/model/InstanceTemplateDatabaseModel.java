@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
@@ -102,4 +103,8 @@ public class InstanceTemplateDatabaseModel extends Model {
 
     @Override
     public Schema getSchema() { return SCHEMA; }
+
+    /** A template database's change is filed on its template. */
+    public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.optional().changes()
+        .filedOn(InstanceTemplateModel.class, row -> row.get(TEMPLATE_ID)));
 }

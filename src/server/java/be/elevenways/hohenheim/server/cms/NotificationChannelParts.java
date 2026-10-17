@@ -46,7 +46,8 @@ import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectType;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -106,8 +107,8 @@ public final class NotificationChannelParts {
                     .resolve(locales, Zenit.getMessageResolver()),
                 HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("test_body")
                     .resolve(locales, Zenit.getMessageResolver()));
-            ActivityLog.record(Models.get(NotificationChannelModel.class), row.get(NotificationChannelModel.ID),
-                HohenheimActivityAction.TESTED, row.get(NotificationChannelModel.NAME));
+            History.event(Models.get(NotificationChannelModel.class), row.get(NotificationChannelModel.ID),
+                Change.fact(HohenheimActivityAction.TESTED));
             return outcome;
         });
     }

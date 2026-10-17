@@ -25,7 +25,8 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
 import be.elevenways.zenit.common.operation.PlacementSurface;
 import be.elevenways.zenit.common.operation.ZenitPlacementSurface;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
@@ -125,8 +126,8 @@ public final class InstanceOperationHandlers {
                 int instanceId = instanceId(call);
                 new InstanceDevices().attachInstallMedia(instanceId,
                     Objects.requireNonNull(call.input(), "the attach has its input").installMedia());
-                ActivityLog.record(Models.get(InstanceModel.class), instanceId,
-                    HohenheimActivityAction.DEVICE_ATTACHED, null);
+                History.event(Models.get(InstanceModel.class), instanceId,
+                    Change.fact(HohenheimActivityAction.DEVICE_ATTACHED));
                 return null;
             });
         OperationHandlers.attach(InstanceOperations.DETACH_INSTALL_MEDIA).source(SUBJECTS)
@@ -135,8 +136,8 @@ public final class InstanceOperationHandlers {
             .handle(call -> {
                 int instanceId = instanceId(call);
                 new InstanceDevices().detachInstallMedia(instanceId);
-                ActivityLog.record(Models.get(InstanceModel.class), instanceId,
-                    HohenheimActivityAction.DEVICE_DETACHED, null);
+                History.event(Models.get(InstanceModel.class), instanceId,
+                    Change.fact(HohenheimActivityAction.DEVICE_DETACHED));
                 return null;
             });
         OperationHandlers.attach(InstanceOperations.INSTALL).source(SUBJECTS)
@@ -351,8 +352,8 @@ public final class InstanceOperationHandlers {
         }
         int instanceId = instanceId(call);
         InstanceConsoles.sendCommand(instanceId, command);
-        ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.CONSOLE_COMMAND,
-            command);
+        History.event(Models.get(InstanceModel.class), instanceId, Change.fact(HohenheimActivityAction.CONSOLE_COMMAND,
+            Map.of(HohenheimActivityAction.COMMAND_KEY, command)));
         return "sent";
     }
 

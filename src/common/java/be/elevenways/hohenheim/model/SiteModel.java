@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.app.PutOnlineReach;
@@ -376,4 +377,11 @@ public class SiteModel extends Model {
 
     @Override
     public Schema getSchema() { return SCHEMA; }
+
+    /**
+     * Revisionable, so always recorded, values captured; the Spamservice reporting key is a credential its own
+     * bookkeeping statement mints (SecurityReportEnv), so no change captures it.
+     */
+    public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.required().values()
+        .except(SECURITY_REPORT_TOKEN));
 }

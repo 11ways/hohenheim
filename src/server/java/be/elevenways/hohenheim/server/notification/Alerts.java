@@ -13,7 +13,6 @@ import be.elevenways.zenit.notifications.NotificationTexts;
 import be.elevenways.zenit.notifications.server.NotificationInboxOwners;
 import be.elevenways.zenit.notifications.server.Notifications;
 import be.elevenways.zenit.notifications.server.NotifyOutcome;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -86,14 +85,11 @@ public final class Alerts {
             }
             recipients.add(recipient);
         }
-        // AIDEV-NOTE: an alert's delivery rows and inbox items are the system's own bookkeeping, recorded in the
-        // delivery log, never activity: inside a person's command (Probe now) they were headed by that command's
-        // sentence ("Jelle checked whether Notification delivery #3 answers").
-        ActivityLog.suppressed(() -> {
-            for (NotificationRecipient recipient : recipients) {
-                Notifications.notify(notification, recipient);
-            }
-        });
+        // AIDEV-NOTE: an alert's delivery rows and inbox items record at the level zenit-notifications declares for
+        // its own models (OPTIONAL); Hohenheim no longer suppresses another module's writes.
+        for (NotificationRecipient recipient : recipients) {
+            Notifications.notify(notification, recipient);
+        }
         int queued = recipients.size();
 
         if (queued == 0) {

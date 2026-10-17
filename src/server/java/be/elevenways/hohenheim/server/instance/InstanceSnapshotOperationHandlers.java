@@ -5,8 +5,6 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceSnapshotModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.server.operation.OperationHandlers;
@@ -35,8 +33,7 @@ public final class InstanceSnapshotOperationHandlers {
                 row.get(InstanceSnapshotModel.INSTANCE_ID), HohenheimCapabilities.SNAPSHOTS) ? null
                 : new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "Snapshot deletion requires its instance capability"))
             .handle(call -> {
-                ActivityLog.withAction(ZenitActivityAction.DELETE, "delete_snapshot",
-                    () -> new InstanceSnapshots().delete(call.subject().get(InstanceSnapshotModel.ID)));
+                new InstanceSnapshots().delete(call.subject().get(InstanceSnapshotModel.ID));
                 return 1;
             });
     }

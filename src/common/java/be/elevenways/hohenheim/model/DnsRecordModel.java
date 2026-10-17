@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -308,4 +309,8 @@ public class DnsRecordModel extends Model {
 
     @Override
     public Schema getSchema() { return SCHEMA; }
+
+    /** A record's change is filed on its zone. */
+    public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.optional().changes()
+        .filedOn(DnsZoneModel.class, row -> row.get(ZONE_ID)));
 }

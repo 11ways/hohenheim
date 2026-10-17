@@ -11,7 +11,8 @@ import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -22,6 +23,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -51,12 +53,6 @@ import java.util.Set;
  * @since  0.1.0
  */
 public final class InstanceStatusReconciler {
-
-    /** Between the stored and the settled status in a correction's detail. */
-    private static final String ARROW = " -> ";
-
-    /** What a correction's detail adds when crash-loop protection held the restart back. */
-    private static final String CRASH_LOOP_NOTE = "; crash loop, automatic restarts suspended";
 
     /** What one record's reconciliation decided. */
     public enum Verdict {
@@ -266,8 +262,8 @@ public final class InstanceStatusReconciler {
         ApplicationUpstreams.invalidateForInstance(instanceId);
         // A correction is accountability, not decoration: the record just contradicted
         // itself and the operator must be able to see when, and on whose evidence.
-        ActivityLog.record(Models.get(InstanceModel.class), instanceId,
-            HohenheimActivityAction.RECONCILED, correctionDetail(stored, settled, state, flapping));
+        History.event(Models.get(InstanceModel.class), instanceId, Change.fact(HohenheimActivityAction.RECONCILED,
+            correctionFact(stored, settled, state, flapping)));
         Blast.log("INSTANCE RECONCILE:", fresh.get(InstanceModel.NAME), stored, "->",
             settled, "- daemon says", state);
         if (flapping) {
@@ -279,16 +275,16 @@ public final class InstanceStatusReconciler {
     }
 
     /**
-     * The detail of a correction's activity row, for the reader of the log only.
+     * The body of a correction's fact, for the reader of the log only.
      *
-     * AIDEV-NOTE: nothing reads this text back; the stoppage a correction to ERROR causes is stamped on the record
-     * (InstanceOperationGuard.stampObserved). M017 parsed the corrections stored before that once, with its own frozen
-     * copy of this shape.
+     * AIDEV-NOTE: nothing reads this back; the stoppage a correction to ERROR causes is stamped on the record
+     * (InstanceOperationGuard.stampObserved). M017 parsed the corrections stored as text before that once.
      */
-    private static @NonNull String correctionDetail(@NonNull String stored, @NonNull String settled,
-                                                    @Nullable ContainerState state, boolean flapping) {
-        return stored + ARROW + settled + " (died without an observed stop; the daemon reports the workload "
-            + (state == ContainerState.ABSENT ? "absent" : "stopped") + (flapping ? CRASH_LOOP_NOTE : "") + ")";
+    private static @NonNull Map<String, Object> correctionFact(@NonNull String stored, @NonNull String settled,
+                                                               @Nullable ContainerState state, boolean flapping) {
+        return Map.of(HohenheimActivityAction.FROM_KEY, stored, HohenheimActivityAction.TO_KEY, settled,
+            HohenheimActivityAction.DAEMON_STATE_KEY, state == ContainerState.ABSENT ? "absent" : "stopped",
+            HohenheimActivityAction.CRASH_LOOP_KEY, flapping);
     }
 
     /**

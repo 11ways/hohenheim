@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.tls;
 
+import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.async.AsyncFailures;
@@ -9,7 +10,8 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.time.Pace;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
@@ -201,7 +203,7 @@ public class AcmeService {
      * publish would be judged and refused as work with no identity. Detached: never the scheduling caller's action.
      */
     private static Runnable asSystem(Runnable job) {
-        return () -> ExecutionIdentity.runDetachedAsSystem("acme", job);
+        return () -> ExecutionIdentity.runDetachedAsSystem(HohenheimSystemPurposes.ACME, job);
     }
 
     public void start() {
@@ -864,7 +866,8 @@ public class AcmeService {
         certRow.set(CertificateModel.RENEWAL_FAILED_AT, now);
         Object id = certRow.get(CertificateModel.ID);
         if (id != null) {
-            ActivityLog.record(Models.get(CertificateModel.class), id, HohenheimActivityAction.RENEWAL_FAILED, message);
+            History.event(Models.get(CertificateModel.class), id, Change.fact(HohenheimActivityAction.RENEWAL_FAILED,
+                Map.of(HohenheimActivityAction.REASON_KEY, String.valueOf(message))));
         }
     }
 

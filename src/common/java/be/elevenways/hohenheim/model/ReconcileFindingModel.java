@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -106,4 +107,7 @@ public class ReconcileFindingModel extends Model {
 
     @Override
     public Schema getSchema() { return SCHEMA; }
+
+    /** A derived cache every sweep rewrites: never recorded (it records nothing today either). */
+    public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.untracked());
 }

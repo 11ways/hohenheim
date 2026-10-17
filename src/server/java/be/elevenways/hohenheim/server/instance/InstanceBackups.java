@@ -55,7 +55,8 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -181,12 +182,13 @@ public final class InstanceBackups {
                         this.instances.resolve(instanceId), false));
             }
         } catch (RuntimeException failed) {
-            ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.BACKUP_FAILED,
-                HohenheimViolations.reasonOf(failed));
+            History.event(Models.get(InstanceModel.class), instanceId,
+                Change.fact(HohenheimActivityAction.BACKUP_FAILED, Map.of(HohenheimActivityAction.REASON_KEY,
+                    String.valueOf(HohenheimViolations.reasonOf(failed)))));
             throw failed;
         }
-        ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.BACKUP,
-            "backup #" + backupId);
+        History.event(Models.get(InstanceModel.class), instanceId,
+            Change.fact(HohenheimActivityAction.BACKUP, Map.of(HohenheimActivityAction.BACKUP_KEY, backupId)));
         return backupId;
     }
 
@@ -1509,13 +1511,18 @@ public final class InstanceBackups {
      */
     private static void recordRestore(int instanceId, @Nullable Object backupId,
                                       @NonNull Restored restored) {
-        String moved = restored.movedPorts().isEmpty() ? ""
-            : " -- host ports already held on this host, now picked by it: " + String.join(", ",
-                restored.movedPorts());
-        ActivityLog.record(Models.get(InstanceModel.class), instanceId,
-            HohenheimActivityAction.RESTORED_BACKUP, (restored.complete()
-                ? "backup #" + backupId
-                : "backup #" + backupId + " -- NOT restored: " + restored.describeLosses()) + moved);
+        Map<String, Object> body = new LinkedHashMap<>();
+        if (backupId != null) {
+            body.put(HohenheimActivityAction.BACKUP_KEY, backupId);
+        }
+        if (!restored.complete()) {
+            body.put(HohenheimActivityAction.LOSSES_KEY, restored.describeLosses());
+        }
+        if (!restored.movedPorts().isEmpty()) {
+            body.put(HohenheimActivityAction.MOVED_PORTS_KEY, List.copyOf(restored.movedPorts()));
+        }
+        History.event(Models.get(InstanceModel.class), instanceId,
+            Change.fact(HohenheimActivityAction.RESTORED_BACKUP, body));
     }
 
 

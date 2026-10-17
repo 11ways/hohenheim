@@ -10,8 +10,8 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
@@ -21,6 +21,7 @@ import be.elevenways.zenit.server.operation.OperationHandlers;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -38,8 +39,8 @@ public final class VolumeDeclarationOperations {
             Row volume = InstanceVolumes.declare(owner, Objects.requireNonNull(input.name()),
                 Objects.requireNonNull(input.container_path()), quota(input.quota_mb()),
                 Boolean.TRUE.equals(input.exclusive()));
-            ActivityLog.record(Models.get(InstanceModel.class), owner,
-                HohenheimActivityAction.VOLUME_DECLARED, input.name());
+            History.event(Models.get(InstanceModel.class), owner, Change.fact(HohenheimActivityAction.VOLUME_DECLARED,
+                Map.of(HohenheimActivityAction.VOLUME_KEY, input.name())));
             return volume.get(InstanceVolumeModel.ID);
         });
         OperationHandlers.attach(VolumeOperations.UPDATE)
@@ -63,8 +64,8 @@ public final class VolumeDeclarationOperations {
                 }
                 InstanceVolumes.declare(owner, name, Objects.requireNonNull(input.container_path()),
                     quota(input.quota_mb()), Boolean.TRUE.equals(input.exclusive()), call.expectedVersion());
-                ActivityLog.record(Models.get(InstanceModel.class), owner,
-                    HohenheimActivityAction.VOLUME_REDECLARED, name);
+                History.event(Models.get(InstanceModel.class), owner, Change.fact(
+                    HohenheimActivityAction.VOLUME_REDECLARED, Map.of(HohenheimActivityAction.VOLUME_KEY, name)));
                 return null;
             });
         OperationHandlers.attach(VolumeOperations.DESTROY).handle(call -> {
@@ -97,8 +98,7 @@ public final class VolumeDeclarationOperations {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("volume_home_protected"));
         }
         String server = ServerModel.canonicalNameOf(instance.get(InstanceModel.SERVER_ID));
-        ActivityLog.withAction(ZenitActivityAction.DELETE, "volume_destroyed",
-            () -> InstanceVolumes.destroyOne(owner, name, server));
+        InstanceVolumes.destroyOne(owner, name, server);
     }
 
     private static int requireOwner(@Nullable Integer owner) {

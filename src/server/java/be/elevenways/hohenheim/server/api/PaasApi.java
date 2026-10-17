@@ -28,7 +28,8 @@ import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.common.conduit.Conduit;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -640,8 +641,8 @@ public final class PaasApi {
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             }
-            ActivityLog.record(Models.get(EnvironmentModel.class), environmentId,
-                HohenheimActivityAction.VARIABLE_SET, key);
+            History.event(Models.get(EnvironmentModel.class), environmentId, Change.fact(
+                HohenheimActivityAction.VARIABLE_SET, Map.of(HohenheimActivityAction.VARIABLE_KEY, key)));
             return ApiConduits.json(Map.of("id", environmentId, "status", "set", "key", key));
         });
 
@@ -656,8 +657,8 @@ public final class PaasApi {
                 return ApiConduits.refusal(conduit, Violations.ofField("key", key,
                     HohenheimMicrocopy.VIOLATIONS.of("variable_not_found")));
             }
-            ActivityLog.record(Models.get(EnvironmentModel.class), environmentId,
-                HohenheimActivityAction.VARIABLE_DELETED, key);
+            History.event(Models.get(EnvironmentModel.class), environmentId, Change.fact(
+                HohenheimActivityAction.VARIABLE_DELETED, Map.of(HohenheimActivityAction.VARIABLE_KEY, key)));
             return ApiConduits.json(Map.of("id", environmentId, "status", "deleted", "key", key));
         });
     }

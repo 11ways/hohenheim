@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
@@ -56,4 +57,8 @@ public class InstallMediaFetchModel extends Model {
     @Override public String getModelName() { return "InstallMediaFetch"; }
     @Override public String getTableName() { return "install_media_fetches"; }
     @Override public Schema getSchema() { return SCHEMA; }
+
+    /** Plumbing: recorded, kept out of people's feeds. */
+    public static final HistoryBehaviour HISTORY =
+        SCHEMA.addBehaviour(HistoryBehaviour.optional().changes().internal());
 }

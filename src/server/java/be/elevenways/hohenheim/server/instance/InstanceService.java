@@ -32,8 +32,8 @@ import be.elevenways.hohenheim.server.runtime.WorkloadAttribution;
 import be.elevenways.hohenheim.server.source.GitCheckout;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -87,9 +87,6 @@ public final class InstanceService {
 
     /** The trigger a deploy records when its caller names none. */
     public static final String DEFAULT_DEPLOY_REASON = "deploy";
-
-    /** The activity detail a verified destroy renames its soft-delete row with. */
-    public static final String ACTIVITY_DESTROY_DETAIL = "destroy";
 
     /**
      * Run one runtime operation holding the record's operation lock; re-entrant on the
@@ -561,8 +558,8 @@ public final class InstanceService {
      */
     private static void recordPower(int instanceId, @NonNull HohenheimActivityAction action,
                                     @NonNull Resolved resolved) {
-        ActivityLog.record(Models.get(InstanceModel.class), instanceId, action,
-            resolved.spec().handle());
+        History.event(Models.get(InstanceModel.class), instanceId,
+            Change.fact(action, Map.of(HohenheimActivityAction.HANDLE_KEY, resolved.spec().handle())));
     }
 
     /** Remove a mid-migration destination copy the daemon attributes to this record. */
@@ -665,13 +662,10 @@ public final class InstanceService {
         // column (see inAuthorizedOperation's contract).
         //
         // This delete is the ONE hook-firing write in the whole teardown, so the verb belongs
-        // around it rather than around the caller's call: the CMS row action used to own that
-        // wrapper, which left every OTHER destroy caller (the release engine, preview expiry,
-        // database teardown) recording a bare "update" for an irreversible teardown.
+        // around it rather than around the caller's call: every destroy caller (the release
+        // engine, preview expiry, database teardown) records the same trash of the record.
         boolean[] trashed = {false};
-        ActivityLog.withAction(ZenitActivityAction.DELETE, ACTIVITY_DESTROY_DETAIL,
-            () -> TenantWrites.inAuthorizedOperation(
-                () -> trashed[0] = Models.get(InstanceModel.class).delete(instanceId)));
+        TenantWrites.inAuthorizedOperation(() -> trashed[0] = Models.get(InstanceModel.class).delete(instanceId));
         return trashed[0];
     }
 
@@ -918,9 +912,9 @@ public final class InstanceService {
         } else {
             InstanceOperationGuard.stamp(this.leases, instanceId, resolved.serverId(),
                 settled, row.get(InstanceModel.NAME));
-            ActivityLog.record(Models.get(InstanceModel.class), instanceId,
-                HohenheimActivityAction.SETTLED_INTERRUPTED, status + " -> " + settled
-                    + " (interrupted by a controller restart)");
+            History.event(Models.get(InstanceModel.class), instanceId, Change.fact(
+                HohenheimActivityAction.SETTLED_INTERRUPTED, Map.of(HohenheimActivityAction.FROM_KEY, status,
+                    HohenheimActivityAction.TO_KEY, settled)));
         }
         Blast.log("INSTANCE: settled interrupted", status, "state of",
             row.get(InstanceModel.NAME), "->", settled);
@@ -966,8 +960,8 @@ public final class InstanceService {
         GitCheckout.discard(InstanceModel.MODEL_ID, instanceId);
         List<String> removed = new ArrayList<>(removeNamedVolumes(row, serverName));
         removed.addAll(InstanceVolumes.destroyAll(instanceId, serverName));
-        ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.DELETED_DATA,
-            String.join(", ", removed));
+        History.event(Models.get(InstanceModel.class), instanceId, Change.fact(HohenheimActivityAction.DELETED_DATA,
+            Map.of(HohenheimActivityAction.REMOVED_KEY, List.copyOf(removed))));
         Blast.log("INSTANCE: deleted data of", row.get(InstanceModel.NAME), "-",
             removed.isEmpty() ? "nothing to remove" : String.join(", ", removed));
         return removed;

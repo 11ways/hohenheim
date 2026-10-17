@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimCounts;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -1004,4 +1005,12 @@ public class ServerModel extends Model {
 
     @Override
     public Schema getSchema() { return SCHEMA; }
+
+    /**
+     * What people do to a host is captured; the probes' stamps (heartbeat, failure, volume and memory readings) and
+     * the port claim fence are bookkeeping no change captures.
+     */
+    public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.optional().changes()
+        .except(LAST_SEEN_AT, LAST_ERROR_KIND, LAST_ERROR, CAPABILITIES, VOLUME_BACKEND, VOLUME_ROOT,
+            VOLUME_BACKEND_DETAIL, VOLUME_PROBED_AT, PORT_CLAIM_FENCE));
 }

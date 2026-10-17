@@ -21,7 +21,9 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.time.Pace;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -202,7 +204,7 @@ public class StackRuntime {
         }
         stopServices(spec);
         setStatus(stackId, StackModel.STATUS_STOPPED);
-        recordSettled(stackId, HohenheimActivityAction.STOPPED, spec.name());
+        recordSettled(stackId, Change.fact(HohenheimActivityAction.STOPPED));
         return true;
     }
 
@@ -436,7 +438,7 @@ public class StackRuntime {
             }
             destroyServices(spec, true);
             setStatus(stackId, StackModel.STATUS_INACTIVE);
-            recordSettled(stackId, HohenheimActivityAction.VOLUMES_PURGED, spec.name());
+            recordSettled(stackId, Change.fact(HohenheimActivityAction.VOLUMES_PURGED));
             return null;
         });
     }
@@ -590,8 +592,8 @@ public class StackRuntime {
             // The SETTLED operation, never the queued intent: a deploy that failed is
             // answered by its failed status and its deployment record, not by an
             // activity row claiming it happened (the instance tier's rule).
-            recordSettled(stackId, REASON_ROLLBACK.equals(reason)
-                ? HohenheimActivityAction.ROLLED_BACK : HohenheimActivityAction.DEPLOYED, reason);
+            recordSettled(stackId, REASON_ROLLBACK.equals(reason) ? Change.fact(HohenheimActivityAction.ROLLED_BACK)
+                : Change.fact(HohenheimActivityAction.DEPLOYED, Map.of(HohenheimActivityAction.TRIGGER_KEY, reason)));
             return null;
         } catch (Throwable e) {
             // Throwable, not Exception: an Error thrown on the worker would otherwise
@@ -943,13 +945,13 @@ public class StackRuntime {
      * Adoption and boot recovery dispatch from system threads and stay the system's.
      */
     private static @NonNull Runnable onLane(@NonNull Runnable work) {
-        return () -> ExecutionIdentity.runAsSystem("stack", work);
+        return () -> ExecutionIdentity.runAsSystem(HohenheimSystemPurposes.STACK, work);
     }
 
     /** Record a SETTLED stack operation on the stack record, on the worker's datasource. */
-    private void recordSettled(int stackId, @NonNull HohenheimActivityAction action, @Nullable String detail) {
+    private void recordSettled(int stackId, @NonNull Change change) {
         scoped(() -> {
-            ActivityLog.record(Models.get(StackModel.class), stackId, action, detail);
+            History.event(Models.get(StackModel.class), stackId, change);
             return null;
         });
     }

@@ -8,8 +8,6 @@ import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
@@ -39,8 +37,7 @@ public final class InstanceAttachmentOperationHandlers {
                 Row device = call.subject();
                 int instanceId = device.get(InstanceDeviceModel.INSTANCE_ID);
                 String name = device.get(InstanceDeviceModel.NAME);
-                ActivityLog.withAction(ZenitActivityAction.DELETE, "device_detached",
-                    () -> new InstanceDevices().detach(instanceId, name));
+                new InstanceDevices().detach(instanceId, name);
                 return 1;
             });
         OperationHandlers.attach(InstanceAttachmentOperations.DELETE_DATABASE_LINK)

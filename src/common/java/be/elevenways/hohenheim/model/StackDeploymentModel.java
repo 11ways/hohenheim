@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -92,4 +93,8 @@ public class StackDeploymentModel extends Model {
 
     @Override
     public Schema getSchema() { return SCHEMA; }
+
+    /** A deployment's change is filed on its stack. */
+    public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.optional().changes()
+        .filedOn(StackModel.class, row -> row.get(STACK_ID)));
 }

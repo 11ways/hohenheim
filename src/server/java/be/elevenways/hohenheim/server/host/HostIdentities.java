@@ -8,8 +8,6 @@ import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.server.process.ProcessOutcome;
 import be.elevenways.protoblast.server.process.Subprocess;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -80,11 +78,9 @@ public final class HostIdentities {
             String privateKey = Files.readString(privateHalf, StandardCharsets.UTF_8);
             String publicText = Files.readString(publicHalf, StandardCharsets.UTF_8);
             String publicKey = trimPublic ? publicText.trim() : publicText;
-            ActivityLog.withAction(ZenitActivityAction.UPDATE, "host_identity_rotated", () -> {
-                server.set(slot.clientPrivate(), privateKey);
-                server.set(slot.clientPublic(), publicKey);
-                Models.get(ServerModel.class).save(server);
-            });
+            server.set(slot.clientPrivate(), privateKey);
+            server.set(slot.clientPublic(), publicKey);
+            Models.get(ServerModel.class).save(server);
             Blast.slog("hohenheim.host.identity_rotated", Map.of("server", name));
         } catch (IOException e) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("identity_generation_failed")

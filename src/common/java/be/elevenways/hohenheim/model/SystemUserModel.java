@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -66,4 +67,11 @@ public class SystemUserModel extends Model {
 
     @Override
     public Schema getSchema() { return SCHEMA; }
+
+    /**
+     * A mirror of each host's /etc/passwd, recorded under its scan's purpose and kept out of people's feeds; the
+     * scan's own stamp is not captured.
+     */
+    public static final HistoryBehaviour HISTORY =
+        SCHEMA.addBehaviour(HistoryBehaviour.optional().changes().except(LAST_SEEN_AT).internal());
 }

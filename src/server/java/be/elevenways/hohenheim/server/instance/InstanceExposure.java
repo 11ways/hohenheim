@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -11,6 +11,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The reverse "which sites expose this instance" question, and the destroy-time rule that
@@ -30,9 +31,6 @@ import java.util.List;
  * brief window in which the site 503s, which the destroy confirmation names up front.
  */
 public final class InstanceExposure {
-
-    /** The activity detail a site disabled by a destroy is renamed with. */
-    public static final String ACTIVITY_STRANDED_DETAIL = "instance_destroyed";
 
     private InstanceExposure() {
     }
@@ -75,8 +73,8 @@ public final class InstanceExposure {
             String name = String.valueOf((Object) site.get(SiteModel.NAME));
             try {
                 site.set(SiteModel.ENABLED, false);
-                ActivityLog.withAction(HohenheimActivityAction.DISABLED, ACTIVITY_STRANDED_DETAIL,
-                    () -> Models.get(SiteModel.class).save(site));
+                Models.get(SiteModel.class).save(site, Change.fact(HohenheimActivityAction.DISABLED,
+                    Map.of(HohenheimActivityAction.STRANDED_KEY, true)));
                 disabled.add(name);
             } catch (RuntimeException refused) {
                 Blast.log("INSTANCE: site", name, "still exposes destroyed instance",

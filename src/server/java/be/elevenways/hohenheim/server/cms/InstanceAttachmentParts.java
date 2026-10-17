@@ -51,7 +51,8 @@ import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.operation.OperationInput;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -259,7 +260,8 @@ public final class InstanceAttachmentParts {
             case CDROM -> throw new IllegalStateException("install media is attached through "
                 + "attach_install_media, never the device form");
         }
-        ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.DEVICE_ATTACHED, null);
+        History.event(Models.get(InstanceModel.class), instanceId, Change.fact(HohenheimActivityAction.DEVICE_ATTACHED,
+            Map.of(HohenheimActivityAction.DEVICE_KEY, name)));
         Row created = Models.get(InstanceDeviceModel.class).find()
             .where(InstanceDeviceModel.INSTANCE_ID.eq(instanceId))
             .where(InstanceDeviceModel.NAME.eq(name))
@@ -311,7 +313,8 @@ public final class InstanceAttachmentParts {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("device_resize_not_a_disk"));
         }
         new InstanceDevices().resizeDisk(instanceId, name, sizeOf(merged));
-        ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.DEVICE_RESIZED, null);
+        History.event(Models.get(InstanceModel.class), instanceId, Change.fact(HohenheimActivityAction.DEVICE_RESIZED,
+            Map.of(HohenheimActivityAction.DEVICE_KEY, name)));
         return null;
     }
 

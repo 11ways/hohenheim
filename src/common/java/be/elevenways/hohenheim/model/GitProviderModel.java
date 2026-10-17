@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.source.GitProviderKindRegistry;
@@ -135,4 +136,6 @@ public class GitProviderModel extends Model {
     @Override public String getModelName() { return "GitProvider"; }
     @Override public String getTableName() { return "git_providers"; }
     @Override public Schema getSchema() { return SCHEMA; }
+
+    public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.optional().changes());
 }

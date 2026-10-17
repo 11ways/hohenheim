@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.application;
 
+import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -39,7 +40,8 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.time.Pace;
 import java.time.Duration;
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -366,8 +368,8 @@ public final class ReleaseEngine {
         // recorded "rollback_triggered" -- the same one-surface-audited asymmetry the
         // instance power path had. The engine writes its state through role saves and
         // ReleaseOperation rows, neither of which is an activity row about the SITE.
-        ActivityLog.record(Models.get(InstanceModel.class), applicationId, HohenheimActivityAction.ROLLED_BACK,
-            null);
+        History.event(Models.get(InstanceModel.class), applicationId,
+            Change.fact(HohenheimActivityAction.ROLLED_BACK));
     }
 
     /** {@link #rollback}'s body; callers hold the application's operation lock. */
@@ -537,7 +539,8 @@ public final class ReleaseEngine {
         Integer seconds = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Releases.DRAIN_SECONDS);
         long waitMs = Math.max(0, (seconds != null ? seconds : 15) * 1000L);
-        JobRunner.startVirtualThread(() -> ExecutionIdentity.runDetachedAsSystem("release-drain", () -> {
+        JobRunner.startVirtualThread(() -> ExecutionIdentity.runDetachedAsSystem(
+            HohenheimSystemPurposes.RELEASE_DRAIN, () -> {
             try {
                 Pace.sleep(Duration.ofMillis(waitMs));
             } catch (InterruptedException interrupted) {

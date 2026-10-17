@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.app.PutOnlineReach;
@@ -476,7 +477,8 @@ final class PutOnlineHandlers {
      */
     private static void installStep(@NonNull OperationCall<Row, ?> call, @NonNull Row template, int instanceId) {
         if (InstanceTemplates.hasInstallStep(template)) {
-            ExecutionIdentity.runAsSystem("template-install", () -> new InstanceInstalls().install(instanceId));
+            ExecutionIdentity.runAsSystem(HohenheimSystemPurposes.TEMPLATE_INSTALL,
+                () -> new InstanceInstalls().install(instanceId));
             call.progress().reportProgressPart();
         } else {
             call.reportStepSkipped();

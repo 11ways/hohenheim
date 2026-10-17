@@ -12,7 +12,8 @@ import be.elevenways.hohenheim.server.proxy.HostnamePatterns;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
@@ -192,8 +193,9 @@ public final class DnsClaimReleases {
             // (the tenant releasing a name rarely holds dyndns on the record).
             TenantWrites.inAuthorizedOperation(() ->
                 DynamicDnsService.revokeFor(record.get(DnsRecordModel.ID)));
-            ActivityLog.record(model, record.get(DnsRecordModel.ID),
-                    HohenheimActivityAction.RELEASED_HOSTNAME_DISABLED, fqdn);
+            History.event(model, record.get(DnsRecordModel.ID), Change.fact(
+                HohenheimActivityAction.RELEASED_HOSTNAME_DISABLED,
+                Map.of(HohenheimActivityAction.HOSTNAME_KEY, fqdn)));
             RecordGrants.revokeAllForRecord(DnsRecordModel.MODEL_ID,
                 record.get(DnsRecordModel.ID));
             touchedZones.add(record.get(DnsRecordModel.ZONE_ID));

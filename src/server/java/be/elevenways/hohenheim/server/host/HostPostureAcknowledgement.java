@@ -5,12 +5,10 @@ import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ActivityText;
 import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolvers;
-import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.Accountability;
@@ -21,21 +19,14 @@ import java.util.Map;
 
 /**
  * THE one act by which a host's shared-container risk becomes accepted: it stamps the
- * five acknowledgement columns from the CURRENT attribution, records the activity row
- * beside them, and refuses everything that is not a human accepting a stated risk.
+ * five acknowledgement columns from the CURRENT attribution, and those columns' change is
+ * the history; it refuses everything that is not a human accepting a stated risk.
  *
  * The {@code HostPins} shape, deliberately: columns are the authority (a gate reads
- * them), the activity row is history, and the ceremony has exactly one entry point so
- * two callers cannot record two different things.
+ * them), their recorded change is history, and the ceremony has exactly one entry point
+ * so two callers cannot record two different things.
  */
 public final class HostPostureAcknowledgement {
-
-    /**
-     * The activity DETAIL the acknowledgement is recorded under, beside the generic
-     * {@code update} action -- the spelling every other trust act on this model uses
-     * ({@code host_key_pinned}, {@code host_key_verified}, {@code host_key_repinned}).
-     */
-    public static final String ACTIVITY_DETAIL = "posture_acknowledged";
 
     private HostPostureAcknowledgement() {
     }
@@ -73,15 +64,12 @@ public final class HostPostureAcknowledgement {
         String label = ActivityText.actorName(principal, actor, who.actorLabel(), who.origin())
             .resolve(LocaleChain.empty(), MessageResolvers.getDefault());
         String posture = server.get(ServerModel.POSTURE);
-        ActivityLog.withAction(ZenitActivityAction.UPDATE, ACTIVITY_DETAIL, () -> {
-            server.set(ServerModel.ACKNOWLEDGED_POSTURE, posture);
-            server.set(ServerModel.ACKNOWLEDGED_WARNING_VERSION,
-                ServerModel.POSTURE_WARNING_VERSION);
-            server.set(ServerModel.ACKNOWLEDGED_AT, Now.instant());
-            ServerModel.ACKNOWLEDGER.write(server, principal);
-            server.set(ServerModel.ACKNOWLEDGED_BY_LABEL, label);
-            Models.get(ServerModel.class).save(server);
-        });
+        server.set(ServerModel.ACKNOWLEDGED_POSTURE, posture);
+        server.set(ServerModel.ACKNOWLEDGED_WARNING_VERSION, ServerModel.POSTURE_WARNING_VERSION);
+        server.set(ServerModel.ACKNOWLEDGED_AT, Now.instant());
+        ServerModel.ACKNOWLEDGER.write(server, principal);
+        server.set(ServerModel.ACKNOWLEDGED_BY_LABEL, label);
+        Models.get(ServerModel.class).save(server);
         Blast.slog("hohenheim.host.posture_acknowledged", Map.of(
             "server", String.valueOf((Object) server.get(ServerModel.NAME)),
             "posture", String.valueOf(posture),

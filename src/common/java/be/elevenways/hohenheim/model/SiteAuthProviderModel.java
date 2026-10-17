@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.auth.SiteAuthProviderTypeRegistry;
@@ -76,4 +77,6 @@ public class SiteAuthProviderModel extends Model {
 
     @Override
     public Schema getSchema() { return SCHEMA; }
+
+    public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.optional().changes());
 }

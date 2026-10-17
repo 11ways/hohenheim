@@ -12,7 +12,8 @@ import be.elevenways.hohenheim.server.dns.DnsZoneFiles;
 import be.elevenways.zenit.cms.common.access.AccessRefusedException;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
@@ -59,8 +60,7 @@ final class DnsZoneHandlers {
             try {
                 DnsZoneFiles.ImportResult result = DnsZoneFiles.importText(zone, text,
                     DnsZoneFiles.ApexNsPolicy.forKeepFlag(form.get("keep_ns")));
-                ActivityLog.record(Models.get(DnsZoneModel.class), zoneId, HohenheimActivityAction.IMPORTED,
-                    zone.get(DnsZoneModel.ORIGIN));
+                History.event(Models.get(DnsZoneModel.class), zoneId, Change.fact(HohenheimActivityAction.IMPORTED));
                 String notes = String.join("; ", result.notes());
                 if (!result.skipped().isEmpty()) {
                     HohenheimFlash.warning(conduit, HohenheimMicrocopy.DNS_ZONE.of("import_partial")

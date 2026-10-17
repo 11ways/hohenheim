@@ -34,7 +34,8 @@ import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -150,8 +151,9 @@ public final class PreviewParts {
             HohenheimMicrocopy.VIOLATIONS.of("preview_ref_required"));
         try {
             Row preview = PreviewDeployments.queue(owner.intValue(), ref, null, null, DeployTrigger.MANUAL);
-            ActivityLog.record(Models.get(InstanceModel.class), owner.intValue(),
-                HohenheimActivityAction.PREVIEW_TRIGGERED, "manual:" + ref);
+            History.event(Models.get(InstanceModel.class), owner.intValue(), Change.fact(
+                HohenheimActivityAction.PREVIEW_TRIGGERED, Map.of(HohenheimActivityAction.VIA_KEY, "manual",
+                    HohenheimActivityAction.REF_KEY, ref)));
             return preview.get(PreviewDeploymentModel.ID);
         } catch (Violations refused) {
             throw refused;

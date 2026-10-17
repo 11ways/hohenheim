@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimCounts;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -156,4 +157,6 @@ public class BackupTargetModel extends Model {
     @Override public String getModelName() { return "BackupTarget"; }
     @Override public String getTableName() { return "backup_targets"; }
     @Override public Schema getSchema() { return SCHEMA; }
+
+    public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.optional().changes());
 }

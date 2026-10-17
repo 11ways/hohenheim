@@ -5,8 +5,6 @@ import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -85,14 +83,12 @@ public final class HostPins {
         String name = String.valueOf((Object) server.get(ServerModel.NAME));
 
         if (pinned == null || pinned.isBlank()) {
-            ActivityLog.withAction(ZenitActivityAction.UPDATE, "host_key_pinned", () -> {
-                server.set(slot.material(), offeredMaterial);
-                server.set(slot.fingerprint(), offeredFingerprint);
-                server.set(slot.pinnedAt(), Now.instant());
-                server.set(slot.verified(), false);
-                server.set(slot.offered(), null);
-                model.save(server);
-            });
+            server.set(slot.material(), offeredMaterial);
+            server.set(slot.fingerprint(), offeredFingerprint);
+            server.set(slot.pinnedAt(), Now.instant());
+            server.set(slot.verified(), false);
+            server.set(slot.offered(), null);
+            model.save(server);
             Blast.slog("hohenheim.host.key_pinned", Map.of(
                 "server", name, "lane", slot.name(), "fingerprint", offeredFingerprint));
             return new HostKeys.ScanResult(HostKeys.ScanOutcome.PINNED, offeredFingerprint, null);
@@ -128,10 +124,8 @@ public final class HostPins {
         if (!slot.isPinned(server)) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("host_key_not_pinned"));
         }
-        ActivityLog.withAction(ZenitActivityAction.UPDATE, "host_key_verified", () -> {
-            server.set(slot.verified(), true);
-            Models.get(ServerModel.class).save(server);
-        });
+        server.set(slot.verified(), true);
+        Models.get(ServerModel.class).save(server);
         Blast.slog("hohenheim.host.key_verified", Map.of(
             "server", String.valueOf((Object) server.get(ServerModel.NAME)),
             "lane", slot.name(),
@@ -153,21 +147,19 @@ public final class HostPins {
         }
         String previous = server.get(slot.fingerprint());
         String fingerprint = fingerprintOf.apply(offered);
-        ActivityLog.withAction(ZenitActivityAction.UPDATE, "host_key_repinned", () -> {
-            server.set(slot.material(), offered);
-            server.set(slot.fingerprint(), fingerprint);
-            server.set(slot.pinnedAt(), Now.instant());
-            server.set(slot.verified(), false);
-            server.set(slot.offered(), null);
-            server.set(ServerModel.PREFLIGHT_OK, false);
-            server.set(ServerModel.LAST_ERROR_KIND, null);
-            server.set(ServerModel.LAST_ERROR, null);
-            // THE one act that lifts a quarantine, and the reason it is an act: an
-            // operator adopted the material the machine now presents, on purpose.
-            server.set(ServerModel.QUARANTINED_AT, null);
-            server.set(ServerModel.QUARANTINE_REASON, null);
-            Models.get(ServerModel.class).save(server);
-        });
+        server.set(slot.material(), offered);
+        server.set(slot.fingerprint(), fingerprint);
+        server.set(slot.pinnedAt(), Now.instant());
+        server.set(slot.verified(), false);
+        server.set(slot.offered(), null);
+        server.set(ServerModel.PREFLIGHT_OK, false);
+        server.set(ServerModel.LAST_ERROR_KIND, null);
+        server.set(ServerModel.LAST_ERROR, null);
+        // THE one act that lifts a quarantine, and the reason it is an act: an
+        // operator adopted the material the machine now presents, on purpose.
+        server.set(ServerModel.QUARANTINED_AT, null);
+        server.set(ServerModel.QUARANTINE_REASON, null);
+        Models.get(ServerModel.class).save(server);
         Blast.slog("hohenheim.host.key_repinned", Map.of(
             "server", String.valueOf((Object) server.get(ServerModel.NAME)),
             "lane", slot.name(),

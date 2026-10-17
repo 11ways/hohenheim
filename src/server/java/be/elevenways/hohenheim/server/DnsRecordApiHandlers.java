@@ -18,8 +18,6 @@ import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DnsPeerApi;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.zenit.common.conduit.Conduit;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -86,7 +84,6 @@ final class DnsRecordApiHandlers {
             }
             applyRecordValues(row, values);
             model.save(row);
-            ActivityLog.record(model, row.get(DnsRecordModel.ID), ZenitActivityAction.CREATE, recordDetail(row));
             DnsZoneStore.INSTANCE.bumpSerialAndReload(zoneId);
             return new JsonResult<Object>(
                 new DnsRecordMutationResponse(row.get(DnsRecordModel.ID)));
@@ -111,8 +108,6 @@ final class DnsRecordApiHandlers {
             }
             applyRecordValues(record, values);
             model.save(record);
-            ActivityLog.record(model, record.get(DnsRecordModel.ID), ZenitActivityAction.UPDATE,
-                recordDetail(record));
             DnsZoneStore.INSTANCE.bumpSerialAndReload(zone.get(DnsZoneModel.ID));
             return new JsonResult<Object>(
                 new DnsRecordMutationResponse(record.get(DnsRecordModel.ID)));
@@ -127,10 +122,7 @@ final class DnsRecordApiHandlers {
             if (record == null) {
                 return null;
             }
-            Integer recordId = record.get(DnsRecordModel.ID);
-            String detail = recordDetail(record);
             model.delete(record);
-            ActivityLog.record(model, recordId, ZenitActivityAction.DELETE, detail);
             DnsZoneStore.INSTANCE.bumpSerialAndReload(zone.get(DnsZoneModel.ID));
             return new JsonResult<Object>(new DnsRecordDeleteResponse("deleted"));
         });
@@ -160,11 +152,6 @@ final class DnsRecordApiHandlers {
                 HohenheimMicrocopy.VIOLATIONS.of("dns_managed_by_unknown"));
         }
         return value;
-    }
-
-    /** Activity detail naming the record an operator would recognise it by. */
-    private static String recordDetail(Row record) {
-        return record.get(DnsRecordModel.TYPE) + " " + record.get(DnsRecordModel.NAME);
     }
 
     private static DnsRecordDto recordDto(Row record) {

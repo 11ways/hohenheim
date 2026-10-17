@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -59,4 +60,8 @@ public class WebhookDeliveryModel extends Model {
     @Override public String getModelName() { return "WebhookDelivery"; }
     @Override public String getTableName() { return "webhook_deliveries"; }
     @Override public Schema getSchema() { return SCHEMA; }
+
+    /** Plumbing: recorded, kept out of people's feeds. */
+    public static final HistoryBehaviour HISTORY =
+        SCHEMA.addBehaviour(HistoryBehaviour.optional().changes().internal());
 }

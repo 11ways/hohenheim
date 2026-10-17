@@ -10,7 +10,8 @@ import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.async.ProgressSink;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.lease.Lease;
 import be.elevenways.zenit.common.orm.lease.Leases;
@@ -26,6 +27,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * THE background lane of an install-media fetch: the request stores a {@code pending} row and returns,
@@ -224,7 +226,8 @@ public final class InstallMediaFetches {
             write(fetchId, InstallMediaFetchState.DOWNLOADING, null, null, false);
             transfer.run(progress);
             write(fetchId, InstallMediaFetchState.READY, 1.0, null, true);
-            ActivityLog.record(Models.get(ServerModel.class), serverId, HohenheimActivityAction.MEDIA_FETCHED, name);
+            History.event(Models.get(ServerModel.class), serverId, Change.fact(HohenheimActivityAction.MEDIA_FETCHED,
+                Map.of(HohenheimActivityAction.NAME_KEY, name)));
         } catch (IOException | RuntimeException failure) {
             String reason = failure.getMessage() != null && !failure.getMessage().isBlank()
                 ? failure.getMessage() : failure.getClass().getSimpleName();

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.database;
 
+import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimViolations;
@@ -83,7 +84,7 @@ public class DatabaseService extends DatasourceScoped {
      */
     static void submit(@NonNull Runnable work) {
         PROVISION_EXECUTOR.submit(ExecutionContext.wrap(
-            () -> ExecutionIdentity.runAsSystem("database-provision", work)));
+            () -> ExecutionIdentity.runAsSystem(HohenheimSystemPurposes.DATABASE_PROVISION, work)));
     }
 
     public DatabaseService() {

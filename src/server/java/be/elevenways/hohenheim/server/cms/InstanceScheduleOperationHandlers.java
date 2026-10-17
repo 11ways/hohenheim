@@ -1,8 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.instance.InstanceScheduleOperations;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
@@ -71,8 +69,7 @@ public final class InstanceScheduleOperationHandlers {
         InstanceScheduleParts.requireManage(access(call),
             InstanceScheduleParts.parseInstanceId(schedule.get(RecordScheduleModel.RECORD_ID)));
         Integer id = schedule.get(RecordScheduleModel.ID);
-        ActivityLog.withAction(ZenitActivityAction.DELETE, "delete_schedule",
-            () -> InstanceScheduleParts.recordSchedules().deleteSchedule(id));
+        InstanceScheduleParts.recordSchedules().deleteSchedule(id);
         return 1;
     }
 

@@ -13,8 +13,8 @@ import be.elevenways.zenit.cms.common.access.AccessRefusedException;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -71,8 +71,6 @@ public final class SiteApi {
                     FormSubmissionRawValues.fromConduit(conduit), ctx);
                 Row created = Objects.requireNonNull(
                     Models.get(SiteModel.class).findById(siteId));
-                ActivityLog.record(Models.get(SiteModel.class), siteId, ZenitActivityAction.CREATE,
-                    created.get(SiteModel.NAME));
                 return ApiConduits.json(PaasApi.siteProjection(created, true));
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
@@ -157,8 +155,8 @@ public final class SiteApi {
                 int domainId = (Integer) ResourceWrites.create(panel, domains, raw, ctx);
                 Row added = Objects.requireNonNull(
                     Models.get(SiteDomainModel.class).findById(domainId));
-                ActivityLog.record(Models.get(SiteModel.class), siteId, HohenheimActivityAction.DOMAIN_ADDED,
-                    added.get(SiteDomainModel.HOSTNAME));
+                History.event(Models.get(SiteModel.class), siteId, Change.fact(HohenheimActivityAction.DOMAIN_ADDED,
+                    Map.of(HohenheimActivityAction.HOSTNAME_KEY, added.get(SiteDomainModel.HOSTNAME))));
                 return ApiConduits.json(domainProjection(added));
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
@@ -195,8 +193,8 @@ public final class SiteApi {
             }
             try {
                 ResourceWrites.delete(panel, domains, domain, ctx);
-                ActivityLog.record(Models.get(SiteModel.class), siteId, HohenheimActivityAction.DOMAIN_REMOVED,
-                    domain.get(SiteDomainModel.HOSTNAME));
+                History.event(Models.get(SiteModel.class), siteId, Change.fact(HohenheimActivityAction.DOMAIN_REMOVED,
+                    Map.of(HohenheimActivityAction.HOSTNAME_KEY, domain.get(SiteDomainModel.HOSTNAME))));
                 return ApiConduits.json(Map.of("id", domainId, "site_id", siteId,
                     "status", "deleted"));
             } catch (Violations refused) {

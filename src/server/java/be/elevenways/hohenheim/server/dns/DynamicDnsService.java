@@ -7,7 +7,8 @@ import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.security.SecretShapes;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.security.SecureTokens;
@@ -17,6 +18,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
+import java.util.Map;
 
 /**
  * Dynamic DNS over the de-facto dyndns2 protocol: an A/AAAA record carries a
@@ -217,7 +219,8 @@ public final class DynamicDnsService {
 
         record.set(DnsRecordModel.VALUE, newIp);
         model.save(record);
-        ActivityLog.record(model, record.get(DnsRecordModel.ID), HohenheimActivityAction.DYNDNS_UPDATE, newIp);
+        History.event(model, record.get(DnsRecordModel.ID), Change.fact(HohenheimActivityAction.DYNDNS_UPDATE,
+            Map.of(HohenheimActivityAction.ADDRESS_KEY, newIp)));
         this.store.bumpSerialAndReload(zone.get(DnsZoneModel.ID));
         Blast.log("DNS: dyndns update", fqdn, type, "->", newIp);
         return new UpdateResult(Status.GOOD, newIp);

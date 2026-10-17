@@ -11,8 +11,6 @@ import be.elevenways.hohenheim.server.cms.ProvisionedRecords;
 import be.elevenways.hohenheim.server.cms.WithheldFailure;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.zenit.common.operation.OperationInput;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -155,8 +153,7 @@ public final class DatabaseWrites {
         // The same in-use refusal the delete makes, asked BEFORE the engine instance is abandoned: the funnel would
         // refuse the row delete anyway, but by then the abandon has already run.
         refuseWhileAttached(name, database.get(DatabaseModel.ID));
-        ActivityLog.withAction(ZenitActivityAction.DELETE, "force-destroy",
-            () -> new DatabaseService().forceDestroyRecord(name));
+        new DatabaseService().forceDestroyRecord(name);
     }
 
     /**
@@ -250,15 +247,13 @@ public final class DatabaseWrites {
      */
     public static void forceDestroyEngine(@NonNull Row engine) {
         Integer engineId = engine.get(DatabaseEngineModel.ID);
-        ActivityLog.withAction(ZenitActivityAction.DELETE, "force-destroy", () -> {
-            try {
-                if (engineId != null) {
-                    DatabaseEngines.forceDestroy(engineId);
-                }
-            } catch (IOException e) {
-                throw engineDestroyFailed(engine, e);
+        try {
+            if (engineId != null) {
+                DatabaseEngines.forceDestroy(engineId);
             }
-        });
+        } catch (IOException e) {
+            throw engineDestroyFailed(engine, e);
+        }
     }
 
     /** @throws Violations {@code database_in_use} naming the workloads */

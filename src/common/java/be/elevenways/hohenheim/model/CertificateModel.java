@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -257,4 +258,6 @@ public class CertificateModel extends Model {
     public static void setRequester(@NonNull Row certificate, @Nullable PrincipalRef requester) {
         REQUESTER.write(certificate, requester);
     }
+
+    public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.optional().changes());
 }

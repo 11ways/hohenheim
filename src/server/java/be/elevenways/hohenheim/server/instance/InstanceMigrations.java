@@ -23,7 +23,8 @@ import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.hohenheim.server.util.UtcStamp;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
@@ -491,9 +492,9 @@ public final class InstanceMigrations {
         // The drain itself is an operator act on the HOST, distinct from the per-instance
         // rows recordMigration wrote: an incomplete drain must be as answerable as a
         // complete one, so this is recorded on both outcomes.
-        ActivityLog.record(Models.get(ServerModel.class), serverId, HohenheimActivityAction.DRAINED,
-            "moved " + moved.size() + ", refused " + refused.size()
-                + (complete ? ", host holds none" : ", INCOMPLETE"));
+        History.event(Models.get(ServerModel.class), serverId, Change.fact(HohenheimActivityAction.DRAINED, Map.of(
+            HohenheimActivityAction.MOVED_KEY, moved.size(), HohenheimActivityAction.REFUSED_KEY, refused.size(),
+            HohenheimActivityAction.COMPLETE_KEY, complete)));
         return new DrainReport(moved, refused, complete);
     }
 
@@ -503,14 +504,12 @@ public final class InstanceMigrations {
      * AIDEV-NOTE: explicit, and in the authority rather than in the CMS row action, for
      * the same reason {@link InstanceSnapshots#recordRestore} is: a migration writes its
      * whole state through {@code InstanceOperationGuard.stampMigrating}/{@code handoff},
-     * which are set-based {@code updateAll} calls and fire NO write hooks. The
-     * {@code ActivityLog.withAction} wrapper the drain row action used to carry recorded
-     * literally nothing -- withAction only RENAMES hook-written rows, and there were
-     * none. Traced 2026-08-07.
+     * which are set-based {@code updateAll} calls on fields no change captures (or, for the host,
+     * one change per record without saying why). Traced 2026-08-07.
      */
     private static void recordMigration(int instanceId, String sourceName, String targetName) {
-        ActivityLog.record(Models.get(InstanceModel.class), instanceId,
-            HohenheimActivityAction.MIGRATED, sourceName + " -> " + targetName);
+        History.event(Models.get(InstanceModel.class), instanceId, Change.fact(HohenheimActivityAction.MIGRATED,
+            Map.of(HohenheimActivityAction.FROM_KEY, sourceName, HohenheimActivityAction.TO_KEY, targetName)));
     }
 
     private static @NonNull List<Row> instancesOn(int serverId) {

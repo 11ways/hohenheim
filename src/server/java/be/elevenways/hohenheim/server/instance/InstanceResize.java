@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.protoblast.common.Blast;
@@ -118,7 +119,8 @@ public final class InstanceResize {
     private static void deployNow(int instanceId) {
         // A SYSTEM deploy (the trigger says so): the resize write that asked for it was the gate,
         // and the recreate stays that writer's action (runAsSystem keeps its attribution).
-        JobRunner.startVirtualThread(() -> ExecutionIdentity.runAsSystem("instance-resize", () -> {
+        JobRunner.startVirtualThread(() -> ExecutionIdentity.runAsSystem(
+            HohenheimSystemPurposes.INSTANCE_RESIZE, () -> {
             try {
                 new InstanceService().deploy(instanceId, DeployTrigger.SYSTEM);
             } catch (RuntimeException refused) {

@@ -32,7 +32,8 @@ import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectType;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -44,6 +45,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -84,9 +86,11 @@ public final class ReleasedClaimParts {
                     + " is not reachable"))
             .handle(call -> {
                 Row claim = call.subject();
-                ActivityLog.withAction(HohenheimActivityAction.QUARANTINE_LIFTED,
-                    String.valueOf((Object) claim.get(ReleasedRouteClaimModel.HOSTNAME)),
-                    () -> Models.get(ReleasedRouteClaimModel.class).delete(claim));
+                // The fact joins the claim's delete in the same segment: one DELETE carrying it.
+                History.event(Models.get(ReleasedRouteClaimModel.class), claim.get(ReleasedRouteClaimModel.ID),
+                    Change.fact(HohenheimActivityAction.QUARANTINE_LIFTED, Map.of(HohenheimActivityAction.HOSTNAME_KEY,
+                        String.valueOf((Object) claim.get(ReleasedRouteClaimModel.HOSTNAME)))));
+                Models.get(ReleasedRouteClaimModel.class).delete(claim);
                 return null;
             });
     }

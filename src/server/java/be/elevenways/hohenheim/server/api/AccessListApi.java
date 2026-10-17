@@ -17,8 +17,6 @@ import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
 import be.elevenways.zenit.common.conduit.Conduit;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -107,8 +105,6 @@ public final class AccessListApi {
                     FormSubmissionRawValues.fromConduit(conduit), ctx);
                 Row created = Objects.requireNonNull(
                     Models.get(AccessListModel.class).findById(listId));
-                ActivityLog.record(Models.get(AccessListModel.class), listId, ZenitActivityAction.CREATE,
-                    created.get(AccessListModel.NAME));
                 return ApiConduits.json(listProjection(created, true));
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);

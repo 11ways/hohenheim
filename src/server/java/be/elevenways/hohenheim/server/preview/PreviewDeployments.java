@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.preview;
 
+import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -150,7 +151,8 @@ public final class PreviewDeployments {
         // the instance it writes is operator-shaped -- no tenant could author it field by field.
         // It stays the queuer's ACTION (runAsSystem keeps the carried caller's attribution): a
         // click is a person's, a verified webhook's queue is already the system's.
-        HandlerSupport.inBackground(() -> ExecutionIdentity.runAsSystem("preview-deploy", () -> {
+        HandlerSupport.inBackground(() -> ExecutionIdentity.runAsSystem(
+            HohenheimSystemPurposes.PREVIEW_DEPLOY, () -> {
             try {
                 deployClaimed(previewId, pinnedSha, trigger);
             } catch (Exception e) {

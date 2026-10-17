@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
@@ -36,4 +37,6 @@ public class ArtifactOperationModel extends Model {
     @Override public String getModelName() { return "ArtifactOperation"; }
     @Override public String getTableName() { return "artifact_operations"; }
     @Override public Schema getSchema() { return SCHEMA; }
+
+    public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.optional().changes());
 }

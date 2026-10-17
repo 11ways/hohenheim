@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -81,4 +82,8 @@ public class ProtectedPathModel extends Model {
 
     @Override
     public Schema getSchema() { return SCHEMA; }
+
+    /** A protected path's change is filed on its site. */
+    public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.optional().changes()
+        .filedOn(SiteModel.class, row -> row.get(SITE_ID)));
 }

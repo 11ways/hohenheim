@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
@@ -24,4 +25,8 @@ public class ArtifactSourceModel extends Model {
     @Override public String getModelName() { return "ArtifactSource"; }
     @Override public String getTableName() { return "artifact_sources"; }
     @Override public Schema getSchema() { return SCHEMA; }
+
+    /** A source's change is filed on its application. */
+    public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.optional().changes()
+        .filedOn(InstanceModel.class, row -> row.get(APPLICATION_ID)));
 }

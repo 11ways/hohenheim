@@ -11,7 +11,8 @@ import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
 import be.elevenways.hohenheim.server.runtime.AppUpdateSupport;
 import be.elevenways.hohenheim.server.runtime.InstallSupport;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -87,20 +88,24 @@ public final class InstanceAppUpdates {
             InstallSupport.InstallOutcome outcome = support.runAppUpdate(resolved.spec(),
                 script, env, UPDATE_TIMEOUT_MS);
             if (!outcome.succeeded()) {
-                ActivityLog.record(Models.get(InstanceModel.class), instanceId,
-                    HohenheimActivityAction.APP_UPDATE_FAILED, "exit " + outcome.exitCode());
+                recordFailure(instanceId, "exit " + outcome.exitCode());
                 throw HohenheimViolations.instanceRefusal("app_update_failed", resolved.row(),
                     new IOException("exit " + outcome.exitCode() + "\n" + outcome.outputTail()));
             }
-            ActivityLog.record(Models.get(InstanceModel.class), instanceId,
-                HohenheimActivityAction.APP_UPDATED, "in-place update script completed");
+            History.event(Models.get(InstanceModel.class), instanceId,
+                Change.fact(HohenheimActivityAction.APP_UPDATED));
             Blast.log("INSTANCE: app update completed for", resolved.spec().handle());
             return outcome.outputTail();
         } catch (IOException error) {
-            ActivityLog.record(Models.get(InstanceModel.class), instanceId,
-                HohenheimActivityAction.APP_UPDATE_FAILED, String.valueOf(error.getMessage()));
+            recordFailure(instanceId, String.valueOf(error.getMessage()));
             throw HohenheimViolations.instanceRefusal("app_update_failed", resolved.row(), error);
         }
+    }
+
+    /** Records the failed update on the instance with the failure's own words. */
+    private static void recordFailure(int instanceId, @NonNull String reason) {
+        History.event(Models.get(InstanceModel.class), instanceId,
+            Change.fact(HohenheimActivityAction.APP_UPDATE_FAILED, Map.of(HohenheimActivityAction.REASON_KEY, reason)));
     }
 
     /** Whether this instance's template declares an update script. */

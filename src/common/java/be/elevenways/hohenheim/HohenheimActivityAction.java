@@ -1,16 +1,46 @@
 package be.elevenways.hohenheim;
 
+import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.DnsRecordModel;
+import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.model.EnvironmentModel;
+import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.InstanceTemplateModel;
+import be.elevenways.hohenheim.model.NotificationChannelModel;
+import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
+import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.SiteDomainModel;
+import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.common.orm.activity.ActivityAction;
 import be.elevenways.zenit.common.orm.activity.ActivityActions;
 import be.elevenways.zenit.common.orm.activity.ActivitySeverity;
 import be.elevenways.zenit.common.orm.activity.ActivityVisibility;
+import be.elevenways.zenit.common.orm.activity.FactShape;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+
+import java.util.List;
+
+/**
+ * The history fact kinds Hohenheim declares; its created, updated and deleted rows are the ORM's own changes.
+ *
+ * AIDEV-NOTE: every verb heads its rows with a sentence of its own ({@link #happened()}), so a row written outside an
+ * operation (a deploy from a git push, a crash restart, an old row from before operations told what happened) reads as
+ * a sentence too, never as "Jelle: Deployed Instance #3". DeclaredMicrocopyKeysTest requires each one in en and nl.
+ * A verb's body is typed ({@link #shape()}) and it is permitted only on the models {@link #subjects()} names.
+ * The ids are stored ({@code InstanceModel.STOPPAGE_CAUSE} holds a cause's path), so a member is never renamed.
+ *
+ * @author Jelle De Loecker
+ * @since  0.10.0
+ */
 
 /**
  * The activity verbs Hohenheim declares; its created, updated and deleted rows are core's verbs.
@@ -104,7 +134,55 @@ public enum HohenheimActivityAction implements ActivityAction {
     WORKLOAD_RESTORE_INTERRUPTED("workload_restore_interrupted", ErrorCause.PLAIN),
     WORKLOAD_COPY_LOST("workload_copy_lost", ErrorCause.PLAIN),
     /** It stopped and the crash policy's automatic restart was refused; the detail is the refusal's own message. */
-    WORKLOAD_RESTART_REFUSED("workload_restart_refused", ErrorCause.MESSAGE);
+    WORKLOAD_RESTART_REFUSED("workload_restart_refused", ErrorCause.MESSAGE),
+    /** A changed host key quarantined the host: it takes no new workload until an operator re-pins it. */
+    QUARANTINED("quarantined");
+
+    /** A text key: a name, path, hostname or command as the act named it. */
+    public static final String NAME_KEY = "name";
+    public static final String SOURCE_KEY = "source";
+    public static final String MANUAL_KEY = "manual";
+    public static final String HOSTNAMES_KEY = "hostnames";
+    public static final String PREVIOUS_KEY = "previous";
+    public static final String COMMAND_KEY = "command";
+    public static final String ADDRESS_KEY = "address";
+    public static final String HOSTNAME_KEY = "hostname";
+    public static final String TRIGGER_KEY = "trigger";
+    public static final String HANDLE_KEY = "handle";
+    public static final String VARIABLE_KEY = "key";
+    public static final String DEVICE_KEY = "device";
+    public static final String TYPE_KEY = "type";
+    public static final String KIND_KEY = "kind";
+    public static final String OBJECTS_KEY = "objects";
+    public static final String TEMPLATE_KEY = "template";
+    public static final String VOLUME_KEY = "volume";
+    /** The failure's own words, an opaque literal a source wrote. */
+    public static final String REASON_KEY = "reason";
+    public static final String VIA_KEY = "via";
+    public static final String REF_KEY = "ref";
+    public static final String BACKUP_KEY = "backup";
+    public static final String LOSSES_KEY = "losses";
+    public static final String MOVED_PORTS_KEY = "moved_ports";
+    public static final String SNAPSHOT_KEY = "snapshot";
+    public static final String NATIVE_SNAPSHOT_KEY = "native_snapshot";
+    public static final String MOVED_KEY = "moved";
+    public static final String REFUSED_KEY = "refused";
+    public static final String COMPLETE_KEY = "complete";
+    public static final String FROM_KEY = "from";
+    public static final String TO_KEY = "to";
+    public static final String PATH_KEY = "path";
+    public static final String REMOVED_KEY = "removed";
+    public static final String DAEMON_STATE_KEY = "daemon_state";
+    public static final String CRASH_LOOP_KEY = "crash_loop";
+    public static final String SHELL_KEY = "shell";
+    public static final String RUN_USER_KEY = "run_user";
+    public static final String CLOSED_BY_KEY = "closed_by";
+    public static final String STRANDED_KEY = "stranded";
+    public static final String ORIGINAL_KEY = "original";
+    /** A cause's exit code as the daemon reported it. */
+    public static final String EXIT_CODE_KEY = "exit_code";
+    /** A cause's failure message, verbatim. */
+    public static final String MESSAGE_KEY = "message";
 
     /** Whether a verb is the cause of a workload's ERROR status, and what its row's detail then holds. */
     public enum ErrorCause {
@@ -249,6 +327,115 @@ public enum HohenheimActivityAction implements ActivityAction {
     /** @return whether this verb is the recorded cause of a workload's ERROR status, and what its detail holds */
     public @NonNull ErrorCause errorCause() {
         return this.errorCause;
+    }
+
+    /**
+     * @return the typed keys this verb's fact holds; a cause verb's body is what its {@link #errorCause()} keeps
+     */
+    @Override
+    public @NonNull FactShape shape() {
+        return switch (this) {
+            case IMPORTED -> FactShape.of(FactShape.optionalKey(SOURCE_KEY, CoreTypes.TEXT));
+            case REQUESTED -> FactShape.of(FactShape.optionalKey(MANUAL_KEY, CoreTypes.BOOLEAN));
+            case REISSUED -> FactShape.of(FactShape.key(HOSTNAMES_KEY, CoreTypes.LIST),
+                FactShape.optionalKey(PREVIOUS_KEY, CoreTypes.TEXT));
+            case CONSOLE_COMMAND, EXEC -> FactShape.of(FactShape.key(COMMAND_KEY, CoreTypes.TEXT));
+            case MEDIA_UPLOADED, MEDIA_DELETED, MEDIA_FETCHED -> FactShape.of(FactShape.key(NAME_KEY, CoreTypes.TEXT));
+            case DYNDNS_UPDATE -> FactShape.of(FactShape.key(ADDRESS_KEY, CoreTypes.TEXT));
+            case RELEASED_HOSTNAME_DISABLED, DOMAIN_ADDED, DOMAIN_REMOVED, QUARANTINE_LIFTED ->
+                FactShape.of(FactShape.key(HOSTNAME_KEY, CoreTypes.TEXT));
+            case DEPLOYED -> FactShape.of(FactShape.optionalKey(TRIGGER_KEY, CoreTypes.TEXT),
+                FactShape.optionalKey(HANDLE_KEY, CoreTypes.TEXT));
+            case STOPPED -> FactShape.of(FactShape.optionalKey(HANDLE_KEY, CoreTypes.TEXT));
+            case VARIABLE_SET, VARIABLE_DELETED -> FactShape.of(FactShape.key(VARIABLE_KEY, CoreTypes.TEXT));
+            case DEVICE_ATTACHED -> FactShape.of(FactShape.optionalKey(DEVICE_KEY, CoreTypes.TEXT),
+                FactShape.optionalKey(TYPE_KEY, CoreTypes.TEXT));
+            case DEVICE_RESIZED, DEVICE_DETACHED -> FactShape.of(FactShape.optionalKey(DEVICE_KEY, CoreTypes.TEXT));
+            case REMOVED_ORPHAN -> FactShape.of(FactShape.key(KIND_KEY, CoreTypes.TEXT),
+                FactShape.key(NAME_KEY, CoreTypes.TEXT));
+            case REAPED_CONTROLLER_OBJECTS -> FactShape.of(FactShape.key(OBJECTS_KEY, CoreTypes.LIST));
+            case TEMPLATE_CAPTURED -> FactShape.of(FactShape.key(TEMPLATE_KEY, FactShape.RECORD));
+            case VOLUME_DECLARED, VOLUME_REDECLARED -> FactShape.of(FactShape.key(VOLUME_KEY, CoreTypes.TEXT));
+            case APP_UPDATE_FAILED, BACKUP_FAILED, RENEWAL_FAILED ->
+                FactShape.of(FactShape.optionalKey(REASON_KEY, CoreTypes.TEXT));
+            case QUARANTINED -> FactShape.of(FactShape.optionalKey(REASON_KEY, CoreTypes.TEXT));
+            case PREVIEW_TRIGGERED -> FactShape.of(FactShape.key(VIA_KEY, CoreTypes.TEXT),
+                FactShape.key(REF_KEY, CoreTypes.TEXT));
+            case RESTORED_BACKUP -> FactShape.of(FactShape.optionalKey(BACKUP_KEY, CoreTypes.INTEGER),
+                FactShape.optionalKey(LOSSES_KEY, CoreTypes.TEXT), FactShape.optionalKey(MOVED_PORTS_KEY,
+                    CoreTypes.LIST));
+            case RESTORED_SNAPSHOT -> FactShape.of(FactShape.optionalKey(SNAPSHOT_KEY, CoreTypes.INTEGER),
+                FactShape.optionalKey(NATIVE_SNAPSHOT_KEY, CoreTypes.TEXT));
+            case DRAINED -> FactShape.of(FactShape.key(MOVED_KEY, CoreTypes.INTEGER),
+                FactShape.key(REFUSED_KEY, CoreTypes.INTEGER), FactShape.key(COMPLETE_KEY, CoreTypes.BOOLEAN));
+            case MIGRATED, SETTLED_INTERRUPTED -> FactShape.of(FactShape.key(FROM_KEY, CoreTypes.TEXT),
+                FactShape.key(TO_KEY, CoreTypes.TEXT));
+            case FILES_SAVE, FILES_UPLOAD, FILES_MKDIR, FILES_RENAME, FILES_DELETE, FILES_WRITE ->
+                FactShape.of(FactShape.key(PATH_KEY, CoreTypes.TEXT));
+            case DELETED_DATA -> FactShape.of(FactShape.key(REMOVED_KEY, CoreTypes.LIST));
+            case RECONCILED -> FactShape.of(FactShape.key(FROM_KEY, CoreTypes.TEXT), FactShape.key(TO_KEY,
+                CoreTypes.TEXT), FactShape.optionalKey(DAEMON_STATE_KEY, CoreTypes.TEXT),
+                FactShape.key(CRASH_LOOP_KEY, CoreTypes.BOOLEAN));
+            case BACKUP -> FactShape.of(FactShape.key(BACKUP_KEY, CoreTypes.INTEGER));
+            case SNAPSHOT -> FactShape.of(FactShape.key(SNAPSHOT_KEY, CoreTypes.INTEGER));
+            case SHELL_OPEN -> FactShape.of(FactShape.key(SHELL_KEY, CoreTypes.TEXT),
+                FactShape.key(RUN_USER_KEY, CoreTypes.TEXT));
+            case SHELL_CLOSE -> FactShape.of(FactShape.key(SHELL_KEY, CoreTypes.TEXT),
+                FactShape.key(RUN_USER_KEY, CoreTypes.TEXT), FactShape.key(CLOSED_BY_KEY, CoreTypes.TEXT));
+            case DISABLED -> FactShape.of(FactShape.optionalKey(STRANDED_KEY, CoreTypes.BOOLEAN));
+            case CLONED -> FactShape.of(FactShape.key(ORIGINAL_KEY, FactShape.RECORD));
+            case MOVE_SHARED, DYNDNS_TOKEN_MINTED, DYNDNS_TOKEN_REVOKED, ROLLED_BACK, VOLUMES_PURGED, TESTED, APPROVED,
+                 UNAPPROVED, BACKUP_DOWNLOADED, APP_UPDATED, ENABLED, HTTPS_FORCED -> FactShape.NONE;
+            case WORKLOAD_EXITED, WORKLOAD_CRASH_LOOPED, WORKLOAD_START_FAILED, WORKLOAD_ISOLATION_REFUSED,
+                 WORKLOAD_NEVER_READY, WORKLOAD_STOP_FAILED, WORKLOAD_REMOVE_FAILED, WORKLOAD_RESTORE_FAILED,
+                 WORKLOAD_RESTORE_INTERRUPTED, WORKLOAD_COPY_LOST, WORKLOAD_RESTART_REFUSED -> switch (this.errorCause) {
+                case EXIT_CODE -> FactShape.of(FactShape.optionalKey(EXIT_CODE_KEY, CoreTypes.TEXT));
+                case MESSAGE -> FactShape.of(FactShape.optionalKey(MESSAGE_KEY, CoreTypes.TEXT));
+                case NONE, PLAIN, HOST_ISOLATION -> FactShape.NONE;
+            };
+        };
+    }
+
+    /**
+     * @return the one body key a cause verb keeps its detail under, null for a cause keeping none (and any other
+     *         verb)
+     */
+    public @Nullable String causeDetailKey() {
+        return switch (this.errorCause) {
+            case EXIT_CODE -> EXIT_CODE_KEY;
+            case MESSAGE -> MESSAGE_KEY;
+            case NONE, PLAIN, HOST_ISOLATION -> null;
+        };
+    }
+
+    /** @return the models a fact of this verb may be recorded on ({@code HistoryFacts.permit}) */
+    public @NonNull List<Identifier> subjects() {
+        return switch (this) {
+            case IMPORTED -> List.of(DnsZoneModel.MODEL_ID, InstanceTemplateModel.MODEL_ID);
+            case REQUESTED, REISSUED, RENEWAL_FAILED -> List.of(CertificateModel.MODEL_ID);
+            case MEDIA_UPLOADED, MEDIA_DELETED, MEDIA_FETCHED, REMOVED_ORPHAN, REAPED_CONTROLLER_OBJECTS, DRAINED,
+                 QUARANTINED -> List.of(ServerModel.MODEL_ID);
+            case MOVE_SHARED, BACKUP_DOWNLOADED -> List.of(DatabaseModel.MODEL_ID);
+            case RESTORED_BACKUP -> List.of(InstanceModel.MODEL_ID, DatabaseModel.MODEL_ID);
+            case DYNDNS_UPDATE, DYNDNS_TOKEN_MINTED, DYNDNS_TOKEN_REVOKED, RELEASED_HOSTNAME_DISABLED ->
+                List.of(DnsRecordModel.MODEL_ID);
+            case DEPLOYED, STOPPED, ROLLED_BACK -> List.of(InstanceModel.MODEL_ID, StackModel.MODEL_ID);
+            case VOLUMES_PURGED -> List.of(StackModel.MODEL_ID);
+            case VARIABLE_SET, VARIABLE_DELETED -> List.of(InstanceModel.MODEL_ID, EnvironmentModel.MODEL_ID);
+            case DOMAIN_ADDED, DOMAIN_REMOVED, ENABLED, DISABLED, CLONED -> List.of(SiteModel.MODEL_ID);
+            case TESTED -> List.of(NotificationChannelModel.MODEL_ID);
+            case APPROVED, UNAPPROVED -> List.of(InstanceTemplateModel.MODEL_ID);
+            case QUARANTINE_LIFTED -> List.of(ReleasedRouteClaimModel.MODEL_ID);
+            case HTTPS_FORCED -> List.of(SiteDomainModel.MODEL_ID);
+            case CONSOLE_COMMAND, DEVICE_ATTACHED, DEVICE_RESIZED, DEVICE_DETACHED, TEMPLATE_CAPTURED, VOLUME_DECLARED,
+                 VOLUME_REDECLARED, APP_UPDATED, APP_UPDATE_FAILED, PREVIEW_TRIGGERED, RESTORED_SNAPSHOT, EXEC,
+                 MIGRATED, FILES_SAVE, FILES_UPLOAD, FILES_MKDIR, FILES_RENAME, FILES_DELETE, FILES_WRITE,
+                 DELETED_DATA, SETTLED_INTERRUPTED, RECONCILED, BACKUP, BACKUP_FAILED, SNAPSHOT, SHELL_OPEN,
+                 SHELL_CLOSE, WORKLOAD_EXITED, WORKLOAD_CRASH_LOOPED, WORKLOAD_START_FAILED,
+                 WORKLOAD_ISOLATION_REFUSED, WORKLOAD_NEVER_READY, WORKLOAD_STOP_FAILED, WORKLOAD_REMOVE_FAILED,
+                 WORKLOAD_RESTORE_FAILED, WORKLOAD_RESTORE_INTERRUPTED, WORKLOAD_COPY_LOST,
+                 WORKLOAD_RESTART_REFUSED -> List.of(InstanceModel.MODEL_ID);
+        };
     }
 
     @Override

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
@@ -136,4 +137,8 @@ public class InstanceDeviceModel extends Model {
     @Override public String getModelName() { return "InstanceDevice"; }
     @Override public String getTableName() { return "instance_devices"; }
     @Override public Schema getSchema() { return SCHEMA; }
+
+    /** A device's change is filed on its instance. */
+    public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.optional().changes()
+        .filedOn(InstanceModel.class, row -> row.get(INSTANCE_ID)));
 }

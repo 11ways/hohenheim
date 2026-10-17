@@ -5,7 +5,8 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.ReconcileFindingModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -22,17 +23,14 @@ import java.util.Map;
  * first: the stored finding is a report, and acting on a stale report would be the
  * reports-success defect with a delete button.
  *
- * Every removal is ActivityLog-recorded on the HOST record (the ReapIncusControllers
+ * Every removal is recorded as an event on the HOST record (the ReapIncusControllers
  * precedent): the daemon-side delete is what an operator must be able to answer for, and
  * the authority that performs it is the only place that can guarantee the record exists.
  *
- * AIDEV-NOTE: the recording used to live in ReconcileFindingResource as an
- * ActivityLog.withAction wrapper, which recorded NOTHING about the container or network
- * -- withAction only renames rows the model hooks would have written anyway, so all it
- * ever tagged was the deletion of the reconcile_finding CACHE row, indistinguishable from
- * the wholesale sweep churn. The class docblock claimed "ActivityLog-recorded" the whole
- * time. The claim is now true, and it is true for every caller instead of only the one
- * that remembered the wrapper.
+ * AIDEV-NOTE: the recording used to live in ReconcileFindingResource as a wrapper renaming
+ * the deletion of the reconcile_finding CACHE row, which recorded NOTHING about the
+ * container or network. It now holds for every caller instead of only the one that
+ * remembered the wrapper.
  *
  * AIDEV-NOTE: volumes are REFUSED here permanently (the one unrecoverable resource,
  * the DockerReclaim rule); label ADOPTION is still not implemented because Docker
@@ -104,8 +102,9 @@ public final class OrphanActions {
                 .withArg("name", name + ": " + e.getMessage()));
         }
         deleteFinding(finding);
-        ActivityLog.record(Models.get(ServerModel.class), server.get(ServerModel.ID),
-            HohenheimActivityAction.REMOVED_ORPHAN, kind + " " + name);
+        History.event(Models.get(ServerModel.class), server.get(ServerModel.ID),
+            Change.fact(HohenheimActivityAction.REMOVED_ORPHAN, Map.of(HohenheimActivityAction.KIND_KEY, kind,
+                HohenheimActivityAction.NAME_KEY, name)));
         Blast.log("DOCKER RECONCILE: operator removed orphaned", kind, name,
             "on", serverName);
     }

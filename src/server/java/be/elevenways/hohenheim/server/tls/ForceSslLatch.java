@@ -4,8 +4,9 @@ import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.StoredRows;
+import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.hohenheim.server.ServerMain;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
@@ -94,8 +95,8 @@ public final class ForceSslLatch {
             }
             domain.set(SiteDomainModel.FORCE_SSL, true);
             domain.set(SiteDomainModel.FORCE_SSL_AUTO, false);
-            ExecutionIdentity.runAsSystem("force-ssl-latch", () ->
-                ActivityLog.withAction(HohenheimActivityAction.HTTPS_FORCED, hostname, () -> domains.save(domain)));
+            ExecutionIdentity.runAsSystem(HohenheimSystemPurposes.FORCE_SSL_LATCH,
+                () -> domains.save(domain, Change.fact(HohenheimActivityAction.HTTPS_FORCED)));
             forced++;
         }
         return forced;

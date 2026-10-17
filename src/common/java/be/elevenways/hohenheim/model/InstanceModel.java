@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hawkeye.common.annotation.HawkeyeFunction;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimIds;
@@ -877,4 +878,11 @@ public class InstanceModel extends Model {
 
     @Override
     public Schema getSchema() { return SCHEMA; }
+
+    /**
+     * Values are captured, an app's configuration changes included; the {@link #OPERATION_OWNED} stamps are not,
+     * because only fenced statements write them and a cause or correction is recorded as its own fact.
+     */
+    public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.optional().values()
+        .except(OPERATION_OWNED.toArray(new Field<?, ?>[0])));
 }

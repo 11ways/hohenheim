@@ -19,7 +19,8 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.validation.validator.Email;
 import be.elevenways.zenit.common.validation.ValidationContext;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
@@ -33,6 +34,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static be.elevenways.hohenheim.RawValues.trimmed;
 
@@ -158,8 +160,9 @@ final class CertificateOperationHandlers {
                     throw refused(RenewalFailure.sentenceFor(outcome.failureReason()));
                 }
                 // The names are the point of the entry; no key material is ever logged.
-                ActivityLog.record(Models.get(CertificateModel.class), certId, HohenheimActivityAction.REISSUED,
-                    previous + " -> " + String.join(",", hostnames));
+                History.event(Models.get(CertificateModel.class), certId, Change.fact(HohenheimActivityAction.REISSUED,
+                    Map.of(HohenheimActivityAction.HOSTNAMES_KEY, List.copyOf(hostnames),
+                        HohenheimActivityAction.PREVIOUS_KEY, previous)));
                 return certId;
             }
             AcmeService.RequestOutcome outcome = acme.requestCertificate(hostnames, niceName,
@@ -170,7 +173,7 @@ final class CertificateOperationHandlers {
                 throw refused(RenewalFailure.sentenceFor(failed != null
                         ? failed.get(CertificateModel.RENEWAL_ERROR) : null));
             }
-            ActivityLog.record(Models.get(CertificateModel.class), certId, HohenheimActivityAction.REQUESTED, niceName);
+            History.event(Models.get(CertificateModel.class), certId, Change.fact(HohenheimActivityAction.REQUESTED));
             return certId;
         } catch (CertificateAuthority.Refused refusal) {
             throw refused(refusal.sentence());
@@ -214,8 +217,8 @@ final class CertificateOperationHandlers {
             throw refused(RenewalFailure.sentenceFor(failed != null
                 ? failed.get(CertificateModel.RENEWAL_ERROR) : null));
         }
-        ActivityLog.record(Models.get(CertificateModel.class), certId,
-                HohenheimActivityAction.REQUESTED, "manual DNS-01");
+        History.event(Models.get(CertificateModel.class), certId, Change.fact(HohenheimActivityAction.REQUESTED,
+            Map.of(HohenheimActivityAction.MANUAL_KEY, true)));
         return certId;
     }
 

@@ -21,8 +21,6 @@ import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectType;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
@@ -94,7 +92,7 @@ final class ServerLifecycleActions {
                 // The first inline verb leads by position, not by a filled style (InstanceActions' deploy note).
                 .icon(Icon.of("stethoscope")).build(),
             place("cordon_server", HohenheimMicrocopy.SERVER.of("cordon"), row -> {
-                setAdmission(row, ServerModel.ADMISSION_CORDONED, "cordon");
+                setAdmission(row, ServerModel.ADMISSION_CORDONED);
                 return HohenheimMicrocopy.SERVER.of("host_cordoned").withArg("name", row.get(ServerModel.NAME));
             }, row -> ServerModel.ADMISSION_ADMITTED.equals(row.get(ServerModel.ADMISSION)))
                 .icon(Icon.of("circle-pause")).style(ActionStyle.DESTRUCTIVE)
@@ -116,14 +114,12 @@ final class ServerLifecycleActions {
                     HohenheimMicrocopy.SERVER.of("drain_confirm"), ActionStyle.DESTRUCTIVE)).build(),
             place("uncordon_server", HohenheimMicrocopy.SERVER.of("uncordon"), row -> {
                 HostAdmission.requireAdmittable(row);
-                setAdmission(row, ServerModel.ADMISSION_ADMITTED, "uncordon");
+                setAdmission(row, ServerModel.ADMISSION_ADMITTED);
                 return HohenheimMicrocopy.SERVER.of("host_admitted").withArg("name", row.get(ServerModel.NAME));
             }, row -> ServerModel.ADMISSION_CORDONED.equals(row.get(ServerModel.ADMISSION)))
                 .icon(Icon.of("circle-play")).build(),
             place("reap_controller_objects", HohenheimMicrocopy.SERVER.of("reap_controller_objects"), row -> {
-                IncusReaper.Reaped[] reaped = new IncusReaper.Reaped[1];
-                ActivityLog.withAction(ZenitActivityAction.DELETE, "reap_controller_objects",
-                    () -> reaped[0] = ReapIncusControllers.reapIncludingUnstamped(row));
+                IncusReaper.Reaped[] reaped = {ReapIncusControllers.reapIncludingUnstamped(row)};
                 return HohenheimMicrocopy.SERVER.of("controller_objects_reaped")
                     .withArg("name", row.get(ServerModel.NAME))
                     .withArg("removed", reaped[0].removed().size()).withArg("refused", reaped[0].refused().size());
@@ -157,8 +153,7 @@ final class ServerLifecycleActions {
     private static Microcopy checkHost(Row row) {
         String name = row.get(ServerModel.NAME);
         HostPreflight.Report[] report = new HostPreflight.Report[1];
-        ActivityLog.withAction(ZenitActivityAction.UPDATE, "preflight",
-            () -> report[0] = HostPreflight.runAndStore(name));
+        report[0] = HostPreflight.runAndStore(name);
         List<Microcopy> failed = report[0].checks().stream()
             .filter(check -> check.required() && check.failed())
             .map(check -> HostPreflight.checkLabel(check.name()))
@@ -174,7 +169,7 @@ final class ServerLifecycleActions {
         // Admission reads what preflight just stored, never the subject loaded before it ran.
         Row stored = Models.get(ServerModel.class).findById(row.get(ServerModel.ID));
         HostAdmission.requireAdmittable(stored);
-        setAdmission(stored, ServerModel.ADMISSION_ADMITTED, "admit");
+        setAdmission(stored, ServerModel.ADMISSION_ADMITTED);
         return HohenheimMicrocopy.SERVER.of("host_checked_admitted").withArg("name", name);
     }
 
@@ -184,11 +179,9 @@ final class ServerLifecycleActions {
             && !ServerModel.ADMISSION_CORDONED.equals(row.get(ServerModel.ADMISSION));
     }
 
-    private static void setAdmission(Row row, String admission, String action) {
-        ActivityLog.withAction(ZenitActivityAction.UPDATE, action, () -> {
-            row.set(ServerModel.ADMISSION, admission);
-            Models.get(ServerModel.class).save(row);
-        });
+    private static void setAdmission(Row row, String admission) {
+        row.set(ServerModel.ADMISSION, admission);
+        Models.get(ServerModel.class).save(row);
     }
 
     private static Microcopy formatSummary(ServerService.Summary summary, String label) {

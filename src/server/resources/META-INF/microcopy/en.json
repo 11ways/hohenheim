@@ -914,7 +914,7 @@
     {
       "text": "Backup failed",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "The backup of {$subject} failed",
@@ -2927,7 +2927,7 @@
   "last_renewal_failed": {"text": "The last renewal failed. {$reason}", "scope": "certificate"},
   "last_renewal_failed_at": {"text": "The last renewal failed on {$when}. {$reason}", "scope": "certificate"},
   "renewal_failed": [
-    {"text": "Renewal failed", "scope": "hohenheim", "target": "activity_action"},
+    {"text": "Renewal failed", "scope": "hohenheim", "target": "history_fact"},
     {"text": "Renewing certificate {$subject} failed", "scope": "hohenheim", "target": "happened"}
   ],
   "request_le": {
@@ -2946,7 +2946,7 @@
     {
       "text": "Backup made",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} made a backup of {$subject}",
@@ -3180,7 +3180,7 @@
     {
       "text": "Enabled",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} switched {$subject} on",
@@ -5806,7 +5806,7 @@
     {
       "text": "Disabled",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} switched {$subject} off",
@@ -5947,7 +5947,7 @@
     {
       "text": "Stopped",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} stopped {$subject}",
@@ -6221,7 +6221,7 @@
     {
       "text": "Deployed",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} deployed {$subject}",
@@ -6796,7 +6796,7 @@
     {
       "text": "Snapshot made",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} took a snapshot of {$subject}",
@@ -7841,7 +7841,7 @@
     {
       "text": "Console command sent",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} ran a console command on {$subject}",
@@ -8129,7 +8129,7 @@
     {
       "text": "File written",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} wrote a file in {$subject}",
@@ -8954,7 +8954,7 @@
     {
       "text": "App update failed",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "The app update of {$subject} failed",
@@ -9406,7 +9406,7 @@
     {
       "text": "Media fetched",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} downloaded install media {$subject}",
@@ -9422,7 +9422,7 @@
     {
       "text": "Media uploaded",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} uploaded install media {$subject}",
@@ -9458,7 +9458,7 @@
     {
       "text": "Media deleted",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} deleted install media {$subject}",
@@ -10181,7 +10181,7 @@
     {
       "text": "Command executed",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} ran a command in {$subject}",
@@ -13460,7 +13460,7 @@
     {
       "text": "Controller objects cleaned up",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} cleaned up leftover objects on {$subject}",
@@ -13472,7 +13472,7 @@
     {
       "text": "Orphan removed",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} removed leftover {$subject}",
@@ -13484,7 +13484,7 @@
     {
       "text": "Backup downloaded",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} downloaded a backup of {$subject}",
@@ -13496,7 +13496,7 @@
     {
       "text": "Dynamic DNS updated",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} updated the dynamic DNS address of {$subject}",
@@ -13508,7 +13508,7 @@
     {
       "text": "Released hostname disabled",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} stopped serving released address {$subject}",
@@ -13520,7 +13520,7 @@
     {
       "text": "Imported",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} imported {$subject}",
@@ -13532,7 +13532,7 @@
     {
       "text": "Rolled back",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} rolled {$subject} back",
@@ -13544,7 +13544,7 @@
     {
       "text": "Volumes purged",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} deleted the volumes of {$subject}",
@@ -13556,7 +13556,7 @@
     {
       "text": "Variable set",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} set a variable on {$subject}",
@@ -13568,7 +13568,7 @@
     {
       "text": "Variable deleted",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} removed a variable from {$subject}",
@@ -13580,7 +13580,7 @@
     {
       "text": "Domain added",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} added an address to {$subject}",
@@ -13592,7 +13592,7 @@
     {
       "text": "Domain removed",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} removed an address from {$subject}",
@@ -13604,7 +13604,7 @@
     {
       "text": "Cloned",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} copied {$subject}",
@@ -13616,7 +13616,7 @@
     {
       "text": "Preview triggered",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} started a preview of {$subject}",
@@ -13628,7 +13628,7 @@
     {
       "text": "Dynamic DNS token created",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} created a dynamic DNS token for {$subject}",
@@ -13640,7 +13640,7 @@
     {
       "text": "Dynamic DNS token revoked",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} revoked the dynamic DNS token of {$subject}",
@@ -13652,7 +13652,7 @@
     {
       "text": "Tested",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} sent a test notification through {$subject}",
@@ -13664,7 +13664,7 @@
     {
       "text": "Device attached",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} attached a device to {$subject}",
@@ -13676,7 +13676,7 @@
     {
       "text": "Device resized",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} resized a device of {$subject}",
@@ -13688,7 +13688,7 @@
     {
       "text": "Device detached",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} detached a device from {$subject}",
@@ -13700,7 +13700,7 @@
     {
       "text": "Approved",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} approved template {$subject}",
@@ -13712,7 +13712,7 @@
     {
       "text": "Approval withdrawn",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} withdrew approval of template {$subject}",
@@ -13724,7 +13724,7 @@
     {
       "text": "Volume declared",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} declared a volume on {$subject}",
@@ -13736,7 +13736,7 @@
     {
       "text": "Volume redeclared",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} changed a volume of {$subject}",
@@ -13748,10 +13748,22 @@
     {
       "text": "Quarantine lifted",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} lifted the hold on {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "quarantined": [
+    {
+      "text": "Quarantined",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": "{$subject} was quarantined: its host key changed",
       "scope": "hohenheim",
       "target": "happened"
     }
@@ -13760,7 +13772,7 @@
     {
       "text": "Requested",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} requested certificate {$subject}",
@@ -13772,7 +13784,7 @@
     {
       "text": "Reissued",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} reissued certificate {$subject}",
@@ -13784,7 +13796,7 @@
     {
       "text": "File saved",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} saved a file in {$subject}",
@@ -13801,7 +13813,7 @@
     {
       "text": "File uploaded",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} uploaded a file to {$subject}",
@@ -13818,7 +13830,7 @@
     {
       "text": "Folder created",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} created a folder in {$subject}",
@@ -13835,7 +13847,7 @@
     {
       "text": "File renamed",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} renamed a file in {$subject}",
@@ -13852,7 +13864,7 @@
     {
       "text": "File deleted",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} deleted a file in {$subject}",
@@ -13869,7 +13881,7 @@
     {
       "text": "Backup restored",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} restored {$subject} from a backup",
@@ -13881,7 +13893,7 @@
     {
       "text": "Snapshot restored",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} restored {$subject} from a snapshot",
@@ -13893,7 +13905,7 @@
     {
       "text": "Interrupted run settled",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "Hohenheim settled the interrupted work on {$subject}",
@@ -13905,7 +13917,7 @@
     {
       "text": "Data deleted",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} deleted the data of {$subject}",
@@ -13917,7 +13929,7 @@
     {
       "text": "Template captured",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} saved {$subject} as a template",
@@ -13929,7 +13941,7 @@
     {
       "text": "Reconciled",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "Hohenheim brought the stored state of {$subject} in line with its host",
@@ -13941,7 +13953,7 @@
     {
       "text": "Drained",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} moved the workloads off {$subject}",
@@ -13953,7 +13965,7 @@
     {
       "text": "Migrated",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} moved {$subject} to another host",
@@ -13965,7 +13977,7 @@
     {
       "text": "Shell opened",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} opened a shell in {$subject}",
@@ -13977,7 +13989,7 @@
     {
       "text": "Shell closed",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} closed a shell in {$subject}",
@@ -13989,7 +14001,7 @@
     {
       "text": "App updated",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} updated the app in {$subject}",
@@ -14127,7 +14139,7 @@
     {
       "text": "Moved to a shared engine",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} moved database {$subject} to a shared engine",
@@ -14692,7 +14704,7 @@
     {
       "text": "HTTPS switched on",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "HTTPS forced",
@@ -17169,7 +17181,7 @@
     {
       "text": "Exited unexpectedly",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$subject} exited unexpectedly and was not restarted",
@@ -17181,7 +17193,7 @@
     {
       "text": "Kept exiting",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$subject} kept exiting, so automatic restarts wait for its next deploy",
@@ -17193,7 +17205,7 @@
     {
       "text": "Could not start",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$subject} could not be started",
@@ -17205,7 +17217,7 @@
     {
       "text": "Never ready",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$subject} started but never said it was ready",
@@ -17217,7 +17229,7 @@
     {
       "text": "Could not stop",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "Stopping {$subject} failed",
@@ -17229,7 +17241,7 @@
     {
       "text": "Could not remove",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "Removing {$subject} failed",
@@ -17241,7 +17253,7 @@
     {
       "text": "Restore failed",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "Restoring {$subject} failed partway, so it was left stopped",
@@ -17253,7 +17265,7 @@
     {
       "text": "Restore interrupted",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "A restart of Hohenheim interrupted the restore of {$subject}",
@@ -17265,7 +17277,7 @@
     {
       "text": "Move lost",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "Moving {$subject} to another host was interrupted, and neither host holds its copy",
@@ -17742,7 +17754,7 @@
     {
       "text": "Refused without firewall rules",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$subject} could not be started without its own firewall rules",
@@ -17991,7 +18003,7 @@
     {
       "text": "Restart refused",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$subject} stopped and its automatic restart was refused",

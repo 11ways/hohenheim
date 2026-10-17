@@ -20,8 +20,8 @@ import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.operation.ZenitPlacementSurface;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -128,7 +128,8 @@ public final class DatabaseApi {
             } catch (DomainRefusal refused) {
                 return ApiConduits.refusal(conduit, refused);
             }
-            ActivityLog.record(Models.get(DatabaseModel.class), databaseId, HohenheimActivityAction.MOVE_SHARED, name);
+            History.event(Models.get(DatabaseModel.class), databaseId,
+                Change.fact(HohenheimActivityAction.MOVE_SHARED));
             // The panel's toast, as data: the work is accepted, and the RECORD's status is
             // the thing to watch (provisioning while it runs, active when it settles).
             return ApiConduits.json(Map.of("id", databaseId, "name", name,
@@ -164,7 +165,6 @@ public final class DatabaseApi {
                 conduit.forbidden();
                 return null;
             }
-            ActivityLog.record(Models.get(DatabaseModel.class), databaseId, ZenitActivityAction.DELETE, name);
             return ApiConduits.json(Map.of("id", databaseId, "name", name, "status", "deleted"));
         });
 

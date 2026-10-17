@@ -914,7 +914,7 @@
     {
       "text": "Back-up mislukt",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "De back-up van {$subject} is mislukt",
@@ -2927,7 +2927,7 @@
   "last_renewal_failed": {"text": "De laatste vernieuwing is mislukt. {$reason}", "scope": "certificate"},
   "last_renewal_failed_at": {"text": "De laatste vernieuwing is mislukt op {$when}. {$reason}", "scope": "certificate"},
   "renewal_failed": [
-    {"text": "Vernieuwing mislukt", "scope": "hohenheim", "target": "activity_action"},
+    {"text": "Vernieuwing mislukt", "scope": "hohenheim", "target": "history_fact"},
     {"text": "Vernieuwen van certificaat {$subject} is mislukt", "scope": "hohenheim", "target": "happened"}
   ],
   "request_le": {
@@ -2946,7 +2946,7 @@
     {
       "text": "Back-up gemaakt",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} maakte een back-up van {$subject}",
@@ -3180,7 +3180,7 @@
     {
       "text": "Ingeschakeld",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} zette {$subject} aan",
@@ -5806,7 +5806,7 @@
     {
       "text": "Uitgeschakeld",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} zette {$subject} uit",
@@ -5947,7 +5947,7 @@
     {
       "text": "Gestopt",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} stopte {$subject}",
@@ -6221,7 +6221,7 @@
     {
       "text": "Uitgerold",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} rolde {$subject} uit",
@@ -6796,7 +6796,7 @@
     {
       "text": "Momentopname gemaakt",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} nam een snapshot van {$subject}",
@@ -7841,7 +7841,7 @@
     {
       "text": "Consoleopdracht verstuurd",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} voerde een consolecommando uit op {$subject}",
@@ -8129,7 +8129,7 @@
     {
       "text": "Bestand geschreven",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} schreef een bestand in {$subject}",
@@ -8954,7 +8954,7 @@
     {
       "text": "App-update mislukt",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "De app-update van {$subject} mislukte",
@@ -9406,7 +9406,7 @@
     {
       "text": "Media opgehaald",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} downloadde installatiemedia {$subject}",
@@ -9422,7 +9422,7 @@
     {
       "text": "Media opgeladen",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} uploadde installatiemedia {$subject}",
@@ -9458,7 +9458,7 @@
     {
       "text": "Media verwijderd",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} verwijderde installatiemedia {$subject}",
@@ -10181,7 +10181,7 @@
     {
       "text": "Opdracht uitgevoerd",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} voerde een commando uit in {$subject}",
@@ -13460,7 +13460,7 @@
     {
       "text": "Controllerobjecten opgeruimd",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} ruimde achtergebleven objecten op {$subject} op",
@@ -13472,7 +13472,7 @@
     {
       "text": "Verweesd object verwijderd",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} ruimde restant {$subject} op",
@@ -13484,7 +13484,7 @@
     {
       "text": "Back-up gedownload",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} downloadde een back-up van {$subject}",
@@ -13496,7 +13496,7 @@
     {
       "text": "Dynamische DNS bijgewerkt",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} werkte het dynamische DNS-adres van {$subject} bij",
@@ -13508,7 +13508,7 @@
     {
       "text": "Vrijgegeven hostnaam uitgeschakeld",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} stopte met het vrijgegeven adres {$subject} te bedienen",
@@ -13520,7 +13520,7 @@
     {
       "text": "Geïmporteerd",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} importeerde {$subject}",
@@ -13532,7 +13532,7 @@
     {
       "text": "Teruggerold",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} zette {$subject} terug",
@@ -13544,7 +13544,7 @@
     {
       "text": "Volumes gewist",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} verwijderde de volumes van {$subject}",
@@ -13556,7 +13556,7 @@
     {
       "text": "Variabele ingesteld",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} stelde een variabele in op {$subject}",
@@ -13568,7 +13568,7 @@
     {
       "text": "Variabele verwijderd",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} verwijderde een variabele van {$subject}",
@@ -13580,7 +13580,7 @@
     {
       "text": "Domein toegevoegd",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} voegde een adres toe aan {$subject}",
@@ -13592,7 +13592,7 @@
     {
       "text": "Domein verwijderd",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} verwijderde een adres van {$subject}",
@@ -13604,7 +13604,7 @@
     {
       "text": "Gekloond",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} kopieerde {$subject}",
@@ -13616,7 +13616,7 @@
     {
       "text": "Preview gestart",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} startte een preview van {$subject}",
@@ -13628,7 +13628,7 @@
     {
       "text": "Dynamische-DNS-token aangemaakt",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} maakte een dynamisch-DNS-token voor {$subject}",
@@ -13640,7 +13640,7 @@
     {
       "text": "Dynamische-DNS-token ingetrokken",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} trok het dynamisch-DNS-token van {$subject} in",
@@ -13652,7 +13652,7 @@
     {
       "text": "Getest",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} stuurde een testmelding via {$subject}",
@@ -13664,7 +13664,7 @@
     {
       "text": "Apparaat gekoppeld",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} koppelde een apparaat aan {$subject}",
@@ -13676,7 +13676,7 @@
     {
       "text": "Apparaatgrootte aangepast",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} wijzigde de grootte van een apparaat van {$subject}",
@@ -13688,7 +13688,7 @@
     {
       "text": "Apparaat losgekoppeld",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} ontkoppelde een apparaat van {$subject}",
@@ -13700,7 +13700,7 @@
     {
       "text": "Goedgekeurd",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} keurde sjabloon {$subject} goed",
@@ -13712,7 +13712,7 @@
     {
       "text": "Goedkeuring ingetrokken",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} trok de goedkeuring van sjabloon {$subject} in",
@@ -13724,7 +13724,7 @@
     {
       "text": "Volume vastgelegd",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} declareerde een volume op {$subject}",
@@ -13736,7 +13736,7 @@
     {
       "text": "Volume opnieuw vastgelegd",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} wijzigde een volume van {$subject}",
@@ -13748,10 +13748,22 @@
     {
       "text": "Quarantaine opgeheven",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} hief de blokkering van {$subject} op",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "quarantined": [
+    {
+      "text": "In quarantaine geplaatst",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": "{$subject} werd in quarantaine geplaatst: de hostsleutel veranderde",
       "scope": "hohenheim",
       "target": "happened"
     }
@@ -13760,7 +13772,7 @@
     {
       "text": "Aangevraagd",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} vroeg certificaat {$subject} aan",
@@ -13772,7 +13784,7 @@
     {
       "text": "Opnieuw uitgegeven",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} vroeg certificaat {$subject} opnieuw aan",
@@ -13784,7 +13796,7 @@
     {
       "text": "Bestand opgeslagen",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} bewaarde een bestand in {$subject}",
@@ -13801,7 +13813,7 @@
     {
       "text": "Bestand opgeladen",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} uploadde een bestand naar {$subject}",
@@ -13818,7 +13830,7 @@
     {
       "text": "Map aangemaakt",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} maakte een map in {$subject}",
@@ -13835,7 +13847,7 @@
     {
       "text": "Bestand hernoemd",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} hernoemde een bestand in {$subject}",
@@ -13852,7 +13864,7 @@
     {
       "text": "Bestand verwijderd",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} verwijderde een bestand in {$subject}",
@@ -13869,7 +13881,7 @@
     {
       "text": "Back-up teruggezet",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} zette {$subject} terug uit een back-up",
@@ -13881,7 +13893,7 @@
     {
       "text": "Momentopname teruggezet",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} zette {$subject} terug uit een snapshot",
@@ -13893,7 +13905,7 @@
     {
       "text": "Onderbroken run afgehandeld",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "Hohenheim rondde het onderbroken werk aan {$subject} af",
@@ -13905,7 +13917,7 @@
     {
       "text": "Gegevens verwijderd",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} verwijderde de gegevens van {$subject}",
@@ -13917,7 +13929,7 @@
     {
       "text": "Sjabloon vastgelegd",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} bewaarde {$subject} als sjabloon",
@@ -13929,7 +13941,7 @@
     {
       "text": "Afgestemd",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "Hohenheim bracht de bewaarde staat van {$subject} in lijn met zijn host",
@@ -13941,7 +13953,7 @@
     {
       "text": "Leeggehaald",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} verhuisde de workloads weg van {$subject}",
@@ -13953,7 +13965,7 @@
     {
       "text": "Gemigreerd",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} verhuisde {$subject} naar een andere host",
@@ -13965,7 +13977,7 @@
     {
       "text": "Shell geopend",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} opende een shell in {$subject}",
@@ -13977,7 +13989,7 @@
     {
       "text": "Shell gesloten",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} sloot een shell in {$subject}",
@@ -13989,7 +14001,7 @@
     {
       "text": "App bijgewerkt",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} werkte de app in {$subject} bij",
@@ -14127,7 +14139,7 @@
     {
       "text": "Naar een gedeelde engine verplaatst",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$actor} verhuisde database {$subject} naar een gedeelde engine",
@@ -14692,7 +14704,7 @@
     {
       "text": "HTTPS ingeschakeld",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "HTTPS verplicht",
@@ -17169,7 +17181,7 @@
     {
       "text": "Onverwacht gestopt",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$subject} stopte onverwacht en is niet herstart",
@@ -17181,7 +17193,7 @@
     {
       "text": "Bleef stoppen",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$subject} bleef stoppen, dus automatische herstarts wachten op de volgende deploy",
@@ -17193,7 +17205,7 @@
     {
       "text": "Kon niet starten",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$subject} kon niet gestart worden",
@@ -17205,7 +17217,7 @@
     {
       "text": "Nooit klaar",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$subject} startte maar meldde nooit dat het klaar was",
@@ -17217,7 +17229,7 @@
     {
       "text": "Kon niet stoppen",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$subject} stoppen is mislukt",
@@ -17229,7 +17241,7 @@
     {
       "text": "Kon niet verwijderen",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$subject} verwijderen is mislukt",
@@ -17241,7 +17253,7 @@
     {
       "text": "Herstellen mislukt",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$subject} herstellen is halverwege mislukt, dus het bleef gestopt",
@@ -17253,7 +17265,7 @@
     {
       "text": "Herstellen onderbroken",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "Een herstart van Hohenheim onderbrak het herstellen van {$subject}",
@@ -17265,7 +17277,7 @@
     {
       "text": "Verplaatsing verloren",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "Het verplaatsen van {$subject} naar een andere host werd onderbroken, en geen van beide hosts heeft nog een kopie",
@@ -17742,7 +17754,7 @@
     {
       "text": "Geweigerd zonder firewallregels",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$subject} kon niet starten zonder eigen firewallregels",
@@ -17991,7 +18003,7 @@
     {
       "text": "Herstart geweigerd",
       "scope": "hohenheim",
-      "target": "activity_action"
+      "target": "history_fact"
     },
     {
       "text": "{$subject} stopte en de automatische herstart werd geweigerd",

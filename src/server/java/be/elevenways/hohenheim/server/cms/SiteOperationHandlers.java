@@ -23,7 +23,7 @@ import be.elevenways.protoblast.common.text.SlugText;
 import be.elevenways.zenit.cms.server.page.ResourcePageEndpoints;
 import be.elevenways.zenit.common.edit.FormSecrets;
 import be.elevenways.zenit.common.edit.submit.SubmittedValueCoercion;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.datasource.DuplicateKeyException;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
@@ -245,8 +245,8 @@ public final class SiteOperationHandlers {
     private static @Nullable Void switchTo(@NonNull OperationCall<Row, Void> call, boolean enable) {
         Row site = call.subject();
         site.set(SiteModel.ENABLED, enable);
-        ActivityLog.withAction(enable ? HohenheimActivityAction.ENABLED : HohenheimActivityAction.DISABLED, null,
-            () -> Models.get(SiteModel.class).save(site));
+        Models.get(SiteModel.class).save(site,
+            Change.fact(enable ? HohenheimActivityAction.ENABLED : HohenheimActivityAction.DISABLED));
         return null;
     }
 
@@ -307,8 +307,9 @@ public final class SiteOperationHandlers {
         clone.set(SiteModel.AUTH_PROVIDER_ID, site.get(SiteModel.AUTH_PROVIDER_ID));
         clone.set(SiteModel.ACCESS_LIST_ID, site.get(SiteModel.ACCESS_LIST_ID));
         try {
-            ActivityLog.withAction(HohenheimActivityAction.CLONED, "of site #" + site.get(SiteModel.ID),
-                () -> siteModel.save(clone));
+            siteModel.save(clone, Change.fact(HohenheimActivityAction.CLONED, Map.of(
+                HohenheimActivityAction.ORIGINAL_KEY, new Change.Context(SiteModel.MODEL_ID,
+                    String.valueOf((Object) site.get(SiteModel.ID))))));
         } catch (DuplicateKeyException conflict) {
             if (!SiteModel.SLUG.getName().equals(conflict.getColumnName())) {
                 throw conflict;

@@ -11,8 +11,8 @@ import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.util.Closeables;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.routing.RouteTarget;
@@ -75,8 +75,7 @@ final class DatabaseHandlers {
                 return HandlerSupport.redirect(CmsRoutes.list(HohenheimSlugs.ADMIN, HohenheimSlugs.DATABASES));
             }
             try {
-                ActivityLog.record(Models.get(DatabaseModel.class), name,
-                        HohenheimActivityAction.BACKUP_DOWNLOADED, name);
+                recordOn(name, Change.fact(HohenheimActivityAction.BACKUP_DOWNLOADED));
             } catch (RuntimeException | Error failed) {
                 // Nothing will serve the stream now; its unlinked file is freed on close.
                 // The record failure is the one worth reporting.
@@ -114,10 +113,21 @@ final class DatabaseHandlers {
                     .withArg("name", name));
                 return HandlerSupport.redirect(restorePage);
             }
-            ActivityLog.record(Models.get(DatabaseModel.class), name, ZenitActivityAction.RESTORE, name);
+            recordOn(name, Change.fact(HohenheimActivityAction.RESTORED_BACKUP));
             HohenheimFlash.success(conduit, HohenheimMicrocopy.DATABASE_TAB.of("restored").withArg("name", name));
             return HandlerSupport.redirect(restorePage);
         });
+    }
+
+    /**
+     * Records an event on the named database's own record (these rows used to be filed under the name, which no
+     * record id ever matched); a name no record holds records nothing.
+     */
+    private static void recordOn(@NonNull String name, @NonNull Change change) {
+        Row database = Models.get(DatabaseModel.class).findByName(name);
+        if (database != null) {
+            History.event(Models.get(DatabaseModel.class), database.get(DatabaseModel.ID), change);
+        }
     }
 
     /** The CMS restore tab for a named database (falls back to the list when unknown). */

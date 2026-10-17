@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.dns;
 
+import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.protoblast.common.Blast;
@@ -149,7 +150,8 @@ public final class SecondaryZoneService {
             if (pendingNotifyPulls.add(zoneId)) {
                 // DETACHED system work: the TSIG check above was the gate, and a NOTIFY from a
                 // primary is nobody's action, whatever the listener thread happens to carry.
-                ExecutionIdentity.runDetachedAsSystem("dns-notify", () -> jobs.fireAndForget(() -> {
+                ExecutionIdentity.runDetachedAsSystem(HohenheimSystemPurposes.DNS_NOTIFY,
+                    () -> jobs.fireAndForget(() -> {
                     try {
                         transfer(zoneId, false);
                     }

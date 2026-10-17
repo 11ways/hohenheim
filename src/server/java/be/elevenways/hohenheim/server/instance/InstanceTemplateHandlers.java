@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
@@ -29,7 +30,8 @@ import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.Nested;
 import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.Select;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
@@ -126,8 +128,9 @@ public final class InstanceTemplateHandlers {
                 // keeps script introduction an operator act.
                 try {
                     int templateId = CommunityScripts.importApp(catalogApp);
-                    ActivityLog.record(Models.get(InstanceTemplateModel.class), templateId,
-                        HohenheimActivityAction.IMPORTED, "vendored catalog: " + catalogApp);
+                    History.event(Models.get(InstanceTemplateModel.class), templateId, Change.fact(
+                        HohenheimActivityAction.IMPORTED, Map.of(HohenheimActivityAction.SOURCE_KEY,
+                            "vendored catalog: " + catalogApp)));
                     return HandlerSupport.redirect(
                         CmsRoutes.detail(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCE_TEMPLATES, templateId));
                 } catch (Violations violations) {
@@ -141,8 +144,9 @@ public final class InstanceTemplateHandlers {
             }
             try {
                 int templateId = new TemplatePortability().importDocument(document, source);
-                ActivityLog.record(Models.get(InstanceTemplateModel.class), templateId,
-                    HohenheimActivityAction.IMPORTED, source.isEmpty() ? "paste" : source);
+                History.event(Models.get(InstanceTemplateModel.class), templateId, Change.fact(
+                    HohenheimActivityAction.IMPORTED, Map.of(HohenheimActivityAction.SOURCE_KEY,
+                        source.isEmpty() ? "paste" : source)));
                 return HandlerSupport.redirect(
                     CmsRoutes.detail(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCE_TEMPLATES, templateId));
             } catch (Violations violations) {
@@ -167,9 +171,7 @@ public final class InstanceTemplateHandlers {
         template.set(InstanceTemplateModel.APPROVED_AT, Now.instant());
         template.set(InstanceTemplateModel.APPROVED_BY_USER_ID,
             Objects.requireNonNull(call.access(), "an operator approves").accountId());
-        Models.get(InstanceTemplateModel.class).save(template);
-        ActivityLog.record(Models.get(InstanceTemplateModel.class), template.get(InstanceTemplateModel.ID),
-            HohenheimActivityAction.APPROVED, "operator approval");
+        Models.get(InstanceTemplateModel.class).save(template, Change.fact(HohenheimActivityAction.APPROVED));
         return null;
     }
 
@@ -177,9 +179,7 @@ public final class InstanceTemplateHandlers {
         Row template = call.subject();
         template.set(InstanceTemplateModel.APPROVED_AT, null);
         template.set(InstanceTemplateModel.APPROVED_BY_USER_ID, null);
-        Models.get(InstanceTemplateModel.class).save(template);
-        ActivityLog.record(Models.get(InstanceTemplateModel.class), template.get(InstanceTemplateModel.ID),
-            HohenheimActivityAction.UNAPPROVED, "operator withdrawal");
+        Models.get(InstanceTemplateModel.class).save(template, Change.fact(HohenheimActivityAction.UNAPPROVED));
         return null;
     }
 
@@ -248,7 +248,8 @@ public final class InstanceTemplateHandlers {
         int instanceId = new InstanceTemplates().createFromTemplate(template, Objects.requireNonNull(call.input()),
             call.access());
         if (InstanceTemplates.hasInstallStep(template)) {
-            INSTALL_RUNNER.startVirtualThread(() -> ExecutionIdentity.runAsSystem("template-install", () -> {
+            INSTALL_RUNNER.startVirtualThread(() -> ExecutionIdentity.runAsSystem(
+                HohenheimSystemPurposes.TEMPLATE_INSTALL, () -> {
                 try {
                     new InstanceInstalls().install(instanceId);
                 } catch (RuntimeException error) {

@@ -18,7 +18,8 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
@@ -177,11 +178,17 @@ public class ReapIncusControllers extends ScheduledTask {
             return new HostOutcome(name, true, plan, List.of(), List.of(), List.of());
         }
         IncusReaper.Reaped reaped = IncusReaper.reap(incus, plan, false);
-        for (String removed : reaped.removed()) {
-            ActivityLog.record(Models.get(ServerModel.class), server.get(ServerModel.ID),
-                HohenheimActivityAction.REAPED_CONTROLLER_OBJECTS, removed);
-        }
+        recordReaped(server, reaped);
         return new HostOutcome(name, true, plan, reaped.removed(), reaped.refused(), List.of());
+    }
+
+    /** One event per host and act naming every object the reap removed; a reap that removed nothing records none. */
+    private static void recordReaped(@NonNull Row server, IncusReaper.@NonNull Reaped reaped) {
+        if (!reaped.removed().isEmpty()) {
+            History.event(Models.get(ServerModel.class), server.get(ServerModel.ID),
+                Change.fact(HohenheimActivityAction.REAPED_CONTROLLER_OBJECTS,
+                    Map.of(HohenheimActivityAction.OBJECTS_KEY, List.copyOf(reaped.removed()))));
+        }
     }
 
     /**
@@ -222,10 +229,7 @@ public class ReapIncusControllers extends ScheduledTask {
                 ControllerPresence.stamp(incus);
             }
             IncusReaper.Reaped reaped = IncusReaper.reap(incus, plan, true);
-            for (String removed : reaped.removed()) {
-                ActivityLog.record(Models.get(ServerModel.class), server.get(ServerModel.ID),
-                    HohenheimActivityAction.REAPED_CONTROLLER_OBJECTS, removed);
-            }
+            recordReaped(server, reaped);
             return reaped;
         } catch (Exception failed) {
             throw new IllegalStateException("Could not reap controller objects on '" + name

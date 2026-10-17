@@ -22,7 +22,8 @@ import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.hohenheim.server.util.UtcStamp;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -78,8 +79,8 @@ public final class InstanceSnapshots {
         int snapshotId = this.instances.operations().exclusive(instanceId,
             InstanceOperationLock.Contention.REFUSE, () -> createLocked(instanceId, note));
         // Written here, once, on success, whichever surface asked; no surface writes one of its own.
-        ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.SNAPSHOT,
-            "snapshot #" + snapshotId);
+        History.event(Models.get(InstanceModel.class), instanceId,
+            Change.fact(HohenheimActivityAction.SNAPSHOT, Map.of(HohenheimActivityAction.SNAPSHOT_KEY, snapshotId)));
         return snapshotId;
     }
 
@@ -326,7 +327,7 @@ public final class InstanceSnapshots {
         } catch (IOException error) {
             throw HohenheimViolations.instanceRefusal("instance_restore_failed", resolved.row(), error);
         }
-        recordRestore(instanceId, "snapshot #" + snapshotId);
+        recordRestore(instanceId, Map.of(HohenheimActivityAction.SNAPSHOT_KEY, snapshotId));
         Blast.log("SNAPSHOT: restored snapshot", snapshotId, "onto instance", instanceId);
     }
 
@@ -346,14 +347,13 @@ public final class InstanceSnapshots {
      * AIDEV-NOTE: explicit, and in the authority rather than the CMS row action, because
      * an in-place restore is a REPLACE that destroys everything written since the
      * snapshot and writes its whole state through InstanceOperationGuard.stamp -- an
-     * updateAll, which fires no write hooks. The ActivityLog.withAction wrapper that used
-     * to be the only "accountability" here recorded literally nothing (withAction renames
-     * hook-written rows; there were none), the same silent-success shape as the
-     * OrphanActions claim.
+     * updateAll on fields no change captures. The wrapper that used to be the only
+     * "accountability" here recorded literally nothing, the same silent-success shape as
+     * the OrphanActions claim.
      */
-    private static void recordRestore(int instanceId, String detail) {
-        ActivityLog.record(Models.get(InstanceModel.class), instanceId,
-            HohenheimActivityAction.RESTORED_SNAPSHOT, detail);
+    private static void recordRestore(int instanceId, @NonNull Map<String, ?> body) {
+        History.event(Models.get(InstanceModel.class), instanceId,
+            Change.fact(HohenheimActivityAction.RESTORED_SNAPSHOT, body));
     }
 
     /**
@@ -392,7 +392,7 @@ public final class InstanceSnapshots {
         } catch (IOException error) {
             throw HohenheimViolations.instanceRefusal("instance_restore_failed", resolved.row(), error);
         }
-        recordRestore(instanceId, "native snapshot " + nativeName);
+        recordRestore(instanceId, Map.of(HohenheimActivityAction.NATIVE_SNAPSHOT_KEY, nativeName));
         Blast.log("SNAPSHOT: restored native snapshot", nativeName, "onto instance", instanceId);
     }
 

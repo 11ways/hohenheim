@@ -12,7 +12,8 @@ import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.security.IsolationUnenforceable;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.QueryBuilder;
@@ -22,6 +23,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.Set;
 
 
@@ -419,12 +421,13 @@ final class InstanceOperationGuard {
         }
     }
 
-    /** Records the cause on the record's activity, its detail the first line of what the cause declares. */
+    /** Records the cause on the record's history, its body the first line of what the cause declares. */
     private static void recordCause(int instanceId, @NonNull HohenheimActivityAction cause, @Nullable String detail) {
-        // The row carries the detail its cause's fact declares, and nothing where it declares none.
-        String line = InstanceModel.stoppageDetailOf(cause, detail);
-        ActivityLog.record(Models.get(InstanceModel.class), instanceId, cause,
-            Texts.blankAsNull(line));
+        // The fact carries the detail its cause's shape declares, and nothing where it declares none.
+        String line = Texts.blankAsNull(InstanceModel.stoppageDetailOf(cause, detail));
+        String key = cause.causeDetailKey();
+        History.event(Models.get(InstanceModel.class), instanceId, key == null || line == null
+            ? Change.fact(cause) : Change.fact(cause, Map.of(key, line)));
     }
 
     /**

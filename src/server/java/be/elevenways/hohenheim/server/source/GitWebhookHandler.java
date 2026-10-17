@@ -20,7 +20,9 @@ import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.http.RateLimiter;
 import be.elevenways.zenit.common.routing.RateLimitPolicy;
 import be.elevenways.zenit.server.http.ExchangeRateLimits;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.security.SecureTokens;
@@ -263,7 +265,7 @@ public class GitWebhookHandler {
         // A verified delivery is SYSTEM work: the signature was the gate, and the deploys and
         // previews it starts (on threads of their own) carry the declaration with them. Before
         // this point the proxy thread holds no identity, which every gate refuses.
-        ExecutionIdentity.runAsSystem("git-webhook",
+        ExecutionIdentity.runAsSystem(HohenheimSystemPurposes.GIT_WEBHOOK,
             () -> processVerified(exchange, application, sourceSettings, body));
     }
 
@@ -369,8 +371,7 @@ public class GitWebhookHandler {
                     .deployQuietly(applicationId, branch,
                         pushedSha, null,
                         DeployTrigger.WEBHOOK));
-            ActivityLog.record(Models.get(InstanceModel.class), applicationId,
-                HohenheimActivityAction.PREVIEW_TRIGGERED, "webhook:" + branch);
+            recordPreview(applicationId, branch);
             WebhookDeliveries.stampAction(claimed, WebhookOutcome.PREVIEW_QUEUED);
             sendJson(exchange, 200, "{\"status\":\"preview_queued\"}");
             return;
@@ -491,8 +492,7 @@ public class GitWebhookHandler {
                         .deployQuietly(applicationId, ref, previewEvent.sha(),
                             previewEvent.number(), DeployTrigger.WEBHOOK));
                 WebhookDeliveries.stampAction(claimed, WebhookOutcome.PREVIEW_QUEUED);
-                ActivityLog.record(Models.get(InstanceModel.class), applicationId,
-                    HohenheimActivityAction.PREVIEW_TRIGGERED, "webhook:" + ref);
+                recordPreview(applicationId, ref);
                 sendJson(exchange, 200, "{\"status\":\"preview_queued\"}");
             }
             case TEARDOWN -> {
@@ -711,5 +711,12 @@ public class GitWebhookHandler {
         exchange.setStatusCode(status);
         exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json");
         exchange.getResponseSender().send(json);
+    }
+
+    /** Records the preview a delivery queued on its application, naming the branch or ref it builds. */
+    private static void recordPreview(int applicationId, @NonNull String ref) {
+        History.event(Models.get(InstanceModel.class), applicationId, Change.fact(
+            HohenheimActivityAction.PREVIEW_TRIGGERED, Map.of(HohenheimActivityAction.VIA_KEY, "webhook",
+                HohenheimActivityAction.REF_KEY, ref)));
     }
 }

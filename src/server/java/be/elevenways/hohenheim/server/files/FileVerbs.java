@@ -2,11 +2,13 @@ package be.elevenways.hohenheim.server.files;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.nio.file.Path;
+import java.util.Map;
 
 /**
  * THE file-manager verbs that change an instance's files: each one performs through {@link InstanceFiles} and records
@@ -79,6 +81,7 @@ public final class FileVerbs {
     }
 
     private static void record(int instanceId, @NonNull HohenheimActivityAction verb, @NonNull String path) {
-        ActivityLog.record(Models.get(InstanceModel.class), instanceId, verb, path);
+        History.event(Models.get(InstanceModel.class), instanceId,
+            Change.fact(verb, Map.of(HohenheimActivityAction.PATH_KEY, path)));
     }
 }

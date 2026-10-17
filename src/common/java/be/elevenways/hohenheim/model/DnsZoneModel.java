@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.dns.DelegationVerdict;
@@ -227,4 +228,8 @@ public class DnsZoneModel extends Model {
 
     @Override
     public Schema getSchema() { return SCHEMA; }
+
+    /** The serial bump and the delegation probe write fields no change captures. */
+    public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.optional().changes()
+        .except(SERIAL, DELEGATION_STATUS, DELEGATION_DETAIL, DELEGATION_CHECKED_AT));
 }

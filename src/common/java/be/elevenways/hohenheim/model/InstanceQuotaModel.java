@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
@@ -131,4 +132,8 @@ public class InstanceQuotaModel extends Model {
     @Override public String getModelName() { return "InstanceQuota"; }
     @Override public String getTableName() { return "instance_quotas"; }
     @Override public Schema getSchema() { return SCHEMA; }
+
+    /** Plumbing: recorded, kept out of people's feeds. */
+    public static final HistoryBehaviour HISTORY =
+        SCHEMA.addBehaviour(HistoryBehaviour.optional().changes().internal());
 }

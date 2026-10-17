@@ -18,7 +18,8 @@ import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.time.Pace;
 import java.time.Duration;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -264,7 +265,8 @@ public final class InstanceShell {
         session.start();
         startSweeper();
 
-        session.record(HohenheimActivityAction.SHELL_OPEN, started.shell() + " as uid " + runUser);
+        session.record(Change.fact(HohenheimActivityAction.SHELL_OPEN, Map.of(HohenheimActivityAction.SHELL_KEY,
+            started.shell(), HohenheimActivityAction.RUN_USER_KEY, String.valueOf(runUser))));
         Blast.log("SHELL: opened on instance", instanceId, "as uid", runUser,
             "->", started.shell());
         return session;
@@ -515,8 +517,9 @@ public final class InstanceShell {
             if (sessions != null) {
                 sessions.remove(this);
             }
-            this.record(HohenheimActivityAction.SHELL_CLOSE, this.shell + " as uid " + this.runUser
-                + " (" + reason.name().toLowerCase(java.util.Locale.ROOT) + ")");
+            this.record(Change.fact(HohenheimActivityAction.SHELL_CLOSE, Map.of(HohenheimActivityAction.SHELL_KEY,
+                this.shell, HohenheimActivityAction.RUN_USER_KEY, String.valueOf(this.runUser),
+                HohenheimActivityAction.CLOSED_BY_KEY, reason.name().toLowerCase(java.util.Locale.ROOT))));
             Blast.log("SHELL: closed on instance", this.instanceId, "-", reason);
             try {
                 this.onEnd.run();
@@ -537,16 +540,15 @@ public final class InstanceShell {
          * this runs on a pump/sweeper thread where neither ThreadLocal survives -- without
          * them an audited act would be recorded as system work, or not at all.
          */
-        void record(@NonNull HohenheimActivityAction action, @NonNull String detail) {
+        void record(@NonNull Change change) {
             Runnable write = () -> Accountability.runAs(this.accountability, () ->
-                ActivityLog.record(Models.get(InstanceModel.class), this.recordId,
-                    action, detail));
+                History.event(Models.get(InstanceModel.class), this.recordId, change));
             try {
                 HandlerSupport.inScope(this.datasource, write);
             } catch (RuntimeException e) {
                 // An audit that cannot be written must be LOUD; it must not kill the
                 // session teardown it is part of.
-                Blast.log("SHELL: could not record", action, "for instance",
+                Blast.log("SHELL: could not record", change.facts().get(0).kind(), "for instance",
                     this.instanceId, "-", e.getMessage());
             }
         }

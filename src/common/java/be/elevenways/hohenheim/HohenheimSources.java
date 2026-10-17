@@ -3,18 +3,13 @@ package be.elevenways.hohenheim;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.InstanceLogModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ReconcileFindingModel;
-import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.SystemUserModel;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.resource.ActivitySources;
 import be.elevenways.zenit.common.ZenitModule;
 import be.elevenways.zenit.common.data.RecordSource;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.activity.ActivityPolicy;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
 import be.elevenways.zenit.common.orm.query.criteria.CompositeCriteria;
 import be.elevenways.zenit.common.orm.query.criteria.CompositeOperator;
@@ -166,23 +161,6 @@ public final class HohenheimSources implements ZenitModule {
         ActivitySources.register(HohenheimSlugs.ADMIN, ADMIN_ACCESS);
         // The /manage landing's Recent band: the entries about records each reader may see.
         ActivitySources.registerViewable(HohenheimSlugs.MANAGE);
-
-        // Sites and instances carry field-level deltas in the activity log (the CMS history tab and the activity
-        // lines narrate them, an app's configuration changes included); every other model stays on the default tier.
-        ActivityLog.setPolicy(SiteModel.MODEL_ID, ActivityPolicy.ALL);
-        ActivityLog.setPolicy(InstanceModel.MODEL_ID, ActivityPolicy.ALL);
-
-        // Bookkeeping tables whose writes are machine-generated churn, not user
-        // actions: instance logs upsert per console episode, and a release operation is
-        // itself the history UI. Tracking them would flood zenit_activity.
-        ActivityLog.setPolicy(InstanceLogModel.MODEL_ID, ActivityPolicy.NONE);
-        ActivityLog.setPolicy(ReleaseOperationModel.MODEL_ID, ActivityPolicy.NONE);
-
-        // Reconcile findings are a DERIVED CACHE, not a record of anything: every sweep
-        // deletes a host's whole finding set and re-inserts it. Logging that churn buried
-        // the one activity row that matters -- the operator's own orphan removal, which
-        // OrphanActions now records explicitly on the host record.
-        ActivityLog.setPolicy(ReconcileFindingModel.MODEL_ID, ActivityPolicy.NONE);
     }
 
     /**

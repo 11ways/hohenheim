@@ -18,7 +18,8 @@ import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.live.LiveFeed;
 import be.elevenways.zenit.common.live.LiveFeeds;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
@@ -144,7 +145,8 @@ final class ServerMediaHandlers {
                     Blast.log("MEDIA: could not remove the upload temp file", temp);
                 }
             }
-            ActivityLog.record(Models.get(ServerModel.class), serverId, HohenheimActivityAction.MEDIA_UPLOADED, name);
+            History.event(Models.get(ServerModel.class), serverId, Change.fact(HohenheimActivityAction.MEDIA_UPLOADED,
+                Map.of(HohenheimActivityAction.NAME_KEY, name)));
             HohenheimFlash.success(conduit, HohenheimMicrocopy.SERVER_MEDIA.of("media_uploaded").withArg("name", name));
             // The uploader reloads the tab itself, so the answer is a bare status rather
             // than a redirect: there is no form post to send back.
@@ -168,7 +170,8 @@ final class ServerMediaHandlers {
                 HohenheimFlash.error(conduit, HandlerSupport.violationMessage(refused));
                 return HandlerSupport.redirect(tab);
             }
-            ActivityLog.record(Models.get(ServerModel.class), serverId, HohenheimActivityAction.MEDIA_DELETED, name);
+            History.event(Models.get(ServerModel.class), serverId, Change.fact(HohenheimActivityAction.MEDIA_DELETED,
+                Map.of(HohenheimActivityAction.NAME_KEY, name)));
             HohenheimFlash.success(conduit, HohenheimMicrocopy.SERVER_MEDIA.of("media_deleted").withArg("name", name));
             return HandlerSupport.redirect(tab);
         });

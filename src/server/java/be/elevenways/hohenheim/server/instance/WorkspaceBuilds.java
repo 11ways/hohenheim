@@ -24,7 +24,8 @@ import be.elevenways.hohenheim.server.source.SiteSources;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -189,8 +190,8 @@ public final class WorkspaceBuilds {
             // half-written checkout. restartWorkload and not restart: restart re-enters
             // InstanceService.deploy, whose workspace branch is THIS method.
             InstanceStatus status = this.instances.restartWorkload(instanceId);
-            ActivityLog.record(Models.get(InstanceModel.class), instanceId,
-                HohenheimActivityAction.DEPLOYED, trigger.word());
+            History.event(Models.get(InstanceModel.class), instanceId, Change.fact(HohenheimActivityAction.DEPLOYED,
+                Map.of(HohenheimActivityAction.TRIGGER_KEY, trigger.word())));
             DeployStatuses.report(settings, commitSha, GitProviderClient.StatusState.SUCCESS,
                 DeployStatuses.CONTEXT_DEPLOY, "Deployed", null);
             finish(operationId, BuildOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), commitSha, null, log,

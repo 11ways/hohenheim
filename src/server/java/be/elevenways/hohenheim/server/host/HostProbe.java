@@ -10,7 +10,10 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -181,8 +184,8 @@ public final class HostProbe {
                 HostDisk.record(server, disk, now);
             }
         }
-        // A heartbeat is bookkeeping, never activity: see HohenheimActivity.
-        ActivityLog.suppressed(() -> Models.get(ServerModel.class).save(server));
+        // A heartbeat is bookkeeping, never activity: ServerModel captures none of the fields it writes.
+        Models.get(ServerModel.class).save(server);
     }
 
     /**
@@ -204,11 +207,21 @@ public final class HostProbe {
         String previous = server.get(ServerModel.LAST_ERROR_KIND);
         server.set(ServerModel.LAST_ERROR_KIND, outcome.kind().token);
         server.set(ServerModel.LAST_ERROR, outcome.detail());
+        boolean quarantines = outcome.kind() == FailureKind.HOST_KEY_CHANGED
+            && server.get(ServerModel.QUARANTINED_AT) == null;
         if (outcome.kind() == FailureKind.HOST_KEY_CHANGED) {
             quarantine(server, outcome.detail());
         }
-        // The failure reaches operators through the transition alert and the attention list, not the activity log.
-        ActivityLog.suppressed(() -> Models.get(ServerModel.class).save(server));
+        // The failure itself is no change (its fields are not captured) and reaches operators through the transition
+        // alert and the attention list; a quarantine it stamps is a security event, recorded as the system's.
+        if (quarantines) {
+            Map<String, Object> reason = outcome.detail() == null ? Map.of()
+                : Map.of(HohenheimActivityAction.REASON_KEY, outcome.detail());
+            ExecutionIdentity.runAsSystem(HohenheimSystemPurposes.HOST_PROBE, () -> Models.get(ServerModel.class)
+                .save(server, Change.fact(HohenheimActivityAction.QUARANTINED, reason)));
+        } else {
+            Models.get(ServerModel.class).save(server);
+        }
         if (previous == null || previous.isBlank()) {
             Alerts.trySend(NotificationEvents.HOST_UNREACHABLE,
                 Alerts.about(ServerModel.MODEL_ID, server.get(ServerModel.ID)),

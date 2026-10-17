@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -96,4 +97,8 @@ public class DnsZonePeerModel extends Model {
 
     @Override
     public Schema getSchema() { return SCHEMA; }
+
+    /** Only the link itself is captured, filed on its zone; the probes' and transfers' stamps are bookkeeping. */
+    public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.optional()
+        .changes(ZONE_ID, PEER_ID).filedOn(DnsZoneModel.class, row -> row.get(ZONE_ID)));
 }

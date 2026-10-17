@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.hohenheim.server.runtime.ConsoleStream;
 import be.elevenways.hohenheim.server.runtime.ConsoleStreamSupport;
 import be.elevenways.protoblast.common.Blast;
@@ -115,8 +116,8 @@ final class InstanceConsoleSession {
         // CONSOLE-only viewer's session restart a crashed workload as that viewer, which the
         // POWER gate refused, leaving it down. Viewer reads stay gated where they happen: the
         // attach and the socket's revalidate, both on the viewer's own thread.
-        JobRunner.startVirtualThread(() -> ExecutionIdentity.runDetachedAsSystem("instance-console",
-            this::pump));
+        JobRunner.startVirtualThread(() -> ExecutionIdentity.runDetachedAsSystem(
+            HohenheimSystemPurposes.INSTANCE_CONSOLE, this::pump));
     }
 
     /** Teach the live redactor a value declared secret after this session opened. */

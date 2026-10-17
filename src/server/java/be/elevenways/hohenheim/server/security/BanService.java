@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.security;
 
+import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BanModel;
@@ -156,7 +157,7 @@ public final class BanService {
                 if (waits) {
                     room.release();
                 }
-                ExecutionIdentity.runDetachedAsSystem("ban-writer", task);
+                ExecutionIdentity.runDetachedAsSystem(HohenheimSystemPurposes.BAN_WRITER, task);
             });
         };
     }
@@ -174,7 +175,7 @@ public final class BanService {
         refreshCache();
         if (nft.isEnabled() && this.nftBootStarted.compareAndSet(false, true)) {
             this.nftBootThread = Thread.ofPlatform().daemon().name("nft-resync").start(() ->
-                ExecutionIdentity.runDetachedAsSystem("nft-resync", () -> {
+                ExecutionIdentity.runDetachedAsSystem(HohenheimSystemPurposes.NFT_RESYNC, () -> {
                     Blast.log("NFT: background boot reconciliation started");
                     nft.setup(NftService.configuredPorts(), NftService.configuredSshPorts());
                     resyncNftables();
@@ -485,10 +486,10 @@ public final class BanService {
      * Lift an active ban: stamps the lift columns on the ban row and removes the kernel
      * element.
      *
-     * AIDEV-NOTE: "audit" here means the BAN ROW ITSELF, which is the trail (BanParts
-     * declares no update or delete writer). It is deliberately NOT the framework
-     * activity log: this is an {@code updateAll()}, which fires no per-row write hooks,
-     * so no {@code zenit_activity} row is written. {@code lifted_by} carries the actor.
+     * AIDEV-NOTE: the ban row's lift columns are the trail (BanParts declares no update or
+     * delete writer), and their targeted update records one change for the ban, as every
+     * update of a captured field does. A targeted statement, not a whole-row save: the
+     * caller's row may be stale, and {@code lifted_by} carries the actor.
      */
     public synchronized void lift(@NonNull Row ban, @Nullable String liftedBy) {
         BanModel bans = Models.get(BanModel.class);

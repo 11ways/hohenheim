@@ -9,7 +9,8 @@ import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
 import be.elevenways.hohenheim.server.runtime.ExecSupport;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -17,6 +18,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Run an ARBITRARY command inside an instance's workload -- the surface that ENFORCES the
@@ -97,7 +99,8 @@ public final class InstanceExec {
 
         // Recorded on the record, never only in a log line: an arbitrary command inside a
         // tenant workload is exactly the act an audit trail exists for.
-        ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.EXEC, command);
+        History.event(Models.get(InstanceModel.class), instanceId,
+            Change.fact(HohenheimActivityAction.EXEC, Map.of(HohenheimActivityAction.COMMAND_KEY, command)));
 
         String output = outcome.outputTail();
         if (output.length() > OUTPUT_TAIL_LIMIT) {

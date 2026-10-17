@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.hohenheim.HohenheimIds;
@@ -389,4 +390,8 @@ public class AccessRuleModel extends Model {
 
     @Override
     public Schema getSchema() { return SCHEMA; }
+
+    /** A rule's change is filed on its access list, whose history lists it. */
+    public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.optional().changes()
+        .filedOn(AccessListModel.class, row -> row.get(ACCESS_LIST_ID)));
 }

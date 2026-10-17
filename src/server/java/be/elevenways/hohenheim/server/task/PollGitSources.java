@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.server.HohenheimRoles;
@@ -51,6 +52,6 @@ public class PollGitSources extends ScheduledTask {
     /** The deploys a new commit starts are the system's own work, as the webhook's are. */
     @Override
     public void executor(TaskContext ctx) {
-        ExecutionIdentity.runAsSystem("git-poll", GitSourcePolls::checkDue);
+        ExecutionIdentity.runAsSystem(HohenheimSystemPurposes.GIT_POLL, GitSourcePolls::checkDue);
     }
 }

@@ -2,8 +2,6 @@ package be.elevenways.hohenheim.server.auth;
 
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.AccessRuleModel;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -28,13 +26,7 @@ public final class AccessRuleNodes {
     }
 
     /**
-     * Append one node to a list's tree, at the end of its parent's sibling run.
-     *
-     * AIDEV-NOTE: the fourth argument of {@code ActivityLog.record} is the DETAIL, not the
-     * accountability origin -- the origin column is stamped from {@code Accountability},
-     * which zenit-auth resolves per request ("api" for an API key, "web" for the panel).
-     * Both callers used to hand it a surface token, and the Rules tab handed it the rule
-     * TYPE, so the recorded detail said nothing about what was created.
+     * Append one node to a list's tree, at the end of its parent's sibling run; its save is the recorded create.
      *
      * @param parentId the enclosing group, or null for a direct child of the implicit root
      * @return the saved row
@@ -49,7 +41,6 @@ public final class AccessRuleNodes {
         // No position: the rule tree appends an unplaced rule after its siblings (AccessRuleModel.TREE).
         rule.set(AccessRuleModel.ENABLED, AccessRuleModel.TYPE_GROUP.equals(type));
         model.save(rule);
-        ActivityLog.record(model, rule.get(AccessRuleModel.ID), ZenitActivityAction.CREATE, type);
         return rule;
     }
 

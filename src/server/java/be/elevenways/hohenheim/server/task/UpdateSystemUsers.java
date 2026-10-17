@@ -5,7 +5,8 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.security.ExecutionIdentity;
+import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.SystemUserModel;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
@@ -83,8 +84,12 @@ public class UpdateSystemUsers extends ScheduledTask {
         row.set(SystemUserModel.LAST_SEEN_AT, now);
     }
 
-    /** Parse /etc/passwd and reconcile the system_users table. */
+    /** Parse /etc/passwd and reconcile the system_users table, as system work under its own purpose. */
     public static void reconcile() {
+        ExecutionIdentity.runAsSystem(HohenheimSystemPurposes.SYSTEM_USERS, UpdateSystemUsers::reconcileParsed);
+    }
+
+    private static void reconcileParsed() {
         List<ParsedUser> parsed = parsePasswdFile();
 
         SystemUserModel model = Models.get(SystemUserModel.class);
@@ -109,8 +114,8 @@ public class UpdateSystemUsers extends ScheduledTask {
                 }
             } else {
                 apply(existing, pu, now);
-                // Re-reading /etc/passwd every pass is a mirror refresh, never activity: see HohenheimActivity.
-                ActivityLog.suppressed(() -> model.save(existing));
+                // A pass that only re-reads /etc/passwd changes LAST_SEEN_AT alone, which no change captures.
+                model.save(existing);
             }
         }
 

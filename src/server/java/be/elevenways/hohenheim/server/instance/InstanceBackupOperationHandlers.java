@@ -6,8 +6,6 @@ import be.elevenways.hohenheim.instance.InstanceBackupOperations.Restored;
 import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.FormSpec;
@@ -56,7 +54,7 @@ public final class InstanceBackupOperationHandlers {
     /** Removes the artifact from its target and the row; the activity row names the act. */
     private static @NonNull Integer delete(@NonNull OperationCall<Row, Void> call) {
         Integer id = call.subject().get(InstanceBackupModel.ID);
-        ActivityLog.withAction(ZenitActivityAction.DELETE, "delete_backup", () -> new InstanceBackups().delete(id));
+        new InstanceBackups().delete(id);
         return 1;
     }
 
@@ -87,9 +85,7 @@ public final class InstanceBackupOperationHandlers {
     private static @NonNull Restored restore(@NonNull OperationCall<Row, RestoreInput> call) {
         AtomicReference<InstanceBackups.Restored> restored = new AtomicReference<>();
         Integer serverId = call.input() == null ? null : call.input().serverId();
-        ActivityLog.withAction(ZenitActivityAction.CREATE, "restore_backup",
-            () -> restored.set(new InstanceBackups().restoreToNew(call.subject().get(InstanceBackupModel.ID),
-                null, serverId)));
+        restored.set(new InstanceBackups().restoreToNew(call.subject().get(InstanceBackupModel.ID), null, serverId));
         InstanceBackups.Restored outcome = restored.get();
         return new Restored(outcome.instanceId(), outcome.complete() ? null : outcome.describeLosses(),
             outcome.movedPorts().isEmpty() ? null : String.join(", ", outcome.movedPorts()));

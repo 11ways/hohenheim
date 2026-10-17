@@ -2,9 +2,10 @@ package be.elevenways.hohenheim.server.dns;
 
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsZonePeerModel;
+import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -62,14 +63,15 @@ public final class DnsFederationTrace {
     }
 
     /**
-     * Saves a trace stamp without an activity entry.
+     * Saves a trace stamp as the system's DNS federation work.
      *
-     * AIDEV-NOTE: a trace stamp is bookkeeping, like {@link DnsSecondaryFreshness}'s probe; the AXFR responder runs on
-     * the DNS server's own thread with no identity, so its save read as "Unattributed changed Dns zone peer" in the
-     * activity log. The structured log line above is the trace.
+     * AIDEV-NOTE: a trace stamp is bookkeeping, like {@link DnsSecondaryFreshness}'s probe: DnsZonePeerModel captures
+     * none of its fields, so the save records nothing. The AXFR responder runs on the DNS server's own thread with no
+     * identity, which is why the save runs under its own purpose. The structured log line above is the trace.
      */
     private static void stamp(@NonNull Row link) {
-        ActivityLog.suppressed(() -> Models.get(DnsZonePeerModel.class).save(link));
+        ExecutionIdentity.runAsSystem(HohenheimSystemPurposes.DNS_FEDERATION,
+            () -> Models.get(DnsZonePeerModel.class).save(link));
     }
 
     /** @return the zone's link to the enabled peer holding the TSIG key, or null */

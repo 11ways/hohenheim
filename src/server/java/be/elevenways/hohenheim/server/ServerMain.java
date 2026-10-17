@@ -68,7 +68,7 @@ public class ServerMain {
         // THE process entry point declares the system identity: the command lines, the boot
         // and every virtual thread, pool and timer started from here carry it, which is what
         // lets HohenheimAccess's gates refuse work that declared no identity at all.
-        ExecutionIdentity.runAsSystem("boot", () -> start(args));
+        ExecutionIdentity.runAsSystem(HohenheimSystemPurposes.BOOT, () -> start(args));
     }
 
     private static void start(String[] args) {
@@ -340,7 +340,8 @@ public class ServerMain {
     /** Registers cleanup before the first managed child can start. */
     private static void installShutdownHook() {
         Runtime.getRuntime().addShutdownHook(new Thread(
-            () -> ExecutionIdentity.runAsSystem("shutdown", ServerMain::shutdown), "hohenheim-shutdown"));
+            () -> ExecutionIdentity.runAsSystem(HohenheimSystemPurposes.SHUTDOWN, ServerMain::shutdown),
+            "hohenheim-shutdown"));
     }
 
     /**

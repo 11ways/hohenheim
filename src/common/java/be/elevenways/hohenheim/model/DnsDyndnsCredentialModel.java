@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
@@ -49,4 +50,8 @@ public class DnsDyndnsCredentialModel extends Model {
 
     @Override
     public Schema getSchema() { return SCHEMA; }
+
+    /** A credential's change is filed on the record it updates. */
+    public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.optional().changes()
+        .filedOn(DnsRecordModel.class, row -> row.get(RECORD_ID)));
 }

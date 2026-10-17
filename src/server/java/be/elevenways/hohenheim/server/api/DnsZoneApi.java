@@ -15,8 +15,8 @@ import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
 import be.elevenways.zenit.common.conduit.Conduit;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -79,8 +79,6 @@ public final class DnsZoneApi {
                     FormSubmissionRawValues.fromConduit(conduit), ctx);
                 Row created = Objects.requireNonNull(
                     Models.get(DnsZoneModel.class).findById(zoneId));
-                ActivityLog.record(Models.get(DnsZoneModel.class), zoneId, ZenitActivityAction.CREATE,
-                    created.get(DnsZoneModel.ORIGIN));
                 return ApiConduits.json(projection(created));
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
@@ -121,8 +119,7 @@ public final class DnsZoneApi {
             try {
                 DnsZoneFiles.ImportResult result = DnsZoneFiles.importText(zone, text,
                     DnsZoneFiles.ApexNsPolicy.forKeepFlag(ApiConduits.formValue(conduit, "keep_ns")));
-                ActivityLog.record(Models.get(DnsZoneModel.class), zoneId, HohenheimActivityAction.IMPORTED,
-                    zone.get(DnsZoneModel.ORIGIN));
+                History.event(Models.get(DnsZoneModel.class), zoneId, Change.fact(HohenheimActivityAction.IMPORTED));
                 Row reloaded = Objects.requireNonNull(Models.get(DnsZoneModel.class).findById(zoneId));
                 Map<String, Object> body = new LinkedHashMap<>();
                 body.put("id", zoneId);

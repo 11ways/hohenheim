@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -81,4 +82,7 @@ public class InstanceLogModel extends Model {
 
     @Override
     public Schema getSchema() { return SCHEMA; }
+
+    /** Console episodes upsert here per flush: never recorded (it records nothing today either). */
+    public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.untracked());
 }

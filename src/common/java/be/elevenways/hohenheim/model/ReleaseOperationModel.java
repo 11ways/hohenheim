@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -172,4 +173,7 @@ public class ReleaseOperationModel extends Model {
     public String getTableName() { return "release_operations"; }
     @Override
     public Schema getSchema() { return SCHEMA; }
+
+    /** A release operation is itself the history surface: never recorded (it records nothing today either). */
+    public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.untracked());
 }
