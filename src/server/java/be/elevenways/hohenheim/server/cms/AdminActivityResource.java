@@ -14,7 +14,7 @@ import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.cms.server.resource.ActivityAdmin;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.activity.ActivityRules;
-import be.elevenways.zenit.common.orm.activity.ActivityText;
+import be.elevenways.zenit.common.orm.history.HistoryText;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.query.rules.RuleText;
@@ -162,7 +162,7 @@ public final class AdminActivityResource {
                 AdminRecordLinks.detailForToken(row.get(ActivityModel.MODEL), row.get(ActivityModel.RECORD_ID)));
         }
         if (ActivityModel.MODEL.getName().equals(name)) {
-            String humanized = ActivityText.humanizeModelToken(row.get(ActivityModel.MODEL));
+            String humanized = HistoryText.humanizeModelToken(row.get(ActivityModel.MODEL));
             return humanized.isEmpty() ? null : humanized;
         }
         return null;

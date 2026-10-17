@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.common.orm.activity.ActivityText;
+import be.elevenways.zenit.common.orm.history.HistoryText;
 import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolvers;
@@ -61,7 +61,7 @@ public final class HostPostureAcknowledgement {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("posture_acknowledgement_needs_actor")
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
         }
-        String label = ActivityText.actorName(principal, actor, who.actorLabel(), who.origin())
+        String label = HistoryText.actorName(principal, actor, who.actorLabel(), who.origin())
             .resolve(LocaleChain.empty(), MessageResolvers.getDefault());
         String posture = server.get(ServerModel.POSTURE);
         server.set(ServerModel.ACKNOWLEDGED_POSTURE, posture);
