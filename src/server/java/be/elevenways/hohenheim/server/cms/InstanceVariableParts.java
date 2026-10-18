@@ -90,10 +90,19 @@ public final class InstanceVariableParts {
         return TableSpec.<Row>builder()
             .column(ColumnSpec.fromField(InstanceVariableModel.KEY).sortable().build())
             .column(ColumnSpec.fromField(InstanceVariableModel.KIND).sortable(false).build())
-            .column(ColumnSpec.virtual(VALUE_COLUMN,
-                HohenheimMicrocopy.INSTANCE_PROVISIONING.of("value")).sortable(false).build())
+            .column(valueColumn())
             .defaultSort(SortSpec.asc(InstanceVariableModel.KEY.getName()))
             .build();
+    }
+
+    /**
+     * The value column every variable list fills with {@link #plainValue}, an instance's or an environment's; a value it
+     * withholds reads "Not shown", never the framework's "None", which would say a secret is empty.
+     */
+    static @NonNull ColumnSpec valueColumn() {
+        return ColumnSpec.virtual(VALUE_COLUMN, HohenheimMicrocopy.INSTANCE_PROVISIONING.of("value"))
+            .absent(HohenheimMicrocopy.INSTANCE_PROVISIONING.of("value_withheld"))
+            .sortable(false).build();
     }
 
     /** @return the stored value of a plain variable; null for a secret or a kind nobody recognizes */

@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.cms.common.resource.ChildList;
 import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
@@ -19,6 +20,7 @@ import be.elevenways.zenit.cms.common.resource.ResourceForm;
 import be.elevenways.zenit.cms.common.resource.ResourceList;
 import be.elevenways.zenit.cms.common.resource.ResourceMutations;
 import be.elevenways.zenit.cms.common.resource.ResourceReads;
+import be.elevenways.zenit.cms.common.resource.ResourceParent;
 import be.elevenways.zenit.cms.common.resource.ResourceTabs;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
@@ -39,8 +41,10 @@ import be.elevenways.zenit.server.operation.RowDeleteOperations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * The project environments' parts: the admin environment resource and the admin environment-variable resource.
@@ -99,6 +103,23 @@ public final class EnvironmentParts {
         // The static field initializers did the work.
     }
 
+    /**
+     * The Environments tab of a project's page: this entry narrowed to the project, whose column it hides.
+     *
+     * AIDEV-NOTE: one instance per panel (a ChildList resolves its slug once); only the admin offers environments.
+     */
+    static final ChildList<Row> PROJECT_ENVIRONMENTS = ChildList.<Row>of(HohenheimSlugs.ENVIRONMENTS)
+        .icon(Icon.of("layer-group"))
+        .lead(HohenheimMicrocopy.PROJECT.of("environments_lead"))
+        .hide(HohenheimSlugs.ENVIRONMENTS, EnvironmentModel.PROJECT_ID.getName());
+
+    /** The Variables tab an environment's page opens on: the variable entry narrowed to it. */
+    private static final ChildList<Row> VARIABLES = ChildList.<Row>of(HohenheimSlugs.ENVIRONMENT_VARIABLES)
+        .label(HohenheimMicrocopy.ENVIRONMENT.of("variables"))
+        .icon(Icon.of("sliders"))
+        .lead(HohenheimMicrocopy.ENVIRONMENT.of("variables_lead"))
+        .hide(HohenheimSlugs.ENVIRONMENT_VARIABLES, InstanceVariableModel.ENVIRONMENT_ID.getName());
+
     /** @return the admin environment resource */
     public static @NonNull PanelResource<Row> admin() {
         RelationPick project = RelationPick.of(EnvironmentModel.PROJECT_ID, ProjectModel.MODEL_ID).build();
@@ -125,18 +146,23 @@ public final class EnvironmentParts {
             .navOrder(15)
             .showInNav(false)
             .standsUnder(HohenheimSlugs.PROJECTS)
+            // A project's page lists its environments, and an environment's trail leads back through its project.
+            .parent(ResourceParent.of(HohenheimSlugs.PROJECTS, EnvironmentModel.PROJECT_ID)
+                .tab(HohenheimSlugs.Tab.ENVIRONMENTS))
             .reads(ResourceReads.rows())
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).facets().ruleFilters()
                 .search(EnvironmentModel.NAME, EnvironmentModel.DESCRIPTION).build())
             // AIDEV-NOTE: the name is the one inline cell. PROJECT_ID is a RelationPick (outside the compact cell
             // subset), and re-homing an environment in use is refused by the ProjectGuards write funnel.
             .form(ResourceForm.<Row>of(form)
-                .createDefaults((access, panel) -> prefill(access, HohenheimParams.PROJECT_ID_PREFILL,
+                .createDefaults((access, panel) -> prefill(access, form, HohenheimParams.PROJECT_ID_PREFILL,
                     EnvironmentModel.PROJECT_ID.getName()))
                 .quickCreate(ENVIRONMENT_QUICK_CREATE)
                 .quickCreatePresets(access -> CmsSupport.parentPreset(access, EnvironmentModel.PROJECT_ID.getName(),
                     HohenheimSlugs.PROJECTS))
                 .inlineEditable(EnvironmentModel.NAME)
+                // An environment is the values its apps deploy with: its page opens on them.
+                .landingTab(HohenheimSlugs.Tab.VARIABLES)
                 .build())
             .writes(ResourceMutations.rows().create().update().delete(DELETE).build())
             // The dialog states the policy the write funnel enforces: an environment still holding variables or
@@ -144,7 +170,7 @@ public final class EnvironmentParts {
             .deleteConfirmation(DeleteConfirmation.of(DeleteConfirmation.body(
                 HohenheimMicrocopy.ENVIRONMENT.of("delete_confirm"))))
             .relatedPages(RelatedPage.toPeer(HohenheimSlugs.ENVIRONMENT_VARIABLES))
-            .tabs(ResourceTabs.<Row>none().withHistory().withContributions())
+            .tabs(ResourceTabs.<Row>of(List.of(VARIABLES)).withHistory().withContributions())
             .build();
     }
 
@@ -170,6 +196,7 @@ public final class EnvironmentParts {
             // The chip carries the KEY: it is what gets pasted into a compose file or a shell.
             .column(ColumnSpec.fromField(InstanceVariableModel.KEY).filterable().subtext("kind").copyable().build())
             .column(ColumnSpec.fromField(InstanceVariableModel.KIND).filterable().hidden().build())
+            .column(InstanceVariableParts.valueColumn())
             .column(ColumnSpec.fromField(InstanceVariableModel.ENVIRONMENT_ID).relation(environment).build())
             .build();
         return PanelResource.builder(HohenheimIds.id("environment_variable"), HohenheimSlugs.ENVIRONMENT_VARIABLES,
@@ -182,15 +209,21 @@ public final class EnvironmentParts {
             .navOrder(15)
             .showInNav(false)
             .standsUnder(HohenheimSlugs.ENVIRONMENTS)
+            // An environment's page lists its variables, and a variable's trail leads back through its environment.
+            .parent(ResourceParent.of(HohenheimSlugs.ENVIRONMENTS, InstanceVariableModel.ENVIRONMENT_ID)
+                .tab(HohenheimSlugs.Tab.VARIABLES))
             // List, load and create alike: a create without an environment refuses rather than landing as an orphan.
             .scope(VARIABLE_ROWS)
             .reads(ResourceReads.rows())
             // The key only: PLAIN_VALUE would leak a lookup over config values, and SECRET_VALUE is a secret the
-            // search layer refuses outright.
+            // search layer refuses outright. The value column reads a plain value only, as an instance's list does.
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).facets().ruleFilters()
-                .search(InstanceVariableModel.KEY).build())
+                .search(InstanceVariableModel.KEY)
+                .computed(Objects.requireNonNull(table.column(InstanceVariableParts.VALUE_COLUMN)),
+                    (row, request) -> InstanceVariableParts.plainValue(row))
+                .build())
             .form(ResourceForm.<Row>of(form)
-                .createDefaults((access, panel) -> prefill(access, HohenheimParams.ENVIRONMENT_ID_PREFILL,
+                .createDefaults((access, panel) -> prefill(access, form, HohenheimParams.ENVIRONMENT_ID_PREFILL,
                     InstanceVariableModel.ENVIRONMENT_ID.getName()))
                 .quickCreate(VARIABLE_QUICK_CREATE)
                 .quickCreatePresets(access -> CmsSupport.parentPreset(access,
@@ -233,11 +266,18 @@ public final class EnvironmentParts {
             .withArg("environment", environment));
     }
 
-    /** A related-record link's {@code ?<parent>_id=} prefill. */
-    private static @NonNull Map<String, Object> prefill(@NonNull AccessContext access,
+    /**
+     * The create form's declared defaults (a new variable starts plain) with a related-record link's
+     * {@code ?<parent>_id=} prefill over them; the hook replaces the spec's defaults, so it lays them itself.
+     */
+    private static @NonNull Map<String, Object> prefill(@NonNull AccessContext access, @NonNull FormSpec form,
                                                         @NonNull ParameterDefinition<Integer> param,
                                                         @NonNull String field) {
+        Map<String, Object> values = new LinkedHashMap<>(form.defaultValues());
         Integer id = CmsSupport.prefill(access.conduit(), param);
-        return id != null ? Map.of(field, id) : Map.of();
+        if (id != null) {
+            values.put(field, id);
+        }
+        return values;
     }
 }

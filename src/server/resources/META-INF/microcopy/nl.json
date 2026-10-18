@@ -2077,6 +2077,10 @@
     {
       "text": "Variabelen",
       "scope": "form_section"
+    },
+    {
+      "text": "Variabelen",
+      "scope": "environment"
     }
   ],
   "webhook": {
@@ -18704,5 +18708,14 @@
   ],
   "not_forwarding_detail": {"scope": "app_health", "text": "Poort {$port} kon niet worden geopend op de host van deze proxy: een ander programma gebruikt hem misschien, of deze installatie draait de proxy niet."},
   "stream_forwarding": {"scope": "app_health", "text": "Stuurt poort {$port} door"},
-  "stream_connect_hint": {"scope": "app_overview", "text": "Clients verbinden met deze poort van de host van de proxy; die stuurt wat binnenkomt door naar {$target}."}
+  "stream_connect_hint": {"scope": "app_overview", "text": "Clients verbinden met deze poort van de host van de proxy; die stuurt wat binnenkomt door naar {$target}."},
+  "variables_lead": {"scope": "environment", "text": "Elke app in deze omgeving krijgt deze waarden bij de volgende uitrol; een eigen waarde van de app voor dezelfde sleutel gaat voor."},
+  "environments_lead": {"scope": "project", "text": "De omgevingen waarin dit project uitrolt, elk met de variabelen waarmee de apps erin starten."},
+  "members_lead": {"scope": "project", "text": "Iemand hoort bij dit project door de rol ervan te hebben: geef die persoon onder Toegang, Personen de rol met de naam van dit project."},
+  "add_member": {"scope": "project", "text": "Iemand toevoegen"},
+  "quota_used_of": {"scope": "project", "text": "{$used} van {$limit}"},
+  "quota_no_limit": {"scope": "project", "text": "{$used}, geen limiet"},
+  "member_kind_person": {"scope": "project", "text": "Persoon"},
+  "member_kind_group": {"scope": "project", "text": "Groep"},
+  "value_withheld": {"scope": "instance_provisioning", "text": "Niet getoond"}
 }

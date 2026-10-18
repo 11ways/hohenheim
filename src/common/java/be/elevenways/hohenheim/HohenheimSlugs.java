@@ -114,11 +114,13 @@ public final class HohenheimSlugs {
         public static final String DEPLOYMENTS = "deployments";
         public static final String DEV_SESSIONS = "dev-sessions";
         public static final String DEVICES = "devices";
+        public static final String ENVIRONMENTS = "environments";
         public static final String EXEC = "exec";
         public static final String FILES = "files";
         public static final String FRAMEBUFFER = "framebuffer";
         public static final String INSTALL_MEDIA = "install-media";
         public static final String KEYS = "keys";
+        public static final String MEMBERS = "members";
         public static final String MIGRATE = "migrate";
         public static final String PROVISIONING = "provisioning";
         public static final String RECORDS = "records";
@@ -129,6 +131,7 @@ public final class HohenheimSlugs {
         public static final String SHELL = "shell";
         public static final String STATS = "stats";
         public static final String STEPS = "steps";
+        public static final String VARIABLES = "variables";
         public static final String VOLUMES = "volumes";
         public static final String ZONEFILE = "zonefile";
 

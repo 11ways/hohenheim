@@ -40,6 +40,7 @@ import be.elevenways.zenit.server.operation.OperationHandlers;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -87,14 +88,17 @@ public final class ProjectParts {
             .writes(ResourceMutations.rows().create().update().delete(DELETE).build())
             .deleteConfirmation(DeleteConfirmation.of(
                 DeleteConfirmation.body(HohenheimMicrocopy.PROJECT.of("delete_confirm"))))
-            .tabs(ResourceTabs.<Row>none().withHistory().withContributions())
+            .tabs(ResourceTabs.<Row>of(List.of(EnvironmentParts.PROJECT_ENVIRONMENTS,
+                    ProjectMembershipParts.ADMIN_MEMBERS))
+                .withHistory().withContributions())
             .relatedPages(RelatedPage.toPeer(HohenheimSlugs.ENVIRONMENTS))
             .build();
     }
 
     public static @NonNull PanelResource<Row> manage() {
         // A Team cluster member, shown while the tenant is in a project.
-        return ManageTwin.listed(entry(ManageTwin.id("project"), 40), TenantScopes.PROJECTS, ResourceTabs.none(),
+        return ManageTwin.listed(entry(ManageTwin.id("project"), 40), TenantScopes.PROJECTS,
+                ResourceTabs.<Row>of(List.of(ProjectMembershipParts.MANAGE_MEMBERS)),
                 access -> !Projects.visibleTo(access).isEmpty())
             .form(ResourceForm.<Row>of(formSpec()).build())
             .build();
@@ -146,11 +150,14 @@ public final class ProjectParts {
         return project.get(ProjectModel.GROUP_ID);
     }
 
-    private static String quota(Row row, @Nullable UUID group) {
+    /** @return the instances the project's owner bucket holds, worded against its limit or as having none */
+    private static Object quota(Row row, @Nullable UUID group) {
         if (group == null) return "-";
         String packed = HohenheimAccess.packSubjects(Projects.ownerSubjectsOf(row));
         Integer limit = OwnerBudget.INSTANCES.limitFor(packed);
-        return OwnerBudget.INSTANCES.usedBy(packed) + " / " + (limit == null ? "-" : String.valueOf(limit));
+        var used = OwnerBudget.INSTANCES.usedBy(packed);
+        return limit == null ? HohenheimMicrocopy.PROJECT.of("quota_no_limit").withArg("used", used)
+            : HohenheimMicrocopy.PROJECT.of("quota_used_of").withArg("used", used).withArg("limit", limit);
     }
 
     private static long ownedCount(@Nullable UUID group, Identifier model) {
