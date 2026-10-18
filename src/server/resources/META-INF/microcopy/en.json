@@ -14256,6 +14256,22 @@
     "text": "All apps",
     "scope": "hohenheim"
   },
+  "host_filter": {
+    "text": "Host",
+    "scope": "hohenheim"
+  },
+  "host_filter_all": {
+    "text": "All hosts",
+    "scope": "hohenheim"
+  },
+  "site_filter": {
+    "text": "Site",
+    "scope": "hohenheim"
+  },
+  "site_filter_all": {
+    "text": "All sites",
+    "scope": "hohenheim"
+  },
   "people_only": {
     "text": "People only",
     "scope": "hohenheim"

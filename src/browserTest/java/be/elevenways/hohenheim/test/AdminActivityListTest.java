@@ -179,7 +179,8 @@ class AdminActivityListTest extends HohenheimTestBase {
             .as("step 1: system work is not an account").isEqualTo("System");
 
         // 2. The live admin list carries that name and never the internal reason.
-        HttpResponse<String> response = adminGet("/admin/activity?filter.origin=system&filter.subject_id=" + hostId);
+        HttpResponse<String> response = adminGet("/admin/activity?filter.origin=system&filter."
+            + AdminActivityResource.HOST_FILTER + "=" + hostId);
         assertThat(response.statusCode()).as("step 2: system activity renders").isEqualTo(200);
         assertThat(response.body()).as("step 2: the system action has its public name")
             .contains(record, "System").doesNotContain("work wait sweep");
@@ -209,14 +210,15 @@ class AdminActivityListTest extends HohenheimTestBase {
             .as("step 1: the panel's activity columns match the framework's")
             .isEqualTo(framework);
 
-        // 2. Every filter an operator needs to reach ONE record is declared: the model, the app, the record, and the
-        //    origin that flips the default scope.
+        // 2. Every filter an operator needs to reach ONE record is declared: the model, the app, host or site, and the
+        //    origin that flips the default scope. No filter names a bare record id: an id says nothing without its model.
         List<String> filters = PartsLists.tableSpec(resource).filters().stream()
             .map(FilterSpec::name).toList();
         assertThat(filters)
-            .as("step 2: model, app, record and origin are all filterable")
-            .contains(ActivityAdmin.MODEL_FILTER, AdminActivityResource.APP_FILTER,
-                ActionModel.SUBJECT_ID.getName(), ActionModel.ORIGIN.getName());
+            .as("step 2: model, app, host, site and origin are all filterable")
+            .contains(ActivityAdmin.MODEL_FILTER, AdminActivityResource.APP_FILTER, AdminActivityResource.HOST_FILTER,
+                AdminActivityResource.SITE_FILTER, ActionModel.ORIGIN.getName())
+            .doesNotContain(ActionModel.SUBJECT_ID.getName());
 
         int operatorHost = host(operatorTitle);
         int backgroundHost = host(backgroundTitle);
@@ -229,10 +231,10 @@ class AdminActivityListTest extends HohenheimTestBase {
         String backgroundAction = act(HistoryFixtureRows.action(datasource())
                 .by(SystemPrincipal.INSTANCE.reference()).origin(Accountability.ORIGIN_SYSTEM),
             ServerModel.MODEL_ID, backgroundHost, ChangeOp.UPDATE);
-        act(HistoryFixtureRows.action(datasource()).origin(Accountability.ORIGIN_WEB), ServerModel.MODEL_ID,
-            narrowedHost, ChangeOp.UPDATE);
-        act(HistoryFixtureRows.action(datasource()).origin(Accountability.ORIGIN_WEB), SiteModel.MODEL_ID, siteId,
-            ChangeOp.UPDATE);
+        String narrowedAction = act(HistoryFixtureRows.action(datasource()).origin(Accountability.ORIGIN_WEB),
+            ServerModel.MODEL_ID, narrowedHost, ChangeOp.UPDATE);
+        String siteAction = act(HistoryFixtureRows.action(datasource()).origin(Accountability.ORIGIN_WEB),
+            SiteModel.MODEL_ID, siteId, ChangeOp.UPDATE);
         act(HistoryFixtureRows.action(datasource()).by(PrincipalRef.account(unlinkableId))
             .origin(Accountability.ORIGIN_WEB), SiteSessionModel.MODEL_ID, "hh-activity-unlinkable-" + suffix,
             ChangeOp.UPDATE);
@@ -322,16 +324,29 @@ class AdminActivityListTest extends HohenheimTestBase {
         assertThat(unlinkable).as("step 7: and carries no record link")
             .doesNotContain("cms-activity-subject");
 
-        // 8. The record filter narrows the log to the history of ONE record.
-        HttpResponse<String> narrowed = adminGet("/admin/activity?filter.subject_id=" + narrowedHost);
+        // 8. The record filter narrows the log to the history of ONE record: never another model's record sharing its
+        //    id, nor a record whose id merely contains it. Rows are told apart by their detail links: the host
+        //    picker beside the list still offers every host by its title.
+        String sameIdSite = act(HistoryFixtureRows.action(datasource()).origin(Accountability.ORIGIN_WEB),
+            SiteModel.MODEL_ID, narrowedHost, ChangeOp.UPDATE);
+        String widerIdHost = act(HistoryFixtureRows.action(datasource()).origin(Accountability.ORIGIN_WEB),
+            ServerModel.MODEL_ID, narrowedHost + "0", ChangeOp.UPDATE);
+        HttpResponse<String> narrowed = adminGet("/admin/activity?filter." + AdminActivityResource.HOST_FILTER + "="
+            + narrowedHost);
         assertThat(narrowed.statusCode()).as("step 8: the record-filtered list renders").isEqualTo(200);
         assertThat(narrowed.body())
             .as("step 8: the named record's activity is on it")
-            .contains(narrowedTitle);
+            .contains("/admin/activity/" + narrowedAction);
         assertThat(narrowed.body())
             .as("step 8: and nothing else is")
-            .doesNotContain(operatorTitle)
-            .doesNotContain(siteTitle);
+            .doesNotContain("/admin/activity/" + operatorAction)
+            .doesNotContain("/admin/activity/" + siteAction);
+        assertThat(narrowed.body())
+            .as("step 8: a site sharing the host's id is another record")
+            .doesNotContain("/admin/activity/" + sameIdSite);
+        assertThat(narrowed.body())
+            .as("step 8: a host whose id contains the named one is another record")
+            .doesNotContain("/admin/activity/" + widerIdHost);
 
         // 9. The list reads as sentences: the time and who did what to what are shown, the detail columns wait in the
         //     column picker, and an anonymous web write reads as someone not signed in, never as "Web".

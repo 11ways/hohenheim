@@ -2,6 +2,8 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.protoblast.common.typed.rule.Condition;
@@ -67,19 +69,31 @@ public final class AdminActivityResource {
     /** The app filter's name, which keys its URL parameter ({@code filter.app=<instance id>}). */
     public static final String APP_FILTER = "app";
 
+    /** The host filter's name, which keys its URL parameter ({@code filter.host=<server id>}). */
+    public static final String HOST_FILTER = "host";
+
+    /** The site filter's name, which keys its URL parameter ({@code filter.site=<site id>}). */
+    public static final String SITE_FILTER = "site";
+
     /**
-     * The framework's own columns and filters, plus every filter an operator needs to reach one record: the app it is
-     * about, the subject record id and the origin that flips the default scope. The row draws only who, the app and
-     * internal records (board Activity); the rest keep narrowing through their chips and a link's parameters.
+     * The framework's own columns and filters, plus every filter an operator needs to reach one record: the app, host
+     * or site it is about and the origin that flips the default scope. The row draws only who, the app and internal
+     * records (board Activity); the rest keep narrowing through their chips and a link's parameters.
      *
      * AIDEV-NOTE: an app is its workload's record, so the app filter offers instances through the
      * instance record source, whose row scope decides which a reader is offered; a site-only app has no workload and is
-     * not offered. Its actions stay reachable through the record filter.
+     * not offered. Its actions stay reachable through the site filter.
+     *
+     * AIDEV-NOTE: a record filter is always ONE model's subject filter, never a leaf on the bare subject id: the id
+     * alone also matched another model's record sharing it and, as a substring, every id containing it.
      */
     private static final TableSpec<Row> TABLE = ActivityAdmin.table().toBuilder()
         .filter(ActivityAdmin.subjectFilter(APP_FILTER, InstanceModel.MODEL_ID,
             HohenheimMicrocopy.HOHENHEIM.of("app_filter"), HohenheimMicrocopy.HOHENHEIM.of("app_filter_all")))
-        .filter(FilterSpec.leaf(ActionModel.SUBJECT_ID, CoreTypes.CONTAINS).build())
+        .filter(ActivityAdmin.subjectFilter(HOST_FILTER, ServerModel.MODEL_ID,
+            HohenheimMicrocopy.HOHENHEIM.of("host_filter"), HohenheimMicrocopy.HOHENHEIM.of("host_filter_all")))
+        .filter(ActivityAdmin.subjectFilter(SITE_FILTER, SiteModel.MODEL_ID,
+            HohenheimMicrocopy.HOHENHEIM.of("site_filter"), HohenheimMicrocopy.HOHENHEIM.of("site_filter_all")))
         .filter(FilterSpec.leaf(ActionModel.ORIGIN, CoreTypes.CONTAINS).build())
         .filterRow(ActivityAdmin.ACTOR_FILTER, APP_FILTER, ActivityAdmin.INTERNAL_FILTER)
         .build();
