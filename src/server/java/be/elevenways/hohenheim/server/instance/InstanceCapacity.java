@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimViolations;
@@ -186,7 +187,7 @@ public final class InstanceCapacity {
                 || !(capabilities.get(HostPreflight.MEM_TOTAL_FACT) instanceof Number bytes)) {
             return null;
         }
-        long mb = bytes.longValue() / (1024L * 1024L);
+        long mb = bytes.longValue() / ByteUnit.MEGABYTE.factor();
         return mb > 0 ? mb : null;
     }
 
@@ -289,8 +290,8 @@ public final class InstanceCapacity {
         long free = freeMbOn(serverId);
         return fits(smallestMb, free) ? null : PlacementRefusal.FULL.text()
             .withArg("name", ServerModel.labelOf(serverId))
-            .withArg("free", Math.max(0, free))
-            .withArg("smallest", smallestMb);
+            .withArg("free", ByteUnit.MEGABYTE.bytes(Math.max(0, free)))
+            .withArg("smallest", ByteUnit.MEGABYTE.bytes(smallestMb));
     }
 
     /** {@link #reserve}'s guard ({@code used <= limit - amount}) asked without booking; nothing always fits. */
@@ -313,8 +314,8 @@ public final class InstanceCapacity {
     private static @NonNull Microcopy capacityReached(int serverId, long neededMb, long freeMb) {
         return HohenheimMicrocopy.VIOLATIONS.of("host_capacity_reached")
             .withArg("name", ServerModel.labelOf(serverId))
-            .withArg("needed", neededMb)
-            .withArg("free", Math.max(0, freeMb));
+            .withArg("needed", ByteUnit.MEGABYTE.bytes(neededMb))
+            .withArg("free", ByteUnit.MEGABYTE.bytes(Math.max(0, freeMb)));
     }
 
     /** Per thread: host id -> memory a workload this thread is replacing is about to release. */

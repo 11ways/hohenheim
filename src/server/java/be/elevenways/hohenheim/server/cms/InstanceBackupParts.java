@@ -42,8 +42,6 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Instant;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -166,7 +164,7 @@ public final class InstanceBackupParts {
             .navOrder(17)
             .showInNav(false)
             .parent(parent)
-            .reads(ResourceReads.rows().title(backup -> Microcopy.literal(title(backup))))
+            .reads(ResourceReads.rows().title(InstanceBackupParts::title))
             // A backup is immutable evidence: no create (born from the instance action or the nightly task) and no
             // update; readers view, actions act. Its archive key is a field of the page, never its title.
             .form(ResourceForm.<Row>of(FormSpec.builder().add(instance).add(InstanceBackupModel.REMOTE_KEY).build())
@@ -183,18 +181,16 @@ public final class InstanceBackupParts {
      * instance prefix on every row of a list).
      *
      * AIDEV-NOTE: declared HERE and not as a schema display field, because a display field is also the derived record
-     * source's SEARCH field. The title never names the instance: it is one String for every viewer, and the instance
-     * may be a trashed one this viewer cannot read (the instance column and card name it under the viewer's own read).
-     * It answers for every row, so no page falls back to the model's class name ("InstanceBackup #1").
+     * source's SEARCH field. The title never names the instance: the instance may be a trashed one this viewer cannot
+     * read (the instance column and card name it under the viewer's own read). The moment is typed copy, so each reader
+     * reads it on their own clock. It answers for every row, so no page falls back to the model's class name
+     * ("InstanceBackup #1").
      */
-    static @NonNull String title(@NonNull Row backup) {
+    static @NonNull Microcopy title(@NonNull Row backup) {
         Instant taken = backup.get(InstanceBackupModel.CREATED_AT);
-        return taken != null ? TAKEN_AT.format(taken) : "#" + backup.get(InstanceBackupModel.ID);
+        return taken != null ? HohenheimMicrocopy.INSTANCE_BACKUP.of("title_taken").withArg("at", taken)
+            : Microcopy.literal("#" + backup.get(InstanceBackupModel.ID));
     }
-
-    /** A backup's title: when it was taken, in UTC, to the minute. */
-    private static final DateTimeFormatter TAKEN_AT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm 'UTC'")
-        .withZone(ZoneOffset.UTC);
 
     /**
      * Restore-to-new, offered on a complete backup. It ends on the NEW instance with a toast naming it; a restore that

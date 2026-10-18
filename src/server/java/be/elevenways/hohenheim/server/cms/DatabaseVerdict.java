@@ -127,7 +127,7 @@ record DatabaseVerdict(@NonNull State state, @Nullable Microcopy reason) {
          * @param name the database's name
          * @return its attention item's title ("Database shop is not running"), null when this state raises none
          */
-        @Nullable Microcopy attentionTitle(@NonNull Object name) {
+        @Nullable Microcopy attentionTitle(@NonNull String name) {
             return this.attentionTitle == null ? null
                 : HohenheimMicrocopy.ATTENTION_TITLE.of(this.attentionTitle).withArg("name", name);
         }

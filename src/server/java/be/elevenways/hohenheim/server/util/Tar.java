@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.util;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.protoblast.server.io.BulkInputStream;
 import be.elevenways.protoblast.common.util.BlastString;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -68,7 +69,7 @@ public final class Tar {
     private static final long MAX_OCTAL_TIME = 077777777777L;
 
     /** Cap on a PAX or GNU long-name body; a real one is a few hundred bytes. */
-    private static final int MAX_META_BYTES = 1024 * 1024;
+    private static final int MAX_META_BYTES = (int) ByteUnit.MEGABYTE.factor();
 
     /**
      * The bytes a single-file archive may carry on top of its file: the entry header, the
@@ -645,7 +646,7 @@ public final class Tar {
             throws IOException {
         Reader reader = new Reader(archive);
         Entry entry = requireSingleRegular(reader, maxBytes);
-        ByteArrayOutputStream out = new ByteArrayOutputStream((int) Math.min(entry.size(), 1 << 20));
+        ByteArrayOutputStream out = new ByteArrayOutputStream((int) Math.min(entry.size(), ByteUnit.MEGABYTE.factor()));
         reader.body().transferTo(out);
         requireEnd(reader);
         return out.toByteArray();

@@ -1,10 +1,13 @@
 package be.elevenways.hohenheim.server.sitetype;
 
 import be.elevenways.protoblast.common.util.Closeables;
-import be.elevenways.zenit.common.text.ByteText;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.UpstreamForwarder;
+import be.elevenways.protoblast.common.i18n.MessageResolvers;
+import be.elevenways.protoblast.common.i18n.wording.Reader;
+import be.elevenways.protoblast.common.i18n.wording.Wording;
 import be.elevenways.protoblast.common.text.HtmlEscape;
+import be.elevenways.zenit.common.setting.ContentLocales;
 import io.undertow.io.IoCallback;
 import io.undertow.io.Sender;
 import io.undertow.server.HttpServerExchange;
@@ -174,6 +177,8 @@ public class StaticFileHandler implements SiteRequestHandler {
                 html.append("<tr><td><a href=\"../\">..</a></td><td></td></tr>");
             }
 
+            // The listing reads in the installation's content locale: a visitor of a static site has no reader here.
+            Reader listing = Reader.of(ContentLocales.chain(), MessageResolvers.getDefault());
             try (var stream = Files.list(dirPath)) {
                 stream.sorted().forEach(entry -> {
                     String name = entry.getFileName().toString();
@@ -184,7 +189,7 @@ public class StaticFileHandler implements SiteRequestHandler {
                     String href = isDir ? name + "/" : name;
                     String size = "";
                     try {
-                        if (!isDir) size = ByteText.human(Files.size(entry));
+                        if (!isDir) size = Wording.bytes(listing, Files.size(entry), MessageResolvers.getDefault());
                     } catch (IOException ignored) {}
 
                     html.append("<tr><td><a href=\"").append(HtmlEscape.attribute(href)).append("\">")

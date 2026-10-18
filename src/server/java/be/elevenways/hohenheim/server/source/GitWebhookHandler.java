@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.source;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
@@ -80,10 +81,10 @@ public class GitWebhookHandler {
     private static final String REFUSAL_BODY = "{\"error\":\"not found\"}";
 
     /** Payloads larger than this are refused, whether or not they announce their length. */
-    private static final int MAX_BODY_BYTES = 2 * 1024 * 1024;
+    private static final int MAX_BODY_BYTES = (int) ByteUnit.MEGABYTE.bytes(2);
 
     /** How much of a refused body is read and discarded before the connection is cut anyway. */
-    private static final long MAX_DRAIN_BYTES = 8L * 1024 * 1024;
+    private static final long MAX_DRAIN_BYTES = ByteUnit.MEGABYTE.bytes(8);
 
     /** How long a refused request may take to finish sending before the connection is cut. */
     private static final long DRAIN_MILLIS = 10_000;

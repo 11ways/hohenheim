@@ -14,9 +14,9 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
+import be.elevenways.zenit.common.time.OfficeZone;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.panel.PartsWrites;
-import be.elevenways.zenit.server.time.JvmZoneClock;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -42,7 +42,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * AIDEV-NOTE: the JVM default zone is moved to Asia/Kathmandu (UTC+05:45) for the journey and restored in finally:
  * on a host already running in the office zone the old defect is invisible, so the test forces the condition that
  * exposed it instead of depending on where the suite happens to run. The office zone is read through
- * JvmZoneClock.office(), never hard-coded, so the journey follows whatever default.dry declares.
+ * OfficeZone.office(), never hard-coded, so the journey follows whatever default.dry declares.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -101,7 +101,7 @@ class InstanceScheduleZoneTest extends HohenheimTestBase {
         try {
             PanelResource<Row> resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCE_SCHEDULES);
             AccessContext operator = operator();
-            ZoneId office = JvmZoneClock.office();
+            ZoneId office = OfficeZone.office();
             ZoneId declared = ZoneId.of(DECLARED_ZONE);
 
             // 1. The office zone differs from the host zone and from the zone step 3 declares, so each step can

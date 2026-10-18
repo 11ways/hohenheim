@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.files;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import java.util.List;
 import java.util.ArrayList;
 import be.elevenways.zenit.sftp.server.SftpSessionInfo;
@@ -38,8 +39,6 @@ import java.util.Map;
  */
 public final class HohenheimSftp {
 
-    private static final long MIB = 1024L * 1024L;
-
     private static @Nullable SftpServer running;
     private static @Nullable String failure;
 
@@ -70,7 +69,7 @@ public final class HohenheimSftp {
             valueOf(HohenheimSettings.Sftp.MAX_SESSIONS),
             valueOf(HohenheimSettings.Sftp.MAX_SESSIONS_PER_ACCOUNT),
             Duration.ofMinutes(valueOf(HohenheimSettings.Sftp.IDLE_TIMEOUT_MINUTES)),
-            valueOf(HohenheimSettings.Sftp.MAX_FILE_MB) * MIB,
+            ByteUnit.MEGABYTE.bytes(valueOf(HohenheimSettings.Sftp.MAX_FILE_MB)),
             spool, SftpConfig.FAILED_LOGINS);
     }
 

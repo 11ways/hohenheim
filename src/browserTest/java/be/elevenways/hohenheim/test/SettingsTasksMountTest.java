@@ -11,6 +11,8 @@ import be.elevenways.hohenheim.server.task.ReconcileDockerResources;
 import be.elevenways.hohenheim.server.task.SecuritySweep;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolvers;
+import be.elevenways.protoblast.common.i18n.wording.Reader;
+import be.elevenways.protoblast.common.i18n.wording.Wording;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelCluster;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
@@ -24,6 +26,7 @@ import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -70,8 +73,10 @@ class SettingsTasksMountTest extends HohenheimTestBase {
                 MessageResolvers.getDefault());
             Locator row = page.locator("pl-table-body pl-table-row", new Page.LocatorOptions().setHasText(label));
             assertThat(row.count()).as("step 2: the schedule is listed by its label").isEqualTo(1);
-            assertThat(row.innerText()).as("step 2: its cron reads in words, never the raw expression")
-                .contains("Every day at 04:41").doesNotContain("41 4 * * *");
+            String clock = Wording.time(Reader.of(LocaleChain.ofTags("en"), MessageResolvers.getDefault()),
+                LocalTime.of(4, 41));
+            assertThat(row.innerText()).as("step 2: its cron reads in words on the reader's clock, never the raw"
+                + " expression").contains("Every day at " + clock).doesNotContain("41 4 * * *");
             assertThat(row.locator("pl-button, button").filter(new Locator.FilterOptions().setHasText("Run now"))
                 .count()).as("step 2: its row offers Run now").isPositive();
 

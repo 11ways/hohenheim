@@ -16,6 +16,7 @@ import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.i18n.wording.Reader;
 import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
@@ -102,10 +103,9 @@ public final class CmsSupport {
     // submitted map for what was sent (containsKey). A hand merge here once duplicated it.
 
     /**
-     * THE resolution of a microcopy outside a template, in the CURRENT request's locale
-     * chain -- the spelling every {@code recordTitle} and rendered cell in this package
-     * shares, because those hooks take no conduit and reading the request scope is the
-     * framework's own answer to that.
+     * THE resolution of a microcopy outside a template, for the CURRENT request's reader -- the spelling every
+     * {@code recordTitle} and rendered cell in this package shares, because those hooks take no conduit and reading
+     * the request scope is the framework's own answer to that.
      *
      * @return the resolved text, or null when no request is in scope (a task thread, a
      *         test calling the hook directly), which every caller renders as "no title"
@@ -114,6 +114,16 @@ public final class CmsSupport {
     public static @Nullable String resolvedText(@NonNull Microcopy copy) {
         Conduit conduit = RouteScope.currentConduit();
         return conduit == null ? null : copy.asString(conduit);
+    }
+
+    /**
+     * @return the current request's reader (its language and the viewer's zone), else the server default locale's,
+     *         the one {@link #resolvedTextOrDefault} falls back to
+     */
+    public static @NonNull Reader currentReader() {
+        Conduit conduit = RouteScope.currentConduit();
+        return conduit != null ? conduit.getReader()
+            : Reader.of(LocaleChain.of(RouteLocales.get().getDefaultLocale()), Zenit.getMessageResolver());
     }
 
     /**

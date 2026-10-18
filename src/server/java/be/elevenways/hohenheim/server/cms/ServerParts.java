@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
@@ -14,7 +15,6 @@ import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.zenit.cms.common.CmsMicrocopy;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.common.conduit.Conduit;
-import be.elevenways.zenit.common.text.ByteText;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.host.HostState;
 import be.elevenways.hohenheim.host.HostStatusCell;
@@ -89,7 +89,6 @@ public final class ServerParts {
     private static final String MEMORY_COLUMN = "memory";
     private static final String DISK_COLUMN = "disk";
     private static final String RUNS_COLUMN = "runs";
-    private static final long MEBIBYTE = 1024L * 1024L;
     /** Request memo of every host's app and database counts: three queries per rendered list. */
     private static final IdentifierKey<Map<Integer, int[]>> RUNS_COUNTS = IdentifierKey.of("hohenheim", "host_runs");
     static final StringField INCUS_TRUST_TOKEN = StringField.builder("incus_trust_token")
@@ -272,7 +271,7 @@ public final class ServerParts {
     /** @return a disk's used bytes against its size in words, the one way the list and the host pick say it */
     private static @NonNull Microcopy diskUsedText(@NonNull DiskSpace space) {
         return HohenheimMicrocopy.HOST_LIST.of("disk_used")
-            .withArg("used", ByteText.human(space.usedBytes())).withArg("total", ByteText.human(space.totalBytes()));
+            .withArg("used", space.usedBytes()).withArg("total", space.totalBytes());
     }
 
     /** @return the host's capacity ledger, null for a host without an id */
@@ -288,13 +287,8 @@ public final class ServerParts {
 
     private static @NonNull Microcopy bookedText(@NonNull HostCapacityView capacity) {
         return HohenheimMicrocopy.HOST_LIST.of("memory_booked")
-            .withArg("booked", sizeOfMegabytes(capacity.bookedMb()))
-            .withArg("budget", sizeOfMegabytes(capacity.budgetMb()));
-    }
-
-    /** @return a host ledger's megabyte count as a size, the one way the list and the host page say memory */
-    static @NonNull String sizeOfMegabytes(int megabytes) {
-        return ByteText.human(megabytes * MEBIBYTE);
+            .withArg("booked", ByteUnit.MEGABYTE.bytes(capacity.bookedMb()))
+            .withArg("budget", ByteUnit.MEGABYTE.bytes(capacity.budgetMb()));
     }
 
     /**

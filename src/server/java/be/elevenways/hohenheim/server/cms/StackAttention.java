@@ -44,7 +44,7 @@ public final class StackAttention {
             if (severity == null) {
                 continue;
             }
-            Object name = stack.get(StackModel.NAME);
+            String name = stack.get(StackModel.NAME);
             AppHealth.Stoppage stoppage = AppHealth.stackStoppage(stack);
             Microcopy title = stoppage != null ? stoppage.title(name)
                 : HohenheimMicrocopy.ATTENTION_TITLE.of("stack_degraded").withArg("name", name);

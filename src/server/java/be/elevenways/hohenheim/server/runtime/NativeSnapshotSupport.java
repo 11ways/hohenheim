@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.runtime;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.hohenheim.instance.DeviceType;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -95,7 +96,7 @@ public interface NativeSnapshotSupport extends WorkloadAttribution {
 
         /** @return what a disk of {@code sizeGb} claims on the host it lands on: its declared size, never its archive */
         public static long claimedBytes(int sizeGb) {
-            return Math.multiplyExact((long) sizeGb, 1024L * 1024 * 1024);
+            return ByteUnit.GIGABYTE.bytes(sizeGb);
         }
     }
 

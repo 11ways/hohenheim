@@ -106,7 +106,7 @@ public final class InstanceConsoles {
                  @Nullable String stopCommand, @NonNull ConsoleStreamSupport support,
                  InstanceService.@NonNull Resolved resolved,
                  int serverId, @NonNull HostLeases leases, @Nullable Datasource datasource,
-                 @NonNull Object instanceName) {
+                 @NonNull String instanceName) {
 
         /** The status deploy stamps: starting only when a readiness line will decide. */
         @NonNull String initialStatus() {
@@ -291,7 +291,7 @@ public final class InstanceConsoles {
      * @return whether the status was written
      */
     private static boolean stampIfStatus(@NonNull HostLeases leases, int serverId,
-                                         @NonNull Object name, int instanceId,
+                                         @NonNull String name, int instanceId,
                                          @NonNull BooleanSupplier current,
                                          @NonNull String expected, @NonNull String status,
                                          @NonNull String why, @Nullable HohenheimActivityAction cause,
@@ -643,7 +643,7 @@ public final class InstanceConsoles {
             throw HohenheimViolations.instanceRefusal("console_open_failed", resolved.row(), e);
         }
         int serverId = resolved.serverId();
-        Object name = resolved.row().get(InstanceModel.NAME);
+        String name = resolved.row().get(InstanceModel.NAME);
         // Built HERE, under the caller's Db scope: the pump thread must never have to read
         // the variable table itself, and an unreadable table must fail loudly at open
         // rather than silently stream a secret later.
@@ -667,7 +667,7 @@ public final class InstanceConsoles {
      * the same exit is "stopped" with it and "crashed" without it.
      */
     private static void handleStreamEnd(@NonNull InstanceConsoleSession session,
-                                        int instanceId, int serverId, @NonNull Object name,
+                                        int instanceId, int serverId, @NonNull String name,
                                         @NonNull ConsoleStreamSupport support,
                                         @NonNull HostLeases leases,
                                         @Nullable Datasource datasource,
@@ -722,7 +722,7 @@ public final class InstanceConsoles {
 
     /** The exit policy proper, under the record's claim. */
     private static void applyExitPolicy(@NonNull InstanceConsoleSession session, int instanceId, int serverId,
-                                        @NonNull Object name, @NonNull HostLeases leases, boolean stopObserved,
+                                        @NonNull String name, @NonNull HostLeases leases, boolean stopObserved,
                                         int exitCode) {
         if (!isCurrent(session)) {
             Blast.log("CONSOLE: exit", exitCode, "of a replaced console of instance", instanceId,
@@ -775,7 +775,7 @@ public final class InstanceConsoles {
 
     /** Stamp from starting OR running (whichever the exit interrupted). */
     private static boolean stampIfAnyRunning(@NonNull HostLeases leases, int serverId,
-                                          @NonNull Object name, int instanceId,
+                                          @NonNull String name, int instanceId,
                                           @NonNull String status, @NonNull String why,
                                           @Nullable HohenheimActivityAction cause, @Nullable String detail) {
         // Called under the claim, after the generation check: the re-entrant stamps need no second one.
@@ -800,7 +800,7 @@ public final class InstanceConsoles {
         }
     }
 
-    static void alertCrashLoop(int instanceId, @NonNull Object name) {
+    static void alertCrashLoop(int instanceId, @NonNull String name) {
         Alerts.trySend(NotificationEvents.INSTANCE_CRASH_LOOP, Alerts.about(InstanceModel.MODEL_ID, instanceId),
             HohenheimMicrocopy.ALERT.of("crash_loop_subject").withArg("name", name),
             HohenheimMicrocopy.ALERT.of("crash_loop_body").withArg("name", name));

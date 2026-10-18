@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.docker;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.hohenheim.server.util.Http11;
@@ -254,7 +255,7 @@ public class DockerClient {
     }
 
     /** Cap on a progress stream answered to an upload (image load); it is text, not payload. */
-    private static final long MAX_PROGRESS_BYTES = 64L * 1024 * 1024;
+    private static final long MAX_PROGRESS_BYTES = ByteUnit.MEGABYTE.bytes(64);
 
     /** Export an immutable image, with the existing archive lane's wire cap and cleanup. */
     public long saveImage(String imageId, Path outFile, long maxBytes) throws IOException {

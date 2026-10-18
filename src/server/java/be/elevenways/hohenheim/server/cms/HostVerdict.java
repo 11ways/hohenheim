@@ -78,7 +78,7 @@ record HostVerdict(@NonNull HostStanding standing, @Nullable Microcopy reason,
      * @param name the host's name, which "Open local" carries
      * @return the remedy as an attention item's worded action
      */
-    @NonNull Microcopy remedyAction(@NonNull Object name) {
+    @NonNull Microcopy remedyAction(@NonNull String name) {
         return switch (this.remedy) {
             case CHECK_AND_ADMIT -> HohenheimMicrocopy.ATTENTION_ACTION.of("act_check_admit");
             case CHECK_AGAIN -> HohenheimMicrocopy.ATTENTION_ACTION.of("act_check_again");

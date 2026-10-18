@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.database;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.HohenheimFormSections;
@@ -101,7 +102,7 @@ public final class DatabaseContainerKind implements InstanceKindHandler {
 
     /** Size cap for an ephemeral (tmpfs) data mount: 1 GiB -- generous for tests and small
      *  preview databases, while bounding RAM use (tmpfs only consumes RAM for live data). */
-    public static final long EPHEMERAL_DATA_SIZE_BYTES = 1024L * 1024 * 1024;
+    public static final long EPHEMERAL_DATA_SIZE_BYTES = ByteUnit.GIGABYTE.factor();
 
     // Which engine, which image and whether the data survives a restart are the decisions;
     // the rest is what DatabaseService writes for you.

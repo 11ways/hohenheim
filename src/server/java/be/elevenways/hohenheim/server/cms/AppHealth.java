@@ -123,14 +123,15 @@ final class AppHealth {
      * AIDEV-NOTE: every problem headline ({@link Headline}, {@link Stoppage}) declares that variant in en and nl
      * (ManagePanelJourneyTest's title step); a headline that is no single key (a literal) is shown as it is.
      */
-    static @NonNull Microcopy titleOf(@NonNull RecordHealth health, @NonNull Object name) {
+    static @NonNull Microcopy titleOf(@NonNull RecordHealth health, @NonNull String name) {
         Microcopy headline = health.headline();
-        if (headline.isLiteral() || headline.isComposed()) {
+        // A literal, composed copy or a standalone list is no single key to re-scope: it is shown as it is.
+        if (headline.isLiteral() || headline.isComposed() || headline.isList()) {
             return headline;
         }
         return Microcopy.of(headline.key(),
             headline.filters().with("scope", HohenheimMicrocopy.ATTENTION_TITLE.scope()),
-            headline.args().with("name", name));
+            headline.args()).withArg("name", name);
     }
 
     /** This site's verdict in the operator's words, for a surface that names the site itself (the attention band). */
@@ -257,7 +258,7 @@ final class AppHealth {
         switch (SiteParts.reachOf(site)) {
             case PORTS -> {
                 // A stream is reached on a public port of its own, never at an address: forwarding is its health.
-                Object port = RawValues.map(site.get(SiteModel.SETTINGS)).get("listen_port");
+                Integer port = RawValues.parsedInt(RawValues.map(site.get(SiteModel.SETTINGS)).get("listen_port"));
                 return forwarding(site)
                     ? Verdict.serving(RecordHealth.ok(HohenheimMicrocopy.APP_HEALTH.of("stream_forwarding")
                         .withArg("port", port)))
@@ -365,7 +366,7 @@ final class AppHealth {
     }
 
     /** @return why a stream site does not forward: the proxy's own bind refusal when it has one */
-    private static @NonNull Microcopy notForwardingDetail(@NonNull Row site, @Nullable Object port) {
+    private static @NonNull Microcopy notForwardingDetail(@NonNull Row site, @Nullable Integer port) {
         ProxyServer proxy = ServerMain.getProxyServer();
         Integer siteId = site.get(SiteModel.ID);
         StreamBindFailure failure = proxy == null || siteId == null ? null : proxy.getStreamFailure(siteId);
@@ -919,7 +920,7 @@ final class AppHealth {
         }
 
         /** @return the same words naming the workload, for a surface that lists many (the attention band) */
-        @NonNull Microcopy title(@Nullable Object name) {
+        @NonNull Microcopy title(@Nullable String name) {
             return HohenheimMicrocopy.ATTENTION_TITLE.of(this.key).withArg("name", name);
         }
     }

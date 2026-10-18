@@ -13,6 +13,8 @@ import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.i18n.wording.Reader;
+import be.elevenways.protoblast.common.i18n.wording.Wording;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
@@ -27,7 +29,6 @@ import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.text.ByteText;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -83,6 +84,7 @@ public final class InstanceVolumesTab implements RecordTab.Rendered<Row> {
             accessContext);
 
         List<Map<String, Object>> volumes = new ArrayList<>();
+        Reader reader = conduit.getReader();
         for (Row volume : InstanceVolumes.declaredFor(instanceId)) {
             Map<String, Object> entry = new HashMap<>();
             entry.put("id", volume.get(InstanceVolumeModel.ID));
@@ -90,8 +92,8 @@ public final class InstanceVolumesTab implements RecordTab.Rendered<Row> {
             entry.put("containerPath", volume.get(InstanceVolumeModel.CONTAINER_PATH));
             Long quota = volume.get(InstanceVolumeModel.QUOTA_BYTES);
             Long used = volume.get(InstanceVolumeModel.USED_BYTES);
-            entry.put("quotaText", quota != null ? ByteText.human(quota) : "");
-            entry.put("usedText", used != null ? ByteText.human(used) : "");
+            entry.put("quotaText", quota != null ? Wording.bytes(reader, quota, conduit.getMessageResolver()) : "");
+            entry.put("usedText", used != null ? Wording.bytes(reader, used, conduit.getMessageResolver()) : "");
             entry.put("usedBytes", used);
             entry.put("quotaBytes", quota);
             entry.put("exclusive",

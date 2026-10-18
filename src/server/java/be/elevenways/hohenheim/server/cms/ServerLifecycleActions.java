@@ -166,7 +166,7 @@ final class ServerLifecycleActions {
         }
         if (!failed.isEmpty() || !report[0].passed()) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("host_check_failed").withArg("name", name)
-                .withArg("checks", failed.isEmpty() ? (Object) "-" : failed));
+                .withArg("checks", failed.isEmpty() ? List.of(Microcopy.literal("-")) : failed));
         }
         // Admission reads what preflight just stored, never the subject loaded before it ran.
         Row stored = Models.get(ServerModel.class).findById(row.get(ServerModel.ID));
@@ -194,12 +194,11 @@ final class ServerLifecycleActions {
                 + summary.architecture();
         String os = summary.operatingSystem().isBlank() ? platform : summary.operatingSystem();
         if (!platform.isBlank() && !os.equals(platform)) os += " (" + platform + ")";
-        double memory = Math.round(summary.memoryBytes() / 1_073_741_824.0 * 10) / 10.0;
         return HohenheimMicrocopy.SERVER.of("host_summary").withArg("docker", docker)
-            .withArg("os", os.isBlank() ? HohenheimMicrocopy.SERVER.of("host_unknown_platform") : os)
-            .withArg("cpus", String.valueOf(summary.cpus())).withArg("memory", String.valueOf(memory))
-            .withArg("running", String.valueOf(summary.containersRunning()))
-            .withArg("total", String.valueOf(summary.containersTotal()))
-            .withArg("images", String.valueOf(summary.images()));
+            .withArg("os", os.isBlank() ? HohenheimMicrocopy.SERVER.of("host_unknown_platform")
+                : Microcopy.literal(os))
+            .withArg("cpus", summary.cpus()).withArg("memory", summary.memoryBytes())
+            .withArg("running", summary.containersRunning()).withArg("total", summary.containersTotal())
+            .withArg("images", summary.images());
     }
 }

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.build;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
@@ -32,7 +33,7 @@ public record BuildQuota(double cpus, int memoryMb, long diskBytes, long timeout
 
     /** Never let a misconfigured setting produce an unbounded build. */
     private static final long MIN_TIMEOUT_MS = 10_000;
-    private static final long MIN_DISK_BYTES = 16L * 1024 * 1024;
+    private static final long MIN_DISK_BYTES = ByteUnit.MEGABYTE.bytes(16);
     private static final int MIN_MEMORY_MB = 128;
     private static final int MIN_PIDS = 16;
     private static final int MIN_LOG_BYTES = 4096;
@@ -52,11 +53,11 @@ public record BuildQuota(double cpus, int memoryMb, long diskBytes, long timeout
         return new BuildQuota(
             cpus != null && cpus > 0 ? cpus : 2.0,
             Math.max(MIN_MEMORY_MB, memoryMb != null ? memoryMb : 2048),
-            Math.max(MIN_DISK_BYTES, (diskMb != null ? diskMb : 4096) * 1024L * 1024L),
+            Math.max(MIN_DISK_BYTES, ByteUnit.MEGABYTE.bytes(diskMb != null ? diskMb : 4096)),
             Math.max(MIN_TIMEOUT_MS, (timeoutSeconds != null ? timeoutSeconds : 900) * 1000L),
             Math.max(MIN_PIDS, pids != null ? pids : 256),
-            Math.max(MIN_LOG_BYTES, (logKb != null ? logKb : 512) * 1024),
-            Math.max(MIN_DISK_BYTES, (artifactMb != null ? artifactMb : 1024) * 1024L * 1024L));
+            Math.max(MIN_LOG_BYTES, Math.toIntExact(ByteUnit.KILOBYTE.bytes(logKb != null ? logKb : 512))),
+            Math.max(MIN_DISK_BYTES, ByteUnit.MEGABYTE.bytes(artifactMb != null ? artifactMb : 1024)));
     }
 
     /**
@@ -86,7 +87,7 @@ public record BuildQuota(double cpus, int memoryMb, long diskBytes, long timeout
     }
 
     public int diskLimitMb() {
-        return (int) (this.diskBytes / (1024 * 1024));
+        return (int) (this.diskBytes / ByteUnit.MEGABYTE.factor());
     }
 
     public int timeoutSeconds() {

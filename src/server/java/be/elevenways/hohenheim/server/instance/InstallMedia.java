@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.DeviceType;
@@ -60,7 +61,7 @@ public final class InstallMedia {
      * OS install ISO in circulation fits well under this; a cap is what keeps a typoed
      * URL from filling the controller's disk.
      */
-    public static final long MAX_ISO_BYTES = 16L * 1024 * 1024 * 1024;
+    public static final long MAX_ISO_BYTES = ByteUnit.GIGABYTE.bytes(16);
 
     private static final UrlPolicy FETCH_POLICY = UrlPolicy.builder()
         .schemes("http", "https")
@@ -367,7 +368,7 @@ public final class InstallMedia {
             outcome = FETCHER.fetch(FetchRequest.get(url), sink);
         }
         if (outcome instanceof FetchOutcome.Failed failed && failed.kind() == FetchFailure.TOO_LARGE) {
-            throw new IOException("download exceeds the " + (MAX_ISO_BYTES >> 30) + " GiB install-media cap");
+            throw new IOException("download exceeds the " + (MAX_ISO_BYTES / ByteUnit.GIGABYTE.factor()) + " GiB install-media cap");
         }
         outcome.requireSuccess("download");
         if (sink.total == 0) {

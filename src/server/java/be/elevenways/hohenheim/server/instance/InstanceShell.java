@@ -252,7 +252,7 @@ public final class InstanceShell {
             if (sessions.size() >= MAX_SESSIONS_PER_INSTANCE) {
                 throw Violations.ofForm(HohenheimViolations.instanceRefusalText("shell_too_many_sessions",
                         instance, null)
-                    .withArg("max", String.valueOf(MAX_SESSIONS_PER_INSTANCE)));
+                    .withArg("max", MAX_SESSIONS_PER_INSTANCE));
             }
         }
 

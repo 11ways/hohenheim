@@ -5,9 +5,9 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.instance.InstanceChildDeletes;
-import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.i18n.wording.Reader;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceForm;
@@ -23,12 +23,9 @@ import be.elevenways.zenit.common.data.RowScope;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.narration.FieldValueText;
-import be.elevenways.zenit.common.routing.RouteLocales;
 import be.elevenways.zenit.common.routing.RouteScope;
 import be.elevenways.zenit.common.task.record.RecordScheduleRunModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleRuns;
-import be.elevenways.zenit.common.task.record.RecordScheduleStepRunModel;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -96,10 +93,8 @@ public final class InstanceScheduleRunParts {
     /** @return each step's verdict, source id, actual attempts and timing, shared by both run-history screens */
     static @NonNull String describeSteps(@NonNull Row run) {
         Conduit conduit = RouteScope.currentConduit();
-        LocaleChain locales = conduit == null ? LocaleChain.of(RouteLocales.get().getDefaultLocale())
-            : conduit.getLocales();
+        Reader reader = CmsSupport.currentReader();
         MessageResolver resolver = conduit == null ? Zenit.getMessageResolver() : conduit.getMessageResolver();
-        FieldValueText text = FieldValueText.standard();
         StringBuilder summary = new StringBuilder();
         for (RecordScheduleRuns.Step step : RecordScheduleRuns.steps(run)) {
             if (summary.length() > 0) {
@@ -112,14 +107,9 @@ public final class InstanceScheduleRunParts {
                 summary.append(" (").append(step.error()).append(')');
             }
             Microcopy execution = HohenheimMicrocopy.INSTANCE_SCHEDULE.of("step_execution")
-                .withArg("id", text.text(null, RecordScheduleStepRunModel.STEP_ID, step.stepId(), locales, resolver))
-                .withArg("attempts", text.text(null, RecordScheduleStepRunModel.ATTEMPT, step.attempts(),
-                        locales, resolver))
-                .withArg("started", text.text(null, RecordScheduleStepRunModel.STARTED_AT, step.startedAt(),
-                        locales, resolver))
-                .withArg("ended", text.text(null, RecordScheduleStepRunModel.ENDED_AT, step.endedAt(),
-                        locales, resolver));
-            summary.append(' ').append(execution.resolve(locales, resolver));
+                .withArg("id", step.stepId()).withArg("attempts", step.attempts())
+                .withArg("started", step.startedAt()).withArg("ended", step.endedAt());
+            summary.append(' ').append(execution.resolve(reader, resolver));
         }
         return summary.toString();
     }

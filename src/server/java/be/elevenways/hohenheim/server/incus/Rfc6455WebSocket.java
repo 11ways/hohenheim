@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.incus;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.protoblast.common.util.Closeables;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -30,7 +31,7 @@ final class Rfc6455WebSocket implements IncusWebSocket {
     private static final SecureRandom RANDOM = new SecureRandom();
 
     /** Refuse absurd frames before allocating for them; console lines are tiny. */
-    private static final long MAX_PAYLOAD = 32L * 1024 * 1024;
+    private static final long MAX_PAYLOAD = ByteUnit.MEGABYTE.bytes(32);
 
     private final InputStream in;
     private final OutputStream out;

@@ -535,6 +535,8 @@ class InstancePowerOperationsTest {
                 }
                 case "getLocales" -> LocaleChain.ofTags("en");
                 case "getMessageResolver" -> Zenit.getMessageResolver();
+                // Its reader is the conduit's own: the language above, no stamped zone.
+                case "getReader" -> InvocationHandler.invokeDefault(proxy, method, args);
                 case "equals" -> proxy == args[0];
                 case "hashCode" -> System.identityHashCode(proxy);
                 case "toString" -> "answering conduit";

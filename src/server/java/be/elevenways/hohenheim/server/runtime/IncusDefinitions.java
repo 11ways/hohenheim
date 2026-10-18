@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.runtime;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.incus.IncusClient;
@@ -227,7 +228,7 @@ public final class IncusDefinitions {
         }
         try {
             long bytes = Long.parseLong(text);
-            return (int) (bytes / (1024L * 1024L * 1024L));
+            return (int) (bytes / ByteUnit.GIGABYTE.factor());
         } catch (NumberFormatException unreadable) {
             return null;
         }

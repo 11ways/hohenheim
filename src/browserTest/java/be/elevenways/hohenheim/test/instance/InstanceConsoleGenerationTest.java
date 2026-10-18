@@ -217,7 +217,7 @@ class InstanceConsoleGenerationTest {
                                 InstanceOperationLock.Contention.QUEUE, () -> {
                                     try {
                                         Method policy = InstanceConsoles.class.getDeclaredMethod("applyExitPolicy",
-                                            session.getClass(), int.class, int.class, Object.class,
+                                            session.getClass(), int.class, int.class, String.class,
                                             HostLeases.class, boolean.class, int.class);
                                         policy.setAccessible(true);
                                         policy.invoke(null, session, instanceId, hostId, "refused-exit", observer,

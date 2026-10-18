@@ -128,10 +128,13 @@ public final class ErrorPages {
 
             // AIDEV-NOTE: this is an alternate server-side render path (no Conduit), so it
             // must stamp what RenderTemplateResult.performRender stamps -- the template's
-            // {% Locales.current() %} in <html lang> reads the chain off this context.
+            // {% Locales.current() %} in <html lang> reads the chain off this context, and the
+            // reader's zone is the viewer's stamp, which a proxied site's visitor never carries:
+            // unknown, so the reader takes the office zone as not the visitor's own.
             RenderBlock block = engine.render(ERROR_TEMPLATE, vars, ctx -> {
                 ctx.setLocales(locales);
                 ctx.setMessageResolver(Zenit.getMessageResolver());
+                ctx.setReaderZone(null);
             });
             if (block != null) {
                 return block.getAsHtml();

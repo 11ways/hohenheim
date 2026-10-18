@@ -4,6 +4,10 @@ import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.i18n.wording.Reader;
+import be.elevenways.protoblast.common.i18n.wording.Wording;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -15,6 +19,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.DayOfWeek;
 import java.time.Instant;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.LinkedHashMap;
@@ -85,13 +90,13 @@ class InstanceScheduleEditorJourneyTest extends HohenheimTestBase {
         assertThat(page.locator(PRESET + " .pl-select-field").innerText()).as("step 1: it opens on every day")
             .contains("Every day");
         assertThat(page.locator(READING).innerText()).as("step 1: read in words with its next run")
-            .contains("Every day at 03:00").contains("Next run:");
+            .contains("Every day at " + clock(3)).contains("Next run:");
 
         // 2. Weekly on Sunday: the reading follows the pick before anything is saved, and the save stores the cron
         //    and arms its next run on a Sunday at 03:00 in the schedule's zone.
         choose(PRESET, "weekly");
         choose(INPUT + " [data-zf-cron-weekday]", "7");
-        page.waitForCondition(() -> page.locator(READING).innerText().contains("Every Sunday at 03:00"));
+        page.waitForCondition(() -> page.locator(READING).innerText().contains("Every Sunday at " + clock(3)));
         saveForm();
         Row backup = Models.get(RecordScheduleModel.class).findById(backupId);
         assertThat(backup.get(RecordScheduleModel.CRON)).as("step 2: the weekly cron is stored")
@@ -135,7 +140,7 @@ class InstanceScheduleEditorJourneyTest extends HohenheimTestBase {
         navigateToApp("/admin/instance-schedules/new?record_id=" + instanceId);
         waitForHydration();
         assertThat(page.locator(READING).innerText()).as("step 5: the new picker reads its default")
-            .contains("Every day at 02:00");
+            .contains("Every day at " + clock(2));
         type("input[name='name']", PREFIX + "untouched");
         page.evaluate("document.querySelector('form.cms-form-layout').requestSubmit()");
         page.waitForURL(url -> url.contains("/page/steps"));
@@ -180,5 +185,10 @@ class InstanceScheduleEditorJourneyTest extends HohenheimTestBase {
     private void saveForm() {
         page.click(".cms-form-actions pl-button[type='submit']");
         page.waitForSelector("text=have been saved");
+    }
+
+    /** @return the hour as the English page words a time of day, the reader's own clock ("3:00 am") */
+    private static String clock(int hour) {
+        return Wording.time(Reader.of(LocaleChain.ofTags("en"), Zenit.getMessageResolver()), LocalTime.of(hour, 0));
     }
 }

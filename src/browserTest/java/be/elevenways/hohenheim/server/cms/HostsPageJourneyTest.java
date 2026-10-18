@@ -22,11 +22,12 @@ import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.i18n.wording.Reader;
+import be.elevenways.protoblast.common.i18n.wording.Wording;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.text.ByteText;
 import be.elevenways.zenit.common.ui.BadgeVariant;
 import org.junit.jupiter.api.Test;
 
@@ -124,7 +125,7 @@ class HostsPageJourneyTest extends HohenheimTestBase {
             assertThat(disk.measured()).as("step 4b: a fresh reading draws a bar").isTrue();
             assertThat(disk.percent()).as("step 4b: 90.6 of 100 GiB used, rounded down").isEqualTo(90);
             assertThat(say(disk.text())).as("step 4b: in words")
-                .isEqualTo(ByteText.human(used) + " of " + ByteText.human(100 * gib) + " used");
+                .isEqualTo(size(used) + " of " + size(100 * gib) + " used");
             HostUsageCell noDisk = ServerParts.diskCellOf(server(waiting));
             assertThat(noDisk.measured()).as("step 4b: never measured, no bar").isFalse();
             assertThat(say(noDisk.text())).as("step 4b: and says so").isEqualTo("Not measured yet");
@@ -205,7 +206,7 @@ class HostsPageJourneyTest extends HohenheimTestBase {
             HostFactView memory = ServerOverviewState.preflightReport(server(admitted)).facts().stream()
                 .filter(fact -> fact.name().equals(HostPreflight.MEM_TOTAL_FACT)).findFirst().orElseThrow();
             assertThat(say(memory.label())).as("step 8: the memory fact is named in words").isEqualTo("Memory");
-            assertThat(memory.value()).as("step 8: as a size, never a byte count").isEqualTo("16.0 GB");
+            assertThat(say(memory.value())).as("step 8: as a size, never a byte count").isEqualTo("16 GB");
             String waitingPage = adminGet("/admin/" + HohenheimSlugs.SERVERS + "/" + waiting + "/page/overview").body();
             assertThat(waitingPage).as("step 8: the host page draws the finding")
                 .contains("nftables refused a firewall change")
@@ -213,8 +214,12 @@ class HostsPageJourneyTest extends HohenheimTestBase {
                 .as("step 8: and the report's verdict apart from its time").contains("data-preflight-verdict");
             String admittedPage = adminGet("/admin/" + HohenheimSlugs.SERVERS + "/" + admitted + "/page/overview")
                 .body();
-            assertThat(admittedPage).as("step 8: the measured memory as a size").contains("16.0 GB")
-                .as("step 8: never its raw bytes").doesNotContain(String.valueOf(16L * 1024 * 1024 * 1024));
+            // The value travels typed (the page words it for its reader), so the raw count may sit in the widget's
+            // data; what the facts table SHOWS is the size.
+            assertThat(texts(admittedPage, "<pl-table-row[^>]*data-fact=\"" + HostPreflight.MEM_TOTAL_FACT
+                + "\"[^>]*>(.*?)</pl-table-row>")).as("step 8: the measured memory row").singleElement()
+                .satisfies(row -> assertThat(row).as("step 8: as a size").contains("16 GB")
+                    .as("step 8: never its raw bytes").doesNotContain(String.valueOf(16L * 1024 * 1024 * 1024)));
         } finally {
             for (Runnable step : cleanup) {
                 step.run();
@@ -394,6 +399,11 @@ class HostsPageJourneyTest extends HohenheimTestBase {
 
     private static String say(Microcopy copy) {
         return copy == null ? "" : copy.resolve(EN, Zenit.getMessageResolver());
+    }
+
+    /** @return a byte count as {@link #say} words a size */
+    private static String size(long bytes) {
+        return Wording.bytes(Reader.of(EN, Zenit.getMessageResolver()), bytes, Zenit.getMessageResolver());
     }
 
     /** @return the text of every first group of the pattern in the markup, tags and edge whitespace dropped */

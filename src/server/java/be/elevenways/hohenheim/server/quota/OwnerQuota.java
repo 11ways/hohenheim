@@ -161,19 +161,19 @@ public final class OwnerQuota {
      * numbers in it. A non-positive amount books nothing: a declaration of nothing is
      * capped by nothing, so charging it would book what no gate enforces.
      *
-     * @throws Violations {@code violationKey}, carrying used and limit
+     * @throws Violations the budget's violation key, carrying used and limit as its copy words them
      */
     public static void reserve(@NonNull String bucket, long amount, @Nullable Integer limit,
-                               @NonNull String violationKey) {
+                               @NonNull OwnerBudget budget) {
         if (amount <= 0) {
             return;
         }
         try {
             Quotas.reserve(bucket, amount, limit == null ? Long.MAX_VALUE : limit);
         } catch (QuotaExceeded full) {
-            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of(violationKey)
-                .withArg("used", full.getUsed())
-                .withArg("limit", full.getLimit()));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of(budget.violationKey())
+                .withArg("used", budget.worded(full.getUsed()))
+                .withArg("limit", budget.worded(full.getLimit())));
         }
     }
 }

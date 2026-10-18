@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.docker;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.text.Texts;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -67,7 +68,7 @@ public final class DockerReclaim {
 
         /** @return the reclaimed size in whole mebibytes, for operator-facing copy */
         public long megabytes() {
-            return this.bytes / (1024L * 1024L);
+            return this.bytes / ByteUnit.MEGABYTE.factor();
         }
     }
 
@@ -140,7 +141,7 @@ public final class DockerReclaim {
                 removeByEveryReference(image, id);
                 removed++;
                 bytes += size;
-                Blast.log("DOCKER RECLAIM: removed image", shortId(id), "(" + size / (1024L * 1024L) + " MiB)");
+                Blast.log("DOCKER RECLAIM: removed image", shortId(id), "(" + size / ByteUnit.MEGABYTE.factor() + " MiB)");
             } catch (IOException e) {
                 // A layer still shared with something the daemon knows about, or a
                 // race with a pull: skip it and keep sweeping.

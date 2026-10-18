@@ -737,7 +737,7 @@ public class AcmeService {
                 HohenheimMicrocopy.ALERT.of("cert_expiring_subject").withArg("name", String.valueOf(niceName))
                     .withArg("expiry", CertificateExpiry.inSentence(expiresOn)),
                 HohenheimMicrocopy.ALERT.of("cert_expiring_body")
-                    .withArg("date", expiresOn.toString().substring(0, 10)));
+                    .withArg("date", expiresOn));
             cert.set(CertificateModel.EXPIRY_NOTIFIED_AT, now);
             certModel.save(cert);
         }

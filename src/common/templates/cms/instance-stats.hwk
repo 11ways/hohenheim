@@ -12,7 +12,6 @@
 {% declare latestSeed: Map = null %}
 {% declare previousSeed: Map = null %}
 {% declare cpuLimit: Double = null %}
-{% declare cpuCores: String = null %}
 {% declare disk: InstanceDiskView %}
 {% declare head: RecordHeadState = null %}
 {% extend "zenitcms:shell" var:title=title %}
@@ -43,8 +42,7 @@
                        txSeed={% txSeed %}
                        latestSeed={% latestSeed %}
                        previousSeed={% previousSeed %}
-                       cpuLimit={% cpuLimit %}
-                       cpuCores={% cpuCores %}></hh-instance-stats>
+                       cpuLimit={% cpuLimit %}></hh-instance-stats>
     {% else %}
     <pl-empty-state icon="chart-line">
         <pl-empty-state-title>{{ t("not_running", scope: "instance_stats") }}</pl-empty-state-title>
@@ -60,7 +58,7 @@
         {% if disk.measured && disk.enforced %}
         <pl-card-content data-disk-state="measured">
             <pl-usage-bar value={% disk.percent %} max={% 100 %} showLabel={% true %}></pl-usage-bar>
-            <p>{{ t("used_of_limit", scope: "instance_stats", used: ByteText.human(disk.usedBytes), limit: ByteText.human(disk.limitBytes)) }}</p>
+            <p>{{ t("used_of_limit", scope: "instance_stats", used: disk.usedBytes, limit: disk.limitBytes) }}</p>
         </pl-card-content>
         {% else %}
         <pl-card-content data-disk-state="not-measured">

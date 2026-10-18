@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
@@ -328,7 +329,7 @@ public final class WorkspaceKind implements InstanceKindHandler {
     public static void ensureHomeDeclared(int instanceId, @NonNull Map<String, Object> settings) {
         Long quota = null;
         if (settings.get("home_quota_mb") instanceof Number number && number.intValue() > 0) {
-            quota = number.longValue() * 1024L * 1024L;
+            quota = ByteUnit.MEGABYTE.bytes(number.longValue());
         }
         InstanceVolumes.declare(instanceId, HOME_VOLUME, HOME_PATH, quota, true);
     }

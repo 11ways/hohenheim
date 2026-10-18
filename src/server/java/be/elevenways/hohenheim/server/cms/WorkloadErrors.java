@@ -12,8 +12,6 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Instant;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 
 /**
  * Why a workload holds the ERROR status, in words: the stoppage {@code InstanceOperationGuard.stampError} stamped on
@@ -29,9 +27,6 @@ import java.time.format.DateTimeFormatter;
  * @since  0.10.0
  */
 final class WorkloadErrors {
-
-    /** The day a stop was recorded on, as the overview names it. */
-    private static final DateTimeFormatter DAY = DateTimeFormatter.ISO_LOCAL_DATE.withZone(ZoneOffset.UTC);
 
     private WorkloadErrors() {
     }
@@ -54,7 +49,7 @@ final class WorkloadErrors {
      */
     static @NonNull Reading readingOf(@NonNull Row instance, boolean withDetail) {
         HohenheimActivityAction cause = InstanceModel.stoppageCauseOf(instance);
-        Object name = instance.get(InstanceModel.NAME);
+        String name = instance.get(InstanceModel.NAME);
         if (cause == null) {
             return new Reading(HohenheimMicrocopy.ATTENTION_DETAIL.of("error_cause_unknown"), null);
         }
@@ -109,7 +104,7 @@ final class WorkloadErrors {
         return at == null
             ? HohenheimMicrocopy.ATTENTION_DETAIL.of("error_stopped_why").withArg("cause", cause).withArg("why", why)
             : HohenheimMicrocopy.ATTENTION_DETAIL.of("error_stopped_on").withArg("cause", cause)
-                .withArg("date", DAY.format(at)).withArg("why", why);
+                .withArg("date", at).withArg("why", why);
     }
 
     /** @return stored technical text (a daemon's or a gate's own words) as the line after the worded ones */

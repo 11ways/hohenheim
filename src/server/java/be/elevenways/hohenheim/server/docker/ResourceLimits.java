@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.docker;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -98,7 +99,7 @@ public record ResourceLimits(@Nullable Integer memoryMb, @Nullable Double cpus) 
     /** Stamp Docker HostConfig entries (Memory bytes, NanoCpus) for the active caps. */
     public void applyTo(Map<String, Object> hostConfig) {
         if (memoryMb != null && memoryMb > 0) {
-            hostConfig.put("Memory", memoryMb * 1024L * 1024L);
+            hostConfig.put("Memory", ByteUnit.MEGABYTE.bytes(memoryMb));
         }
         if (cpus != null && cpus > 0) {
             hostConfig.put("NanoCpus", (long) (cpus * 1_000_000_000L));

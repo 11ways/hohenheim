@@ -69,7 +69,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * masked and every tag's attributes in name order (HTML attribute order means nothing): the data under the widgets
  * is not this conversion's subject. The declared differences are the surface address (a legacy peer answered to its
  * slug address, a PanelDashboard only to its id token, no slug alias), the /manage landing's surface, which
- * was redrawn on purpose ({@link #redrawn}), and plumage's mark on a directional glyph ({@link #markDirectional}).
+ * was redrawn on purpose ({@link #redrawn}), plumage's mark on a directional glyph ({@link #markDirectional}) and a
+ * relative time's worded hover title ({@link #wordedMoments}).
  *
  * AIDEV-NOTE: the fixture decides the operator's checklist and tiles. Its only site has no address and so serves
  * nobody: "Put your first app online" stays TODO with its Open link and the Apps tile reads "1 with a problem". Its
@@ -98,6 +99,7 @@ class LandingDashboardSurfacesTest extends HohenheimTestBase {
         "\\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\b");
     private static final Pattern CSRF = Pattern.compile("(name=\"_csrf\"[^>]*value=\")[^\"]*\"");
     private static final Pattern DIGITS = Pattern.compile("\\d+");
+    private static final Pattern TIME_TITLE = Pattern.compile("(<time\\b[^>]*\\btitle=\")[^\"]*(\")");
     private static final Pattern SPACE = Pattern.compile("\\s+");
     private static final Pattern START_TAG =
             Pattern.compile("<([a-z][a-z0-9-]*)((?:\\s+[^\\s=>\"]+(?:=\"[^\"]*\")?)+)\\s*>");
@@ -235,8 +237,18 @@ class LandingDashboardSurfacesTest extends HohenheimTestBase {
             stored = stored.replace("surface=\"cms:" + panelSlug + "/dashboard\"",
                 "surface=\"" + normalize(dashboardToken(panelSlug)) + "\"");
         }
-        assertThat(redrawn(cases(current))).as("step 3: every audience's landing dashboards are the stored ones")
-            .containsExactlyElementsOf(redrawn(cases(sortAttributes(markDirectional(stored)))));
+        assertThat(redrawn(cases(wordedMoments(current))))
+            .as("step 3: every audience's landing dashboards are the stored ones")
+            .containsExactlyElementsOf(redrawn(cases(wordedMoments(sortAttributes(markDirectional(stored))))));
+    }
+
+    /**
+     * The declared difference the wording redesign made after the capture: a relative time's hover title words its
+     * moment for the reader ("17 October 2026 3:05 pm (Europe/Brussels)"), whose month name and clock half move with
+     * the day the suite runs, so the title's text is not compared on either side; that it is there still is.
+     */
+    private static @NonNull String wordedMoments(@NonNull String surfaces) {
+        return TIME_TITLE.matcher(surfaces).replaceAll("$1<moment>$2");
     }
 
     /**

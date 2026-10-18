@@ -73,10 +73,10 @@ class HohenheimFactWordsTest {
                     HohenheimActivityAction.MOVED_PORTS_KEY, List.of("game 30000/tcp", "query 30001/udp")), EN))
                 .as("step 1: and the host ports it moved")
                 .isEqualTo("Restored from backup #7, except: config file /a; host ports this host already held, now"
-                    + " picked by it: game 30000/tcp, query 30001/udp");
+                    + " picked by it: game 30000/tcp and query 30001/udp");
             assertThat(detail(instances, instance, NL)).as("step 1: in Dutch too")
                 .isEqualTo("Teruggezet uit back-up #7, behalve: config file /a; hostpoorten die deze host al"
-                    + " gebruikte, kiest hij nu zelf: game 30000/tcp, query 30001/udp");
+                    + " gebruikte, kiest hij nu zelf: game 30000/tcp en query 30001/udp");
 
             // 2. A status correction names both statuses as their labels, what the host reported, and a crash loop.
             assertThat(said(instances, instance, HohenheimActivityAction.RECONCILED, Map.of(
@@ -166,12 +166,12 @@ class HohenheimFactWordsTest {
             assertThat(detail(servers, host, NL)).as("step 7: in Dutch too")
                 .isEqualTo("Leeghalen onvolledig: 1 verhuisd, 2 geweigerd; de host heeft er nog");
 
-            // 8. A reap names every object it removed.
+            // 8. A reap names every object it removed, in the reader's list grammar.
             assertThat(said(servers, host, HohenheimActivityAction.REAPED_CONTROLLER_OBJECTS,
                 Map.of(HohenheimActivityAction.OBJECTS_KEY, List.of("acl hh-a", "network hh-b")), EN))
-                .as("step 8: a reap").isEqualTo("Removed leftover controller objects: acl hh-a, network hh-b");
+                .as("step 8: a reap").isEqualTo("Removed leftover controller objects: acl hh-a and network hh-b");
             assertThat(detail(servers, host, NL)).as("step 8: in Dutch too")
-                .isEqualTo("Achtergebleven controllerobjecten verwijderd: acl hh-a, network hh-b");
+                .isEqualTo("Achtergebleven controllerobjecten verwijderd: acl hh-a en network hh-b");
 
             // 9. A certificate request says when it went through manual DNS-01, and a reissue what it covered.
             Model certificates = Models.get(CertificateModel.class);
@@ -184,8 +184,8 @@ class HohenheimFactWordsTest {
             assertThat(said(certificates, certificate, HohenheimActivityAction.REISSUED, Map.of(
                     HohenheimActivityAction.HOSTNAMES_KEY, List.of("a.words.test", "b.words.test"),
                     HohenheimActivityAction.PREVIOUS_KEY, "old.words.test"), EN))
-                .as("step 9: a reissue").isEqualTo("Reissued for a.words.test, b.words.test; it covered old.words.test"
-                    + " before");
+                .as("step 9: a reissue").isEqualTo("Reissued for a.words.test and b.words.test; it covered"
+                    + " old.words.test before");
 
             // 10. A site switched off because its instance went says so; a copy names its original.
             Model sites = Models.get(SiteModel.class);

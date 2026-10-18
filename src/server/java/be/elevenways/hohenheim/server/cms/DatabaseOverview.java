@@ -15,11 +15,12 @@ import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.protoblast.common.i18n.wording.Reader;
+import be.elevenways.protoblast.common.i18n.wording.Wording;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.text.ByteText;
 import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.WidgetTree;
 import be.elevenways.zenit.widget.common.builtin.CardWidget;
@@ -136,7 +137,8 @@ final class DatabaseOverview {
         String name = database.get(DatabaseModel.NAME);
         List<DatabaseBackups.Stored> dumps = name == null ? List.of() : DatabaseBackups.stored(name);
         for (DatabaseBackups.Stored dump : dumps) {
-            facts.add(WidgetFact.instant(ByteText.human(dump.bytes()), dump.at().toString()));
+            facts.add(WidgetFact.instant(Wording.bytes(Reader.of(locales, resolver), dump.bytes(), resolver),
+                dump.at().toString()));
         }
         if (dumps.isEmpty()) {
             facts.add(WidgetFact.of(text("backup_never", locales, resolver),

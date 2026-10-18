@@ -10,6 +10,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * THE vocabulary of what a preflight check found: every detail a battery stores is one of these, worded by the
@@ -17,8 +18,11 @@ import java.util.Map;
  *
  * AIDEV-NOTE: the token is the member's name in lower case and is STORED on each check entry (with its arguments),
  * so renaming a member makes rows written before read as their stored text, never as another finding. The arguments
- * are the probe's evidence (a version, a uid map, an error message) and travel verbatim, except the argument named
- * {@value #FAILURE_ARG}, which is a {@link HostProbe.FailureKind} token and reads as that failure's words.
+ * are the probe's evidence and are stored typed: a count or a size as its whole number (the catalog words it, a size
+ * through {@code :bytes}), everything else as text (a version, a uid map, an error message), except the argument
+ * named {@value #FAILURE_ARG}, which is a {@link HostProbe.FailureKind} token and reads as that failure's words. A row
+ * that stored an argument named in {@link #NUMBER_ARGS} as text (written before evidence was typed) reads as its
+ * stored detail, never as a number guessed from the text.
  * HostCheckAndAdmitJourneyTest binds every member to copy in en and nl, so a new finding fails the build until it is
  * worded.
  *
@@ -93,6 +97,9 @@ public enum PreflightFinding {
     /** The argument that is a probe failure token, read as that failure's words. */
     public static final String FAILURE_ARG = "failure";
 
+    /** The arguments that are whole numbers (a count, a size in bytes), which the catalog words in the reader's form. */
+    public static final Set<String> NUMBER_ARGS = Set.of("count", "cpus", "memory");
+
     /** @return the token stored on a check entry */
     public @NonNull String token() {
         return this.name().toLowerCase(Locale.ROOT);
@@ -104,13 +111,28 @@ public enum PreflightFinding {
     }
 
     /**
-     * @param args name/value pairs, in that order
+     * @param args name/value pairs, in that order; a value under a {@link #NUMBER_ARGS} name is its whole number, or
+     *             null when the probe did not measure it (the argument is then left out)
      * @return this finding with its evidence
+     * @throws IllegalArgumentException when a number argument is not a whole number
      */
     public @NonNull Found with(@NonNull Object... args) {
-        Map<String, String> named = new LinkedHashMap<>();
+        Map<String, Object> named = new LinkedHashMap<>();
         for (int i = 0; i + 1 < args.length; i += 2) {
-            named.put(String.valueOf(args[i]), String.valueOf(args[i + 1]));
+            String name = String.valueOf(args[i]);
+            Object value = args[i + 1];
+            if (NUMBER_ARGS.contains(name)) {
+                if (value == null) {
+                    continue;
+                }
+                if (!(value instanceof Long || value instanceof Integer)) {
+                    throw new IllegalArgumentException("Evidence '" + name + "' of " + this
+                        + " is a whole number, got " + value);
+                }
+                named.put(name, ((Number) value).longValue());
+            } else {
+                named.put(name, String.valueOf(value));
+            }
         }
         return new Found(this, named);
     }
@@ -137,9 +159,19 @@ public enum PreflightFinding {
         if (finding == null) {
             return Microcopy.literal(stored);
         }
-        Map<String, String> named = new LinkedHashMap<>();
+        Map<String, Object> named = new LinkedHashMap<>();
         if (args instanceof Map<?, ?> map) {
-            map.forEach((name, value) -> named.put(String.valueOf(name), String.valueOf(value)));
+            for (Map.Entry<?, ?> arg : map.entrySet()) {
+                String name = String.valueOf(arg.getKey());
+                if (!NUMBER_ARGS.contains(name)) {
+                    named.put(name, String.valueOf(arg.getValue()));
+                } else if (arg.getValue() instanceof Number number) {
+                    named.put(name, number.longValue());
+                } else {
+                    // Stored before evidence was typed: its detail text is what it said.
+                    return Microcopy.literal(stored);
+                }
+            }
         }
         return new Found(finding, named).words();
     }
@@ -147,9 +179,9 @@ public enum PreflightFinding {
     /**
      * One finding with the evidence it was found on.
      *
-     * @param args the evidence by argument name, verbatim
+     * @param args the evidence by argument name: a whole number under a {@link #NUMBER_ARGS} name, else text
      */
-    public record Found(@NonNull PreflightFinding finding, @NonNull Map<String, String> args) {
+    public record Found(@NonNull PreflightFinding finding, @NonNull Map<String, Object> args) {
 
         public Found {
             args = Collections.unmodifiableMap(new LinkedHashMap<>(args));
@@ -158,9 +190,12 @@ public enum PreflightFinding {
         /** @return the finding in words, its evidence filled in */
         public @NonNull Microcopy words() {
             Microcopy words = this.finding.copy();
-            for (Map.Entry<String, String> arg : this.args.entrySet()) {
-                words = words.withArg(arg.getKey(), FAILURE_ARG.equals(arg.getKey())
-                    ? HostProbe.FailureKind.labelOf(arg.getValue()) : arg.getValue());
+            for (Map.Entry<String, Object> arg : this.args.entrySet()) {
+                String name = arg.getKey();
+                String text = String.valueOf(arg.getValue());
+                words = FAILURE_ARG.equals(name) ? words.withArg(name, HostProbe.FailureKind.labelOf(text))
+                    : arg.getValue() instanceof Number number ? words.withArg(name, number)
+                    : words.withArg(name, text);
             }
             return words;
         }

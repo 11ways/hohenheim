@@ -296,7 +296,7 @@ public final class InstanceStatusReconciler {
      * also what brings restart-policy workloads back after a host reboot (their records
      * still claim {@code running}, the daemon says gone, the correction lands here).
      */
-    private void redeployCrashed(int instanceId, int serverId, Object name) {
+    private void redeployCrashed(int instanceId, int serverId, String name) {
         Blast.log("INSTANCE RECONCILE: instance", instanceId,
             "died without an observed stop; crash policy restart -> redeploying");
         // The datasource context does not cross threads on its own (the console watch

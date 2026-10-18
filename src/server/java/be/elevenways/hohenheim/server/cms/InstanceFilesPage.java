@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim.server.cms;
 
-import be.elevenways.zenit.common.text.ByteText;
 import be.elevenways.protoblast.common.time.RelativeTimeWording;
 import be.elevenways.zenit.sftp.server.SftpSessionInfo;
 import be.elevenways.hohenheim.HohenheimIds;
@@ -29,6 +28,7 @@ import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.sftp.server.SftpHostKeys;
 import be.elevenways.zenit.sftp.server.SftpServer;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.i18n.wording.Wording;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
@@ -109,7 +109,8 @@ public final class InstanceFilesPage implements RecordTab.Rendered<Row> {
             .with(HohenheimEndpoints.INSTANCE_ID, instanceId));
         vars.put("canWrite", HohenheimAccess.hasInstanceCapability(accessContext, instanceId,
             HohenheimCapabilities.FILES_WRITE));
-        vars.put("maxFileSize", ByteText.human(InstanceFiles.maxFileBytes()));
+        vars.put("maxFileSize", Wording.bytes(conduit.getReader(), InstanceFiles.maxFileBytes(),
+            conduit.getMessageResolver()));
 
         vars.put("entries", List.of());
         vars.put("crumbs", List.of());

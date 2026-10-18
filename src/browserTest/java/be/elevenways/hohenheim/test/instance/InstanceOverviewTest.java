@@ -201,7 +201,7 @@ class InstanceOverviewTest extends HohenheimTestBase {
                 .doesNotContain("widget-usage-unmeasured")
                 .contains("<pl-usage-bar");
             assertThat(measured.body()).as("step 2: with the stored numbers, humanized")
-                .contains("3.0 GB").contains("4.0 GB");
+                .contains("3 GB").contains("4 GB");
             assertThat(measured.body()).as("step 2: and the observation's own timestamp")
                 .contains("2026-08-11T08:00:00Z");
 

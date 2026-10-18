@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -293,8 +294,8 @@ public final class InstancePlacement {
             }
             if (somethingWasFull) {
                 throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("no_placement_capacity")
-                    .withArg("needed", footprint)
-                    .withArg("free", Math.max(0, largestFreeMb)));
+                    .withArg("needed", ByteUnit.MEGABYTE.bytes(footprint))
+                    .withArg("free", ByteUnit.MEGABYTE.bytes(Math.max(0, largestFreeMb))));
             }
             if (unmeasured != null) {
                 throw Violations.ofForm(capacityUnproven(unmeasured));

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.backup;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -65,7 +66,7 @@ public final class SshBackupTarget implements BackupTarget {
     private static final int STDERR_CAP_CHARS = 64 * 1024;
 
     /** The bound on a captured answer: a listing of every stored archive fits many times over. */
-    private static final int CAPTURE_CAP_BYTES = 16 * 1024 * 1024;
+    private static final int CAPTURE_CAP_BYTES = (int) ByteUnit.MEGABYTE.bytes(16);
 
     private final int serverId;
     private final @NonNull String basePath;

@@ -13,8 +13,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.security.HohenheimSecurity;
 import be.elevenways.hohenheim.server.security.IpLiterals;
 import be.elevenways.hohenheim.server.security.ThreatScorer;
-import be.elevenways.protoblast.common.time.RelativeTime;
-import be.elevenways.protoblast.common.time.RelativeTimeWording;
+import be.elevenways.protoblast.common.i18n.wording.Wording;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.resource.ListScope;
@@ -260,16 +259,19 @@ public final class BanParts {
         ThreatScorer scorer = HohenheimSecurity.scorer();
         List<ThreatScorer.Misses> misses = scorer.recentMisses(Now.millis() - RECENT_MISSES.toMillis(),
             RECENT_MISSES_SHOWN);
-        RelativeTimeWording wording = CmsSupport.timeWording(conduit);
         List<WidgetFact> facts = new ArrayList<>();
         for (ThreatScorer.Misses missed : misses) {
             List<String> names = missed.names();
             int shown = Math.min(MISSED_NAMES_SHOWN, names.size());
-            facts.add(WidgetFact.of(missed.actor(),
-                HohenheimMicrocopy.BAN.of(names.size() > shown ? "missed_names_more" : "missed_names")
-                .withArg("names", String.join(", ", names.subList(0, shown)))
-                .withArg("more", names.size() - shown)
-                .withArg("ago", RelativeTime.ago(Instant.ofEpochMilli(missed.lastMs()), wording))
+            // The names not shown are the list's last item ("a, b and 3 more"), joined in the reader's grammar.
+            List<Microcopy> asked = new ArrayList<>(names.subList(0, shown).stream().map(Microcopy::literal).toList());
+            if (names.size() > shown) {
+                asked.add(HohenheimMicrocopy.BAN.of("missed_more").withArg("more", names.size() - shown));
+            }
+            facts.add(WidgetFact.of(missed.actor(), HohenheimMicrocopy.BAN.of("missed_names")
+                .withArg("names", asked)
+                .withArg("ago", Wording.relative(conduit.getReader(), Instant.ofEpochMilli(missed.lastMs()),
+                    conduit.getMessageResolver()))
                 .asString(conduit)));
         }
         // The empty state is a sentence, never a fact without a value: that renders the widgets' "Unknown" beside it.

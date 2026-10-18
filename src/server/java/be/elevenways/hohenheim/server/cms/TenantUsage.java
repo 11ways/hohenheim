@@ -31,9 +31,6 @@ import java.util.List;
  */
 final class TenantUsage {
 
-    private static final long MB = 1024L * 1024L;
-    private static final long GB = MB * 1024L;
-
     private TenantUsage() {
     }
 
@@ -59,8 +56,7 @@ final class TenantUsage {
             }
             long used = budget.usedBy(pack);
             int percent = limit <= 0 ? 100 : (int) Math.min(100, used * 100 / limit);
-            lines.add(new UsageLine(label, used * shown.unit(), (long) limit * shown.unit(), shown.unit() > 1,
-                percent, true));
+            lines.add(new UsageLine(label, budget.worded(used), budget.worded(limit), budget.isSize(), percent, true));
         }
         return lines;
     }
@@ -68,24 +64,23 @@ final class TenantUsage {
     /** How the card words one budget, or null for one it leaves out; every member answers (no default). */
     private static @Nullable Shown shownAs(@NonNull OwnerBudget budget) {
         return switch (budget) {
-            case INSTANCES -> new Shown("instances", 1, Role.INSTANCES, true);
-            case OWNER_MEMORY -> new Shown("memory", MB, Role.INSTANCES, true);
-            case DISK_GB -> new Shown("disk", GB, Role.INSTANCES, true);
+            case INSTANCES -> new Shown("instances", Role.INSTANCES, true);
+            case OWNER_MEMORY -> new Shown("memory", Role.INSTANCES, true);
+            case DISK_GB -> new Shown("disk", Role.INSTANCES, true);
             // An extra network interface is a placement detail a tenant never asks for by name.
             case NICS -> null;
             // Not one of the listed budgets: shown only where the operator capped it.
-            case SITES -> new Shown("sites", 1, Role.PROXY, false);
-            case DATABASES -> new Shown("databases", 1, Role.DATABASES, true);
-            case PREVIEWS -> new Shown("previews", 1, Role.PROXY, true);
+            case SITES -> new Shown("sites", Role.PROXY, false);
+            case DATABASES -> new Shown("databases", Role.DATABASES, true);
+            case PREVIEWS -> new Shown("previews", Role.PROXY, true);
         };
     }
 
     /**
      * @param key  the label's key under {@code tenant_usage}
-     * @param unit bytes per counted unit, 1 for a count
      * @param role the tier the budget belongs to
      * @param uncapped whether the card shows the budget while the operator set no cap ("No limit")
      */
-    private record Shown(@NonNull String key, long unit, @NonNull Role role, boolean uncapped) {
+    private record Shown(@NonNull String key, @NonNull Role role, boolean uncapped) {
     }
 }

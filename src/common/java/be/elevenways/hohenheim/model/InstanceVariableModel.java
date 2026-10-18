@@ -101,7 +101,7 @@ public class InstanceVariableModel extends Model {
             VariableKind kind = VariableKind.parse(kindValue);
             if (kind == null) {
                 throw Violations.ofField(KIND.getName(), kindValue,
-                    HohenheimMicrocopy.VIOLATIONS.of("variable_kind_unknown").withArg("kind", kindValue));
+                    HohenheimMicrocopy.VIOLATIONS.of("variable_kind_unknown").withArg("kind", String.valueOf(kindValue)));
             }
             boolean secret = kind.isSecret();
             String wrongCarrier = secret ? PLAIN_VALUE.getName() : SECRET_VALUE.getName();

@@ -14,7 +14,6 @@
     public latestSeed: Map = null
     public previousSeed: Map = null
     public cpuLimit: Double = null
-    public cpuCores: String = null
 
     private transient cpu: List = null
     private transient memory: List = null
@@ -82,12 +81,10 @@
                         <strong data-stats-now="cpu">
                             {% if cpuShare{:} == null %}
                             {{ t("waiting", scope: "instance_stats") }}
-                            {% elseif cpuCores == null %}
+                            {% elseif cpuLimit == null %}
                             {{ t("cpu_now_unlimited", scope: "instance_stats", percent: cpuShare{:}) }}
-                            {% elseif cpuCores == "1" %}
-                            {{ t("cpu_now_one", scope: "instance_stats", percent: cpuShare{:}) }}
                             {% else %}
-                            {{ t("cpu_now_cores", scope: "instance_stats", percent: cpuShare{:}, cores: cpuCores) }}
+                            {{ t("cpu_now_cores", scope: "instance_stats", percent: cpuShare{:}, cores: cpuLimit) }}
                             {% /if %}
                         </strong>
                     </p>
@@ -108,9 +105,9 @@
                     <p class="hh-stats-now">
                         <span>{{ t("now", scope: "instance_stats") }}</span>
                         <strong data-stats-now="memory">
-                            {% if memoryUsed{:} == "" %}
+                            {% if memoryUsed{:} == null %}
                             {{ t("waiting", scope: "instance_stats") }}
-                            {% elseif memoryLimit{:} == "" %}
+                            {% elseif memoryLimit{:} == null %}
                             {{ t("used_no_limit", scope: "instance_stats", used: memoryUsed{:}) }}
                             {% else %}
                             {{ t("used_of_limit", scope: "instance_stats", used: memoryUsed{:}, limit: memoryLimit{:}) }}
@@ -135,7 +132,7 @@
                                       points={% rx{:} ?? rxSeed %}
                                       yMin={% 0.0 %}></pl-sparkline>
                         <strong data-stats-now="rx">
-                            {% if rxRate{:} == "" %}
+                            {% if rxRate{:} == null %}
                             {{ t("waiting", scope: "instance_stats") }}
                             {% else %}
                             {{ t("per_second", scope: "instance_stats", amount: rxRate{:}) }}
@@ -149,7 +146,7 @@
                                       points={% tx{:} ?? txSeed %}
                                       yMin={% 0.0 %}></pl-sparkline>
                         <strong data-stats-now="tx">
-                            {% if txRate{:} == "" %}
+                            {% if txRate{:} == null %}
                             {{ t("waiting", scope: "instance_stats") }}
                             {% else %}
                             {{ t("per_second", scope: "instance_stats", amount: txRate{:}) }}

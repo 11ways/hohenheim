@@ -94,7 +94,7 @@ class AppMetricsJourneyTest extends HohenheimTestBase {
             // 3. Every reading is in words: a full core is half of the 2-core limit, memory
             //    reads against its cap, and the counters read as a rate.
             assertThat(nowText("cpu")).as("step 3: cpu against the CPU limit").isEqualTo("50% of 2 cores");
-            assertThat(nowText("memory")).as("step 3: memory against its cap").isEqualTo("512.0 MB of 1.0 GB");
+            assertThat(nowText("memory")).as("step 3: memory against its cap").isEqualTo("512 MB of 1 GB");
             assertThat(nowText("rx")).as("step 3: received per second").matches("\\d+ B/s");
             assertThat(nowText("tx")).as("step 3: sent per second").matches("\\d+ B/s");
             assertThat(page.locator("[data-stats-contract]").textContent())
@@ -132,7 +132,7 @@ class AppMetricsJourneyTest extends HohenheimTestBase {
             FakeNativeDaemons.ScriptedStream stream = FakeNativeDaemons.STATS_STREAMS.get(handle);
             pushHeld(stream, 1, sample(1_000_000_000L, 10_000_000_000L, 300, 400));
             pushHeld(stream, 2, sample(1_100_000_000L, 10_400_000_000L, 500, 600));
-            awaitGauge("step 2: the memory gauge reads the live sample", "memory", "512.0 MB", "1.0 GB");
+            awaitGauge("step 2: the memory gauge reads the live sample", "memory", "512 MB", "1 GB");
             awaitGauge("step 2: the CPU gauge reads the window", "cpu", "100%", "4 cores");
             Object gap = page.evaluate("() => document.querySelector(\"[data-live-gauge='cpu'] .widget-usage\")"
                 + ".getBoundingClientRect().top - document.querySelector(\"[data-live-gauge='memory'] .widget-usage\")"

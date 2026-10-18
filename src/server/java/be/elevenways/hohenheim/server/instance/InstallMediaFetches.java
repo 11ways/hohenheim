@@ -123,7 +123,7 @@ public final class InstallMediaFetches {
             }
             if (active.size() >= MAX_ACTIVE) {
                 throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("media_fetch_busy")
-                    .withArg("count", String.valueOf(MAX_ACTIVE)));
+                    .withArg("count", MAX_ACTIVE));
             }
             // Another controller running this name holds its lease even when its row is not
             // visible here yet: the lease, not this process's row list, is the arbiter.

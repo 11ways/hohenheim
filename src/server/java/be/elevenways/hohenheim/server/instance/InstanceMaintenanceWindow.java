@@ -101,7 +101,7 @@ final class InstanceMaintenanceWindow {
     private static void window(@NonNull InstanceService instances, @NonNull Resolved resolved,
                                @NonNull Plan plan, @NonNull Work work) throws IOException {
         int instanceId = resolved.row().get(InstanceModel.ID);
-        Object name = resolved.row().get(InstanceModel.NAME);
+        String name = resolved.row().get(InstanceModel.NAME);
         if (plan.stopFirst()) {
             TenantWrites.inAuthorizedOperation(() -> instances.stop(instanceId));
         }

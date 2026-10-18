@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.hohenheim.HohenheimStatsFunctions;
 import be.elevenways.hohenheim.HohenheimStatsFunctions.Metric;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
@@ -142,7 +143,7 @@ public final class InstanceStats {
         if (samples.isEmpty()) {
             return null;
         }
-        return samples.get(samples.size() - 1).memoryBytes() / (1024L * 1024L);
+        return samples.get(samples.size() - 1).memoryBytes() / ByteUnit.MEGABYTE.factor();
     }
 
     /** Close every live stream; the boot/shutdown seam and the test cleanup hook. */

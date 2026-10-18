@@ -134,7 +134,8 @@ public final class DnsSecondaryFreshness {
      */
     public static @NonNull Microcopy staleTitle(@NonNull List<String> peers, @NonNull String origin) {
         return HohenheimMicrocopy.ATTENTION_TITLE.of("dns_secondaries_stale")
-            .withArg("count", peers.size()).withArg("peers", peers).withArg("origin", origin);
+            .withArg("count", peers.size()).withArg("peers", peers.stream().map(Microcopy::literal).toList())
+            .withArg("origin", origin);
     }
 
     /**

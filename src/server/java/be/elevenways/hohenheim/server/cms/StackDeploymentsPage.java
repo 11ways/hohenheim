@@ -60,7 +60,7 @@ public final class StackDeploymentsPage implements RecordTab.Rendered<Row> {
             entry.put("statusKnown", colors.known());
             entry.put("reasonLabel",
                 scopedLabel(row.get(StackDeploymentModel.REASON), HohenheimMicrocopy.STACK_DEPLOY_REASON));
-            entry.put("duration", durationLabel(row.get(StackDeploymentModel.DURATION_MS)));
+            entry.put("duration", InstanceDeploymentsPage.durationLabel(row.get(StackDeploymentModel.DURATION_MS)));
             entry.put("error", Objects.toString(row.get(StackDeploymentModel.ERROR), ""));
             Instant startedAt = row.get(StackDeploymentModel.STARTED_AT);
             entry.put("startedAtIso", startedAt != null ? startedAt.toString() : "");
@@ -87,14 +87,4 @@ public final class StackDeploymentsPage implements RecordTab.Rendered<Row> {
         return scope.of(String.valueOf(value));
     }
 
-    private static String durationLabel(@Nullable Object durationMs) {
-        if (!(durationMs instanceof Number number)) {
-            return "";
-        }
-        long ms = number.longValue();
-        if (ms < 1000) {
-            return ms + "ms";
-        }
-        return (ms / 1000) + "s";
-    }
 }

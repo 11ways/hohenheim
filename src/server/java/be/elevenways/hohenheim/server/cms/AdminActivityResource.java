@@ -171,7 +171,7 @@ public final class AdminActivityResource {
                 lines.add(item.subtitle());
             }
             lines.add(ViewerFieldValueText.CELL.text(null, ActionModel.CREATED_AT, action.get(ActionModel.CREATED_AT),
-                locales, resolver));
+                reader.getReader(), resolver));
             items.add(new WidgetItem(item.title() == null ? item.value() : item.title(), item.editUrl(), lines));
         }
         return items;

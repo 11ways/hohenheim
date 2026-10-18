@@ -10,14 +10,13 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.database.DatabaseBackups;
 import be.elevenways.hohenheim.server.tls.CertificateExpiry;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.time.RelativeTime;
-import be.elevenways.protoblast.common.time.RelativeTimeWording;
+import be.elevenways.protoblast.common.i18n.wording.Reader;
+import be.elevenways.protoblast.common.i18n.wording.Wording;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.text.ByteText;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -192,8 +191,8 @@ final class DashboardStats {
         // "0 of 2" said what is not backed up and never why: with no copy at all the line says none was made yet.
         String detail = newestAt == null ? words.say(HohenheimMicrocopy.DASHBOARD.of("stat_backups_never"))
             : words.say(HohenheimMicrocopy.DASHBOARD.of("stat_backups_newest")
-            .withArg("ago", RelativeTime.ago(newestAt, RelativeTimeWording.resolve(words.locales(), words.resolver())))
-            .withArg("size", ByteText.human(newestSize)));
+            .withArg("ago", Wording.relative(Reader.of(words.locales(), words.resolver()), newestAt, words.resolver()))
+            .withArg("size", newestSize));
         return tile("backups", label,
             words.say(HohenheimMicrocopy.DASHBOARD.of("stat_backups_value").withArg("ok", complete)
                 .withArg("total", total)), detail,

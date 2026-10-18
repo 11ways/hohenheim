@@ -100,7 +100,7 @@ public final class HostAttention {
             if (raised == null && held == null) {
                 continue;
             }
-            Object name = server.get(ServerModel.NAME);
+            String name = server.get(ServerModel.NAME);
             // A host that raises nothing itself but holds apps back warns for them.
             items.add(item(raised != null ? raised : AttentionSeverity.WARNING, "server",
                 verdict.standing().attentionTitle(name), raised != null ? verdict.reason() : held.reason(),
@@ -128,7 +128,7 @@ public final class HostAttention {
     static void isolationUnenforced(@NonNull List<AttentionItem> items) {
         Map<Integer, Integer> held = isolationHeld();
         for (int host : isolationRoots(held)) {
-            Object name = ServerModel.nameOf(host);
+            String name = ServerModel.nameOf(host);
             int apps = held.getOrDefault(host, 0);
             items.add(item(apps > 0 ? AttentionSeverity.ERROR : AttentionSeverity.WARNING, "shield-halved",
                 HohenheimMicrocopy.ATTENTION_TITLE.of("isolation_unenforced").withArg("host", name),

@@ -1,16 +1,22 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.i18n.wording.DateStyle;
+import be.elevenways.protoblast.common.i18n.wording.Reader;
+import be.elevenways.protoblast.common.i18n.wording.Wording;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.server.time.JvmZoneClock;
+import be.elevenways.zenit.common.time.OfficeZone;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
 import java.time.Instant;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.TimeZone;
 
@@ -26,8 +32,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * default created_at order.
  *
  * AIDEV-NOTE: the request carries no zn-tz cookie, so the cell reads in the office zone (office.zone, Europe/Brussels
- * in default.dry), the zone an unknown viewer zone reads as; the JVM default zone is forced to Asia/Kathmandu for
- * step 1, so a render that fell back to the host's own zone fails here even on a host running in Europe/Brussels.
+ * in default.dry), the zone an unknown viewer zone reads as, and names it, since it is not the reader's own; the JVM
+ * default zone is forced to Asia/Kathmandu for step 1, so a render that fell back to the host's own zone fails here
+ * even on a host running in Europe/Brussels.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -40,7 +47,7 @@ class CertificateDateColumnTest extends HohenheimTestBase {
     private static final String EARLY_NAME = MARKER + "-early";
     private static final String LATE_NAME = MARKER + "-late";
 
-    /** Whole minutes: the wall-clock reading is "yyyy-MM-dd HH:mm" and must match exactly. */
+    /** Whole minutes: the reading names the minute and must match exactly. */
     private static final Instant EARLY_EXPIRY = Instant.parse("2031-03-04T05:06:00Z");
     private static final Instant LATE_EXPIRY = Instant.parse("2032-07-08T09:10:00Z");
 
@@ -50,9 +57,9 @@ class CertificateDateColumnTest extends HohenheimTestBase {
     /** UTC+05:45 all year, the forced host zone: neither UTC nor the office zone. */
     private static final String HOST_ZONE = "Asia/Kathmandu";
 
-    /** The expiries in the office zone: CET (+01:00) in March, CEST (+02:00) in July. */
-    private static final String EARLY_WALL = "2031-03-04 06:06";
-    private static final String LATE_WALL = "2032-07-08 11:10";
+    /** The expiries' times of day in the office zone: CET (+01:00) in March, CEST (+02:00) in July. */
+    private static final LocalTime EARLY_WALL = LocalTime.of(6, 6);
+    private static final LocalTime LATE_WALL = LocalTime.of(11, 10);
 
     private static Integer earlyId;
     private static Integer lateId;
@@ -100,7 +107,7 @@ class CertificateDateColumnTest extends HohenheimTestBase {
         // 1. The cell carries the ABSOLUTE wall-clock reading as its text, not only a
         //    relative one hidden behind a tooltip, read in the office zone: the request names
         //    no viewer zone, and the host's own zone (forced to another one here) never applies.
-        assertThat(JvmZoneClock.office()).as("step 1: default.dry declares the office zone").isEqualTo(OFFICE_ZONE);
+        assertThat(OfficeZone.office()).as("step 1: default.dry declares the office zone").isEqualTo(OFFICE_ZONE);
         HttpResponse<String> list;
         TimeZone original = TimeZone.getDefault();
         TimeZone.setDefault(TimeZone.getTimeZone(HOST_ZONE));
@@ -110,10 +117,15 @@ class CertificateDateColumnTest extends HohenheimTestBase {
             TimeZone.setDefault(original);
         }
         assertThat(list.statusCode()).isEqualTo(200);
+        // A cookieless English reader: the office zone, which is not theirs, so the reading names it.
+        Reader reader = Reader.of(LocaleChain.ofTags("en"), Zenit.getMessageResolver());
+        assertThat(reader.zoneIsReaders()).as("step 1: no stamp is no zone of the reader's own").isFalse();
         assertThat(list.body())
-            .as("step 1: the expiry cell reads as a calendar day and time in the office zone")
-            .contains(EARLY_WALL)
-            .contains(LATE_WALL);
+            .as("step 1: the expiry cell reads as a calendar day and time in the office zone, the zone named")
+            .contains(Wording.moment(reader, EARLY_EXPIRY, DateStyle.LONG))
+            .contains(Wording.moment(reader, LATE_EXPIRY, DateStyle.LONG))
+            .contains(Wording.time(reader, EARLY_WALL) + " (" + OFFICE_ZONE.getId() + ")")
+            .contains(Wording.time(reader, LATE_WALL) + " (" + OFFICE_ZONE.getId() + ")");
 
         // 2. The relative reading is still there, live, beside it.
         assertThat(list.body())

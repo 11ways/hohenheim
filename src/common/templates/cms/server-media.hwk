@@ -10,7 +10,7 @@
 {% declare fetchTarget: RouteTarget %}
 {% declare deleteTarget: RouteTarget %}
 {% declare uploadUrl: String %}
-{% declare maxIsoGb: Long %}
+{% declare maxIsoBytes: Long %}
 {% declare head: RecordHeadState = null %}
 {% extend "zenitcms:shell" var:title=title %}
 
@@ -26,7 +26,7 @@
     <pl-card>
         <pl-card-header>
             <pl-card-title>{{ t("upload_title", scope: "server_media") }}</pl-card-title>
-            <pl-card-description>{{ t("upload_description", scope: "server_media", size: maxIsoGb) }}</pl-card-description>
+            <pl-card-description>{{ t("upload_description", scope: "server_media", size: maxIsoBytes) }}</pl-card-description>
         </pl-card-header>
         <pl-card-content>
             <form id="media-upload-form" use:CmsUpload.to={% uploadUrl %}>

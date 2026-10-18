@@ -11,16 +11,16 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * {@code ServerModel.refuseRemovalWhileOwned} counts, so drain/cordon/delete refusals are
  * legible BEFORE they fire.
  *
- * @param tier     which population the workload belongs to
- * @param bookedMb the memory this workload books on the host, null when it books nothing
- * @param target   the workload's record page, as a typed route (never a built URL)
+ * @param tier        which population the workload belongs to
+ * @param bookedBytes the memory this workload books on the host, in bytes; null when it books nothing
+ * @param target      the workload's record page, as a typed route (never a built URL)
  */
 @HawkeyeClass
 public record WorkloadView(
     String name,
     WorkloadTier tier,
     @Nullable EnumBadgeState status,
-    @Nullable Integer bookedMb,
+    @Nullable Long bookedBytes,
     RouteTarget target
 ) {
 }

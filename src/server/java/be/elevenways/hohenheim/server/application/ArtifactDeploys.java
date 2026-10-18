@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.application;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -50,9 +51,9 @@ import java.util.zip.ZipFile;
 /** Immutable artifact ownership over the existing health-gated application release lane. */
 public final class ArtifactDeploys {
     static final String BUILD_STAMP = "META-INF/blast/build-info.tsv";
-    static final int MAX_STAMP_BYTES = 256 * 1024;
-    private static final long MAX_INFLATED_BYTES = 1024L * 1024 * 1024;
-    private static final int MAX_DIRECTORY_BYTES = 16 * 1024 * 1024;
+    static final int MAX_STAMP_BYTES = (int) ByteUnit.KILOBYTE.bytes(256);
+    private static final long MAX_INFLATED_BYTES = ByteUnit.GIGABYTE.factor();
+    private static final int MAX_DIRECTORY_BYTES = (int) ByteUnit.MEGABYTE.bytes(16);
 
     private ArtifactDeploys() {}
 

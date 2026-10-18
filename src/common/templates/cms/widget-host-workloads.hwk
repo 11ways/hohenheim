@@ -30,7 +30,7 @@
                         {% /if %}
                     </pl-table-cell>
                     <pl-table-cell>
-                        {% if workload.bookedMb != null %}{{ workload.bookedMb }} MB{% /if %}
+                        {% if workload.bookedBytes != null %}{{ ByteText.human(workload.bookedBytes) }}{% /if %}
                     </pl-table-cell>
                 </pl-table-row>
                 {% /each %}

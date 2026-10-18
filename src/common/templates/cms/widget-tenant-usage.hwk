@@ -14,7 +14,7 @@
         <div class="hh-tenant-usage-line" data-hh-usage={% line.label %}>
             <span class="hh-tenant-usage-label">{{ line.label }}</span>
             {% if line.capped %}
-            <span class="hh-tenant-usage-amount">{% if line.bytes %}{{ t("of_size", scope: "tenant_usage", used: ByteText.human(line.used), limit: ByteText.human(line.limit)) }}{% else %}{{ t("of_count", scope: "tenant_usage", used: line.used, limit: line.limit) }}{% /if %}</span>
+            <span class="hh-tenant-usage-amount">{% if line.bytes %}{{ t("of_size", scope: "tenant_usage", used: line.used, limit: line.limit) }}{% else %}{{ t("of_count", scope: "tenant_usage", used: line.used, limit: line.limit) }}{% /if %}</span>
             <pl-usage-bar value={% line.percent %} max={% 100 %} size="sm" ariaLabel={% line.label %}></pl-usage-bar>
             {% else %}
             <span class="hh-tenant-usage-amount" data-hh-usage-uncapped>{{ t("no_limit", scope: "tenant_usage") }}</span>

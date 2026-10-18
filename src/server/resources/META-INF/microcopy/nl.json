@@ -1402,23 +1402,23 @@
     "scope": "attention_detail"
   },
   "access_rules": {
-    "text": ".match {$count :number}\none {{1 toegangsregel}}\n* {{{$count} toegangsregels}}",
+    "text": ".match {$count :number}\none {{1 toegangsregel}}\n* {{{$count :integer} toegangsregels}}",
     "scope": "count"
   },
   "templates": {
-    "text": ".match {$count :number}\none {{1 sjabloon}}\n* {{{$count} sjablonen}}",
+    "text": ".match {$count :number}\none {{1 sjabloon}}\n* {{{$count :integer} sjablonen}}",
     "scope": "count"
   },
   "port_claims": {
-    "text": ".match {$count :number}\none {{1 poortclaim}}\n* {{{$count} poortclaims}}",
+    "text": ".match {$count :number}\none {{1 poortclaim}}\n* {{{$count :integer} poortclaims}}",
     "scope": "count"
   },
   "engines": {
-    "text": ".match {$count :number}\none {{1 gedeelde database-engine}}\n* {{{$count} gedeelde database-engines}}",
+    "text": ".match {$count :number}\none {{1 gedeelde database-engine}}\n* {{{$count :integer} gedeelde database-engines}}",
     "scope": "count"
   },
   "stacks": {
-    "text": ".match {$count :number}\none {{1 stack}}\n* {{{$count} stacks}}",
+    "text": ".match {$count :number}\none {{1 stack}}\n* {{{$count :integer} stacks}}",
     "scope": "count"
   },
   "act_review_host_key": {
@@ -1442,7 +1442,7 @@
     "scope": "attention_detail"
   },
   "https_certificates_unloaded": {
-    "text": ".match {$count :number}\none {{Het actieve certificaat kon niet geladen worden, dus niets kan via HTTPS antwoorden.}}\n* {{Geen van de {$count} actieve certificaten kon geladen worden, dus niets kan via HTTPS antwoorden.}}",
+    "text": ".match {$count :number}\none {{Het actieve certificaat kon niet geladen worden, dus niets kan via HTTPS antwoorden.}}\n* {{Geen van de {$count :integer} actieve certificaten kon geladen worden, dus niets kan via HTTPS antwoorden.}}",
     "scope": "attention_detail"
   },
   "https_no_certificate": {
@@ -1726,7 +1726,7 @@
     "scope": "attention_title"
   },
   "sites_held_back": {
-    "text": ".match {$count :number}\none {{Bezoekers van zijn site krijgen een foutpagina}}\n* {{Bezoekers van zijn {$count} sites krijgen een foutpagina}}",
+    "text": ".match {$count :number}\none {{Bezoekers van zijn site krijgen een foutpagina}}\n* {{Bezoekers van zijn {$count :integer} sites krijgen een foutpagina}}",
     "scope": "attention_detail"
   },
   "lines": {
@@ -2929,7 +2929,7 @@
   "renew_now": {"text": "Nu vernieuwen", "scope": "certificate"},
   "renew_now_description": {"text": "Vraagt Let's Encrypt nu een nieuw certificaat voor dezelfde namen, zoals de nachtelijke vernieuwing zou doen.", "scope": "certificate"},
   "last_renewal_failed": {"text": "De laatste vernieuwing is mislukt. {$reason}", "scope": "certificate"},
-  "last_renewal_failed_at": {"text": "De laatste vernieuwing is mislukt op {$when}. {$reason}", "scope": "certificate"},
+  "last_renewal_failed_at": {"text": "De laatste vernieuwing is mislukt op {$when :datetime}. {$reason}", "scope": "certificate"},
   "renewal_failed": [
     {"text": "Vernieuwing mislukt", "scope": "hohenheim", "target": "history_fact"},
     {"text": "Vernieuwen van certificaat {$subject} is mislukt", "scope": "hohenheim", "target": "happened"}
@@ -2992,7 +2992,7 @@
       "scope": "attention_title"
     },
     {
-      "text": ".match {$count :number}\none {{1 Docker-resource op deze host is niet door Hohenheim aangemaakt. Die blijft ongemoeid; open {$page} om hem te bekijken.}}\n* {{{$count} Docker-resources op deze host zijn niet door Hohenheim aangemaakt. Ze blijven ongemoeid; open {$page} om precies deze te bekijken.}}",
+      "text": ".match {$count :number}\none {{1 Docker-resource op deze host is niet door Hohenheim aangemaakt. Die blijft ongemoeid; open {$page} om hem te bekijken.}}\n* {{{$count :integer} Docker-resources op deze host zijn niet door Hohenheim aangemaakt. Ze blijven ongemoeid; open {$page} om precies deze te bekijken.}}",
       "scope": "attention_detail"
     }
   ],
@@ -3044,7 +3044,7 @@
       "scope": "backup_target"
     },
     {
-      "text": ".match {$count :number}\none {{De provider antwoordde; 1 repository is zichtbaar.}}\n* {{De provider antwoordde; {$count} repositories zijn zichtbaar.}}",
+      "text": ".match {$count :number}\none {{De provider antwoordde; 1 repository is zichtbaar.}}\n* {{De provider antwoordde; {$count :integer} repositories zijn zichtbaar.}}",
       "scope": "git_provider"
     }
   ],
@@ -3067,7 +3067,7 @@
     "scope": "server"
   },
   "host_summary": {
-    "text": "{$docker} | {$os} | {$cpus} CPU | {$memory} GiB RAM | {$running}/{$total} containers | {$images} images",
+    "text": "{$docker} | {$os} | {$cpus :integer} CPU | {$memory :bytes} RAM | {$running :integer}/{$total :integer} containers | {$images :integer} images",
     "scope": "server"
   },
   "clone": {
@@ -3092,7 +3092,7 @@
       "scope": "tenant_usage"
     },
     {
-      "text": ".match {$count :number}\none {{1 database}}\n* {{{$count} databases}}",
+      "text": ".match {$count :number}\none {{1 database}}\n* {{{$count :integer} databases}}",
       "scope": "count"
     }
   ],
@@ -3675,7 +3675,7 @@
     }
   ],
   "import_done": {
-    "text": "{$count} records geïmporteerd.",
+    "text": "{$count :integer} records geïmporteerd.",
     "scope": "dns_zone"
   },
   "import_empty": {
@@ -4718,7 +4718,7 @@
       "scope": "security_event_type"
     },
     {
-      "text": ".match {$count :number}\none {{Vroeg naar 1 naam die deze server niet bedient}}\n* {{Vroeg naar {$count} namen die deze server niet bedient}}",
+      "text": ".match {$count :number}\none {{Vroeg naar 1 naam die deze server niet bedient}}\n* {{Vroeg naar {$count :integer} namen die deze server niet bedient}}",
       "scope": "ban_cause"
     },
     {
@@ -4733,7 +4733,7 @@
       "scope": "security_event_type"
     },
     {
-      "text": ".match {$count :number}\none {{1 mislukte aanmelding}}\n* {{{$count} mislukte aanmeldingen}}",
+      "text": ".match {$count :number}\none {{1 mislukte aanmelding}}\n* {{{$count :integer} mislukte aanmeldingen}}",
       "scope": "ban_cause"
     },
     {
@@ -4748,7 +4748,7 @@
       "scope": "security_event_type"
     },
     {
-      "text": ".match {$count :number}\none {{1 keer buitengesloten bij het aanmelden}}\n* {{{$count} keer buitengesloten bij het aanmelden}}",
+      "text": ".match {$count :number}\none {{1 keer buitengesloten bij het aanmelden}}\n* {{{$count :integer} keer buitengesloten bij het aanmelden}}",
       "scope": "ban_cause"
     },
     {
@@ -4763,7 +4763,7 @@
       "scope": "security_event_type"
     },
     {
-      "text": ".match {$count :number}\none {{1 keer over een snelheidslimiet}}\n* {{{$count} keer over een snelheidslimiet}}",
+      "text": ".match {$count :number}\none {{1 keer over een snelheidslimiet}}\n* {{{$count :integer} keer over een snelheidslimiet}}",
       "scope": "ban_cause"
     },
     {
@@ -4778,7 +4778,7 @@
       "scope": "security_event_type"
     },
     {
-      "text": ".match {$count :number}\none {{1 formulier zonder geldig beveiligingstoken}}\n* {{{$count} formulieren zonder geldig beveiligingstoken}}",
+      "text": ".match {$count :number}\none {{1 formulier zonder geldig beveiligingstoken}}\n* {{{$count :integer} formulieren zonder geldig beveiligingstoken}}",
       "scope": "ban_cause"
     },
     {
@@ -4793,7 +4793,7 @@
       "scope": "security_event_type"
     },
     {
-      "text": ".match {$count :number}\none {{1 pagina geopend die het niet mag zien}}\n* {{{$count} pagina's geopend die het niet mag zien}}",
+      "text": ".match {$count :number}\none {{1 pagina geopend die het niet mag zien}}\n* {{{$count :integer} pagina's geopend die het niet mag zien}}",
       "scope": "ban_cause"
     },
     {
@@ -4808,7 +4808,7 @@
       "scope": "security_event_type"
     },
     {
-      "text": ".match {$count :number}\none {{1 live-verbinding vanaf een andere site}}\n* {{{$count} live-verbindingen vanaf een andere site}}",
+      "text": ".match {$count :number}\none {{1 live-verbinding vanaf een andere site}}\n* {{{$count :integer} live-verbindingen vanaf een andere site}}",
       "scope": "ban_cause"
     },
     {
@@ -4823,7 +4823,7 @@
       "scope": "security_event_type"
     },
     {
-      "text": ".match {$count :number}\none {{1 live-verbinding zonder aanmelding}}\n* {{{$count} live-verbindingen zonder aanmelding}}",
+      "text": ".match {$count :number}\none {{1 live-verbinding zonder aanmelding}}\n* {{{$count :integer} live-verbindingen zonder aanmelding}}",
       "scope": "ban_cause"
     },
     {
@@ -4838,7 +4838,7 @@
       "scope": "security_event_type"
     },
     {
-      "text": ".match {$count :number}\none {{SSH geprobeerd als 1 gebruiker die niet bestaat}}\n* {{SSH geprobeerd als {$count} gebruikers die niet bestaan}}",
+      "text": ".match {$count :number}\none {{SSH geprobeerd als 1 gebruiker die niet bestaat}}\n* {{SSH geprobeerd als {$count :integer} gebruikers die niet bestaan}}",
       "scope": "ban_cause"
     },
     {
@@ -4853,7 +4853,7 @@
       "scope": "security_event_type"
     },
     {
-      "text": ".match {$count :number}\none {{1 fout SSH-wachtwoord}}\n* {{{$count} foute SSH-wachtwoorden}}",
+      "text": ".match {$count :number}\none {{1 fout SSH-wachtwoord}}\n* {{{$count :integer} foute SSH-wachtwoorden}}",
       "scope": "ban_cause"
     },
     {
@@ -4868,7 +4868,7 @@
       "scope": "security_event_type"
     },
     {
-      "text": ".match {$count :number}\none {{1 geweigerde SSH-sleutel}}\n* {{{$count} geweigerde SSH-sleutels}}",
+      "text": ".match {$count :number}\none {{1 geweigerde SSH-sleutel}}\n* {{{$count :integer} geweigerde SSH-sleutels}}",
       "scope": "ban_cause"
     },
     {
@@ -4883,7 +4883,7 @@
       "scope": "security_event_type"
     },
     {
-      "text": ".match {$count :number}\none {{1 SSH-verbinding verbroken voor de aanmelding}}\n* {{{$count} SSH-verbindingen verbroken voor de aanmelding}}",
+      "text": ".match {$count :number}\none {{1 SSH-verbinding verbroken voor de aanmelding}}\n* {{{$count :integer} SSH-verbindingen verbroken voor de aanmelding}}",
       "scope": "ban_cause"
     },
     {
@@ -4898,7 +4898,7 @@
       "scope": "security_event_type"
     },
     {
-      "text": ".match {$count :number}\none {{1 keer door de SSH-aanmeldpogingen heen}}\n* {{{$count} keer door de SSH-aanmeldpogingen heen}}",
+      "text": ".match {$count :number}\none {{1 keer door de SSH-aanmeldpogingen heen}}\n* {{{$count :integer} keer door de SSH-aanmeldpogingen heen}}",
       "scope": "ban_cause"
     },
     {
@@ -4913,7 +4913,7 @@
       "scope": "security_event_type"
     },
     {
-      "text": ".match {$count :number}\none {{1 misvormde SSH-handshake}}\n* {{{$count} misvormde SSH-handshakes}}",
+      "text": ".match {$count :number}\none {{1 misvormde SSH-handshake}}\n* {{{$count :integer} misvormde SSH-handshakes}}",
       "scope": "ban_cause"
     },
     {
@@ -5045,15 +5045,15 @@
     "scope": "spamservice"
   },
   "active_keys_count": {
-    "text": "{$count} actieve sleutels",
+    "text": "{$count :integer} actieve sleutels",
     "scope": "spamservice"
   },
   "spam_samples_count": {
-    "text": "{$count} als spam gemarkeerd",
+    "text": "{$count :integer} als spam gemarkeerd",
     "scope": "spamservice"
   },
   "confirmed_counts": {
-    "text": "Bevestigd: {$spam} spam, {$ham} ham",
+    "text": "Bevestigd: {$spam :integer} spam, {$ham :integer} ham",
     "scope": "spamservice"
   },
   "start_hint": {
@@ -5359,7 +5359,7 @@
     "scope": "spamservice_sample"
   },
   "rescored": {
-    "text": "Voorbeeld opnieuw gescoord op {$score}",
+    "text": "Voorbeeld opnieuw gescoord op {$score :number}",
     "scope": "spamservice_sample"
   },
   "verdict_spam": {
@@ -5371,7 +5371,7 @@
     "scope": "spamservice_sample"
   },
   "score_threshold": {
-    "text": "Score {$score}, drempel {$threshold}",
+    "text": "Score {$score :number}, drempel {$threshold :number}",
     "scope": "spamservice_sample"
   },
   "request_info": {
@@ -5431,7 +5431,7 @@
     "scope": "spamservice_reputation"
   },
   "weighted_explanation": {
-    "text": "Binnen de eigen categorie compenseert elke positieve gebeurtenis maximaal {$weight} negatieve gebeurtenissen. De huidige totale nettoscore is {$net}; Hohenheim verbant zodra die {$threshold} bereikt. Risicovlaggen uit datasets zijn alleen diagnostisch.",
+    "text": "Binnen de eigen categorie compenseert elke positieve gebeurtenis maximaal {$weight :number} negatieve gebeurtenissen. De huidige totale nettoscore is {$net :number}; Hohenheim verbant zodra die {$threshold :number} bereikt. Risicovlaggen uit datasets zijn alleen diagnostisch.",
     "scope": "spamservice_reputation"
   },
   "formula": {
@@ -5664,10 +5664,6 @@
   },
   "reclaim_images_confirm": {
     "text": "Losse images en vervangen versies van beheerde images verwijderen? Images die in gebruik zijn blijven staan, en wat verdwijnt wordt bij de volgende deploy die het nodig heeft opnieuw gedownload.",
-    "scope": "stack"
-  },
-  "reclaim_images_done": {
-    "text": "{$images} images opgeruimd, {$megabytes} MiB vrij",
     "scope": "stack"
   },
   "reclaim_images_started": {
@@ -6053,7 +6049,7 @@
       "scope": "attention_title"
     },
     {
-      "text": ".match {$count :number}\none {{1 Docker-resource zonder levend eigenaarsrecord: {$names}}}\n* {{{$count} Docker-resources zonder levend eigenaarsrecord: {$names}}}",
+      "text": ".match {$count :number}\none {{1 Docker-resource zonder levend eigenaarsrecord: {$names}}}\n* {{{$count :integer} Docker-resources zonder levend eigenaarsrecord: {$names}}}",
       "scope": "attention_detail"
     }
   ],
@@ -6063,7 +6059,7 @@
       "scope": "attention_title"
     },
     {
-      "text": ".match {$count :number}\none {{1 onbeheerde resource draagt een naam in hohenheim-stijl: {$names}}}\n* {{{$count} onbeheerde resources dragen namen in hohenheim-stijl: {$names}}}",
+      "text": ".match {$count :number}\none {{1 onbeheerde resource draagt een naam in hohenheim-stijl: {$names}}}\n* {{{$count :integer} onbeheerde resources dragen namen in hohenheim-stijl: {$names}}}",
       "scope": "attention_detail"
     }
   ],
@@ -6073,7 +6069,7 @@
       "scope": "attention_title"
     },
     {
-      "text": ".match {$count :number}\none {{1 poortclaim staat al meer dan {$hours} uur op vrijgeven: {$ports}. Mogelijk houdt iets buiten ons beheer hem nog vast.}}\n* {{{$count} poortclaims staan al meer dan {$hours} uur op vrijgeven: {$ports}. Mogelijk houdt iets buiten ons beheer ze nog vast.}}",
+      "text": ".match {$count :number}\none {{1 poortclaim staat al meer dan {$hours} uur op vrijgeven: {$ports}. Mogelijk houdt iets buiten ons beheer hem nog vast.}}\n* {{{$count :integer} poortclaims staan al meer dan {$hours} uur op vrijgeven: {$ports}. Mogelijk houdt iets buiten ons beheer ze nog vast.}}",
       "scope": "attention_detail"
     }
   ],
@@ -6156,15 +6152,15 @@
     "scope": "released_claim"
   },
   "route_quarantined": {
-    "text": ".match {$days :number}\none {{{$hostname} is onlangs vrijgegeven door een andere eigenaar en blijft nog 1 dag gereserveerd; een beheerder kan de quarantaine opheffen}}\n* {{{$hostname} is onlangs vrijgegeven door een andere eigenaar en blijft nog {$days} dagen gereserveerd; een beheerder kan de quarantaine opheffen}}",
+    "text": ".match {$days :number}\none {{{$hostname} is onlangs vrijgegeven door een andere eigenaar en blijft nog 1 dag gereserveerd; een beheerder kan de quarantaine opheffen}}\n* {{{$hostname} is onlangs vrijgegeven door een andere eigenaar en blijft nog {$days :integer} dagen gereserveerd; een beheerder kan de quarantaine opheffen}}",
     "scope": "violations"
   },
   "enable_route_quarantined": {
-    "text": ".match {$days :number}\none {{Kan deze site niet inschakelen: {$hostname} is onlangs vrijgegeven door een andere eigenaar en blijft nog 1 dag gereserveerd; een beheerder kan de quarantaine opheffen}}\n* {{Kan deze site niet inschakelen: {$hostname} is onlangs vrijgegeven door een andere eigenaar en blijft nog {$days} dagen gereserveerd; een beheerder kan de quarantaine opheffen}}",
+    "text": ".match {$days :number}\none {{Kan deze site niet inschakelen: {$hostname} is onlangs vrijgegeven door een andere eigenaar en blijft nog 1 dag gereserveerd; een beheerder kan de quarantaine opheffen}}\n* {{Kan deze site niet inschakelen: {$hostname} is onlangs vrijgegeven door een andere eigenaar en blijft nog {$days :integer} dagen gereserveerd; een beheerder kan de quarantaine opheffen}}",
     "scope": "violations"
   },
   "restore_route_quarantined": {
-    "text": ".match {$days :number}\none {{Kan deze site niet herstellen: {$hostname} is onlangs vrijgegeven door een andere eigenaar en blijft nog 1 dag gereserveerd; een beheerder kan de quarantaine opheffen}}\n* {{Kan deze site niet herstellen: {$hostname} is onlangs vrijgegeven door een andere eigenaar en blijft nog {$days} dagen gereserveerd; een beheerder kan de quarantaine opheffen}}",
+    "text": ".match {$days :number}\none {{Kan deze site niet herstellen: {$hostname} is onlangs vrijgegeven door een andere eigenaar en blijft nog 1 dag gereserveerd; een beheerder kan de quarantaine opheffen}}\n* {{Kan deze site niet herstellen: {$hostname} is onlangs vrijgegeven door een andere eigenaar en blijft nog {$days :integer} dagen gereserveerd; een beheerder kan de quarantaine opheffen}}",
     "scope": "violations"
   },
   "kind": [
@@ -6284,7 +6280,7 @@
     "scope": "violations"
   },
   "quota_reached": {
-    "text": "Instantiequota bereikt: {$used} van {$limit} in gebruik",
+    "text": "Instantiequota bereikt: {$used :integer} van {$limit :integer} in gebruik",
     "scope": "violations"
   },
   "quota_negative": {
@@ -6374,11 +6370,11 @@
     "scope": "server"
   },
   "host_drained": {
-    "text": "Host {$name} leeggemaakt: {$moved} verplaatst, niets meer aanwezig",
+    "text": "Host {$name} leeggemaakt: {$moved :integer} verplaatst, niets meer aanwezig",
     "scope": "server"
   },
   "host_drain_partial": {
-    "text": "Leegmaken van {$name} ONVOLLEDIG: {$moved} verplaatst, {$refused} geweigerd ({$held})",
+    "text": "Leegmaken van {$name} ONVOLLEDIG: {$moved :integer} verplaatst, {$refused :integer} geweigerd ({$held})",
     "scope": "server"
   },
   "host_admitted": {
@@ -6619,7 +6615,7 @@
     "scope": "violations"
   },
   "host_capacity_reached": {
-    "text": "Host '{$name}' heeft geen ruimte voor deze workload: er is {$needed} MB nodig en slechts {$free} MB van het geheugenbudget is vrij. Kies een kleinere geheugenlimiet, maak een workload vrij of laat een extra host toe.",
+    "text": "Host '{$name}' heeft geen ruimte voor deze workload: er is {$needed :bytes} nodig en slechts {$free :bytes} van het geheugenbudget is vrij. Kies een kleinere geheugenlimiet, maak een workload vrij of laat een extra host toe.",
     "scope": "violations"
   },
   "host_capacity_unproven": {
@@ -6627,7 +6623,7 @@
     "scope": "violations"
   },
   "host_full": {
-    "text": "{$name} is vol: slechts {$free} MB van het geheugenbudget is vrij, minder dan de kleinste nieuwe app nodig heeft ({$smallest} MB).",
+    "text": "{$name} is vol: slechts {$free :bytes} van het geheugenbudget is vrij, minder dan de kleinste nieuwe app nodig heeft ({$smallest :bytes}).",
     "scope": "violations"
   },
   "host_prepared_image_missing": {
@@ -6663,7 +6659,7 @@
     "scope": "violations"
   },
   "migrate_devices_present": {
-    "text": ".match {$count :number}\none {{Instantie {$name} heeft 1 gekoppeld apparaat, en zijn host of de bestemming kan geen apparaatvolumes overzetten, dus migreren zou het stilzwijgend verliezen. Koppel het apparaat eerst los.}}\n* {{Instantie {$name} heeft {$count} gekoppelde apparaten, en zijn host of de bestemming kan geen apparaatvolumes overzetten, dus migreren zou ze stilzwijgend verliezen. Koppel de apparaten eerst los.}}",
+    "text": ".match {$count :number}\none {{Instantie {$name} heeft 1 gekoppeld apparaat, en zijn host of de bestemming kan geen apparaatvolumes overzetten, dus migreren zou het stilzwijgend verliezen. Koppel het apparaat eerst los.}}\n* {{Instantie {$name} heeft {$count :integer} gekoppelde apparaten, en zijn host of de bestemming kan geen apparaatvolumes overzetten, dus migreren zou ze stilzwijgend verliezen. Koppel de apparaten eerst los.}}",
     "scope": "violations"
   },
   "migrate_install_media_present": {
@@ -6791,7 +6787,7 @@
     "scope": "violations"
   },
   "restore_capacity": {
-    "text": "Host {$server} heeft onvoldoende ruimte voor dit herstel ({$needed} bytes nodig, {$available} beschikbaar)",
+    "text": "Host {$server} heeft onvoldoende ruimte voor dit herstel ({$needed :bytes} nodig, {$available :bytes} beschikbaar)",
     "scope": "violations"
   },
   "restore_capacity_unknown": {
@@ -6990,7 +6986,7 @@
       "scope": "database_overview"
     },
     {
-      "text": ".match {$count :number}\none {{1 back-up}}\n* {{{$count} back-ups}}",
+      "text": ".match {$count :number}\none {{1 back-up}}\n* {{{$count :integer} back-ups}}",
       "scope": "count"
     },
     {
@@ -7095,7 +7091,7 @@
     "scope": "violations"
   },
   "template_in_use": {
-    "text": ".match {$count :number}\none {{Sjabloon {$name} wordt nog gebruikt door 1 instantie}}\n* {{Sjabloon {$name} wordt nog gebruikt door {$count} instanties}}",
+    "text": ".match {$count :number}\none {{Sjabloon {$name} wordt nog gebruikt door 1 instantie}}\n* {{Sjabloon {$name} wordt nog gebruikt door {$count :integer} instanties}}",
     "scope": "violations"
   },
   "runtime_image_in_use": {
@@ -7996,7 +7992,7 @@
     "scope": "violations"
   },
   "port_window_exhausted": {
-    "text": "Geen vrije hostpoort in het pre-allocatievenster ({$first}, {$count} poorten); maak claims vrij of vergroot hohenheim.instances",
+    "text": "Geen vrije hostpoort in het pre-allocatievenster ({$first}, {$count :integer} poorten); maak claims vrij of vergroot hohenheim.instances",
     "scope": "violations"
   },
   "port_bound_on_host": {
@@ -8046,7 +8042,7 @@
     "scope": "violations"
   },
   "no_placement_capacity": {
-    "text": "Elke host die deze workload aanvaardt zit vol: er is {$needed} MB nodig en de leegste heeft {$free} MB vrij. Kies een kleinere geheugenlimiet, maak een workload vrij of laat een extra host toe",
+    "text": "Elke host die deze workload aanvaardt zit vol: er is {$needed :bytes} nodig en de leegste heeft {$free :bytes} vrij. Kies een kleinere geheugenlimiet, maak een workload vrij of laat een extra host toe",
     "scope": "violations"
   },
   "host_help": {
@@ -8157,7 +8153,7 @@
       "target": "happened"
     },
     {
-      "text": ".match {$count :number}\none {{1 bestand geschreven}}\n* {{{$count} bestanden geschreven}}",
+      "text": ".match {$count :number}\none {{1 bestand geschreven}}\n* {{{$count :integer} bestanden geschreven}}",
       "scope": "hohenheim",
       "target": "activity_batch"
     },
@@ -8357,7 +8353,7 @@
     "scope": "violations"
   },
   "files_too_large": {
-    "text": "Bestanden groter dan {$bytes} bytes kunnen hier niet gelezen of geschreven worden",
+    "text": "Bestanden groter dan {$bytes :bytes} kunnen hier niet gelezen of geschreven worden",
     "scope": "violations"
   },
   "files_unknown_action": {
@@ -8590,7 +8586,7 @@
     }
   ],
   "dns_peer_in_use": {
-    "text": ".match {$count :number}\none {{Peer {$name} is nog de primaire van 1 secundaire zone, {$zone}; wijs hem eerst om of verwijder hem}}\n* {{Peer {$name} is nog de primaire van {$count} secundaire zones zoals {$zone}; wijs ze eerst om of verwijder ze}}",
+    "text": ".match {$count :number}\none {{Peer {$name} is nog de primaire van 1 secundaire zone, {$zone}; wijs hem eerst om of verwijder hem}}\n* {{Peer {$name} is nog de primaire van {$count :integer} secundaire zones zoals {$zone}; wijs ze eerst om of verwijder ze}}",
     "scope": "violations"
   },
   "auth_provider_in_use": {
@@ -8630,7 +8626,7 @@
     "scope": "violations"
   },
   "preview_quota_reached": {
-    "text": "Previewquotum bereikt: {$used} van {$limit} in gebruik",
+    "text": "Previewquotum bereikt: {$used :integer} van {$limit :integer} in gebruik",
     "scope": "violations"
   },
   "preview_unsupported_type": {
@@ -9191,7 +9187,7 @@
     }
   ],
   "root_disk_shrink": {
-    "text": "Een rootschijf kan enkel groeien; ze bevat momenteel {$current} GB",
+    "text": "Een rootschijf kan enkel groeien; ze bevat momenteel {$current :bytes}",
     "scope": "violations"
   },
   "root_disk_invalid": {
@@ -9203,11 +9199,11 @@
     "scope": "violations"
   },
   "disk_quota_reached": {
-    "text": "Schijfquotum bereikt: {$used} van {$limit} GB in gebruik",
+    "text": "Schijfquotum bereikt: {$used :bytes} van {$limit :bytes} in gebruik",
     "scope": "violations"
   },
   "nic_quota_reached": {
-    "text": "Extra-NIC-quotum bereikt: {$used} van {$limit} in gebruik",
+    "text": "Extra-NIC-quotum bereikt: {$used :integer} van {$limit :integer} in gebruik",
     "scope": "violations"
   },
   "device_name_invalid": {
@@ -9415,7 +9411,7 @@
     "scope": "violations"
   },
   "media_fetch_busy": {
-    "text": "Er lopen al {$count} ophaalacties voor installatiemedia; wacht tot er een klaar is",
+    "text": "Er lopen al {$count :integer} ophaalacties voor installatiemedia; wacht tot er een klaar is",
     "scope": "violations"
   },
   "media_fetched": [
@@ -9455,7 +9451,7 @@
     "scope": "server_media"
   },
   "upload_description": {
-    "text": "Stuur een image vanaf deze computer, tot {$size} GB. Grote uploads lopen door zolang deze pagina open blijft.",
+    "text": "Stuur een image vanaf deze computer, tot {$size :bytes}. Grote uploads lopen door zolang deze pagina open blijft.",
     "scope": "server_media"
   },
   "upload_file": {
@@ -9663,7 +9659,7 @@
     "scope": "server"
   },
   "controller_objects_reaped": {
-    "text": ".match {$removed :number}\none {{{$name}: 1 gedeeld object van vertrokken controllers verwijderd, {$refused} geweigerd}}\n* {{{$name}: {$removed} gedeelde objecten van vertrokken controllers verwijderd, {$refused} geweigerd}}",
+    "text": ".match {$removed :number}\none {{{$name}: 1 gedeeld object van vertrokken controllers verwijderd, {$refused} geweigerd}}\n* {{{$name}: {$removed :integer} gedeelde objecten van vertrokken controllers verwijderd, {$refused} geweigerd}}",
     "scope": "server"
   },
   "singular": [
@@ -10285,7 +10281,7 @@
       "scope": "attention_title"
     },
     {
-      "text": "De nieuwste voltooide back-up is {$days} dagen oud.",
+      "text": "De nieuwste voltooide back-up is {$days :integer} dagen oud.",
       "scope": "attention_detail"
     }
   ],
@@ -10295,7 +10291,7 @@
       "scope": "attention_title"
     },
     {
-      "text": "{$percent}% van de {$limit} GB rootschijf is in gebruik.",
+      "text": "{$percent :percent} van de {$limit :bytes} rootschijf is in gebruik.",
       "scope": "attention_detail"
     }
   ],
@@ -10315,7 +10311,7 @@
       "scope": "attention_title"
     },
     {
-      "text": "Geen controlevlak-back-up voltooid in de laatste {$hours} uur; het nieuwste herstelarchief weerspiegelt deze host niet meer.",
+      "text": "Geen controlevlak-back-up voltooid in de laatste {$hours :integer} uur; het nieuwste herstelarchief weerspiegelt deze host niet meer.",
       "scope": "attention_detail"
     }
   ],
@@ -10496,7 +10492,7 @@
     }
   ],
   "memory_quota_reached": {
-    "text": "Geheugenquotum bereikt: {$used} van {$limit} MB in gebruik",
+    "text": "Geheugenquotum bereikt: {$used :bytes} van {$limit :bytes} in gebruik",
     "scope": "violations"
   },
   "max_sites": [
@@ -10520,15 +10516,15 @@
     }
   ],
   "site_quota_reached": {
-    "text": "Sitequotum bereikt: {$used} van {$limit} in gebruik",
+    "text": "Sitequotum bereikt: {$used :integer} van {$limit :integer} in gebruik",
     "scope": "violations"
   },
   "database_quota_reached": {
-    "text": "Databankquotum bereikt: {$used} van {$limit} in gebruik",
+    "text": "Databankquotum bereikt: {$used :integer} van {$limit :integer} in gebruik",
     "scope": "violations"
   },
   "host_contact_lapsed": {
-    "text": ".match {$minutes :number}\none {{{$name} antwoordde 1 minuut geleden voor het laatst, dus er komt geen nieuwe app op tot hij weer antwoordt}}\n* {{{$name} antwoordde {$minutes} minuten geleden voor het laatst, dus er komt geen nieuwe app op tot hij weer antwoordt}}",
+    "text": ".match {$minutes :number}\none {{{$name} antwoordde 1 minuut geleden voor het laatst, dus er komt geen nieuwe app op tot hij weer antwoordt}}\n* {{{$name} antwoordde {$minutes :integer} minuten geleden voor het laatst, dus er komt geen nieuwe app op tot hij weer antwoordt}}",
     "scope": "violations"
   },
   "preview_branches": [
@@ -10744,7 +10740,7 @@
     "text": "Boekbaar",
     "scope": "server_overview"
   },
-  "bookable_free": {"text": "{$free} vrij van {$budget}", "scope": "server_overview"},
+  "bookable_free": {"text": "{$free :bytes} vrij van {$budget :bytes}", "scope": "server_overview"},
   "unmeasured": [
     {
       "text": "Ongemeten",
@@ -10913,7 +10909,7 @@
     "scope": "onboarding_checklist"
   },
   "checklist_host_enrolled_more": {
-    "text": ".match {$more :number}\none {{{$name}, {$runtime} en nog 1}}\n* {{{$name}, {$runtime} en nog {$more}}}",
+    "text": ".match {$more :number}\none {{{$name}, {$runtime} en nog 1}}\n* {{{$name}, {$runtime} en nog {$more :integer}}}",
     "scope": "onboarding_checklist"
   },
   "checklist_admit": {
@@ -10929,7 +10925,7 @@
     "scope": "onboarding_checklist"
   },
   "held_back": {
-    "text": ".match {$count :number}\none {{1 app wacht erop}}\n* {{{$count} apps wachten erop}}",
+    "text": ".match {$count :number}\none {{1 app wacht erop}}\n* {{{$count :integer} apps wachten erop}}",
     "scope": "attention_detail"
   },
   "checklist_admit_detail": {
@@ -11125,7 +11121,7 @@
     "scope": "server_overview"
   },
   "import_partial": {
-    "text": "{$count} records geïmporteerd; overgeslagen: {$skipped}. {$notes}",
+    "text": "{$count :integer} records geïmporteerd; overgeslagen: {$skipped}. {$notes}",
     "scope": "dns_zone"
   },
   "import_failed": {
@@ -11545,11 +11541,11 @@
     "scope": "access_rule"
   },
   "protection_password": {
-    "text": ".match {$count :number}\none {{Wachtwoord, 1 persoon}}\n* {{Wachtwoord, {$count} personen}}",
+    "text": ".match {$count :number}\none {{Wachtwoord, 1 persoon}}\n* {{Wachtwoord, {$count :integer} personen}}",
     "scope": "access_rule"
   },
   "protection_network": {
-    "text": ".match {$count :number}\none {{Netwerk, 1 regel}}\n* {{Netwerk, {$count} regels}}",
+    "text": ".match {$count :number}\none {{Netwerk, 1 regel}}\n* {{Netwerk, {$count :integer} regels}}",
     "scope": "access_rule"
   },
   "protection_sign_in": {
@@ -12520,7 +12516,7 @@
     "scope": "instance_shell"
   },
   "limits_hint": {
-    "text": "Maximaal {$sessions} shell-sessies per workspace; een inactieve sessie sluit na {$minutes} minuten.",
+    "text": "Maximaal {$sessions :integer} shell-sessies per workspace; een inactieve sessie sluit na {$minutes :integer} minuten.",
     "scope": "instance_shell"
   },
   "repository_url_credential": {
@@ -12574,7 +12570,7 @@
     "scope": "violations"
   },
   "shell_too_many_sessions": {
-    "text": "Instantie {$name} heeft al het maximum van {$max} shell-sessies open",
+    "text": "Instantie {$name} heeft al het maximum van {$max :integer} shell-sessies open",
     "scope": "violations"
   },
   "shell_unsupported_runtime": {
@@ -12686,11 +12682,11 @@
   },
   "delete_confirm_named": [
     {
-      "text": ".match {$rules :number}\none {{De toegangslijst {$name} verwijderen? De ene regel verdwijnt mee. Er wordt op dit moment niets door bewaakt.}}\n* {{De toegangslijst {$name} verwijderen? De {$rules} regels verdwijnen mee. Er wordt op dit moment niets door bewaakt.}}",
+      "text": ".match {$rules :number}\none {{De toegangslijst {$name} verwijderen? De ene regel verdwijnt mee. Er wordt op dit moment niets door bewaakt.}}\n* {{De toegangslijst {$name} verwijderen? De {$rules :integer} regels verdwijnen mee. Er wordt op dit moment niets door bewaakt.}}",
       "scope": "access_list"
     },
     {
-      "text": ".match {$records :number}\none {{De zone {$origin} verwijderen? Het ene opgeslagen record verdwijnt mee en deze server antwoordt niet langer voor die naam.}}\n* {{De zone {$origin} verwijderen? De {$records} opgeslagen records verdwijnen mee en deze server antwoordt niet langer voor die naam.}}",
+      "text": ".match {$records :number}\none {{De zone {$origin} verwijderen? Het ene opgeslagen record verdwijnt mee en deze server antwoordt niet langer voor die naam.}}\n* {{De zone {$origin} verwijderen? De {$records :integer} opgeslagen records verdwijnen mee en deze server antwoordt niet langer voor die naam.}}",
       "scope": "dns_zone"
     },
     {
@@ -12711,7 +12707,7 @@
     "scope": "dns_peer"
   },
   "delete_confirm_gating": {
-    "text": ".match {$rules :number}\none {{De toegangslijst {$name} verwijderen? De ene regel verdwijnt mee, en deze worden niet langer bewaakt -- hun verkeer wordt vanaf dat moment ongecontroleerd doorgelaten: {$gated}.}}\n* {{De toegangslijst {$name} verwijderen? De {$rules} regels verdwijnen mee, en deze worden niet langer bewaakt -- hun verkeer wordt vanaf dat moment ongecontroleerd doorgelaten: {$gated}.}}",
+    "text": ".match {$rules :number}\none {{De toegangslijst {$name} verwijderen? De ene regel verdwijnt mee, en deze worden niet langer bewaakt -- hun verkeer wordt vanaf dat moment ongecontroleerd doorgelaten: {$gated}.}}\n* {{De toegangslijst {$name} verwijderen? De {$rules :integer} regels verdwijnen mee, en deze worden niet langer bewaakt -- hun verkeer wordt vanaf dat moment ongecontroleerd doorgelaten: {$gated}.}}",
     "scope": "access_list"
   },
   "delete_local": {
@@ -12720,7 +12716,7 @@
   },
   "delete_in_use": [
     {
-      "text": ".match {$workloads :number}\none {{1 record verwijst nog naar deze host: {$instances}, {$stacks}, {$databases}, {$engines} en {$ports}. Verwijder of verplaats het eerst (geef de claim vrij), anders verwijst zijn record naar een host die niet meer bestaat.}}\n* {{{$workloads} records verwijzen nog naar deze host: {$instances}, {$stacks}, {$databases}, {$engines} en {$ports}. Verwijder of verplaats ze eerst (geef de claims vrij), anders verwijzen hun records naar een host die niet meer bestaat.}}",
+      "text": ".match {$workloads :number}\none {{1 record verwijst nog naar deze host: {$instances}, {$stacks}, {$databases}, {$engines} en {$ports}. Verwijder of verplaats het eerst (geef de claim vrij), anders verwijst zijn record naar een host die niet meer bestaat.}}\n* {{{$workloads :integer} records verwijzen nog naar deze host: {$instances}, {$stacks}, {$databases}, {$engines} en {$ports}. Verwijder of verplaats ze eerst (geef de claims vrij), anders verwijzen hun records naar een host die niet meer bestaat.}}",
       "scope": "server"
     },
     {
@@ -12757,15 +12753,15 @@
     "scope": "server"
   },
   "delete_confirm_dependents": {
-    "text": ".match {$records :number}\none {{De zone {$origin} verwijderen? Het ene opgeslagen record verdwijnt mee en deze server antwoordt niet langer voor die naam. Deze sites en certificaten resolven erin en verliezen hun DNS: {$dependents}.}}\n* {{De zone {$origin} verwijderen? De {$records} opgeslagen records verdwijnen mee en deze server antwoordt niet langer voor die naam. Deze sites en certificaten resolven erin en verliezen hun DNS: {$dependents}.}}",
+    "text": ".match {$records :number}\none {{De zone {$origin} verwijderen? Het ene opgeslagen record verdwijnt mee en deze server antwoordt niet langer voor die naam. Deze sites en certificaten resolven erin en verliezen hun DNS: {$dependents}.}}\n* {{De zone {$origin} verwijderen? De {$records :integer} opgeslagen records verdwijnen mee en deze server antwoordt niet langer voor die naam. Deze sites en certificaten resolven erin en verliezen hun DNS: {$dependents}.}}",
     "scope": "dns_zone"
   },
   "delete_confirm_admin": {
-    "text": ".match {$records :number}\none {{De zone {$origin} verwijderen? Het ene opgeslagen record verdwijnt mee en deze server antwoordt niet langer voor die naam. Deze zone antwoordt voor {$host}, de hostnaam waarop je dit beheerpaneel bereikt: verwijderen kan je buitensluiten.}}\n* {{De zone {$origin} verwijderen? De {$records} opgeslagen records verdwijnen mee en deze server antwoordt niet langer voor die naam. Deze zone antwoordt voor {$host}, de hostnaam waarop je dit beheerpaneel bereikt: verwijderen kan je buitensluiten.}}",
+    "text": ".match {$records :number}\none {{De zone {$origin} verwijderen? Het ene opgeslagen record verdwijnt mee en deze server antwoordt niet langer voor die naam. Deze zone antwoordt voor {$host}, de hostnaam waarop je dit beheerpaneel bereikt: verwijderen kan je buitensluiten.}}\n* {{De zone {$origin} verwijderen? De {$records :integer} opgeslagen records verdwijnen mee en deze server antwoordt niet langer voor die naam. Deze zone antwoordt voor {$host}, de hostnaam waarop je dit beheerpaneel bereikt: verwijderen kan je buitensluiten.}}",
     "scope": "dns_zone"
   },
   "delete_confirm_admin_dependents": {
-    "text": ".match {$records :number}\none {{De zone {$origin} verwijderen? Het ene opgeslagen record verdwijnt mee en deze server antwoordt niet langer voor die naam. Deze sites en certificaten resolven erin en verliezen hun DNS: {$dependents}. Deze zone antwoordt voor {$host}, de hostnaam waarop je dit beheerpaneel bereikt: verwijderen kan je buitensluiten.}}\n* {{De zone {$origin} verwijderen? De {$records} opgeslagen records verdwijnen mee en deze server antwoordt niet langer voor die naam. Deze sites en certificaten resolven erin en verliezen hun DNS: {$dependents}. Deze zone antwoordt voor {$host}, de hostnaam waarop je dit beheerpaneel bereikt: verwijderen kan je buitensluiten.}}",
+    "text": ".match {$records :number}\none {{De zone {$origin} verwijderen? Het ene opgeslagen record verdwijnt mee en deze server antwoordt niet langer voor die naam. Deze sites en certificaten resolven erin en verliezen hun DNS: {$dependents}. Deze zone antwoordt voor {$host}, de hostnaam waarop je dit beheerpaneel bereikt: verwijderen kan je buitensluiten.}}\n* {{De zone {$origin} verwijderen? De {$records :integer} opgeslagen records verdwijnen mee en deze server antwoordt niet langer voor die naam. Deze sites en certificaten resolven erin en verliezen hun DNS: {$dependents}. Deze zone antwoordt voor {$host}, de hostnaam waarop je dit beheerpaneel bereikt: verwijderen kan je buitensluiten.}}",
     "scope": "dns_zone"
   },
   "import_confirm": {
@@ -12858,7 +12854,7 @@
       "scope": "security_event_type"
     },
     {
-      "text": ".match {$count :number}\none {{1 keer aangemeld}}\n* {{{$count} keer aangemeld}}",
+      "text": ".match {$count :number}\none {{1 keer aangemeld}}\n* {{{$count :integer} keer aangemeld}}",
       "scope": "ban_cause"
     },
     {
@@ -13160,7 +13156,7 @@
     "scope": "help"
   },
   "step_execution": {
-    "text": "Stap {$id}: {$attempts} pogingen; gestart {$started}; geëindigd {$ended}",
+    "text": "Stap {$id}: {$attempts :integer} pogingen; gestart {$started :datetime}; geëindigd {$ended :datetime}",
     "scope": "instance_schedule"
   },
   "last_failure": {
@@ -13264,7 +13260,7 @@
     "scope": "dns_zone"
   },
   "check_health_done": {
-    "text": ".match {$secondaries :number}\none {{Delegatie: {$verdict}. 1 secundaire gepeild, {$behind} achter.}}\n* {{Delegatie: {$verdict}. {$secondaries} secundaires gepeild, {$behind} achter.}}",
+    "text": ".match {$secondaries :number}\none {{Delegatie: {$verdict}. 1 secundaire gepeild, {$behind} achter.}}\n* {{Delegatie: {$verdict}. {$secondaries :integer} secundaires gepeild, {$behind} achter.}}",
     "scope": "dns_zone"
   },
   "check_health_unserved": {
@@ -13372,7 +13368,7 @@
     "scope": "dns_delegation"
   },
   "import_done_notes": {
-    "text": "{$count} records geïmporteerd. {$notes}",
+    "text": "{$count :integer} records geïmporteerd. {$notes}",
     "scope": "dns_zone"
   },
   "import_keep_nameservers": {
@@ -13437,7 +13433,7 @@
     "scope": "dns_zone"
   },
   "secondaries_current": {
-    "text": "{$current} van {$total} actueel",
+    "text": "{$current :integer} van {$total :integer} actueel",
     "scope": "dns_zone"
   },
   "lead_primary": {
@@ -13449,7 +13445,7 @@
     "scope": "dns_zone"
   },
   "lead_records": {
-    "text": ".match {$records :number}\none {{1 record}}\n* {{{$records} records}}",
+    "text": ".match {$records :number}\none {{1 record}}\n* {{{$records :integer} records}}",
     "scope": "dns_zone"
   },
   "lead_secondaries_none": {
@@ -13457,7 +13453,7 @@
     "scope": "dns_zone"
   },
   "lead_secondaries_current": {
-    "text": ".match {$total :number}\none {{{$current} van 1 secundaire server actueel}}\n* {{{$current} van {$total} secundaire servers actueel}}",
+    "text": ".match {$total :number}\none {{{$current :integer} van 1 secundaire server actueel}}\n* {{{$current :integer} van {$total :integer} secundaire servers actueel}}",
     "scope": "dns_zone"
   },
   "lead_transfer": {
@@ -13976,7 +13972,7 @@
       "target": "happened"
     },
     {
-      "text": ".match {$count :number}\none {{1 bestand opgeslagen}}\n* {{{$count} bestanden opgeslagen}}",
+      "text": ".match {$count :number}\none {{1 bestand opgeslagen}}\n* {{{$count :integer} bestanden opgeslagen}}",
       "scope": "hohenheim",
       "target": "activity_batch"
     }
@@ -13993,7 +13989,7 @@
       "target": "happened"
     },
     {
-      "text": ".match {$count :number}\none {{1 bestand opgeladen}}\n* {{{$count} bestanden opgeladen}}",
+      "text": ".match {$count :number}\none {{1 bestand opgeladen}}\n* {{{$count :integer} bestanden opgeladen}}",
       "scope": "hohenheim",
       "target": "activity_batch"
     }
@@ -14010,7 +14006,7 @@
       "target": "happened"
     },
     {
-      "text": ".match {$count :number}\none {{1 map aangemaakt}}\n* {{{$count} mappen aangemaakt}}",
+      "text": ".match {$count :number}\none {{1 map aangemaakt}}\n* {{{$count :integer} mappen aangemaakt}}",
       "scope": "hohenheim",
       "target": "activity_batch"
     }
@@ -14027,7 +14023,7 @@
       "target": "happened"
     },
     {
-      "text": ".match {$count :number}\none {{1 bestand hernoemd}}\n* {{{$count} bestanden hernoemd}}",
+      "text": ".match {$count :number}\none {{1 bestand hernoemd}}\n* {{{$count :integer} bestanden hernoemd}}",
       "scope": "hohenheim",
       "target": "activity_batch"
     }
@@ -14044,7 +14040,7 @@
       "target": "happened"
     },
     {
-      "text": ".match {$count :number}\none {{1 bestand verwijderd}}\n* {{{$count} bestanden verwijderd}}",
+      "text": ".match {$count :number}\none {{1 bestand verwijderd}}\n* {{{$count :integer} bestanden verwijderd}}",
       "scope": "hohenheim",
       "target": "activity_batch"
     }
@@ -14582,11 +14578,11 @@
     "scope": "alert"
   },
   "isolation_contained_subject": {
-    "text": ".match {$count :number}\none {{{$sweep}: 1 app is afgesloten om het apart te houden}}\n* {{{$sweep}: {$count} apps zijn afgesloten om ze apart te houden}}",
+    "text": ".match {$count :number}\none {{{$sweep}: 1 app is afgesloten om het apart te houden}}\n* {{{$sweep}: {$count :integer} apps zijn afgesloten om ze apart te houden}}",
     "scope": "alert"
   },
   "isolation_unconfirmed_subject": {
-    "text": ".match {$count :number}\none {{{$sweep}: van 1 ding is niet bevestigd dat het apart blijft}}\n* {{{$sweep}: van {$count} dingen is niet bevestigd dat ze apart blijven}}",
+    "text": ".match {$count :number}\none {{{$sweep}: van 1 ding is niet bevestigd dat het apart blijft}}\n* {{{$sweep}: van {$count :integer} dingen is niet bevestigd dat ze apart blijven}}",
     "scope": "alert"
   },
   "data_integrity_subject": {
@@ -15530,7 +15526,7 @@
     }
   ],
   "stack_kind": {
-    "text": ".match {$count :number}\none {{Stack met 1 service}}\n* {{Stack met {$count} services}}",
+    "text": ".match {$count :number}\none {{Stack met 1 service}}\n* {{Stack met {$count :integer} services}}",
     "scope": "app_list"
   },
   "type_workload": {
@@ -16300,7 +16296,7 @@
     "scope": "deployments"
   },
   "poll_every": {
-    "text": ".match {$minutes :number}\none {{Het controleert elke minuut de repository op nieuwe commits; een push-webhook, als de repository er een stuurt, rolt meteen uit.}}\n* {{Het controleert elke {$minutes} minuten de repository op nieuwe commits; een push-webhook, als de repository er een stuurt, rolt meteen uit.}}",
+    "text": ".match {$minutes :number}\none {{Het controleert elke minuut de repository op nieuwe commits; een push-webhook, als de repository er een stuurt, rolt meteen uit.}}\n* {{Het controleert elke {$minutes :integer} minuten de repository op nieuwe commits; een push-webhook, als de repository er een stuurt, rolt meteen uit.}}",
     "scope": "deployments"
   },
   "poll_last": {
@@ -16395,28 +16391,24 @@
     "text": "Nu",
     "scope": "instance_stats"
   },
-  "cpu_now_one": {
-    "text": "{$percent}% van 1 core",
-    "scope": "instance_stats"
-  },
   "cpu_now_cores": {
-    "text": "{$percent}% van {$cores} cores",
+    "text": ".match {$cores :number}\n1 {{{$percent :percent} van 1 core}}\n* {{{$percent :percent} van {$cores :number maxFraction=1} cores}}",
     "scope": "instance_stats"
   },
   "cpu_now_unlimited": {
-    "text": "{$percent}% van één core, geen limiet",
+    "text": "{$percent :percent} van één core, geen limiet",
     "scope": "instance_stats"
   },
   "used_of_limit": {
-    "text": "{$used} van {$limit}",
+    "text": "{$used :bytes} van {$limit :bytes}",
     "scope": "instance_stats"
   },
   "used_no_limit": {
-    "text": "{$used}, geen limiet",
+    "text": "{$used :bytes}, geen limiet",
     "scope": "instance_stats"
   },
   "per_second": {
-    "text": "{$amount}/s",
+    "text": "{$amount :bytes}/s",
     "scope": "instance_stats"
   },
   "waiting": {
@@ -16520,11 +16512,11 @@
     "scope": "certificate"
   },
   "state_failing_detail": {
-    "text": ".match {$count :number}\none {{1 keer mislukt · {$expiry}}}\n* {{{$count} keer mislukt · {$expiry}}}",
+    "text": ".match {$count :number}\none {{1 keer mislukt · {$expiry}}}\n* {{{$count :integer} keer mislukt · {$expiry}}}",
     "scope": "certificate"
   },
   "state_failing_unissued": {
-    "text": ".match {$count :number}\none {{1 keer mislukt; nog niet uitgegeven}}\n* {{{$count} keer mislukt; nog niet uitgegeven}}",
+    "text": ".match {$count :number}\none {{1 keer mislukt; nog niet uitgegeven}}\n* {{{$count :integer} keer mislukt; nog niet uitgegeven}}",
     "scope": "certificate"
   },
   "state_waiting_dns": {
@@ -16564,7 +16556,7 @@
     "scope": "access_list"
   },
   "protects_count": {
-    "text": ".match {$count :number}\none {{1 plaats}}\n* {{{$count} plaatsen}}",
+    "text": ".match {$count :number}\none {{1 plaats}}\n* {{{$count :integer} plaatsen}}",
     "scope": "access_list"
   },
   "protects_site": {
@@ -16588,7 +16580,7 @@
     "scope": "access_rule"
   },
   "lets_in_rules": {
-    "text": ".match {$count :number}\none {{1 regel}}\n* {{{$count} regels}}",
+    "text": ".match {$count :number}\none {{1 regel}}\n* {{{$count :integer} regels}}",
     "scope": "access_rule"
   },
   "by_column": {
@@ -16618,7 +16610,7 @@
     "scope": "auth_provider"
   },
   "used_by_count": {
-    "text": ".match {$count :number}\none {{1 plaats}}\n* {{{$count} plaatsen}}",
+    "text": ".match {$count :number}\none {{1 plaats}}\n* {{{$count :integer} plaatsen}}",
     "scope": "auth_provider"
   },
   "back_up_now": {"text": "Nu een backup maken", "scope": "database"},
@@ -16641,20 +16633,20 @@
   "backup_temporary_detail": {"text": "Tijdelijke gegevens, weg zodra hij stopt", "scope": "database_overview"},
   "backup_never": {"text": "Nooit", "scope": "database_overview"},
   "backup_never_detail": {"text": "Maak nu een backup, of wacht op de nachtelijke backup", "scope": "database_overview"},
-  "backup_overdue_detail": {"text": "{$size}; de nachtelijke backup schreef geen nieuwere", "scope": "database_overview"},
+  "backup_overdue_detail": {"text": "{$size :bytes}; de nachtelijke backup schreef geen nieuwere", "scope": "database_overview"},
   "kept": {"text": "Bewaard", "scope": "database_overview"},
-  "kept_value": {"text": ".match {$count :number}\none {{De nieuwste dump, op deze machine}}\n* {{De nieuwste {$count} dumps, op deze machine}}", "scope": "database_overview"},
+  "kept_value": {"text": ".match {$count :number}\none {{De nieuwste dump, op deze machine}}\n* {{De nieuwste {$count :integer} dumps, op deze machine}}", "scope": "database_overview"},
   "runs_on_dedicated": {"text": "Eigen container op {$host}", "scope": "database_overview"},
   "runs_on_shared": {"text": "Gedeelde engine {$engine} op {$host}", "scope": "database_overview"},
   "memory_column": {"text": "Geheugen", "scope": "host_list"},
   "disk_column": {"text": "Schijf", "scope": "host_list"},
-  "disk_used": {"text": "{$used} van {$total} gebruikt", "scope": "host_list"},
+  "disk_used": {"text": "{$used :bytes} van {$total :bytes} gebruikt", "scope": "host_list"},
   "runs_column": {"text": "Draait", "scope": "host_list"},
   "cordoned_detail": {"text": "Apps die hier al draaien, blijven draaien", "scope": "host_list"},
-  "checks_failed": {"text": ".match {$count :number}\none {{1 verplichte controle mislukt: {$checks}}}\n* {{{$count} verplichte controles mislukt: {$checks}}}", "scope": "host_list"},
+  "checks_failed": {"text": ".match {$count :number}\none {{1 verplichte controle mislukt: {$checks}}}\n* {{{$count :integer} verplichte controles mislukt: {$checks}}}", "scope": "host_list"},
   "never_checked": {"text": "Nog nooit gecontroleerd", "scope": "host_list"},
   "checks_pass": {"text": "Zijn verplichte controles slagen; Controleren en toelaten laat hier apps draaien", "scope": "host_list"},
-  "memory_booked": {"text": "{$booked} van {$budget} geboekt", "scope": "host_list"},
+  "memory_booked": {"text": "{$booked :bytes} van {$budget :bytes} geboekt", "scope": "host_list"},
   "reading_unmeasured": {"text": "Nog niet gemeten", "scope": "host_list"},
   "reading_stale": {"text": "Laatste meting te oud", "scope": "host_list"},
   "host_option_facts": {"text": "{$state}. Geheugen: {$memory}.", "scope": "host_list"},
@@ -16662,8 +16654,8 @@
   "host_option_disk": {"text": "Schijf: {$disk}", "scope": "host_list"},
   "runs_nothing": {"text": "Nog niets", "scope": "host_list"},
   "runs_count": {"text": "{$apps}, {$databases}", "scope": "host_list"},
-  "apps_count": {"text": ".match {$count :number}\none {{1 app}}\n* {{{$count} apps}}", "scope": "host_list"},
-  "databases_count": {"text": ".match {$count :number}\none {{1 database}}\n* {{{$count} databases}}", "scope": "host_list"},
+  "apps_count": {"text": ".match {$count :number}\none {{1 app}}\n* {{{$count :integer} apps}}", "scope": "host_list"},
+  "databases_count": {"text": ".match {$count :number}\none {{1 database}}\n* {{{$count :integer} databases}}", "scope": "host_list"},
   "stop_forcing_https": [
     {
       "text": "HTTPS niet meer verplichten",
@@ -16679,7 +16671,7 @@
   "stop_forcing_https_confirm": { "text": "Bezoekers bereiken de namen zonder werkend certificaat dan via gewone, onversleutelde HTTP. Verplicht HTTPS opnieuw zodra een certificaat werkt.", "scope": "site" },
   "other_event": [
     {
-      "text": ".match {$count :number}\none {{1 beveiligingsgebeurtenis: {$event}}}\n* {{{$count} beveiligingsgebeurtenissen: {$event}}}",
+      "text": ".match {$count :number}\none {{1 beveiligingsgebeurtenis: {$event}}}\n* {{{$count :integer} beveiligingsgebeurtenissen: {$event}}}",
       "scope": "ban_cause"
     },
     {
@@ -16923,11 +16915,11 @@
     "scope": "tenant_usage"
   },
   "of_count": {
-    "text": "{$used} van {$limit}",
+    "text": "{$used :integer} van {$limit :integer}",
     "scope": "tenant_usage"
   },
   "of_size": {
-    "text": "{$used} van {$limit}",
+    "text": "{$used :bytes} van {$limit :bytes}",
     "scope": "tenant_usage"
   },
   "instances": [
@@ -16936,7 +16928,7 @@
       "scope": "tenant_usage"
     },
     {
-      "text": ".match {$count :number}\none {{1 instantie}}\n* {{{$count} instanties}}",
+      "text": ".match {$count :number}\none {{1 instantie}}\n* {{{$count :integer} instanties}}",
       "scope": "count"
     }
   ],
@@ -16946,7 +16938,7 @@
       "scope": "tenant_usage"
     },
     {
-      "text": ".match {$count :number}\none {{1 site}}\n* {{{$count} sites}}",
+      "text": ".match {$count :number}\none {{1 site}}\n* {{{$count :integer} sites}}",
       "scope": "count"
     }
   ],
@@ -17094,15 +17086,15 @@
     "scope": "host_check"
   },
   "finding_network_headroom": {
-    "text": "Ruimte voor nog een containernetwerk ({$count} in gebruik)",
+    "text": "Ruimte voor nog een containernetwerk ({$count :integer} in gebruik)",
     "scope": "host_check"
   },
   "finding_network_headroom_low": {
-    "text": "Ruimte voor nog een containernetwerk, maar er zijn er {$count} in gebruik en de standaard adrespools zijn bijna op",
+    "text": "Ruimte voor nog een containernetwerk, maar er zijn er {$count :integer} in gebruik en de standaard adrespools zijn bijna op",
     "scope": "host_check"
   },
   "finding_network_exhausted": {
-    "text": "Er kon geen containernetwerk worden gemaakt ({$count} in gebruik): {$error}",
+    "text": "Er kon geen containernetwerk worden gemaakt ({$count :integer} in gebruik): {$error}",
     "scope": "host_check"
   },
   "finding_nft_applied": {
@@ -17130,7 +17122,7 @@
     "scope": "host_check"
   },
   "finding_resources_measured": {
-    "text": "{$cpus} CPU's en {$memory} geheugen",
+    "text": "{$cpus :integer} CPU's en {$memory :bytes} geheugen",
     "scope": "host_check"
   },
   "finding_resources_no_memory": {
@@ -17360,15 +17352,15 @@
     "scope": "dashboard"
   },
   "stat_apps_live": {
-    "text": ".match {$count :number}\none {{1 live}}\n* {{{$count} live}}",
+    "text": ".match {$count :number}\none {{1 live}}\n* {{{$count :integer} live}}",
     "scope": "dashboard"
   },
   "stat_apps_problem": {
-    "text": ".match {$count :number}\none {{1 met een probleem}}\n* {{{$count} met een probleem}}",
+    "text": ".match {$count :number}\none {{1 met een probleem}}\n* {{{$count :integer} met een probleem}}",
     "scope": "dashboard"
   },
   "stat_certs_attention": {
-    "text": ".match {$count :number}\none {{1 vraagt aandacht}}\n* {{{$count} vragen aandacht}}",
+    "text": ".match {$count :number}\none {{1 vraagt aandacht}}\n* {{{$count :integer} vragen aandacht}}",
     "scope": "dashboard"
   },
   "stat_certs_next": {
@@ -17376,11 +17368,11 @@
     "scope": "dashboard"
   },
   "stat_backups_value": {
-    "text": "{$ok} van {$total}",
+    "text": "{$ok :integer} van {$total :integer}",
     "scope": "dashboard"
   },
   "stat_backups_newest": {
-    "text": "Nieuwste {$ago}, {$size}",
+    "text": "Nieuwste {$ago}, {$size :bytes}",
     "scope": "dashboard"
   },
   "stat_backups_none": {
@@ -17388,19 +17380,19 @@
     "scope": "dashboard"
   },
   "tally_waiting": {
-    "text": ".match {$count :number}\none {{1 wacht}}\n* {{{$count} wachten}}",
+    "text": ".match {$count :number}\none {{1 wacht}}\n* {{{$count :integer} wachten}}",
     "scope": "host_admission"
   },
   "tally_taking": {
-    "text": ".match {$count :number}\none {{1 neemt nieuwe apps aan}}\n* {{{$count} nemen nieuwe apps aan}}",
+    "text": ".match {$count :number}\none {{1 neemt nieuwe apps aan}}\n* {{{$count :integer} nemen nieuwe apps aan}}",
     "scope": "host_admission"
   },
   "tally_refusing": {
-    "text": ".match {$count :number}\none {{1 weigert nieuwe apps}}\n* {{{$count} weigeren nieuwe apps}}",
+    "text": ".match {$count :number}\none {{1 weigert nieuwe apps}}\n* {{{$count :integer} weigeren nieuwe apps}}",
     "scope": "host_admission"
   },
   "tally_paused": {
-    "text": ".match {$count :number}\none {{1 gepauzeerd}}\n* {{{$count} gepauzeerd}}",
+    "text": ".match {$count :number}\none {{1 gepauzeerd}}\n* {{{$count :integer} gepauzeerd}}",
     "scope": "host_admission"
   },
   "stat_tile": {
@@ -17432,15 +17424,15 @@
     "scope": "isolation_finding"
   },
   "not_repaired": {
-    "text": ".match {$count :number}\none {{De isolatie van 1 workload op {$subject} kon niet worden gecontroleerd of hersteld}}\n* {{De isolatie van {$count} workloads op {$subject} kon niet worden gecontroleerd of hersteld}}",
+    "text": ".match {$count :number}\none {{De isolatie van 1 workload op {$subject} kon niet worden gecontroleerd of hersteld}}\n* {{De isolatie van {$count :integer} workloads op {$subject} kon niet worden gecontroleerd of hersteld}}",
     "scope": "isolation_finding"
   },
   "cut_off": {
-    "text": ".match {$count :number}\none {{1 workload op {$subject} is gestopt of afgesneden omdat de isolatie niet kon worden hersteld}}\n* {{{$count} workloads op {$subject} zijn gestopt of afgesneden omdat hun isolatie niet kon worden hersteld}}",
+    "text": ".match {$count :number}\none {{1 workload op {$subject} is gestopt of afgesneden omdat de isolatie niet kon worden hersteld}}\n* {{{$count :integer} workloads op {$subject} zijn gestopt of afgesneden omdat hun isolatie niet kon worden hersteld}}",
     "scope": "isolation_finding"
   },
   "enforcement_off": {
-    "text": ".match {$count :number}\none {{de firewallregels per app staan daar uit, dus het ene app-netwerk kan niet worden gecontroleerd of hersteld}}\n* {{de firewallregels per app staan daar uit, dus de {$count} app-netwerken kunnen niet worden gecontroleerd of hersteld}}",
+    "text": ".match {$count :number}\none {{de firewallregels per app staan daar uit, dus het ene app-netwerk kan niet worden gecontroleerd of hersteld}}\n* {{de firewallregels per app staan daar uit, dus de {$count :integer} app-netwerken kunnen niet worden gecontroleerd of hersteld}}",
     "scope": "isolation_finding"
   },
   "daemon_unreachable": {
@@ -17568,7 +17560,7 @@
     "scope": "attention_detail"
   },
   "error_stopped_on": {
-    "text": "{$cause} op {$date}. {$why}",
+    "text": "{$cause} op {$date :date}. {$why}",
     "scope": "attention_detail"
   },
   "error_stopped_why": {
@@ -17592,7 +17584,7 @@
     "scope": "attention_detail"
   },
   "apps_use_it": {
-    "text": ".match {$count :number}\none {{1 app gebruikt het}}\n* {{{$count} apps gebruiken het}}",
+    "text": ".match {$count :number}\none {{1 app gebruikt het}}\n* {{{$count :integer} apps gebruiken het}}",
     "scope": "attention_detail"
   },
   "app_database_down": {
@@ -17778,7 +17770,7 @@
     "scope": "alert"
   },
   "cert_expiring_body": {
-    "text": "Vernieuw of vervang het voor {$date}; automatische vernieuwing deed dat nog niet.",
+    "text": "Vernieuw of vervang het voor {$date :date}; automatische vernieuwing deed dat nog niet.",
     "scope": "alert"
   },
   "cert_renewal_failed_subject": {
@@ -17814,7 +17806,7 @@
     "scope": "alert"
   },
   "spamservice_outage_body": {
-    "text": ".match {$minutes :number}\none {{Spamservice antwoordt al 1 minuut niet, dus reputatiebans en meldingen van beveiligingsgebeurtenissen worden overgeslagen tot het weer antwoordt. Laatste fout, {$source}: {$detail}}}\n* {{Spamservice antwoordt al {$minutes} minuten niet, dus reputatiebans en meldingen van beveiligingsgebeurtenissen worden overgeslagen tot het weer antwoordt. Laatste fout, {$source}: {$detail}}}",
+    "text": ".match {$minutes :number}\none {{Spamservice antwoordt al 1 minuut niet, dus reputatiebans en meldingen van beveiligingsgebeurtenissen worden overgeslagen tot het weer antwoordt. Laatste fout, {$source}: {$detail}}}\n* {{Spamservice antwoordt al {$minutes :integer} minuten niet, dus reputatiebans en meldingen van beveiligingsgebeurtenissen worden overgeslagen tot het weer antwoordt. Laatste fout, {$source}: {$detail}}}",
     "scope": "alert"
   },
   "spamservice_recovered_subject": {
@@ -17830,7 +17822,7 @@
     "scope": "alert"
   },
   "auto_ban_budget_body": {
-    "text": ".match {$budget :number}\none {{Er is het voorbije uur 1 automatische ban gemaakt, het maximum, dus nieuwe worden overgeslagen tot die een uur oud is. Een trigger kan op hol geslagen zijn, of zijn gebeurtenissen kunnen vervalst zijn. Handmatige bans werken nog.}}\n* {{Er zijn het voorbije uur {$budget} automatische bans gemaakt, het maximum, dus nieuwe worden overgeslagen tot de oudste een uur oud is. Een trigger kan op hol geslagen zijn, of zijn gebeurtenissen kunnen vervalst zijn. Handmatige bans werken nog.}}",
+    "text": ".match {$budget :number}\none {{Er is het voorbije uur 1 automatische ban gemaakt, het maximum, dus nieuwe worden overgeslagen tot die een uur oud is. Een trigger kan op hol geslagen zijn, of zijn gebeurtenissen kunnen vervalst zijn. Handmatige bans werken nog.}}\n* {{Er zijn het voorbije uur {$budget :integer} automatische bans gemaakt, het maximum, dus nieuwe worden overgeslagen tot de oudste een uur oud is. Een trigger kan op hol geslagen zijn, of zijn gebeurtenissen kunnen vervalst zijn. Handmatige bans werken nog.}}",
     "scope": "alert"
   },
   "dns_secondaries_stale": {
@@ -17867,11 +17859,11 @@
   },
   "certificate_expiry": [
     {
-      "text": ".match {$days :number}\none {{Verloopt over 1 dag}}\n* {{Verloopt over {$days} dagen}}",
+      "text": ".match {$days :number}\none {{Verloopt over 1 dag}}\n* {{Verloopt over {$days :integer} dagen}}",
       "scope": "certificate"
     },
     {
-      "text": ".match {$days :number}\none {{verloopt over 1 dag}}\n* {{verloopt over {$days} dagen}}",
+      "text": ".match {$days :number}\none {{verloopt over 1 dag}}\n* {{verloopt over {$days :integer} dagen}}",
       "scope": "certificate",
       "case": "sentence"
     }
@@ -17889,11 +17881,11 @@
   ],
   "certificate_expired": [
     {
-      "text": ".match {$days :number}\none {{1 dag geleden verlopen}}\n* {{{$days} dagen geleden verlopen}}",
+      "text": ".match {$days :number}\none {{1 dag geleden verlopen}}\n* {{{$days :integer} dagen geleden verlopen}}",
       "scope": "certificate"
     },
     {
-      "text": ".match {$days :number}\none {{1 dag geleden verlopen}}\n* {{{$days} dagen geleden verlopen}}",
+      "text": ".match {$days :number}\none {{1 dag geleden verlopen}}\n* {{{$days :integer} dagen geleden verlopen}}",
       "scope": "certificate",
       "case": "sentence"
     }
@@ -17975,7 +17967,7 @@
     "scope": "instance_overview"
   },
   "memory_no_limit": {
-    "text": "Het gebruikt {$used}, zonder limiet om dat tegen af te zetten.",
+    "text": "Het gebruikt {$used :bytes}, zonder limiet om dat tegen af te zetten.",
     "scope": "instance_overview"
   },
   "cpu_first_reading": {
@@ -17983,11 +17975,11 @@
     "scope": "instance_overview"
   },
   "offset_value": {
-    "text": ".match {$count :number}\none {{1 seconde}}\n* {{{$count} seconden}}",
+    "text": ".match {$count :number}\none {{1 seconde}}\n* {{{$count :integer} seconden}}",
     "scope": "schedule_step"
   },
   "cores": {
-    "text": ".match {$count :number}\none {{1 kern}}\n* {{{$count} kernen}}",
+    "text": ".match {$count :number}\none {{1 kern}}\n* {{{$count :integer} kernen}}",
     "scope": "instance_overview"
   },
   "database_value": {
@@ -18007,7 +17999,7 @@
     "scope": "instance_overview"
   },
   "backups_last": {
-    "text": "Laatste {$ago}, {$size}",
+    "text": "Laatste {$ago}, {$size :bytes}",
     "scope": "instance_overview"
   },
   "backups_last_failed": {
@@ -18069,7 +18061,7 @@
     "scope": "attention_detail"
   },
   "could_not_start_held": {
-    "text": ".match {$count :number}\none {{1 app kon niet starten}}\n* {{{$count} apps konden niet starten}}",
+    "text": ".match {$count :number}\none {{1 app kon niet starten}}\n* {{{$count :integer} apps konden niet starten}}",
     "scope": "attention_detail"
   },
   "points_here_not_checked": {
@@ -18145,8 +18137,8 @@
     "text": "Vroeg naar {$names}, {$ago}",
     "scope": "ban"
   },
-  "missed_names_more": {
-    "text": ".match {$more :number}\none {{Vroeg naar {$names} en nog 1, {$ago}}}\n* {{Vroeg naar {$names} en nog {$more}, {$ago}}}",
+  "missed_more": {
+    "text": ".match {$more :number}\none {{nog 1}}\n* {{nog {$more :integer}}}",
     "scope": "ban"
   },
   "other_names_column": {
@@ -18162,7 +18154,7 @@
     "scope": "ban"
   },
   "recent_misses_lead": {
-    "text": "Aanvragen voor namen die deze server niet bedient, het voorbije uur. Een adres dat er meer dan {$threshold} doet binnen {$minutes} minuten wordt geblokkeerd.",
+    "text": "Aanvragen voor namen die deze server niet bedient, het voorbije uur. Een adres dat er meer dan {$threshold :integer} doet binnen {$minutes :integer} minuten wordt geblokkeerd.",
     "scope": "ban"
   },
   "never_block_title": {
@@ -18476,7 +18468,7 @@
     "scope": "instance_files"
   },
   "sftp_session_requests": {
-    "text": "{$count} verzoeken",
+    "text": "{$count :integer} verzoeken",
     "scope": "instance_files"
   },
   "sftp_end": {
@@ -18636,10 +18628,10 @@
   "game_address_set": {"scope": "instance_overview", "text": "Geef het een speladres"},
   "game_address_change": {"scope": "instance_overview", "text": "Speladres wijzigen"},
   "owner_quota": {"scope": "instance_overview", "text": "Quotum van de eigenaar"},
-  "quota_workloads": {"scope": "instance_overview", "text": "{$used} van {$limit} werklasten"},
-  "quota_workloads_open": {"scope": "instance_overview", "text": "{$used} werklasten, geen limiet"},
-  "quota_memory": {"scope": "instance_overview", "text": "{$used} van {$limit} MB geheugen"},
-  "quota_memory_open": {"scope": "instance_overview", "text": "{$used} MB geheugen, geen limiet"},
+  "quota_workloads": {"scope": "instance_overview", "text": "{$used :integer} van {$limit :integer} werklasten"},
+  "quota_workloads_open": {"scope": "instance_overview", "text": "{$used :integer} werklasten, geen limiet"},
+  "quota_memory": {"scope": "instance_overview", "text": "{$used :bytes} van {$limit :bytes} geheugen"},
+  "quota_memory_open": {"scope": "instance_overview", "text": "{$used :bytes} geheugen, geen limiet"},
   "connect_hint": {"scope": "instance_overview", "text": "Spelers en clients verbinden met deze poorten van zijn host."},
   "connect_hint_clients": {"scope": "instance_overview", "text": "Clients verbinden met deze poorten van zijn host."},
   "connect_name": {"scope": "instance_overview", "text": "Spelers verbinden met {$address}, of met een poort hieronder."},
@@ -18682,8 +18674,8 @@
   "outcome_https_existing_none": {"scope": "put_online", "text": "Nog geen werkend certificaat in Hohenheim dekt {$address}. Kies een andere optie."},
   "cert_key_mismatch": {"scope": "violations", "text": "Deze private sleutel hoort niet bij het eerste certificaat in de keten."},
   "cert_chain_order": {"scope": "violations", "text": "Certificaat {$position} in de keten is niet uitgegeven door certificaat {$next}: zet het servercertificaat eerst, dan elke uitgever op volgorde."},
-  "cert_expired": {"scope": "violations", "text": "Certificaat {$position} in de keten is verlopen op {$date}."},
-  "cert_not_yet_valid": {"scope": "violations", "text": "Certificaat {$position} in de keten is pas geldig vanaf {$date}."},
+  "cert_expired": {"scope": "violations", "text": "Certificaat {$position} in de keten is verlopen op {$date :datetime}."},
+  "cert_not_yet_valid": {"scope": "violations", "text": "Certificaat {$position} in de keten is pas geldig vanaf {$date :datetime}."},
   "cert_not_covering": {"scope": "violations", "text": "Dit certificaat dekt {$names}, niet {$hostname}."},
   "cert_pem_required": {"scope": "violations", "text": "Plak de certificaatketen."},
   "key_pem_required": {"scope": "violations", "text": "Plak de private sleutel."},
@@ -18748,7 +18740,27 @@
   "environments_lead": {"scope": "project", "text": "De omgevingen waarin dit project uitrolt, elk met de variabelen waarmee de apps erin starten."},
   "members_lead": {"scope": "project", "text": "Iemand hoort bij dit project door de rol ervan te hebben: geef die persoon onder Toegang, Personen de rol met de naam van dit project."},
   "add_member": {"scope": "project", "text": "Iemand toevoegen"},
-  "quota_used_of": {"scope": "project", "text": "{$used} van {$limit}"},
-  "quota_no_limit": {"scope": "project", "text": "{$used}, geen limiet"},
-  "value_withheld": {"scope": "instance_provisioning", "text": "Niet getoond"}
+  "quota_used_of": {"scope": "project", "text": "{$used :integer} van {$limit :integer}"},
+  "quota_no_limit": {"scope": "project", "text": "{$used :integer}, geen limiet"},
+  "value_withheld": {"scope": "instance_provisioning", "text": "Niet getoond"},
+  "cpu_share": {
+    "text": "{$share :percent}",
+    "scope": "instance_stats"
+  },
+  "fact_value_count": {
+    "text": "{$value :integer}",
+    "scope": "host_check"
+  },
+  "backups_last_unsized": {
+    "text": "Laatste {$ago}",
+    "scope": "instance_overview"
+  },
+  "moment_ago": {
+    "text": "{$at :datetime} ({$ago})",
+    "scope": "certificate"
+  },
+  "title_taken": {
+    "text": "{$at :datetime}",
+    "scope": "instance_backup"
+  }
 }

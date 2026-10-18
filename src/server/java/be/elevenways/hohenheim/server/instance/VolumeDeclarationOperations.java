@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.instance.VolumeOperations;
@@ -81,7 +82,7 @@ public final class VolumeDeclarationOperations {
     public static @NonNull Declaration declaration(@NonNull Row row) {
         Long bytes = row.get(InstanceVolumeModel.QUOTA_BYTES);
         return new Declaration(row.get(InstanceVolumeModel.INSTANCE_ID), row.get(InstanceVolumeModel.NAME),
-            row.get(InstanceVolumeModel.CONTAINER_PATH), bytes == null ? null : (int) (bytes / (1024L * 1024L)),
+            row.get(InstanceVolumeModel.CONTAINER_PATH), bytes == null ? null : (int) (bytes / ByteUnit.MEGABYTE.factor()),
             row.get(InstanceVolumeModel.EXCLUSIVE));
     }
 
@@ -116,6 +117,6 @@ public final class VolumeDeclarationOperations {
         if (mb == null) return null;
         if (mb <= 0) throw Violations.ofField(VolumeOperations.QUOTA_MB.getName(), mb,
                 HohenheimMicrocopy.VIOLATIONS.of("volume_quota_invalid"));
-        return mb * 1024L * 1024L;
+        return ByteUnit.MEGABYTE.bytes(mb);
     }
 }

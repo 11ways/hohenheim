@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.quota;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -32,43 +33,56 @@ public enum OwnerBudget {
 
     /** Live instances per owner. */
     INSTANCES("hohenheim:instances:", InstanceQuotaModel.MAX_INSTANCES,
-        HohenheimSettings.Quota.MAX_INSTANCES_PER_OWNER, "quota_reached"),
+        HohenheimSettings.Quota.MAX_INSTANCES_PER_OWNER, "quota_reached", null),
 
     /** Workload memory (MB) per owner, at the number the driver enforces as the cap. */
     OWNER_MEMORY("hohenheim:owner_mem_mb:", InstanceQuotaModel.MAX_MEMORY_MB,
-        HohenheimSettings.Quota.MAX_MEMORY_MB_PER_OWNER, "memory_quota_reached"),
+        HohenheimSettings.Quota.MAX_MEMORY_MB_PER_OWNER, "memory_quota_reached", ByteUnit.MEGABYTE),
 
     /** Disk GB per owner: attached disk devices and root disks together. */
     DISK_GB("hohenheim:disk_gb:", InstanceQuotaModel.MAX_DISK_GB,
-        HohenheimSettings.Quota.MAX_DISK_GB_PER_OWNER, "disk_quota_reached"),
+        HohenheimSettings.Quota.MAX_DISK_GB_PER_OWNER, "disk_quota_reached", ByteUnit.GIGABYTE),
 
     /** Extra NICs per owner. */
     NICS("hohenheim:nics:", InstanceQuotaModel.MAX_NICS,
-        HohenheimSettings.Quota.MAX_EXTRA_NICS_PER_OWNER, "nic_quota_reached"),
+        HohenheimSettings.Quota.MAX_EXTRA_NICS_PER_OWNER, "nic_quota_reached", null),
 
     /** Site records per owner, whether or not the site runs a workload. */
     SITES("hohenheim:sites:", InstanceQuotaModel.MAX_SITES,
-        HohenheimSettings.Quota.MAX_SITES_PER_OWNER, "site_quota_reached"),
+        HohenheimSettings.Quota.MAX_SITES_PER_OWNER, "site_quota_reached", null),
 
     /** Managed database records per owner, on top of the instance slot an engine spends. */
     DATABASES("hohenheim:databases:", InstanceQuotaModel.MAX_DATABASES,
-        HohenheimSettings.Quota.MAX_DATABASES_PER_OWNER, "database_quota_reached"),
+        HohenheimSettings.Quota.MAX_DATABASES_PER_OWNER, "database_quota_reached", null),
 
     /** Concurrent live previews per owner; the global setting only, no override column. */
     PREVIEWS("hohenheim:previews:", null,
-        HohenheimSettings.Previews.MAX_PER_OWNER, "preview_quota_reached");
+        HohenheimSettings.Previews.MAX_PER_OWNER, "preview_quota_reached", null);
 
     private final @NonNull String prefix;
     private final @Nullable IntegerField overrideColumn;
     private final @NonNull SettingDefinition<Integer> fallback;
     private final @NonNull String violationKey;
+    private final @Nullable ByteUnit unit;
 
+    /** @param unit the unit one count of a size budget is in; null for a budget that counts things */
     OwnerBudget(@NonNull String prefix, @Nullable IntegerField overrideColumn,
-                @NonNull SettingDefinition<Integer> fallback, @NonNull String violationKey) {
+                @NonNull SettingDefinition<Integer> fallback, @NonNull String violationKey, @Nullable ByteUnit unit) {
         this.prefix = prefix;
         this.overrideColumn = overrideColumn;
         this.fallback = fallback;
         this.violationKey = violationKey;
+        this.unit = unit;
+    }
+
+    /** @return whether this budget is a size, which its copy words through {@code :bytes} */
+    public boolean isSize() {
+        return this.unit != null;
+    }
+
+    /** @return an amount of this budget as its copy takes it: a count as it is, a size in bytes */
+    public long worded(long amount) {
+        return this.unit == null ? amount : this.unit.bytes(amount);
     }
 
     /** @return the ledger prefix every bucket of this budget starts with */
@@ -122,6 +136,6 @@ public enum OwnerBudget {
      * @throws Violations this budget's violation key
      */
     public void reserve(@NonNull String bucket, long amount) {
-        OwnerQuota.reserve(bucket, amount, this.limitIn(bucket), this.violationKey);
+        OwnerQuota.reserve(bucket, amount, this.limitIn(bucket), this);
     }
 }

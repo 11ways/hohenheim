@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HostTrustLane;
@@ -23,7 +24,6 @@ import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.server.host.DiskSpace;
 import be.elevenways.hohenheim.server.host.HostDisk;
 import be.elevenways.hohenheim.server.host.HostFact;
-import be.elevenways.zenit.common.text.ByteText;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostPins;
 import be.elevenways.hohenheim.server.host.HostPreflight;
@@ -37,8 +37,8 @@ import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.time.RelativeTime;
-import be.elevenways.protoblast.common.time.RelativeTimeWording;
+import be.elevenways.protoblast.common.i18n.wording.Reader;
+import be.elevenways.protoblast.common.i18n.wording.Wording;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.render.table.EnumBadgeState;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -432,7 +432,8 @@ public final class ServerOverviewState {
             HostFact fact = HostFact.ofToken(key);
             facts.add(new HostFactView(key,
                 fact != null ? fact.label() : Microcopy.literal(key),
-                fact != null ? fact.valueText(entry.getValue()) : String.valueOf(entry.getValue()),
+                fact != null ? fact.valueWords(entry.getValue())
+                    : Microcopy.literal(String.valueOf(entry.getValue())),
                 measuredAt != null ? measuredAt.toString() : null));
         }
         return facts;
@@ -457,15 +458,15 @@ public final class ServerOverviewState {
             // The reason carries when it was last measured: the unmeasured bar has no time slot of its own.
             String reason = capacity.stale() && capacity.measuredAtIso() != null
                 ? HohenheimMicrocopy.SERVER_OVERVIEW.of("evidence_stale")
-                    .withArg("ago", RelativeTime.ago(Instant.parse(capacity.measuredAtIso()),
-                        RelativeTimeWording.resolve(locales, resolver)))
+                    .withArg("ago", Wording.relative(Reader.of(locales, resolver),
+                        Instant.parse(capacity.measuredAtIso()), resolver))
                     .resolve(locales, resolver)
                 : HohenheimMicrocopy.SERVER_OVERVIEW.of("unmeasured_body").resolve(locales, resolver);
             return UsageData.unmeasured(reason);
         }
         return UsageData.measured(capacity.bookedMb(), capacity.budgetMb(),
-            ServerParts.sizeOfMegabytes(capacity.bookedMb()), ServerParts.sizeOfMegabytes(capacity.budgetMb()),
-            capacity.measuredAtIso());
+            UsageData.sizeOf(ByteUnit.MEGABYTE.bytes(capacity.bookedMb())),
+            UsageData.sizeOf(ByteUnit.MEGABYTE.bytes(capacity.budgetMb())), capacity.measuredAtIso());
     }
 
     /** The disk bar: used bytes against the instance-data filesystem's size, or why there is no trusted reading. */
@@ -479,12 +480,12 @@ public final class ServerOverviewState {
             return UsageData.unmeasured(disk.measuredAt() == null
                 ? HohenheimMicrocopy.SERVER_OVERVIEW.of("unmeasured_body").resolve(locales, resolver)
                 : HohenheimMicrocopy.SERVER_OVERVIEW.of("evidence_stale")
-                    .withArg("ago", RelativeTime.ago(disk.measuredAt(), RelativeTimeWording.resolve(locales, resolver)))
+                    .withArg("ago", Wording.relative(Reader.of(locales, resolver), disk.measuredAt(), resolver))
                     .resolve(locales, resolver));
         }
         DiskSpace space = disk.space();
-        return UsageData.measured(space.usedBytes(), space.totalBytes(), ByteText.human(space.usedBytes()),
-            ByteText.human(space.totalBytes()), disk.measuredAt() != null ? disk.measuredAt().toString() : null);
+        return UsageData.bytes(space.usedBytes(), space.totalBytes(),
+            disk.measuredAt() != null ? disk.measuredAt().toString() : null);
     }
 
     /** The numbers the bar itself cannot show: what is booked, and what is still free to book of the budget. */
@@ -494,12 +495,13 @@ public final class ServerOverviewState {
         if (!capacity.measured()) {
             return facts;
         }
-        facts.add(WidgetFact.of(HohenheimMicrocopy.SERVER_OVERVIEW.of("booked")
-            .resolve(locales, resolver), ServerParts.sizeOfMegabytes(capacity.bookedMb())));
+        facts.add(WidgetFact.of(HohenheimMicrocopy.SERVER_OVERVIEW.of("booked").resolve(locales, resolver),
+            Wording.bytes(Reader.of(locales, resolver), ByteUnit.MEGABYTE.bytes(capacity.bookedMb()),
+                resolver)));
         facts.add(WidgetFact.of(HohenheimMicrocopy.SERVER_OVERVIEW.of("bookable").resolve(locales, resolver),
             HohenheimMicrocopy.SERVER_OVERVIEW.of("bookable_free")
-                .withArg("free", ServerParts.sizeOfMegabytes(capacity.freeMb()))
-                .withArg("budget", ServerParts.sizeOfMegabytes(capacity.bookableMb()))
+                .withArg("free", ByteUnit.MEGABYTE.bytes(capacity.freeMb()))
+                .withArg("budget", ByteUnit.MEGABYTE.bytes(capacity.bookableMb()))
                 .resolve(locales, resolver)));
         return facts;
     }
@@ -543,7 +545,7 @@ public final class ServerOverviewState {
                 String.valueOf((Object) instance.get(InstanceModel.NAME)),
                 WorkloadTier.INSTANCE,
                 EnumBadgeState.ofNullable(InstanceModel.STATUS, instance.get(InstanceModel.STATUS)),
-                instance.get(InstanceModel.CAPACITY_MB),
+                bookedBytes(instance.get(InstanceModel.CAPACITY_MB)),
                 // A release row is not served by the instance list; the route sends it to
                 // its application's Deploys tab instead of a 404.
                 InstanceParts.recordRoute(panel, instance, null)));
@@ -565,7 +567,7 @@ public final class ServerOverviewState {
                 // What it does, never the stored "active" (DatabaseVerdict): the list and the attention band agree.
                 DatabaseVerdict.ofDatabase(database).badge(),
                 // A shared database books nothing of its own: its engine does.
-                instance == null ? null : instance.get(InstanceModel.CAPACITY_MB),
+                instance == null ? null : bookedBytes(instance.get(InstanceModel.CAPACITY_MB)),
                 CmsRoutes.detail(panel, HohenheimSlugs.DATABASES, database.get(DatabaseModel.ID))));
         }
         for (Row engine : engines) {
@@ -574,11 +576,16 @@ public final class ServerOverviewState {
                 String.valueOf((Object) engine.get(DatabaseEngineModel.NAME)),
                 WorkloadTier.DATABASE_ENGINE,
                 DatabaseVerdict.ofEngine(engine).badge(),
-                instance == null ? null : instance.get(InstanceModel.CAPACITY_MB),
+                instance == null ? null : bookedBytes(instance.get(InstanceModel.CAPACITY_MB)),
                 CmsRoutes.detail(panel, HohenheimSlugs.DATABASE_ENGINES,
                     engine.get(DatabaseEngineModel.ID))));
         }
         return workloads;
+    }
+
+    /** @return a ledger's booked megabytes in bytes, the unit a size is worded from; null books nothing */
+    private static @Nullable Long bookedBytes(@Nullable Integer bookedMb) {
+        return bookedMb == null ? null : ByteUnit.MEGABYTE.bytes(bookedMb);
     }
 
     /** @return the owning record of a generated instance as one key; never matches for an instance nothing owns */

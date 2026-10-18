@@ -117,7 +117,7 @@ public enum HostStanding implements WordedState {
      * @return the host attention item's title for a host in this state; a taking host raises one only while the gate
      *         refuses some of the apps placed on it
      */
-    public @NonNull Microcopy attentionTitle(@NonNull Object name) {
+    public @NonNull Microcopy attentionTitle(@NonNull String name) {
         return this.attentionTitle.withArg("name", name);
     }
 

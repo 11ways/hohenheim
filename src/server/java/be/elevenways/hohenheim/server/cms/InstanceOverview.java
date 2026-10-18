@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.quota.ChargedDimension.Charge;
@@ -36,8 +37,8 @@ import be.elevenways.hohenheim.server.instance.InstanceStats;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.time.RelativeTime;
-import be.elevenways.protoblast.common.time.RelativeTimeWording;
+import be.elevenways.protoblast.common.i18n.wording.Reader;
+import be.elevenways.protoblast.common.i18n.wording.Wording;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.auth.server.GrantAdministration;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
@@ -50,7 +51,6 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.KnownCapabilities;
 import be.elevenways.zenit.common.security.KnownCapability;
-import be.elevenways.zenit.common.text.ByteText;
 import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.WidgetTree;
 import be.elevenways.zenit.widget.common.builtin.AlertVariant;
@@ -285,8 +285,8 @@ public final class InstanceOverview {
     private static @NonNull Microcopy usage(@NonNull OwnerBudget budget, @NonNull String owner, @NonNull String key) {
         Integer limit = budget.limitFor(owner);
         Microcopy words = HohenheimMicrocopy.INSTANCE_OVERVIEW.of(limit != null ? key : key + "_open")
-            .withArg("used", budget.usedBy(owner));
-        return limit != null ? words.withArg("limit", limit) : words;
+            .withArg("used", budget.worded(budget.usedBy(owner)));
+        return limit != null ? words.withArg("limit", budget.worded(limit)) : words;
     }
 
     /**
@@ -339,14 +339,13 @@ public final class InstanceOverview {
             return WidgetFact.of(label, HohenheimMicrocopy.INSTANCE_OVERVIEW.of("backups_none_yet")
                 .resolve(locales, resolver));
         }
-        RelativeTimeWording wording = RelativeTimeWording.resolve(locales, resolver);
         boolean made = InstanceBackupModel.STATUS_COMPLETE.equals(newest.get(InstanceBackupModel.STATUS));
         Long size = newest.get(InstanceBackupModel.SIZE_BYTES);
-        Microcopy words = made
-            ? HohenheimMicrocopy.INSTANCE_OVERVIEW.of("backups_last")
-                .withArg("size", size == null ? "-" : ByteText.human(size))
-            : HohenheimMicrocopy.INSTANCE_OVERVIEW.of("backups_last_failed");
-        return WidgetFact.of(label, words.withArg("ago", RelativeTime.ago(at, wording)).resolve(locales, resolver));
+        Microcopy words = !made ? HohenheimMicrocopy.INSTANCE_OVERVIEW.of("backups_last_failed")
+            : size == null ? HohenheimMicrocopy.INSTANCE_OVERVIEW.of("backups_last_unsized")
+            : HohenheimMicrocopy.INSTANCE_OVERVIEW.of("backups_last").withArg("size", size);
+        return WidgetFact.of(label, words.withArg("ago", Wording.relative(Reader.of(locales, resolver), at, resolver))
+            .resolve(locales, resolver));
     }
 
     // -- live usage ------------------------------------------------------------------
@@ -376,7 +375,7 @@ public final class InstanceOverview {
         }
         int instanceId = instance.get(InstanceModel.ID);
         List<InstanceStats.Sample> held = InstanceStats.history(instanceId);
-        long booked = InstanceCapacity.bookedMbOf(instance) * 1024L * 1024L;
+        long booked = ByteUnit.MEGABYTE.bytes(InstanceCapacity.bookedMbOf(instance));
         InstanceLiveUsageView view = new InstanceLiveUsageView(instanceId,
             held.isEmpty() ? null : held.get(held.size() - 1).toMap(),
             held.size() < 2 ? null : held.get(held.size() - 2).toMap(),
@@ -431,9 +430,7 @@ public final class InstanceOverview {
             return UsageData.unmeasured(
                 HohenheimMicrocopy.INSTANCE_OVERVIEW.of("not_measured_body").resolve(locales, resolver));
         }
-        return UsageData.measured(disk.usedBytes(), disk.limitBytes(),
-            ByteText.human(disk.usedBytes()), ByteText.human(disk.limitBytes()),
-            disk.observedAtIso());
+        return UsageData.bytes(disk.usedBytes(), disk.limitBytes(), disk.observedAtIso());
     }
 
     /** The stored disk observation as a view, for the attention collector and this page. */

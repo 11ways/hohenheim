@@ -56,7 +56,7 @@ public final class SiteDevSessionsPage implements RecordTab.Rendered<Row> {
             Map<String, Object> entry = new HashMap<>();
             entry.put("name", lease.getName());
             entry.put("origin", lease.getOrigin());
-            entry.put("registeredAt", String.valueOf(lease.getRegisteredAt()));
+            entry.put("registeredAtIso", lease.getRegisteredAt().toString());
             entry.put("streams", lease.getActiveStreams());
             sessions.add(entry);
         }

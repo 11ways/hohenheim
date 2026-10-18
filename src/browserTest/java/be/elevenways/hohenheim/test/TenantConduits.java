@@ -23,6 +23,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * A request scope carrying nothing but an identity, so a test can drive a write straight at
@@ -42,6 +43,10 @@ public final class TenantConduits {
 
     /** The test admin's sign-in, which every operator caller of the suite is. */
     public static final String OPERATOR_EMAIL = "test@hohenheim.local";
+
+    /** The conduit faces a resolution reads its reader from, answered by Conduit's own defaults. */
+    private static final Set<String> READER_FACES = Set.of("getReader", "getLocales", "requestedLocales",
+        "getMessageResolver");
 
     private TenantConduits() {
     }
@@ -120,7 +125,10 @@ public final class TenantConduits {
             attributes.put(ConduitAttributes.PRINCIPAL, principal);
         }
         Object[] self = new Object[1];
+        // A request's memos and its reader (language, catalog and the viewer's stamped zone) answer as a real conduit
+        // does: from the attributes this stub holds.
         InvocationHandler handler = (proxy, method, args) -> TestAccessContexts.isRequestMemo(method)
+            || READER_FACES.contains(method.getName())
             ? InvocationHandler.invokeDefault(proxy, method, args) : switch (method.getName()) {
             case "getAttribute" -> attributes.get(args[0]);
             case "setAttribute" -> {

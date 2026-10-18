@@ -21,6 +21,7 @@ import be.elevenways.hohenheim.test.database.EngineHandles;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
@@ -128,7 +129,7 @@ class DatabasesPageJourneyTest extends HohenheimTestBase {
                 .as("step 3: the dumps on disk, newest first")
                 .containsExactly("20261003-030000.sql", "20261002-030000.sql", "20261001-030000.sql");
             list = adminGet("/admin/" + HohenheimSlugs.DATABASES);
-            assertThat(list.body()).as("step 3: the list reads the newest dump's size").contains("18.0 MB")
+            assertThat(list.body()).as("step 3: the list reads the newest dump's size").contains("18 MB")
                 .as("step 3: a dump from last night is not overdue").doesNotContain(OVERDUE);
 
             HttpResponse<String> overview = adminGet("/admin/" + HohenheimSlugs.DATABASES + "/" + shop
@@ -138,7 +139,7 @@ class DatabasesPageJourneyTest extends HohenheimTestBase {
             assertThat(overview.body()).as("step 3: the connection names, never the password")
                 .contains("shopdb", "shopuser").doesNotContain("shop-secret-password")
                 .as("step 3: the app using it links to its page").contains(PREFIX + "app")
-                .as("step 3: every dump with its size").contains("18.0 MB", "4.0 KB", "2.0 KB")
+                .as("step 3: every dump with its size").contains("18 MB", "4 KB", "2 KB")
                 .as("step 3: and how many are kept").contains("dumps, on this machine");
 
             DatabaseBackups.prune(directory, 2);
@@ -157,7 +158,7 @@ class DatabasesPageJourneyTest extends HohenheimTestBase {
             dump(directory, "20260930-030000.sql", 1024, now.minus(3, ChronoUnit.DAYS));
             list = adminGet("/admin/" + HohenheimSlugs.DATABASES);
             assertThat(list.body()).as("step 5: an old newest dump says the nightly backup stopped")
-                .contains("1.0 KB; " + OVERDUE);
+                .contains("1 KB; " + OVERDUE);
 
             // 6. Back up now leads the heading by position; the once-in-a-lifetime move to a shared engine is neither
             //    the primary button nor in the heading row, only in its More menu.
@@ -249,7 +250,7 @@ class DatabasesPageJourneyTest extends HohenheimTestBase {
                 .containsExactly(before[0] + 1, before[1] + 1);
             DashboardStat tile = backupsStat();
             assertThat(tile.detail()).as("step 2: and names the newest copy with its size")
-                .startsWith("Newest ").endsWith(", 18.0 MB");
+                .startsWith("Newest ").endsWith(", 18 MB");
 
             // 3. A dump older than the nightly allows is not a good backup: counted, not backed up.
             dump(directory, "20261008-030000.sql", 18 * 1024 * 1024, Now.instant().minus(3, ChronoUnit.DAYS));
@@ -327,14 +328,14 @@ class DatabasesPageJourneyTest extends HohenheimTestBase {
                 .filteredOn(view -> view.name().equals(PREFIX + "shared-engine")).singleElement()
                 .satisfies(view -> {
                     assertThat(view.tier()).isEqualTo(WorkloadTier.DATABASE_ENGINE);
-                    assertThat(view.bookedMb()).as("step 1: booked at its instance's ledger memory")
-                        .isEqualTo(engineInstance.get(InstanceModel.CAPACITY_MB));
+                    assertThat(view.bookedBytes()).as("step 1: booked at its instance's ledger memory")
+                        .isEqualTo(ByteUnit.MEGABYTE.bytes(engineInstance.get(InstanceModel.CAPACITY_MB)));
                 });
             assertThat(workloads).as("step 1: its instance is not a second row")
                 .noneSatisfy(view -> assertThat(view.name()).isEqualTo(engineInstance.get(InstanceModel.NAME)));
             assertThat(workloads).as("step 1: the shared database books nothing of its own")
                 .filteredOn(view -> view.name().equals(PREFIX + "shared-shop")).singleElement()
-                .satisfies(view -> assertThat(view.bookedMb()).isNull());
+                .satisfies(view -> assertThat(view.bookedBytes()).isNull());
 
             // 2. The engine stops. The database is the root: one item titled by the database, with its action, saying
             //    how many apps it holds back, in English and in Dutch.

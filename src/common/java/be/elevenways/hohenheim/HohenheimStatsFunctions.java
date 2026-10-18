@@ -8,7 +8,6 @@ import be.elevenways.hawkeye.common.render.RenderContext;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.channel.ChannelLinks;
-import be.elevenways.zenit.common.text.ByteText;
 import be.elevenways.zenit.widget.common.data.UsageData;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -313,40 +312,40 @@ public final class HohenheimStatsFunctions {
         return Metric.MEMORY.scaled(bytes.doubleValue());
     }
 
-    /** @return the memory in use as a size ("842.0 MB"), or "" when the sample has none */
+    /** @return the memory in use in bytes, null when the sample has none; the catalog words it as a size */
     @HawkeyeFunction(
         name = "memoryUsed",
         namespace = "InstanceStats",
-        description = "The memory in use as a size",
-        returnType = String.class,
+        description = "The memory in use in bytes, or null without a reading",
+        returnType = Long.class,
         returnsReference = false,
         arguments = @Arg(name = "sample", required = false, type = Map.class, expectsReference = false,
                          description = "The latest sample map")
     )
-    public static @NonNull String memoryUsed(@Nullable Object sample) {
-        return sizeOf(sample, Metric.MEMORY.key());
+    public static @Nullable Long memoryUsed(@Nullable Object sample) {
+        return bytesOf(sample, Metric.MEMORY.key());
     }
 
-    /** @return the memory cap as a size ("1.0 GB"), or "" when the runtime reports none */
+    /** @return the memory cap in bytes, null when the runtime reports none */
     @HawkeyeFunction(
         name = "memoryLimit",
         namespace = "InstanceStats",
-        description = "The memory cap as a size, or empty when there is none",
-        returnType = String.class,
+        description = "The memory cap in bytes, or null when there is none",
+        returnType = Long.class,
         returnsReference = false,
         arguments = @Arg(name = "sample", required = false, type = Map.class, expectsReference = false,
                          description = "The latest sample map")
     )
-    public static @NonNull String memoryLimit(@Nullable Object sample) {
-        return sizeOf(sample, MEMORY_LIMIT_KEY);
+    public static @Nullable Long memoryLimit(@Nullable Object sample) {
+        return bytesOf(sample, MEMORY_LIMIT_KEY);
     }
 
-    /** @return the per-second rate of a cumulative metric as a size ("1.4 MB"), or "" without one */
+    /** @return the per-second rate of a cumulative metric in bytes, null without one */
     @HawkeyeFunction(
         name = "rate",
         namespace = "InstanceStats",
-        description = "The per-second rate between two samples as a size",
-        returnType = String.class,
+        description = "The per-second rate between two samples in bytes, or null without one",
+        returnType = Long.class,
         returnsReference = false,
         arguments = {
             @Arg(name = "previous", required = false, type = Map.class, expectsReference = false,
@@ -357,13 +356,13 @@ public final class HohenheimStatsFunctions {
                  description = "Which cumulative metric key to read")
         }
     )
-    public static @NonNull String rate(@Nullable Object previous, @Nullable Object sample, @Nullable String metric) {
+    public static @Nullable Long rate(@Nullable Object previous, @Nullable Object sample, @Nullable String metric) {
         Metric resolved = Metric.byKey(metric);
         if (resolved == null || !resolved.cumulative()) {
-            return "";
+            return null;
         }
         double rate = rateBetween(previous, sample, resolved);
-        return rate < 0 ? "" : ByteText.human(Math.round(rate));
+        return rate < 0 ? null : Math.round(rate);
     }
 
     /**
@@ -410,7 +409,7 @@ public final class HohenheimStatsFunctions {
         if (limit <= 0) {
             return UsageData.unmeasured(noLimit);
         }
-        return UsageData.measured(used, limit, ByteText.human(used), ByteText.human(limit), null);
+        return UsageData.bytes(used, limit, null);
     }
 
     /** The CPU gauge of the newest window, for a template: {@link #cpuGauge} with its words resolved for the render. */
@@ -440,18 +439,19 @@ public final class HohenheimStatsFunctions {
                                               @Nullable Microcopy unreported, @Nullable Microcopy firstReading,
                                               @Nullable Microcopy coresLabel) {
         return cpuGauge(previous, sample, words(context, waiting), words(context, unreported),
-            words(context, firstReading), words(context, coresLabel));
+            words(context, firstReading), coresLabel);
     }
 
     /**
      * The CPU gauge of the newest window: the reading's share (100 per core) against the cores the daemon reports.
      *
+     * @param coresLabel the cores the share is measured against, as words ("2 cores")
      * @return measured, or not measured with {@code waiting} (no reading), {@code unreported} (the runtime gives none)
      *         or {@code firstReading} (one reading is no window yet)
      */
     public static @NonNull UsageData cpuGauge(@Nullable Object previous, @Nullable Object sample,
                                               @Nullable String waiting, @Nullable String unreported,
-                                              @Nullable String firstReading, @Nullable String coresLabel) {
+                                              @Nullable String firstReading, @Nullable Microcopy coresLabel) {
         if (!(sample instanceof Map<?, ?> latest)) {
             return UsageData.unmeasured(waiting);
         }
@@ -462,7 +462,8 @@ public final class HohenheimStatsFunctions {
             return UsageData.unmeasured(firstReading);
         }
         long share = Math.round(cpu.doubleValue());
-        return UsageData.measured(share, 100L * Math.max(1, cores(sample)), share + "%", coresLabel, null);
+        return UsageData.measured(share, 100L * Math.max(1, cores(sample)),
+            HohenheimMicrocopy.INSTANCE_STATS.of("cpu_share").withArg("share", share), coresLabel, null);
     }
 
     /** @return the words resolved the way the render resolves its own copy; null stays null */
@@ -489,11 +490,12 @@ public final class HohenheimStatsFunctions {
         return sample instanceof Map<?, ?> map && map.get(key) instanceof Number number ? number.longValue() : -1;
     }
 
-    private static @NonNull String sizeOf(@Nullable Object sample, @NonNull String key) {
+    /** @return the sample's positive byte count under {@code key}, null when it carries none */
+    private static @Nullable Long bytesOf(@Nullable Object sample, @NonNull String key) {
         if (!(sample instanceof Map<?, ?> map) || !(map.get(key) instanceof Number bytes) || bytes.longValue() <= 0) {
-            return "";
+            return null;
         }
-        return ByteText.human(bytes.longValue());
+        return bytes.longValue();
     }
 
     private static @NonNull List<Double> appendTrimmed(@Nullable List<Object> base, double value) {

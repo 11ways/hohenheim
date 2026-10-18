@@ -510,7 +510,7 @@ public final class IncusPreflight {
         checks.add(HostPreflight.Check.of("resources",
             measured ? HostPreflight.STATUS_PASS : HostPreflight.STATUS_FAIL, true,
             measured ? PreflightFinding.RESOURCES_MEASURED.with("cpus", facts.get(HostFact.NCPU.token()),
-                    "memory", HostFact.MEM_TOTAL.valueText(facts.get(HostFact.MEM_TOTAL.token())))
+                    "memory", facts.get(HostFact.MEM_TOTAL.token()))
                 : PreflightFinding.RESOURCES_NO_MEMORY.with()));
     }
 

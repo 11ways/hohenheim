@@ -87,7 +87,7 @@ public final class ServerMediaTab implements RecordTab.Rendered<Row> {
         // itself rather than a RouteTarget to render into an action attribute.
         vars.put("uploadUrl", HohenheimEndpoints.SERVERS_MEDIA_UPLOAD
             .with(HohenheimEndpoints.SERVER_ID, serverId).toUrl());
-        vars.put("maxIsoGb", InstallMedia.MAX_ISO_BYTES >> 30);
+        vars.put("maxIsoBytes", InstallMedia.MAX_ISO_BYTES);
         vars.put("head", recordHead(conduit));
         return new RenderTemplateResult(HohenheimTemplateIds.SERVER_MEDIA, vars);
     }

@@ -10,11 +10,10 @@ import be.elevenways.hohenheim.HohenheimCounts;
 import be.elevenways.hohenheim.model.GroupedCounts;
 import be.elevenways.hohenheim.server.database.DatabaseBackups;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.protoblast.common.time.RelativeTime;
+import be.elevenways.protoblast.common.i18n.wording.Wording;
 import be.elevenways.zenit.cms.common.CmsMicrocopy;
 import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.zenit.common.orm.field.StringField;
-import be.elevenways.zenit.common.text.ByteText;
 import be.elevenways.zenit.common.ui.BadgeVariant;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
@@ -81,6 +80,7 @@ import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.WidgetTree;
 import be.elevenways.zenit.widget.common.builtin.CardWidget;
 import be.elevenways.zenit.widget.common.builtin.FactListWidget;
+import be.elevenways.zenit.widget.common.data.UsageData;
 import be.elevenways.zenit.widget.common.data.WidgetFact;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -808,14 +808,14 @@ public final class DatabaseParts {
                 neverBackedUpDetail(database));
             case OVERDUE -> StateLineCell.of(state, Microcopy.literal(ago(newest, request)),
                 HohenheimMicrocopy.DATABASE_OVERVIEW.of("backup_overdue_detail")
-                    .withArg("size", ByteText.human(newest.bytes())));
+                    .withArg("size", newest.bytes()));
             case DONE -> StateLineCell.of(state, Microcopy.literal(ago(newest, request)),
-                Microcopy.literal(ByteText.human(newest.bytes())));
+                UsageData.sizeOf(newest.bytes()));
         };
     }
 
     private static @NonNull String ago(DatabaseBackups.@NonNull Stored dump, @NonNull PanelRequest request) {
-        return RelativeTime.ago(dump.at(), CmsSupport.timeWording(request.conduit()));
+        return Wording.relative(request.conduit().getReader(), dump.at(), request.conduit().getMessageResolver());
     }
 
     /** The state column every database and engine list draws in place of the stored status. */

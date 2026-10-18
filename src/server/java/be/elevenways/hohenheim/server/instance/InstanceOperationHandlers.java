@@ -386,14 +386,14 @@ public final class InstanceOperationHandlers {
     }
 
     /** @return what failed, in words a person reads: a refusal's shown words, else the failure's message */
-    private static @NonNull Object reasonOf(@Nullable RuntimeException cause) {
+    private static @NonNull Microcopy reasonOf(@Nullable RuntimeException cause) {
         if (cause instanceof DomainRefusal refusal) {
             return refusal.shown();
         }
         if (cause == null) {
-            return "";
+            return Microcopy.literal("");
         }
-        return HohenheimViolations.reasonOf(cause);
+        return Microcopy.literal(HohenheimViolations.reasonOf(cause));
     }
 
     /**

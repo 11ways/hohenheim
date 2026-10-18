@@ -616,8 +616,8 @@ public class ProxyServer {
         }
     }
 
-    private static Object reasonOrDash(@Nullable Microcopy reason) {
-        return reason == null ? "-" : reason;
+    private static @NonNull Microcopy reasonOrDash(@Nullable Microcopy reason) {
+        return reason == null ? Microcopy.literal("-") : reason;
     }
 
     private void noteHttpListenerHealthy() {

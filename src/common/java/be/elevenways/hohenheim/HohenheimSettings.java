@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import java.util.Objects;
 import be.elevenways.zenit.common.Zenit;
@@ -53,7 +54,7 @@ public class HohenheimSettings {
 
     /** @return {@link #positiveOrDefault} of a megabyte setting, in bytes */
     public static long positiveMbAsBytes(@NonNull SettingDefinition<Integer> setting) {
-        return positiveOrDefault(setting) * 1024L * 1024L;
+        return ByteUnit.MEGABYTE.bytes(positiveOrDefault(setting));
     }
 
     /** @return whether the switch is on; an unset value counts as off */

@@ -463,7 +463,7 @@ final class PutOnlineHandlers {
         int instanceId = createApp(call, template, input.create());
         Row instance = Objects.requireNonNull(Models.get(InstanceModel.class).findById(instanceId), "the new app");
         call.attachSubject(InstanceOperations.INSTANCE, instance);
-        call.reportStepDone(appDone(String.valueOf((Object) template.get(InstanceTemplateModel.NAME)), instance));
+        call.reportStepDone(appDone(templateName(template), instance));
 
         // 2. Its install step, when the template declares one.
         installStep(call, template, instanceId);
@@ -511,7 +511,7 @@ final class PutOnlineHandlers {
         int instanceId = createApp(call, template, input.create());
         Row instance = Objects.requireNonNull(Models.get(InstanceModel.class).findById(instanceId), "the new app");
         call.attachSubject(InstanceOperations.INSTANCE, instance);
-        call.reportStepDone(appDone(String.valueOf((Object) template.get(InstanceTemplateModel.NAME)), instance));
+        call.reportStepDone(appDone(templateName(template), instance));
         installStep(call, template, instanceId);
         publishPorts(call, instance, chosenPorts(template, input.ports()));
         gameAddressStep(call, instanceId, input.game_address());
@@ -667,7 +667,8 @@ final class PutOnlineHandlers {
         }
         call.attachSubject(InstanceOperations.INSTANCE, instance);
         InstanceKindInfo info = InstanceKindRegistry.registry().get(Identifier.tryParse(String.valueOf(kindId)));
-        call.reportStepDone(appDone(info == null ? String.valueOf(kindId) : info.getLabel(), instance));
+        call.reportStepDone(appDone(info == null ? Microcopy.literal(String.valueOf(kindId)) : info.getLabel(),
+            instance));
         return instance;
     }
 
@@ -889,8 +890,13 @@ final class PutOnlineHandlers {
         return HohenheimMicrocopy.PUT_ONLINE.of("done_" + key);
     }
 
+    /** @return the template's stored name, a name and no copy */
+    private static @NonNull Microcopy templateName(@NonNull Row template) {
+        return Microcopy.literal(String.valueOf((Object) template.get(InstanceTemplateModel.NAME)));
+    }
+
     /** @param what the template's name, or the kind's label for an app made from a kind's own settings */
-    private static @NonNull Microcopy appDone(@NonNull Object what, @NonNull Row instance) {
+    private static @NonNull Microcopy appDone(@NonNull Microcopy what, @NonNull Row instance) {
         return done("app").withArg("what", what)
             .withArg("host", ServerModel.canonicalNameOf(instance.get(InstanceModel.SERVER_ID)));
     }

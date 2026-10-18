@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.stack;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -85,7 +86,7 @@ public final class StackServiceKind implements InstanceKindHandler {
     public static final Egress EGRESS = Egress.OPEN;
 
     /** Size cap for a service's tmpfs mount; compose declares no size and neither did we. */
-    public static final long TMPFS_SIZE_BYTES = 256L * 1024 * 1024;
+    public static final long TMPFS_SIZE_BYTES = ByteUnit.MEGABYTE.bytes(256);
 
     public static final Schema SETTINGS_SCHEMA = new Schema();
 

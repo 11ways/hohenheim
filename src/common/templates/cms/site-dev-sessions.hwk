@@ -24,7 +24,7 @@
                 <pl-table-cell>
                     <a href={% session.get("origin") %} target="_blank" rel="noopener">{{ session.get("origin") }}</a>
                 </pl-table-cell>
-                <pl-table-cell>{{ session.get("registeredAt") }}</pl-table-cell>
+                <pl-table-cell><pl-relative-time datetime={% session.get("registeredAtIso") %}></pl-relative-time></pl-table-cell>
                 <pl-table-cell>{{ session.get("streams") }}</pl-table-cell>
             </pl-table-row>
             {% /each %}

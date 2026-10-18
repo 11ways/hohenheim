@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.database;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
@@ -949,7 +950,7 @@ public class ManagedDatabase {
     /** The cap refusal, translated to name the setting an operator would raise. */
     private static IOException capRefusal(String handle, Http11.BodyCapExceededException cause) {
         return new IOException("Dump of '" + handle + "' exceeds the configured cap of "
-            + (maxDumpBytes() / (1024 * 1024)) + " MB (setting database.max_dump_mb);"
+            + (maxDumpBytes() / ByteUnit.MEGABYTE.factor()) + " MB (setting database.max_dump_mb);"
             + " the partial file was deleted", cause);
     }
 
@@ -958,9 +959,9 @@ public class ManagedDatabase {
      * names the number an operator has to set, and no transfer was started.
      */
     private static IOException capRefusal(String handle, long actualBytes) {
-        long actualMb = (actualBytes + 1024 * 1024 - 1) / (1024 * 1024);
+        long actualMb = (actualBytes + ByteUnit.MEGABYTE.factor() - 1) / ByteUnit.MEGABYTE.factor();
         return new IOException("Dump of '" + handle + "' is " + actualMb + " MB, over the"
-            + " configured cap of " + (maxDumpBytes() / (1024 * 1024)) + " MB; set"
+            + " configured cap of " + (maxDumpBytes() / ByteUnit.MEGABYTE.factor()) + " MB; set"
             + " database.max_dump_mb to at least " + actualMb + " (nothing was transferred)");
     }
 

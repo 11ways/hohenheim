@@ -65,6 +65,13 @@ import static org.assertj.core.api.Assertions.*;
  */
 class AdminPagesTest extends HohenheimTestBase {
 
+    /**
+     * A moment ahead in words: "27 November 2026 12:55 pm", its zone when not the viewer's, then how far ahead; the
+     * gaps are any horizontal space, since a locale may set its day period apart with a narrow no-break space.
+     */
+    private static final String WORDED_MOMENT_AHEAD =
+        "\\d{1,2}\\h\\p{L}+\\h\\d{4}\\h\\d{1,2}:\\d{2}(\\h?\\p{L}+)?(\\h\\([^)]+\\))?\\h\\(.+ from now\\)";
+
     @BeforeAll
     static void seed() throws Exception {
         // Collector cardinality and the dashboard must read this class's fleet, not earlier fixtures.
@@ -522,14 +529,14 @@ class AdminPagesTest extends HohenheimTestBase {
             navigateToApp("/admin/certificates/" + cert.get(CertificateModel.ID));
             waitForHydration();
             String dated = page.content();
-            // The stamp is rendered in the VIEWER's zone, so the assertion is on the SHAPE
-            // (absolute wall-clock plus the relative wording), never on a zone-dependent day.
+            // The stamp is rendered in the VIEWER's zone, so the assertion is on the SHAPE (the moment in words, its
+            // zone named when it is not the viewer's, plus the relative wording), never on a zone-dependent day.
             assertThat(readonlyEntry("expiry_display"))
-                .as("the expiry reads as an absolute stamp plus the relative wording")
-                .matches("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2} \\(.+ from now\\)");
+                .as("the expiry reads as an absolute moment plus the relative wording")
+                .matches(WORDED_MOMENT_AHEAD);
             assertThat(readonlyEntry("next_attempt_display"))
                 .as("a scheduled retry replaces the absence sentence")
-                .matches("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2} \\(.+ from now\\)");
+                .matches(WORDED_MOMENT_AHEAD);
             assertThat(dated).as("the next attempt is no longer the absence sentence")
                 .doesNotContain("None due yet");
             assertThat(readonlyEntry("dns_publisher_display"))

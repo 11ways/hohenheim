@@ -27,7 +27,8 @@ import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.operation.SubjectArity;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.server.operation.RowDeleteOperations;
-import be.elevenways.protoblast.common.time.RelativeTime;
+import be.elevenways.protoblast.common.i18n.wording.Wording;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
@@ -57,19 +58,14 @@ import be.elevenways.zenit.common.orm.field.DateTimeField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.routing.RouteScope;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
-import be.elevenways.zenit.common.ui.Timezones;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.security.cert.X509Certificate;
 import java.time.Instant;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -132,9 +128,6 @@ public final class CertificateParts {
      */
     private static final StringField DNS_RECORDS_DISPLAY = displayField("dns_records_display",
         "cert_dns_records", "coverage");
-
-    /** Wall-clock shape of {@code Dates.wallText}, which needs a RenderContext this hook has not. */
-    private static final DateTimeFormatter WALL_CLOCK = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     private static final FormSpec ADMIN_FORM = FormSpec.builder()
         // The create is the upload ("Get a certificate" orders one, "Upload a certificate" saves
@@ -321,7 +314,7 @@ public final class CertificateParts {
         return failure.at() == null
             ? HohenheimMicrocopy.CERTIFICATE.of("last_renewal_failed").withArg("reason", failure.sentence())
             : HohenheimMicrocopy.CERTIFICATE.of("last_renewal_failed_at").withArg("reason", failure.sentence())
-                .withArg("when", instantText(failure.at(), ""));
+                .withArg("when", failure.at());
     }
 
     /**
@@ -504,22 +497,13 @@ public final class CertificateParts {
         return text.toString();
     }
 
-    /** An absolute wall-clock stamp plus the relative wording, or the absence sentence. */
+    /** The moment on the reader's clock plus how long ago it was, or the absence sentence. */
     private static @NonNull String instantText(@Nullable Instant instant, @NonNull String absent) {
         if (instant == null) {
             return absent;
         }
-        return WALL_CLOCK.format(instant.atZone(viewerZone()))
-            + " (" + RelativeTime.ago(instant, CmsSupport.timeWording(RouteScope.currentConduit())) + ")";
-    }
-
-    /** The viewer's own zone, falling back to UTC when no request or cookie says otherwise. */
-    private static @NonNull ZoneId viewerZone() {
-        try {
-            return ZoneId.of(Timezones.current(RouteScope.currentConduit()));
-        } catch (RuntimeException unknownZone) {
-            return ZoneOffset.UTC;
-        }
+        return CmsSupport.resolvedTextOrDefault(HohenheimMicrocopy.CERTIFICATE.of("moment_ago").withArg("at", instant)
+            .withArg("ago", Wording.relative(CmsSupport.currentReader(), instant, Zenit.getMessageResolver())));
     }
 
     private static @NonNull String orNone(@Nullable Object value) {

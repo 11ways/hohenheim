@@ -24,6 +24,7 @@ import be.elevenways.hohenheim.server.source.GitWebhookHandler;
 import be.elevenways.hohenheim.server.source.WebhookOutcome;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.i18n.wording.Wording;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.live.LiveFeed;
 import be.elevenways.zenit.common.live.LiveFeeds;
@@ -38,6 +39,7 @@ import be.elevenways.zenit.cms.server.render.action.ActionStateTranslator;
 import be.elevenways.zenit.cms.server.render.action.RowOffer;
 import be.elevenways.zenit.common.routing.ReturnPath;
 import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -50,6 +52,7 @@ import be.elevenways.zenit.server.http.ReturnTarget;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -619,15 +622,13 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         return value.length() > 8 ? value.substring(0, 8) : value;
     }
 
-    private static String durationLabel(Object durationMs) {
-        if (!(durationMs instanceof Integer ms)) {
+    /** @return a stored run length in milliseconds as the request's reader words a span ("700 ms", "1 min"), else "" */
+    static @NonNull String durationLabel(@Nullable Object durationMs) {
+        if (!(durationMs instanceof Number ms)) {
             return "";
         }
-        if (ms < 1000) {
-            return ms + " ms";
-        }
-        long seconds = Math.round(ms / 1000.0);
-        return seconds < 60 ? seconds + " s" : (seconds / 60) + " min " + (seconds % 60) + " s";
+        return Wording.durationUnits(CmsSupport.currentReader(), Duration.ofMillis(ms.longValue()),
+            Zenit.getMessageResolver());
     }
 
 }

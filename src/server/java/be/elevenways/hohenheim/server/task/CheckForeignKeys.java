@@ -85,7 +85,8 @@ public class CheckForeignKeys extends ScheduledTask {
             Blast.log("DATABASE INTEGRITY: orphaned rows found -", summary);
             Alerts.trySend(NotificationEvents.DATA_INTEGRITY, Alerts.INSTALLATION,
                 HohenheimMicrocopy.ALERT.of("data_integrity_subject"),
-                HohenheimMicrocopy.ALERT.of("data_integrity_body").withArg("detail", summary));
+                HohenheimMicrocopy.ALERT.of("data_integrity_body").withArg("detail",
+                    summary.stream().map(Microcopy::literal).toList()));
         }
         throw new IllegalStateException("Orphaned rows violate declared foreign keys (inspect and"
             + " repair offline with --foreign-key-orphans <database-file>): " + String.join("; ", summary));

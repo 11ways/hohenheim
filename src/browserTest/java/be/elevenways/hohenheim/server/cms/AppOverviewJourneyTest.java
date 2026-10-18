@@ -28,6 +28,10 @@ import be.elevenways.hohenheim.test.RecordedChanges;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.i18n.wording.DateStyle;
+import be.elevenways.protoblast.common.i18n.wording.Reader;
+import be.elevenways.protoblast.common.i18n.wording.Wording;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.testsupport.text.InOrder;
 import be.elevenways.zenit.cms.common.resource.RecordHealth;
@@ -51,8 +55,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -416,13 +418,14 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
                 .as("step 2: and with neither, not measured").isEqualTo("no limit");
             assertThat(HohenheimStatsFunctions.memoryGauge(null, null, "waiting", "no limit").unmeasuredReason())
                 .as("step 2: before any reading it waits").isEqualTo("waiting");
-            assertThat(HohenheimStatsFunctions.cpuGauge(null, first, "waiting", "unreported", "first", "2 cores")
+            Microcopy twoCores = Microcopy.literal("2 cores");
+            assertThat(HohenheimStatsFunctions.cpuGauge(null, first, "waiting", "unreported", "first", twoCores)
                 .unmeasuredReason()).as("step 2: one reading is no window").isEqualTo("first");
             UsageData cpu = HohenheimStatsFunctions.cpuGauge(first, second, "waiting", "unreported", "first",
-                "2 cores");
+                twoCores);
             assertThat(cpu.used()).as("step 2: CPU is the newest window's share").isEqualTo(36L);
             assertThat(cpu.max()).as("step 2: of its two cores").isEqualTo(200L);
-            assertThat(cpu.maxLabel()).as("step 2: said as cores").isEqualTo("2 cores");
+            assertThat(cpu.maxLabel()).as("step 2: said as cores").isSameAs(twoCores);
 
             // 3. The overview draws Memory, Root disk and CPU, and Details say when it started (the start its record
             //    stamped), the database it uses with that database's state, and its backups.
@@ -584,7 +587,9 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
     void anErroredWorkloadSaysWhenItStoppedWhyNothingRestartedItAndWhatToDo() throws Exception {
         Row instance = instance("app-journey-errored");
         int id = instance.get(InstanceModel.ID);
-        String today = DateTimeFormatter.ISO_LOCAL_DATE.format(Now.instant().atZone(ZoneOffset.UTC));
+        // The day as a cookieless English reader reads it: on the office clock, in words.
+        String today = Wording.day(Reader.of(LocaleChain.ofTags("en"), Zenit.getMessageResolver()), Now.instant(),
+            DateStyle.LONG);
         String page = "/admin/instances/" + id + "/page/overview";
         HostFixtures.LocalHostState localBefore = HostFixtures.captureLocal();
         try {

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.host.HostCapacityView;
 import be.elevenways.hohenheim.host.HostStanding;
@@ -16,6 +17,8 @@ import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.i18n.wording.Reader;
+import be.elevenways.protoblast.common.i18n.wording.Wording;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.edit.EditContext;
 import be.elevenways.zenit.common.edit.FieldOption;
@@ -99,11 +102,11 @@ class HostPickRoomTest extends HohenheimTestBase {
         //     3 MB free of the budget, never the whole budget beside a "3 MB free" warning.
         HostCapacityView ledger = InstanceCapacity.viewOf(server(full), full);
         assertThat(ledger.freeMb()).as("step 1c: the ledger leaves 3 MB free").isEqualTo(3);
-        String budget = ServerParts.sizeOfMegabytes(ledger.bookableMb());
+        long budget = ByteUnit.MEGABYTE.bytes(ledger.bookableMb());
         assertThat(bookableFact(ledger, "en")).as("step 1c: free of the budget")
-            .isEqualTo(ServerParts.sizeOfMegabytes(3) + " free of " + budget);
-        assertThat(bookableFact(ledger, "nl")).as("step 1c: in Dutch too")
-            .isEqualTo(ServerParts.sizeOfMegabytes(3) + " vrij van " + budget);
+            .isEqualTo(size(ByteUnit.MEGABYTE.bytes(3), "en") + " free of " + size(budget, "en"));
+        assertThat(bookableFact(ledger, "nl")).as("step 1c: in Dutch too, in its own symbols")
+            .isEqualTo(size(ByteUnit.MEGABYTE.bytes(3), "nl") + " vrij van " + size(budget, "nl"));
         LocaleChain english = LocaleChain.ofTags("en");
         MessageResolver resolver = Zenit.getMessageResolver();
         assertThat(ServerOverviewState.capacityFacts(ledger, english, resolver).stream().map(fact -> fact.label())
@@ -121,7 +124,8 @@ class HostPickRoomTest extends HohenheimTestBase {
         assertThat(refusal).as("step 2: the full host is refused in the Where step").isNotNull();
         assertThat(Objects.requireNonNull(refusal).key()).as("step 2: with the run's own refusal")
             .isEqualTo("host_capacity_reached");
-        assertThat(refusal.args().get("free")).as("step 2: saying what is free").isEqualTo(3L);
+        assertThat(refusal.args().get("free")).as("step 2: saying what is free, as a size")
+            .isEqualTo(ByteUnit.MEGABYTE.bytes(3));
 
         // 3. The roomy host stays a choice.
         assertThat(judged.refusal(create, container, roomy)).as("step 3: a host with room is a choice").isNull();
@@ -139,9 +143,10 @@ class HostPickRoomTest extends HohenheimTestBase {
             .isEqualTo(HostStanding.REFUSING);
         Microcopy reason = Objects.requireNonNull(fullVerdict.reason(), "step 1: the standing says why");
         assertThat(reason.key()).as("step 1: it is full").isEqualTo("host_full");
-        assertThat(reason.args().get("free")).as("step 1: saying what is free").isEqualTo(3L);
+        assertThat(reason.args().get("free")).as("step 1: saying what is free, as a size")
+            .isEqualTo(ByteUnit.MEGABYTE.bytes(3));
         assertThat((Long) reason.args().get("smallest")).as("step 1: and what the smallest new app needs")
-            .isGreaterThan(3L);
+            .isGreaterThan(ByteUnit.MEGABYTE.bytes(3));
 
         // 2. The gate's host verdict is that same refusal, so the list and the pick cannot disagree.
         assertThat(Objects.requireNonNull(InstancePlacement.hostRefusal(server(full))).key())
@@ -162,5 +167,11 @@ class HostPickRoomTest extends HohenheimTestBase {
 
     private static Row server(int id) {
         return Models.get(ServerModel.class).findById(id);
+    }
+
+    /** @return a byte count as a size in the language's own symbols */
+    private static String size(long bytes, String tag) {
+        return Wording.bytes(Reader.of(LocaleChain.ofTags(tag), Zenit.getMessageResolver()), bytes,
+            Zenit.getMessageResolver());
     }
 }

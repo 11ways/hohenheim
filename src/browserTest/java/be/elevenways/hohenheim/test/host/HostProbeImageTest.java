@@ -80,7 +80,7 @@ class HostProbeImageTest {
                 assertThat(check.found().args())
                     .containsEntry("image", IncusPreflight.PROBE_IMAGE)
                     .containsEntry("server", IncusInstanceRuntime.IMAGE_SERVER)
-                    .hasEntrySatisfying("error", error -> assertThat(error).contains("Image not found"));
+                    .hasEntrySatisfying("error", error -> assertThat(String.valueOf(error)).contains("Image not found"));
             });
     }
 

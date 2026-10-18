@@ -300,7 +300,7 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
         assertThat(body)
             .as("step 3: a failed release states its reason").contains("Did not answer on port 3000 within 60 s")
             .as("step 3: and its state in words, never the stored token").contains(">Failed<")
-            .as("step 3: durations read in minutes and seconds").contains("1 min 48 s");
+            .as("step 3: durations read as a span in their largest unit").contains(">1.8 min<");
 
         // 3b. A deploy whose build was refused is listed too, newest first, with what refused it.
         int refused = body.indexOf("The builder refused the image: no Dockerfile at the root");

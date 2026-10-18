@@ -362,8 +362,9 @@ public final class ProxyAttention {
 
     /** The localized sentence for a problem's reason, carrying its specific cause (in words when it has them). */
     static @NonNull Microcopy reasonOf(@NonNull RoutingProblem problem) {
-        Object cause = problem.cause() != null ? problem.cause() : problem.detail() != null ? problem.detail() : "-";
-        return HohenheimMicrocopy.ROUTING_PROBLEM.of(problem.reason().name().toLowerCase(Locale.ROOT))
-            .withArg("detail", cause);
+        Microcopy sentence = HohenheimMicrocopy.ROUTING_PROBLEM.of(problem.reason().name().toLowerCase(Locale.ROOT));
+        // Words when the problem has them, else its technical detail as the text it is.
+        return problem.cause() != null ? sentence.withArg("detail", problem.cause())
+            : sentence.withArg("detail", problem.detail() != null ? problem.detail() : "-");
     }
 }

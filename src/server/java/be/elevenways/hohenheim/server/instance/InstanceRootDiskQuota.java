@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -130,7 +131,7 @@ public final class InstanceRootDiskQuota {
         int after = effectiveGb(row, stored);
         if (after < before) {
             throw Violations.ofField(RootDisk.SETTING, after,
-                HohenheimMicrocopy.VIOLATIONS.of("root_disk_shrink").withArg("current", before));
+                HohenheimMicrocopy.VIOLATIONS.of("root_disk_shrink").withArg("current", ByteUnit.GIGABYTE.bytes(before)));
         }
     }
 

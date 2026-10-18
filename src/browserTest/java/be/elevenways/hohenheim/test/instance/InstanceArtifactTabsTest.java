@@ -16,9 +16,14 @@ import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.i18n.wording.DateStyle;
+import be.elevenways.protoblast.common.i18n.wording.Reader;
+import be.elevenways.protoblast.common.i18n.wording.Wording;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -140,7 +145,7 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
         Matcher title = Pattern.compile("<title>([^<]*)</title>").matcher(page);
         assertThat(title.find()).as("step 5: the backup's page has a title").isTrue();
         assertThat(title.group(1)).as("step 5: the title is when the backup was taken")
-            .contains("2026-08-10 13:00 UTC").doesNotContain("complete.hib");
+            .contains(taken("2026-08-10T13:00:00Z")).doesNotContain("complete.hib");
         assertThat(page).as("step 5: the key stays a field on the page").contains("artifact-tabs/complete.hib");
     }
 
@@ -332,7 +337,7 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
         // 2. Live: the tenant reaches the backup, headed by when it was taken (no keyless "InstanceBackup #N").
         HttpResponse<String> live = httpGet(pagePath, tenantSession);
         assertThat(live.statusCode()).as("step 2: the tenant reaches its backup").isEqualTo(200);
-        assertThat(live.body()).as("step 2: headed by when it was taken").contains("2026-08-11 09:30 UTC")
+        assertThat(live.body()).as("step 2: headed by when it was taken").contains(taken("2026-08-11T09:30:00Z"))
             .doesNotContain("InstanceBackup #");
 
         // 3. Trashed: the record page refuses the tenant, and the backup list never names the instance.
@@ -447,5 +452,14 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
     /** A backup's record page: its overview, where the bare record route lands. */
     private static String backupPage(String panel, int backupId) {
         return CmsRoutes.subpage(panel, HohenheimSlugs.INSTANCE_BACKUPS, backupId, RecordOverview.SLUG).toUrl();
+    }
+
+    /**
+     * @return a backup's title as a cookieless English reader reads it: the moment in the office zone, which is not
+     *         theirs, so the zone is named
+     */
+    private static String taken(String iso) {
+        Reader reader = Reader.of(LocaleChain.ofTags("en"), Zenit.getMessageResolver());
+        return Wording.moment(reader, Instant.parse(iso), DateStyle.LONG);
     }
 }

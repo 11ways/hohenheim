@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.server.host;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.zenit.common.text.ByteText;
+import be.elevenways.zenit.widget.common.data.UsageData;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -52,8 +52,9 @@ public enum HostFact {
     /** How a fact's stored value reads. */
     public enum Unit {
         TEXT,
+        /** A whole count, grouped in the reader's symbols. */
         COUNT,
-        /** A byte count, read as a size through {@link ByteText}. */
+        /** A byte count, read as a size. */
         BYTES
     }
 
@@ -77,11 +78,19 @@ public enum HostFact {
         return HohenheimMicrocopy.HOST_CHECK.of("fact_" + this.token());
     }
 
-    /** @return the stored value as a reader reads it */
-    public @NonNull String valueText(@Nullable Object stored) {
+    /**
+     * @return the stored value in words the render's reader reads (a size, a grouped count); a value that is not the
+     *         unit's whole number reads as stored
+     */
+    public @NonNull Microcopy valueWords(@Nullable Object stored) {
+        if (!(stored instanceof Long || stored instanceof Integer)) {
+            return Microcopy.literal(String.valueOf(stored));
+        }
+        long number = ((Number) stored).longValue();
         return switch (this.unit) {
-            case BYTES -> stored instanceof Number ? ByteText.humanOf(stored) : String.valueOf(stored);
-            case TEXT, COUNT -> String.valueOf(stored);
+            case BYTES -> UsageData.sizeOf(number);
+            case COUNT -> HohenheimMicrocopy.HOST_CHECK.of("fact_value_count").withArg("value", number);
+            case TEXT -> Microcopy.literal(String.valueOf(stored));
         };
     }
 

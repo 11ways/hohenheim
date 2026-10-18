@@ -61,7 +61,7 @@ public final class UploadedCertificates {
         for (int i = 0; i + 1 < chain.size(); i++) {
             if (!issuedBy(chain.get(i), chain.get(i + 1))) {
                 throw Violations.ofField(CERTIFICATE_FIELD, null, HohenheimMicrocopy.VIOLATIONS.of("cert_chain_order")
-                    .withArg("position", String.valueOf(i + 1)).withArg("next", String.valueOf(i + 2)));
+                    .withArg("position", i + 1).withArg("next", i + 2));
             }
         }
         Instant now = Now.instant();
@@ -69,14 +69,14 @@ public final class UploadedCertificates {
             X509Certificate certificate = chain.get(i);
             if (certificate.getNotAfter().toInstant().isBefore(now)) {
                 throw Violations.ofField(CERTIFICATE_FIELD, null, HohenheimMicrocopy.VIOLATIONS.of("cert_expired")
-                    .withArg("position", String.valueOf(i + 1))
-                    .withArg("date", certificate.getNotAfter().toInstant().toString()));
+                    .withArg("position", i + 1)
+                    .withArg("date", certificate.getNotAfter().toInstant()));
             }
             if (certificate.getNotBefore().toInstant().isAfter(now)) {
                 throw Violations.ofField(CERTIFICATE_FIELD, null,
                     HohenheimMicrocopy.VIOLATIONS.of("cert_not_yet_valid")
-                        .withArg("position", String.valueOf(i + 1))
-                        .withArg("date", certificate.getNotBefore().toInstant().toString()));
+                        .withArg("position", i + 1)
+                        .withArg("date", certificate.getNotBefore().toInstant()));
             }
         }
         if (hostname != null) {

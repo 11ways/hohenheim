@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.incus;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.hohenheim.server.util.Http11;
 import be.elevenways.hohenheim.server.util.Watchdog;
 import be.elevenways.protoblast.common.util.Closeables;
@@ -41,7 +42,7 @@ abstract class StreamIncusTransport implements IncusTransport {
      * the recorded output of an exec; payload-sized bodies ride
      * {@link #exchangeDownload}, never this lane.
      */
-    static final long MAX_RESPONSE_BYTES = 32L * 1024 * 1024;
+    static final long MAX_RESPONSE_BYTES = ByteUnit.MEGABYTE.bytes(32);
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
@@ -163,7 +164,7 @@ abstract class StreamIncusTransport implements IncusTransport {
             }
             // An envelope (error or refusal): small by contract, hand it back inline.
             ByteArrayOutputStream body = new ByteArrayOutputStream();
-            Http11.copyBody(in, head, body, 1024 * 1024, describe());
+            Http11.copyBody(in, head, body, (int) ByteUnit.MEGABYTE.factor(), describe());
             return new Http11.Raw(head.status(), head.headers(), body.toByteArray());
         } catch (IOException e) {
             if (watchdog.isDone()) {

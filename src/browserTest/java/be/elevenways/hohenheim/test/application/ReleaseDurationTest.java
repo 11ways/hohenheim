@@ -48,7 +48,8 @@ class ReleaseDurationTest extends HohenheimTestBase {
                 .body();
 
             // 1. BUG FIXED: the first release took its build plus its switch, never the switch alone.
-            assertThat(body).as("step 1: the first release took its build too").contains(">1 min 1 s<")
+            assertThat(body).as("step 1: the first release took its build too, a minute in its largest unit")
+                .contains(">1 min<")
                 .as("step 1: never the switch time alone").doesNotContain(">548 ms<");
 
             // 2. The second release took its own build, from the build's start to the switch's end.

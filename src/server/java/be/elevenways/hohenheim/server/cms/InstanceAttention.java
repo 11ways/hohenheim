@@ -209,7 +209,7 @@ public final class InstanceAttention {
                 HohenheimMicrocopy.ATTENTION_TITLE.of("instance_disk")
                     .withArg("name", instance.get(InstanceModel.NAME)),
                 HohenheimMicrocopy.ATTENTION_DETAIL.of("instance_disk").withArg("percent", Math.round(fraction * 100))
-                    .withArg("limit", Math.round(limit / (1024.0 * 1024 * 1024))),
+                    .withArg("limit", limit),
                 InstanceParts.recordRoute(ADMIN, instance, null),
                 HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_app")
                     .withArg("name", instance.get(InstanceModel.NAME))));
