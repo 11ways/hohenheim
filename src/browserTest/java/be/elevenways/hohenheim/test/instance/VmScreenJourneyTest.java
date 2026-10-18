@@ -34,6 +34,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.kvm.common.ScreenMessage;
 import be.elevenways.zenit.kvm.common.ScreenStatus;
 import be.elevenways.zenit.kvm.test.support.RecordingScreenSocket;
+import be.elevenways.zenit.kvm.test.support.ScreenPicture;
 import be.elevenways.zenit.server.http.SessionCookies;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.Locator;
@@ -198,8 +199,8 @@ class VmScreenJourneyTest extends HohenheimTestBase {
 
             // 4. CONSOLE alone opens a running VM's screen, which is drawn; revoked, the next revalidation refuses.
             RecordingScreenSocket console = open(consoleId, running);
-            console.await(ScreenMessage.FrameEnd.class, end -> true);
-            assertThat(console.picture().pixel(4, 4)).as("step 4: the VM's green screen").isEqualTo(0x00FF00);
+            assertThat(console.awaitUntil(() -> presentsGreen(console)))
+                .as("step 4: a frame presents the VM's green screen").isTrue();
             assertThat(console.handler().revalidate()).as("step 4: still granted").isTrue();
             RecordGrants.revoke(GrantSubjectType.USER, consoleId, InstanceModel.MODEL_ID, running,
                 HohenheimCapabilities.CONSOLE);
@@ -240,8 +241,8 @@ class VmScreenJourneyTest extends HohenheimTestBase {
                 slot -> open(consoleId, instanceId)).values());
             assertThat(viewers).as("step 1: both viewers opened").hasSize(2);
             for (RecordingScreenSocket viewer : viewers) {
-                viewer.await(ScreenMessage.FrameEnd.class, end -> true);
-                assertThat(viewer.picture().pixel(4, 4)).as("step 1: the VM's green screen").isEqualTo(0x00FF00);
+                assertThat(viewer.awaitUntil(() -> presentsGreen(viewer)))
+                    .as("step 1: a frame presents the VM's green screen").isTrue();
             }
             assertThat(daemon.started()).as("step 1: one console for both viewers").isEqualTo(1);
             assertThat(daemon.controlLinked()).as("step 1: its control websocket linked")
@@ -345,6 +346,25 @@ class VmScreenJourneyTest extends HohenheimTestBase {
         while (System.nanoTime() < deadline) {
             Long key = this.keys.poll(100, TimeUnit.MILLISECONDS);
             if (key != null && key == scancode) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Whether a frame the viewer was sent presents the VM's green screen, replaying its messages up to each FRAME_END.
+     *
+     * AIDEV-NOTE: a viewer joining a running console may get a frame end before the green fill is painted, so the
+     * first FRAME_END alone proves nothing; the live picture is not enough either, as it applies a fill before its
+     * frame ends.
+     */
+    private static boolean presentsGreen(RecordingScreenSocket viewer) {
+        ScreenPicture presented = new ScreenPicture();
+        for (ScreenMessage.Down message : viewer.received()) {
+            presented.apply(message);
+            if (message instanceof ScreenMessage.FrameEnd && presented.width() > 4 && presented.height() > 4
+                && presented.pixel(4, 4) == 0x00FF00) {
                 return true;
             }
         }
