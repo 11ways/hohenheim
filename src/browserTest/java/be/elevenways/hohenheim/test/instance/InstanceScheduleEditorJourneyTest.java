@@ -25,7 +25,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * An instance schedule's cron edits as a schedule picker on its record page: a backup schedule moves from every night
  * to Sunday night through the presets, a power schedule keeps and edits its custom expression, an expression the
- * scheduler cannot run is refused on the field, and a new schedule saved untouched stores the default it shows.
+ * scheduler cannot run is refused on the field in words said once, and a new schedule saved untouched stores the
+ * default it shows.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -37,6 +38,7 @@ class InstanceScheduleEditorJourneyTest extends HohenheimTestBase {
     private static final String PRESET = INPUT + " [data-zf-cron-preset]";
     private static final String READING = INPUT + " [data-zf-cron-reading]";
     private static final String CUSTOM = INPUT + " [data-zf-cron-custom] input";
+    private static final String REFUSAL = "This is not a cron expression a schedule can run";
 
     private static Integer instanceId;
     private static Integer backupId;
@@ -112,14 +114,20 @@ class InstanceScheduleEditorJourneyTest extends HohenheimTestBase {
         assertThat(Models.get(RecordScheduleModel.class).findById(powerId).get(RecordScheduleModel.CRON))
             .as("step 3: the edited custom cron is stored").isEqualTo("0 7 * * 1-5");
 
-        // 4. An expression the scheduler cannot run is refused on the field and the stored one stays.
+        // 4. An expression the scheduler cannot run is said to be so while typing, in the validator's words; saved, it
+        //    is refused on the field, said once (the field's violation, not the picker's reading again), and the
+        //    stored one stays.
         navigateToApp("/admin/instance-schedules/" + powerId);
         waitForHydration();
         page.locator(CUSTOM).fill("61 * * * *");
         page.locator(CUSTOM).blur();
         waitForReactiveIdle();
+        page.waitForCondition(() -> page.locator(READING).innerText().contains(REFUSAL));
         page.click(".cms-form-actions pl-button[type='submit']");
-        page.waitForSelector("text=This is not a cron expression a schedule can run");
+        page.waitForSelector("zf-field-errors:has-text('" + REFUSAL + "')");
+        String refused = page.locator("form.cms-form-layout").innerText();
+        assertThat(refused.split(REFUSAL, -1).length - 1).as("step 4: the refusal is said once, got: %s", refused)
+            .isEqualTo(1);
         assertThat(Models.get(RecordScheduleModel.class).findById(powerId).get(RecordScheduleModel.CRON))
             .as("step 4: the stored cron stays").isEqualTo("0 7 * * 1-5");
 
