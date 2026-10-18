@@ -81,11 +81,12 @@ class BrowserTestLaneGuardTest {
 
         // 4. The solo lane stays SMALL, and the bound is a MEASURED price, not a taste.
         //    2026-08-12: the same three classes cost 74s as a forkEvery=1 lane and 11.4s
-        //    sharing a JVM, so a solo tag is worth about TWENTY SECONDS of the default
-        //    lane each. Two classes have earned it; a third must argue for it here.
+        //    sharing a JVM. Most of that turned out to be a worker per class FILE, which the
+        //    build now prunes (forkOnlyForTaggedClasses, 2026-10-18); what a solo class still
+        //    costs is its own worker and runtime boot, ~10s, beside its own test time.
         assertThat(soloClasses)
-            .as("step 4: the solo lane grew -- measured at ~20s of default-lane wall clock "
-                + "per entry (forkEvery=1 starts and tears down a worker per class). If the "
+            .as("step 4: the solo lane grew -- each entry costs its own worker JVM and runtime "
+                + "boot (~10s, forkEvery=1 starts and tears down a worker per class). If the "
                 + "new class really cannot share a JVM, raise this bound in the same commit "
                 + "and say why in the class comment.")
             // The fresh-install walkthrough owns the first runtime boot; AlertsTest owns its LAN boot declaration.
