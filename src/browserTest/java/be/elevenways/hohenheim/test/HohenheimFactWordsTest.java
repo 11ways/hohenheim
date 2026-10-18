@@ -199,6 +199,37 @@ class HohenheimFactWordsTest {
             assertThat(said(sites, copy, HohenheimActivityAction.CLONED, Map.of(HohenheimActivityAction.ORIGINAL_KEY,
                     new Change.Context(SiteModel.MODEL_ID, String.valueOf(site))), EN))
                 .as("step 10: a copy names its original").isEqualTo("Copied from words-site");
+
+            // 11. A re-pin tells the new fingerprint from the old one, and a posture acceptance labels both values.
+            assertThat(said(servers, host, HohenheimActivityAction.HOST_KEY_REPINNED, Map.of(
+                    HohenheimActivityAction.LANE_KEY, "ssh", HohenheimActivityAction.FINGERPRINT_KEY, "SHA256:new",
+                    HohenheimActivityAction.PREVIOUS_KEY, "SHA256:old"), EN))
+                .as("step 11: a re-pin").isEqualTo("Re-pinned ssh to the new fingerprint SHA256:new; the old one was"
+                    + " SHA256:old");
+            assertThat(detail(servers, host, NL)).as("step 11: in Dutch too")
+                .isEqualTo("ssh opnieuw vastgezet op de nieuwe vingerafdruk SHA256:new; de oude was SHA256:old");
+            assertThat(said(servers, host, HohenheimActivityAction.HOST_KEY_REPINNED, Map.of(
+                    HohenheimActivityAction.LANE_KEY, "incus", HohenheimActivityAction.FINGERPRINT_KEY,
+                    "SHA256:first"), EN))
+                .as("step 11: a re-pin of a lane that held no pin names no old one")
+                .isEqualTo("Re-pinned incus to the new fingerprint SHA256:first");
+            assertThat(detail(servers, host, NL)).as("step 11: in Dutch too")
+                .isEqualTo("incus opnieuw vastgezet op de nieuwe vingerafdruk SHA256:first");
+            assertThat(said(servers, host, HohenheimActivityAction.POSTURE_RISK_ACCEPTED, Map.of(
+                    HohenheimActivityAction.POSTURE_KEY, ServerModel.POSTURE_SHARED_CONTAINER,
+                    HohenheimActivityAction.WARNING_VERSION_KEY, 1), EN))
+                .as("step 11: a posture acceptance")
+                .isEqualTo("Accepted the risk of the Shared containers posture, warning version 1");
+            assertThat(detail(servers, host, NL)).as("step 11: in Dutch too")
+                .isEqualTo("Risico van de houding Gedeelde containers aanvaard, waarschuwingsversie 1");
+
+            // 12. A converted acceptance keeps its own stored text after the plain words.
+            HistoryFixtureRows.action(datasource).change(ServerModel.MODEL_ID, host, ChangeOp.EVENT)
+                .fact(HohenheimActivityAction.POSTURE_RISK_ACCEPTED,
+                    Map.of(FactShape.LEGACY_DETAIL, "shared_container, 1"))
+                .done().write();
+            assertThat(detail(servers, host, EN)).as("step 12: a converted acceptance reads its old detail")
+                .isEqualTo("Posture risk accepted: shared_container, 1");
         });
     }
 

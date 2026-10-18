@@ -25,6 +25,7 @@ import be.elevenways.zenit.common.orm.activity.ActivityActions;
 import be.elevenways.zenit.common.orm.activity.ActivitySeverity;
 import be.elevenways.zenit.common.orm.history.HistoryVisibility;
 import be.elevenways.zenit.common.orm.activity.FactShape;
+import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -410,8 +411,10 @@ public enum HohenheimActivityAction implements ActivityAction {
             case HOST_KEY_REPINNED -> FactShape.of(FactShape.key(LANE_KEY, CoreTypes.TEXT),
                 FactShape.key(FINGERPRINT_KEY, CoreTypes.TEXT), FactShape.optionalKey(PREVIOUS_KEY, CoreTypes.TEXT));
             case HOST_IDENTITY_ROTATED -> FactShape.of(FactShape.key(LANE_KEY, CoreTypes.TEXT));
-            case POSTURE_RISK_ACCEPTED -> FactShape.of(FactShape.key(POSTURE_KEY, CoreTypes.TEXT),
-                FactShape.key(WARNING_VERSION_KEY, CoreTypes.INTEGER));
+            case POSTURE_RISK_ACCEPTED -> FactShape.of(FactShape.wordedKey(POSTURE_KEY, token -> {
+                    EnumField.EnumValue posture = ServerModel.POSTURE.getValues().get(token);
+                    return posture == null ? null : posture.getLabel();
+                }), FactShape.key(WARNING_VERSION_KEY, CoreTypes.INTEGER));
             case PREVIEW_TRIGGERED -> FactShape.of(FactShape.key(VIA_KEY, CoreTypes.TEXT),
                 FactShape.key(REF_KEY, CoreTypes.TEXT));
             case RESTORED_BACKUP -> FactShape.of(FactShape.optionalKey(BACKUP_KEY, CoreTypes.INTEGER),

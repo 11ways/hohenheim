@@ -13831,6 +13831,19 @@
       "target": "history_fact"
     },
     {
+      "text": "Re-pinned {$lane} to the new fingerprint {$fingerprint}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_fingerprint": "true"
+    },
+    {
+      "text": "Re-pinned {$lane} to the new fingerprint {$fingerprint}; the old one was {$previous}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_fingerprint": "true",
+      "has_previous": "true"
+    },
+    {
       "text": "{$actor} re-pinned {$subject} to the identity it now offers",
       "scope": "hohenheim",
       "target": "happened"
@@ -13853,6 +13866,12 @@
       "text": "Posture risk accepted",
       "scope": "hohenheim",
       "target": "history_fact"
+    },
+    {
+      "text": "Accepted the risk of the {$posture} posture, warning version {$warning_version}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_posture": "true"
     },
     {
       "text": "{$actor} accepted the posture risk of {$subject}",
