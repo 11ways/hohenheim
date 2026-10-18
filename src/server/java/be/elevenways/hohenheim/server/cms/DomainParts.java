@@ -459,8 +459,7 @@ public final class DomainParts {
             .bindings(List.of(switchAccess(SiteDomainModel.FORCE_SSL, panelSlug),
                 switchAccess(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT, panelSlug)))
             .quickCreate(QUICK_CREATE)
-            .quickCreatePresets(access -> CmsSupport.parentPreset(access, SiteDomainModel.SITE_ID.getName(),
-                HohenheimSlugs.SITES))
+            .quickCreatePresets(DomainParts::quickCreatePresets)
             .inlineEditable(SiteDomainModel.FORCE_SSL, SiteDomainModel.HSTS_ENABLED,
                 SiteDomainModel.HSTS_SUBDOMAINS, SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT)
             .lead(DomainParts::lead)
@@ -529,19 +528,38 @@ public final class DomainParts {
             : Models.get(SiteModel.class).findById(siteId);
     }
 
+    /** The quick-add bar's site preset: the site {@link #createSiteId} reads, none without one. */
+    private static @NonNull Map<String, Object> quickCreatePresets(@NonNull AccessContext access) {
+        Conduit conduit = access.conduit();
+        Integer siteId = conduit == null ? null : createSiteId(conduit);
+        return siteId != null ? Map.of(SiteDomainModel.SITE_ID.getName(), siteId) : Map.of();
+    }
+
     /**
-     * The switches a create under the request's parent site will be stored with (SiteDomainModel.fixedTlsSwitches),
-     * empty without a request or a parent site.
+     * The site a domain create on this request is made under: the {@code site_id} the quick-add bar presets, else the
+     * create form's {@code parent}, each else the site page it renders on; null for none.
+     *
+     * AIDEV-NOTE: THE one read of a create's site, so the bar's preset and the switches' preview (fixedOnCreate) can
+     * never name two sites: the bar used to preset {@code site_id} while the preview read only {@code parent}.
+     */
+    private static @Nullable Integer createSiteId(@NonNull Conduit conduit) {
+        Integer preset = CmsSupport.scopedParentId(conduit, SiteDomainModel.SITE_ID.getName(), HohenheimSlugs.SITES);
+        return preset != null ? preset
+            : CmsSupport.scopedParentId(conduit, CmsEndpoints.PARENT_PARAM.getName(), HohenheimSlugs.SITES);
+    }
+
+    /**
+     * The switches a create under the request's site ({@link #createSiteId}) will be stored with
+     * (SiteDomainModel.fixedTlsSwitches), empty without a request or a site.
      *
      * AIDEV-NOTE: the site is read through the panel's own site entry, in the caller's scope: a site the caller cannot
      * read previews exactly as no site does, so the form is no probe of another tenant's configuration. A create
-     * without a request names no parent and previews nothing; the write hook still stores the switches.
+     * without a request names no site and previews nothing; the write hook still stores the switches.
      */
     private static @NonNull Map<BooleanField, Boolean> fixedOnCreate(@NonNull AccessContext access,
                                                                      @Nullable Panel panel) {
         Conduit conduit = access.conduit();
-        Integer siteId = conduit == null ? null
-            : CmsSupport.scopedParentId(conduit, CmsEndpoints.PARENT_PARAM.getName(), HohenheimSlugs.SITES);
+        Integer siteId = conduit == null ? null : createSiteId(conduit);
         if (siteId == null || panel == null
                 || !(panel.entryBySlug(HohenheimSlugs.SITES) instanceof PanelResource<?> sites)) {
             return Map.of();

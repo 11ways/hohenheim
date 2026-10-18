@@ -15,6 +15,11 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.cms.DnsRecordParts;
 import be.elevenways.zenit.cms.server.panel.PartsReads;
+import be.elevenways.zenit.cms.server.page.QuickAddState;
+import be.elevenways.zenit.forms.common.choose.InlineCreateFieldState;
+import be.elevenways.zenit.forms.common.choose.InlineCreateFormState;
+import be.elevenways.zenit.forms.common.choose.ZfChooserClient;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.hohenheim.server.cms.DomainParts;
@@ -443,6 +448,28 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
             assertThat(entryHelp(createForm, SiteDomainModel.HSTS_ENABLED.getName()))
                 .as("step 1d: HSTS keeps its own help").isNotEqualTo(PASSTHROUGH_REASON);
 
+            // 1e. The Addresses list's quick-add bar under that site decides force_ssl by the create form's own access
+            //     and help: fixed at the stored value, with the reason, and never posted. Under a site that terminates
+            //     TLS it stays the operator's switch with its own help.
+            Map<String, Object> fixedBar = quickAddBar(operator(), foreign);
+            InlineCreateFormState fixedForm = (InlineCreateFormState) fixedBar.get("quickAddForm");
+            InlineCreateFieldState fixedSwitch = createField(fixedForm, SiteDomainModel.FORCE_SSL.getName());
+            assertThat(fixedSwitch.readonly()).as("step 1e: the bar shows force_ssl fixed").isTrue();
+            assertThat(fixedSwitch.help()).as("step 1e: and says why, in the create form's words")
+                .isEqualTo(HohenheimMicrocopy.HELP.of("tls_passthrough_switch"));
+            assertThat(((Map<?, ?>) fixedBar.get("quickAddValues")).get(SiteDomainModel.FORCE_SSL.getName()))
+                .as("step 1e: at the value the save stores").isEqualTo(false);
+            assertThat(ZfChooserClient.createBody(Map.of(SiteDomainModel.HOSTNAME.getName(), "bar.example.test",
+                    SiteDomainModel.FORCE_SSL.getName(), true), Map.of(), "", fixedForm.fields()))
+                .as("step 1e: an add posts the hostname and nothing for the fixed switch")
+                .containsOnlyKeys(SiteDomainModel.HOSTNAME.getName());
+            InlineCreateFieldState openSwitch = createField(
+                (InlineCreateFormState) quickAddBar(operator(), siteId).get("quickAddForm"),
+                SiteDomainModel.FORCE_SSL.getName());
+            assertThat(openSwitch.readonly()).as("step 1e: a TLS-terminating site's bar keeps the switch").isFalse();
+            assertThat(openSwitch.help()).as("step 1e: with its own help").isNotNull()
+                .isNotEqualTo(HohenheimMicrocopy.HELP.of("tls_passthrough_switch"));
+
             // 2. A create without a request (a job, an MCP call) under the passthrough site stores both switches.
             Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN));
             Object detachedId = ResourceWrites.create(admin, DomainParts.admin(),
@@ -616,6 +643,23 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
             decisions.add(access.getOrDefault(field.getName(), FieldAccess.ALWAYS_EDITABLE).decide(create, null));
         }
         return decisions;
+    }
+
+    /** The Addresses list's quick-add vars on /admin, as the list renders them under {@code site}'s preset. */
+    private static Map<String, Object> quickAddBar(AccessContext ctx, int site) {
+        EndpointConduit conduit = new EndpointConduit()
+            .withAttribute(ConduitAttributes.PRINCIPAL, ctx.principal())
+            .setParameter(CmsEndpoints.RESOURCE_PARAM, HohenheimSlugs.DOMAINS);
+        conduit.setQueryParam(SiteDomainModel.SITE_ID.getName(), String.valueOf(site));
+        Map<String, Object> vars = new LinkedHashMap<>();
+        QuickAddState.putVars(vars, Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN)),
+            DomainParts.admin(), AccessContext.of(conduit), "/admin/domains", "/admin/domains/new");
+        assertThat(vars.get("quickAddEnabled")).as("the Addresses list offers its bar under the site").isEqualTo(true);
+        return vars;
+    }
+
+    private static InlineCreateFieldState createField(InlineCreateFormState form, String name) {
+        return form.fields().stream().filter(field -> field.name().equals(name)).findFirst().orElseThrow();
     }
 
     private static PanelResource<Row> domainResource(String panel) {
