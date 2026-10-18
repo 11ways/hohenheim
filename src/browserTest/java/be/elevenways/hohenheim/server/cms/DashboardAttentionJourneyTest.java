@@ -37,13 +37,13 @@ import be.elevenways.hohenheim.server.task.BackupControlPlane;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
-import be.elevenways.hohenheim.test.InOrder;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.database.EngineHandles;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.testsupport.text.InOrder;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
@@ -935,12 +935,13 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             assertThat(refusedItem.note().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
                 .as("step 2: in Dutch, the stored text kept as it is")
                 .isEqualTo("Technisch: Conflict. The container name /conflict is already in use");
-            assertThat(adminGet("/admin/instances/" + refusedId + "/page/overview").body())
-                .as("step 2: the page's band reads the words, then the technical text")
+            String refusedOverview = adminGet("/admin/instances/" + refusedId + "/page/overview").body();
+            assertThat(refusedOverview).as("step 2: the page's band reads the words")
                 .contains("Could not start")
-                .containsPattern(InOrder.of("It never got to run.",
-                    "Technically: Conflict. The container name /conflict is already in use"))
                 .doesNotContain("What refused it");
+            InOrder.assertThat(refusedOverview).as("step 2: the page's band reads the words, then the technical text")
+                .contains("It never got to run.",
+                    "Technically: Conflict. The container name /conflict is already in use");
 
             // 3. A crash whose automatic restart the start gates refused is recorded as that, so the app does not
             //    read "Not running" with no reason: stopped after an error, the refusal as its technical line.

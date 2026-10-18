@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.protoblast.testsupport.text.InOrder;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.cms.AuthAdminParts;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
@@ -91,9 +92,9 @@ class ProjectPagesJourneyTest extends HohenheimTestBase {
             .contains(PREFIX + "production").contains("/admin/environments/" + environmentId);
         assertThat(environments.body()).as("step 1: and never another project's")
             .doesNotContain(PREFIX + "staging");
-        assertThat(trailOf(environments.body()))
+        InOrder.assertThat(trailOf(environments.body()))
             .as("step 1: the trail reads Apps / Projects / the project, its own list a collection apart from Apps")
-            .containsSubsequence("\"/admin/" + HohenheimSlugs.APPS + "\"", "\"/admin/" + HohenheimSlugs.PROJECTS + "\"",
+            .contains("\"/admin/" + HohenheimSlugs.APPS + "\"", "\"/admin/" + HohenheimSlugs.PROJECTS + "\"",
                 PREFIX + "webshop");
 
         // 2. Its Members tab names the member as a person, never as the stored subject key, and points at the People
@@ -117,8 +118,10 @@ class ProjectPagesJourneyTest extends HohenheimTestBase {
         //    bare beneath the project's: the project is the crumb before it, never repeated in its title.
         assertThat(variables).as("step 4: the trail names the project and links its Environments tab")
             .contains(PREFIX + "webshop").contains(projectTab(HohenheimSlugs.ADMIN, "environments"));
-        assertThat(trailOf(variables)).as("step 4: the environment's crumb is its bare name, beneath the project's")
-            .containsSubsequence(PREFIX + "webshop", PREFIX + "production")
+        String variablesTrail = trailOf(variables);
+        InOrder.assertThat(variablesTrail).as("step 4: the environment's crumb is its bare name, beneath the project's")
+            .contains(PREFIX + "webshop", PREFIX + "production");
+        assertThat(variablesTrail).as("step 4: the environment's crumb never repeats its project")
             .doesNotContain(PREFIX + "webshop" + EnvironmentModel.PROJECT_SEPARATOR);
 
         // 5. A new variable starts as a plain one, so its value field is there before anything is picked.
@@ -155,8 +158,11 @@ class ProjectPagesJourneyTest extends HohenheimTestBase {
             .where(InstanceVariableModel.KEY.eq("PPJ_CURRENCY")).first().get(InstanceVariableModel.ID);
         String variable = httpGet("/admin/" + HohenheimSlugs.ENVIRONMENT_VARIABLES + "/" + variableId, sessionToken)
             .body();
-        assertThat(trailOf(variable)).as("step 8: a variable's trail names its environment bare beneath the project")
-            .containsSubsequence(PREFIX + "webshop", PREFIX + "production")
+        String variableTrail = trailOf(variable);
+        InOrder.assertThat(variableTrail)
+            .as("step 8: a variable's trail names its environment bare beneath the project")
+            .contains(PREFIX + "webshop", PREFIX + "production");
+        assertThat(variableTrail).as("step 8: the environment's crumb never repeats its project")
             .doesNotContain(PREFIX + "webshop" + EnvironmentModel.PROJECT_SEPARATOR);
 
         // 9. A member's name opens that person's page for an operator who may open it, and never for a tenant whose

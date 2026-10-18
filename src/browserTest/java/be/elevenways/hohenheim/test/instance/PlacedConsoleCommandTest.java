@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.testsupport.text.InOrder;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
@@ -107,8 +108,8 @@ class PlacedConsoleCommandTest {
                 FakeNativeDaemons.CONSOLE_STREAMS.get(FakeNativeDaemons.handleOf(instanceId));
             assertThat(stream).as("step 2: the console session is open").isNotNull();
             Poll.until("step 2: both lines reached stdin", WAIT, () -> stream.stdinWrites().size() >= 2);
-            assertThat(String.join("", stream.stdinWrites())).as("step 2: each line once, in order")
-                .containsSubsequence("say admin", "say api");
+            InOrder.assertThat(String.join("", stream.stdinWrites())).as("step 2: each line once, in order")
+                .contains("say admin", "say api");
             assertThat(consoleRows(instanceId)).as("step 2: one activity row per line").isEqualTo(2);
 
             // 3. A schedule step sends its stored line through the same operation, recorded the same way.

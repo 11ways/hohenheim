@@ -22,7 +22,6 @@ import be.elevenways.hohenheim.server.instance.InstanceStats;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
-import be.elevenways.hohenheim.test.InOrder;
 import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
 import be.elevenways.hohenheim.test.RecordedChanges;
@@ -30,6 +29,7 @@ import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.testsupport.text.InOrder;
 import be.elevenways.zenit.cms.common.resource.RecordHealth;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.history.Change;
@@ -102,8 +102,8 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
 
             // 1d. The trail reads Apps / the site: the Apps list shows the site's row, so its own list is never a crumb
             //     ("Apps / Sites / site" was a defect fixed on purpose).
-            assertThat(trailOf(page)).as("step 1d: the trail leads to Apps, then names the site")
-                .containsSubsequence("\"/admin/" + HohenheimSlugs.APPS + "\"", "app-journey-healthy");
+            InOrder.assertThat(trailOf(page)).as("step 1d: the trail leads to Apps, then names the site")
+                .contains("\"/admin/" + HohenheimSlugs.APPS + "\"", "app-journey-healthy");
             assertThat(trailOf(page)).as("step 1d: and never through the Sites list")
                 .doesNotContain("\"/admin/" + HohenheimSlugs.SITES + "\"");
 
@@ -506,12 +506,13 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
             //    and Started names no older start beside it.
             stopped(id, HohenheimActivityAction.WORKLOAD_START_FAILED, "image app-journey:missing was not found");
             String failed = adminGet("/admin/instances/" + id + "/page/overview").body();
-            assertThat(failed).as("step 2: the band reads a failed start in words, the failure's text after them")
+            assertThat(failed).as("step 2: the band reads a failed start in words")
                 .contains("Could not start")
-                .containsPattern(InOrder.of("It never got to run.",
-                    "Technically: image app-journey:missing was not found"))
                 .doesNotContain("What refused it")
                 .doesNotContain("Stopped after an error");
+            InOrder.assertThat(failed)
+                .as("step 2: the band reads a failed start in words, the failure's text after them")
+                .contains("It never got to run.", "Technically: image app-journey:missing was not found");
             // A record left claiming running beside that failed start still names no start.
             status(id, InstanceModel.STATUS_RUNNING);
             assertThat(adminGet("/admin/instances/" + id + "/page/overview").body())

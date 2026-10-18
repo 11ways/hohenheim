@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.protoblast.testsupport.text.InOrder;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.Test;
@@ -42,8 +43,8 @@ class RecordTabSetJourneyTest extends HohenheimTestBase {
             int more = overview.indexOf("cms-record-tabs-more");
             assertThat(more).as("step 1: the strip renders its More menu").isGreaterThan(-1);
             String strip = overview.substring(overview.indexOf("cms-record-tabs"), more);
-            assertThat(strip).as("step 1: overview, console, files, metrics and backups stay on the strip")
-                .containsSubsequence(record + "/page/overview", record + "/page/console", record + "/page/files",
+            InOrder.assertThat(strip).as("step 1: overview, console, files, metrics and backups stay on the strip")
+                .contains(record + "/page/overview", record + "/page/console", record + "/page/files",
                     record + "/page/stats", record + "/page/backups");
             assertThat(strip).as("step 1: the Metrics tab is called that")
                 .contains("Metrics");
@@ -148,8 +149,8 @@ class RecordTabSetJourneyTest extends HohenheimTestBase {
             // Bounded to the strip itself: the command palette later in the page names the Domains cluster.
             int stripStart = overview.indexOf("cms-record-tabs");
             String strip = overview.substring(stripStart, overview.indexOf("</pl-scroll-nav>", stripStart));
-            assertThat(strip).as("step 2: overview, addresses and protection, in that order")
-                .containsSubsequence(siteRecord + "/page/overview", siteRecord + "/page/" + SiteParts.DOMAINS_TAB,
+            InOrder.assertThat(strip).as("step 2: overview, addresses and protection, in that order")
+                .contains(siteRecord + "/page/overview", siteRecord + "/page/" + SiteParts.DOMAINS_TAB,
                     siteRecord + "/page/" + HohenheimSlugs.PROTECTED_PATHS);
             assertThat(strip).as("step 2: the tabs read as the overview's cards do")
                 .contains("Addresses").contains("Protection")
