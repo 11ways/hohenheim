@@ -359,9 +359,12 @@ tasks.named('browserTest') {
     }
     filter.failOnNoMatchingTests = false
     maxParallelForks = browserTestForks
-    // Gradle's Test default is 512m; the build lane buffers an image tar through heap
-    // (bounded by builds.max_artifact_mb), so a realistic artifact needs real headroom.
-    maxHeapSize = '2g'
+    // AIDEV-NOTE: 1g, measured (2026-10-18, class-level runs at 2g vs 1g on the same classes): this lane peaked at
+    // 931 MB used / 1248 committed under -Xmx2g and at 532 used / 646 committed under -Xmx1g, total GC time 1.34s vs
+    // 1.41s, no OOM. The heap is what zenit-dev's fork plan charges per fork, so an unused gigabyte costs a fork.
+    // The build lane buffers an image tar through heap (bounded by builds.max_artifact_mb), but the classes that
+    // build real images are live classes of browserTestSolo, which keeps 2g; no shared-server class builds one.
+    maxHeapSize = '1g'
     // AIDEV-NOTE: a task timeout KILLS workers mid-test and Gradle then reports the
     // killed test as SKIPPED with no message (observed 2026-08-10: the per-class-JVM lane
     // hit 30m, RestoreCapacityLiveTest was killed mid-flight, its finally never ran and
@@ -436,8 +439,9 @@ task browserTestStandalone(type: Test) {
     }
     filter.failOnNoMatchingTests = false
     maxParallelForks = browserTestForks
-    // See browserTest: the buffered artifact read outgrows Gradle's 512m default.
-    maxHeapSize = '2g'
+    // See browserTest: 1g, measured (peak 597 MB used under 2g, 552 under 1g; GC 0.65s vs 0.48s). Live classes,
+    // which build real images, never run here ('slow' is excluded structurally).
+    maxHeapSize = '1g'
     // See browserTest for the derivation; the 2026-08-10 kill happened in THIS task.
     timeout = java.time.Duration.ofMinutes(60)
 
@@ -491,7 +495,8 @@ task browserTestSolo(type: Test) {
     }
     filter.failOnNoMatchingTests = false
     maxParallelForks = browserTestForks
-    // See browserTest: the buffered artifact read outgrows Gradle's 512m default.
+    // 2g, unlike the other two lanes: `--all` runs the live build classes here, and their image tar is read through
+    // heap up to builds.max_artifact_mb (1024 MiB by default), past Gradle's 512m default and past 1g.
     maxHeapSize = '2g'
     // AIDEV-NOTE: a worker per class. The lane's old "flat ~65s" (measured 2026-08-12 and
     // blamed on Gradle's worker restart cycle) was a worker per class FILE of the whole source
