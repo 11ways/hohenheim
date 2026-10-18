@@ -585,14 +585,27 @@ public final class ReleaseEngine {
                 .orderBy(ReleaseOperationModel.ID, SortOrder.ASC)
                 .all()) {
             Integer retiredId = op.get(ReleaseOperationModel.RETIRED_INSTANCE_ID);
-            completeDrain(applicationId, op, retiredId != null ? retiredId : -1,
+            drain(applicationId, op, retiredId != null ? retiredId : -1,
                 servingImageOf(applicationId), "superseded by a newer operation; drain completed early");
+            // AIDEV-NOTE: settled AT ONCE, never after the release like an operation's own outcome. This drain belongs
+            // to an EARLIER operation, and the operation running now is about to swap: an earlier one still reading
+            // draining once this one let go would be drained again by the next operation, which reclaims every
+            // retired release but this earlier one's -- the rollback target this swap just retained.
+            settle(stamp(op), ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), null,
+                "release complete", Now.instant());
         }
     }
 
-    /** The shared drain completion: stop retained, free its kept ports, reclaim older, prune, succeed. */
+    /** The drain completing its own operation: drained under the claim, succeeded once the claim is let go. */
     private static void completeDrain(int applicationId, @NonNull Row op, int retiredId,
                                       @NonNull String servingImage, @NonNull String how) {
+        drain(applicationId, op, retiredId, servingImage, how);
+        finish(op, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), null, "release complete");
+    }
+
+    /** The shared drain work: stop retained, free its kept ports, reclaim older, prune, sweep link networks. */
+    private static void drain(int applicationId, @NonNull Row op, int retiredId,
+                              @NonNull String servingImage, @NonNull String how) {
         try {
             Row retired = Models.get(InstanceModel.class).findById(retiredId);
             if (retired != null
@@ -622,7 +635,6 @@ public final class ReleaseEngine {
         } catch (RuntimeException e) {
             step(op, "WARNING: database link-network sweep failed: " + HohenheimViolations.reasonOf(e));
         }
-        finish(op, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), null, "release complete");
     }
 
     /**
@@ -1092,10 +1104,13 @@ public final class ReleaseEngine {
     }
 
     private static void step(@NonNull RecordStamp stamp, @NonNull String line) {
+        staged(stamp, line, Now.instant()).write();
+    }
+
+    /** Stage a timestamped step line onto the log the row carries. */
+    private static @NonNull RecordStamp staged(@NonNull RecordStamp stamp, @NonNull String line, @NonNull Instant at) {
         String existing = stamp.row().get(ReleaseOperationModel.STEP_LOG);
-        stamp.set(ReleaseOperationModel.STEP_LOG,
-                (existing == null ? "" : existing) + Now.instant() + " " + line + "\n")
-            .write();
+        return stamp.set(ReleaseOperationModel.STEP_LOG, (existing == null ? "" : existing) + at + " " + line + "\n");
     }
 
     private static void transition(@NonNull Row op, @NonNull String status,
@@ -1113,9 +1128,30 @@ public final class ReleaseEngine {
         finish(stamp(op), status, failureReason, line);
     }
 
+    /**
+     * Stamp the operation's own outcome once its application's claim is let go
+     * ({@link InstanceOperationLock#afterRelease}), timed when the work ended.
+     */
     private static void finish(@NonNull RecordStamp stamp, @NonNull String status,
                                @Nullable String failureReason, @NonNull String line) {
         Instant finished = Now.instant();
+        Integer applicationId = stamp.row().get(ReleaseOperationModel.FOR_ID);
+        Runnable outcome = () -> settle(stamp, status, failureReason, line, finished);
+        if (applicationId == null
+                || !InstanceModel.MODEL_ID.toString().equals(stamp.row().get(ReleaseOperationModel.FOR_MODEL))) {
+            outcome.run();
+            return;
+        }
+        InstanceOperationLock.production().afterRelease(applicationId, outcome);
+    }
+
+    /**
+     * Write the terminal stamp while the operation still reads the status this thread left it in; a newer operation
+     * that settled it meanwhile ({@link #completePendingDrains}) keeps its own stamp, alert and prune.
+     */
+    private static void settle(@NonNull RecordStamp stamp, @NonNull String status, @Nullable String failureReason,
+                               @NonNull String line, @NonNull Instant finished) {
+        String inFlight = stamp.row().get(ReleaseOperationModel.STATUS);
         stamp.set(ReleaseOperationModel.STATUS, status)
             .set(ReleaseOperationModel.FAILURE_REASON, failureReason)
             .set(ReleaseOperationModel.FINISHED_AT, finished);
@@ -1124,7 +1160,9 @@ public final class ReleaseEngine {
             stamp.set(ReleaseOperationModel.DURATION_MS,
                 (int) (finished.toEpochMilli() - started.toEpochMilli()));
         }
-        step(stamp, line);
+        if (staged(stamp, line, finished).writeWhile(ReleaseOperationModel.STATUS.eq(inFlight)) == 0) {
+            return;
+        }
         if (ReleaseOperationModel.LIFECYCLE.is(status, OperationStatus.FAILED)) {
             alertFailed(stamp.row(), failureReason);
         }

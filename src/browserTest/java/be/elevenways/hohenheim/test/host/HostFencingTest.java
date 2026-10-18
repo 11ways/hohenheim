@@ -131,7 +131,7 @@ class HostFencingTest {
             // Controller B: a RIVAL identity -- its own coordinator, row-arbitrated.
             Leases rivalCoordinator = Leases.independent(datasource);
             InstanceService controllerB = new InstanceService(
-                new HostLeases(d -> rivalCoordinator, Duration.ofSeconds(30)), () -> {});
+                new HostLeases(d -> rivalCoordinator, Leases.DEFAULT_TTL), () -> {});
 
             AtomicReference<Throwable> aOutcome = new AtomicReference<>();
             // The raw thread carries the test's operator identity, as a request's continuation

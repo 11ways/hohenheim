@@ -4,6 +4,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.query.QueryBuilder;
+import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.orm.query.criteria.EqualsCriteria;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -66,12 +67,30 @@ public final class RecordStamp {
      * @throws IllegalStateException when nothing was staged
      */
     public int write() {
+        return this.persist(null);
+    }
+
+    /**
+     * Persist the staged columns only while the record still matches {@code still}; the Row keeps the staged values
+     * either way.
+     *
+     * @return rows matched -- 0 when the record is gone or no longer matches
+     * @throws IllegalStateException when nothing was staged
+     */
+    public int writeWhile(@NonNull Criteria still) {
+        return this.persist(still);
+    }
+
+    private int persist(@Nullable Criteria still) {
         if (this.assignments.isEmpty()) {
             throw new IllegalStateException("RecordStamp.write() needs at least one set()");
         }
         Field<?, ?> primaryKey = this.model.getPrimaryKeyField();
         QueryBuilder<Row> query = this.model.find()
             .where(identifies(primaryKey, this.row.get(primaryKey.getName())));
+        if (still != null) {
+            query = query.and(still);
+        }
         for (Map.Entry<Field<?, ?>, Object> assignment : this.assignments.entrySet()) {
             query = query.assign(assignment.getKey(), assignment.getValue());
         }

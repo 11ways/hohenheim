@@ -19,6 +19,7 @@ import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
+import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
@@ -317,6 +318,49 @@ class ApplicationReleaseTest {
                 Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Capacity.HOST_MEMORY_RESERVE_MB, savedReserve);
                 Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Capacity.MEMORY_OVERCOMMIT_RATIO, savedRatio);
                 HostFixtures.makeLocalPlaceable(16 * 1024);
+            }
+        });
+    }
+
+    /**
+     * A release reads finished only once its operation let go of the application, so a client that waits for
+     * succeeded and then rolls back is never refused by the release it just read about.
+     */
+    @Test
+    void aReleaseReadsFinishedOnlyOnceItsOperationLetGoOfTheApplication() {
+        Db.run(datasource, () -> {
+            int applicationId = application("settling", "v1");
+            try {
+                // 1. A deploy verb holds the application around its converge, as ApplicationDeploys and
+                //    ArtifactDeploys do: while the verb still holds it, the release it made reads in flight.
+                InstanceOperationLock.production().exclusive(applicationId, InstanceOperationLock.Contention.QUEUE,
+                    () -> {
+                        ApplicationReleases.converge(applicationId, Map.of());
+                        assertThat(ReleaseOperationModel.IN_FLIGHT_STATUSES)
+                            .as("step 1: a release whose verb still holds the application has not finished")
+                            .contains((String) latestOp(applicationId).get(ReleaseOperationModel.STATUS));
+                    });
+
+                // 2. The verb let go: the release reads succeeded, and nothing holds the application.
+                assertThat(latestOp(applicationId).get(ReleaseOperationModel.STATUS))
+                    .as("step 2: succeeded once the verb let go")
+                    .isEqualTo(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED));
+                assertThat(InstanceOperationLock.production().runIfIdle(applicationId, () -> { }))
+                    .as("step 2: and the application is idle").isTrue();
+
+                // 3. A second release flips and drains on its own thread. A client waits for it to read succeeded
+                //    and rolls back at once: the rollback, which refuses a busy application, is admitted.
+                setSettings(applicationId, "v2");
+                ApplicationReleases.converge(applicationId, Map.of());
+                await("step 3: the second release reads succeeded after its drain", () ->
+                    ReleaseOperationModel.LIFECYCLE.is(latestOp(applicationId).get(ReleaseOperationModel.STATUS),
+                        OperationStatus.SUCCEEDED));
+                ReleaseEngine.rollback(applicationId);
+                assertThat(latestOp(applicationId).get(ReleaseOperationModel.KIND))
+                    .as("step 3: the rollback ran").isEqualTo(ReleaseOperationModel.KIND_ROLLBACK);
+                await("step 3: the rollback's drain settles", () -> ReleaseSettling.settled(applicationId));
+            } finally {
+                ApplicationReleases.destroyFor(applicationId);
             }
         });
     }

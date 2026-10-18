@@ -47,7 +47,7 @@ class BootSettleLeaseTest {
     @Test
     void aSettleBorrowsTheHostLeaseAndSkipsAHostARivalHolds() {
         Db.run(datasource, () -> {
-            HostLeases mine = new HostLeases(Leases::of, Duration.ofSeconds(30));
+            HostLeases mine = new HostLeases(Leases::of, Leases.DEFAULT_TTL);
             AtomicInteger ran = new AtomicInteger();
 
             // 1. THE CLOCK, which is the second guard and only judges rows this controller
@@ -95,7 +95,7 @@ class BootSettleLeaseTest {
             //    timestamps belong to, and the one whose live operation must not be
             //    "recovered" out from under it.
             Leases rivalCoordinator = Leases.independent(datasource);
-            HostLeases rival = new HostLeases(d -> rivalCoordinator, Duration.ofSeconds(30));
+            HostLeases rival = new HostLeases(d -> rivalCoordinator, Leases.DEFAULT_TTL);
             rival.requireFence(HOST);
             // The skip comes once the controller's host-lease wait passed, on the moved clock.
             assertThat(outwaitedHostLease(() -> BootSettle.underBorrowedHostLease(mine, HOST, ran::incrementAndGet)))

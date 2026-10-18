@@ -200,9 +200,9 @@ class InstanceOperationSerializationTest {
         int id = record[0];
         Leases crashedCoordinator = Leases.independent(datasource);
         Leases rivalCoordinator = Leases.independent(datasource);
-        HostLeases first = new HostLeases(Leases::of, Duration.ofSeconds(30));
+        HostLeases first = new HostLeases(Leases::of, Leases.DEFAULT_TTL);
         HostLeases crashed = new HostLeases(d -> crashedCoordinator, Duration.ofSeconds(1));
-        HostLeases rival = new HostLeases(d -> rivalCoordinator, Duration.ofSeconds(30));
+        HostLeases rival = new HostLeases(d -> rivalCoordinator, Leases.DEFAULT_TTL);
 
         // 1. While one operation holds the record, a second is refused at once, and a queued one runs only after the
         //    first released it.

@@ -197,7 +197,7 @@ class InstanceConsoleGenerationTest {
             Object session = InstanceConsoles.ensureSession(instanceId);
             observer.release(hostId);
             Leases independent = Leases.independent(datasource);
-            HostLeases winner = new HostLeases(ignored -> independent, Duration.ofSeconds(30));
+            HostLeases winner = new HostLeases(ignored -> independent, Leases.DEFAULT_TTL);
             List<String> logged = new CopyOnWriteArrayList<>();
             BlastLog.LogSink previous = BlastLog.getLogSink();
             try {

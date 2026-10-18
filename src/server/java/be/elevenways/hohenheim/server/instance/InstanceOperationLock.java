@@ -134,10 +134,8 @@ public final class InstanceOperationLock {
         if (hold == null) {
             throw refusalFor(instanceId);
         }
-        try {
+        try (hold) {
             return body.get();
-        } finally {
-            hold.close();
         }
     }
 
@@ -163,12 +161,29 @@ public final class InstanceOperationLock {
         if (hold == null) {
             return false;
         }
-        try {
+        try (hold) {
             body.run();
             return true;
-        } finally {
-            hold.close();
         }
+    }
+
+    /**
+     * Runs {@code publish} once this thread's operation on the record has let go of it, at once when it holds none:
+     * the way an operation states its outcome, so a caller that reads the outcome and acts is never refused by the
+     * operation it just read about.
+     *
+     * AIDEV-NOTE: a terminal status written INSIDE the claim was visible before the claim's release, and a client that
+     * polled a release until it read succeeded and then rolled back met instance_operation_in_progress from that very
+     * release (ApiWireSitesTest on a slow host). Between the release and the publication the record reads idle with
+     * the operation still in flight, which every reader treats as busy-or-recoverable; the other order is a lie.
+     */
+    public void afterRelease(int instanceId, @NonNull Runnable publish) {
+        ClaimedRows<Integer>.Held hold = this.rows.heldHere(instanceId);
+        if (hold == null) {
+            publish.run();
+            return;
+        }
+        hold.afterRelease(publish);
     }
 
     /**
