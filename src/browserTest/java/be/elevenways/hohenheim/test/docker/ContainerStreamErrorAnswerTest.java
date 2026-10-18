@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.docker;
 
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.UnixSocketDockerTransport;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -49,6 +50,7 @@ class ContainerStreamErrorAnswerTest {
     private Path directory;
     private ServerSocketChannel server;
     private final List<SocketChannel> accepted = new CopyOnWriteArrayList<>();
+    private final JobRunner daemons = JobRunner.create("fake-docker-keepalive");
 
     @BeforeEach
     void listen() throws IOException {
@@ -64,6 +66,7 @@ class ContainerStreamErrorAnswerTest {
             channel.close();
         }
         this.server.close();
+        this.daemons.shutdownNow();
         Files.deleteIfExists(this.directory.resolve("docker.sock"));
         Files.deleteIfExists(this.directory);
     }
@@ -153,7 +156,7 @@ class ContainerStreamErrorAnswerTest {
      */
     private CountDownLatch answerOnce(String answer) {
         CountDownLatch released = new CountDownLatch(1);
-        Thread daemon = new Thread(() -> {
+        this.daemons.startThread(() -> {
             try {
                 SocketChannel channel = this.server.accept();
                 this.accepted.add(channel);
@@ -173,9 +176,7 @@ class ContainerStreamErrorAnswerTest {
                 // the test tore the server down, or the client reset the connection
                 released.countDown();
             }
-        }, "fake-docker-keepalive");
-        daemon.setDaemon(true);
-        daemon.start();
+        });
         return released;
     }
 

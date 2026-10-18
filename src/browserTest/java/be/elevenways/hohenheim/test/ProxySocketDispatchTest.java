@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -66,11 +67,12 @@ class ProxySocketDispatchTest {
         ServerSocketChannel unixServer = ServerSocketChannel.open(StandardProtocolFamily.UNIX);
         unixServer.bind(UnixDomainSocketAddress.of(sock.toString()));
         AtomicBoolean running = new AtomicBoolean(true);
-        Thread.ofVirtual().start(() -> {
+        JobRunner upstream = JobRunner.create("proxy-socket-upstream");
+        upstream.startThread(() -> {
             while (running.get()) {
                 try {
                     SocketChannel conn = unixServer.accept();
-                    Thread.ofVirtual().start(() -> serveOnce(conn, body));
+                    upstream.startThread(() -> serveOnce(conn, body));
                 } catch (IOException e) {
                     return;   // server closed
                 }
@@ -96,6 +98,7 @@ class ProxySocketDispatchTest {
         } finally {
             running.set(false);
             unixServer.close();
+            upstream.shutdownNow();
         }
     }
 

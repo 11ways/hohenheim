@@ -11,7 +11,7 @@ import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.thread.ExecutionContext;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -25,11 +25,10 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -131,18 +130,22 @@ class HostRemovalAgreementTest {
         // 2. Eight first calls behind one barrier.
         int racers = 8;
         CyclicBarrier start = new CyclicBarrier(racers);
-        ExecutorService pool = Executors.newFixedThreadPool(racers);
-        List<Future<Integer>> calls = new ArrayList<>();
+        JobRunner racing = JobRunner.create("local-host-racers");
+        List<CompletableFuture<Integer>> calls = new ArrayList<>();
         try {
-            ExecutionContext.Snapshot operator = ExecutionContext.capture();
             for (int i = 0; i < racers; i++) {
-                calls.add(pool.submit(() -> {
-                    start.await(10, TimeUnit.SECONDS);
-                    return operator.supply(() -> Db.supply(datasource, ServerModel::localServerId));
-                }));
+                AtomicReference<Integer> id = new AtomicReference<>();
+                calls.add(racing.runAsync(() -> {
+                    try {
+                        start.await(10, TimeUnit.SECONDS);
+                    } catch (Exception barrier) {
+                        throw new IllegalStateException("the racers never met at the barrier", barrier);
+                    }
+                    id.set(Db.supply(datasource, ServerModel::localServerId));
+                }).thenApply(done -> id.get()));
             }
             Set<Integer> ids = new HashSet<>();
-            for (Future<Integer> call : calls) {
+            for (CompletableFuture<Integer> call : calls) {
                 ids.add(call.get(30, TimeUnit.SECONDS));
             }
 
@@ -152,7 +155,7 @@ class HostRemovalAgreementTest {
                     .where(ServerModel.NAME.eq(ServerModel.LOCAL_HOST_NAME)).count()))
                 .as("step 3: and exactly one local host row was written").isEqualTo(1L);
         } finally {
-            pool.shutdownNow();
+            racing.shutdownNow();
         }
     }
 

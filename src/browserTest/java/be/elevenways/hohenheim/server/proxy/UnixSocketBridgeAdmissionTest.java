@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.server.util.LoopbackPeers;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -40,13 +41,14 @@ class UnixSocketBridgeAdmissionTest {
             + "\r\nConnection: close\r\n\r\n" + body;
         AtomicInteger requestsSeen = new AtomicInteger();
 
+        JobRunner upstream = JobRunner.create("bridge-admission-upstream");
         ServerSocketChannel unixServer = ServerSocketChannel.open(StandardProtocolFamily.UNIX);
         unixServer.bind(UnixDomainSocketAddress.of(sockPath.toString()));
-        Thread.ofVirtual().start(() -> {
+        upstream.startThread(() -> {
             while (true) {
                 try {
                     SocketChannel conn = unixServer.accept();
-                    Thread.ofVirtual().start(() -> {
+                    upstream.startThread(() -> {
                         try (conn) {
                             ByteBuffer request = ByteBuffer.allocate(4096);
                             if (conn.read(request) > 0) {
@@ -100,6 +102,7 @@ class UnixSocketBridgeAdmissionTest {
             }
         } finally {
             unixServer.close();
+            upstream.shutdownNow();
             Files.deleteIfExists(sockPath);
         }
     }

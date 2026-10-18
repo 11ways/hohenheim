@@ -22,6 +22,7 @@ import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.test.HardDeletes;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -52,7 +53,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -735,24 +738,25 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         capTenantAt(tenantAId, (int) used + 1);   // EXACTLY one remaining slot
 
         CyclicBarrier barrier = new CyclicBarrier(2);
-        List<Thread> threads = new ArrayList<>();
         Throwable[] failures = new Throwable[2];
-        for (int i = 0; i < 2; i++) {
-            int slot = i;
-            Thread worker = new Thread(() -> {
-                try {
-                    barrier.await();
-                    post(sessionA, csrfA, "/manage/databases/new",
-                        "name=race" + slot + "&engine=postgres");
-                } catch (Throwable error) {
-                    failures[slot] = error;
-                }
-            });
-            worker.start();
-            threads.add(worker);
-        }
-        for (Thread thread : threads) {
-            thread.join();
+        JobRunner racing = JobRunner.create("database-allocation-racers");
+        try {
+            CompletableFuture<?>[] racers = new CompletableFuture<?>[2];
+            for (int i = 0; i < 2; i++) {
+                int slot = i;
+                racers[slot] = racing.runAsync(() -> {
+                    try {
+                        barrier.await();
+                        post(sessionA, csrfA, "/manage/databases/new",
+                            "name=race" + slot + "&engine=postgres");
+                    } catch (Throwable error) {
+                        failures[slot] = error;
+                    }
+                });
+            }
+            CompletableFuture.allOf(racers).get(60, TimeUnit.SECONDS);
+        } finally {
+            racing.shutdownNow();
         }
         assertThat(failures).as("step 1: both submits completed").containsOnlyNulls();
 

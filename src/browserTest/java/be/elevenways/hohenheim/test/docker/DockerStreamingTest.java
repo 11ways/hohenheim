@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.docker.DockerTransport;
 import be.elevenways.hohenheim.server.docker.ProcessDockerTransport;
 import be.elevenways.hohenheim.server.runtime.ConsoleStream;
 import be.elevenways.hohenheim.test.live.LiveLane;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.time.Pace;
 import org.junit.jupiter.api.Test;
@@ -276,17 +277,21 @@ class DockerStreamingTest {
         assertThat(connection.written.toString(StandardCharsets.ISO_8859_1))
             .as("step 4: stdin write reached the wire").isEqualTo("say hi\n");
 
-        Thread closer = new Thread(() -> {
-            try {
-                Pace.await(connection.blocked, Duration.ofSeconds(5));
-            } catch (Exception neverBlocked) {
-                // Closed all the same; the assertion below names the missing block.
-            }
-            stream.close();
-        });
-        closer.start();
-        assertThat(stream.next()).as("step 4: blocked next() unblocks to null").isNull();
-        closer.join(2000);
+        JobRunner closers = JobRunner.create("docker-stream-closer");
+        try {
+            CompletableFuture<Void> closer = closers.runOnThread(() -> {
+                try {
+                    Pace.await(connection.blocked, Duration.ofSeconds(5));
+                } catch (Exception neverBlocked) {
+                    // Closed all the same; the assertion below names the missing block.
+                }
+                stream.close();
+            });
+            assertThat(stream.next()).as("step 4: blocked next() unblocks to null").isNull();
+            closer.get(2, TimeUnit.SECONDS);
+        } finally {
+            closers.shutdownNow();
+        }
         assertThat(connection.blocked).as("step 4: the close came while next() blocked on the wire").isDone();
         assertThat(stream.termination()).as("step 4: our close is CONSUMER_CLOSED, not a"
             + " daemon failure").isEqualTo(ConsoleStream.Termination.CONSUMER_CLOSED);

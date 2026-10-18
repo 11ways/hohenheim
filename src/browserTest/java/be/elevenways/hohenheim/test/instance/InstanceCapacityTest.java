@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim.test.instance;
 
-import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -16,6 +15,7 @@ import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
@@ -36,7 +36,9 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -302,26 +304,27 @@ class InstanceCapacityTest {
         for (int i = 0; i < racers; i++) {
             failures[i] = new AtomicReference<>();
         }
-        List<Thread> threads = new ArrayList<>();
-        for (int i = 0; i < racers; i++) {
-            int slot = i;
-            // Wrapped so the racer acts as the test's operator, as a JobRunner job would.
-            Thread worker = new Thread(ExecutionContext.wrap(() -> {
-                try {
-                    barrier.await();
-                    Db.run(datasource, () -> {
-                        Models.get(InstanceModel.class)
-                            .save(newWorkload(alpha, "racer" + slot, 1024));
-                    });
-                } catch (Throwable refused) {
-                    failures[slot].set(refused);
-                }
-            }));
-            worker.start();
-            threads.add(worker);
-        }
-        for (Thread thread : threads) {
-            thread.join();
+        JobRunner racing = JobRunner.create("capacity-racers");
+        try {
+            CompletableFuture<?>[] runs = new CompletableFuture<?>[racers];
+            for (int i = 0; i < racers; i++) {
+                int slot = i;
+                // runAsync carries the test's operator into the racer, as any JobRunner job does.
+                runs[slot] = racing.runAsync(() -> {
+                    try {
+                        barrier.await();
+                        Db.run(datasource, () -> {
+                            Models.get(InstanceModel.class)
+                                .save(newWorkload(alpha, "racer" + slot, 1024));
+                        });
+                    } catch (Throwable refused) {
+                        failures[slot].set(refused);
+                    }
+                });
+            }
+            CompletableFuture.allOf(runs).get(60, TimeUnit.SECONDS);
+        } finally {
+            racing.shutdownNow();
         }
 
         Db.run(datasource, () -> {

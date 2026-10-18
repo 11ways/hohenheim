@@ -7,7 +7,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.protoblast.common.thread.ExecutionContext;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.revision.RevisionModel;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -21,8 +21,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Executors;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -144,12 +145,13 @@ class SecurityReportEnvTest {
         configureSpamservice();
         recordEnsures();
         int siteId = createSite("Env Concurrent");
-        var executor = Executors.newFixedThreadPool(8);
+        JobRunner callers = JobRunner.create("security-report-env-callers");
         try {
-            List<java.util.concurrent.Future<Map<String, String>>> calls = new ArrayList<>();
-            ExecutionContext.Snapshot operator = ExecutionContext.capture();
+            List<CompletableFuture<Map<String, String>>> calls = new ArrayList<>();
             for (int i = 0; i < 8; i++) {
-                calls.add(executor.submit(() -> operator.supply(() -> SecurityReportEnv.forSite(siteId))));
+                AtomicReference<Map<String, String>> env = new AtomicReference<>();
+                calls.add(callers.runAsync(() -> env.set(SecurityReportEnv.forSite(siteId)))
+                    .thenApply(done -> env.get()));
             }
             String canonical = null;
             for (var call : calls) {
@@ -162,7 +164,7 @@ class SecurityReportEnvTest {
                 .get(SiteModel.SECURITY_REPORT_TOKEN)).isEqualTo(canonicalKey);
             assertThat(ensured).allSatisfy(value -> assertThat(value).endsWith("|" + canonicalKey));
         } finally {
-            executor.shutdownNow();
+            callers.shutdownNow();
         }
     }
 

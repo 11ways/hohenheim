@@ -25,7 +25,7 @@ import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolvers;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.thread.ExecutionContext;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.notifications.server.transport.TransportTypes;
 import be.elevenways.zenit.notifications.DeliveryChannel;
@@ -248,21 +248,14 @@ class DnsFederationHealthTest {
         int peerId = transferPeer("notify-serial-peer", "127.0.0.1", secondary.port());
         int linkId = linkZonePeer(zoneId, peerId);
         AtomicLong announced = new AtomicLong(-1);
+        JobRunner senders = JobRunner.create("dns-notify-sender");
         try {
             // 1. The production wiring: the store hands the listener the published serial
             //    after the commit, and the NOTIFY leaves on ANOTHER thread, which holds
             //    none of the writer's transaction (JobRunner.fireAndForget in ServerMain).
             DnsZoneStore.INSTANCE.setOnZoneChanged((id, serial) -> {
                 announced.set(serial);
-                Thread sender = new Thread(ExecutionContext.wrap(
-                    () -> new DnsNotifier().notifyZonePeersBlocking(id, serial)));
-                sender.start();
-                try {
-                    sender.join();
-                }
-                catch (InterruptedException interrupted) {
-                    Thread.currentThread().interrupt();
-                }
+                senders.runAsync(() -> new DnsNotifier().notifyZonePeersBlocking(id, serial)).join();
             });
 
             // 2. The record write and the serial bump run inside ONE thread-bound
@@ -289,6 +282,7 @@ class DnsFederationHealthTest {
         }
         finally {
             DnsZoneStore.INSTANCE.setOnZoneChanged(null);
+            senders.shutdownNow();
             secondary.stop();
             Models.get(DnsZonePeerModel.class).find().where(DnsZonePeerModel.ZONE_ID.eq(zoneId)).delete();
             Models.get(DnsRecordModel.class).find().where(DnsRecordModel.ZONE_ID.eq(zoneId))

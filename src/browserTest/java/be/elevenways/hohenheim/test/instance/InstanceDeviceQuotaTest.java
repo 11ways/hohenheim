@@ -10,7 +10,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
-import be.elevenways.protoblast.common.thread.ExecutionContext;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.zenit.auth.cms.SubjectTag;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.PermissionGroupModel;
@@ -30,7 +30,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -132,23 +134,24 @@ class InstanceDeviceQuotaTest extends HohenheimTestBase {
         CyclicBarrier barrier = new CyclicBarrier(2);
         AtomicReference<Throwable>[] failures = new AtomicReference[] {
             new AtomicReference<>(), new AtomicReference<>()};
-        List<Thread> threads = new ArrayList<>();
-        for (int i = 0; i < 2; i++) {
-            int slot = i;
-            Thread worker = new Thread(ExecutionContext.wrap(() -> {
-                try {
-                    barrier.await();
-                    Models.get(InstanceDeviceModel.class)
-                        .save(diskRow(instanceId, NAME_PREFIX + "race" + slot, 2));
-                } catch (Throwable refused) {
-                    failures[slot].set(refused);
-                }
-            }));
-            worker.start();
-            threads.add(worker);
-        }
-        for (Thread thread : threads) {
-            thread.join();
+        JobRunner racing = JobRunner.create("disk-quota-racers");
+        try {
+            CompletableFuture<?>[] racers = new CompletableFuture<?>[2];
+            for (int i = 0; i < 2; i++) {
+                int slot = i;
+                racers[slot] = racing.runAsync(() -> {
+                    try {
+                        barrier.await();
+                        Models.get(InstanceDeviceModel.class)
+                            .save(diskRow(instanceId, NAME_PREFIX + "race" + slot, 2));
+                    } catch (Throwable refused) {
+                        failures[slot].set(refused);
+                    }
+                });
+            }
+            CompletableFuture.allOf(racers).get(60, TimeUnit.SECONDS);
+        } finally {
+            racing.shutdownNow();
         }
 
         List<Row> raceRows = Models.get(InstanceDeviceModel.class).find()

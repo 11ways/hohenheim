@@ -22,6 +22,7 @@ import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -36,11 +37,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -369,10 +368,11 @@ class IncusInstanceRuntimeLiveTest {
 
     /** Pull console output with a deadline; a silent console fails the assertion. */
     private static String pullText(ConsoleStream stream, long timeoutMs) {
-        ExecutorService pump = Executors.newSingleThreadExecutor();
+        JobRunner pump = JobRunner.create("console-pull");
         try {
-            Future<ConsoleStream.Chunk> next = pump.submit(stream::next);
-            ConsoleStream.Chunk chunk = next.get(timeoutMs, TimeUnit.MILLISECONDS);
+            AtomicReference<ConsoleStream.Chunk> pulled = new AtomicReference<>();
+            pump.runOnThread(() -> pulled.set(stream.next())).get(timeoutMs, TimeUnit.MILLISECONDS);
+            ConsoleStream.Chunk chunk = pulled.get();
             return chunk == null ? "" : new String(chunk.data(), StandardCharsets.UTF_8);
         } catch (TimeoutException silent) {
             return "";

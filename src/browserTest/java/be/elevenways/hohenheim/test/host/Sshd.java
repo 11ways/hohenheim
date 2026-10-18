@@ -1,10 +1,13 @@
 package be.elevenways.hohenheim.test.host;
 
-import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.protoblast.common.time.Backoff;
 import be.elevenways.protoblast.common.time.Retry;
+import be.elevenways.protoblast.server.process.RunningProcess;
+import be.elevenways.protoblast.server.process.Subprocess;
+import be.elevenways.protoblast.server.process.SubprocessException;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
@@ -12,7 +15,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * A throwaway OpenSSH server on loopback whose host key a test can replace and whose
@@ -36,7 +42,7 @@ public final class Sshd {
 
     private final Path directory;
     private final int port;
-    private Process process;
+    private RunningProcess process;
 
     private Sshd(Path directory, int port) {
         this.directory = directory;
@@ -113,30 +119,48 @@ public final class Sshd {
     private void spawn() throws IOException {
         // AIDEV-NOTE: wait for the port to go QUIET first. sshd's per-connection
         // children inherit the listening socket, so a lingering child keeps the port
-        // bound after the master is killed; the replacement master then loses the
+        // bound after the master is gone; the replacement master then loses the
         // bind while the port still ACCEPTS nothing, which reaches the test as an
-        // empty-stderr "unreachable" instead of the failure it is measuring.
+        // empty-stderr "unreachable" instead of the failure it is measuring. The stop
+        // takes the whole tree now, so this wait normally passes on its first probe.
         //
-        // AIDEV-NOTE: -e sends sshd's log to the captured file, and the server is up only
+        // AIDEV-NOTE: -e sends sshd's log into the merged output, and the server is up only
         // once THAT process says it listens on OUR port. A bare TCP connect used to be the
         // readiness check, and it succeeds just as well against whichever process took the
         // port after the probe closed it; sshd then dies with "Address already in use"
         // and the test talks to a stranger. A lost bind is reported as PortTaken so
         // start() can retry on a fresh port.
         waitUntilClosed();
-        Path log = this.directory.resolve("sshd.log");
-        Process started = new ProcessBuilder("/usr/sbin/sshd", "-D", "-e",
-            "-f", this.directory.resolve("sshd_config").toString())
-            .redirectErrorStream(true)
-            .redirectOutput(log.toFile())
-            .start();
+        SshdLog log = new SshdLog("Server listening on 127.0.0.1 port " + this.port);
+        RunningProcess started;
+        try {
+            started = Subprocess.of("/usr/sbin/sshd", "-D", "-e",
+                    "-f", this.directory.resolve("sshd_config").toString())
+                .mergeStderr()
+                .stdoutTo(log)
+                .start();
+        } catch (SubprocessException refused) {
+            throw new IOException(refused.getMessage(), refused);
+        }
         this.process = started;
-        String listening = "Server listening on 127.0.0.1 port " + this.port;
-        Poll.until("sshd to listen on 127.0.0.1:" + this.port + " or exit", Duration.ofSeconds(10),
-            Duration.ofMillis(50), () -> !started.isAlive() || readLog(log).contains(listening));
+        try {
+            CompletableFuture.anyOf(log.listening, started.completion().toFuture()).get(10, TimeUnit.SECONDS);
+        } catch (TimeoutException silent) {
+            this.stop();
+            throw new IOException("sshd neither listened on 127.0.0.1:" + this.port + " nor exited in 10 s: "
+                + log.text(), silent);
+        } catch (InterruptedException e) {
+            this.stop();
+            Thread.currentThread().interrupt();
+            throw new IOException("interrupted waiting for sshd", e);
+        } catch (ExecutionException e) {
+            this.stop();
+            throw new IOException("sshd's start could not be observed", e.getCause());
+        }
         if (!started.isAlive()) {
+            started.await();
             this.process = null;
-            String output = readLog(log);
+            String output = log.text();
             if (output.contains("Address already in use") || output.contains("Cannot bind")) {
                 throw new PortTaken("port " + this.port + " was taken before sshd bound it: "
                     + output.trim());
@@ -146,11 +170,43 @@ public final class Sshd {
         waitUntilListening();
     }
 
-    private static String readLog(Path log) {
-        try {
-            return Files.readString(log, StandardCharsets.UTF_8);
-        } catch (IOException notYet) {
-            return "";
+    /**
+     * sshd's merged output: a bounded tail for failure messages and the moment its listening line arrived.
+     *
+     * AIDEV-NOTE: bytes are kept as ISO-8859-1 chars, one per byte, so a needle split across two writes still
+     * matches; text() decodes the tail as UTF-8 again.
+     */
+    private static final class SshdLog extends OutputStream {
+
+        private static final int TAIL_LIMIT = 64 * 1024;
+
+        private final String needle;
+        private final StringBuilder tail = new StringBuilder();
+        final CompletableFuture<Void> listening = new CompletableFuture<>();
+
+        SshdLog(String needle) {
+            this.needle = needle;
+        }
+
+        @Override
+        public void write(int b) {
+            this.write(new byte[] {(byte) b}, 0, 1);
+        }
+
+        @Override
+        public synchronized void write(byte[] bytes, int offset, int length) {
+            int from = Math.max(0, this.tail.length() - this.needle.length());
+            this.tail.append(new String(bytes, offset, length, StandardCharsets.ISO_8859_1));
+            if (!this.listening.isDone() && this.tail.indexOf(this.needle, from) >= 0) {
+                this.listening.complete(null);
+            }
+            if (this.tail.length() > TAIL_LIMIT) {
+                this.tail.delete(0, this.tail.length() - TAIL_LIMIT);
+            }
+        }
+
+        synchronized String text() {
+            return new String(this.tail.toString().getBytes(StandardCharsets.ISO_8859_1), StandardCharsets.UTF_8);
         }
     }
 
@@ -224,27 +280,15 @@ public final class Sshd {
         if (this.process == null) {
             return;
         }
-        this.process.destroyForcibly();
-        try {
-            this.process.waitFor(10, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        this.process.close();
         this.process = null;
     }
 
     private static String run(List<String> argv) {
         try {
-            Process process = new ProcessBuilder(argv).redirectErrorStream(true).start();
-            String output = new String(process.getInputStream().readAllBytes(),
-                StandardCharsets.UTF_8);
-            process.waitFor(30, TimeUnit.SECONDS);
-            return output;
+            return Subprocess.of(argv).mergeStderr().timeout(Duration.ofSeconds(30)).runChecked().stdout().text();
         } catch (IOException e) {
             throw new IllegalStateException("could not run " + argv, e);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("interrupted running " + argv, e);
         }
     }
 }

@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.live.LiveLane;
-import be.elevenways.protoblast.common.thread.ExecutionContext;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -134,16 +134,15 @@ class HostFencingTest {
                 new HostLeases(d -> rivalCoordinator, Leases.DEFAULT_TTL), () -> {});
 
             AtomicReference<Throwable> aOutcome = new AtomicReference<>();
-            // The raw thread carries the test's operator identity, as a request's continuation
-            // carries its caller: bare, the fail-closed gates refuse the deploy outright.
-            Thread aThread = new Thread(ExecutionContext.wrap(() -> {
-                Db.run(datasource, () ->
-                    aOutcome.set(catchThrowable(() -> controllerA.deploy(id))));
-            }), "controller-a");
+            // A runner's thread carries the test's operator identity, as a request's continuation carries its
+            // caller: bare, the fail-closed gates refuse the deploy outright. A platform thread
+            // (startBlockingThread): the deploy waits for SQLite's write lock in the driver's native code.
+            JobRunner controllers = JobRunner.create("controller-a");
 
             try {
                 // 1. A deploys and STALLS after create+start, before its outcome write.
-                aThread.start();
+                Thread aThread = controllers.startBlockingThread(() -> Db.run(datasource, () ->
+                    aOutcome.set(catchThrowable(() -> controllerA.deploy(id)))));
                 boolean stalled = false;
                 for (int wait = 0; wait < 600 && !stalled && aThread.isAlive(); wait++) {
                     stalled = aStalled.await(200, TimeUnit.MILLISECONDS);
@@ -226,6 +225,7 @@ class HostFencingTest {
                 throw new RuntimeException(e);
             } finally {
                 resumeA.countDown();
+                controllers.shutdownNow();
                 cleanup(docker, handle);
             }
         });

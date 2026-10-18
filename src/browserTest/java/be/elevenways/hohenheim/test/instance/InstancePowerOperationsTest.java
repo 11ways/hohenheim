@@ -32,7 +32,7 @@ import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
-import be.elevenways.protoblast.common.thread.ExecutionContext;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.zenit.common.security.SystemPurpose;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -73,15 +73,16 @@ import be.elevenways.zenit.server.operation.OperationRequest;
 import be.elevenways.zenit.server.task.record.RecordSchedules;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Proxy;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -105,6 +106,9 @@ class InstancePowerOperationsTest {
     private static BackupLaneFixture fixture;
     private static UUID tenantId;
 
+    /** A rival's operation; platform threads, as an operation waits for SQLite's lock in native code. */
+    private final JobRunner rivals = JobRunner.create("power-rivals");
+
     @BeforeAll
     static void setUp() throws Exception {
         fixture = BackupLaneFixture.install();
@@ -116,6 +120,11 @@ class InstancePowerOperationsTest {
     static void tearDown() {
         FakeNativeDaemons.DURING_START.set(null);
         BackupLaneFixture.uninstall();
+    }
+
+    @AfterEach
+    void stopRivals() {
+        this.rivals.shutdownNow();
     }
 
     @Test
@@ -326,17 +335,10 @@ class InstancePowerOperationsTest {
             //    by the in-progress refusal.
             AtomicReference<Throwable> rival = new AtomicReference<>();
             FakeNativeDaemons.DURING_START.set(() -> {
-                Thread thread = new Thread(ExecutionContext.wrap(() -> Db.run(datasource,
-                    () -> rival.set(catchThrowable(() -> api(InstanceOperations.START, tenant, instanceId))))),
-                    "rival-start");
-                thread.start();
-                try {
-                    thread.join(TimeUnit.SECONDS.toMillis(5));
-                    assertThat(thread.isAlive()).as("step 5: a different power verb reaches its refusal immediately")
-                        .isFalse();
-                } catch (InterruptedException interrupted) {
-                    Thread.currentThread().interrupt();
-                }
+                assertThat(this.rivals.runAsync(() -> Db.run(datasource,
+                        () -> rival.set(catchThrowable(() -> api(InstanceOperations.START, tenant, instanceId))))))
+                    .as("step 5: a different power verb reaches its refusal immediately")
+                    .succeedsWithin(Duration.ofSeconds(5));
             });
             api(InstanceOperations.RESTART, tenant, instanceId);
             assertThat(rival.get()).as("step 5: the rival start is refused while the restart holds the record")

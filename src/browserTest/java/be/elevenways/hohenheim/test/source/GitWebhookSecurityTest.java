@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.source.GitWebhookHandler;
 import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -285,6 +286,7 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
      */
     @Test
     void aChunkedBodyPastTheCapIsRefusedWithoutWaitingForItsEnd() throws Exception {
+        JobRunner writers = JobRunner.create("webhook-chunk-writer");
         try (Socket socket = new Socket("127.0.0.1", proxyPort)) {
             socket.setSoTimeout(15000);
             OutputStream out = socket.getOutputStream();
@@ -299,7 +301,7 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
             //    able to wedge the test on a full socket buffer.
             byte[] chunk = new byte[64 * 1024];
             java.util.Arrays.fill(chunk, (byte) 'a');
-            Thread writer = Thread.ofVirtual().start(() -> {
+            Thread writer = writers.startThread(() -> {
                 try {
                     for (int sent = 0; sent < 40; sent++) {
                         out.write((Integer.toHexString(chunk.length) + "\r\n")
@@ -322,6 +324,8 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
                 .isNotNull()
                 .startsWith("HTTP/1.1 413");
             writer.join(15000);
+        } finally {
+            writers.shutdownNow();
         }
 
         // 3. And nothing was claimed or deployed: the body never reached the handler.
@@ -365,6 +369,7 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
      * @return the full response text, or the text read before a reset (which then fails the caller)
      */
     private static String sendWholeBody(String path, byte[] body, boolean chunked) throws Exception {
+        JobRunner writers = JobRunner.create("webhook-body-writer");
         try (Socket socket = new Socket("127.0.0.1", proxyPort)) {
             socket.setSoTimeout(15000);
             OutputStream out = socket.getOutputStream();
@@ -375,7 +380,7 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
                 + "Content-Type: application/json\r\n"
                 + framing
                 + "X-GitHub-Event: push\r\n\r\n").getBytes(StandardCharsets.UTF_8));
-            Thread writer = Thread.ofVirtual().start(() -> {
+            Thread writer = writers.startThread(() -> {
                 try {
                     if (chunked) {
                         int slice = 64 * 1024;
@@ -407,6 +412,8 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
             }
             writer.join(15000);
             return received.toString(StandardCharsets.UTF_8);
+        } finally {
+            writers.shutdownNow();
         }
     }
 

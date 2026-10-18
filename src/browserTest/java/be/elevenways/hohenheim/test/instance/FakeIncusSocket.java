@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.server.util.Http11;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.ByteArrayOutputStream;
@@ -32,22 +33,21 @@ final class FakeIncusSocket implements AutoCloseable {
     final FakeIncusTransport daemon = new FakeIncusTransport();
     private final Path socket;
     private final ServerSocketChannel server;
+    private final JobRunner serving = JobRunner.create("fake-incus-socket");
 
     private FakeIncusSocket(@NonNull Path socket, @NonNull ServerSocketChannel server) {
         this.socket = socket;
         this.server = server;
     }
 
-    /** Binds a fresh socket in a temp directory and serves it on a daemon thread. */
+    /** Binds a fresh socket in a temp directory and serves it on a thread {@link #close} stops. */
     static @NonNull FakeIncusSocket start() throws IOException {
         Path directory = Files.createTempDirectory("fake-incus");
         Path socket = directory.resolve("incus.sock");
         ServerSocketChannel server = ServerSocketChannel.open(StandardProtocolFamily.UNIX);
         server.bind(UnixDomainSocketAddress.of(socket));
         FakeIncusSocket fake = new FakeIncusSocket(socket, server);
-        Thread thread = new Thread(fake::serve, "fake-incus-socket");
-        thread.setDaemon(true);
-        thread.start();
+        fake.serving.startThread(fake::serve);
         return fake;
     }
 
@@ -98,6 +98,7 @@ final class FakeIncusSocket implements AutoCloseable {
     @Override
     public void close() throws IOException {
         this.server.close();
+        this.serving.shutdownNow();
         Files.deleteIfExists(this.socket);
     }
 }

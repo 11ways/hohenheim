@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.incus;
 import be.elevenways.hohenheim.server.runtime.ConsoleStreamSupport;
 import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
 import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.kvm.server.ScreenRefusalReason;
 import org.junit.jupiter.api.Test;
@@ -14,6 +15,7 @@ import java.net.ServerSocket;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -30,6 +32,7 @@ class IncusSerialConsoleTest {
 
     @Test
     void theSerialConsoleHoldsTheOneConsoleOnlyUntilItsStreamCloses() throws Exception {
+        JobRunner screens = JobRunner.create("serial-console-screen");
         try (ServerSocket console = new ServerSocket(0, 50, InetAddress.getLoopbackAddress())) {
             FakeVgaConsoleDaemon daemon = new FakeVgaConsoleDaemon(console.getLocalPort());
             IncusClient incus = new IncusClient(daemon);
@@ -49,13 +52,14 @@ class IncusSerialConsoleTest {
 
             // 3. A screen asked for just before the serial console is let go (a page moving from the console to the
             //    screen) waits for it instead of reading it held, and opens without forcing anything.
-            CompletableFuture<IncusSpice.Console> asked = CompletableFuture.supplyAsync(() -> {
+            AtomicReference<IncusSpice.Console> opened = new AtomicReference<>();
+            CompletableFuture<IncusSpice.Console> asked = screens.runOnThread(() -> {
                 try {
-                    return IncusSpice.open(incus, "hohenheim-instance-9", false);
+                    opened.set(IncusSpice.open(incus, "hohenheim-instance-9", false));
                 } catch (IOException failed) {
                     throw new UncheckedIOException(failed);
                 }
-            });
+            }).thenApply(done -> opened.get());
             Poll.until("step 3: the screen was refused once while the serial console runs", Duration.ofSeconds(5),
                 () -> vgaAsks(daemon) > IncusSpice.HELD_ATTEMPTS);
             serial.stream().close();
@@ -66,6 +70,8 @@ class IncusSerialConsoleTest {
             // 4. Closing the screen leaves no console operation running.
             screen.close();
             assertThat(daemon.running()).as("step 4: no console operation is left running").isEmpty();
+        } finally {
+            screens.shutdownNow();
         }
     }
 

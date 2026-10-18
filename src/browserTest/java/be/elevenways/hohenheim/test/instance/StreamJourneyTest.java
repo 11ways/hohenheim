@@ -20,6 +20,7 @@ import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.operation.OperationRunStatus;
@@ -78,15 +79,17 @@ class StreamJourneyTest extends HohenheimTestBase {
     private static ProxyServer proxy;
     private static ServerSocket tcpEcho;
     private static DatagramSocket udpEcho;
+    private static JobRunner echoes;
 
     @BeforeAll
     static void boot() throws Exception {
         tcpEcho = new ServerSocket(0, 50, InetAddress.getLoopbackAddress());
-        Thread.ofVirtual().start(() -> {
+        echoes = JobRunner.create("stream-journey-echo");
+        echoes.startThread(() -> {
             while (!tcpEcho.isClosed()) {
                 try {
                     Socket client = tcpEcho.accept();
-                    Thread.ofVirtual().start(() -> echo(client));
+                    echoes.startThread(() -> echo(client));
                 } catch (IOException closed) {
                     return;
                 }
@@ -94,7 +97,7 @@ class StreamJourneyTest extends HohenheimTestBase {
         });
         // The same number as the TCP echo, so one stream forwarding both transports reaches an echo either way.
         udpEcho = new DatagramSocket(tcpEcho.getLocalPort(), InetAddress.getLoopbackAddress());
-        Thread.ofVirtual().start(() -> {
+        echoes.startThread(() -> {
             byte[] buffer = new byte[2048];
             while (!udpEcho.isClosed()) {
                 try {
@@ -120,6 +123,7 @@ class StreamJourneyTest extends HohenheimTestBase {
         }
         tcpEcho.close();
         udpEcho.close();
+        echoes.shutdownNow();
     }
 
     @Test

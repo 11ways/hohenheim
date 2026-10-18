@@ -18,7 +18,7 @@ import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.hohenheim.test.host.HostFixtures;
-import be.elevenways.protoblast.common.thread.ExecutionContext;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -26,6 +26,7 @@ import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -66,6 +67,8 @@ class ReleaseConvergenceSerializationTest {
     private static Integer savedProbeInterval;
     private static Integer savedDrain;
 
+    private final JobRunner convergers = JobRunner.create("release-convergers");
+
     @BeforeAll
     static void setUp() throws Exception {
         datasource = TestDatabases.freshDatasource();
@@ -95,6 +98,11 @@ class ReleaseConvergenceSerializationTest {
         Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Releases.PROBE_INTERVAL_MS, savedProbeInterval);
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, savedDrain);
+    }
+
+    @AfterEach
+    void stopConvergers() {
+        this.convergers.shutdownNow();
     }
 
     /**
@@ -129,8 +137,7 @@ class ReleaseConvergenceSerializationTest {
             });
             AtomicReference<ApplicationReleases.Release> aResult = new AtomicReference<>();
             AtomicReference<Throwable> aFailure = new AtomicReference<>();
-            Thread a = converger(applicationId, aResult, aFailure, "converge-a");
-            a.start();
+            Thread a = converger(applicationId, aResult, aFailure);
             assertThat(aStalled.await(120, TimeUnit.SECONDS))
                 .as("step 2: converge A reached its stall point inside the candidate's start")
                 .isTrue();
@@ -142,8 +149,7 @@ class ReleaseConvergenceSerializationTest {
             //    the overlap still happens, and the invariants below are what fail.
             AtomicReference<ApplicationReleases.Release> bResult = new AtomicReference<>();
             AtomicReference<Throwable> bFailure = new AtomicReference<>();
-            Thread b = converger(applicationId, bResult, bFailure, "converge-b");
-            b.start();
+            Thread b = converger(applicationId, bResult, bFailure);
             await("step 3: converge B either queued on the lock or ran past it",
                 () -> queuedOn(applicationId, b) || !b.isAlive());
             boolean bQueuedOnTheLock = queuedOn(applicationId, b);
@@ -359,17 +365,23 @@ class ReleaseConvergenceSerializationTest {
 
     // -- fixtures --------------------------------------------------------------
 
-    private static Thread converger(int applicationId,
-                                    AtomicReference<ApplicationReleases.Release> result,
-                                    AtomicReference<Throwable> failure, String name) {
-        return new Thread(ExecutionContext.wrap(() -> {
+    /**
+     * Start one converge of the application on its own thread.
+     *
+     * AIDEV-NOTE: a platform thread (startBlockingThread): converge waits for SQLite's write lock inside the
+     * driver's native code, which would pin a virtual thread's carrier, and queuedOn asks the lock about this
+     * very Thread.
+     */
+    private Thread converger(int applicationId, AtomicReference<ApplicationReleases.Release> result,
+                             AtomicReference<Throwable> failure) {
+        return this.convergers.startBlockingThread(() -> {
             try {
                 Db.run(datasource, () ->
                     result.set(ApplicationReleases.converge(applicationId, Map.of())));
             } catch (Throwable refused) {
                 failure.set(refused);
             }
-        }), name);
+        });
     }
 
     /**

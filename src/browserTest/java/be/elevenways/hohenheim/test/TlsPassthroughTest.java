@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.server.proxy.ProxyProtocolV2;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.proxy.TlsClientHelloReader;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -51,6 +52,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class TlsPassthroughTest {
 
     private static boolean initialized;
+    private final JobRunner jobs = JobRunner.create("tls-passthrough-test");
     private ProxyServer proxy;
     private ServerSocket rawBackend;
     private HttpServer httpBackend;
@@ -67,6 +69,7 @@ class TlsPassthroughTest {
 
     @AfterEach
     void cleanup() throws Exception {
+        jobs.shutdownNow();
         if (proxy != null) proxy.stop();
         if (rawBackend != null) rawBackend.close();
         if (httpBackend != null) httpBackend.stop(0);
@@ -141,7 +144,6 @@ class TlsPassthroughTest {
         proxy = null;
         rawBackend.close();
         rawBackend = new ServerSocket(0, 10, InetAddress.getLoopbackAddress());
-        rawBackend.setSoTimeout(1_000);
         Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Proxy.PROXY_PROTOCOL_TRUSTED_SOURCES, List.of());
         resetDatabase();
@@ -155,14 +157,7 @@ class TlsPassthroughTest {
             client.getOutputStream().flush();
             assertThat(client.getInputStream().read()).isEqualTo(-1);
         }
-        assertThat(CompletableFuture.supplyAsync(() -> {
-            try {
-                rawBackend.accept().close();
-                return true;
-            } catch (Exception e) {
-                return false;
-            }
-        }).get(2, TimeUnit.SECONDS)).isFalse();
+        assertThat(proxyDialed(rawBackend)).isFalse();
     }
 
     @Test
@@ -182,7 +177,6 @@ class TlsPassthroughTest {
             Map.of("forward_host", "127.0.0.1", "forward_port", httpBackend.getAddress().getPort()));
         addDomain(control, "control.example.test", "exact", null, false);
         rawBackend = new ServerSocket(0, 10, InetAddress.getLoopbackAddress());
-        rawBackend.setSoTimeout(1_000);
         setupPassthrough("*.example.test", "wildcard", rawBackend.getLocalPort(), false);
         startProxy();
 
@@ -202,14 +196,7 @@ class TlsPassthroughTest {
             assertThat(response).contains("200 OK").contains("terminated");
         }
 
-        assertThat(CompletableFuture.supplyAsync(() -> {
-            try {
-                rawBackend.accept().close();
-                return true;
-            } catch (Exception e) {
-                return false;
-            }
-        }).get(2, TimeUnit.SECONDS)).isFalse();
+        assertThat(proxyDialed(rawBackend)).isFalse();
     }
 
     @Test
@@ -218,7 +205,6 @@ class TlsPassthroughTest {
         Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Proxy.CONNECTION_PROLOGUE_TIMEOUT_SECONDS, 1);
         rawBackend = new ServerSocket(0, 10, InetAddress.getLoopbackAddress());
-        rawBackend.setSoTimeout(1_500);
         setupPassthrough("slow.example.test", "exact", rawBackend.getLocalPort(), false);
         startProxy();
 
@@ -243,7 +229,7 @@ class TlsPassthroughTest {
             client.setSoTimeout(3_000);
             assertClosed(client, "the incomplete handshake is closed at its absolute deadline");
         }
-        assertThat(backendAccepted()).isFalse();
+        assertThat(proxyDialed(rawBackend)).isFalse();
     }
 
     @Test
@@ -252,7 +238,7 @@ class TlsPassthroughTest {
         Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Proxy.CONNECTION_PROLOGUE_TIMEOUT_SECONDS, 1);
         rawBackend = new ServerSocket(0, 10, InetAddress.getLoopbackAddress());
-        CompletableFuture<Void> backend = CompletableFuture.runAsync(() -> {
+        CompletableFuture<Void> backend = jobs.runOnThread(() -> {
             try (Socket socket = rawBackend.accept()) {
                 socket.setSoTimeout(5_000);
                 BufferedInputStream input = new BufferedInputStream(socket.getInputStream());
@@ -299,7 +285,7 @@ class TlsPassthroughTest {
         rawBackend = new ServerSocket(0, 10, InetAddress.getLoopbackAddress());
         CompletableFuture<Void> accepted = new CompletableFuture<>();
         CompletableFuture<Void> release = new CompletableFuture<>();
-        CompletableFuture<Void> backend = CompletableFuture.runAsync(() -> {
+        CompletableFuture<Void> backend = jobs.runOnThread(() -> {
             try (Socket socket = rawBackend.accept()) {
                 TlsClientHelloReader.read(new BufferedInputStream(socket.getInputStream()));
                 accepted.complete(null);
@@ -354,9 +340,7 @@ class TlsPassthroughTest {
     void equivalentRegexRoutesWithDifferentTargetsFailClosed() throws Exception {
         resetDatabase();
         rawBackend = new ServerSocket(0, 10, InetAddress.getLoopbackAddress());
-        rawBackend.setSoTimeout(1_000);
         try (ServerSocket secondBackend = new ServerSocket(0, 10, InetAddress.getLoopbackAddress())) {
-            secondBackend.setSoTimeout(1_000);
             setupPassthrough("conflict\\.example\\.test", "regex", rawBackend.getLocalPort(), false);
             setupPassthrough("/conflict\\.example\\.test/i", "regex", secondBackend.getLocalPort(), false);
             startProxy();
@@ -367,15 +351,8 @@ class TlsPassthroughTest {
                 client.getOutputStream().flush();
                 assertThat(client.getInputStream().read()).isEqualTo(-1);
             }
-            assertThat(backendAccepted()).isFalse();
-            assertThat(CompletableFuture.supplyAsync(() -> {
-                try {
-                    secondBackend.accept().close();
-                    return true;
-                } catch (Exception e) {
-                    return false;
-                }
-            }).get(3, TimeUnit.SECONDS)).isFalse();
+            assertThat(proxyDialed(rawBackend)).isFalse();
+            assertThat(proxyDialed(secondBackend)).isFalse();
         }
     }
 
@@ -441,7 +418,6 @@ class TlsPassthroughTest {
         }
         setupPassthrough("exact.example.test", "exact", unusedPort, false);
         rawBackend = new ServerSocket(0, 10, InetAddress.getLoopbackAddress());
-        rawBackend.setSoTimeout(1_500);
         setupPassthrough("*.example.test", "wildcard", rawBackend.getLocalPort(), false);
         startProxy();
 
@@ -451,7 +427,7 @@ class TlsPassthroughTest {
             client.getOutputStream().flush();
             assertThat(client.getInputStream().read()).isEqualTo(-1);
         }
-        assertThat(backendAccepted()).isFalse();
+        assertThat(proxyDialed(rawBackend)).isFalse();
     }
 
     @Test
@@ -513,7 +489,8 @@ class TlsPassthroughTest {
     }
 
     private CompletableFuture<Captured> captureOneConnection(boolean expectProxy) {
-        return CompletableFuture.supplyAsync(() -> {
+        AtomicReference<Captured> captured = new AtomicReference<>();
+        return jobs.runOnThread(() -> {
             try (Socket socket = rawBackend.accept()) {
                 socket.setSoTimeout(5_000);
                 BufferedInputStream input = new BufferedInputStream(socket.getInputStream());
@@ -523,23 +500,36 @@ class TlsPassthroughTest {
                 byte[] payload = input.readNBytes(4);
                 socket.getOutputStream().write("PONG".getBytes(StandardCharsets.US_ASCII));
                 socket.getOutputStream().flush();
-                return new Captured(header.orElse(null), hello.serverName().orElse(null),
-                    hello.replayBytes(), payload);
+                captured.set(new Captured(header.orElse(null), hello.serverName().orElse(null),
+                    hello.replayBytes(), payload));
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
-        });
+        }).thenApply(done -> captured.get());
     }
 
-    private boolean backendAccepted() throws Exception {
-        return CompletableFuture.supplyAsync(() -> {
-            try {
-                rawBackend.accept().close();
-                return true;
-            } catch (Exception e) {
-                return false;
+    /**
+     * Whether the proxy dialed this backend for a connection whose close the client already saw.
+     *
+     * AIDEV-NOTE: the proxy dials a backend before it closes the client, on that connection's one handler thread
+     * (vetting only resolves names), so once the client saw the close any connection the proxy made already waits
+     * in this backend's accept queue. A sentinel the test connects now queues behind it: draining up to the
+     * sentinel answers without a fixed wait, and a sentinel that never arrives fails instead of reading as "never
+     * dialed".
+     */
+    private static boolean proxyDialed(ServerSocket backend) throws IOException {
+        backend.setSoTimeout(5_000);
+        try (Socket sentinel = new Socket(backend.getInetAddress(), backend.getLocalPort())) {
+            boolean dialed = false;
+            while (true) {
+                try (Socket accepted = backend.accept()) {
+                    if (accepted.getPort() == sentinel.getLocalPort()) {
+                        return dialed;
+                    }
+                    dialed = true;
+                }
             }
-        }).get(3, TimeUnit.SECONDS);
+        }
     }
 
     private static void installCertificate(String hostname) throws Exception {

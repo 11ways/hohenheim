@@ -18,31 +18,28 @@ import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
 import be.elevenways.hohenheim.test.live.LiveLane;
+import be.elevenways.protoblast.server.process.ProcessOutcome;
+import be.elevenways.protoblast.server.process.Subprocess;
+import be.elevenways.protoblast.server.process.Termination;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 /**
  * The enrollment facts for a GENUINELY REMOTE Incus host, supplied out of band by an
@@ -64,16 +61,6 @@ public final class LiveIncusHost {
 
     /** The ssh port a {@code trust_target} without one connects to. */
     private static final int SSH_PORT = 22;
-
-    /**
-     * Pipe drains. Daemon threads: a test JVM must never be held open by a drain still
-     * waiting on a remote that outlived the test.
-     */
-    private static final ExecutorService DRAINS = Executors.newCachedThreadPool(runnable -> {
-        Thread thread = new Thread(runnable, "live-incus-ssh-drain");
-        thread.setDaemon(true);
-        return thread;
-    });
 
     /** Where an operator records the enrollment facts. */
     public static final Path CONFIG = Path.of(System.getProperty("user.home"),
@@ -805,15 +792,13 @@ public final class LiveIncusHost {
     /**
      * Run one command over the operator ssh lane, bounded by a real wall clock.
      *
-     * AIDEV-NOTE: both pipes are drained on their OWN threads and the budget is enforced
-     * on the PROCESS, because the obvious shape is a trap this fixture already fell into:
-     * reading {@code getInputStream().readAllBytes()} on the calling thread blocks until
-     * the remote closes stdout, so a command that keeps its channel open never reaches the
-     * {@code waitFor(timeout)} below it and the "timeout" is decoration. Observed
-     * 2026-08-05: one such call sat until Gradle killed the whole task at 30 minutes and
-     * reported the test SKIPPED -- a hang that reads as a green-ish run. Draining
-     * sequentially is the second half of the same trap: a child that fills the stderr pipe
-     * while nobody reads it deadlocks against a caller blocked on stdout.
+     * AIDEV-NOTE: Subprocess drains both pipes on its own threads and enforces the budget on the whole process
+     * tree, because the obvious shape is a trap this fixture already fell into: reading stdout on the calling
+     * thread blocks until the remote closes it, so a command that keeps its channel open never reaches the
+     * timeout and the "timeout" is decoration. Observed 2026-08-05: one such call sat until Gradle killed the
+     * whole task at 30 minutes and reported the test SKIPPED -- a hang that reads as a green-ish run. Draining
+     * sequentially is the second half of the same trap: a child that fills the stderr pipe while nobody reads
+     * it deadlocks against a caller blocked on stdout.
      *
      * @throws IOException naming the command and the budget when the remote outlives it
      */
@@ -824,38 +809,20 @@ public final class LiveIncusHost {
             // command to sit forever waiting on input nobody is going to type.
             "-n", "--", this.trustTarget));
         argv.addAll(remoteCommand);
-        Process process = new ProcessBuilder(argv).start();
-        Future<String> stdout = DRAINS.submit(() -> drain(process.getInputStream()));
-        Future<String> stderr = DRAINS.submit(() -> drain(process.getErrorStream()));
-        try {
-            if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
-                process.destroyForcibly();
-                process.waitFor(5, TimeUnit.SECONDS);
-                throw new IOException("ssh " + remoteCommand + " to " + this.trustTarget
-                    + " outlived its " + timeoutSeconds + "s budget and was killed");
-            }
-            String out = stdout.get(10, TimeUnit.SECONDS);
-            String err = stderr.get(10, TimeUnit.SECONDS);
-            if (process.exitValue() != 0) {
-                throw new IOException("ssh " + remoteCommand + " failed (exit "
-                    + process.exitValue() + "): " + err.trim());
-            }
-            return out;
-        } catch (InterruptedException e) {
-            process.destroyForcibly();
-            Thread.currentThread().interrupt();
-            throw new IOException("interrupted talking to " + this.trustTarget);
-        } catch (ExecutionException | TimeoutException e) {
-            process.destroyForcibly();
-            throw new IOException("could not read the output of ssh " + remoteCommand
-                + ": " + e.getMessage());
+        ProcessOutcome outcome = Subprocess.of(argv).timeout(Duration.ofSeconds(timeoutSeconds)).runChecked();
+        if (outcome.termination() == Termination.TIMED_OUT) {
+            throw new IOException("ssh " + remoteCommand + " to " + this.trustTarget
+                + " outlived its " + timeoutSeconds + "s budget and was killed");
         }
-    }
-
-    private static String drain(InputStream stream) throws IOException {
-        try (stream) {
-            return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+        if (!outcome.succeeded()) {
+            throw new IOException("ssh " + remoteCommand + " failed (exit "
+                + outcome.exitCode() + "): " + outcome.failureText());
         }
+        if (outcome.stdout().truncated()) {
+            throw new IOException("ssh " + remoteCommand + " printed " + outcome.stdout().totalBytes()
+                + " bytes, more than the output Subprocess keeps");
+        }
+        return outcome.stdout().text();
     }
 
     private static String require(Properties properties, String key) throws IOException {

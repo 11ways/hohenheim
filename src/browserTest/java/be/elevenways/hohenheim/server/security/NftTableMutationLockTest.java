@@ -2,8 +2,9 @@ package be.elevenways.hohenheim.server.security;
 
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
-import be.elevenways.protoblast.common.thread.ExecutionContext;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -27,12 +28,19 @@ class NftTableMutationLockTest {
 
     private static boolean initialized = false;
 
+    private final JobRunner writers = JobRunner.create("nft-table-lock-writers");
+
     @BeforeAll
     static void initDb() throws Exception {
         if (initialized) return;
         initialized = true;
         TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();
+    }
+
+    @AfterEach
+    void stopWriters() {
+        this.writers.shutdownNow();
     }
 
     @Test
@@ -52,25 +60,25 @@ class NftTableMutationLockTest {
         // 2. The remover's emptiness listing is held open -- the race window.
         kernel.holdNextTableListing();
         AtomicReference<Throwable> removerFailure = new AtomicReference<>();
-        Thread removing = Thread.ofPlatform().start(ExecutionContext.wrap(() -> {
+        Thread removing = writers.startThread(() -> {
             try {
                 remover.remove(1001, "gone");
             } catch (Throwable failure) {
                 removerFailure.set(failure);
             }
-        }));
+        });
         assertThat(kernel.listingHeld.await(5, TimeUnit.SECONDS))
             .as("step 2: the remover has seen an empty table and not yet deleted it").isTrue();
 
         // 3. A deploy starts inside that window. It must wait, not write.
         AtomicReference<Throwable> deployFailure = new AtomicReference<>();
-        Thread deploying = Thread.ofPlatform().start(ExecutionContext.wrap(() -> {
+        Thread deploying = writers.startThread(() -> {
             try {
                 deployer.apply(1002, "fresh");
             } catch (Throwable failure) {
                 deployFailure.set(failure);
             }
-        }));
+        });
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
         while (deploying.getState() != Thread.State.WAITING
                 && deploying.isAlive() && System.nanoTime() < deadline) {

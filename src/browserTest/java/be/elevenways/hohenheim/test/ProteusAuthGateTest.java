@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -30,7 +31,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
@@ -59,6 +59,7 @@ class ProteusAuthGateTest {
     private static ProxyServer proxy;
     private static int httpPort;
     private static HttpServer proteus;
+    private static JobRunner proteusHandlers;
     /**
      * A provider's realm rides the public-internet guard, so the fake realm on the loopback is reached through a
      * public-looking host the fixture routes to it.
@@ -105,6 +106,10 @@ class ProteusAuthGateTest {
         if (proteus != null) {
             proteus.stop(0);
         }
+        if (proteusHandlers != null) {
+            proteusHandlers.shutdownNow();
+            proteusHandlers = null;
+        }
         if (upstream != null) {
             upstream.stop(0);
         }
@@ -113,7 +118,8 @@ class ProteusAuthGateTest {
     /** A fake Proteus realm answering the four protocol calls for every realm client. */
     private static HttpServer startFakeProteus() throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        server.setExecutor(Executors.newFixedThreadPool(4));
+        proteusHandlers = JobRunner.create("fake-proteus");
+        server.setExecutor(proteusHandlers::fireAndForget);
         server.createContext("/realm/", exchange -> {
             String path = exchange.getRequestURI().getPath();
             String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);

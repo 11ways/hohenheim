@@ -22,6 +22,7 @@ import be.elevenways.hohenheim.test.ProxyTestSupport;
 import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.time.Pace;
 import be.elevenways.zenit.common.Zenit;
@@ -703,7 +704,7 @@ class ApplicationReleaseLiveTest {
      */
     private static final class Hammer implements AutoCloseable {
 
-        private final List<Thread> threads = new ArrayList<>();
+        private final JobRunner lanes = JobRunner.create("release-hammer");
         private final List<List<String>> laneBodies = new ArrayList<>();
         final List<String> failures = Collections.synchronizedList(new ArrayList<>());
         private volatile boolean stop;
@@ -712,7 +713,7 @@ class ApplicationReleaseLiveTest {
             for (int lane = 0; lane < lanes; lane++) {
                 List<String> bodies = Collections.synchronizedList(new ArrayList<>());
                 this.laneBodies.add(bodies);
-                Thread thread = new Thread(() -> {
+                this.lanes.startThread(() -> {
                     while (!this.stop) {
                         try {
                             String response = ProxyTestSupport.rawRequest(port, host, "/");
@@ -731,10 +732,7 @@ class ApplicationReleaseLiveTest {
                             this.failures.add("request failed: " + e.getMessage());
                         }
                     }
-                }, "release-hammer-" + lane);
-                thread.setDaemon(true);
-                thread.start();
-                this.threads.add(thread);
+                });
             }
         }
 
@@ -770,9 +768,8 @@ class ApplicationReleaseLiveTest {
         @Override
         public void close() throws InterruptedException {
             this.stop = true;
-            for (Thread thread : this.threads) {
-                thread.join(5000);
-            }
+            this.lanes.shutdown();
+            this.lanes.awaitTermination(5_000);
         }
     }
 }

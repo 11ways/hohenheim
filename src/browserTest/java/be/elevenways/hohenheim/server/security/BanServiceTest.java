@@ -7,7 +7,7 @@ import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.security.BanScope;
-import be.elevenways.protoblast.common.thread.ExecutionContext;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.security.SecurityEventTypes;
@@ -22,9 +22,8 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -331,24 +330,26 @@ class BanServiceTest {
         int workers = 12;
         CountDownLatch ready = new CountDownLatch(workers);
         CountDownLatch start = new CountDownLatch(1);
-        List<Thread> threads = new ArrayList<>();
-        for (int i = 0; i < workers; i++) {
-            String ip = "2001:db8:77:88::" + Integer.toHexString(i + 1);
-            threads.add(Thread.ofPlatform().start(ExecutionContext.wrap(() -> {
-                ready.countDown();
-                try {
-                    start.await();
-                    service.autoBan(ip, "reputation", "concurrent rotation");
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-            })));
-        }
-        assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
-        start.countDown();
-        for (Thread thread : threads) {
-            thread.join(5_000);
-            assertThat(thread.isAlive()).isFalse();
+        JobRunner rotations = JobRunner.create("ban-rotation-racers");
+        try {
+            List<CompletableFuture<Void>> racers = new ArrayList<>();
+            for (int i = 0; i < workers; i++) {
+                String ip = "2001:db8:77:88::" + Integer.toHexString(i + 1);
+                racers.add(rotations.runAsync(() -> {
+                    ready.countDown();
+                    try {
+                        start.await();
+                        service.autoBan(ip, "reputation", "concurrent rotation");
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }));
+            }
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            CompletableFuture.allOf(racers.toArray(CompletableFuture[]::new)).get(5, TimeUnit.SECONDS);
+        } finally {
+            rotations.shutdownNow();
         }
 
         service.autoBan("192.0.2.71", "reputation", "second unique");
@@ -526,14 +527,16 @@ class BanServiceTest {
         }, () -> true);
         BanService service = new BanService(slowNft);
 
-        Thread bootCaller = Thread.ofPlatform().start(ExecutionContext.wrap(service::boot));
+        JobRunner boots = JobRunner.create("ban-boot-caller");
+        CompletableFuture<Void> bootCaller = boots.runAsync(service::boot);
         try {
             assertThat(runnerEntered.await(1, TimeUnit.SECONDS)).isTrue();
-            bootCaller.join(500);
-            assertThat(bootCaller.isAlive()).isFalse();
+            assertThat(bootCaller).as("boot returned while the kernel resync still runs")
+                .succeedsWithin(Duration.ofMillis(500));
         } finally {
             releaseRunner.countDown();
-            bootCaller.join(5_000);
+            boots.shutdown();
+            boots.awaitTermination(5_000);
             service.awaitNftBootForTests();
         }
     }
@@ -603,32 +606,32 @@ class BanServiceTest {
             }
             return new NftRunner.Result(0, "", "");
         }, () -> true);
-        ExecutorService writer = Executors.newSingleThreadExecutor();
+        JobRunner lane = JobRunner.createDaemonSerial("ban-writer-hot-path-test");
+        JobRunner callers = JobRunner.create("ban-hot-path-callers");
         BanService service = new BanService(slowNft, Now::millis,
-            (event, subject, message) -> notifications.add(event.token()), writer);
+            (event, subject, message) -> notifications.add(event.token()), BanService.backgroundWriter(lane));
         try {
             service.createBan("198.51.100.130", "warm", BanModel.SOURCE_MANUAL, null, null);
 
             // 1. autoBan hands the work to the writer and returns; the writer then sits in
             //    nft, holding the service monitor.
-            Thread caller = Thread.ofPlatform().start(ExecutionContext.wrap(() ->
-                service.autoBan(slowTarget, "auth.lockout", "score 30 over threshold")));
-            caller.join(2_000);
-            assertThat(caller.isAlive())
-                .as("step 1: autoBan returned without waiting for the write").isFalse();
+            assertThat(callers.runAsync(() ->
+                    service.autoBan(slowTarget, "auth.lockout", "score 30 over threshold")))
+                .as("step 1: autoBan returned without waiting for the write")
+                .succeedsWithin(Duration.ofSeconds(2));
             assertThat(nftEntered.await(5, TimeUnit.SECONDS))
                 .as("step 1: the writer is inside nft").isTrue();
 
             // 2. The ban check still answers at once: it is a snapshot read, never the monitor.
             CountDownLatch answered = new CountDownLatch(1);
-            Thread checker = Thread.ofPlatform().start(ExecutionContext.wrap(() -> {
+            CompletableFuture<Void> checker = callers.runAsync(() -> {
                 if (service.isBanned("198.51.100.130")) {
                     answered.countDown();
                 }
-            }));
+            });
             assertThat(answered.await(2, TimeUnit.SECONDS))
                 .as("step 2: isBanned answered true while the writer holds the monitor").isTrue();
-            checker.join(1_000);
+            checker.get(1, TimeUnit.SECONDS);
 
             // 3. Once nft answers, the queued ban is there.
             releaseNft.countDown();
@@ -639,7 +642,8 @@ class BanServiceTest {
                 .as("step 3: the automatic ban was written by the writer").isEqualTo(1);
         } finally {
             releaseNft.countDown();
-            writer.shutdownNow();
+            callers.shutdownNow();
+            lane.shutdownNow();
         }
     }
 

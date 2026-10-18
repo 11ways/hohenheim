@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -33,6 +34,7 @@ class PublicTcpListenerRecoveryTest {
     private static final byte[] CLIENT_PAYLOAD = "hello-proxy!".getBytes(StandardCharsets.UTF_8);
     private static final byte[] BACKEND_REPLY = "pong".getBytes(StandardCharsets.UTF_8);
 
+    private final JobRunner servers = JobRunner.create("tcp-listener-recovery-backend");
     private ServerSocket backend;
     private PublicTcpListener listener;
 
@@ -40,6 +42,7 @@ class PublicTcpListenerRecoveryTest {
     void tearDown() throws IOException {
         if (listener != null) listener.close();
         if (backend != null) backend.close();
+        servers.shutdownNow();
     }
 
     @Test
@@ -47,7 +50,7 @@ class PublicTcpListenerRecoveryTest {
     void acceptLoopSurvivesTransientFailuresAndEscalatesSustainedOnes() throws Exception {
         // A tiny echo backend: read the 12-byte payload, answer "pong", close.
         backend = new ServerSocket(0, 50, InetAddress.getLoopbackAddress());
-        Thread.ofVirtual().start(() -> {
+        servers.startThread(() -> {
             while (!backend.isClosed()) {
                 try (Socket socket = backend.accept()) {
                     socket.getInputStream().readNBytes(CLIENT_PAYLOAD.length);

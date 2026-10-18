@@ -30,6 +30,7 @@ import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.time.Pace;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -111,6 +112,9 @@ class InstanceShellLiveTest {
     /** Completed when the running test ends, which disarms its stall dump. */
     private static CompletableFuture<Void> testEnded = CompletableFuture.completedFuture(null);
 
+    /** Where the stall dumps wait; created and stopped with the class. */
+    private static JobRunner stallDumps;
+
     /**
      * Dump every stack once the test has run 60 s, so a hang NAMES its blocking frame.
      *
@@ -123,7 +127,7 @@ class InstanceShellLiveTest {
     private static void startStallDump() {
         CompletableFuture<Void> ended = new CompletableFuture<>();
         testEnded = ended;
-        Thread thread = new Thread(() -> {
+        stallDumps.startThread(() -> {
             try {
                 Pace.await(ended, Duration.ofSeconds(60));
                 return;
@@ -141,8 +145,6 @@ class InstanceShellLiveTest {
             });
             System.out.flush();
         });
-        thread.setDaemon(true);
-        thread.start();
     }
 
     @AfterEach
@@ -159,6 +161,7 @@ class InstanceShellLiveTest {
 
     @BeforeAll
     static void setUp() throws Exception {
+        stallDumps = JobRunner.create("shell-live-stall-dump");
         datasource = TestDatabases.freshDatasource();
         // BEFORE the boot: the grant below is on InstanceModel, and zenit-auth refuses a
         // grant on an undeclared model. Same order ServerMain uses.
@@ -171,6 +174,9 @@ class InstanceShellLiveTest {
     @AfterAll
     static void tearDown() {
         PrivateNetns.uninstall(netns);
+        if (stallDumps != null) {
+            stallDumps.shutdownNow();
+        }
         netns = null;
     }
 

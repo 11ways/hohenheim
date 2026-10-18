@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -19,11 +20,12 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -143,22 +145,23 @@ class InstanceMemoryQuotaTest extends HohenheimTestBase {
         CyclicBarrier barrier = new CyclicBarrier(2);
         HttpResponse<?>[] responses = new HttpResponse<?>[2];
         Throwable[] failures = new Throwable[2];
-        List<Thread> threads = new ArrayList<>();
-        for (int i = 0; i < 2; i++) {
-            int slot = i;
-            Thread worker = new Thread(() -> {
-                try {
-                    barrier.await();
-                    responses[slot] = postCreate(PREFIX + "race" + slot);
-                } catch (Throwable error) {
-                    failures[slot] = error;
-                }
-            });
-            worker.start();
-            threads.add(worker);
-        }
-        for (Thread thread : threads) {
-            thread.join();
+        JobRunner racing = JobRunner.create("memory-quota-racers");
+        try {
+            CompletableFuture<?>[] racers = new CompletableFuture<?>[2];
+            for (int i = 0; i < 2; i++) {
+                int slot = i;
+                racers[slot] = racing.runAsync(() -> {
+                    try {
+                        barrier.await();
+                        responses[slot] = postCreate(PREFIX + "race" + slot);
+                    } catch (Throwable error) {
+                        failures[slot] = error;
+                    }
+                });
+            }
+            CompletableFuture.allOf(racers).get(60, TimeUnit.SECONDS);
+        } finally {
+            racing.shutdownNow();
         }
         assertThat(failures).as("step 3: both submits completed").containsOnlyNulls();
 

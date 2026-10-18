@@ -83,6 +83,8 @@ public final class LiveLaneReport implements TestExecutionListener {
             System.getProperty("hohenheim.truncation.dir", "build/live-lane-truncations"),
             "jvm-" + ProcessHandle.current().pid() + ".txt");
         if (this.hookArmed.compareAndSet(false, true)) {
+            // AIDEV-NOTE: a raw Thread on purpose: addShutdownHook takes an unstarted Thread, the one exception
+            // protoblast's JobRunner rule names; the JVM, not a runner, starts it at exit.
             Runtime.getRuntime().addShutdownHook(
                 new Thread(this::reportTruncation, "live-lane-truncation"));
         }

@@ -3,6 +3,8 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.server.sitetype.UnixSocketBridgeConnection;
 import be.elevenways.hohenheim.server.proxy.UnixSocketBridge;
 import be.elevenways.hohenheim.server.proxy.UnixSocketListenerBridge;
+import be.elevenways.protoblast.common.thread.JobRunner;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -28,6 +30,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * an AF_UNIX HTTP server and the response is spliced back verbatim.
  */
 class UnixSocketBridgeTest {
+
+    private final JobRunner servers = JobRunner.create("unix-bridge-test-servers");
+
+    @AfterEach
+    void stopServers() {
+        this.servers.shutdownNow();
+    }
 
     /**
      * A bridge to a path with no listener must FAIL construction rather than bind a loopback
@@ -73,11 +82,11 @@ class UnixSocketBridgeTest {
         // AF_UNIX HTTP server: loop-accept and answer each connection. The bridge now makes a
         // reachability PROBE connection at construction (closed immediately), so a single-accept
         // server would leave the real request with nothing to accept.
-        Thread.ofVirtual().start(() -> {
+        servers.startThread(() -> {
             while (true) {
                 try {
                     SocketChannel conn = unixServer.accept();
-                    Thread.ofVirtual().start(() -> {
+                    servers.startThread(() -> {
                         try (conn) {
                             conn.read(ByteBuffer.allocate(4096));   // consume the request
                             conn.write(ByteBuffer.wrap(httpResponse.getBytes(StandardCharsets.UTF_8)));
@@ -124,7 +133,7 @@ class UnixSocketBridgeTest {
         tcpServer.bind(new InetSocketAddress("127.0.0.1", 0));
         int port = ((InetSocketAddress) tcpServer.getLocalAddress()).getPort();
 
-        Thread.ofVirtual().start(() -> {
+        servers.startThread(() -> {
             try (SocketChannel conn = tcpServer.accept()) {
                 conn.read(ByteBuffer.allocate(4096));
                 conn.write(ByteBuffer.wrap(response.getBytes(StandardCharsets.UTF_8)));
@@ -172,7 +181,7 @@ class UnixSocketBridgeTest {
         // The backend only answers AFTER it has seen the client's EOF, so the
         // response can only arrive if the bridge propagates the half-close
         // instead of tearing the whole splice down.
-        Thread.ofVirtual().start(() -> {
+        servers.startThread(() -> {
             try (SocketChannel conn = tcpServer.accept()) {
                 ByteBuffer sink = ByteBuffer.allocate(4096);
                 while (conn.read(sink) != -1) {

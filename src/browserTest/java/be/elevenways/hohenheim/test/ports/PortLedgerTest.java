@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.test.ports;
 
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.TestDatabases;
-import be.elevenways.protoblast.common.thread.ExecutionContext;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -22,7 +22,12 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -386,27 +391,28 @@ class PortLedgerTest {
                 ids[i] = rival.get(InstanceModel.ID);
             }
         });
-        java.util.concurrent.CyclicBarrier barrier = new java.util.concurrent.CyclicBarrier(2);
-        java.util.List<Throwable> refusals =
-            java.util.Collections.synchronizedList(new java.util.ArrayList<>());
-        Thread[] racers = new Thread[2];
-        for (int i = 0; i < 2; i++) {
-            int ownerId = ids[i];
-            racers[i] = new Thread(ExecutionContext.wrap(() -> Db.run(datasource, () -> {
-                try {
-                    barrier.await();
-                    PortLedger.claimPreallocated(ServerModel.localServerId(), "", 8351,
-                        "udp", InstanceModel.MODEL_ID, ownerId, null);
-                } catch (PortLedger.PortConflict conflict) {
-                    refusals.add(conflict);
-                } catch (Exception unexpected) {
-                    refusals.add(unexpected);
-                }
-            })));
-            racers[i].start();
-        }
-        for (Thread racer : racers) {
-            racer.join();
+        CyclicBarrier barrier = new CyclicBarrier(2);
+        List<Throwable> refusals = Collections.synchronizedList(new ArrayList<>());
+        JobRunner racing = JobRunner.create("port-ledger-racers");
+        try {
+            CompletableFuture<?>[] racers = new CompletableFuture<?>[2];
+            for (int i = 0; i < 2; i++) {
+                int ownerId = ids[i];
+                racers[i] = racing.runAsync(() -> Db.run(datasource, () -> {
+                    try {
+                        barrier.await();
+                        PortLedger.claimPreallocated(ServerModel.localServerId(), "", 8351,
+                            "udp", InstanceModel.MODEL_ID, ownerId, null);
+                    } catch (PortLedger.PortConflict conflict) {
+                        refusals.add(conflict);
+                    } catch (Exception unexpected) {
+                        refusals.add(unexpected);
+                    }
+                }));
+            }
+            CompletableFuture.allOf(racers).get(60, TimeUnit.SECONDS);
+        } finally {
+            racing.shutdownNow();
         }
         Db.run(datasource, () -> {
             List<Row> rows = Models.get(PortAllocationModel.class).find()
