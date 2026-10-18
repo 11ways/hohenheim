@@ -28,6 +28,7 @@ class SqliteOnlyDatabaseGuardTest {
     void bootRefusesNonSqliteEnginesAndResolvesOneUrlForEveryLane() throws Exception {
         String previousUrl = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.URL);
         String previousZenitUrl = ServerSettings.VALUES.getValue(ServerSettings.Database.URL);
+        String previousPath = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.PATH);
         var datasourceBefore = HohenheimDatabase.datasource();
 
         try {
@@ -71,17 +72,21 @@ class SqliteOnlyDatabaseGuardTest {
                 .isEqualTo(chosen);
 
             // 5. Unset, the deprecated hohenheim path is still honoured as the fallback, so an
-            //    upgraded production install opens the same file it always did.
+            //    upgraded production install opens the same file it always did. The path is a plain file, as an
+            //    install writes it (a test database's path also carries its URL parameters).
             ServerSettings.VALUES.setValue(ServerSettings.Database.URL, null);
-            String path = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.PATH);
+            Path fallback = Files.createTempFile("hohenheim-fallback", ".db");
+            Files.deleteIfExists(fallback);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.PATH, fallback.toString());
             assertThat(HohenheimDatabase.resolution().url())
                 .as("step 5: without database.url the hohenheim path is the url")
-                .isEqualTo("jdbc:sqlite:" + path);
+                .isEqualTo("jdbc:sqlite:" + fallback);
             assertThat(ControlPlaneBackups.databaseFile())
                 .as("step 5: and the restore lane agrees")
-                .isEqualTo(Path.of(path));
+                .isEqualTo(fallback);
         } finally {
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.URL, previousUrl);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.PATH, previousPath);
             ServerSettings.VALUES.setValue(ServerSettings.Database.URL, previousZenitUrl);
         }
 

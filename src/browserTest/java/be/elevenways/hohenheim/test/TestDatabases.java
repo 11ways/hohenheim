@@ -16,6 +16,7 @@ import be.elevenways.zenit.server.orm.backup.SnapshotCapableDatasource;
 import be.elevenways.zenit.server.orm.seed.Seeds;
 import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.server.task.TaskRuntime;
+import be.elevenways.zenit.test.support.TestSqliteFiles;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -84,7 +85,8 @@ public final class TestDatabases {
         SqlDatasource outgoing = HohenheimDatabase.datasource();
         releaseHandBoundDefault();
 
-        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
+        // The test database file, committing without a disk flush (TestSqliteFiles: production's journal and locking).
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.PATH, TestSqliteFiles.reference(db.toPath()));
         HohenheimDatabase.init();
         closeOutgoing(outgoing);
         remintControllerIdentity();
