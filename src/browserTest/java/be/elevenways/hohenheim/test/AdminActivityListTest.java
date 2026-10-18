@@ -476,7 +476,8 @@ class AdminActivityListTest extends HohenheimTestBase {
 
         // 3. The list opens on what a person did: a seed, an internal change and work that declared no identity at
         //    all are not on it. Each marker is its actor's display name, except the unattributed action's, which
-        //    has no actor and names a site titled with its marker.
+        //    has no actor: it is told apart by its detail link, since the site it names is titled live and another
+        //    test's action on a then-missing site of the same id names that site too.
         String unattributed = "hh-people-unattributed-" + suffix;
         int siteId = site("hh-people-site-" + suffix);
         String personAction = act(HistoryFixtureRows.action(datasource()).by(PrincipalRef.account(account(person)))
@@ -502,7 +503,9 @@ class AdminActivityListTest extends HohenheimTestBase {
         assertThat(opening).as("step 3: a sign-in does not").doesNotContain(signedIn);
         assertThat(opening).as("step 3: a seed does not").doesNotContain(seeded);
         assertThat(opening).as("step 3: an internal change does not").doesNotContain(plumbing);
-        assertThat(opening).as("step 3: unattributed work is not a person's either").doesNotContain(unattributed);
+        assertThat(opening).as("step 3: unattributed work is not a person's either")
+            .contains("/admin/activity/" + personAction)
+            .doesNotContain("/admin/activity/" + unattributedAction);
 
         // 4. The framework's internal toggle brings the plumbing back, still searchable.
         assertThat(adminGet("/admin/activity?filter.internal=true&filter.actor="
