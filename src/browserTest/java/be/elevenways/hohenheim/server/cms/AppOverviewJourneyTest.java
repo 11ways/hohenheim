@@ -99,6 +99,13 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
                 .contains("href=\"http://healthy.app-journey.test")
                 .contains("Open site");
 
+            // 1d. The trail reads Apps / the site: the Apps list shows the site's row, so its own list is never a crumb
+            //     ("Apps / Sites / site" was a defect fixed on purpose).
+            assertThat(trailOf(page)).as("step 1d: the trail leads to Apps, then names the site")
+                .containsSubsequence("\"/admin/" + HohenheimSlugs.APPS + "\"", "app-journey-healthy");
+            assertThat(trailOf(page)).as("step 1d: and never through the Sites list")
+                .doesNotContain("\"/admin/" + HohenheimSlugs.SITES + "\"");
+
             // 2. A name forced to HTTPS without a working certificate is the error page visitors get: said plainly,
             //    with the fix offered right there, and the address marked as not working.
             String brokenPage = adminGet(overview(broken)).body();

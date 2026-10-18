@@ -87,6 +87,15 @@ final class AppDirectory {
         }
     }
 
+    /** @return the slugs of the entries whose rows the apps are read from, one per {@link Source} */
+    static @NonNull String[] sourceEntrySlugs() {
+        String[] slugs = new String[Source.values().length];
+        for (Source source : Source.values()) {
+            slugs[source.ordinal()] = source.entrySlug;
+        }
+        return slugs;
+    }
+
     /**
      * One app as the list draws it, worded for the viewer it was read for.
      *

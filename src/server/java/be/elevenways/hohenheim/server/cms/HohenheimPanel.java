@@ -215,8 +215,9 @@ public final class HohenheimPanel extends Panel {
         // grant.
         peers.add(TaskAdmin.schedules(NavGroup.SYSTEM, 96));
         peers.add(TaskAdmin.runs(NavGroup.SYSTEM, 97));
+        // The Apps list draws the rows of this node's Sites, Instances and Stacks: their records trail "Apps / site".
         peers.add(AppParts.admin(present(peers, HohenheimSlugs.SITES, HohenheimSlugs.INSTANCES, HohenheimSlugs.STACKS,
-                HohenheimSlugs.PROJECTS),
+                HohenheimSlugs.PROJECTS), present(peers, AppDirectory.sourceEntrySlugs()),
             present(peers, HohenheimSlugs.PUT_ONLINE).isEmpty() ? null : HohenheimSlugs.PUT_ONLINE));
         // In tab order: addresses, certificates, DNS zones, released addresses.
         addCluster(peers, cluster("domain_names", HohenheimSlugs.Cluster.DOMAIN_NAMES, "globe", 50),

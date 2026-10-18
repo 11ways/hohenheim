@@ -202,6 +202,13 @@ public abstract class HohenheimTestBase extends ZenitBrowserTestBase {
         return answer.headers().firstValue("Location").map(FlashHandoff::landing).orElse("");
     }
 
+    /** @return the page header's breadcrumb trail markup ({@code zenitcms:breadcrumbs}), "" for a page without one */
+    protected static @NonNull String trailOf(@NonNull String page) {
+        int start = page.indexOf("data-cms-trail");
+        int end = start < 0 ? -1 : page.indexOf("</pl-breadcrumb>", start);
+        return start < 0 || end < 0 ? "" : page.substring(start, end);
+    }
+
     // -- shared HTTP transport ------------------------------------------------
     //
     // THE one copy of the request helpers ~60 test classes used to each hand-roll.

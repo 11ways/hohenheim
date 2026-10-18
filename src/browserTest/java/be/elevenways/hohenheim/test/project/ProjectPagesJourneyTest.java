@@ -88,6 +88,10 @@ class ProjectPagesJourneyTest extends HohenheimTestBase {
             .contains(PREFIX + "production").contains("/admin/environments/" + environmentId);
         assertThat(environments.body()).as("step 1: and never another project's")
             .doesNotContain(PREFIX + "staging");
+        assertThat(trailOf(environments.body()))
+            .as("step 1: the trail reads Apps / Projects / the project, its own list a collection apart from Apps")
+            .containsSubsequence("\"/admin/" + HohenheimSlugs.APPS + "\"", "\"/admin/" + HohenheimSlugs.PROJECTS + "\"",
+                PREFIX + "webshop");
 
         // 2. Its Members tab names the member as a person, never as the stored subject key, and points at the People
         //    page where someone is given the project's role.

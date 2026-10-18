@@ -82,39 +82,47 @@ public final class AppParts {
     /**
      * @param related the slugs of the admin entries an app is made of (sites, instances, stacks, projects) that this
      *                node registers, linked from the list's toolbar
+     * @param shown   the slugs of this node's entries whose rows the list draws ({@link AppDirectory#sourceEntrySlugs})
      * @param putOnline the entry that puts something online, null on a node that has none
      * @return the operator's Apps list
      */
-    static @NonNull PanelResource<App> admin(@NonNull List<String> related, @Nullable String putOnline) {
-        return onward(entry(HohenheimIds.id("app"), HohenheimSlugs.ADMIN, true), related, putOnline, null).build();
+    static @NonNull PanelResource<App> admin(@NonNull List<String> related, @NonNull List<String> shown,
+                                             @Nullable String putOnline) {
+        return onward(entry(HohenheimIds.id("app"), HohenheimSlugs.ADMIN, true), related, shown, putOnline, null)
+            .build();
     }
 
     /**
      * @param related   the slugs of the /manage entries an app is made of that this node registers, linked from the
      *                  list's toolbar
+     * @param shown     the slugs of this node's /manage entries whose rows the list draws
+     *                  ({@link AppDirectory#sourceEntrySlugs})
      * @param putOnline the entry that puts something online, null on a node that has none
      * @return the /manage twin: the apps made of the sites and instances the caller may list there; no host column,
      *         since the delegated panel names no host
      */
-    static @NonNull PanelResource<App> manage(@NonNull List<String> related, @Nullable String putOnline) {
+    static @NonNull PanelResource<App> manage(@NonNull List<String> related, @NonNull List<String> shown,
+                                              @Nullable String putOnline) {
         // A tenant granted nothing an app is made of sees no empty entry; the list stays scoped.
-        return ManageTwin.listed(onward(entry(ManageTwin.id("app"), HohenheimSlugs.MANAGE, false), related, putOnline,
-                    InstanceTemplateParts::offersTenantCatalog),
+        return ManageTwin.listed(onward(entry(ManageTwin.id("app"), HohenheimSlugs.MANAGE, false), related, shown,
+                    putOnline, InstanceTemplateParts::offersTenantCatalog),
                 access -> HohenheimAccess.managesAnySite(access)
                     || HohenheimAccess.reachesAny(access, InstanceModel.MODEL_ID, HohenheimCapabilities.VIEW))
             .build();
     }
 
     /**
-     * Both twins' sidebar place, toolbar pages and primary verb.
+     * Both twins' sidebar place, toolbar pages, primary verb and the entries whose rows they draw, so a site's or an
+     * instance's record trails "Apps / record", never through its own list.
      *
      * @param offered who is offered the primary verb, null for everyone the panel admits
      */
     private static PanelResource.@NonNull Builder<App> onward(PanelResource.@NonNull Builder<App> builder,
                                                               @NonNull List<String> related,
+                                                              @NonNull List<String> shown,
                                                               @Nullable String putOnline,
                                                               @Nullable Predicate<AccessContext> offered) {
-        builder.navGroup(NavGroup.DEFAULT).navOrder(20);
+        builder.navGroup(NavGroup.DEFAULT).navOrder(20).showsRowsOf(shown.toArray(String[]::new));
         List<RelatedPage> pages = new ArrayList<>();
         for (String slug : related) {
             pages.add(RelatedPage.toPeer(slug));

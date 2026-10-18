@@ -172,6 +172,7 @@ public final class ManagePanel extends Panel {
         HohenheimPanel.addIf(peers, AppParts.manage(HohenheimPanel.present(peers, HohenheimSlugs.SITES,
                 HohenheimSlugs.INSTANCES, HohenheimSlugs.INSTANCE_TEMPLATES, HohenheimSlugs.PREVIEWS,
                     HohenheimSlugs.GIT_PROVIDERS),
+            HohenheimPanel.present(peers, AppDirectory.sourceEntrySlugs()),
             HohenheimPanel.present(peers, HohenheimSlugs.PUT_ONLINE).isEmpty() ? null : HohenheimSlugs.PUT_ONLINE),
             Role.PROXY, Role.INSTANCES);
         HohenheimPanel.addCluster(peers, HohenheimPanel.cluster("tenant_domains", HohenheimSlugs.Cluster.DOMAIN_NAMES,
