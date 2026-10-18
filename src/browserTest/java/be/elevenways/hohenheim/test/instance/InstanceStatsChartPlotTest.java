@@ -1,14 +1,23 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceStats;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
+import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.server.http.SessionCookies;
+import com.microsoft.playwright.BrowserContext;
+import com.microsoft.playwright.Page;
+import com.microsoft.playwright.options.Cookie;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -16,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -38,6 +48,9 @@ class InstanceStatsChartPlotTest extends HohenheimTestBase {
 
     /** Bounded wait: the stats stream is pumped by a thread of its own. */
     private static final Duration WAIT = Duration.ofSeconds(15);
+
+    /** How long a revoked tenant's chart may keep its link: a fraction of the socket's 30 s periodic check. */
+    private static final Duration REVOKED_VIEW_ENDS_WITHIN = Duration.ofSeconds(5);
 
     private static int instanceId;
     private static String handle;
@@ -161,6 +174,41 @@ class InstanceStatsChartPlotTest extends HohenheimTestBase {
         assertThat(page.evaluate("() => window.__statsJourney"))
             .as("step 3: still the same document").isEqualTo("same document");
         assertThat(InstanceStats.viewers(instanceId)).as("step 3: exactly one viewer").isEqualTo(1);
+    }
+
+    /**
+     * A tenant watching the Metrics tab through a record grant stops being a viewer the moment the grant is revoked:
+     * the committed revocation cuts the chart's link at once, though the stream sends it nothing in between.
+     */
+    @Test
+    void aTenantsRevokedGrantEndsTheirLiveStatsAtOnce() throws Exception {
+        UUID tenantId = ApiSupport.user("statschart-tenant@hohenheim.local", "Stats chart tenant");
+        RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, instanceId,
+            HohenheimCapabilities.VIEW, true);
+        BrowserContext tenantContext = browser.newContext();
+        try {
+            // 1. No other tab watches the instance; the tenant opens its Metrics tab from the manage panel, and the
+            //    mounted chart's link becomes the hub's one viewer.
+            navigateToApp("/admin/apps");
+            Poll.until("step 1: no operator tab watches the instance", WAIT,
+                () -> InstanceStats.viewers(instanceId) == 0);
+            tenantContext.addCookies(List.of(new Cookie(SessionCookies.name(), sessionFor(tenantId).token())
+                .setDomain("localhost").setPath("/")));
+            Page tenant = tenantContext.newPage();
+            tenant.navigate(baseUrl() + "/manage/instances/" + instanceId + "/page/stats");
+            Poll.until("step 1: the tenant's chart link reached the hub", WAIT,
+                () -> InstanceStats.viewers(instanceId) == 1);
+
+            // 2. The grant is revoked: the committed revocation names the tenant, whose socket re-asks each link, and
+            //    the idle stats link is cut and leaves the hub long before the socket's periodic check would run.
+            RecordGrants.revoke(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, instanceId,
+                HohenheimCapabilities.VIEW);
+            Poll.until("step 2: the revoked tenant's link left the hub", REVOKED_VIEW_ENDS_WITHIN,
+                () -> InstanceStats.viewers(instanceId) == 0);
+        } finally {
+            tenantContext.close();
+            Models.get(UserModel.class).delete(tenantId);
+        }
     }
 
     // -- plumbing -------------------------------------------------------------

@@ -6,7 +6,6 @@ import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.channel.ChannelHandler;
 import be.elevenways.zenit.common.channel.ChannelLink;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
@@ -26,25 +25,20 @@ import java.util.function.Consumer;
  *
  * The channel declares only {@code requiresLogin}, because a record capability is not a
  * permission -- so admission is decided HERE, per record, through the same precedence walk
- * every other instance surface rides. It is re-decided on a cadence while the link is
- * live, so a revoked grant closes a running stream.
+ * every other instance surface rides.
  *
- * AIDEV-NOTE: the periodic re-check is NOT belt-and-braces over the framework's WebSocket
- * revalidator. That revalidator keys on the WebSocketEndpoint, and the channel gateway is
- * ONE socket carrying many links, so it cannot know that this particular link is bound to
- * instance #7. {@link ChannelHandler#revalidate} only runs before a RESUME. Without the
- * cadence below, a grant revoked mid-session would keep pushing until the tab closed.
+ * AIDEV-NOTE: {@link #revalidate} is that admission again, and zenit asks it (through
+ * {@link ChannelHandler#admits}) at every revalidation of the gateway socket: its periodic
+ * check and, at once, a committed access change naming the viewer (a revoked or denied
+ * record grant). A failed check cuts this link alone, so no private re-check cadence lives
+ * here any more; an idle stream is cut as surely as a busy one.
  */
 public final class InstanceStatsHandler implements ChannelHandler<Object, Object> {
-
-    /** How often a live link's view capability is re-decided. */
-    private static final long REVALIDATION_INTERVAL_MS = 15_000;
 
     private final @NonNull ChannelLink<Object, Object> link;
 
     private @Nullable Integer instanceId;
     private InstanceStats.@Nullable Subscription subscription;
-    private volatile long lastChecked;
 
     public InstanceStatsHandler(@NonNull ChannelLink<Object, Object> link) {
         this.link = link;
@@ -65,22 +59,11 @@ public final class InstanceStatsHandler implements ChannelHandler<Object, Object
             throw new DomainRefusal(ZenitRefusalReason.PERMISSION_DENIED, "Not permitted");
         }
         this.instanceId = instanceId;
-        this.lastChecked = Now.millis();
 
         Consumer<InstanceStats.Sample> viewer = sample -> {
-            if (!this.link.isOpen()) {
-                return;
+            if (this.link.isOpen()) {
+                this.link.submit(sample.toMap());
             }
-            if (Now.millis() - this.lastChecked > REVALIDATION_INTERVAL_MS) {
-                this.lastChecked = Now.millis();
-                if (!this.permitted(instanceId)) {
-                    Blast.log("STATS: capability revoked mid-stream; closing link for instance",
-                        instanceId);
-                    this.link.close();
-                    return;
-                }
-            }
-            this.link.submit(sample.toMap());
         };
         try {
             this.subscription = InstanceStats.subscribe(instanceId, viewer);
