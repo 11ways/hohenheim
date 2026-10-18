@@ -17,6 +17,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.lease.Leases;
+import be.elevenways.zenit.test.support.LeaseObservations;
 import be.elevenways.protoblast.common.util.BlastLog;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.jupiter.api.AfterEach;
@@ -207,18 +208,29 @@ class InstanceConsoleGenerationTest {
                 var ports = PortLedger.claimsOf(InstanceModel.MODEL_ID, instanceId);
                 assertThat(ports).as("step 1: B actually owns an observed port").isNotEmpty();
                 BlastLog.setLogSink(args -> logged.add(Arrays.toString(args)));
-                // 2. A enters a fresh record claim with its already observed exit code; its host stamp is refused.
-                InstanceOperationLock.of(observer).exclusive(instanceId, InstanceOperationLock.Contention.QUEUE, () -> {
-                    try {
-                        Method policy = InstanceConsoles.class.getDeclaredMethod("applyExitPolicy",
-                            session.getClass(), int.class, int.class, Object.class, HostLeases.class,
-                            boolean.class, int.class);
-                        policy.setAccessible(true);
-                        policy.invoke(null, session, instanceId, hostId, "refused-exit", observer, true, 0);
-                    } catch (ReflectiveOperationException failure) {
-                        throw new IllegalStateException(failure);
-                    }
-                });
+                // 2. A enters a fresh record claim with its already observed exit code; its host stamp is refused once
+                //    its wait for the host's lease, which B holds, passed on the moved clock.
+                try {
+                    LeaseObservations.outwaited(Leases.of(datasource), HostLeases.keyFor(hostId),
+                        Duration.ofSeconds(HostLeases.ACQUIRE_WAIT_SECONDS), () -> {
+                            InstanceOperationLock.of(observer).exclusive(instanceId,
+                                InstanceOperationLock.Contention.QUEUE, () -> {
+                                    try {
+                                        Method policy = InstanceConsoles.class.getDeclaredMethod("applyExitPolicy",
+                                            session.getClass(), int.class, int.class, Object.class,
+                                            HostLeases.class, boolean.class, int.class);
+                                        policy.setAccessible(true);
+                                        policy.invoke(null, session, instanceId, hostId, "refused-exit", observer,
+                                            true, 0);
+                                    } catch (ReflectiveOperationException failure) {
+                                        throw new IllegalStateException(failure);
+                                    }
+                                });
+                            return null;
+                        });
+                } catch (Exception failed) {
+                    throw new IllegalStateException(failed);
+                }
                 assertThat(status(instanceId)).as("step 3: the refused stamp leaves B's running outcome intact")
                     .isEqualTo(InstanceModel.STATUS_RUNNING);
                 assertThat(logged).as("step 3: refusal is observed, not merely an unchanged status")

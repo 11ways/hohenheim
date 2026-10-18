@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
 import java.lang.reflect.InvocationHandler;
+import be.elevenways.zenit.test.support.LeaseObservations;
 import be.elevenways.zenit.test.support.TestAccessContexts;
 import be.elevenways.hohenheim.test.LegacyStepPayloads;
 import be.elevenways.hohenheim.HohenheimActivityAction;
@@ -155,19 +156,14 @@ class InstancePowerOperationsTest {
                     .isEqualTo(InstanceOperations.KEYS.key(id));
                 AtomicReference<Throwable> refused = new AtomicReference<>();
                 InstanceOperationLock.production().exclusive(id, InstanceOperationLock.Contention.REFUSE, () -> {
-                    Thread backup = new Thread(ExecutionContext.wrap(() -> Db.run(datasource,
-                        () -> refused.set(catchThrowable(() -> api(InstanceOperations.BACKUP, tenant, id))))),
-                        "backup-during-deploy");
-                    backup.start();
-                    try {
-                        backup.join(TimeUnit.SECONDS.toMillis(Leases.DEFAULT_WAIT_SECONDS + 15L));
-                    } catch (InterruptedException interrupted) {
-                        Thread.currentThread().interrupt();
-                        throw new IllegalStateException("Backup contention journey interrupted", interrupted);
-                    }
-                    assertThat(backup.isAlive())
+                    // The backup waits the production 30 seconds for the deploy's claim, passing on the moved clock;
+                    // a backup queueing for an hour would not finish, and outwaited would fail.
+                    Throwable thrown = catchThrowable(() -> LeaseObservations.outwaited(Leases.of(datasource),
+                        commandKey, () -> Db.supply(datasource, () -> api(InstanceOperations.BACKUP, tenant, id))));
+                    assertThat(thrown)
                             .as("step 2: the API refuses after the normal wait, never queues for an hour")
-                        .isFalse();
+                        .isNotInstanceOf(AssertionError.class);
+                    refused.set(thrown);
                 });
                 // 2. The production deploy claim yields typed core contention and the frozen instance wire answer.
                 assertThat(refused.get()).as("step 2: a live deploy is contention, not a crash")

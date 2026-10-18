@@ -7,10 +7,12 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.lease.Leases;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
+import be.elevenways.zenit.test.support.LeaseObservations;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -95,7 +97,8 @@ class BootSettleLeaseTest {
             Leases rivalCoordinator = Leases.independent(datasource);
             HostLeases rival = new HostLeases(d -> rivalCoordinator, Duration.ofSeconds(30));
             rival.requireFence(HOST);
-            assertThat(BootSettle.underBorrowedHostLease(mine, HOST, ran::incrementAndGet))
+            // The skip comes once the controller's host-lease wait passed, on the moved clock.
+            assertThat(outwaitedHostLease(() -> BootSettle.underBorrowedHostLease(mine, HOST, ran::incrementAndGet)))
                 .as("step 4: a host another controller holds is skipped, not seized")
                 .isFalse();
             assertThat(ran.get())
@@ -114,5 +117,15 @@ class BootSettleLeaseTest {
             assertThat(mine.isHeld(HOST))
                 .as("step 5: still borrowed, still returned").isFalse();
         });
+    }
+
+    /** Runs the call past this controller's wait for the host's lease, which a rival holds. */
+    private static <T> T outwaitedHostLease(Callable<T> call) {
+        try {
+            return LeaseObservations.outwaited(Leases.of(datasource), HostLeases.keyFor(HOST),
+                Duration.ofSeconds(HostLeases.ACQUIRE_WAIT_SECONDS), call);
+        } catch (Exception failed) {
+            throw new IllegalStateException(failed);
+        }
     }
 }

@@ -40,6 +40,9 @@ public final class HostLeases {
     /** Mirrors zenit Leases' default TTL (the field is package-private there). */
     static final Duration DEFAULT_TTL = Duration.ofSeconds(30);
 
+    /** How long a controller waits for a host's lease before it treats the host as another controller's. */
+    public static final int ACQUIRE_WAIT_SECONDS = 5;
+
     private static final HostLeases PRODUCTION = new HostLeases(Leases::of, DEFAULT_TTL);
 
     private final Function<Datasource, Leases> coordinators;
@@ -189,7 +192,7 @@ public final class HostLeases {
         if (!acquire) {
             return null;
         }
-        Lease lease = coordinator.acquire(keyFor(serverId), 5, this.ttl);
+        Lease lease = coordinator.acquire(keyFor(serverId), ACQUIRE_WAIT_SECONDS, this.ttl);
         if (lease == null) {
             return null;
         }
