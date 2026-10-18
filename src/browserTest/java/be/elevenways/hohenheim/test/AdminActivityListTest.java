@@ -326,11 +326,14 @@ class AdminActivityListTest extends HohenheimTestBase {
 
         // 8. The record filter narrows the log to the history of ONE record: never another model's record sharing its
         //    id, nor a record whose id merely contains it. Rows are told apart by their detail links: the host
-        //    picker beside the list still offers every host by its title.
+        //    picker beside the list still offers every host by its title. Both other records are real, so neither
+        //    action names a missing record that one created later under its id would inherit.
         String sameIdSite = act(HistoryFixtureRows.action(datasource()).origin(Accountability.ORIGIN_WEB),
-            SiteModel.MODEL_ID, narrowedHost, ChangeOp.UPDATE);
+            SiteModel.MODEL_ID, siteWithId(narrowedHost, "hh-activity-same-id-site-" + suffix), ChangeOp.UPDATE);
+        // Ten times the id reads as the id followed by a zero: it contains the named id.
+        int widerId = hostWithId(narrowedHost * 10, "hh-activity-wider-id-host-" + suffix);
         String widerIdHost = act(HistoryFixtureRows.action(datasource()).origin(Accountability.ORIGIN_WEB),
-            ServerModel.MODEL_ID, narrowedHost + "0", ChangeOp.UPDATE);
+            ServerModel.MODEL_ID, widerId, ChangeOp.UPDATE);
         HttpResponse<String> narrowed = adminGet("/admin/activity?filter." + AdminActivityResource.HOST_FILTER + "="
             + narrowedHost);
         assertThat(narrowed.statusCode()).as("step 8: the record-filtered list renders").isEqualTo(200);
@@ -570,28 +573,57 @@ class AdminActivityListTest extends HohenheimTestBase {
 
     /** A host record titled {@code name}, admitted nowhere. */
     private static int host(@NonNull String name) {
-        ServerModel servers = Models.get(ServerModel.class);
-        Row host = servers.createEmptyRow();
+        Row host = hostRow(name);
+        Models.get(ServerModel.class).save(host);
+        return host.get(ServerModel.ID);
+    }
+
+    /** @return {@code id}, a host stored under it: the one already there, else a new one titled {@code name} */
+    private static int hostWithId(int id, @NonNull String name) {
+        if (Models.get(ServerModel.class).findById(id) == null) {
+            Row host = hostRow(name);
+            host.set(ServerModel.ID, id);
+            Models.get(ServerModel.class).insert(host);
+        }
+        return id;
+    }
+
+    private static @NonNull Row hostRow(@NonNull String name) {
+        Row host = Models.get(ServerModel.class).createEmptyRow();
         host.set(ServerModel.NAME, name);
         host.set(ServerModel.MODE, ServerModel.MODE_SSH);
         host.set(ServerModel.SSH_TARGET, "operator@" + name + ".invalid");
         host.set(ServerModel.ADMISSION, ServerModel.ADMISSION_BLOCKED);
-        servers.save(host);
-        return host.get(ServerModel.ID);
+        return host;
     }
 
     /** A static site titled {@code name}. */
     private static int site(@NonNull String name) {
+        Row site = siteRow(name);
+        Models.get(SiteModel.class).save(site);
+        return site.get(SiteModel.ID);
+    }
+
+    /** @return {@code id}, a site stored under it: the one already there (trashed too), else a new one */
+    private static int siteWithId(int id, @NonNull String name) {
         SiteModel sites = Models.get(SiteModel.class);
-        Row site = sites.createEmptyRow();
+        if (sites.find().withTrashed().where(SiteModel.ID.eq(id)).first() == null) {
+            Row site = siteRow(name);
+            site.set(SiteModel.ID, id);
+            sites.insert(site);
+        }
+        return id;
+    }
+
+    private static @NonNull Row siteRow(@NonNull String name) {
+        Row site = Models.get(SiteModel.class).createEmptyRow();
         site.set(SiteModel.NAME, name);
         site.set(SiteModel.SLUG, name);
         site.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
         site.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
         site.set(SiteModel.STATUS, "active");
         site.set(SiteModel.ENABLED, true);
-        sites.save(site);
-        return site.get(SiteModel.ID);
+        return site;
     }
 
     /** A bare instance record, enough for the record source to title and offer it. */
