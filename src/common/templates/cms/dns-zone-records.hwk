@@ -20,6 +20,7 @@
 {% declare quickAddForm: InlineCreateFormState = null %}
 {% declare quickAddValues: Map<String, Object> = null %}
 {% declare quickAddPresets: Map<String, Object> = null %}
+{% declare quickAddContext: Map<String, Object> = null %}
 {% declare quickAddRefreshUrl: String = "" %}
 {% declare quickAddCreateUrl: String = "" %}
 {% declare addRecordTarget: RouteTarget = null %}
@@ -43,6 +44,7 @@
         <cms-quick-add createForm={% quickAddForm %}
                        values={% quickAddValues %}
                        presets={% quickAddPresets %}
+                       addContext={% quickAddContext %}
                        refreshUrl={% quickAddRefreshUrl %}
                        createUrl={% quickAddCreateUrl %}></cms-quick-add>
         {% /if %}

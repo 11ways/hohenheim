@@ -18,7 +18,11 @@ import be.elevenways.zenit.cms.server.panel.PartsReads;
 import be.elevenways.zenit.cms.server.page.QuickAddState;
 import be.elevenways.zenit.forms.common.choose.InlineCreateFieldState;
 import be.elevenways.zenit.forms.common.choose.InlineCreateFormState;
+import be.elevenways.zenit.forms.common.choose.InlineCreateEndpoints;
+import be.elevenways.zenit.forms.common.choose.InlineCreateResult;
 import be.elevenways.zenit.forms.common.choose.ZfChooserClient;
+import be.elevenways.zenit.common.data.RecordSourceEndpoints;
+import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
 import be.elevenways.zenit.common.operation.Operation;
@@ -495,6 +499,33 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
                 .as("step 3: the form create does not force HTTPS").isFalse();
             assertThat((Boolean) viaForm.get(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT))
                 .as("step 3: the form create asks no ACME certificate").isTrue();
+
+            // 4. The quick-add bar's add is decided on the server as that create form decides it, under the site its
+            //    context names: a crafted force_ssl=1 naming another site is stored off and under the bar's site. The
+            //    refresh after the add keeps the site, so the next add there lands under it too.
+            Map<String, Object> ownBar = quickAddBar(operator(), own);
+            assertThat((Map<String, Object>) ownBar.get("quickAddContext")).as("step 4: the bar's context is its site")
+                .containsEntry(SiteDomainModel.SITE_ID.getName(), String.valueOf(own));
+            assertThat(ownBar.get("quickAddRefreshUrl")).as("step 4: the refresh after an add keeps it")
+                .isEqualTo("/admin/domains?site_id=" + own);
+            String crafted = PREFIX + "crafted.example.test";
+            InlineCreateResult forged = quickAdd(operator(), own, Map.of(SiteDomainModel.HOSTNAME.getName(), crafted,
+                SiteDomainModel.FORCE_SSL.getName(), true, SiteDomainModel.SITE_ID.getName(), foreign));
+            assertThat(forged.succeeded()).as("step 4: the crafted add is stored: " + forged.violations()).isTrue();
+            Row viaBar = domains.find().where(SiteDomainModel.HOSTNAME.eq(crafted)).first();
+            assertThat(viaBar).as("step 4: the crafted add is stored").isNotNull();
+            created.add(viaBar.get(SiteDomainModel.ID));
+            assertThat((Boolean) viaBar.get(SiteDomainModel.FORCE_SSL))
+                .as("step 4: the crafted force_ssl=1 is stored off").isFalse();
+            assertThat(viaBar.get(SiteDomainModel.SITE_ID)).as("step 4: under the bar's site, never the posted one")
+                .isEqualTo(own);
+            String next = PREFIX + "next.example.test";
+            InlineCreateResult second = quickAdd(operator(), own, Map.of(SiteDomainModel.HOSTNAME.getName(), next));
+            assertThat(second.succeeded()).as("step 4: the next add succeeds: " + second.violations()).isTrue();
+            Row nextRow = domains.find().where(SiteDomainModel.HOSTNAME.eq(next)).first();
+            assertThat(nextRow).as("step 4: the next add is stored").isNotNull();
+            created.add(nextRow.get(SiteDomainModel.ID));
+            assertThat(nextRow.get(SiteDomainModel.SITE_ID)).as("step 4: under the same site").isEqualTo(own);
         } finally {
             for (Object id : created) {
                 domains.delete(id);
@@ -660,6 +691,21 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
 
     private static InlineCreateFieldState createField(InlineCreateFormState form, String name) {
         return form.fields().stream().filter(field -> field.name().equals(name)).findFirst().orElseThrow();
+    }
+
+    /** The Addresses bar's add on /admin as the bar posts it under {@code site}: its context as the submit's query. */
+    @SuppressWarnings("unchecked")
+    private static InlineCreateResult quickAdd(AccessContext ctx, int site, Map<String, Object> body) {
+        Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN));
+        EndpointConduit conduit = new EndpointConduit()
+            .withAttribute(ConduitAttributes.PRINCIPAL, ctx.principal())
+            .setParameter(RecordSourceEndpoints.SOURCE_PARAM, DomainParts.admin().sourceIdIn(admin))
+            .setBody(new LinkedHashMap<>(body));
+        conduit.setQueryParam(SiteDomainModel.SITE_ID.getName(), String.valueOf(site));
+        ActionResult<InlineCreateResult> added =
+            (ActionResult<InlineCreateResult>) InlineCreateEndpoints.CREATE_SUBMIT.handle(conduit);
+        assertThat(added).as("the quick add answers").isNotNull();
+        return added.get();
     }
 
     private static PanelResource<Row> domainResource(String panel) {
