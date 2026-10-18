@@ -36,6 +36,8 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.KeyedRows;
+import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -47,7 +49,12 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -1162,6 +1169,75 @@ public class DatabaseService extends DatasourceScoped {
      * @return null when the move would be accepted, else the named reason it is not
      */
     public static @Nullable Microcopy moveRefusal(@NonNull Row row) {
+        return moveRefusals(List.of(row)).get(0);
+    }
+
+    /**
+     * {@link #moveRefusal} for many records at once (the row action's applicability over a page): their hosts, those
+     * hosts' shared engines and the records already on those engines are each read ONCE, never once per row.
+     *
+     * @return per record, in record order: null where the move would be accepted, else the named reason it is not
+     * @throws IllegalArgumentException when a record names a host that does not exist
+     */
+    public static @NonNull List<@Nullable Microcopy> moveRefusals(@NonNull List<? extends Row> rows) {
+        List<Microcopy> refusals = new ArrayList<>(rows.size());
+        List<Row> candidates = new ArrayList<>();
+        for (Row row : rows) {
+            Microcopy own = ownMoveRefusal(row);
+            refusals.add(own);
+            if (own == null) {
+                candidates.add(row);
+            }
+        }
+        if (candidates.isEmpty()) {
+            return refusals;
+        }
+        // The host's shared engine, if one exists yet, must not already hold a logical
+        // database of this name: that is another record's data, and the restore would
+        // land inside it.
+        List<Integer> stored = new ArrayList<>();
+        Set<String> tokens = new LinkedHashSet<>();
+        for (Row row : candidates) {
+            stored.add(row.get(DatabaseModel.SERVER_ID));
+            tokens.add(Objects.requireNonNull(ManagedDatabase.Engine.forToken(row.get(DatabaseModel.ENGINE))).token());
+        }
+        Map<Integer, Integer> hosts = ServerModel.canonicalServerIds(stored);
+        Map<String, Row> engines = new HashMap<>();
+        for (Row engine : Models.get(DatabaseEngineModel.class).find()
+                .where(DatabaseEngineModel.SERVER_ID.in(new LinkedHashSet<>(hosts.values())))
+                .where(DatabaseEngineModel.ENGINE.in(tokens))
+                .orderBy(DatabaseEngineModel.ID, SortOrder.ASC).all()) {
+            engines.putIfAbsent(engine.get(DatabaseEngineModel.SERVER_ID) + "/" + engine.get(DatabaseEngineModel.ENGINE),
+                engine);
+        }
+        Map<Integer, List<Row>> held = KeyedRows.byAsked(Models.get(DatabaseModel.class).find()
+                .orderBy(DatabaseModel.ID, SortOrder.ASC), DatabaseModel.ENGINE_ID,
+            engines.values().stream().map(engine -> (Integer) engine.get(DatabaseEngineModel.ID)).toList());
+        for (int i = 0; i < rows.size(); i++) {
+            Row row = rows.get(i);
+            if (refusals.get(i) != null) {
+                continue;
+            }
+            String token = Objects.requireNonNull(ManagedDatabase.Engine.forToken(row.get(DatabaseModel.ENGINE)))
+                .token();
+            Row existing = engines.get(hosts.get((Integer) row.get(DatabaseModel.SERVER_ID)) + "/" + token);
+            if (existing == null) {
+                continue;
+            }
+            Row holder = holderAmong(held.getOrDefault((Integer) existing.get(DatabaseEngineModel.ID), List.of()),
+                DatabaseModel.DB_NAME, row.get(DatabaseModel.DB_NAME), row.get(DatabaseModel.ID));
+            if (holder != null) {
+                refusals.set(i, HohenheimMicrocopy.VIOLATIONS.of("database_logical_name_taken")
+                    .withArg("database", row.get(DatabaseModel.DB_NAME))
+                    .withArg("engine", existing.get(DatabaseEngineModel.NAME))
+                    .withArg("record", holder.get(DatabaseModel.NAME)));
+            }
+        }
+        return refusals;
+    }
+
+    /** @return why this record cannot move by its own state alone, null when only its host's engine can refuse it */
+    private static @Nullable Microcopy ownMoveRefusal(@NonNull Row row) {
         if (DatabaseModel.isShared(row)) {
             return HohenheimMicrocopy.VIOLATIONS.of("database_already_shared")
                 .withArg("name", row.get(DatabaseModel.NAME));
@@ -1179,22 +1255,6 @@ public class DatabaseService extends DatasourceScoped {
         }
         if (Boolean.TRUE.equals(row.get(DatabaseModel.EPHEMERAL))) {
             return HohenheimMicrocopy.VIOLATIONS.of("database_ephemeral_shared");
-        }
-        // The host's shared engine, if one exists yet, must not already hold a logical
-        // database of this name: that is another record's data, and the restore would
-        // land inside it.
-        int serverId = ServerModel.canonicalServerId(row.get(DatabaseModel.SERVER_ID));
-        Row existing = Models.get(DatabaseEngineModel.class).findOnHost(serverId, engine.token());
-        if (existing != null) {
-            Integer recordId = row.get(DatabaseModel.ID);
-            Row holder = holderOf(existing.get(DatabaseEngineModel.ID), DatabaseModel.DB_NAME,
-                row.get(DatabaseModel.DB_NAME), recordId);
-            if (holder != null) {
-                return HohenheimMicrocopy.VIOLATIONS.of("database_logical_name_taken")
-                    .withArg("database", row.get(DatabaseModel.DB_NAME))
-                    .withArg("engine", existing.get(DatabaseEngineModel.NAME))
-                    .withArg("record", holder.get(DatabaseModel.NAME));
-            }
         }
         return null;
     }
@@ -1237,10 +1297,17 @@ public class DatabaseService extends DatasourceScoped {
     /** @return the other record on the engine whose {@code field} equals {@code value}, or null */
     private static @Nullable Row holderOf(int engineId, @NonNull StringField field,
                                           @Nullable String value, @Nullable Integer excludeRecordId) {
+        return value == null ? null
+            : holderAmong(DatabaseEngines.databasesOn(engineId), field, value, excludeRecordId);
+    }
+
+    /** @return the first of these records on one engine, other than the excluded one, holding this value */
+    private static @Nullable Row holderAmong(@NonNull List<Row> onEngine, @NonNull StringField field,
+                                             @Nullable String value, @Nullable Integer excludeRecordId) {
         if (value == null) {
             return null;
         }
-        for (Row other : DatabaseEngines.databasesOn(engineId)) {
+        for (Row other : onEngine) {
             Integer otherId = other.get(DatabaseModel.ID);
             if (excludeRecordId != null && excludeRecordId.equals(otherId)) {
                 continue;

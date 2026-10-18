@@ -27,8 +27,13 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The wiring between the managed-DATABASE tier and the canonical runtime-resource
@@ -89,11 +94,80 @@ public final class DatabaseInstances {
 
     /**
      * The instance SERVING a managed database (its own, or its shared engine's), or null
-     * when there is none yet.
+     * when there is none yet or its placement does not resolve ({@link EngineHost#placementsOf}).
+     *
+     * AIDEV-NOTE: this never throws, where {@link EngineHost#serving} does for a binding that
+     * cannot resolve (an unknown engine token, or a shared record whose engine row is missing):
+     * such a record is answered "no engine", and so are its {@link #handleOf(int)},
+     * {@link #liveStatus(int)}, DatabaseLinkNetworks.refreshDatabasePort and
+     * DatabaseEnvInjection, which read through here.
      */
     public static @Nullable Row owned(int databaseId) {
         Row database = Models.get(DatabaseModel.class).findById(databaseId);
-        return database == null ? null : ownedBy(EngineHost.serving(database));
+        return database == null ? null : ownedAmong(List.of(database)).get(databaseId);
+    }
+
+    /**
+     * {@link #owned(int)} for a page of database records at once: the instance serving each (its own for a dedicated
+     * record, its shared engine's for a shared one) -- what a list asking every row's verdict reads, never a lookup
+     * per row.
+     *
+     * @return database id to its serving instance; a database nothing serves yet is absent
+     */
+    public static @NonNull Map<Integer, Row> ownedAmong(@NonNull List<? extends Row> databases) {
+        return servingAmong(EngineHost.placementsOf(databases)).instances();
+    }
+
+    /**
+     * The instances serving placed host records, with the hosts that judged them.
+     *
+     * @param instances key to its serving instance; a key whose placement does not resolve, or whose owner owns no
+     *                  instance, is absent
+     * @param servers   stored host id (null: the local daemon) to its server row, for the placements' hosts and the
+     *                  serving instances' own
+     */
+    public record Serving(@NonNull Map<Integer, Row> instances, @NonNull Map<@Nullable Integer, Row> servers) {
+
+        /** @return the host row an engine instance runs on, null when it names no server */
+        public @Nullable Row hostOf(@NonNull Row instance) {
+            return this.servers.get(instance.get(InstanceModel.SERVER_ID));
+        }
+    }
+
+    /**
+     * THE resolution behind {@link #ownedAmong} and the database verdicts: the newest live instance each placement's
+     * owner owns (one grouped read per owner model), then ONE read of the servers for both the placements' stored
+     * hosts and those instances' own hosts; a placement that does not resolve ({@link
+     * EngineHost.Placement#resolves}) keeps no instance.
+     *
+     * @param placements a key (a database or engine id) to its host's placement
+     */
+    public static @NonNull Serving servingAmong(@NonNull Map<Integer, EngineHost.Placement> placements) {
+        Map<Identifier, Set<Integer>> byModel = new LinkedHashMap<>();
+        for (EngineHost.Placement placement : placements.values()) {
+            byModel.computeIfAbsent(placement.owner().model(), model -> new LinkedHashSet<>())
+                .add(placement.owner().id());
+        }
+        Map<Identifier, Map<Integer, Row>> owned = new HashMap<>();
+        byModel.forEach((model, ids) -> owned.put(model, OwnedInstances.soleOwnedAmong(model, ids)));
+        Map<Integer, Row> candidates = new HashMap<>();
+        List<Integer> serverIds = new ArrayList<>();
+        placements.forEach((key, placement) -> {
+            serverIds.add(placement.serverId());
+            Row instance = owned.get(placement.owner().model()).get(placement.owner().id());
+            if (instance != null) {
+                candidates.put(key, instance);
+                serverIds.add(instance.get(InstanceModel.SERVER_ID));
+            }
+        });
+        Map<Integer, Row> servers = serverIds.isEmpty() ? new HashMap<>() : ServerModel.serversByStoredId(serverIds);
+        Map<Integer, Row> instances = new HashMap<>();
+        candidates.forEach((key, instance) -> {
+            if (placements.get(key).resolves(servers)) {
+                instances.put(key, instance);
+            }
+        });
+        return new Serving(instances, servers);
     }
 
     /**
@@ -101,8 +175,10 @@ public final class DatabaseInstances {
      * on any shared user-defined network) the hostname a joined container reaches it
      * under.
      *
-     * @return null when nothing serves the database yet -- callers must treat that as
-     *         "no engine to reach", never as a name to guess
+     * @return null when nothing serves the database yet, and (unlike {@link EngineHost#serving},
+     *         which throws) for a binding that cannot resolve too (an unknown engine token, a missing
+     *         engine row; see {@link #owned(int)}) -- callers must treat that as "no engine to reach",
+     *         never as a name to guess
      */
     public static @Nullable String handleOf(int databaseId) {
         return handleOf(owned(databaseId));

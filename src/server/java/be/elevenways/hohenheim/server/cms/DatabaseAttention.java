@@ -15,13 +15,15 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.KeyedRows;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 import static be.elevenways.hohenheim.server.cms.AttentionItems.item;
 import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
@@ -50,9 +52,12 @@ public final class DatabaseAttention {
      */
     static void failedDatabases(List<AttentionItem> items) {
         Map<Integer, List<Row>> usedBy = InstanceDatabaseLinks.liveInstancesByDatabase();
-        Map<Integer, Row> leftovers = leftovers();
-        for (Row row : Models.get(DatabaseModel.class).find().all()) {
-            DatabaseVerdict verdict = DatabaseVerdict.ofDatabase(row);
+        Map<Integer, Leftover> leftovers = leftovers();
+        // Every database judged together: the serving instances and their hosts are read once, never once per row.
+        List<Row> databases = Models.get(DatabaseModel.class).find().all();
+        Function<Row, DatabaseVerdict> verdicts = DatabaseVerdict.ofDatabases(databases);
+        for (Row row : databases) {
+            DatabaseVerdict verdict = verdicts.apply(row);
             Microcopy title = verdict.state().attentionTitle(row.get(DatabaseModel.NAME));
             AttentionSeverity severity = verdict.state().severity();
             Integer id = row.get(DatabaseModel.ID);
@@ -60,13 +65,13 @@ public final class DatabaseAttention {
                 continue;
             }
             int apps = usedBy.getOrDefault(id, List.of()).size();
-            Row leftover = leftovers.get(id);
+            Leftover leftover = leftovers.get(id);
             items.add(item(severity, "database", title, verdict.reason(),
                 CmsRoutes.open(ADMIN, HohenheimSlugs.DATABASES, id),
                     HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_database"))
                 .about(AttentionSubject.database(id),
                     apps == 0 ? null : HohenheimMicrocopy.ATTENTION_DETAIL.of("apps_use_it").withArg("count", apps))
-                .withNote(leftover == null ? null : leftoverLine(leftover)));
+                .withNote(leftover == null ? null : leftoverLine(leftover.instance())));
         }
         // An ACTIVE record carrying a reason is the one shape a status alone cannot show:
         // a failed move rolled the record back onto its untouched dedicated engine and
@@ -103,31 +108,54 @@ public final class DatabaseAttention {
      * and removing it is the fix, never restarting it.
      */
     static void moveLeftovers(List<AttentionItem> items) {
-        leftovers().forEach((databaseId, instance) -> {
-            Row database = Models.get(DatabaseModel.class).findById(databaseId);
-            if (database == null
-                    || DatabaseVerdict.ofDatabase(database).state().attentionTitle(database.get(DatabaseModel.NAME))
-                        != null) {
-                return;
+        List<Leftover> leftovers = new ArrayList<>(leftovers().values());
+        Function<Row, DatabaseVerdict> verdicts = DatabaseVerdict.ofDatabases(
+            leftovers.stream().map(Leftover::database).toList());
+        for (Leftover leftover : leftovers) {
+            Row database = leftover.database();
+            Integer databaseId = database.get(DatabaseModel.ID);
+            if (verdicts.apply(database).state().attentionTitle(database.get(DatabaseModel.NAME)) != null) {
+                continue;
             }
             items.add(item(AttentionSeverity.WARNING, "database",
                 HohenheimMicrocopy.ALERT.of("database_move_leftover_subject")
                     .withArg("name", database.get(DatabaseModel.NAME)),
-                leftoverLine(instance), CmsRoutes.open(ADMIN, HohenheimSlugs.DATABASES, databaseId),
+                leftoverLine(leftover.instance()), CmsRoutes.open(ADMIN, HohenheimSlugs.DATABASES, databaseId),
                 HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_database"))
                 .about(AttentionSubject.database(databaseId), null));
-        });
+        }
     }
 
-    /** @return every engine instance a move left behind, keyed by the database it was generated for */
-    private static @NonNull Map<Integer, Row> leftovers() {
-        Map<Integer, Row> found = new LinkedHashMap<>();
-        for (Row instance : Models.get(InstanceModel.class).find()
-                .where(InstanceModel.GENERATED_FOR_MODEL.eq(DatabaseModel.MODEL_ID.toString()))
-                .all()) {
-            Row database = leftoverOf(instance);
-            if (database != null) {
-                found.putIfAbsent(database.get(DatabaseModel.ID), instance);
+    /**
+     * An engine instance a move left behind and the database it was generated for.
+     *
+     * @param database the database, now shared
+     * @param instance its old dedicated engine
+     */
+    private record Leftover(@NonNull Row database, @NonNull Row instance) {
+    }
+
+    /**
+     * @return every engine instance a move left behind, keyed by the database it was generated for; those databases
+     *         are read once
+     */
+    private static @NonNull Map<Integer, Leftover> leftovers() {
+        List<Row> instances = Models.get(InstanceModel.class).find()
+            .where(InstanceModel.GENERATED_FOR_MODEL.eq(DatabaseModel.MODEL_ID.toString()))
+            .all();
+        List<Integer> ids = new ArrayList<>();
+        for (Row instance : instances) {
+            ids.add(instance.get(InstanceModel.GENERATED_FOR_ID));
+        }
+        Map<Integer, List<Row>> databases = KeyedRows.byAsked(Models.get(DatabaseModel.class).find(),
+            DatabaseModel.ID, ids);
+        Map<Integer, Leftover> found = new LinkedHashMap<>();
+        for (Row instance : instances) {
+            Integer databaseId = instance.get(InstanceModel.GENERATED_FOR_ID);
+            List<Row> rows = databaseId == null ? null : databases.get(databaseId);
+            Row database = rows == null ? null : rows.get(0);
+            if (database != null && DatabaseModel.isShared(database)) {
+                found.putIfAbsent(database.get(DatabaseModel.ID), new Leftover(database, instance));
             }
         }
         return found;
@@ -143,8 +171,7 @@ public final class DatabaseAttention {
         }
         Integer databaseId = instance.get(InstanceModel.GENERATED_FOR_ID);
         Row database = Models.get(DatabaseModel.class).findById(databaseId);
-        return database != null && DatabaseModel.PLACEMENT_SHARED.equals(database.get(DatabaseModel.PLACEMENT))
-            ? database : null;
+        return database != null && DatabaseModel.isShared(database) ? database : null;
     }
 
     /** @return the leftover in the alert's words: which old engine, on which host, still holding what */
@@ -155,19 +182,41 @@ public final class DatabaseAttention {
     }
 
     /**
-     * @return the first database this workload uses that does not serve (its {@link DatabaseVerdict}), null when every
-     *         one serves or it uses none
+     * A database a workload uses that does not serve, with the verdict that says so.
+     *
+     * @param database the database record
+     * @param verdict  its verdict, which does not serve
      */
-    static @Nullable Row firstNotServing(int instanceId) {
+    record NotServing(@NonNull Row database, @NonNull DatabaseVerdict verdict) {
+    }
+
+    /**
+     * @return the first database this workload uses that does not serve, with its {@link DatabaseVerdict}; null when
+     *         every one serves or it uses none
+     */
+    static @Nullable NotServing firstNotServing(int instanceId) {
         InstanceDatabaseModel links = Models.get(InstanceDatabaseModel.class);
         if (links == null) {
             return null;
         }
+        List<Integer> ids = new ArrayList<>();
         for (Row link : links.findByInstanceId(instanceId)) {
-            Integer databaseId = link.get(InstanceDatabaseModel.DATABASE_ID);
-            Row database = Models.get(DatabaseModel.class).findById(databaseId);
-            if (database != null && !DatabaseVerdict.ofDatabase(database).serves()) {
-                return database;
+            ids.add(link.get(InstanceDatabaseModel.DATABASE_ID));
+        }
+        Map<Integer, List<Row>> byId = KeyedRows.byAsked(Models.get(DatabaseModel.class).find(), DatabaseModel.ID,
+            ids);
+        List<Row> databases = new ArrayList<>();
+        for (Integer id : ids) {
+            List<Row> found = byId.get(id);
+            if (found != null) {
+                databases.add(found.get(0));
+            }
+        }
+        Function<Row, DatabaseVerdict> verdicts = DatabaseVerdict.ofDatabases(databases);
+        for (Row database : databases) {
+            DatabaseVerdict verdict = verdicts.apply(database);
+            if (!verdict.serves()) {
+                return new NotServing(database, verdict);
             }
         }
         return null;
@@ -212,24 +261,36 @@ public final class DatabaseAttention {
         if (links.isEmpty()) {
             return;
         }
-        var instanceModel = Models.get(InstanceModel.class);
-        var databaseModel = Models.get(DatabaseModel.class);
-        Map<Integer, DatabaseVerdict> verdicts = new HashMap<>();
+        // The apps, the databases and the databases' verdicts are each read once for every link.
+        List<Integer> instanceIds = new ArrayList<>();
+        List<Integer> databaseIds = new ArrayList<>();
         for (Row link : links) {
-            Row instance = instanceModel.find()
-                .where(InstanceModel.ID.eq(link.get(InstanceDatabaseModel.INSTANCE_ID)))
-                .first();
-            if (instance == null) {
+            instanceIds.add(link.get(InstanceDatabaseModel.INSTANCE_ID));
+            databaseIds.add(link.get(InstanceDatabaseModel.DATABASE_ID));
+        }
+        Map<Integer, List<Row>> instances = KeyedRows.byAsked(Models.get(InstanceModel.class).find(),
+            InstanceModel.ID, instanceIds);
+        Map<Integer, List<Row>> byId = KeyedRows.byAsked(Models.get(DatabaseModel.class).find(), DatabaseModel.ID,
+            databaseIds);
+        List<Row> databases = new ArrayList<>();
+        for (List<Row> found : byId.values()) {
+            databases.add(found.get(0));
+        }
+        Function<Row, DatabaseVerdict> verdicts = DatabaseVerdict.ofDatabases(databases);
+        for (Row link : links) {
+            Integer instanceId = link.get(InstanceDatabaseModel.INSTANCE_ID);
+            List<Row> app = instanceId == null ? null : instances.get(instanceId);
+            if (app == null) {
                 continue;
             }
+            Row instance = app.get(0);
             Integer databaseId = link.get(InstanceDatabaseModel.DATABASE_ID);
-            Row database = databaseId == null ? null : databaseModel.find()
-                .where(DatabaseModel.ID.eq(databaseId))
-                .first();
-            if (database == null) {
+            List<Row> found = databaseId == null ? null : byId.get(databaseId);
+            if (found == null) {
                 continue;   // dangling link; the tab shows it as (deleted)
             }
-            DatabaseVerdict verdict = verdicts.computeIfAbsent(databaseId, id -> DatabaseVerdict.ofDatabase(database));
+            Row database = found.get(0);
+            DatabaseVerdict verdict = verdicts.apply(database);
             if (verdict.serves()) {
                 continue;
             }

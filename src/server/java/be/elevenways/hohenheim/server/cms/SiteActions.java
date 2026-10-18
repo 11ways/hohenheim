@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.site.ProtectPath;
 import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.text.SlugText;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
@@ -17,20 +18,22 @@ import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.routing.UrlTarget;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.function.Function;
-import java.util.function.Predicate;
 
 /**
  * THE site verbs, built once for both panels: the operator list and the delegated subset read the same builders, so
@@ -62,7 +65,7 @@ final class SiteActions {
      * operator's form changes what a site serves, so only this family carries {@link #CHANGE_CONFIGURATION}.
      */
     static @NonNull List<PanelAction<Row>> operator() {
-        return List.of(openSiteAction(OPEN_SITE, AppHealth::openUrl, AppHealth::siteServes), enableAction(),
+        return List.of(openSiteAction(OPEN_SITE, AppHealth::openSites, SiteModel.ID), enableAction(),
             disableAction(), cloneAction(),
             rollbackAction(), protectPathAction(), fixHttpsAction(), stopForcingHttpsAction(), addAddressAction(),
             fixProtectionAction(), changeConfigurationAction());
@@ -73,39 +76,56 @@ final class SiteActions {
      * stay operator acts.
      */
     static @NonNull List<PanelAction<Row>> delegated() {
-        return List.of(openSiteAction(OPEN_SITE, AppHealth::openUrl, AppHealth::siteServes), enableAction(),
+        return List.of(openSiteAction(OPEN_SITE, AppHealth::openSites, SiteModel.ID), enableAction(),
             disableAction(), protectPathAction(), fixHttpsAction(), stopForcingHttpsAction(), addAddressAction(),
             fixProtectionAction());
     }
 
     /**
      * The app's own address in a new tab, the record heading's first action (Open site), offered only
-     * while visitors reach it: the instance's twin passes {@link AppHealth#openUrlOfInstance}.
+     * while visitors reach it: the instance's twin passes {@link AppHealth#openInstances}.
      *
      * AIDEV-NOTE: hidden while the app is not serving (broken, unable to start or
      * stopped): a link to the error page visitors get offers nothing, and the health band
      * beside it carries the fix. It reads the verdict's own serving half (AppHealth), never a second check of what
      * "serving" means, for the operator and the tenant alike.
      *
-     * @param serves the serving half of the verdict of the resource this action is placed on
+     * AIDEV-NOTE: the addresses of a rendered page are read ONCE, by the shown condition, and kept on the request
+     * (Conduit.memo, per action) for the link targets of the rows it shows; a route asked without that read (no
+     * request, or a row it never judged) reads its one row afresh.
+     *
+     * @param open the addresses of the records Open site is offered on, by id, for a page of records
+     * @param key  the records' id field
      */
     static @NonNull PanelAction<Row> openSiteAction(@NonNull Identifier id,
-                                                    @NonNull Function<Row, @Nullable String> url,
-                                                    @NonNull Predicate<Row> serves) {
+                                                    @NonNull Function<List<Row>, Map<Integer, String>> open,
+                                                    @NonNull IntegerField key) {
+        IdentifierKey<Map<Integer, String>> read = IdentifierKey.of("hohenheim", "open_urls_" + id.getPath());
         return PanelAction.<Row>link(id, ActionPlacement.ROW)
             .label(HohenheimMicrocopy.APP_OVERVIEW.of("open_site"))
             .icon(Icon.of("up-right-from-square"))
             .inlineInRow(false)
             .openInNewTab()
-            .shownWhen((row, access) -> url.apply(row) != null && serves.test(row))
-            .route((row, request) -> new UrlTarget(Objects.requireNonNull(url.apply(row),
-                "Open site is shown only while the app has an address")))
+            .shownWhenAmong((rows, access) -> {
+                Map<Integer, String> urls = open.apply(rows);
+                Conduit conduit = access.conduit();
+                if (conduit != null) {
+                    conduit.memo(read, HashMap::new).putAll(urls);
+                }
+                return row -> urls.containsKey(row.get(key));
+            })
+            .route((row, request) -> {
+                Integer rowId = row.get(key);
+                String url = request.conduit().memo(read, HashMap::new).get(rowId);
+                return new UrlTarget(Objects.requireNonNull(url != null ? url : open.apply(List.of(row)).get(rowId),
+                    "Open site is shown only while the app has an address"));
+            })
             .build();
     }
 
     /** To the site's addresses, where each name forced without a certificate gets one. */
     private static @NonNull PanelAction<Row> fixHttpsAction() {
-        return fixLink(FIX_HTTPS, "fix_https", "lock", SiteParts.DOMAINS_TAB, AppHealth::needsCertificate);
+        return fixLink(FIX_HTTPS, "fix_https", "lock", SiteParts.DOMAINS_TAB, AppHealth::needingCertificate);
     }
 
     /**
@@ -125,7 +145,7 @@ final class SiteActions {
 
     /** To the site's addresses, for a site visitors cannot reach because it answers on no name. */
     private static @NonNull PanelAction<Row> addAddressAction() {
-        return fixLink(ADD_ADDRESS, "add_address", "plus", SiteParts.DOMAINS_TAB, AppHealth::needsAddress);
+        return fixLink(ADD_ADDRESS, "add_address", "plus", SiteParts.DOMAINS_TAB, AppHealth::needingAddress);
     }
 
     /**
@@ -157,32 +177,41 @@ final class SiteActions {
      * own settings: it names no app to serve, an upstream the proxy refuses, or a sign-in provider that cannot work.
      */
     private static @NonNull PanelAction<Row> changeConfigurationAction() {
-        return fixLink(CHANGE_CONFIGURATION, "change_configuration", "sliders", AppHealth::refusedBySettings,
+        return fixLink(CHANGE_CONFIGURATION, "change_configuration", "sliders",
+            (sites, access) -> AppHealth::refusedBySettings,
             (site, request) -> CmsRoutes.detail(request.panelSlug(), HohenheimSlugs.SITES, site.get(SiteModel.ID)));
     }
 
     /** To the site's protected paths, for a path whose protection lets everyone in. */
     private static @NonNull PanelAction<Row> fixProtectionAction() {
         return fixLink(FIX_PROTECTION, "fix_protection", "lock", HohenheimSlugs.PROTECTED_PATHS,
-            AppHealth::hasOpenPath);
+            AppHealth::withOpenPath);
     }
 
+    /**
+     * A health fix that leads to one of the site's tabs, drawn for the sites {@code among} names: a page of sites asks
+     * it once, never once per row.
+     */
     private static @NonNull PanelAction<Row> fixLink(@NonNull Identifier id, @NonNull String key, @NonNull String icon,
-                                                     @NonNull String tab, @NonNull Predicate<Row> applies) {
-        return fixLink(id, key, icon, applies, (site, request) -> CmsRoutes.subpage(request.panelSlug(),
-            HohenheimSlugs.SITES, site.get(SiteModel.ID), tab));
+                                                     @NonNull String tab,
+                                                     @NonNull Function<List<Row>, Set<Integer>> among) {
+        return fixLink(id, key, icon, (sites, access) -> {
+            Set<Integer> applies = among.apply(sites);
+            return site -> applies.contains(site.get(SiteModel.ID));
+        }, (site, request) -> CmsRoutes.subpage(request.panelSlug(), HohenheimSlugs.SITES, site.get(SiteModel.ID),
+            tab));
     }
 
     /** A health fix that leads somewhere on the site, offered only where its verdict applies. */
     private static @NonNull PanelAction<Row> fixLink(@NonNull Identifier id, @NonNull String key, @NonNull String icon,
-                                                     @NonNull Predicate<Row> applies,
+                                                     PanelAction.@NonNull PageShown<Row> applies,
                                                      @NonNull BiFunction<Row, PanelRequest, RouteTarget> route) {
         return PanelAction.<Row>link(id, ActionPlacement.ROW)
             .label(HohenheimMicrocopy.APP_HEALTH.of(key))
             .icon(Icon.of(icon))
             .inlineOnRecord(false)
             .inlineInRow(false)
-            .shownWhen((site, access) -> applies.test(site))
+            .shownWhenAmong(applies)
             .route(route)
             .build();
     }

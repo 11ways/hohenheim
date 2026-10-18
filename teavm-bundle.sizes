@@ -1310,7 +1310,6 @@ cms.js	be.elevenways.hohenheim.model.DnsZonePeerModel	1265
 cms.js	be.elevenways.hohenheim.model.EnvironmentModel	749
 cms.js	be.elevenways.hohenheim.model.GameDomainModel	1127
 cms.js	be.elevenways.hohenheim.model.GitProviderModel	1297
-cms.js	be.elevenways.hohenheim.model.GroupedCounts	249
 cms.js	be.elevenways.hohenheim.model.HostMode	466
 cms.js	be.elevenways.hohenheim.model.InstallMediaFetchModel	700
 cms.js	be.elevenways.hohenheim.model.InstanceBackupModel	1662

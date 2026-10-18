@@ -29,18 +29,19 @@ import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.zenit.server.operation.OperationRuns;
 import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.render.table.HealthFixCellState;
 import be.elevenways.zenit.cms.common.resource.HealthTone;
 import be.elevenways.zenit.cms.common.resource.RecordHealth;
 import be.elevenways.zenit.cms.common.resource.ResourceHealth;
 import be.elevenways.zenit.cms.server.page.RecordHealthReads;
 import be.elevenways.zenit.cms.server.panel.PanelGate;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.field.IntegerField;
-import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.KeyedRows;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.security.AccessContext;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -48,10 +49,15 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * The health verdict of an app, for both of its record pages: a site and the instance behind it. The overview's first
@@ -70,50 +76,81 @@ import java.util.Set;
  */
 final class AppHealth {
 
+    /** The certificate rows one request's site verdicts and HTTPS cells share ({@link #certificateRows}). */
+    private static final IdentifierKey<Supplier<List<Row>>> CERTIFICATE_ROWS =
+        IdentifierKey.of("hohenheim", "app_health_certificate_rows");
+
     private AppHealth() {
+    }
+
+    /**
+     * The certificate rows a covering certificate is looked up in, read at most once per request and only when a name
+     * asks ({@link CertificateCoverage#candidatesOnce()}): the Apps list's HTTPS column, its site verdicts and its
+     * instance verdicts share one read. Without a request each call reads on its own.
+     *
+     * @param access the reader, whose request holds the shared supplier; null for a read outside one
+     */
+    static @NonNull Supplier<List<Row>> certificateRows(@Nullable AccessContext access) {
+        var conduit = access == null ? null : access.conduit();
+        return conduit == null ? CertificateCoverage.candidatesOnce()
+            : conduit.memo(CERTIFICATE_ROWS, CertificateCoverage::candidatesOnce);
     }
 
     /** @param delegated whether the twin is /manage, whose row actions are a subset and whose words name no host */
     static @NonNull ResourceHealth<Row> sites(boolean delegated) {
         return ResourceHealth.batch((sites, access) -> {
-            SiteFacts facts = SiteFacts.of(sites);
-            return site -> spokenTo(siteVerdict(site, facts, delegated, access).health(), delegated,
-                HohenheimSlugs.SITES, site, access);
+            SiteFacts facts = SiteFacts.of(sites, access);
+            return spokenTo(sites, site -> siteVerdict(site, facts, delegated, access).health(), delegated,
+                HohenheimSlugs.SITES, access);
         });
     }
 
     /** @param delegated whether the twin is /manage, whose row actions are a subset and whose words name no host */
     static @NonNull ResourceHealth<Row> instances(boolean delegated) {
         return ResourceHealth.batch((instances, access) -> {
-            InstanceFacts facts = InstanceFacts.of(instances);
-            return instance -> spokenTo(instanceVerdict(instance, facts, delegated, access).health(), delegated,
-                HohenheimSlugs.INSTANCES, instance, access);
+            InstanceFacts facts = InstanceFacts.of(instances, access);
+            return spokenTo(instances, instance -> instanceVerdict(instance, facts, delegated, access).health(),
+                delegated, HohenheimSlugs.INSTANCES, access);
         });
     }
 
     /**
      * A delegated verdict naming fixes of which the reader may use none says who can: /manage offers a fix only where
      * the reader's grants open it, so a tenant read a problem with no way forward and nobody named (an app
-     * whose site the tenant holds no grant on).
+     * whose site the tenant holds no grant on). The fixes of a whole page are offered in one read
+     * ({@link RecordHealthReads#fixCells}, the fix list cells' own answer).
      *
-     * @param ownSlug the entry of the record the verdict is read for
+     * @param rows     the records of one page, judged together
+     * @param verdicts each record's own verdict
+     * @param ownSlug  the entry of the records the verdicts are read for
+     * @return each record's verdict as this reader reads it
      */
-    private static @NonNull RecordHealth spokenTo(@NonNull RecordHealth health, boolean delegated,
-                                                  @NonNull String ownSlug, @NonNull Row own,
-                                                  @NonNull AccessContext reader) {
-        if (!delegated || health.fixes().isEmpty()) {
-            return health;
+    private static @NonNull Function<Row, RecordHealth> spokenTo(@NonNull List<Row> rows,
+                                                                @NonNull Function<Row, RecordHealth> verdicts,
+                                                                boolean delegated, @NonNull String ownSlug,
+                                                                @NonNull AccessContext reader) {
+        Map<Row, RecordHealth> judged = new IdentityHashMap<>();
+        for (Row row : rows) {
+            judged.put(row, verdicts.apply(row));
         }
-        // The fix list cell's own answer (RecordHealthReads.fixCell); a verdict read off-request offers none.
+        Function<Row, RecordHealth> verdictOf = row -> judged.computeIfAbsent(row, verdicts);
+        if (!delegated) {
+            return verdictOf;
+        }
+        // A verdict read off-request offers none.
         Panel manage = PanelRegistry.getBySlug(HohenheimSlugs.MANAGE);
         PanelEntry entry = manage != null ? manage.entryBySlug(ownSlug) : null;
-        if (entry != null && reader.conduit() != null
-                && RecordHealthReads.fixCell(PanelGate.request(manage, reader), entry, own, health) != null) {
-            return health;
-        }
+        Function<Row, @Nullable HealthFixCellState> offered = entry != null && reader.conduit() != null
+            ? RecordHealthReads.fixCells(PanelGate.request(manage, reader), entry, rows, verdictOf) : row -> null;
         Microcopy who = CmsSupport.operatorWords(HohenheimMicrocopy.APP_HEALTH, "operator_fixes");
-        return health.detail(health.detail() == null ? who
-            : Microcopy.concat(List.of(health.detail(), Microcopy.literal(" "), who)));
+        return row -> {
+            RecordHealth health = verdictOf.apply(row);
+            if (health.fixes().isEmpty() || offered.apply(row) != null) {
+                return health;
+            }
+            return health.detail(health.detail() == null ? who
+                : Microcopy.concat(List.of(health.detail(), Microcopy.literal(" "), who)));
+        };
     }
 
     /**
@@ -190,11 +227,6 @@ final class AppHealth {
      * @param reason why, in the first held app's verdict words (the placement gate's refusal)
      */
     record HeldBack(int apps, @Nullable Microcopy reason) {}
-
-    /** Whether visitors reach this site: its verdict's serving half (Open site's condition). */
-    static boolean siteServes(@NonNull Row site) {
-        return siteVerdict(site, SiteFacts.of(List.of(site)), false, null).serving();
-    }
 
     /** Whether this instance runs and serves what visitors reach of it: its verdict's serving half. */
     static boolean instanceServes(@NonNull Row instance) {
@@ -310,14 +342,14 @@ final class AppHealth {
         if (live == SiteHealth.DOWN) {
             // A workload that runs while its database does not serve: the database is the cause, its own item the
             // root ("Database shop-db is not running"), so this site's error page folds under it.
-            Row database = instance == null ? null : DatabaseAttention.firstNotServing(instance.get(InstanceModel.ID));
-            if (database != null) {
-                return Verdict.causedBy(AttentionSubject.database(database.get(DatabaseModel.ID)),
+            DatabaseAttention.NotServing down = instance == null ? null
+                : DatabaseAttention.firstNotServing(instance.get(InstanceModel.ID));
+            if (down != null) {
+                return Verdict.causedBy(AttentionSubject.database(down.database().get(DatabaseModel.ID)),
                     RecordHealth.broken(Headline.ERROR_PAGE.copy())
                         .detail(HohenheimMicrocopy.APP_HEALTH.of("database_not_serving")
-                        .withArg("name", database.get(DatabaseModel.NAME))
-                        .withArg("state", DatabaseVerdict.ofDatabase(database).state().label()
-                            .withFilter("case", "sentence"))));
+                        .withArg("name", down.database().get(DatabaseModel.NAME))
+                        .withArg("state", down.verdict().state().label().withFilter("case", "sentence"))));
             }
             return Verdict.notServing(RecordHealth.broken(Headline.ERROR_PAGE.copy())
                 .detail(HohenheimMicrocopy.APP_HEALTH.of("upstream_down")));
@@ -340,10 +372,11 @@ final class AppHealth {
         // A name its stored certificate cannot be served for: plain HTTP works, HTTPS ends in an error. The verdict
         // says it in the HTTPS cell's own reason, so an app row never reads OK beside a "Not working" HTTPS badge.
         for (Row domain : domains) {
-            if (httpsOf(domain, passthrough, facts.working) == CertCoverage.ERROR) {
+            if (httpsOf(domain, passthrough, facts.working, facts.certificates) == CertCoverage.ERROR) {
                 return Verdict.serving(RecordHealth.attention(Headline.HTTPS_NOT_WORKING.copy())
                     .detail(DomainParts.httpsDetail(domain, CertCoverage.ERROR,
-                        CertificateCoverage.coveringCertificate(domain.get(SiteDomainModel.HOSTNAME)))));
+                        CertificateCoverage.coveringCertificate(domain.get(SiteDomainModel.HOSTNAME),
+                            facts.certificates.get()))));
             }
         }
         return Verdict.serving(RecordHealth.ok(liveWords(domains, facts.working, passthrough)));
@@ -588,7 +621,7 @@ final class AppHealth {
                 }
             }
         }
-        return attention != null ? attention : RecordHealth.ok(liveHeadline(sites, facts.working));
+        return attention != null ? attention : RecordHealth.ok(liveHeadline(sites, facts));
     }
 
     /**
@@ -627,12 +660,12 @@ final class AppHealth {
             : verdict.fixedBy();
     }
 
-    private static @NonNull Microcopy liveHeadline(@Nullable List<Row> sites, @NonNull Set<String> working) {
+    private static @NonNull Microcopy liveHeadline(@Nullable List<Row> sites, @NonNull SiteFacts facts) {
         if (sites != null) {
             for (Row site : sites) {
-                List<Row> domains = SiteParts.domainsOf(site);
+                List<Row> domains = facts.domains.getOrDefault(site.get(SiteModel.ID), List.of());
                 if (!domains.isEmpty() && Boolean.TRUE.equals(site.get(SiteModel.ENABLED))) {
-                    return liveWords(domains, working, SiteParts.tlsPassthrough(site));
+                    return liveWords(domains, facts.working, SiteParts.tlsPassthrough(site));
                 }
             }
         }
@@ -684,6 +717,16 @@ final class AppHealth {
      * @return the coverage; {@link CertCoverage#PATTERN} for a pattern (no single name to judge)
      */
     static @NonNull CertCoverage httpsOf(@NonNull Row domain, boolean passthrough, @NonNull Set<String> working) {
+        return httpsOf(domain, passthrough, working, CertificateCoverage.candidatesOnce());
+    }
+
+    /**
+     * {@link #httpsOf(Row, boolean, Set)} over certificate rows a page reads once
+     * ({@link CertificateCoverage#candidatesOnce()}).
+     */
+    static @NonNull CertCoverage httpsOf(@NonNull Row domain, boolean passthrough,
+                                         @NonNull Set<String> working,
+                                         @NonNull Supplier<List<Row>> certificates) {
         if (passthrough) {
             return CertCoverage.NOT_USED;
         }
@@ -694,7 +737,7 @@ final class AppHealth {
         if (CertificateCoverage.covers(working, hostname)) {
             return CertCoverage.ACTIVE;
         }
-        Row cert = CertificateCoverage.coveringCertificate(hostname);
+        Row cert = CertificateCoverage.coveringCertificate(hostname, certificates.get());
         CertCoverage coverage = CertCoverage.ofCertificateStatus(cert == null ? null
                 : cert.get(CertificateModel.STATUS));
         // A certificate stored as active that the working names leave out is one the proxy cannot serve.
@@ -737,15 +780,45 @@ final class AppHealth {
         return null;
     }
 
-    /** Whether the Get a certificate fix applies to this one site (its row action's visibility). */
-    static boolean needsCertificate(@NonNull Row site) {
-        return forcedWithoutCertificate(SiteParts.domainsOf(site), workingNames(),
-            SiteParts.tlsPassthrough(site)) != null;
+    /**
+     * The sites the Get a certificate fix applies to (its row actions' visibility): a name forced to HTTPS that no
+     * working certificate covers. A page of sites reads its hostnames and the working certificates once.
+     *
+     * @return the ids, among these sites, of the ones needing a certificate
+     */
+    static @NonNull Set<Integer> needingCertificate(@NonNull List<? extends Row> sites) {
+        Set<Integer> needing = new HashSet<>();
+        if (sites.isEmpty()) {
+            return needing;
+        }
+        Map<Integer, List<Row>> domains = KeyedRows.byAsked(Models.get(SiteDomainModel.class).find(),
+            SiteDomainModel.SITE_ID,
+            sites.stream().map(site -> site.get(SiteModel.ID)).filter(Objects::nonNull).toList());
+        Set<String> working = workingNames();
+        for (Row site : sites) {
+            Integer id = site.get(SiteModel.ID);
+            if (id != null && forcedWithoutCertificate(domains.getOrDefault(id, List.of()), working,
+                    SiteParts.tlsPassthrough(site)) != null) {
+                needing.add(id);
+            }
+        }
+        return needing;
     }
 
-    /** Whether the Add an address fix applies to this one site: one reached by address that answers on none. */
-    static boolean needsAddress(@NonNull Row site) {
-        return SiteParts.reachOf(site).asksAddress() && SiteParts.domainsOf(site).isEmpty();
+    /**
+     * The sites the Add an address fix applies to: reached by address and answering on none, the hostnames of a page
+     * of sites read once.
+     *
+     * @return the ids, among these sites, of the ones needing an address
+     */
+    static @NonNull Set<Integer> needingAddress(@NonNull List<? extends Row> sites) {
+        List<Integer> byAddress = sites.stream().filter(site -> SiteParts.reachOf(site).asksAddress())
+            .map(site -> site.get(SiteModel.ID)).filter(Objects::nonNull).toList();
+        Set<Integer> answering = KeyedRows.byAsked(Models.get(SiteDomainModel.class).find(), SiteDomainModel.SITE_ID,
+            byAddress).keySet();
+        Set<Integer> needing = new HashSet<>(byAddress);
+        needing.removeAll(answering);
+        return needing;
     }
 
     /** Whether the Change its configuration fix applies: the running proxy turns every visitor of this site away. */
@@ -763,10 +836,23 @@ final class AppHealth {
         return false;
     }
 
-    /** Whether the Fix protection fix applies to this one site. */
-    static boolean hasOpenPath(@NonNull Row site) {
-        return firstOpenPath(Models.get(ProtectedPathModel.class).find()
-            .where(ProtectedPathModel.SITE_ID.eq(site.get(SiteModel.ID))).all()) != null;
+    /**
+     * The sites the Fix protection fix applies to: one of its protected paths admits everyone. The paths of a page of
+     * sites are read once.
+     *
+     * @return the ids, among these sites, of the ones with an open path
+     */
+    static @NonNull Set<Integer> withOpenPath(@NonNull List<? extends Row> sites) {
+        Map<Integer, List<Row>> paths = KeyedRows.byAsked(Models.get(ProtectedPathModel.class).find()
+                .orderBy(ProtectedPathModel.ID, SortOrder.ASC), ProtectedPathModel.SITE_ID,
+            sites.stream().map(site -> site.get(SiteModel.ID)).filter(Objects::nonNull).toList());
+        Set<Integer> open = new HashSet<>();
+        paths.forEach((siteId, rows) -> {
+            if (firstOpenPath(rows) != null) {
+                open.add(siteId);
+            }
+        });
+        return open;
     }
 
     // -- shared ----------------------------------------------------------------------
@@ -786,32 +872,60 @@ final class AppHealth {
     }
 
     /**
-     * Where a site's Open site link goes: its first exact name over the scheme that works, or null while visitors
-     * reach nothing there (trashed, switched off, no exact name, or a name forced to HTTPS without a certificate).
+     * Where each of these sites' Open site link goes, for the ones visitors reach: its first exact name over the
+     * scheme that works. A site visitors reach nothing of (trashed, switched off, no exact name, a name forced to
+     * HTTPS without a certificate, or a verdict that does not serve) is absent. The page's facts are read once.
+     *
+     * @return site id to its address, for the sites Open site is offered on
      */
-    static @Nullable String openUrl(@NonNull Row site) {
+    static @NonNull Map<Integer, String> openSites(@NonNull List<Row> sites) {
+        SiteFacts facts = SiteFacts.of(sites);
+        Map<Integer, String> open = new HashMap<>();
+        for (Row site : sites) {
+            String url = openUrl(site, facts);
+            if (url != null && siteVerdict(site, facts, false, null).serving()) {
+                open.put(site.get(SiteModel.ID), url);
+            }
+        }
+        return open;
+    }
+
+    /**
+     * Where each of these instances' Open site link goes, for the ones that run and serve: the first site serving it
+     * that visitors reach. The sites serving the page and their facts are read once.
+     *
+     * @return instance id to its address, for the instances Open site is offered on
+     */
+    static @NonNull Map<Integer, String> openInstances(@NonNull List<Row> instances) {
+        InstanceFacts facts = InstanceFacts.of(instances);
+        Map<Integer, String> open = new HashMap<>();
+        for (Row instance : instances) {
+            Integer id = instance.get(InstanceModel.ID);
+            String url = null;
+            for (Row site : facts.sitesByInstance.getOrDefault(id, List.of())) {
+                url = openUrl(site, facts.sites);
+                if (url != null) {
+                    break;
+                }
+            }
+            if (url != null && instanceVerdict(instance, facts, false, null).serving()) {
+                open.put(id, url);
+            }
+        }
+        return open;
+    }
+
+    /** @return where this site's Open site link goes by its address alone, null while visitors reach nothing there */
+    private static @Nullable String openUrl(@NonNull Row site, @NonNull SiteFacts facts) {
         if (site.get(SiteModel.DELETED_AT) != null || !Boolean.TRUE.equals(site.get(SiteModel.ENABLED))) {
             return null;
         }
-        List<Row> domains = SiteParts.domainsOf(site);
-        Set<String> working = workingNames();
+        List<Row> domains = facts.domains.getOrDefault(site.get(SiteModel.ID), List.of());
         boolean passthrough = SiteParts.tlsPassthrough(site);
-        if (forcedWithoutCertificate(domains, working, passthrough) != null) {
+        if (forcedWithoutCertificate(domains, facts.working, passthrough) != null) {
             return null;
         }
-        return exactUrl(domains, working, passthrough);
-    }
-
-    /** Where an instance's Open site link goes: the first site serving it that visitors reach, null when none does. */
-    static @Nullable String openUrlOfInstance(@NonNull Row instance) {
-        for (Row site : Models.get(SiteModel.class).find()
-                .where(SiteModel.INSTANCE_ID.eq(instance.get(InstanceModel.ID))).all()) {
-            String url = openUrl(site);
-            if (url != null) {
-                return url;
-            }
-        }
-        return null;
+        return exactUrl(domains, facts.working, passthrough);
     }
 
     /** @return the first exact name with the scheme that works for it, null when these domains hold no exact name */
@@ -837,23 +951,8 @@ final class AppHealth {
         for (Row instance : instances) {
             ids.add(instance.get(InstanceModel.ID));
         }
-        return rowsByKey(Models.get(SiteModel.class), SiteModel.INSTANCE_ID, ids);
-    }
-
-    /**
-     * The rows of {@code model} whose {@code key} is one of these ids, read in one query and grouped by that key, each
-     * group in stored order: the one batch read a page of verdicts or the Apps list makes per related table.
-     */
-    static @NonNull Map<Integer, List<Row>> rowsByKey(@NonNull Model model, @NonNull IntegerField key,
-                                                      @NonNull List<Integer> ids) {
-        Map<Integer, List<Row>> byKey = new HashMap<>();
-        if (ids.isEmpty()) {
-            return byKey;
-        }
-        for (Row row : model.find().where(key.in(ids)).orderBy(model.getPrimaryKeyField(), SortOrder.ASC).all()) {
-            byKey.computeIfAbsent(row.get(key), id -> new ArrayList<>()).add(row);
-        }
-        return byKey;
+        return KeyedRows.byAsked(Models.get(SiteModel.class).find().orderBy(SiteModel.ID, SortOrder.ASC),
+            SiteModel.INSTANCE_ID, ids);
     }
 
     /**
@@ -965,12 +1064,18 @@ final class AppHealth {
                                  @NonNull Map<Integer, Row> runtimes) {
 
         static @NonNull InstanceFacts of(@NonNull List<Row> instances) {
+            return of(instances, null);
+        }
+
+        /** @param access the reader whose request shares the certificate rows ({@link #certificateRows}) */
+        static @NonNull InstanceFacts of(@NonNull List<Row> instances, @Nullable AccessContext access) {
             Map<Integer, List<Row>> sitesByInstance = sitesServing(instances);
             List<Row> serving = new ArrayList<>();
             for (List<Row> sites : sitesByInstance.values()) {
                 serving.addAll(sites);
             }
-            return new InstanceFacts(sitesByInstance, SiteFacts.of(serving), ApplicationReleases.runtimeRows(instances));
+            return new InstanceFacts(sitesByInstance, SiteFacts.of(serving, access),
+                ApplicationReleases.runtimeRows(instances));
         }
 
         /** @return the row whose status speaks for this instance's runtime, the instance itself when none other */
@@ -979,13 +1084,22 @@ final class AppHealth {
         }
     }
 
-    /** Everything a page of site verdicts reads, read once for the page. */
+    /**
+     * Everything a page of site verdicts reads, read once for the page; the certificate rows only when a verdict asks
+     * which certificate covers a name.
+     */
     private record SiteFacts(@NonNull Map<Integer, List<Row>> domains, @NonNull Map<Integer, List<Row>> paths,
                              @NonNull Map<Integer, Row> instances, @NonNull Map<Integer, Row> runtimes,
                              @NonNull Map<Integer, SiteHealth> live,
-                             @NonNull Map<Integer, List<RoutingProblem>> problems, @NonNull Set<String> working) {
+                             @NonNull Map<Integer, List<RoutingProblem>> problems, @NonNull Set<String> working,
+                             @NonNull Supplier<List<Row>> certificates) {
 
         static @NonNull SiteFacts of(@NonNull List<Row> sites) {
+            return of(sites, null);
+        }
+
+        /** @param access the reader whose request shares the certificate rows ({@link #certificateRows}) */
+        static @NonNull SiteFacts of(@NonNull List<Row> sites, @Nullable AccessContext access) {
             List<Integer> siteIds = new ArrayList<>();
             List<Integer> instanceIds = new ArrayList<>();
             for (Row site : sites) {
@@ -995,10 +1109,10 @@ final class AppHealth {
                     instanceIds.add(instanceId);
                 }
             }
-            Map<Integer, List<Row>> domains = rowsByKey(Models.get(SiteDomainModel.class), SiteDomainModel.SITE_ID,
-                siteIds);
-            Map<Integer, List<Row>> paths = rowsByKey(Models.get(ProtectedPathModel.class), ProtectedPathModel.SITE_ID,
-                siteIds);
+            Map<Integer, List<Row>> domains = KeyedRows.byAsked(Models.get(SiteDomainModel.class).find()
+                .orderBy(SiteDomainModel.ID, SortOrder.ASC), SiteDomainModel.SITE_ID, siteIds);
+            Map<Integer, List<Row>> paths = KeyedRows.byAsked(Models.get(ProtectedPathModel.class).find()
+                .orderBy(ProtectedPathModel.ID, SortOrder.ASC), ProtectedPathModel.SITE_ID, siteIds);
             Map<Integer, Row> instances = new HashMap<>();
             Map<Integer, SiteHealth> live = new HashMap<>();
             Map<Integer, List<RoutingProblem>> problems = new HashMap<>();
@@ -1025,7 +1139,7 @@ final class AppHealth {
                 }
             }
             return new SiteFacts(domains, paths, instances, ApplicationReleases.runtimeRows(new ArrayList<>(
-                instances.values())), live, problems, workingNames());
+                instances.values())), live, problems, workingNames(), certificateRows(access));
         }
     }
 }

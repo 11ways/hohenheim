@@ -31,6 +31,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.server.operation.OperationCall;
+import be.elevenways.zenit.server.operation.Applicability;
 import be.elevenways.zenit.server.operation.OperationHandlers;
 import be.elevenways.zenit.server.task.record.SchedulePlacements;
 import be.elevenways.zenit.server.task.record.RecordSchedules;
@@ -48,8 +49,11 @@ import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.server.operation.InputScope;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.function.BiPredicate;
 
 /**
  * The handlers of the instance operations and their schedule placements, attached once per JVM.
@@ -117,9 +121,9 @@ public final class InstanceOperationHandlers {
             });
         // One ISO per machine through its record: a drive that holds one is emptied (the detach) before another goes in.
         OperationHandlers.attach(InstanceOperations.ATTACH_INSTALL_MEDIA).source(SUBJECTS)
-            .applies(instance -> authored(instance) && InstanceKinds.handlerOf(instance) != null
-                && InstanceKinds.handlerOf(instance).supportsInstallMedia()
-                && !InstanceDevices.hasInstallMedia(instance.get(InstanceModel.ID)))
+            .applies(Applicability.batch((instances, access, source) -> byInstallMedia(instances,
+                (instance, held) -> !held && authored(instance) && InstanceKinds.handlerOf(instance) != null
+                    && InstanceKinds.handlerOf(instance).supportsInstallMedia())))
             .inputScope(InstanceOperationHandlers::hostMedia)
             .authorize(HohenheimAccess.operatorOnly(OPERATOR_VERB))
             .handle(call -> {
@@ -131,7 +135,8 @@ public final class InstanceOperationHandlers {
                 return null;
             });
         OperationHandlers.attach(InstanceOperations.DETACH_INSTALL_MEDIA).source(SUBJECTS)
-            .applies(instance -> authored(instance) && InstanceDevices.hasInstallMedia(instance.get(InstanceModel.ID)))
+            .applies(Applicability.batch((instances, access, source) -> byInstallMedia(instances,
+                (instance, held) -> held && authored(instance))))
             .authorize(HohenheimAccess.operatorOnly(OPERATOR_VERB))
             .handle(call -> {
                 int instanceId = instanceId(call);
@@ -266,6 +271,18 @@ public final class InstanceOperationHandlers {
      */
     private static boolean authored(@NonNull Row instance) {
         return instance.get(InstanceModel.GENERATED_BY) == null;
+    }
+
+    /**
+     * An install-media verb's verdicts over a page of instances, their drives read ONCE for the page: {@code applies}
+     * decides each instance from whether a drive of it holds a medium.
+     */
+    private static @NonNull List<Boolean> byInstallMedia(@NonNull List<? extends Row> instances,
+                                                         @NonNull BiPredicate<Row, Boolean> applies) {
+        Set<Integer> holding = InstanceDevices.withInstallMedia(instances.stream()
+            .map(instance -> instance.get(InstanceModel.ID)).filter(Objects::nonNull).toList());
+        return instances.stream()
+            .map(instance -> applies.test(instance, holding.contains(instance.get(InstanceModel.ID)))).toList();
     }
 
     /**

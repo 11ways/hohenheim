@@ -17,6 +17,7 @@ import be.elevenways.protoblast.common.util.Uuids;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.KeyedRows;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
@@ -24,7 +25,10 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -254,21 +258,35 @@ public final class ProjectGuards {
      * and the variables it holds. Fresh queries, because this feeds the write gate.
      */
     public static @NonNull EnvironmentUsage usageOf(int environmentId) {
-        List<String> instances = new ArrayList<>();
-        for (Row instance : Models.get(InstanceModel.class).find()
-                .where(InstanceModel.ENVIRONMENT_ID.eq(environmentId))
-                .all()) {
-            instances.add(EnvironmentUsage.nameOf(instance.get(InstanceModel.NAME),
-                instance.get(InstanceModel.ID)));
+        return usageAmong(List.of(environmentId)).get(environmentId);
+    }
+
+    /**
+     * {@link #usageOf} of every asked environment, in one read per holding table: the write gate asks one, the
+     * environments list's dead delete asks a page at once.
+     *
+     * @return environment id to its usage, one entry per asked id (an empty usage when nothing holds it)
+     */
+    public static @NonNull Map<Integer, EnvironmentUsage> usageAmong(@NonNull Collection<Integer> environmentIds) {
+        Map<Integer, List<Row>> instances = KeyedRows.byAsked(Models.get(InstanceModel.class).find(),
+            InstanceModel.ENVIRONMENT_ID, environmentIds);
+        Map<Integer, List<Row>> variables = KeyedRows.byAsked(Models.get(InstanceVariableModel.class).find(),
+            InstanceVariableModel.ENVIRONMENT_ID, environmentIds);
+        Map<Integer, EnvironmentUsage> usages = new LinkedHashMap<>();
+        for (Integer environmentId : environmentIds) {
+            List<String> instanceNames = new ArrayList<>();
+            for (Row instance : instances.getOrDefault(environmentId, List.of())) {
+                instanceNames.add(EnvironmentUsage.nameOf(instance.get(InstanceModel.NAME),
+                    instance.get(InstanceModel.ID)));
+            }
+            List<String> variableNames = new ArrayList<>();
+            for (Row variable : variables.getOrDefault(environmentId, List.of())) {
+                variableNames.add(EnvironmentUsage.nameOf(variable.get(InstanceVariableModel.KEY),
+                    variable.get(InstanceVariableModel.ID)));
+            }
+            usages.put(environmentId, new EnvironmentUsage(instanceNames, variableNames));
         }
-        List<String> variables = new ArrayList<>();
-        for (Row variable : Models.get(InstanceVariableModel.class).find()
-                .where(InstanceVariableModel.ENVIRONMENT_ID.eq(environmentId))
-                .all()) {
-            variables.add(EnvironmentUsage.nameOf(variable.get(InstanceVariableModel.KEY),
-                variable.get(InstanceVariableModel.ID)));
-        }
-        return new EnvironmentUsage(instances, variables);
+        return usages;
     }
 
     /**

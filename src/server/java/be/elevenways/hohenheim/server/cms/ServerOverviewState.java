@@ -72,6 +72,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
 /**
@@ -559,23 +560,26 @@ public final class ServerOverviewState {
                 null,
                 CmsRoutes.detail(panel, HohenheimSlugs.STACKS, stack.get(StackModel.ID))));
         }
+        Function<Row, DatabaseVerdict> verdicts = DatabaseVerdict.ofDatabases(databases);
         for (Row database : databases) {
             Row instance = owned.get(ownerKey(DatabaseModel.MODEL_ID, database.get(DatabaseModel.ID)));
             workloads.add(new WorkloadView(
                 String.valueOf((Object) database.get(DatabaseModel.NAME)),
                 WorkloadTier.DATABASE,
-                // What it does, never the stored "active" (DatabaseVerdict): the list and the attention band agree.
-                DatabaseVerdict.ofDatabase(database).badge(),
+                // What it does, never the stored "active" (DatabaseVerdict, the page's databases judged together):
+                // the list and the attention band agree.
+                verdicts.apply(database).badge(),
                 // A shared database books nothing of its own: its engine does.
                 instance == null ? null : bookedBytes(instance.get(InstanceModel.CAPACITY_MB)),
                 CmsRoutes.detail(panel, HohenheimSlugs.DATABASES, database.get(DatabaseModel.ID))));
         }
+        Function<Row, DatabaseVerdict> engineVerdicts = DatabaseVerdict.ofEngines(engines);
         for (Row engine : engines) {
             Row instance = owned.get(ownerKey(DatabaseEngineModel.MODEL_ID, engine.get(DatabaseEngineModel.ID)));
             workloads.add(new WorkloadView(
                 String.valueOf((Object) engine.get(DatabaseEngineModel.NAME)),
                 WorkloadTier.DATABASE_ENGINE,
-                DatabaseVerdict.ofEngine(engine).badge(),
+                engineVerdicts.apply(engine).badge(),
                 instance == null ? null : bookedBytes(instance.get(InstanceModel.CAPACITY_MB)),
                 CmsRoutes.detail(panel, HohenheimSlugs.DATABASE_ENGINES,
                     engine.get(DatabaseEngineModel.ID))));

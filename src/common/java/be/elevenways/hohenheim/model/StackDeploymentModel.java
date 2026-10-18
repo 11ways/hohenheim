@@ -11,7 +11,9 @@ import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 
 /**
  * One stack deploy attempt: status, captured log, and the fully resolved spec
@@ -74,10 +76,22 @@ public class StackDeploymentModel extends Model {
 
     /** The newest successful deployment carrying a spec snapshot, or null. */
     public Row findLatestSuccessful(int stackId) {
-        return this.history(stackId)
-            .where(STATUS.eq(LIFECYCLE.stored(OperationStatus.SUCCEEDED)))
-            .where(SPEC.isNotNull())
-            .first();
+        return rollbackTargets(this.history(stackId)).first();
+    }
+
+    /**
+     * Which of these stacks hold a rollback target (a successful deployment carrying a spec snapshot), in ONE grouped
+     * count: what a page of stacks asks instead of a read per row.
+     *
+     * @return the ids, among the asked ones, of the stacks holding one
+     */
+    public Set<Integer> withRollbackTarget(Collection<Integer> stackIds) {
+        return rollbackTargets(find()).countBy(STACK_ID, stackIds).keySet();
+    }
+
+    /** {@code deployments} narrowed to the ones a rollback can re-deploy. */
+    private static QueryBuilder<Row> rollbackTargets(QueryBuilder<Row> deployments) {
+        return deployments.where(STATUS.eq(LIFECYCLE.stored(OperationStatus.SUCCEEDED))).where(SPEC.isNotNull());
     }
 
     @Override

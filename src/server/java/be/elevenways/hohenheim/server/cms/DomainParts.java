@@ -37,6 +37,7 @@ import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.RecordLead;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import be.elevenways.zenit.cms.common.resource.ResourceForm;
+import be.elevenways.zenit.cms.common.resource.CellMapper;
 import be.elevenways.zenit.cms.common.resource.ResourceList;
 import be.elevenways.zenit.cms.common.resource.ResourceMutations;
 import be.elevenways.zenit.cms.common.resource.ResourceParent;
@@ -68,6 +69,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.BooleanField;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
+import be.elevenways.zenit.common.orm.query.KeyedRows;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.server.operation.OperationHandlers;
@@ -77,10 +79,12 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Supplier;
 
 /**
  * The site domain entries' shared parts, and the admin domain resource and its /manage twin built from them.
@@ -199,7 +203,9 @@ public final class DomainParts {
             .icon(Icon.of("at"))
             .parent(ResourceParent.of(HohenheimSlugs.SITES, SiteDomainModel.SITE_ID).tab(HohenheimSlugs.DOMAINS))
             .list(list())
-            .reads(ResourceReads.rows())
+            // The HTTPS cell of a page of addresses: their sites, the working names and the certificate rows are read
+            // once for the page (its computed cell is the one-record read).
+            .reads(ResourceReads.rows().pageBatch(DomainParts::certificateCells))
             .writes(ResourceMutations.rows().create().update().delete().build())
             .authority(SiteParts.childAuthority(SiteDomainModel.SITE_ID));
     }
@@ -376,25 +382,56 @@ public final class DomainParts {
     static @Nullable StateLineCell certificateCell(@NonNull Row domain, @NonNull PanelRequest request) {
         boolean passthrough = SiteParts.tlsPassthrough(
             Models.get(SiteModel.class).findById(domain.get(SiteDomainModel.SITE_ID)));
-        return certificateCell(domain, passthrough, AppHealth.workingNames(), request.access(),
-            request.panelSlug());
+        return certificateCell(domain, passthrough, AppHealth.workingNames(), CertificateCoverage.candidatesOnce(),
+            request.access(), request.panelSlug());
+    }
+
+    /**
+     * {@link #certificateCell(Row, PanelRequest)} for a page of addresses: their sites, the working names and the
+     * certificate rows are each read once for the page, never once per row.
+     */
+    private static @NonNull CellMapper<Row> certificateCells(@NonNull List<Row> domains,
+                                                             @NonNull AccessContext access) {
+        Conduit conduit = access.conduit();
+        if (conduit == null) {
+            return (domain, column) -> null;
+        }
+        String panelSlug = CmsSupport.panelSlug(conduit);
+        Set<Integer> siteIds = new LinkedHashSet<>();
+        for (Row domain : domains) {
+            siteIds.add(domain.get(SiteDomainModel.SITE_ID));
+        }
+        Map<Integer, List<Row>> sites = KeyedRows.byAsked(Models.get(SiteModel.class).find(), SiteModel.ID, siteIds);
+        Set<String> working = AppHealth.workingNames();
+        Supplier<List<Row>> certificates = AppHealth.certificateRows(access);
+        return (domain, column) -> {
+            if (!CERTIFICATE_COLUMN.equals(column.name())) {
+                return null;
+            }
+            Integer siteId = domain.get(SiteDomainModel.SITE_ID);
+            List<Row> site = siteId == null ? null : sites.get(siteId);
+            return certificateCell(domain, SiteParts.tlsPassthrough(site == null || site.isEmpty() ? null
+                : site.get(0)), working, certificates, access, panelSlug);
+        };
     }
 
     /**
      * {@link #certificateCell(Row, PanelRequest)} over facts already read: the Apps list's HTTPS column draws its main
      * address through it, so the two lists say one name's HTTPS in the same words.
      *
-     * @param passthrough whether the name belongs to a TLS passthrough site
-     * @param working     the names a working certificate covers ({@link AppHealth#workingNames()})
-     * @param access      who reads it, which decides whether the certificate is named and linked
-     * @param panelSlug   the panel the link points into
+     * @param passthrough  whether the name belongs to a TLS passthrough site
+     * @param working      the names a working certificate covers ({@link AppHealth#workingNames()})
+     * @param certificates the certificate rows, read once for the request ({@link AppHealth#certificateRows})
+     * @param access       who reads it, which decides whether the certificate is named and linked
+     * @param panelSlug    the panel the link points into
      */
     static @Nullable StateLineCell certificateCell(@NonNull Row domain, boolean passthrough,
-                                                   @NonNull Set<String> working, @NonNull AccessContext access,
-                                                   @NonNull String panelSlug) {
-        CertCoverage coverage = AppHealth.httpsOf(domain, passthrough, working);
+                                                   @NonNull Set<String> working,
+                                                   @NonNull Supplier<List<Row>> certificates,
+                                                   @NonNull AccessContext access, @NonNull String panelSlug) {
+        CertCoverage coverage = AppHealth.httpsOf(domain, passthrough, working, certificates);
         Row cert = coverage.hasCertificate()
-            ? CertificateCoverage.coveringCertificate(domain.get(SiteDomainModel.HOSTNAME)) : null;
+            ? CertificateCoverage.coveringCertificate(domain.get(SiteDomainModel.HOSTNAME), certificates.get()) : null;
         StateLineCell cell = StateLineCell.of(coverage, httpsDetail(domain, coverage, cert));
         if (cert == null) {
             return cell;

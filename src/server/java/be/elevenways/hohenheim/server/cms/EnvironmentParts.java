@@ -37,6 +37,7 @@ import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.routing.ParameterDefinition;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.server.operation.Availability;
 import be.elevenways.zenit.server.operation.RowDeleteOperations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -76,7 +77,7 @@ public final class EnvironmentParts {
     public static final Operation<Row, Void, Integer> DELETE =
         RowDeleteOperations.declare(EnvironmentModel.class, SubjectArity.ONE, OPERATOR)
             .id(HohenheimIds.id("delete_environment"))
-            .availability((environment, access) -> DeleteImpact.environmentInUse(environment))
+            .availability(Availability.batch((environments, access) -> DeleteImpact.environmentsInUse(environments)))
             .register();
 
     /** Removes one environment-owned variable; anything running keeps its value until its next deploy. */

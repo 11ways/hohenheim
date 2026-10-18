@@ -7,7 +7,6 @@ import be.elevenways.hohenheim.StateBadge;
 import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.HohenheimCounts;
-import be.elevenways.hohenheim.model.GroupedCounts;
 import be.elevenways.hohenheim.server.database.DatabaseBackups;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.i18n.wording.Wording;
@@ -75,6 +74,8 @@ import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.server.operation.Applicability;
+import be.elevenways.zenit.server.operation.Availability;
 import be.elevenways.zenit.server.operation.OperationHandlers;
 import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.WidgetTree;
@@ -87,10 +88,12 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
 
 import static be.elevenways.hohenheim.RawValues.trimmed;
 
@@ -270,20 +273,22 @@ public final class DatabaseParts {
         OperationHandlers.attach(DELETE)
             .authorize((database, input, access) -> mayDestroy(database, access) ? null
                 : new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "destroying a database demands destroy on it"))
-            .availability((database, access) -> DeleteImpact.databaseInUse(database))
+            .availability(Availability.batch((databases, access) -> DeleteImpact.databasesInUse(databases)))
             .handle(call -> {
                 DatabaseWrites.destroy(call.subject());
                 return 1;
             });
         OperationHandlers.attach(BACK_UP_NOW)
-            .availability((database, access) -> backUpUnavailable(database))
+            .availability(Availability.batch((databases, access) -> backUpUnavailable(databases)))
             .handle(call -> {
                 DatabaseBackups.backUpInBackground(call.subject().get(DatabaseModel.NAME));
                 return null;
             });
         OperationHandlers.attach(MOVE_TO_SHARED)
-            .applies(database -> DatabaseService.moveRefusal(database) == null)
-            .availability((database, access) -> moveUnavailable(database))
+            // Its hosts, their shared engines and the records on them read once for the page.
+            .applies(Applicability.batch((databases, access, source) -> DatabaseService.moveRefusals(databases)
+                .stream().map(Objects::isNull).toList()))
+            .availability(Availability.batch((databases, access) -> moveUnavailable(databases)))
             .handle(call -> {
                 new DatabaseService().moveToSharedEngineInBackground(call.subject().get(DatabaseModel.NAME));
                 return null;
@@ -295,7 +300,7 @@ public final class DatabaseParts {
                 return null;
             });
         OperationHandlers.attach(DELETE_ENGINE)
-            .availability((engine, access) -> DeleteImpact.engineInUse(engine))
+            .availability(Availability.batch((engines, access) -> DeleteImpact.enginesInUse(engines)))
             .handle(call -> {
                 DatabaseWrites.destroyEngine(call.subject());
                 return 1;
@@ -466,7 +471,12 @@ public final class DatabaseParts {
             .icon(Icon.of("database"))
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(50)
-            .reads(ResourceReads.rows());
+            .reads(ResourceReads.rows().pageBatch((databases, access) -> {
+                // The state cell of a page of databases, judged together (its computed cell is the one-record read).
+                Function<Row, DatabaseVerdict> verdicts = DatabaseVerdict.ofDatabases(databases);
+                return (database, column) -> STATE_COLUMN.equals(column.name()) ? verdicts.apply(database).cell()
+                    : null;
+            }));
     }
 
     /**
@@ -628,35 +638,59 @@ public final class DatabaseParts {
 
     /** @return why this database cannot be backed up now, or null when it can */
     static @Nullable Microcopy backUpUnavailable(@NonNull Row database) {
-        if (Boolean.TRUE.equals(database.get(DatabaseModel.EPHEMERAL))) {
-            return HohenheimMicrocopy.DATABASE.of("back_up_temporary");
+        return backUpUnavailable(List.of(database)).get(0);
+    }
+
+    /** @return per database: why it cannot be backed up now, null where it can; the verdicts read once for all */
+    static @NonNull List<@Nullable Microcopy> backUpUnavailable(@NonNull List<? extends Row> databases) {
+        List<Row> persistent = new ArrayList<>();
+        for (Row database : databases) {
+            if (!Boolean.TRUE.equals(database.get(DatabaseModel.EPHEMERAL))) {
+                persistent.add(database);
+            }
         }
         // A dump runs inside the engine serving it.
-        return whileNotServing(database, HohenheimMicrocopy.DATABASE.of("back_up_not_active"),
-            HohenheimMicrocopy.DATABASE.of("back_up_not_serving"));
+        Iterator<Microcopy> notServing = whileNotServing(persistent,
+            HohenheimMicrocopy.DATABASE.of("back_up_not_active"),
+            HohenheimMicrocopy.DATABASE.of("back_up_not_serving")).iterator();
+        List<Microcopy> reasons = new ArrayList<>(databases.size());
+        for (Row database : databases) {
+            reasons.add(Boolean.TRUE.equals(database.get(DatabaseModel.EPHEMERAL))
+                ? HohenheimMicrocopy.DATABASE.of("back_up_temporary") : notServing.next());
+        }
+        return reasons;
     }
 
     /** @return why this database cannot move onto a shared engine now (the move dumps it from the engine it leaves) */
     public static @Nullable Microcopy moveUnavailable(@NonNull Row database) {
-        return whileNotServing(database, HohenheimMicrocopy.DATABASE.of("move_not_active"),
+        return moveUnavailable(List.of(database)).get(0);
+    }
+
+    /** @return per database: why it cannot move onto a shared engine now, null where it can */
+    static @NonNull List<@Nullable Microcopy> moveUnavailable(@NonNull List<? extends Row> databases) {
+        return whileNotServing(databases, HohenheimMicrocopy.DATABASE.of("move_not_active"),
             HohenheimMicrocopy.DATABASE.of("move_not_serving"));
     }
 
     /**
-     * Why a verb that runs inside this database's engine (a dump, a move) cannot run now: the verdict every surface
-     * reads, never the stored "active".
+     * Why a verb that runs inside each database's engine (a dump, a move) cannot run now: the verdict every surface
+     * reads, never the stored "active", judged for all the databases at once.
      *
      * @param plain      the verb's words for a verdict that gives no reason
      * @param withReason the verb's words around the verdict's reason
-     * @return those words, null while the database serves
+     * @return per database those words, null while it serves
      */
-    private static @Nullable Microcopy whileNotServing(@NonNull Row database, @NonNull Microcopy plain,
-                                                       @NonNull Microcopy withReason) {
-        DatabaseVerdict verdict = DatabaseVerdict.ofDatabase(database);
-        if (verdict.serves()) {
-            return null;
+    private static @NonNull List<@Nullable Microcopy> whileNotServing(@NonNull List<? extends Row> databases,
+                                                                    @NonNull Microcopy plain,
+                                                                    @NonNull Microcopy withReason) {
+        List<Microcopy> reasons = new ArrayList<>(databases.size());
+        Function<Row, DatabaseVerdict> verdicts = DatabaseVerdict.ofDatabases(databases);
+        for (Row database : databases) {
+            DatabaseVerdict verdict = verdicts.apply(database);
+            reasons.add(verdict.serves() ? null
+                : verdict.reason() == null ? plain : withReason.withArg("reason", verdict.reason()));
         }
-        return verdict.reason() == null ? plain : withReason.withArg("reason", verdict.reason());
+        return reasons;
     }
 
     /** @return what a database with no dump yet is told: why it cannot be backed up now, or how it will be */
@@ -704,13 +738,14 @@ public final class DatabaseParts {
         Conduit conduit = scope.accessContext().conduit();
         String panelSlug = CmsSupport.panelSlug(conduit);
         Map<Integer, Long> counts = countDatabasesPerEngine();
+        Function<Row, DatabaseVerdict> verdicts = DatabaseVerdict.ofEngines(engines);
         List<WidgetFact> facts = new ArrayList<>();
         for (Row engine : engines) {
             Integer id = engine.get(DatabaseEngineModel.ID);
             String host = ServerModel.canonicalNameOf(engine.get(DatabaseEngineModel.SERVER_ID));
             Microcopy holds = HohenheimMicrocopy.DATABASE_LIST.of("engine_holds")
                 .withArg("databases", HohenheimCounts.of("databases", counts.getOrDefault(id, 0L)))
-                .withArg("state", Labels.inSentence(DatabaseVerdict.ofEngine(engine).state().label()));
+                .withArg("state", Labels.inSentence(verdicts.apply(engine).state().label()));
             facts.add(WidgetFact.link(
                 HohenheimMicrocopy.DATABASE_LIST.of("engine_on_host")
                     .withArg("engine", CmsSupport.enumValueLabel(DatabaseEngineModel.ENGINE,
@@ -861,7 +896,11 @@ public final class DatabaseParts {
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             // Right after Databases: the tier the list above it places records on.
             .navOrder(51)
-            .reads(ResourceReads.rows())
+            // The state cell of a page of engines, judged together (its computed cell is the one-record read).
+            .reads(ResourceReads.rows().pageBatch((engines, access) -> {
+                Function<Row, DatabaseVerdict> verdicts = DatabaseVerdict.ofEngines(engines);
+                return (engine, column) -> STATE_COLUMN.equals(column.name()) ? verdicts.apply(engine).cell() : null;
+            }))
             .list(ResourceList.rows(table).chrome(CmsSupport.WIDE_LIST).facets().ruleFilters()
                 .search(DatabaseEngineModel.NAME)
                 .computed(Objects.requireNonNull(table.column(DATABASES_COLUMN)),
@@ -934,6 +973,7 @@ public final class DatabaseParts {
 
     /** @return engine id -> managed database count, for every engine holding one */
     private static @NonNull Map<Integer, Long> countDatabasesPerEngine() {
-        return GroupedCounts.of(Models.get(DatabaseModel.class).find(), DatabaseModel.ENGINE_ID);
+        return Models.get(DatabaseModel.class).find().where(DatabaseModel.ENGINE_ID.isNotNull())
+            .countBy(DatabaseModel.ENGINE_ID);
     }
 }

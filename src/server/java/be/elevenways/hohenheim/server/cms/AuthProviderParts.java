@@ -33,11 +33,13 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.operation.Availability;
 import be.elevenways.zenit.server.operation.RowDeleteOperations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -61,7 +63,7 @@ public final class AuthProviderParts {
         RowDeleteOperations.declare(SiteAuthProviderModel.class, SubjectArity.ONE,
                 OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
             .id(HohenheimIds.id("delete_auth_provider"))
-            .availability((provider, access) -> DeleteImpact.authProviderInUse(provider))
+            .availability(Availability.batch((providers, access) -> DeleteImpact.authProvidersInUse(providers)))
             .register();
 
     private AuthProviderParts() {
@@ -71,12 +73,11 @@ public final class AuthProviderParts {
     private static final String USED_BY_COLUMN = "used_by";
 
     /** How many places use a provider, in words: the rules naming it plus the sites it gates. */
-    private static @NonNull Microcopy usedBy(@Nullable Integer providerId) {
-        long uses = DeleteImpact.rulesNamingAuthProvider(providerId)
-            + DeleteImpact.sitesGatedByAuthProvider(providerId).size();
-        return uses == 0
+    private static @NonNull Microcopy usedBy(DeleteImpact.@Nullable AuthProviderUses uses) {
+        long count = uses == null ? 0 : uses.count();
+        return count == 0
             ? HohenheimMicrocopy.AUTH_PROVIDER.of("used_by_nothing")
-            : HohenheimMicrocopy.AUTH_PROVIDER.of("used_by_count").withArg("count", uses);
+            : HohenheimMicrocopy.AUTH_PROVIDER.of("used_by_count").withArg("count", count);
     }
 
     /** @return the admin auth-provider resource */
@@ -109,11 +110,18 @@ public final class AuthProviderParts {
             .navOrder(50)
             // A member of the Access cluster (HohenheimPanel): the cluster stands in for it in the sidebar, and a
             // member hidden from nav would drop out of the cluster's tabs too.
-            .reads(ResourceReads.rows())
+            // The "used by" cell of a page of providers, read once for the page through the delete refusal's own
+            // read (its computed cell is the one-record read).
+            .reads(ResourceReads.rows().pageBatch((providers, access) -> {
+                Map<Integer, DeleteImpact.AuthProviderUses> uses = DeleteImpact.authProviderUses(providers);
+                return (provider, column) -> USED_BY_COLUMN.equals(column.name())
+                    ? usedBy(uses.get((Integer) provider.get(SiteAuthProviderModel.ID))) : null;
+            }))
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).facets().ruleFilters()
                 .search(SiteAuthProviderModel.NAME, SiteAuthProviderModel.REQUIRED_PERMISSION)
                 .computed(Objects.requireNonNull(table.column(USED_BY_COLUMN)),
-                    (provider, request) -> usedBy(provider.get(SiteAuthProviderModel.ID)))
+                    (provider, request) -> usedBy(DeleteImpact.authProviderUses(List.of(provider))
+                        .get((Integer) provider.get(SiteAuthProviderModel.ID))))
                 .build())
             .form(ResourceForm.<Row>of(form).build())
             .writes(ResourceMutations.rows()

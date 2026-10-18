@@ -9,10 +9,8 @@ import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.DnsZonePeerModel;
 import be.elevenways.hohenheim.model.EnvironmentModel;
-import be.elevenways.hohenheim.model.GroupedCounts;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
-import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -32,12 +30,15 @@ import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.KeyedRows;
 import be.elevenways.zenit.common.routing.RouteScope;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -45,14 +46,13 @@ import java.util.Set;
 
 /**
  * What a delete takes with it or why it is dead: the facts a per-record delete confirmation names and every
- * resource's in-use refusal, memoized per request.
+ * resource's in-use refusal.
  *
- * AIDEV-NOTE: a delete's confirmation and its availability are asked once per ROW while a list page renders, so a
- * naive implementation would issue a query per row. Every table a delete warning or refusal consults is read ONCE
- * per request through {@link RouteScope#memo} and every record on the page is then answered in memory. A
- * conduit-less caller (a test, a detail render outside a request) degrades to reading the tables directly rather
- * than failing. The {@code *InUse} methods are the ONE home of a delete's dead reason; each resource's delete
- * operation reads its own here.
+ * AIDEV-NOTE: the {@code *InUse} methods are the ONE home of a delete's dead reason; each resource's delete operation
+ * declares its own here as an {@code Availability.batch}. A list render asks the batch ONCE over the page's rows,
+ * so each answer is one read narrowed to the asked keys ({@code countBy}, {@code KeyedRows}), never a query per row
+ * and never a whole-table snapshot; a single subject (the record page, an invoke) is the batch of one. The
+ * confirmations and the list cells below still read their tables once per request through {@link RouteScope#memo}.
  */
 public final class DeleteImpact {
 
@@ -96,121 +96,178 @@ public final class DeleteImpact {
     private static final IdentifierKey<List<Row>> INSTANCES =
         IdentifierKey.of("hohenheim", "delete_impact_instances");
 
-    /** Request-scoped snapshot of every variable, so an environment listing names its holders once. */
-    private static final IdentifierKey<List<Row>> VARIABLES =
-        IdentifierKey.of("hohenheim", "delete_impact_variables");
-
     /** Request-scoped database id to the live instances attached to it, shared with the list's Used by cell. */
     private static final IdentifierKey<Map<Integer, List<Row>>> ATTACHED =
         IdentifierKey.of("hohenheim", "database_used_by");
 
-    /** Request-scoped runtime image id to the live instances running it. */
-    private static final IdentifierKey<Map<Integer, Long>> IMAGE_INSTANCES =
-        IdentifierKey.of("hohenheim", "delete_impact_image_instances");
-
-    /** Request-scoped runtime image id to the templates naming it. */
-    private static final IdentifierKey<Map<Integer, Long>> IMAGE_TEMPLATES =
-        IdentifierKey.of("hohenheim", "delete_impact_image_templates");
-
-    /** Request-scoped host id to what still references it. */
-    private static final IdentifierKey<Map<Integer, ServerModel.References>> SERVER_REFERENCES =
-        IdentifierKey.of("hohenheim", "delete_impact_server_references");
-
-    /** Request-scoped host id to the instance a cold migration is moving onto it. */
-    private static final IdentifierKey<Map<Integer, Row>> MIGRATIONS =
-        IdentifierKey.of("hohenheim", "delete_impact_migrations");
-
     private DeleteImpact() {}
 
-    // -- why a delete is dead: each @return is the refusal, null while the delete is live -----------------------------
+    // -- why a delete is dead: one refusal per asked row, null while its delete is live ------------------------------
 
-    /** @return the sites gated by the provider (named) and the access rules naming it (counted) */
-    static @Nullable Microcopy authProviderInUse(@NonNull Row provider) {
-        Integer id = provider.get(SiteAuthProviderModel.ID);
-        String sites = join(sitesGatedByAuthProvider(id));
-        long rules = rulesNamingAuthProvider(id);
-        if (!sites.isEmpty()) {
-            return HohenheimMicrocopy.AUTH_PROVIDER.of("delete_in_use").withArg("sites", sites).withArg("rules", rules);
+    /**
+     * Who uses one auth provider: the live sites it gates, named, and the access rules naming it, counted.
+     *
+     * @param sites the names of the sites whose login gate it is
+     * @param rules how many access rules name it
+     */
+    record AuthProviderUses(@NonNull List<String> sites, long rules) {
+
+        /** @return how many places use it: the rules plus the sites */
+        long count() {
+            return this.rules + this.sites.size();
         }
-        return rules > 0 ? HohenheimMicrocopy.AUTH_PROVIDER.of("delete_in_use_rules").withArg("rules", rules) : null;
+    }
+
+    /**
+     * THE who-uses-this-provider read, for one provider or a page of them: the gating sites in one read and the
+     * naming rules in one read. The delete's refusal and the list's "used by" cell both read it.
+     *
+     * @return provider id to its uses; a provider nothing uses maps to none (no sites, zero rules)
+     */
+    static @NonNull Map<Integer, AuthProviderUses> authProviderUses(@NonNull List<? extends Row> providers) {
+        List<Integer> ids = idsOf(providers, SiteAuthProviderModel.ID);
+        Map<Integer, List<Row>> gating = KeyedRows.byAsked(Models.get(SiteModel.class).find(),
+            SiteModel.AUTH_PROVIDER_ID, ids);
+        Map<Integer, Long> naming = SiteAuthProviderGuards.rulesNamingAmong(ids);
+        Map<Integer, AuthProviderUses> uses = new HashMap<>();
+        for (Integer id : ids) {
+            List<String> sites = new ArrayList<>();
+            for (Row site : gating.getOrDefault(id, List.of())) {
+                sites.add(siteName(site));
+            }
+            uses.put(id, new AuthProviderUses(sites, naming.getOrDefault(id, 0L)));
+        }
+        return uses;
+    }
+
+    /** @return per provider: the sites it gates (named) and the access rules naming it (counted) */
+    static @NonNull List<@Nullable Microcopy> authProvidersInUse(@NonNull List<? extends Row> providers) {
+        Map<Integer, AuthProviderUses> uses = authProviderUses(providers);
+        List<Microcopy> reasons = new ArrayList<>(providers.size());
+        for (Row provider : providers) {
+            Integer id = provider.get(SiteAuthProviderModel.ID);
+            AuthProviderUses use = id == null ? null : uses.get(id);
+            List<String> sites = use == null ? List.of() : use.sites();
+            long rules = use == null ? 0 : use.rules();
+            reasons.add(!sites.isEmpty() ? HohenheimMicrocopy.AUTH_PROVIDER.of("delete_in_use")
+                    .withArg("sites", join(sites)).withArg("rules", rules)
+                : rules > 0 ? HohenheimMicrocopy.AUTH_PROVIDER.of("delete_in_use_rules").withArg("rules", rules)
+                : null);
+        }
+        return reasons;
     }
 
     /**
      * AIDEV-NOTE: both tiers count. Since 2026-08-08 a database can be attached to an instance, and a refusal that only
      * counted SITES would have let a tenant destroy the engine out from under their own running game server.
      *
-     * @return the live workloads holding the database, named
+     * @return per database: the live workloads holding it, named
      */
-    static @Nullable Microcopy databaseInUse(@NonNull Row database) {
-        String workloads = workloadsHolding(database.get(DatabaseModel.ID));
-        return workloads.isEmpty() ? null : HohenheimMicrocopy.DATABASE.of("delete_in_use")
-            .withArg("name", String.valueOf((Object) database.get(DatabaseModel.NAME)))
-            .withArg("workloads", workloads);
+    static @NonNull List<@Nullable Microcopy> databasesInUse(@NonNull List<? extends Row> databases) {
+        Map<Integer, List<Row>> holding = InstanceDatabaseLinks.liveInstancesAmong(idsOf(databases, DatabaseModel.ID));
+        List<Microcopy> reasons = new ArrayList<>(databases.size());
+        for (Row database : databases) {
+            Integer id = database.get(DatabaseModel.ID);
+            String workloads = workloadNames(id == null ? List.of() : holding.getOrDefault(id, List.of()));
+            reasons.add(workloads.isEmpty() ? null : HohenheimMicrocopy.DATABASE.of("delete_in_use")
+                .withArg("name", String.valueOf((Object) database.get(DatabaseModel.NAME)))
+                .withArg("workloads", workloads));
+        }
+        return reasons;
     }
 
-    /** @return the databases still living on the engine, named */
-    static @Nullable Microcopy engineInUse(@NonNull Row engine) {
-        Integer engineId = engine.get(DatabaseEngineModel.ID);
-        List<Row> hosted = new ArrayList<>();
-        for (Row database : engineId == null ? List.<Row>of() : databases()) {
-            if (engineId.equals(database.get(DatabaseModel.ENGINE_ID))) {
-                hosted.add(database);
-            }
+    /** @return {@link #databasesInUse} of one database */
+    static @Nullable Microcopy databaseInUse(@NonNull Row database) {
+        return databasesInUse(List.of(database)).get(0);
+    }
+
+    /** @return per engine: the databases still living on it, named */
+    static @NonNull List<@Nullable Microcopy> enginesInUse(@NonNull List<? extends Row> engines) {
+        Map<Integer, List<Row>> hosting = KeyedRows.byAsked(Models.get(DatabaseModel.class).find(),
+            DatabaseModel.ENGINE_ID, idsOf(engines, DatabaseEngineModel.ID));
+        List<Microcopy> reasons = new ArrayList<>(engines.size());
+        for (Row engine : engines) {
+            Integer id = engine.get(DatabaseEngineModel.ID);
+            List<Row> hosted = id == null ? List.of() : hosting.getOrDefault(id, List.of());
+            reasons.add(hosted.isEmpty() ? null : HohenheimMicrocopy.DATABASE_ENGINE.of("delete_in_use")
+                .withArg("name", String.valueOf((Object) engine.get(DatabaseEngineModel.NAME)))
+                .withArg("databases", DatabaseEngines.names(hosted)));
         }
-        return hosted.isEmpty() ? null : HohenheimMicrocopy.DATABASE_ENGINE.of("delete_in_use")
-            .withArg("name", String.valueOf((Object) engine.get(DatabaseEngineModel.NAME)))
-            .withArg("databases", DatabaseEngines.names(hosted));
+        return reasons;
     }
 
     /**
      * Without the peer the secondary zones replicating from it decay to {@code error} and stop answering once their SOA
      * expire window closes; the enforcement for every other writer is {@code DnsPeerCascades}.
      *
-     * @return the secondary zones replicating from the peer, named
+     * @return per peer: the secondary zones replicating from it, named
      */
-    static @Nullable Microcopy dnsPeerInUse(@NonNull Row peer) {
-        String zones = join(secondaryZonesOfPeer(peer.get(DnsPeerModel.ID)));
-        return zones.isEmpty() ? null : HohenheimMicrocopy.DNS_PEER.of("delete_in_use").withArg("zones", zones);
+    static @NonNull List<@Nullable Microcopy> dnsPeersInUse(@NonNull List<? extends Row> peers) {
+        Map<Integer, List<Row>> replicating = KeyedRows.byAsked(Models.get(DnsZoneModel.class).find(),
+            DnsZoneModel.PRIMARY_PEER_ID, idsOf(peers, DnsPeerModel.ID));
+        List<Microcopy> reasons = new ArrayList<>(peers.size());
+        for (Row peer : peers) {
+            Integer id = peer.get(DnsPeerModel.ID);
+            List<String> origins = new ArrayList<>();
+            for (Row zone : id == null ? List.<Row>of() : replicating.getOrDefault(id, List.of())) {
+                if (DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))) {
+                    addOrigin(origins, zone);
+                }
+            }
+            reasons.add(origins.isEmpty() ? null
+                : HohenheimMicrocopy.DNS_PEER.of("delete_in_use").withArg("zones", join(origins)));
+        }
+        return reasons;
     }
 
-    /** @return what still groups under the environment, in the write funnel's own words */
-    static @Nullable Microcopy environmentInUse(@NonNull Row environment) {
-        ProjectGuards.EnvironmentUsage usage = environmentUsage(environment.get(EnvironmentModel.ID));
-        return usage.isEmpty() ? null : usage.refusal();
+    /** @return per environment: what still groups under it, in the write funnel's own words */
+    static @NonNull List<@Nullable Microcopy> environmentsInUse(@NonNull List<? extends Row> environments) {
+        Map<Integer, ProjectGuards.EnvironmentUsage> usages =
+            ProjectGuards.usageAmong(idsOf(environments, EnvironmentModel.ID));
+        List<Microcopy> reasons = new ArrayList<>(environments.size());
+        for (Row environment : environments) {
+            Integer id = environment.get(EnvironmentModel.ID);
+            ProjectGuards.EnvironmentUsage usage = id == null ? null : usages.get(id);
+            reasons.add(usage == null || usage.isEmpty() ? null : usage.refusal());
+        }
+        return reasons;
     }
 
-    /** @return how many live instances and templates still run inside the image */
-    static @Nullable Microcopy runtimeImageInUse(@NonNull Row image) {
-        Integer id = image.get(RuntimeImageModel.ID);
-        if (id == null) {
-            return null;
+    /** @return per image: how many live instances and templates still run inside it */
+    static @NonNull List<@Nullable Microcopy> runtimeImagesInUse(@NonNull List<? extends Row> images) {
+        List<Integer> ids = idsOf(images, RuntimeImageModel.ID);
+        Map<Integer, Long> running = Models.get(InstanceModel.class).find()
+            .countBy(InstanceModel.RUNTIME_IMAGE_ID, ids);
+        Map<Integer, Long> naming = Models.get(InstanceTemplateModel.class).find()
+            .countBy(InstanceTemplateModel.RUNTIME_IMAGE_ID, ids);
+        List<Microcopy> reasons = new ArrayList<>(images.size());
+        for (Row image : images) {
+            Integer id = image.get(RuntimeImageModel.ID);
+            long instances = id == null ? 0 : running.getOrDefault(id, 0L);
+            long templates = id == null ? 0 : naming.getOrDefault(id, 0L);
+            reasons.add(instances > 0 || templates > 0 ? HohenheimMicrocopy.RUNTIME_IMAGE.of("delete_in_use")
+                .withArg("instances", instances).withArg("templates", templates) : null);
         }
-        long instances = RouteScope.memo(IMAGE_INSTANCES, () -> GroupedCounts.of(Models.get(InstanceModel.class).find(),
-            InstanceModel.RUNTIME_IMAGE_ID)).getOrDefault(id, 0L);
-        long templates = RouteScope.memo(IMAGE_TEMPLATES,
-                () -> GroupedCounts.of(Models.get(InstanceTemplateModel.class).find(),
-            InstanceTemplateModel.RUNTIME_IMAGE_ID)).getOrDefault(id, 0L);
-        return instances > 0 || templates > 0 ? HohenheimMicrocopy.RUNTIME_IMAGE.of("delete_in_use")
-            .withArg("instances", instances).withArg("templates", templates) : null;
+        return reasons;
     }
 
-    /** @return why the host cannot go: it is this machine, a migration is landing on it, or records still name it */
-    static @Nullable Microcopy serverInUse(@NonNull Row server) {
-        if (ServerParts.local(server)) {
-            return HohenheimMicrocopy.SERVER.of("delete_local");
+    /** @return per host: why it cannot go -- it is this machine, a migration is landing on it, or records name it */
+    static @NonNull List<@Nullable Microcopy> serversInUse(@NonNull List<? extends Row> servers) {
+        List<Integer> ids = idsOf(servers, ServerModel.ID);
+        Map<Integer, Row> migrations = ServerModel.migrationsOnto(ids);
+        Map<Integer, ServerModel.References> references = ServerModel.referencesAmong(ids);
+        List<Microcopy> reasons = new ArrayList<>(servers.size());
+        for (Row server : servers) {
+            Integer id = server.get(ServerModel.ID);
+            Row migrating = id == null ? null : migrations.get(id);
+            ServerModel.References held = id == null ? ServerModel.References.NONE
+                : references.getOrDefault(id, ServerModel.References.NONE);
+            reasons.add(ServerParts.local(server) ? HohenheimMicrocopy.SERVER.of("delete_local")
+                : migrating != null ? HohenheimMicrocopy.SERVER.of("delete_migrating")
+                    .withArg("instance", String.valueOf((Object) migrating.get(InstanceModel.NAME)))
+                : held.any() ? held.describe(HohenheimMicrocopy.SERVER.of("delete_in_use")) : null);
         }
-        Integer id = server.get(ServerModel.ID);
-        if (id == null) {
-            return null;
-        }
-        Row migrating = RouteScope.memo(MIGRATIONS, ServerModel::migrationsByTarget).get(id);
-        if (migrating != null) {
-            return HohenheimMicrocopy.SERVER.of("delete_migrating")
-                .withArg("instance", String.valueOf((Object) migrating.get(InstanceModel.NAME)));
-        }
-        ServerModel.References references = RouteScope.memo(SERVER_REFERENCES, ServerModel::referencesByServer)
-            .getOrDefault(id, ServerModel.References.NONE);
-        return references.any() ? references.describe(HohenheimMicrocopy.SERVER.of("delete_in_use")) : null;
+        return reasons;
     }
 
     /** @return the live instance rows a database is attached to, in link order */
@@ -227,29 +284,30 @@ public final class DeleteImpact {
      * may open it; a reason or refusal is a sentence.
      */
     public static @NonNull String workloadsHolding(@Nullable Integer databaseId) {
+        return workloadNames(liveInstancesOf(databaseId));
+    }
+
+    private static @NonNull String workloadNames(@NonNull List<Row> instances) {
         List<String> workloads = new ArrayList<>();
-        for (Row instance : liveInstancesOf(databaseId)) {
+        for (Row instance : instances) {
             workloads.add(String.valueOf((Object) instance.get(InstanceModel.NAME)));
         }
         return join(workloads);
     }
 
-    // -- what a delete takes with it ----------------------------------------------------------------------------------
-
-    /** @return the origins of the SECONDARY zones that replicate from one peer */
-    static @NonNull List<String> secondaryZonesOfPeer(@Nullable Integer peerId) {
-        List<String> origins = new ArrayList<>();
-        if (peerId == null) {
-            return origins;
-        }
-        for (Row zone : zones()) {
-            if (peerId.equals(zone.get(DnsZoneModel.PRIMARY_PEER_ID))
-                    && DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))) {
-                addOrigin(origins, zone);
+    /** @return the non-null ids of these rows, in row order */
+    private static @NonNull List<Integer> idsOf(@NonNull List<? extends Row> rows, @NonNull IntegerField id) {
+        List<Integer> ids = new ArrayList<>(rows.size());
+        for (Row row : rows) {
+            Integer value = row.get(id);
+            if (value != null) {
+                ids.add(value);
             }
         }
-        return origins;
+        return ids;
     }
+
+    // -- what a delete takes with it ----------------------------------------------------------------------------------
 
     /** @return the origins of the zones linked to one peer as a NOTIFY/AXFR target, deduplicated */
     static @NonNull List<String> zonesLinkedToPeer(@Nullable Integer peerId) {
@@ -267,53 +325,6 @@ public final class DeleteImpact {
             }
         }
         return new ArrayList<>(origins);
-    }
-
-    /** @return the names of the LIVE sites whose login gate is one auth provider */
-    static @NonNull List<String> sitesGatedByAuthProvider(@Nullable Integer providerId) {
-        List<String> gated = new ArrayList<>();
-        if (providerId == null) {
-            return gated;
-        }
-        for (Row site : sites()) {
-            if (providerId.equals(site.get(SiteModel.AUTH_PROVIDER_ID))) {
-                String name = site.get(SiteModel.NAME);
-                gated.add(name == null || name.isBlank() ? String.valueOf((Object) site.get(SiteModel.ID)) : name);
-            }
-        }
-        return gated;
-    }
-
-    /** @return how many access rules name one auth provider */
-    static long rulesNamingAuthProvider(@Nullable Integer providerId) {
-        return SiteAuthProviderGuards.rulesNaming(providerId, rules());
-    }
-
-    /**
-     * What still references one environment, answered from the request snapshots; the
-     * wording is {@link ProjectGuards.EnvironmentUsage}'s, so the dead delete affordance
-     * and the write gate's refusal name the same holders.
-     */
-    static ProjectGuards.@NonNull EnvironmentUsage environmentUsage(@Nullable Integer environmentId) {
-        List<String> instances = new ArrayList<>();
-        List<String> variables = new ArrayList<>();
-        if (environmentId == null) {
-            return new ProjectGuards.EnvironmentUsage(instances, variables);
-        }
-        for (Row instance : instances()) {
-            if (environmentId.equals(instance.get(InstanceModel.ENVIRONMENT_ID))
-                    && !InstanceModel.SOFT_DELETE.isTrashed(instance)) {
-                instances.add(ProjectGuards.EnvironmentUsage.nameOf(
-                    instance.get(InstanceModel.NAME), instance.get(InstanceModel.ID)));
-            }
-        }
-        for (Row variable : variables()) {
-            if (environmentId.equals(variable.get(InstanceVariableModel.ENVIRONMENT_ID))) {
-                variables.add(ProjectGuards.EnvironmentUsage.nameOf(
-                    variable.get(InstanceVariableModel.KEY), variable.get(InstanceVariableModel.ID)));
-            }
-        }
-        return new ProjectGuards.EnvironmentUsage(instances, variables);
     }
 
     /** @return the environment's name, or null when the reference is absent or dangling */
@@ -624,9 +635,5 @@ public final class DeleteImpact {
     /** Soft-deleted instances included: an attachment to a destroyed workload still names it. */
     private static @NonNull List<Row> instances() {
         return RouteScope.memo(INSTANCES, () -> Models.get(InstanceModel.class).find().withTrashed().all());
-    }
-
-    private static @NonNull List<Row> variables() {
-        return RouteScope.memo(VARIABLES, () -> Models.get(InstanceVariableModel.class).find().all());
     }
 }

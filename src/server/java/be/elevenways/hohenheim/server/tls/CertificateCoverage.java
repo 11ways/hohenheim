@@ -15,6 +15,8 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 /**
  * Which stored certificate covers a hostname, by SAN list (exact or
@@ -34,12 +36,41 @@ public final class CertificateCoverage {
         if (hostname == null || hostname.isEmpty()) {
             return null;
         }
-        String needle = BlastString.lower(hostname);
-        List<Row> certs = Models.get(CertificateModel.class).find()
+        return coveringCertificate(hostname, candidates());
+    }
+
+    /**
+     * The certificate rows a name can be covered by (every row but the ACME account key), read once for a page of
+     * names ({@link #coveringCertificate(String, List)}).
+     */
+    public static @NonNull List<Row> candidates() {
+        return Models.get(CertificateModel.class).find()
             .where(new CompositeCriteria(CompositeOperator.OR,
                 CertificateModel.PROVIDER.isNull(),
                 CertificateModel.PROVIDER.ne(CertificateModel.PROVIDER_ACME_ACCOUNT)))
             .all();
+    }
+
+    /**
+     * {@link #candidates()} read at most once, on its first ask: the one supplier a page of names shares, so the page
+     * reads the certificate rows once, and a page whose names never ask (every one covered by a working certificate)
+     * reads none.
+     */
+    public static @NonNull Supplier<List<Row>> candidatesOnce() {
+        AtomicReference<List<Row>> read = new AtomicReference<>();
+        return () -> read.updateAndGet(rows -> rows != null ? rows : candidates());
+    }
+
+    /**
+     * {@link #coveringCertificate(String)} among certificate rows already read ({@link #candidates()}).
+     *
+     * @return the covering certificate row (active preferred, then served), or null
+     */
+    public static @Nullable Row coveringCertificate(@Nullable String hostname, @NonNull List<Row> certs) {
+        if (hostname == null || hostname.isEmpty()) {
+            return null;
+        }
+        String needle = BlastString.lower(hostname);
 
         Row served = null;
         Row fallback = null;

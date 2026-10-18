@@ -22,6 +22,9 @@ import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.orm.query.criteria.CompositeCriteria;
+import be.elevenways.zenit.common.orm.query.criteria.CompositeOperator;
+import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -29,6 +32,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -614,7 +618,7 @@ public class ServerModel extends Model {
             if (serverId == null) {
                 return;
             }
-            Row migrating = migrationsByTarget().get(serverId);
+            Row migrating = migrationsOnto(List.of(serverId)).get(serverId);
             if (migrating != null) {
                 throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("server_migration_target")
                     .withArg("name", String.valueOf((Object) doomed.get(NAME)))
@@ -671,49 +675,51 @@ public class ServerModel extends Model {
 
     /** @return what still references one host, {@link References#NONE} when nothing does */
     public static @NonNull References referencesOf(int serverId) {
-        return referencesByServer().getOrDefault(serverId, References.NONE);
+        return referencesAmong(List.of(serverId)).getOrDefault(serverId, References.NONE);
     }
 
     /**
-     * THE count of what still references each host, one grouped query per table -- the removal refusal above and the
-     * admin list's dead delete (one read per page) both read it, so the button can never look available for a host
-     * the delete then refuses.
+     * THE count of what still references each asked host, one grouped count per table narrowed to the asked hosts --
+     * the removal refusal above (a batch of one) and the admin list's dead delete (one batch per page) both read it, so
+     * the button can never look available for a host the delete then refuses.
      *
      * @return host id to its references; a host nothing references is absent
      */
-    public static @NonNull Map<Integer, References> referencesByServer() {
-        Map<Integer, Long> stacks = GroupedCounts.of(Models.get(StackModel.class).find(), StackModel.SERVER_ID);
-        Map<Integer, Long> databases = GroupedCounts.of(Models.get(DatabaseModel.class).find(),
-            DatabaseModel.SERVER_ID);
-        Map<Integer, Long> engines = GroupedCounts.of(Models.get(DatabaseEngineModel.class).find(),
-            DatabaseEngineModel.SERVER_ID);
-        Map<Integer, Long> instances = GroupedCounts.of(Models.get(InstanceModel.class).find(),
-            InstanceModel.SERVER_ID);
-        Map<Integer, Long> ports = GroupedCounts.of(Models.get(PortAllocationModel.class).find(),
-            PortAllocationModel.SERVER_ID);
-        Set<Integer> held = new HashSet<>();
-        for (Map<Integer, Long> counts : List.of(stacks, databases, engines, instances, ports)) {
-            held.addAll(counts.keySet());
-        }
+    public static @NonNull Map<Integer, References> referencesAmong(@NonNull Collection<Integer> serverIds) {
+        Map<Integer, Long> stacks = Models.get(StackModel.class).find().countBy(StackModel.SERVER_ID, serverIds);
+        Map<Integer, Long> databases = Models.get(DatabaseModel.class).find()
+            .countBy(DatabaseModel.SERVER_ID, serverIds);
+        Map<Integer, Long> engines = Models.get(DatabaseEngineModel.class).find()
+            .countBy(DatabaseEngineModel.SERVER_ID, serverIds);
+        Map<Integer, Long> instances = Models.get(InstanceModel.class).find()
+            .countBy(InstanceModel.SERVER_ID, serverIds);
+        Map<Integer, Long> ports = Models.get(PortAllocationModel.class).find()
+            .countBy(PortAllocationModel.SERVER_ID, serverIds);
         Map<Integer, References> byServer = new HashMap<>();
-        for (Integer serverId : held) {
-            byServer.put(serverId, new References(stacks.getOrDefault(serverId, 0L),
+        for (Integer serverId : serverIds) {
+            References references = new References(stacks.getOrDefault(serverId, 0L),
                 databases.getOrDefault(serverId, 0L), engines.getOrDefault(serverId, 0L),
-                instances.getOrDefault(serverId, 0L), ports.getOrDefault(serverId, 0L)));
+                instances.getOrDefault(serverId, 0L), ports.getOrDefault(serverId, 0L));
+            if (references.any()) {
+                byServer.put(serverId, references);
+            }
         }
         return byServer;
     }
 
     /**
-     * The live instance an open cold migration is moving onto each host -- THE one read behind both the funnel
+     * The live instance an open cold migration is moving onto each asked host -- THE one read behind both the funnel
      * refusal above and the admin list's dead delete.
      *
-     * @return destination host id to the first instance moving there
+     * @return destination host id to the first instance moving there; a host nothing moves onto is absent
      */
-    public static @NonNull Map<Integer, Row> migrationsByTarget() {
+    public static @NonNull Map<Integer, Row> migrationsOnto(@NonNull Collection<Integer> serverIds) {
         Map<Integer, Row> byTarget = new HashMap<>();
+        if (serverIds.isEmpty()) {
+            return byTarget;
+        }
         for (Row instance : Models.get(InstanceModel.class).find()
-                .where(InstanceModel.MIGRATE_TARGET_ID.isNotNull()).all()) {
+                .where(InstanceModel.MIGRATE_TARGET_ID.in(serverIds)).all()) {
             byTarget.putIfAbsent(instance.get(InstanceModel.MIGRATE_TARGET_ID), instance);
         }
         return byTarget;
@@ -880,6 +886,68 @@ public class ServerModel extends Model {
     }
 
     /**
+     * THE batch resolution of stored host ids, where a null means the local daemon: each asked id to its server row,
+     * in ONE read of the servers (the local daemon's row resolved once for a null). The single-spelling form is
+     * {@link #canonicalServerId}.
+     *
+     * @return each asked id (null included) to its server row; an id naming no server is absent
+     */
+    public static @NonNull Map<@Nullable Integer, Row> serversByStoredId(@NonNull Collection<@Nullable Integer> ids) {
+        Set<Integer> stored = new HashSet<>();
+        boolean local = false;
+        for (Integer id : ids) {
+            if (id == null) {
+                local = true;
+            } else {
+                stored.add(id);
+            }
+        }
+        Map<Integer, Row> servers = new HashMap<>();
+        if (stored.isEmpty() && !local) {
+            return servers;
+        }
+        // The local daemon's row is asked in the same statement as the stored ids, by its reserved name.
+        Criteria asked = local && stored.isEmpty() ? NAME.eq(LOCAL_HOST_NAME)
+            : local ? new CompositeCriteria(CompositeOperator.OR, ID.in(stored), NAME.eq(LOCAL_HOST_NAME))
+                : ID.in(stored);
+        for (Row server : Models.get(ServerModel.class).find().where(asked).all()) {
+            Integer id = server.get(ID);
+            if (stored.contains(id)) {
+                servers.put(id, server);
+            }
+            if (local && LOCAL_HOST_NAME.equals(server.get(NAME))) {
+                servers.put(null, server);
+            }
+        }
+        if (local && !servers.containsKey(null)) {
+            // First use: the local daemon's row does not exist yet, and resolving it creates it.
+            servers.put(null, localServerRow());
+        }
+        return servers;
+    }
+
+    /**
+     * {@link #canonicalServerId} for many stored host ids at once (the records of one page), read through
+     * {@link #serversByStoredId}.
+     *
+     * @return each asked id (null included) to its canonical server id
+     * @throws IllegalArgumentException when an id names no server, as {@link #canonicalServerId} does
+     */
+    public static @NonNull Map<@Nullable Integer, Integer> canonicalServerIds(
+            @NonNull Collection<@Nullable Integer> ids) {
+        Map<Integer, Row> servers = serversByStoredId(ids);
+        Map<Integer, Integer> canonical = new HashMap<>();
+        for (Integer id : ids) {
+            Row server = servers.get(id);
+            if (server == null) {
+                throw new IllegalArgumentException("No server with id " + id);
+            }
+            canonical.put(id, server.get(ID));
+        }
+        return canonical;
+    }
+
+    /**
      * THE canonical host key: resolve any spelling (row id, {@code hohenheim:<id>}
      * registry key, server name, blank/"local") to the {@code servers.id} every
      * FK and port claim references.
@@ -887,8 +955,10 @@ public class ServerModel extends Model {
      * @throws IllegalArgumentException when the spelling names no known server
      */
     public static int canonicalServerId(@Nullable Object raw) {
-        if (raw instanceof Number number) {
-            return requireExisting(number.intValue());
+        if (raw == null || raw instanceof Number) {
+            // A stored host id, or none (the local daemon): THE batch resolver's rule, for one.
+            Integer stored = raw == null ? null : ((Number) raw).intValue();
+            return canonicalServerIds(Collections.singletonList(stored)).get(stored);
         }
         String spelling = canonicalSpelling(raw);
         if (LOCAL_HOST_NAME.equals(spelling)) {
@@ -899,7 +969,8 @@ public class ServerModel extends Model {
             return byName.get(ID);
         }
         if (spelling.chars().allMatch(Character::isDigit)) {
-            return requireExisting(Integer.parseInt(spelling));
+            Integer stored = Integer.parseInt(spelling);
+            return canonicalServerIds(List.of(stored)).get(stored);
         }
         throw new IllegalArgumentException("No server named '" + spelling + "'");
     }
@@ -907,6 +978,14 @@ public class ServerModel extends Model {
     /**
      * The implicit local daemon's row id, creating its row when absent (idempotent, and safe
      * under concurrent first calls).
+     */
+    public static int localServerId() {
+        return localServerRow().get(ID);
+    }
+
+    /**
+     * The implicit local daemon's row, creating it when absent (idempotent, and safe under
+     * concurrent first calls).
      *
      * AIDEV-NOTE: two first calls used to both miss the read and both insert; the loser hit
      * {@code servers_name_unique} and surfaced a raw duplicate-key failure from whatever
@@ -914,24 +993,24 @@ public class ServerModel extends Model {
      * JVM lock serializes this process's callers; the unique index stays the arbiter across
      * processes, and losing that race reads the winner's row instead of failing.
      */
-    public static synchronized int localServerId() {
+    public static synchronized @NonNull Row localServerRow() {
         ServerModel model = Models.get(ServerModel.class);
         Row row = model.findByName(LOCAL_HOST_NAME);
         if (row != null) {
-            return row.get(ID);
+            return row;
         }
         Row created = model.createEmptyRow();
         created.set(NAME, LOCAL_HOST_NAME);
         created.set(MODE, HostMode.LOCAL.token());
         try {
             model.save(created);
-            return created.get(ID);
+            return created;
         } catch (DuplicateKeyException lost) {
             Row winner = model.find().noCache().where(NAME.eq(LOCAL_HOST_NAME)).first();
             if (winner == null) {
                 throw lost;
             }
-            return winner.get(ID);
+            return winner;
         }
     }
 
@@ -982,13 +1061,6 @@ public class ServerModel extends Model {
     /** The registry key a type-settings map stores for a server ({@code hohenheim:<id>}). */
     public static @NonNull String registryKeyOf(int serverId) {
         return HohenheimIds.id(String.valueOf(serverId)).toString();
-    }
-
-    private static int requireExisting(int serverId) {
-        if (Models.get(ServerModel.class).findById(serverId) == null) {
-            throw new IllegalArgumentException("No server with id " + serverId);
-        }
-        return serverId;
     }
 
     @Override

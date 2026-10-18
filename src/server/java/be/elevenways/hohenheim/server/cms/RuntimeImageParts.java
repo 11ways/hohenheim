@@ -28,6 +28,7 @@ import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.server.operation.Availability;
 import be.elevenways.zenit.server.operation.OperationHandlers;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -52,7 +53,7 @@ public final class RuntimeImageParts {
 
     static {
         OperationHandlers.attach(DELETE).applies(RuntimeImageParts::custom)
-            .availability((row, access) -> DeleteImpact.runtimeImageInUse(row))
+            .availability(Availability.batch((images, access) -> DeleteImpact.runtimeImagesInUse(images)))
             .handle(call -> {
                 Models.get(RuntimeImageModel.class).delete(call.subject());
                 return 1;

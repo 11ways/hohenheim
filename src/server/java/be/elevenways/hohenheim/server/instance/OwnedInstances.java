@@ -10,13 +10,17 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.GroupedRows;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -147,8 +151,30 @@ public final class OwnedInstances {
 
     /** The single live instance owned by one product record (newest wins), or null. */
     public static @Nullable Row soleOwnedBy(@NonNull Identifier model, int recordId) {
-        List<Row> owned = ownedBy(model, recordId);
-        return owned.isEmpty() ? null : owned.get(0);
+        return soleOwnedAmong(model, List.of(recordId)).get(recordId);
+    }
+
+    /**
+     * {@link #soleOwnedBy} for many records of one product model at once: the newest live instance each owns, in one
+     * grouped read (a page of databases asks it once, never once per row).
+     *
+     * @return record id to its newest live instance; a record that owns none is absent
+     */
+    public static @NonNull Map<Integer, Row> soleOwnedAmong(@NonNull Identifier model,
+                                                           @NonNull Collection<Integer> recordIds) {
+        Map<Integer, Row> owned = new HashMap<>();
+        if (recordIds.isEmpty()) {
+            return owned;
+        }
+        for (GroupedRows.Group<Integer, Row> group : Models.get(InstanceModel.class).find()
+                .where(InstanceModel.GENERATED_FOR_MODEL.eq(model.toString()))
+                .orderBy(InstanceModel.ID, SortOrder.DESC)
+                .firstPerGroup(InstanceModel.GENERATED_FOR_ID, 1, recordIds).groups()) {
+            if (group.key() != null && !group.rows().isEmpty()) {
+                owned.put(group.key(), group.rows().get(0));
+            }
+        }
+        return owned;
     }
 
     /**

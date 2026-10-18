@@ -28,6 +28,7 @@ import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.KeyedRows;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -45,6 +46,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * The apps a panel lists for one viewer: every workload with the sites serving it, every site serving no workload of
@@ -191,6 +193,9 @@ final class AppDirectory {
         List<Row> stacks = listed(panel, HohenheimSlugs.STACKS, access);
 
         Set<String> working = AppHealth.workingNames();
+        // The HTTPS column's certificate rows, read once for the whole list (and only when a main name asks), shared
+        // with the site and instance verdicts below.
+        Supplier<List<Row>> certificates = AppHealth.certificateRows(access);
         Map<Integer, Row> workloads = new LinkedHashMap<>();
         for (Row instance : instances) {
             workloads.put(instance.get(InstanceModel.ID), instance);
@@ -231,7 +236,7 @@ final class AppDirectory {
                     .label(),
                 address, address == null ? null : address.primary(),
                 delegated ? null : ServerModel.canonicalNameOf(instance.get(InstanceModel.SERVER_ID)),
-                mainHttps(names, served, working, access, panel.slug()), workloadHealth.apply(instance),
+                mainHttps(names, served, working, certificates, access, panel.slug()), workloadHealth.apply(instance),
                 InstanceParts.recordRoute(panel.slug(), instance, null)));
         }
 
@@ -244,18 +249,19 @@ final class AppDirectory {
             apps.add(new App(Source.WEBSITE.token() + "-" + id, Source.WEBSITE, id,
                 String.valueOf((Object) site.get(SiteModel.NAME)), words.say(SiteParts.upstreamLabel(site)),
                 address, address.primary(), websiteHost(site, servedBy),
-                mainHttps(names, List.of(site), working, access, panel.slug()), websiteHealth.apply(site),
+                mainHttps(names, List.of(site), working, certificates, access, panel.slug()),
+                websiteHealth.apply(site),
                 SiteParts.recordRoute(panel.slug(), id)));
         }
 
         Function<Row, RecordHealth> stackHealth = AppHealth.stacks().read(stacks, access);
-        Map<Integer, Integer> members = memberCounts(stacks);
+        Map<Integer, Long> members = memberCounts(stacks);
         for (Row stack : stacks) {
             int id = stack.get(StackModel.ID);
             apps.add(new App(Source.STACK.token() + "-" + id, Source.STACK, id,
                 String.valueOf((Object) stack.get(StackModel.NAME)),
                 words.say(HohenheimMicrocopy.APP_LIST.of("stack_kind")
-                    .withArg("count", members.getOrDefault(id, 0))),
+                    .withArg("count", members.getOrDefault(id, 0L))),
                 new SiteHostnamesCell(null, 0), null,
                 delegated ? null : ServerModel.canonicalNameOf(stack.get(StackModel.SERVER_ID)),
                 null, stackHealth.apply(stack),
@@ -324,12 +330,14 @@ final class AppDirectory {
      * cell ({@link DomainParts#certificateCell}): one name's HTTPS reads the same words on both lists, never the app's
      * overall verdict.
      *
-     * @param sites the sites the names belong to, which decide whether the name is a TLS passthrough
+     * @param sites        the sites the names belong to, which decide whether the name is a TLS passthrough
+     * @param certificates the certificate rows, read once for the request ({@link AppHealth#certificateRows})
      * @return the cell, null without a name; a pattern's says HTTPS works per name a certificate covers
      */
     private static @Nullable StateLineCell mainHttps(@NonNull List<Row> names, @NonNull List<Row> sites,
-                                                     @NonNull Set<String> working, @NonNull AccessContext access,
-                                                     @NonNull String panelSlug) {
+                                                     @NonNull Set<String> working,
+                                                     @NonNull Supplier<List<Row>> certificates,
+                                                     @NonNull AccessContext access, @NonNull String panelSlug) {
         if (names.isEmpty()) {
             return null;
         }
@@ -340,7 +348,7 @@ final class AppDirectory {
                 passthrough = SiteParts.tlsPassthrough(site);
             }
         }
-        return DomainParts.certificateCell(main, passthrough, working, access, panelSlug);
+        return DomainParts.certificateCell(main, passthrough, working, certificates, access, panelSlug);
     }
 
     /**
@@ -356,7 +364,7 @@ final class AppDirectory {
             }
         }
         Map<Integer, Row> instances = new HashMap<>();
-        AppHealth.rowsByKey(Models.get(InstanceModel.class), InstanceModel.ID, ids)
+        KeyedRows.byAsked(Models.get(InstanceModel.class).find(), InstanceModel.ID, ids)
             .forEach((id, rows) -> instances.put(id, rows.get(0)));
         return instances;
     }
@@ -374,7 +382,8 @@ final class AppDirectory {
     /** The live (untrashed) sites serving each of these workloads, read once, in stored order. */
     private static @NonNull Map<Integer, List<Row>> servingSitesOf(@NonNull List<Integer> workloadIds) {
         Map<Integer, List<Row>> serving = new HashMap<>();
-        AppHealth.rowsByKey(Models.get(SiteModel.class), SiteModel.INSTANCE_ID, workloadIds)
+        KeyedRows.byAsked(Models.get(SiteModel.class).find().orderBy(SiteModel.ID, SortOrder.ASC),
+                SiteModel.INSTANCE_ID, workloadIds)
             .forEach((instanceId, sites) -> {
                 for (Row site : sites) {
                     if (site.get(SiteModel.DELETED_AT) == null) {
@@ -391,19 +400,18 @@ final class AppDirectory {
         for (Row site : sites) {
             ids.add(site.get(SiteModel.ID));
         }
-        return AppHealth.rowsByKey(Models.get(SiteDomainModel.class), SiteDomainModel.SITE_ID, ids);
+        return KeyedRows.byAsked(Models.get(SiteDomainModel.class).find().orderBy(SiteDomainModel.ID, SortOrder.ASC),
+            SiteDomainModel.SITE_ID, ids);
     }
 
-    /** How many services each of these stacks declares, read once. */
-    private static @NonNull Map<Integer, Integer> memberCounts(@NonNull List<Row> stacks) {
+    /** How many services each of these stacks declares, counted in one grouped read. */
+    private static @NonNull Map<Integer, Long> memberCounts(@NonNull List<Row> stacks) {
         List<Integer> ids = new ArrayList<>();
         for (Row stack : stacks) {
             ids.add(stack.get(StackModel.ID));
         }
-        Map<Integer, Integer> counts = new HashMap<>();
-        AppHealth.rowsByKey(Models.get(StackServiceModel.class), StackServiceModel.STACK_ID, ids)
-            .forEach((stack, services) -> counts.put(stack, services.size()));
-        return counts;
+        return ids.isEmpty() ? Map.of()
+            : Models.get(StackServiceModel.class).find().countBy(StackServiceModel.STACK_ID, ids);
     }
 
     /**

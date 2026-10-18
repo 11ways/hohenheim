@@ -17,7 +17,11 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -100,7 +104,28 @@ public final class SiteAuthProviderGuards {
 
     /** @return how many access rules name this provider */
     public static long rulesNaming(@Nullable Integer providerId) {
-        return providerId == null ? 0 : rulesNaming(providerId, providerRules().all());
+        return providerId == null ? 0 : rulesNamingAmong(List.of(providerId)).getOrDefault(providerId, 0L);
+    }
+
+    /**
+     * How many access rules name each asked provider, off ONE read of the provider-typed rules (a rule names its
+     * provider inside its data JSON, see the class note): what a page of providers asks instead of a read per row.
+     *
+     * @return provider id to its rule count; a provider no rule names is absent
+     */
+    public static @NonNull Map<Integer, Long> rulesNamingAmong(@NonNull Collection<Integer> providerIds) {
+        Map<Integer, Long> counts = new HashMap<>();
+        if (providerIds.isEmpty()) {
+            return counts;
+        }
+        List<Row> rules = providerRules().all();
+        for (Integer providerId : providerIds) {
+            long count = rulesNaming(providerId, rules);
+            if (count > 0) {
+                counts.put(providerId, count);
+            }
+        }
+        return counts;
     }
 
     /** @return how many of these access rules are auth-provider rules naming this provider */

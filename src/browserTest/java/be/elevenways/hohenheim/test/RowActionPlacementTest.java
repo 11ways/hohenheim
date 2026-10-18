@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.cms.DnsRecordParts;
 import be.elevenways.hohenheim.server.cms.DnsZoneParts;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.test.support.TestAccessContexts;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
@@ -50,9 +51,11 @@ class RowActionPlacementTest extends HohenheimTestBase {
         assertThat(reissue.inlineInRow())
             .as("step 2b: and it overflows").isFalse();
         // A placed operation hides through hiddenWhen; shownFor is the link and screen verbs' condition.
-        assertThat(reissue.hiddenFor(certificateRow(CertificateModel.PROVIDER_LETSENCRYPT)))
+        Row letsEncrypt = certificateRow(CertificateModel.PROVIDER_LETSENCRYPT);
+        assertThat(reissue.hiddenOn(List.of(letsEncrypt), TestAccessContexts.anonymous()).test(letsEncrypt))
             .as("step 2b: shown for a Let's Encrypt certificate").isFalse();
-        assertThat(reissue.hiddenFor(certificateRow(CertificateModel.PROVIDER_CUSTOM)))
+        Row custom = certificateRow(CertificateModel.PROVIDER_CUSTOM);
+        assertThat(reissue.hiddenOn(List.of(custom), TestAccessContexts.anonymous()).test(custom))
             .as("step 2b: hidden for a manual upload").isTrue();
 
         // 3. FALSIFICATION: an action that IS a per-row affordance keeps the row, so this

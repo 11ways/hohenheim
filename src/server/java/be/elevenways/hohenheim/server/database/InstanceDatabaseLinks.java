@@ -18,6 +18,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -197,7 +198,21 @@ public final class InstanceDatabaseLinks {
      * @return database id to its live instance rows, in link order; a database without one is absent
      */
     public static @NonNull Map<Integer, List<Row>> liveInstancesByDatabase() {
-        List<Row> links = Models.get(InstanceDatabaseModel.class).find().all();
+        return liveInstancesOver(Models.get(InstanceDatabaseModel.class).find().all());
+    }
+
+    /**
+     * {@link #liveInstancesByDatabase} narrowed to the asked databases: the read a batch of databases (a list's dead
+     * delete) makes, two queries whatever the number of rows.
+     *
+     * @return database id to its live instance rows, in link order; a database without one is absent
+     */
+    public static @NonNull Map<Integer, List<Row>> liveInstancesAmong(@NonNull Collection<Integer> databaseIds) {
+        return databaseIds.isEmpty() ? Map.of() : liveInstancesOver(Models.get(InstanceDatabaseModel.class).find()
+            .where(InstanceDatabaseModel.DATABASE_ID.in(databaseIds)).all());
+    }
+
+    private static @NonNull Map<Integer, List<Row>> liveInstancesOver(@NonNull List<Row> links) {
         List<Integer> instanceIds = new ArrayList<>();
         for (Row link : links) {
             instanceIds.add(link.get(InstanceDatabaseModel.INSTANCE_ID));

@@ -8,7 +8,6 @@ import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.DnsZonePeerModel;
-import be.elevenways.hohenheim.model.GroupedCounts;
 import be.elevenways.hohenheim.server.dns.DelegationCheck;
 import be.elevenways.hohenheim.server.dns.DnsDelegationHealth;
 import be.elevenways.hohenheim.server.dns.DnsNames;
@@ -284,11 +283,13 @@ public final class DnsZoneParts {
         IdentifierKey.of("hohenheim", "dns_zone_current_secondary_counts");
 
     private static @NonNull Map<Integer, Long> recordCounts() {
-        return GroupedCounts.of(Models.get(DnsRecordModel.class).find(), DnsRecordModel.ZONE_ID);
+        return Models.get(DnsRecordModel.class).find().where(DnsRecordModel.ZONE_ID.isNotNull())
+            .countBy(DnsRecordModel.ZONE_ID);
     }
 
     private static @NonNull Map<Integer, Long> secondaryCounts() {
-        return GroupedCounts.of(Models.get(DnsZonePeerModel.class).find(), DnsZonePeerModel.ZONE_ID);
+        return Models.get(DnsZonePeerModel.class).find().where(DnsZonePeerModel.ZONE_ID.isNotNull())
+            .countBy(DnsZonePeerModel.ZONE_ID);
     }
 
     /**
@@ -297,9 +298,9 @@ public final class DnsZoneParts {
      * secondary is exactly the one that silently stopped pulling).
      */
     private static @NonNull Map<Integer, Long> currentSecondaryCounts() {
-        return GroupedCounts.of(Models.get(DnsZonePeerModel.class).find()
-            .where(DnsZonePeerModel.PROBED_AT.isNotNull()).where(DnsZonePeerModel.BEHIND_SINCE.isNull()),
-            DnsZonePeerModel.ZONE_ID);
+        return Models.get(DnsZonePeerModel.class).find().where(DnsZonePeerModel.ZONE_ID.isNotNull())
+            .where(DnsZonePeerModel.PROBED_AT.isNotNull()).where(DnsZonePeerModel.BEHIND_SINCE.isNull())
+            .countBy(DnsZonePeerModel.ZONE_ID);
     }
 
     /**

@@ -65,6 +65,7 @@ import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.operation.Availability;
 import be.elevenways.zenit.server.operation.OperationHandlers;
 import be.elevenways.zenit.widget.common.data.UsageData;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -102,7 +103,8 @@ public final class ServerParts {
         .one(SubjectType.record(ServerModel.MODEL_ID)).gate(OperationGate.permission(HohenheimPanel.ACCESS))
         .result(Integer.class).facts(OperationFact.DESTRUCTIVE).command(CmsCommands.TRANSACTIONAL).register();
     static {
-        OperationHandlers.attach(DELETE).availability((row, access) -> DeleteImpact.serverInUse(row)).handle(call -> {
+        OperationHandlers.attach(DELETE)
+            .availability(Availability.batch((servers, access) -> DeleteImpact.serversInUse(servers))).handle(call -> {
             IncusTrust.releaseAfterRemoval(call.subject());
             Models.get(ServerModel.class).delete(call.subject());
             ServerOptions.refresh();

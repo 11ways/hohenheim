@@ -22,11 +22,14 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.operation.Applicability;
 import be.elevenways.zenit.server.operation.OperationHandlers;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.IOException;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 /**
  * The stack entries' verbs as operations: deploying, stopping, rolling back, purging the volumes of and refreshing a
@@ -158,9 +161,13 @@ public final class StackOperations {
                 StackRuntime.get().stopAsync(call.subject().get(StackModel.ID));
                 return null;
             });
+        // A page of stacks counts its rollback targets in one grouped read.
         OperationHandlers.attach(ROLLBACK)
-            .applies(stack -> Models.get(StackDeploymentModel.class)
-                .findLatestSuccessful(stack.get(StackModel.ID)) != null)
+            .applies(Applicability.batch((stacks, access, source) -> {
+                Set<Integer> rollbackable = Models.get(StackDeploymentModel.class).withRollbackTarget(stacks.stream()
+                    .map(stack -> stack.get(StackModel.ID)).filter(Objects::nonNull).toList());
+                return stacks.stream().map(stack -> rollbackable.contains(stack.get(StackModel.ID))).toList();
+            }))
             .handle(call -> {
                 StackRuntime.get().rollbackAsync(call.subject().get(StackModel.ID));
                 return null;

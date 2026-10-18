@@ -72,7 +72,7 @@ final class InstanceActions {
      * declaration order inside the inline band, so the first declared verb leads.
      */
     static @NonNull List<PanelAction<Row>> placedOperator() {
-        return List.of(SiteActions.openSiteAction(OPEN_SITE, AppHealth::openUrlOfInstance, AppHealth::instanceServes),
+        return List.of(SiteActions.openSiteAction(OPEN_SITE, AppHealth::openInstances, InstanceModel.ID),
             deployAction(false),
             stopAction(), restartAction(false), snapshotAction(), backupAction(),
             appUpdateAction(false), consoleCommandAction(), exposeAction(), rollbackAction(),
@@ -85,7 +85,7 @@ final class InstanceActions {
      * the app update and the console line.
      */
     static @NonNull List<PanelAction<Row>> placedDelegated() {
-        return List.of(SiteActions.openSiteAction(OPEN_SITE, AppHealth::openUrlOfInstance, AppHealth::instanceServes),
+        return List.of(SiteActions.openSiteAction(OPEN_SITE, AppHealth::openInstances, InstanceModel.ID),
             deployAction(true), restartAction(true),
             stopAction(), snapshotAction(), backupAction(), appUpdateAction(true), consoleCommandAction());
     }

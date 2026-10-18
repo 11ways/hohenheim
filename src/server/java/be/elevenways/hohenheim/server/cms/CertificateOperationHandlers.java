@@ -27,6 +27,8 @@ import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.common.orm.query.KeyedRows;
+import be.elevenways.zenit.server.operation.Applicability;
 import be.elevenways.zenit.server.operation.Authorizer;
 import be.elevenways.zenit.server.operation.OperationHandlers;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -35,6 +37,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import static be.elevenways.hohenheim.RawValues.trimmed;
 
@@ -53,7 +56,7 @@ final class CertificateOperationHandlers {
             .availability((none, access) -> letsEncryptUnavailable())
             .handle(call -> order(require(call.input()), call.subjectAccess(), null));
         OperationHandlers.attach(CertificateOperations.REQUEST_FOR_DOMAIN).authorize(admin())
-            .applies(CertificateOperationHandlers::certifiable)
+            .applies(Applicability.batch((domains, access, source) -> certifiable(domains)))
             .availability((domain, access) -> letsEncryptUnavailable())
             .handle(call -> order(require(call.input()), call.subjectAccess(), null));
         OperationHandlers.attach(CertificateOperations.REISSUE).authorize(admin())
@@ -85,14 +88,29 @@ final class CertificateOperationHandlers {
             ? null : HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("letsencrypt_disabled");
     }
 
-    /** A hostname a certificate can be ordered for: one exact name on a site this proxy terminates TLS for. */
-    private static boolean certifiable(@NonNull Row domain) {
-        if (!SiteDomainModel.MATCH_EXACT.equals(domain.get(SiteDomainModel.MATCH_TYPE))
-                || Boolean.TRUE.equals(domain.get(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT))) {
-            return false;
+    /**
+     * A hostname a certificate can be ordered for: one exact name on a site this proxy terminates TLS for. The sites of
+     * a page of hostnames are read once for the page.
+     *
+     * @return one verdict per domain, in domain order
+     */
+    private static @NonNull List<Boolean> certifiable(@NonNull List<? extends Row> domains) {
+        Map<Integer, List<Row>> sites = KeyedRows.byAsked(Models.get(SiteModel.class).find(), SiteModel.ID,
+            domains.stream().filter(CertificateOperationHandlers::exactAndIncluded)
+                .map(domain -> domain.get(SiteDomainModel.SITE_ID)).filter(Objects::nonNull).toList());
+        List<Boolean> verdicts = new ArrayList<>(domains.size());
+        for (Row domain : domains) {
+            Integer siteId = domain.get(SiteDomainModel.SITE_ID);
+            List<Row> site = siteId == null ? List.of() : sites.getOrDefault(siteId, List.of());
+            verdicts.add(exactAndIncluded(domain) && !site.isEmpty()
+                && !SiteModel.UPSTREAM_TLS_PASSTHROUGH.equals(site.get(0).get(SiteModel.UPSTREAM_KIND)));
         }
-        Row site = Models.get(SiteModel.class).findById(domain.get(SiteDomainModel.SITE_ID));
-        return site != null && !SiteModel.UPSTREAM_TLS_PASSTHROUGH.equals(site.get(SiteModel.UPSTREAM_KIND));
+        return verdicts;
+    }
+
+    private static boolean exactAndIncluded(@NonNull Row domain) {
+        return SiteDomainModel.MATCH_EXACT.equals(domain.get(SiteDomainModel.MATCH_TYPE))
+            && !Boolean.TRUE.equals(domain.get(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT));
     }
 
     /**

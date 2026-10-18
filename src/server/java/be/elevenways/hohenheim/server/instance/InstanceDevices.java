@@ -23,8 +23,11 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Attach, resize and detach instance devices (extra disks and NICs) as DESIRED-STATE
@@ -183,19 +186,42 @@ public final class InstanceDevices {
 
     /** @return whether the instance has install media in a drive (a cdrom row) */
     public static boolean hasInstallMedia(int instanceId) {
-        return !installMediaOf(instanceId).isEmpty();
+        return withInstallMedia(List.of(instanceId)).contains(instanceId);
+    }
+
+    /**
+     * Which of these instances hold an install medium in a drive, in ONE read of their drives: what a page of
+     * instances asks instead of a read per row.
+     *
+     * @return the ids, among the asked ones, of the instances whose drive holds a medium
+     */
+    public static @NonNull Set<Integer> withInstallMedia(@NonNull Collection<Integer> instanceIds) {
+        Set<Integer> holding = new HashSet<>();
+        if (instanceIds.isEmpty()) {
+            return holding;
+        }
+        for (Row drive : rowsOf(instanceIds, DeviceType.CDROM)) {
+            if (holdsMedium(drive)) {
+                holding.add(drive.get(InstanceDeviceModel.INSTANCE_ID));
+            }
+        }
+        return holding;
     }
 
     /** @return the install media (ISO volume names) in the instance's drives, in the order they were attached */
     public static @NonNull List<String> installMediaOf(int instanceId) {
         List<String> media = new ArrayList<>();
         for (Row row : rowsOf(instanceId, DeviceType.CDROM)) {
-            String medium = row.get(InstanceDeviceModel.SOURCE_MEDIA);
-            if (medium != null && !medium.isBlank()) {
-                media.add(medium);
+            if (holdsMedium(row)) {
+                media.add(row.get(InstanceDeviceModel.SOURCE_MEDIA));
             }
         }
         return media;
+    }
+
+    private static boolean holdsMedium(@NonNull Row drive) {
+        String medium = drive.get(InstanceDeviceModel.SOURCE_MEDIA);
+        return medium != null && !medium.isBlank();
     }
 
     /** @return the device names of the instance's extra network interfaces, in the order they were attached */
@@ -271,8 +297,13 @@ public final class InstanceDevices {
 
     /** The instance's rows of one device type, oldest first. */
     private static @NonNull List<Row> rowsOf(int instanceId, @NonNull DeviceType type) {
+        return rowsOf(List.of(instanceId), type);
+    }
+
+    /** THE read of device rows: these instances' rows of one device type, oldest first, in one query. */
+    private static @NonNull List<Row> rowsOf(@NonNull Collection<Integer> instanceIds, @NonNull DeviceType type) {
         return Models.get(InstanceDeviceModel.class).find()
-            .where(InstanceDeviceModel.INSTANCE_ID.eq(instanceId))
+            .where(InstanceDeviceModel.INSTANCE_ID.in(instanceIds))
             .where(InstanceDeviceModel.TYPE.eq(type.token()))
             .orderBy(InstanceDeviceModel.ID, SortOrder.ASC).all();
     }

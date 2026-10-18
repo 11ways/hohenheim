@@ -33,6 +33,7 @@ import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.operation.Applicability;
 import be.elevenways.zenit.server.operation.Authorizer;
 import be.elevenways.zenit.server.operation.OperationCall;
 import be.elevenways.zenit.server.operation.OperationHandlers;
@@ -76,7 +77,10 @@ public final class SiteOperationHandlers {
             .handle(call -> switchTo(call, false));
         // Only a name forced to HTTPS that no working certificate covers is an error page this switches back.
         OperationHandlers.attach(SiteOperations.STOP_FORCING_HTTPS)
-            .applies(site -> live(site) && AppHealth.needsCertificate(site))
+            .applies(Applicability.batch((sites, access, source) -> {
+                Set<Integer> needing = AppHealth.needingCertificate(sites);
+                return sites.stream().map(site -> live(site) && needing.contains(site.get(SiteModel.ID))).toList();
+            }))
             .authorize(reachesSite())
             .handle(call -> stopForcingHttps(call.subject()));
         OperationHandlers.attach(SiteOperations.CLONE)

@@ -17,6 +17,7 @@ import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.test.support.TestAccessContexts;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.operation.OperationRunModel;
@@ -90,20 +91,20 @@ class MachineRecordPageJourneyTest extends HohenheimTestBase {
 
             // 2b. A running machine is not offered Start: it already runs, so Restart and Stop are its power verbs.
             //     Stopped, it is offered Start again. A running app keeps Deploy, which ships its code again.
-            assertThat(action(InstanceOperations.START.id()).hiddenFor(vm)).as("step 2b: a running VM offers no Start")
+            assertThat(hidden(InstanceOperations.START.id(), vm)).as("step 2b: a running VM offers no Start")
                 .isTrue();
-            assertThat(action(InstanceOperations.RESTART.id()).hiddenFor(vm)).as("step 2b: it offers Restart")
+            assertThat(hidden(InstanceOperations.RESTART.id(), vm)).as("step 2b: it offers Restart")
                 .isFalse();
-            assertThat(action(InstanceOperations.STOP.id()).hiddenFor(vm)).as("step 2b: and Stop").isFalse();
+            assertThat(hidden(InstanceOperations.STOP.id(), vm)).as("step 2b: and Stop").isFalse();
             Row stoppedVm = Models.get(InstanceModel.class).findById(vm.get(InstanceModel.ID));
             stoppedVm.set(InstanceModel.STATUS, InstanceModel.STATUS_STOPPED);
-            assertThat(action(InstanceOperations.START.id()).hiddenFor(stoppedVm))
+            assertThat(hidden(InstanceOperations.START.id(), stoppedVm))
                 .as("step 2b: a stopped VM offers Start").isFalse();
-            assertThat(action(InstanceOperations.STOP.id()).hiddenFor(stoppedVm))
+            assertThat(hidden(InstanceOperations.STOP.id(), stoppedVm))
                 .as("step 2b: and no Stop").isTrue();
-            assertThat(action(InstanceOperations.START.id()).hiddenFor(app))
+            assertThat(hidden(InstanceOperations.START.id(), app))
                 .as("step 2b: a running app still offers Deploy").isFalse();
-            assertThat(action(InstanceOperations.START.id()).hiddenFor(box))
+            assertThat(hidden(InstanceOperations.START.id(), box))
                 .as("step 2b: a running bare workspace is started, so it offers no Start either").isTrue();
 
             // 3. The machine's overview has a Network card, never the web-address card's promise.
@@ -238,6 +239,11 @@ class MachineRecordPageJourneyTest extends HohenheimTestBase {
             }
         }
         throw new AssertionError("no action " + id);
+    }
+
+    /** @return whether the placed operation's state hides it on this one row */
+    private static boolean hidden(Identifier id, Row row) {
+        return action(id).hiddenOn(List.of(row), TestAccessContexts.anonymous()).test(row);
     }
 
     private static Row incusHost(List<Runnable> cleanup) {

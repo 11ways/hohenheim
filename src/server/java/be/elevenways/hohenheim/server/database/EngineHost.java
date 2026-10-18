@@ -8,10 +8,16 @@ import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.KeyedRows;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * THE engine PROCESS a managed database lives in, as the runtime tier sees it: which
@@ -77,8 +83,11 @@ public record EngineHost(@NonNull Identifier ownerModel, int ownerId, @NonNull S
     /**
      * The host SERVING a managed database record, whatever its placement.
      *
-     * @throws IllegalStateException for a shared record whose engine row is gone -- a
-     *         dangling binding is a defect to name, never a dedicated host to guess
+     * @throws IllegalStateException for a shared record whose engine row is missing -- a
+     *         dangling binding is a defect to name, never a dedicated host to guess -- and
+     *         IllegalArgumentException for an unknown engine token. The instance READS
+     *         (DatabaseInstances.owned, handleOf, liveStatus) do not throw for either: they go
+     *         through {@link #placementsOf} and answer "no engine" instead.
      */
     public static @NonNull EngineHost serving(@NonNull Row database) {
         if (!DatabaseModel.isShared(database)) {
@@ -93,6 +102,100 @@ public record EngineHost(@NonNull Identifier ownerModel, int ownerId, @NonNull S
                 + engineId + " does not exist");
         }
         return ofEngine(engine);
+    }
+
+    /**
+     * The product record that owns a host's engine instance.
+     *
+     * @param model the owner's model: a dedicated database record, or a shared engine row
+     * @param id    that record's id
+     */
+    public record Owner(@NonNull Identifier model, int id) {
+    }
+
+    /**
+     * Where one record's host would be: the owner of its engine instance, the engine token and the stored host id
+     * (null: the local daemon).
+     *
+     * @param owner    the product record owning the engine instance
+     * @param token    the engine token {@link #dedicated} or {@link #ofEngine} would parse
+     * @param serverId the stored host id
+     */
+    public record Placement(@NonNull Owner owner, @Nullable String token, @Nullable Integer serverId) {
+
+        /**
+         * Whether {@link #dedicated} or {@link #ofEngine} resolves this placement without throwing: in practice, whether
+         * its engine token is known. The stored host check only mirrors their canonicalServerId; both server_id columns
+         * reference servers.id, so a stored host id always names a server.
+         *
+         * @param servers the hosts read through {@link ServerModel#serversByStoredId}, this stored host id among them
+         */
+        public boolean resolves(@NonNull Map<@Nullable Integer, Row> servers) {
+            return ManagedDatabase.Engine.forToken(this.token) != null && servers.containsKey(this.serverId);
+        }
+    }
+
+    /**
+     * THE non-throwing owner-key resolution of {@link #serving}, for one record or a page of them: each managed
+     * database record's placement, in one read of the named shared engines. The caller reads the hosts (with whatever
+     * else it needs from the servers table) and keeps the placements that {@link Placement#resolves}.
+     *
+     * AIDEV-NOTE: a placement that does not resolve is exactly where {@link #serving} THROWS (an unknown engine
+     * token); a shared record naming no engine, or one whose engine row is missing, has no placement at all. Every
+     * verdict reads both as "no engine". The single and page reads (DatabaseInstances.owned and ownedAmong) both go
+     * through here, so they cannot judge apart.
+     *
+     * @return database id to its host's placement; a shared record naming no engine or whose engine row is missing is
+     *         absent
+     */
+    public static @NonNull Map<Integer, Placement> placementsOf(@NonNull List<? extends Row> databases) {
+        Set<Integer> engineIds = new LinkedHashSet<>();
+        for (Row database : databases) {
+            if (DatabaseModel.isShared(database) && database.get(DatabaseModel.ENGINE_ID) != null) {
+                engineIds.add(database.get(DatabaseModel.ENGINE_ID));
+            }
+        }
+        Map<Integer, List<Row>> engines = engineIds.isEmpty() ? Map.of()
+            : KeyedRows.byAsked(Models.get(DatabaseEngineModel.class).find(), DatabaseEngineModel.ID, engineIds);
+        Map<Integer, Placement> placements = new HashMap<>();
+        for (Row database : databases) {
+            Integer id = database.get(DatabaseModel.ID);
+            if (id == null) {
+                continue;
+            }
+            if (!DatabaseModel.isShared(database)) {
+                placements.put(id, new Placement(new Owner(DatabaseModel.MODEL_ID, id),
+                    database.get(DatabaseModel.ENGINE), database.get(DatabaseModel.SERVER_ID)));
+                continue;
+            }
+            Integer engineId = database.get(DatabaseModel.ENGINE_ID);
+            List<Row> found = engineId == null ? null : engines.get(engineId);
+            if (found != null && !found.isEmpty()) {
+                placements.put(id, engineHosted(found.get(0)));
+            }
+        }
+        return placements;
+    }
+
+    /** The placement of one shared engine row's own instance. */
+    private static @NonNull Placement engineHosted(@NonNull Row engine) {
+        return new Placement(new Owner(DatabaseEngineModel.MODEL_ID, engine.get(DatabaseEngineModel.ID)),
+            engine.get(DatabaseEngineModel.ENGINE), engine.get(DatabaseEngineModel.SERVER_ID));
+    }
+
+    /**
+     * {@link #placementsOf} for shared engine rows: each engine owns its own instance. Reads nothing.
+     *
+     * @return engine id to its placement
+     */
+    public static @NonNull Map<Integer, Placement> placementsOfEngines(@NonNull List<? extends Row> engines) {
+        Map<Integer, Placement> placements = new HashMap<>();
+        for (Row engine : engines) {
+            if (engine.get(DatabaseEngineModel.ID) != null) {
+                placements.put(engine.get(DatabaseEngineModel.ID), engineHosted(engine));
+            }
+        }
+        return placements;
     }
 
     /** The named data volume of a persistent host; keyed to the NAME so it outlives runtime rows. */
