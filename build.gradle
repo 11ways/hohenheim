@@ -469,91 +469,6 @@ task browserTestStandalone(type: Test) {
     }
 }
 
-/**
- * Narrows a forkEvery Test task's class files to those its JUnit includeTags can select, so it forks no worker for
- * the rest of the source set.
- *
- * AIDEV-NOTE: JUnit Platform has no Gradle-side test detector, so Gradle hands EVERY class file of the test classes
- * dirs to the workers and the tag filter runs inside them. With forkEvery = 1 that is one worker JVM per class file
- * (872 on 2026-10-18, ~0.4s each), nearly all of them running nothing: that, and not the solo classes, was the solo
- * lane's "flat" cost, 211 of run 2670's 505 seconds. The workers still apply the real tag filter, so this narrows
- * to a SUPERSET only: a class is read as JUnit reads it (AnnotationSupport over the class, its hierarchy's methods
- * and its nested classes), a class that cannot be read is kept, and a tag expression narrows nothing.
- */
-void forkOnlyForTaggedClasses(Test task) {
-    Set<String> selected = null
-    boolean read = false
-    task.include { FileTreeElement element ->
-        if (element.directory) {
-            return true
-        }
-        if (!read) {
-            selected = classesSelectableByIncludeTags(task)
-            read = true
-        }
-        String path = element.relativePath.pathString
-        if (selected == null || !path.endsWith('.class')) {
-            return true
-        }
-        String name = path.substring(0, path.length() - '.class'.length()).replace('/', '.')
-        int nested = name.indexOf('$')
-        return selected.contains(name) || (nested > 0 && selected.contains(name.substring(0, nested)))
-    }
-}
-
-/** @return the classes whose JUnit tags can match the task's includeTags, or null when every class must stay */
-Set<String> classesSelectableByIncludeTags(Test task) {
-    Set<String> wanted = task.options.includeTags
-    if (wanted.isEmpty() || wanted.any { !(it ==~ /[A-Za-z0-9_.-]+/) }) {
-        return null
-    }
-    Set<String> selected = new HashSet<>()
-    URL[] urls = task.classpath.files.collect { it.toURI().toURL() } as URL[]
-    new URLClassLoader(urls, ClassLoader.platformClassLoader).withCloseable { loader ->
-        Class<?> tag = loader.loadClass('org.junit.jupiter.api.Tag')
-        def find = loader.loadClass('org.junit.platform.commons.support.AnnotationSupport')
-            .getMethod('findRepeatableAnnotations', java.lang.reflect.AnnotatedElement, Class)
-        def value = tag.getMethod('value')
-        Closure<Boolean> tagged = { element -> find.invoke(null, element, tag).any { wanted.contains(value.invoke(it)) } }
-        task.testClassesDirs.asFileTree.matching { include '**/*.class' }.visit { details ->
-            if (details.directory) {
-                return
-            }
-            String path = details.relativePath.pathString
-            String name = path.substring(0, path.length() - '.class'.length()).replace('/', '.')
-            try {
-                if (carriesTag(Class.forName(name, false, loader), tagged)) {
-                    selected.add(name)
-                }
-            } catch (Throwable unreadable) {
-                selected.add(name)
-            }
-        }
-    }
-    return selected
-}
-
-/** @return true when the type, a method its hierarchy declares, or a class nested in it carries a wanted tag */
-boolean carriesTag(Class<?> type, Closure<Boolean> tagged) {
-    if (tagged(type)) {
-        return true
-    }
-    List<Class<?>> pending = [type]
-    Set<Class<?>> seen = new HashSet<>()
-    while (!pending.isEmpty()) {
-        Class<?> current = pending.remove(0)
-        if (current == null || current == Object || !seen.add(current)) {
-            continue
-        }
-        if (current.declaredMethods.any { tagged(it) }) {
-            return true
-        }
-        pending.add(current.superclass)
-        pending.addAll(current.interfaces)
-    }
-    return type.declaredClasses.any { carriesTag(it, tagged) }
-}
-
 // The residue: classes that genuinely cannot share a JVM, each in its own.
 //
 // AIDEV-NOTE: membership is DECLARED with @Tag("solo") and the declaration must name
@@ -580,9 +495,9 @@ task browserTestSolo(type: Test) {
     maxHeapSize = '2g'
     // AIDEV-NOTE: a worker per class. The lane's old "flat ~65s" (measured 2026-08-12 and
     // blamed on Gradle's worker restart cycle) was a worker per class FILE of the whole source
-    // set, which forkOnlyForTaggedClasses now prunes to the tagged classes.
+    // set; the protoblast settings plugin (TaggedForkNarrowing) now hands this lane only the
+    // classes its include tags can select.
     forkEvery = 1
-    forkOnlyForTaggedClasses(it)
     // See browserTest for the derivation; the 2026-08-10 kill happened in this lane.
     timeout = java.time.Duration.ofMinutes(60)
 

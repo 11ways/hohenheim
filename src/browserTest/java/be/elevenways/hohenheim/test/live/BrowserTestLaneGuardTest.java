@@ -82,8 +82,9 @@ class BrowserTestLaneGuardTest {
         // 4. The solo lane stays SMALL, and the bound is a MEASURED price, not a taste.
         //    2026-08-12: the same three classes cost 74s as a forkEvery=1 lane and 11.4s
         //    sharing a JVM. Most of that turned out to be a worker per class FILE, which the
-        //    build now prunes (forkOnlyForTaggedClasses, 2026-10-18); what a solo class still
-        //    costs is its own worker and runtime boot, ~10s, beside its own test time.
+        //    protoblast settings plugin now prunes for every forkEvery lane (TaggedForkNarrowing,
+        //    2026-10-18); what a solo class still costs is its own worker and runtime boot, ~10s,
+        //    beside its own test time.
         assertThat(soloClasses)
             .as("step 4: the solo lane grew -- each entry costs its own worker JVM and runtime "
                 + "boot (~10s, forkEvery=1 starts and tears down a worker per class). If the "
