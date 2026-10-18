@@ -63,6 +63,9 @@ class DevTunnelTest {
     private static final String TOKEN = "zdev_test_registration_token";
     private static final String BASE = "dev.example.test";
 
+    /** How long a revoked tunnel may stay up: a fraction of the 15 s revalidation interval the tick would need. */
+    private static final Duration REVOKED_TUNNEL_CLOSES_WITHIN = Duration.ofSeconds(5);
+
     private static boolean initialized = false;
     private static ZenitHttpServer adminServer;
     private static ProxyServer proxy;
@@ -433,7 +436,7 @@ class DevTunnelTest {
     /**
      * The in-band credential is re-resolved for the life of the connection: a
      * rotated registration token closes a tunnel that already registered with the
-     * old one.
+     * old one, at once, because the site write that rotated it asks the tunnel again.
      */
     @Test
     void aRotatedRegistrationTokenClosesTheLiveTunnel() throws Exception {
@@ -459,10 +462,12 @@ class DevTunnelTest {
             //    simply no longer valid.
             setNamespaceToken("zdev_rotated_registration_token");
 
-            // 4. The next revalidation tick resolves that and closes the tunnel, so
-            //    the proxy falls back to the offline page. Without revalidation the
-            //    lease survives until the client or the transport ends it.
-            awaitOffline("step 4: a rotated token must close the live tunnel", "rotating." + BASE);
+            // 4. The committed site write is an access change of the site the tunnel
+            //    declared it reads, so the tunnel is asked again at once and closes,
+            //    and the proxy falls back to the offline page long before the next
+            //    revalidation tick. Without revalidation the lease survives until the
+            //    client or the transport ends it.
+            awaitOffline("step 4: a rotated token must close the live tunnel at once", "rotating." + BASE);
         } finally {
             setNamespaceToken(TOKEN);
         }
@@ -478,16 +483,15 @@ class DevTunnelTest {
         siteModel.save(site);
     }
 
-    /** Poll the proxy until the name no longer resolves to a live tunnel. */
+    /** Poll the proxy until the name no longer resolves to a live tunnel, well inside one revalidation interval. */
     private static void awaitOffline(String what, String host) {
-        Poll.until(what, Duration.ofMillis(HohenheimEndpoints.DEV_TUNNEL_REVALIDATION_INTERVAL_MS * 4),
-            Duration.ofMillis(500), () -> {
-                try {
-                    return proxyGet(host, "/")[0].contains("503");
-                } catch (Exception unreachable) {
-                    throw new IllegalStateException("the proxy did not answer " + host, unreachable);
-                }
-            });
+        Poll.until(what, REVOKED_TUNNEL_CLOSES_WITHIN, Duration.ofMillis(50), () -> {
+            try {
+                return proxyGet(host, "/")[0].contains("503");
+            } catch (Exception unreachable) {
+                throw new IllegalStateException("the proxy did not answer " + host, unreachable);
+            }
+        });
     }
 
     @Test

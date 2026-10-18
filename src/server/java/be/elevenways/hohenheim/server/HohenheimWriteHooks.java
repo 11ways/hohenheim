@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.StackFileModel;
 import be.elevenways.hohenheim.model.InstanceTemplateFileModel;
 import be.elevenways.hohenheim.server.instance.TemplateDeclarationGuards;
 import be.elevenways.hohenheim.server.ports.SitePortClaims;
+import be.elevenways.hohenheim.server.devtunnel.SiteAccessChanges;
 import be.elevenways.hohenheim.server.cms.SiteDomainRouteInvariant;
 import be.elevenways.hohenheim.server.cms.SiteEnableInvariant;
 import be.elevenways.hohenheim.server.auth.OperatorTrustedWrites;
@@ -103,6 +104,9 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // A site listening on a public port of its own (a TCP/UDP stream) claims it in the port ledger in the same
         // save, and carries no login gate -- AFTER TenantWrites for the same reason.
         SitePortClaims.install();
+        // A live dev tunnel authorizes through its site's token and wildcard domain: every committed site or domain
+        // write asks such tunnels again at once (its access change), instead of at their next periodic check.
+        SiteAccessChanges.install();
         // A dyndns credential dies with its record, on every delete lane -- AFTER
         // TenantWrites so an unauthorized record delete refuses first.
         DynamicDnsService.installCredentialCascade();

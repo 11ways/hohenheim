@@ -69,8 +69,8 @@ class VmScreenJourneyTest extends HohenheimTestBase {
 
     private static final Duration WAIT = Duration.ofSeconds(15);
 
-    /** Two production revalidation intervals, so a tick that just passed still gets its next one. */
-    private static final double REVOKE_WAIT_MS = 2.5 * HohenheimEndpoints.TERMINAL_REVALIDATION_INTERVAL_MS;
+    /** How long a revoked viewer's screen may stay up: a fraction of the 15 s revalidation interval the tick needs. */
+    private static final double REVOKED_VIEW_ENDS_WITHIN_MS = 5_000;
 
     private static final int SCAN_A = 0x1E;
     private static final int SCAN_B = 0x30;
@@ -134,13 +134,14 @@ class VmScreenJourneyTest extends HohenheimTestBase {
             tenant.keyboard().press("KeyB");
             assertThat(this.awaitKey(SCAN_B)).as("step 4: the new controller's key reached the VM").isTrue();
 
-            // 5. His grant is revoked: the next revalidation closes his view, which says so.
+            // 5. His grant is revoked: the committed revocation asks his screen socket again at once, which closes his
+            //    view long before the next revalidation tick, and the view says so.
             RecordGrants.revoke(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, instanceId,
                 HohenheimCapabilities.CONSOLE);
             tenant.waitForFunction("([selector, token]) => document.querySelector(selector)"
                     + ".getAttribute('data-screen-status') === token",
                 List.of(SCREEN, ScreenStatus.ACCESS_REVOKED.token()),
-                new Page.WaitForFunctionOptions().setTimeout(REVOKE_WAIT_MS));
+                new Page.WaitForFunctionOptions().setTimeout(REVOKED_VIEW_ENDS_WITHIN_MS));
             awaitRole(page, "watcher");
         } finally {
             if (tenantContext != null) {

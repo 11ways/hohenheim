@@ -277,6 +277,9 @@ public final class DevTunnelServerHandler implements WebSocketHandler, TunnelTra
             replaced = DevLeases.claim(newLease);
         }
         releasePreAuthSlot();
+        // The handshake carried no principal, so no account names this connection: its authorization reads the site,
+        // and a committed write of that site or its domains asks it again at once (SiteAccessChanges).
+        session.revalidateOnChangeOf(SiteModel.MODEL_ID, siteId);
 
         if (replaced != null) {
             // Off the receive lane: the old handler's send lock may be held by one
