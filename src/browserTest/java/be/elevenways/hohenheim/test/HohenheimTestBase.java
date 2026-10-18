@@ -39,7 +39,6 @@ import be.elevenways.zenit.common.flash.FlashNotice;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import be.elevenways.zenit.test.support.FlashHandoff;
-import be.elevenways.zenit.test.support.RateLimitExemption;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -117,12 +116,9 @@ public abstract class HohenheimTestBase extends ZenitBrowserTestBase {
         serveLaneBundle();
         holdTheReconcileSweep();
 
+        // Every endpoint keeps its declared rate limit: ZenitBrowserTestBase empties every bucket before each test,
+        // so a budget only ever counts the calls of ONE test.
         sessionToken = seedAuthenticatedAdmin();
-
-        // Endpoint rate limits (deploy/db-io/download) are exempted here; an operation's own budget is not, and
-        // ZenitBrowserTestBase empties every bucket before each test, so no budget carries over between tests.
-        // The dedicated rate-limit test lifts the exemption for its hammer.
-        RateLimitExemption.exemptAll();
     }
 
     /**

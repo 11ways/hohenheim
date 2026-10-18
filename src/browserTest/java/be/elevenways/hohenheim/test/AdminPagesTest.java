@@ -42,7 +42,6 @@ import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.test.support.TestAccessContexts;
 import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
-import be.elevenways.zenit.test.support.RateLimitExemption;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.server.panel.PartsReads;
@@ -800,20 +799,14 @@ class AdminPagesTest extends HohenheimTestBase {
             domainModel.delete(bare);
         }
 
-        // The base exempts every endpoint (suite-wide buckets would trip
-        // across classes); lift the exemption so the DECLARED policies apply.
-        RateLimitExemption.restore();
-        try {
-            boolean limited = false;
-            for (int i = 0; i < 40 && !limited; i++) {
-                limited = adminGet("/certificates/999999/download").statusCode() == 429;
-            }
-            assertThat(limited)
-                .as("the declared download policy (30/min) must answer 429 under a hammer")
-                .isTrue();
-        } finally {
-            RateLimitExemption.exemptAll();
+        // The declared download policy (30/min) is in force: a hammer is answered 429.
+        boolean limited = false;
+        for (int i = 0; i < 40 && !limited; i++) {
+            limited = adminGet("/certificates/999999/download").statusCode() == 429;
         }
+        assertThat(limited)
+            .as("the declared download policy (30/min) must answer 429 under a hammer")
+            .isTrue();
     }
 
     /**

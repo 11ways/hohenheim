@@ -99,13 +99,12 @@ class ApiWireSharedRefusalsTest extends HohenheimTestBase {
         wire.get("a read as a browser session", operatorSession, "/api/v1/instances");
         wire.post("a write as a browser session", operatorSession, "/api/v1/sites", "name=wire-session");
 
-        // 3. The rate limit: the backup route admits five calls of a key per window, the sixth is refused.
-        ApiWire.withRateLimits(() -> {
-            for (int call = 1; call <= 6; call++) {
-                wire.post("backup call " + call + " of a five-call window", limited,
-                    "/api/v1/instances/999999/backup", "");
-            }
-        });
+        // 3. The rate limit: the backup route admits five calls of a key per window, the sixth is refused. The key is
+        //    this test's own, so no other call spends its window.
+        for (int call = 1; call <= 6; call++) {
+            wire.post("backup call " + call + " of a five-call window", limited,
+                "/api/v1/instances/999999/backup", "");
+        }
 
         // 4. Oversized bodies: an artifact over the upload cap, and a form body over the framework's cap.
         byte[] artifact = new byte[1024 * 1024 + 1];

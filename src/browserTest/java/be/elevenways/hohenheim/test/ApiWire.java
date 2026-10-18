@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.test.support.RateLimitExemption;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -208,21 +207,6 @@ public final class ApiWire {
         }
         assertThat(current).as("the /api/v1 wire of %s is the java-rewrite capture (current at %s)",
             this.name, "build/api-v1-wire/" + this.name + ".txt").isEqualTo(stored);
-    }
-
-    /**
-     * Run {@code body} with the declared rate limits of every endpoint in force, which the suite otherwise lifts.
-     *
-     * AIDEV-NOTE: the limiter's buckets outlive the call, so a caller spends them under a credential nothing else
-     * uses.
-     */
-    public static void withRateLimits(@NonNull Runnable body) {
-        RateLimitExemption.restore();
-        try {
-            body.run();
-        } finally {
-            RateLimitExemption.exemptAll();
-        }
     }
 
     /** @return the operator account of the current database, holding every permission, created on first use */
