@@ -15,7 +15,7 @@ public final class InstanceKindIsolation implements BeforeAllCallback, AfterAllC
 
     @Override
     public void beforeAll(ExtensionContext context) {
-        context.getStore(SCOPE).put("kinds", InstanceKindRegistry.REGISTRY.snapshot());
+        context.getStore(SCOPE).put("kinds", InstanceKindRegistry.registry().snapshot());
     }
 
     @Override

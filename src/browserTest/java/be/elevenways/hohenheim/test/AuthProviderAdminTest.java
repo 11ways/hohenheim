@@ -66,7 +66,7 @@ class AuthProviderAdminTest extends HohenheimTestBase {
         assertThat(basic.innerText()).as("the Basic type's name").contains("HTTP Basic Auth");
         assertThat(basic.locator(".pl-select-subtitle").innerText()).as("the Basic type's description")
             .isEqualTo("A username and password the browser asks for");
-        SiteAuthProviderType basicType = SiteAuthProviderTypeRegistry.REGISTRY.get(BasicAuthProviderType.ID);
+        SiteAuthProviderType basicType = SiteAuthProviderTypeRegistry.registry().get(BasicAuthProviderType.ID);
         assertThat(basicType.getLabel().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
             .as("the Basic type in Dutch").isEqualTo("HTTP-basisauthenticatie");
 

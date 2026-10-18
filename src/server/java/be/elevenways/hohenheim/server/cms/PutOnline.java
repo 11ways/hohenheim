@@ -747,14 +747,14 @@ public final class PutOnline {
     /** @return whether the upstream kind with this stored id may be put online as an app of its own */
     static boolean offeredAsApp(@Nullable String kind) {
         Identifier id = kind == null ? null : Identifier.tryParse(kind);
-        UpstreamKindInfo info = id == null ? null : UpstreamKinds.REGISTRY.get(id);
+        UpstreamKindInfo info = id == null ? null : UpstreamKinds.registry().get(id);
         return info != null && info.offeredAsApp();
     }
 
     /** @return how an address of the upstream kind with this stored id is reached, null for a kind not known */
     static @Nullable PutOnlineReach addressReachOf(@Nullable String kind) {
         Identifier id = kind == null ? null : Identifier.tryParse(kind);
-        UpstreamKindInfo info = id == null ? null : UpstreamKinds.REGISTRY.get(id);
+        UpstreamKindInfo info = id == null ? null : UpstreamKinds.registry().get(id);
         return info == null ? null : info.putOnlineReach();
     }
 
@@ -890,7 +890,7 @@ public final class PutOnline {
     private static @NonNull List<SummaryLine> addressSummary(@NonNull StepAnswers answers) {
         String kind = answers.text(SiteModel.UPSTREAM_KIND.getName());
         Identifier kindId = kind == null ? null : Identifier.tryParse(kind);
-        UpstreamKindInfo info = kindId == null ? null : UpstreamKinds.REGISTRY.get(kindId);
+        UpstreamKindInfo info = kindId == null ? null : UpstreamKinds.registry().get(kindId);
         return servedSummary(info == null ? null : info.getLabel(), answers.text(SiteModel.NAME.getName()),
             answers.text(ADDRESS_HOSTNAME.getName()), null);
     }

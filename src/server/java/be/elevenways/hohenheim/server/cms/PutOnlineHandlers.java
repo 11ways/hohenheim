@@ -666,7 +666,7 @@ final class PutOnlineHandlers {
             throw refusedAs("app", refused);
         }
         call.attachSubject(InstanceOperations.INSTANCE, instance);
-        InstanceKindInfo info = InstanceKindRegistry.REGISTRY.get(Identifier.tryParse(String.valueOf(kindId)));
+        InstanceKindInfo info = InstanceKindRegistry.registry().get(Identifier.tryParse(String.valueOf(kindId)));
         call.reportStepDone(appDone(info == null ? String.valueOf(kindId) : info.getLabel(), instance));
         return instance;
     }

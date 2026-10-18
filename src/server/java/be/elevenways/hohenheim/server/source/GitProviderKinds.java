@@ -18,14 +18,6 @@ import java.util.Set;
  */
 public final class GitProviderKinds {
 
-    /**
-     * Entries arrive via the generated BlastAutoLoadInit; force it so lookups work
-     * regardless of which class the JVM touched first. MUST be the LAST static field.
-     */
-    @SuppressWarnings("unused")
-    private static final Object AUTO_LOAD_TRIGGER =
-            be.elevenways.protoblast.generated.BlastAutoLoadInit.loaded;
-
     private GitProviderKinds() {}
 
     /** Compile-time discovery hook (BlastAutoLoadInit). */
@@ -39,14 +31,14 @@ public final class GitProviderKinds {
             return null;
         }
         Identifier id = Identifier.tryParse(kindToken);
-        return id != null && GitProviderKindRegistry.REGISTRY.get(id) instanceof GitProviderKind kind ? kind : null;
+        return id != null && GitProviderKindRegistry.registry().get(id) instanceof GitProviderKind kind ? kind : null;
     }
 
     /** @return every declared kind's identifier, for tests and diagnostics */
     public static @NonNull Set<Identifier> declaredKinds() {
         Set<Identifier> kinds = new LinkedHashSet<>();
-        for (Identifier id : GitProviderKindRegistry.REGISTRY.ids()) {
-            if (GitProviderKindRegistry.REGISTRY.get(id) instanceof GitProviderKind) {
+        for (Identifier id : GitProviderKindRegistry.registry().ids()) {
+            if (GitProviderKindRegistry.registry().get(id) instanceof GitProviderKind) {
                 kinds.add(id);
             }
         }

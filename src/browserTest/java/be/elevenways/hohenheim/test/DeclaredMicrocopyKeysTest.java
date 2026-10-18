@@ -143,12 +143,12 @@ class DeclaredMicrocopyKeysTest {
         ShippedCatalogs catalogs = new ShippedCatalogs();
         InstanceKinds.kindsWhere(kind -> true);
         List<WordedKind> kinds = new ArrayList<>();
-        InstanceKindRegistry.REGISTRY.forEach(kinds::add);
-        UpstreamKinds.REGISTRY.forEach(kinds::add);
-        GitProviderKindRegistry.REGISTRY.forEach(kinds::add);
-        BackupTargetRegistry.REGISTRY.forEach(kinds::add);
-        VariableTypeRegistry.REGISTRY.forEach(kinds::add);
-        SiteAuthProviderTypeRegistry.REGISTRY.forEach(kinds::add);
+        InstanceKindRegistry.registry().forEach(kinds::add);
+        UpstreamKinds.registry().forEach(kinds::add);
+        GitProviderKindRegistry.registry().forEach(kinds::add);
+        BackupTargetRegistry.registry().forEach(kinds::add);
+        VariableTypeRegistry.registry().forEach(kinds::add);
+        SiteAuthProviderTypeRegistry.registry().forEach(kinds::add);
         kinds.removeIf(kind -> !kind.getClass().getName().startsWith("be.elevenways.hohenheim.server."));
         assertTrue(kinds.size() >= 26, () -> "step 2: the registries list the production kinds, found " + kinds);
         List<String> missing = new ArrayList<>();

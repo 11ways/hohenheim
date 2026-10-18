@@ -238,7 +238,7 @@ public final class TemplatePortability {
         }
         String kind = trimmed(body.get("kind"));
         Identifier kindId = Identifier.tryParse(kind);
-        if (kindId == null || InstanceKindRegistry.REGISTRY.get(kindId) == null) {
+        if (kindId == null || InstanceKindRegistry.registry().get(kindId) == null) {
             throw Violations.ofField("kind", kind,
                 HohenheimMicrocopy.VIOLATIONS.of("instance_kind_unknown").withArg("kind", kind));
         }

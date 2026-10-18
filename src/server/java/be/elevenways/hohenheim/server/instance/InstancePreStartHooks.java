@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.registry.Registry;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -21,17 +22,13 @@ public final class InstancePreStartHooks {
     private static final Registry<InstancePreStartHook> HOOKS =
         Registry.create(HohenheimIds.id("instance_pre_start_hook"));
 
-    /**
-     * Entries arrive via the generated BlastAutoLoadInit; force it so lookups work
-     * regardless of which class the JVM touched first. MUST be the LAST static field:
-     * the loader re-enters register() while this class is mid init and needs HOOKS
-     * assigned.
-     */
-    @SuppressWarnings("unused")
-    private static final Object AUTO_LOAD_TRIGGER =
-            be.elevenways.protoblast.generated.BlastAutoLoadInit.loaded;
-
     private InstancePreStartHooks() {}
+
+    /** Runs the autoload index first so every discovered hook is registered. */
+    private static @NonNull Registry<InstancePreStartHook> registered() {
+        Blast.ensureAutoLoaded();
+        return HOOKS;
+    }
 
     /**
      * Compile-time discovery hook (BlastAutoLoadInit).
@@ -46,7 +43,7 @@ public final class InstancePreStartHooks {
     /** Every registered hook in DISPATCH order: ascending weight, ties broken on id. */
     public static @NonNull List<InstancePreStartHook> all() {
         List<InstancePreStartHook> hooks = new ArrayList<>();
-        HOOKS.forEach(hooks::add);
+        registered().forEach(hooks::add);
         hooks.sort(Comparator.comparingInt(InstancePreStartHook::weight)
             .thenComparing(hook -> hook.id().toString()));
         return List.copyOf(hooks);

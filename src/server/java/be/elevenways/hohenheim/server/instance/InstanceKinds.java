@@ -41,15 +41,6 @@ import java.util.function.Predicate;
  */
 public final class InstanceKinds {
 
-    /**
-     * Entries arrive via the generated BlastAutoLoadInit; force it so lookups
-     * work regardless of which class the JVM touched first. MUST be the LAST
-     * static field.
-     */
-    @SuppressWarnings("unused")
-    private static final Object AUTO_LOAD_TRIGGER =
-            be.elevenways.protoblast.generated.BlastAutoLoadInit.loaded;
-
     private InstanceKinds() {}
 
     /** Compile-time discovery hook (BlastAutoLoadInit). */
@@ -59,7 +50,7 @@ public final class InstanceKinds {
 
     /** Deliberately points a kind's id at another handler (a test standing a fake in for a production kind). */
     public static void replace(InstanceKindHandler handler) {
-        InstanceKindRegistry.REGISTRY.replace(handler.typeId(), handler);
+        InstanceKindRegistry.registry().replace(handler.typeId(), handler);
     }
 
     public static InstanceKindHandler getHandler(String typeIdentifier) {
@@ -82,7 +73,7 @@ public final class InstanceKinds {
     }
 
     private static @Nullable InstanceKindHandler handlerFor(@Nullable Identifier id) {
-        return id != null && InstanceKindRegistry.REGISTRY.get(id) instanceof InstanceKindHandler handler
+        return id != null && InstanceKindRegistry.registry().get(id) instanceof InstanceKindHandler handler
             ? handler : null;
     }
 
@@ -184,9 +175,9 @@ public final class InstanceKinds {
 
         List<FieldOption<String>> options = new ArrayList<>();
 
-        for (InstanceKindInfo entry : InstanceKindRegistry.REGISTRY) {
+        for (InstanceKindInfo entry : InstanceKindRegistry.registry()) {
 
-            Identifier id = InstanceKindRegistry.REGISTRY.idOf(entry);
+            Identifier id = InstanceKindRegistry.registry().idOf(entry);
 
             if (id == null) {
                 continue;
@@ -299,8 +290,8 @@ public final class InstanceKinds {
     /** Stored kind values whose handler passes the predicate, registry order. */
     public static @NonNull List<String> kindsWhere(@NonNull Predicate<InstanceKindHandler> predicate) {
         List<String> kinds = new ArrayList<>();
-        for (InstanceKindInfo entry : InstanceKindRegistry.REGISTRY) {
-            Identifier id = InstanceKindRegistry.REGISTRY.idOf(entry);
+        for (InstanceKindInfo entry : InstanceKindRegistry.registry()) {
+            Identifier id = InstanceKindRegistry.registry().idOf(entry);
             InstanceKindHandler handler = handlerFor(id);
             if (handler != null && predicate.test(handler)) {
                 kinds.add(id.toString());
@@ -317,7 +308,7 @@ public final class InstanceKinds {
      */
     public static @NonNull Set<WorkloadIsolation> isolationsOn(@NonNull String runtime) {
         Set<WorkloadIsolation> isolations = EnumSet.noneOf(WorkloadIsolation.class);
-        for (Identifier id : InstanceKindRegistry.REGISTRY.ids()) {
+        for (Identifier id : InstanceKindRegistry.registry().ids()) {
             InstanceKindHandler handler = handlerFor(id);
             if (handler != null && handler.supportedRuntimes().contains(runtime)) {
                 isolations.add(handler.isolation());

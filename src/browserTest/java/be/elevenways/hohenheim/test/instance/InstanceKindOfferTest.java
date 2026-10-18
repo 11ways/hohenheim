@@ -63,8 +63,8 @@ class InstanceKindOfferTest {
     /** Every registered id whose handler declares generatedOnly(), read live. */
     private static List<String> generatedOnlyIds() {
         List<String> ids = new ArrayList<>();
-        for (InstanceKindInfo entry : InstanceKindRegistry.REGISTRY) {
-            Identifier id = InstanceKindRegistry.REGISTRY.idOf(entry);
+        for (InstanceKindInfo entry : InstanceKindRegistry.registry()) {
+            Identifier id = InstanceKindRegistry.registry().idOf(entry);
             if (id == null) {
                 continue;
             }
@@ -78,8 +78,8 @@ class InstanceKindOfferTest {
 
     private static List<String> registeredIds() {
         List<String> ids = new ArrayList<>();
-        for (InstanceKindInfo entry : InstanceKindRegistry.REGISTRY) {
-            Identifier id = InstanceKindRegistry.REGISTRY.idOf(entry);
+        for (InstanceKindInfo entry : InstanceKindRegistry.registry()) {
+            Identifier id = InstanceKindRegistry.registry().idOf(entry);
             if (id != null) {
                 ids.add(id.toString());
             }

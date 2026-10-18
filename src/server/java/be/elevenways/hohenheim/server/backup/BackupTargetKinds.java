@@ -21,14 +21,6 @@ import java.util.Map;
  */
 public final class BackupTargetKinds {
 
-    /**
-     * Entries arrive via the generated BlastAutoLoadInit; force it so lookups work
-     * regardless of which class the JVM touched first. MUST be the LAST static field.
-     */
-    @SuppressWarnings("unused")
-    private static final Object AUTO_LOAD_TRIGGER =
-            be.elevenways.protoblast.generated.BlastAutoLoadInit.loaded;
-
     private BackupTargetKinds() {}
 
     /** Compile-time discovery hook (BlastAutoLoadInit). */
@@ -48,7 +40,7 @@ public final class BackupTargetKinds {
             return null;
         }
         Identifier id = Identifier.tryParse(typeIdentifier);
-        return id != null && BackupTargetRegistry.REGISTRY.get(id) instanceof BackupTargetKindHandler handler
+        return id != null && BackupTargetRegistry.registry().get(id) instanceof BackupTargetKindHandler handler
             ? handler : null;
     }
 

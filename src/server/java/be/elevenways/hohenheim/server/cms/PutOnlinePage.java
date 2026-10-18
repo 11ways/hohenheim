@@ -191,7 +191,7 @@ public final class PutOnlinePage extends PanelPage {
                 ? PageActions.open(request, this, ADDRESS.id(), Map.of(SiteModel.UPSTREAM_KIND.getName(), kind))
                 : PageActions.open(request, this, addressAction.id());
             if (opened instanceof PageActions.Form form) {
-                UpstreamKindInfo info = UpstreamKinds.REGISTRY.get(Identifier.tryParse(kind));
+                UpstreamKindInfo info = UpstreamKinds.registry().get(Identifier.tryParse(kind));
                 vars.put("document", form.state().withJourney(BEFORE_WIZARD, AFTER_WIZARD));
                 if (addressAction == STREAM) {
                     vars.put("lead", HohenheimMicrocopy.PUT_ONLINE.of("stream_lead"));
@@ -203,7 +203,7 @@ public final class PutOnlinePage extends PanelPage {
         } else if (workload != null && workloadAction != null && HohenheimAccess.isAdmin(request.access())) {
             PageActions.Opened opened = PageActions.open(request, this, workloadAction.id(),
                 Map.of(InstanceModel.KIND.getName(), workload));
-            InstanceKindInfo info = InstanceKindRegistry.REGISTRY.get(Identifier.tryParse(workload));
+            InstanceKindInfo info = InstanceKindRegistry.registry().get(Identifier.tryParse(workload));
             if (opened instanceof PageActions.Form form && info != null) {
                 vars.put("document", form.state().withJourney(BEFORE_WIZARD, AFTER_WIZARD));
                 // Only a website is led in by the app flow's promise of an address and a certificate.
@@ -258,7 +258,7 @@ public final class PutOnlinePage extends PanelPage {
                 resolve(HohenheimMicrocopy.PUT_ONLINE.of("catalog_help"), request),
             CmsRoutes.list(request.panelSlug(), HohenheimSlugs.INSTANCE_TEMPLATES));
         boolean admin = HohenheimAccess.isAdmin(request.access());
-        for (InstanceKindInfo info : InstanceKindRegistry.REGISTRY) {
+        for (InstanceKindInfo info : InstanceKindRegistry.registry()) {
             PutOnlineGroup group = info.putOnlineGroup();
             if (group == null) {
                 continue;
@@ -284,7 +284,7 @@ public final class PutOnlinePage extends PanelPage {
             }
         }
         if (admin) {
-            for (UpstreamKindInfo info : UpstreamKinds.REGISTRY) {
+            for (UpstreamKindInfo info : UpstreamKinds.registry()) {
                 PutOnlineGroup group = info.putOnlineGroup();
                 if (group != null) {
                     card(cards, targets, group, "kind:" + info.typeId(), info.getIcon().name(),

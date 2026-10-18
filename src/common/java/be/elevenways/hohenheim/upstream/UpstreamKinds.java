@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.upstream;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.registry.Registry;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
  * THE declaring home of a site's upstream vocabulary: what a hostname resolves TO. Drives
@@ -13,20 +15,20 @@ import be.elevenways.protoblast.common.registry.Registry;
  * address, instance, tls passthrough, dev namespace) and "what workload runs" (docker, node,
  * java, command, alchemy). The second question moved to the INSTANCE kind, so a site now has
  * exactly one typed upstream and no opinion about how the thing upstream is run.
+ *
+ * AIDEV-NOTE: every read goes through {@link #registry()}; {@link #REGISTRY} itself is only for fields that hold
+ * the registry object (a RegistryMemberField) and for the discovery hook's writes.
  */
 public class UpstreamKinds {
 
     public static final Registry<UpstreamKindInfo> REGISTRY =
         Registry.create(HohenheimIds.id("upstream_kind"));
 
-    /**
-     * Entries arrive via the generated BlastAutoLoadInit (UpstreamKindHandler is
-     * discoverable); force it so direct REGISTRY consumers see the entries.
-     * MUST be the LAST static field (re-entrant init reads REGISTRY above).
-     */
-    @SuppressWarnings("unused")
-    private static final Object AUTO_LOAD_TRIGGER =
-            be.elevenways.protoblast.generated.BlastAutoLoadInit.loaded;
-
     private UpstreamKinds() {}
+
+    /** Runs the autoload index first so every discovered member is registered. */
+    public static @NonNull Registry<UpstreamKindInfo> registry() {
+        Blast.ensureAutoLoaded();
+        return REGISTRY;
+    }
 }

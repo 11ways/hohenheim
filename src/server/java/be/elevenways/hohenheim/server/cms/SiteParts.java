@@ -313,7 +313,7 @@ public final class SiteParts {
         Map<String, Object> values = new LinkedHashMap<>(SiteWrites.ADMIN_FORM.defaultValues());
         Conduit conduit = access.conduit();
         String kind = CmsSupport.prefill(conduit, HohenheimParams.UPSTREAM_KIND_PREFILL);
-        if (kind != null && UpstreamKinds.REGISTRY.get(Identifier.tryParse(kind)) != null) {
+        if (kind != null && UpstreamKinds.registry().get(Identifier.tryParse(kind)) != null) {
             values.put(SiteModel.UPSTREAM_KIND.getName(), kind);
         }
         Integer instanceId = CmsSupport.prefill(conduit, HohenheimParams.INSTANCE_ID_PREFILL);
@@ -569,7 +569,7 @@ public final class SiteParts {
     private static @Nullable UpstreamKindInfo kindOf(@Nullable Row site) {
         Identifier kind = site == null ? null : Identifier.tryParse(String.valueOf((Object) site.get(
             SiteModel.UPSTREAM_KIND)));
-        return kind == null ? null : UpstreamKinds.REGISTRY.get(kind);
+        return kind == null ? null : UpstreamKinds.registry().get(kind);
     }
 
     /**

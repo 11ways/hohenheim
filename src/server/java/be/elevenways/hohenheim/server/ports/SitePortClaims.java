@@ -174,6 +174,6 @@ public final class SitePortClaims {
 
     private static @Nullable UpstreamKindInfo kindOf(@Nullable Object kind) {
         Identifier id = kind == null ? null : Identifier.tryParse(String.valueOf(kind));
-        return id == null ? null : UpstreamKinds.REGISTRY.get(id);
+        return id == null ? null : UpstreamKinds.registry().get(id);
     }
 }

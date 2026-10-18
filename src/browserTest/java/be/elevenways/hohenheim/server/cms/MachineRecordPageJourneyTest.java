@@ -58,7 +58,7 @@ class MachineRecordPageJourneyTest extends HohenheimTestBase {
 
             // 1. Every kind's declared driver is the class its runtimeFor builds, on each runtime it supports, so the
             //    lanes the page reads can never disagree with the driver.
-            for (Identifier id : InstanceKindRegistry.REGISTRY.ids()) {
+            for (Identifier id : InstanceKindRegistry.registry().ids()) {
                 InstanceKindHandler kind = InstanceKinds.getHandler(id.toString());
                 // A release-managed kind owns no container (its runtimeFor refuses by name): its lanes are its
                 // serving release's, whose kind is checked here in its own right.

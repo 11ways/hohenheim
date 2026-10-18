@@ -30,7 +30,7 @@ class InstanceKindIsolationTest {
     class Restored {
         @Test
         void seesTheOriginalVocabularyAndCanRegisterAgain() {
-            assertThat(InstanceKindRegistry.REGISTRY.get(FakeNativeDaemons.FakeNativeKind.ID))
+            assertThat(InstanceKindRegistry.registry().get(FakeNativeDaemons.FakeNativeKind.ID))
                 .as("step 2: the previous class did not leave its fake kind in the picker").isNull();
             FakeNativeDaemons.register();
             assertThat(InstanceKinds.getHandler(FakeNativeDaemons.FakeNativeKind.ID.toString()))

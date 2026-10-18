@@ -18,15 +18,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 public final class SiteAuthProviders {
 
-    /**
-     * Entries arrive via the generated BlastAutoLoadInit; force it so lookups
-     * work regardless of which class the JVM touched first. MUST be the LAST
-     * static field.
-     */
-    @SuppressWarnings("unused")
-    private static final Object AUTO_LOAD_TRIGGER =
-            be.elevenways.protoblast.generated.BlastAutoLoadInit.loaded;
-
     /** Compile-time discovery hook (BlastAutoLoadInit). */
     public static void register(SiteAuthProviderTypeHandler handler) {
         SiteAuthProviderTypeRegistry.REGISTRY.add(handler.typeId(), handler);
@@ -39,7 +30,7 @@ public final class SiteAuthProviders {
         }
         Identifier id = Identifier.tryParse(typeIdentifier);
         return id != null
-                && SiteAuthProviderTypeRegistry.REGISTRY.get(id) instanceof SiteAuthProviderTypeHandler handler
+                && SiteAuthProviderTypeRegistry.registry().get(id) instanceof SiteAuthProviderTypeHandler handler
             ? handler : null;
     }
 

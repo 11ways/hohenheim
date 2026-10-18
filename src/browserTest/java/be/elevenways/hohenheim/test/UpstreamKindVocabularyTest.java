@@ -43,8 +43,8 @@ class UpstreamKindVocabularyTest {
 
     private static List<Identifier> registeredIds() {
         List<Identifier> ids = new ArrayList<>();
-        for (UpstreamKindInfo entry : UpstreamKinds.REGISTRY) {
-            Identifier id = UpstreamKinds.REGISTRY.idOf(entry);
+        for (UpstreamKindInfo entry : UpstreamKinds.registry()) {
+            Identifier id = UpstreamKinds.registry().idOf(entry);
             if (id != null) {
                 ids.add(id);
             }

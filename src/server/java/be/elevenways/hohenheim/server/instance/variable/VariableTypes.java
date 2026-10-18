@@ -12,14 +12,6 @@ import be.elevenways.protoblast.common.registry.Identifier;
  */
 public final class VariableTypes {
 
-    /**
-     * Entries arrive via the generated BlastAutoLoadInit; force it so lookups work
-     * regardless of which class the JVM touched first. MUST be the LAST static field.
-     */
-    @SuppressWarnings("unused")
-    private static final Object AUTO_LOAD_TRIGGER =
-            be.elevenways.protoblast.generated.BlastAutoLoadInit.loaded;
-
     private VariableTypes() {}
 
     /** Compile-time discovery hook (BlastAutoLoadInit). */
@@ -32,7 +24,7 @@ public final class VariableTypes {
             return null;
         }
         Identifier id = Identifier.tryParse(typeIdentifier);
-        return id != null && VariableTypeRegistry.REGISTRY.get(id) instanceof VariableTypeHandler handler
+        return id != null && VariableTypeRegistry.registry().get(id) instanceof VariableTypeHandler handler
             ? handler : null;
     }
 }

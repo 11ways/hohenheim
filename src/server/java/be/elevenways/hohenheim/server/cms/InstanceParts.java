@@ -394,7 +394,7 @@ public final class InstanceParts {
         Map<String, Object> values = new LinkedHashMap<>(createForm().defaultValues());
         String kind = CmsSupport.prefill(access.conduit(), HohenheimParams.PUT_ONLINE_KIND);
         Identifier kindId = kind == null ? null : Identifier.tryParse(kind);
-        if (kindId != null && InstanceKindRegistry.REGISTRY.get(kindId) instanceof InstanceKindInfo info
+        if (kindId != null && InstanceKindRegistry.registry().get(kindId) instanceof InstanceKindInfo info
                 && info.putOnlineGroup() != null) {
             values.put(InstanceModel.KIND.getName(), kind);
         }

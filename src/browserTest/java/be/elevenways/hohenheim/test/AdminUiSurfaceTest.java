@@ -438,8 +438,8 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
     void deployIsOfferedOnlyForKindsAPersonMayPower() throws Exception {
         // 1. Every registered kind answers from its own generatedOnly() declaration.
         List<String> deployable = new ArrayList<>();
-        for (InstanceKindInfo entry : InstanceKindRegistry.REGISTRY) {
-            Identifier id = InstanceKindRegistry.REGISTRY.idOf(entry);
+        for (InstanceKindInfo entry : InstanceKindRegistry.registry()) {
+            Identifier id = InstanceKindRegistry.registry().idOf(entry);
             if (id == null) {
                 continue;
             }

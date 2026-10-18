@@ -9,20 +9,11 @@ import be.elevenways.protoblast.common.registry.Identifier;
  * BlastAutoLoadInit (see the @BlastDiscoverable on the interface); nothing is registered
  * manually.
  *
- * AIDEV-NOTE: a handler is read out of THE registry ({@link UpstreamKinds#REGISTRY}), never a
+ * AIDEV-NOTE: a handler is read out of THE registry ({@link UpstreamKinds#registry()}), never a
  * private handler map beside it (two homes for one vocabulary); an entry that is not a server
  * handler fails closed as "unknown kind", as in BackupTargetKinds.
  */
 public class UpstreamKindHandlers {
-
-    /**
-     * Entries arrive via the generated BlastAutoLoadInit; force it so lookups
-     * work regardless of which class the JVM touched first. MUST be the LAST
-     * static field.
-     */
-    @SuppressWarnings("unused")
-    private static final Object AUTO_LOAD_TRIGGER =
-            be.elevenways.protoblast.generated.BlastAutoLoadInit.loaded;
 
     /** Compile-time discovery hook (BlastAutoLoadInit). */
     public static void register(UpstreamKindHandler handler) {
@@ -36,6 +27,6 @@ public class UpstreamKindHandlers {
     }
 
     public static UpstreamKindHandler getHandler(Identifier id) {
-        return UpstreamKinds.REGISTRY.get(id) instanceof UpstreamKindHandler handler ? handler : null;
+        return UpstreamKinds.registry().get(id) instanceof UpstreamKindHandler handler ? handler : null;
     }
 }

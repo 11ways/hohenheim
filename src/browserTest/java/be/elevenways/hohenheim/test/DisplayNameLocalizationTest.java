@@ -70,7 +70,7 @@ class DisplayNameLocalizationTest {
         // whether a fixture that declares a fake kind happens to share this JVM is luck,
         // so the rule is proven directly on both sides instead of hoping for the polluted
         // fork that would otherwise be the only place it is exercised.
-        assertThat(ships(UpstreamKinds.REGISTRY.iterator().next()))
+        assertThat(ships(UpstreamKinds.registry().iterator().next()))
             .as("a kind declared outside the test tree is judged").isTrue();
         assertThat(ships(new TestTreeDeclaration()))
             .as("a kind declared inside the test tree is skipped").isFalse();
@@ -79,7 +79,7 @@ class DisplayNameLocalizationTest {
         // (the card presentations draw it): an English literal there rots exactly the same
         // way, and nothing else would notice.
         int walked = 0;
-        for (InstanceKindInfo handler : InstanceKindRegistry.REGISTRY) {
+        for (InstanceKindInfo handler : InstanceKindRegistry.registry()) {
             if (!ships(handler)) {
                 continue;
             }
@@ -88,7 +88,7 @@ class DisplayNameLocalizationTest {
             check(handler.getDescription(), "instance kind description "
                 + handler.typeId(), catalogs, broken);
         }
-        for (UpstreamKindInfo type : UpstreamKinds.REGISTRY) {
+        for (UpstreamKindInfo type : UpstreamKinds.registry()) {
             if (!ships(type)) {
                 continue;
             }
@@ -126,14 +126,14 @@ class DisplayNameLocalizationTest {
         LocaleChain described = LocaleChain.of(ContentLocales.getDefault());
         List<String> broken = new ArrayList<>();
 
-        for (InstanceKindInfo handler : InstanceKindRegistry.REGISTRY) {
+        for (InstanceKindInfo handler : InstanceKindRegistry.registry()) {
             if (!ships(handler)) {
                 continue;
             }
             checkRefusal(handler.getLabel(), "instance kind " + handler.typeId(),
                 catalogs, described, broken);
         }
-        for (UpstreamKindInfo type : UpstreamKinds.REGISTRY) {
+        for (UpstreamKindInfo type : UpstreamKinds.registry()) {
             if (!ships(type)) {
                 continue;
             }

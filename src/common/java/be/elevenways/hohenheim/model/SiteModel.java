@@ -284,7 +284,7 @@ public class SiteModel extends Model {
         Row stored = StoredRows.of(Models.get(SiteModel.class), row);
         Object kind = row.afterWrite(UPSTREAM_KIND, stored);
         if (kind == null) return;
-        UpstreamKindInfo info = UpstreamKinds.REGISTRY.get(Identifier.tryParse(kind.toString()));
+        UpstreamKindInfo info = UpstreamKinds.registry().get(Identifier.tryParse(kind.toString()));
         if (info == null) return;
         Object instanceId = row.afterWrite(INSTANCE_ID, stored);
         if (info.requiresInstance() && instanceId == null) {
