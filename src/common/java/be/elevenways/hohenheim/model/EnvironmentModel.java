@@ -1,6 +1,11 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -21,6 +26,9 @@ import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
  * does not own that record.
  */
 public class EnvironmentModel extends Model {
+
+    /** Between the project's title and the environment's name in the environment's title. */
+    public static final String PROJECT_SEPARATOR = " / ";
 
     public static final Identifier MODEL_ID = HohenheimIds.id("environment");
     public static final Schema SCHEMA = new Schema();
@@ -55,6 +63,34 @@ public class EnvironmentModel extends Model {
 
     static {
         SCHEMA.setDisplayFields(NAME);
+    }
+
+    /**
+     * An environment is named with its project ("Webshop / production"): two projects' "production" are told apart in
+     * every list, picker and history line outside their own project page.
+     *
+     * AIDEV-NOTE: the one place an environment's title is decided; {@link #resolveTitleBeneathParent} keeps the bare
+     * name for the crumb under the project's own crumb. The title reads the project row by key, as every title surface
+     * of an admin-only environment may.
+     *
+     * @return null when the environment has no name, so the pk fallback applies
+     */
+    @Override
+    public @Nullable String resolveDisplayTitle(@NonNull Row row, @Nullable LocaleChain chain) {
+        String name = super.resolveDisplayTitle(row, chain);
+        Integer projectId = row.get(PROJECT_ID);
+        if (name == null || projectId == null) {
+            return name;
+        }
+        ProjectModel projects = Models.get(ProjectModel.class);
+        Row project = projects.find().where(ProjectModel.ID.eq(projectId)).first();
+        String projectTitle = project != null ? projects.resolveDisplayTitle(project, chain) : null;
+        return projectTitle != null ? projectTitle + PROJECT_SEPARATOR + name : name;
+    }
+
+    @Override
+    public @Nullable String resolveTitleBeneathParent(@NonNull Row row, @Nullable LocaleChain chain) {
+        return super.resolveDisplayTitle(row, chain);
     }
 
     @Override public Identifier getModelId() { return MODEL_ID; }
