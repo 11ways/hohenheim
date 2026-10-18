@@ -343,8 +343,8 @@ public final class StackParts {
                     .withTypedConfirmation(stack.get(StackModel.NAME)))
                 .build(),
             PanelAction.<Row, String>places(StackOperations.REFRESH, ActionPlacement.ROW,
-                    (request, result) -> CmsActionResult.refreshWithToast(
-                        HohenheimMicrocopy.STACK_STATUS.of(result.value())))
+                    (request, status) -> CmsActionResult.refreshWithToast(
+                        HohenheimMicrocopy.STACK_STATUS.of(status)))
                 .build(),
             // Disk reclaim is per DAEMON, not per stack, so it belongs on the page rather than on a row.
             PanelAction.<Row, Void>places(StackOperations.RECLAIM_IMAGES, ActionPlacement.HEADER,

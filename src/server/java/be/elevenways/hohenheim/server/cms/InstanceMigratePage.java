@@ -49,10 +49,10 @@ public final class InstanceMigratePage implements RecordTab.Rendered<Row> {
 
     /** The migrate operation over this tab's own record, its destination carried hidden per row. */
     private static final PanelAction<Row> MIGRATE = PanelAction.<Row, Integer>places(InstanceOperations.MIGRATE,
-            ActionPlacement.PAGE, (request, result) -> CmsActionResult.refreshWithToast(
+            ActionPlacement.PAGE, (request, serverId) -> CmsActionResult.refreshWithToast(
                 HohenheimMicrocopy.INSTANCE.of("migrated_toast")
                     .withArg("name", request.subject().get(InstanceModel.NAME))
-                    .withArg("host", ServerModel.nameOf(result.value()))))
+                    .withArg("host", ServerModel.nameOf(serverId))))
         .confirmation(ConfirmationSpec.of(HohenheimMicrocopy.INSTANCE_MIGRATE.of("migrate"),
             HohenheimMicrocopy.INSTANCE_MIGRATE.of("migrate_here"), HohenheimMicrocopy.INSTANCE_MIGRATE.of("cold_note"),
             ActionStyle.DESTRUCTIVE))

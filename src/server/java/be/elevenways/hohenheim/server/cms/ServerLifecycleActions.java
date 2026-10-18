@@ -139,7 +139,7 @@ final class ServerLifecycleActions {
             .result(Microcopy.class).register();
         OperationHandlers.attach(operation).applies(applies::test).handle(call -> handler.apply(call.subject()));
         return PanelAction.<Row, Microcopy>places(operation, ActionPlacement.ROW,
-            (request, result) -> CmsActionResult.refreshWithToast(result.value()));
+            (request, told) -> CmsActionResult.refreshWithToast(told));
     }
 
     /**

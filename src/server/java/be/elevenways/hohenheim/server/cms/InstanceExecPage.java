@@ -22,16 +22,17 @@ import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.server.page.PageActions;
 import be.elevenways.zenit.common.conduit.Conduit;
-import be.elevenways.zenit.common.operation.OperationResult;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * The one-off command mode of an instance's Console tab: run one arbitrary command inside the workload and read its
@@ -106,9 +107,9 @@ public final class InstanceExecPage implements ConsoleModes.Mode {
      * This tab renders under /admin AND /manage, so the way back is built from the HOSTING panel.
      */
     private static @NonNull CmsActionResult ran(@NonNull ActionRequest<Row> request,
-                                                @NonNull OperationResult<ExecRun> result) {
+                                                @Nullable ExecRun answered) {
         int instanceId = request.subject().get(InstanceModel.ID);
-        ExecRun run = result.value();
+        ExecRun run = Objects.requireNonNull(answered, "an exec answers its run");
         InstanceExecResults.stash(request.request().conduit(), instanceId, run.exitCode(), run.output());
         return CmsActionResult.redirect(new Uri(CmsRoutes.subpage(request.request().panelSlug(),
             HohenheimSlugs.INSTANCES, instanceId, HohenheimSlugs.Tab.EXEC).toUrl()));

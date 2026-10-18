@@ -208,8 +208,7 @@ public final class InstanceBackupParts {
     private static @NonNull PanelAction<Row> restore() {
         Microcopy verb = HohenheimMicrocopy.INSTANCE_BACKUP.of("restore_new");
         return PanelAction.<Row, Restored>places(InstanceBackupOperations.RESTORE_BACKUP, ActionPlacement.ROW,
-                (request, result) -> {
-                    Restored outcome = result.value();
+                (request, outcome) -> {
                     Microcopy told = outcome.missing() != null
                         ? HohenheimMicrocopy.INSTANCE_BACKUP.of("restored_new_partial")
                             .withArg("id", outcome.instanceId())

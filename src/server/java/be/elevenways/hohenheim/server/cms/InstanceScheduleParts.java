@@ -218,9 +218,9 @@ public final class InstanceScheduleParts {
     /** Run the chain off-cron, offered on an enabled schedule to a CONFIG holder. */
     private static @NonNull PanelAction<Row> runNow() {
         return PanelAction.<Row, String>places(InstanceScheduleOperations.RUN_SCHEDULE, ActionPlacement.ROW,
-                (request, result) -> CmsActionResult.refreshWithToast(HohenheimMicrocopy.INSTANCE_SCHEDULE
+                (request, status) -> CmsActionResult.refreshWithToast(HohenheimMicrocopy.INSTANCE_SCHEDULE
                     .of("run_finished")
-                    .withArg("status", result.value())))
+                    .withArg("status", status)))
             .label(HohenheimMicrocopy.INSTANCE_SCHEDULE.of("run_now"))
             .icon(Icon.of("play"))
             .build();

@@ -26,7 +26,6 @@ import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.OperationInput;
-import be.elevenways.zenit.common.operation.OperationResult;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.EnumField;
@@ -294,9 +293,9 @@ public final class CertificateOperations {
      * order shows its TXT records, never the edit form an operator lands on through the plain record URL.
      */
     private static @NonNull CmsActionResult opened(@NonNull ActionRequest<Row> request,
-                                                   @NonNull OperationResult<Integer> result) {
+                                                   @Nullable Integer certificateId) {
         return CmsActionResult.redirect(new Uri(CmsRoutes.open(request.request().panelSlug(),
-            HohenheimSlugs.CERTIFICATES, result.value()).toUrl()));
+            HohenheimSlugs.CERTIFICATES, certificateId).toUrl()));
     }
 
     private static @NonNull Map<String, Object> prefill(@Nullable Row domain) {

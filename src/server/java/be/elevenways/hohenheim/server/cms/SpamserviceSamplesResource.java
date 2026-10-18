@@ -188,9 +188,9 @@ public final class SpamserviceSamplesResource {
                     .icon(Icon.of("check"))
                     .build(),
                 PanelAction.<SampleSummary, String>places(RESCORE, ActionPlacement.ROW,
-                        (request, result) -> CmsActionResult.refreshWithToast(
+                        (request, score) -> CmsActionResult.refreshWithToast(
                             HohenheimMicrocopy.SPAMSERVICE_SAMPLE.of("rescored")
-                                .withArg("score", result.value())))
+                                .withArg("score", score)))
                     .label(HohenheimMicrocopy.SPAMSERVICE_SAMPLE.of("rescore"))
                     .icon(Icon.of("rotate"))
                     .hiddenWhen(SampleSummary::confirmed)

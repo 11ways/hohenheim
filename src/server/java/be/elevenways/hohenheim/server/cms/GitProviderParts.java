@@ -156,7 +156,7 @@ public final class GitProviderParts {
             // credential columns are read. Everything else on the record is secret.
             .form(ResourceForm.<Row>of(form).inlineEditable(GitProviderModel.NAME).build())
             .actions(List.of(PanelAction.<Row, ConnectionTest>places(GitProviderOperations.TEST_CONNECTION,
-                    ActionPlacement.ROW, (request, result) -> words.apply(result.value()))
+                    ActionPlacement.ROW, (request, test) -> words.apply(test))
                 .label(HohenheimMicrocopy.GIT_PROVIDER.of("test_connection"))
                 .icon(Icon.of("plug-circle-check"))
                 .build()));

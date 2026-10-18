@@ -268,7 +268,7 @@ public final class NotificationChannelParts {
             .deleteConfirmation(DeleteConfirmation.of(DeleteConfirmation.body(
                 HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("delete_confirm"))))
             .actions(List.of(PanelAction.<Row, NotifyOutcome>places(TEST, ActionPlacement.ROW,
-                    (request, result) -> testWords(Objects.requireNonNull(result.value(), "a test answers")))
+                    (request, outcome) -> testWords(Objects.requireNonNull(outcome, "a test answers")))
                 .label(HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("test"))
                 .icon(Icon.of("paper-plane"))
                 .build(),

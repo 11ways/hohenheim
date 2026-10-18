@@ -136,7 +136,7 @@ public final class BackupTargetParts {
             .form(ResourceForm.<Row>of(form).build())
             .writes(ResourceMutations.rows().create().update().delete().build())
             .actions(List.of(PanelAction.<Row, TestOutcome>places(TEST, ActionPlacement.ROW,
-                    (request, result) -> testWords(Objects.requireNonNull(result.value(), "a test answers")))
+                    (request, outcome) -> testWords(Objects.requireNonNull(outcome, "a test answers")))
                 .label(HohenheimMicrocopy.BACKUP_TARGET.of("test_connection"))
                 .icon(Icon.of("plug-circle-check"))
                 .build()))

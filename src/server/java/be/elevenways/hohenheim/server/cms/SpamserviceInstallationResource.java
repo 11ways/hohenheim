@@ -71,8 +71,8 @@ public final class SpamserviceInstallationResource extends RowSingleton {
             destructive(SpamserviceOperations.STOP, "stop"),
             destructive(SpamserviceOperations.RESTART, "restart"),
             PanelAction.<Void, String>places(SpamserviceOperations.TEST, ActionPlacement.HEADER,
-                    (request, result) -> CmsActionResult.refreshWithToast(
-                        HohenheimMicrocopy.SPAMSERVICE.of("test_ok").withArg("status", result.value())))
+                    (request, status) -> CmsActionResult.refreshWithToast(
+                        HohenheimMicrocopy.SPAMSERVICE.of("test_ok").withArg("status", status)))
                 .build());
     }
 

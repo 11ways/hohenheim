@@ -112,7 +112,7 @@ public final class DnsZoneParts {
                 .route((row, request) -> CmsRoutes.subpage(request.panelSlug(), HohenheimSlugs.DNS_ZONES,
                     row.get(DnsZoneModel.ID), HohenheimSlugs.Tab.RECORDS)).build(),
                 PanelAction.<Row, CmsActionResult>places(DnsOperations.CHECK_HEALTH, ActionPlacement.ROW,
-                    (request, result) -> result.value()).build()))
+                    (request, answer) -> answer).build()))
             .tabs(ResourceTabs.<Row>of(List.of(new DnsZoneRecordsPage(), new DnsZoneFilePage(),
                 secondariesTab())).withHistory().withContributions())
             .relatedPages(parts.relatedPages().toArray(RelatedPage[]::new)).build();

@@ -89,7 +89,7 @@ import java.util.Objects;
 public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
 
     private static final PanelAction<Row> REMOTE_EDIT = PanelAction.<Row, CmsActionResult>places(
-        DnsOperations.REMOTE_EDIT, ActionPlacement.PAGE, (request, result) -> result.value())
+        DnsOperations.REMOTE_EDIT, ActionPlacement.PAGE, (request, answer) -> answer)
         .transport("action", "record_id")
         .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.DNS_REMOTE.of("save_remote"),
             HohenheimMicrocopy.DNS_REMOTE.of("edit_saved"), ActionStyle.DEFAULT))

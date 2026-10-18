@@ -97,11 +97,11 @@ public final class DnsRecordParts {
             .deleteConfirmation(DeleteConfirmation.<Row>defaults().forRow((row, request) ->
                 new DnsRecordParts().deleteConfirmationFor(row)))
             .actions(List.of(PanelAction.<Row, CmsActionResult>places(DnsOperations.MINT_DYNAMIC_TOKEN,
-                ActionPlacement.ROW, (request, result) -> result.value()).inlineInRow(false)
+                ActionPlacement.ROW, (request, answer) -> answer).inlineInRow(false)
                 .dynamicDescription(row -> HohenheimMicrocopy.DNS_RECORD.of("dyndns_token_hint")
                     .withArg("url", dyndnsUpdateUrl())).build(),
                 PanelAction.<Row, CmsActionResult>places(DnsOperations.REVOKE_DYNAMIC_TOKEN,
-                    ActionPlacement.ROW, (request, result) -> result.value()).inlineInRow(false)
+                    ActionPlacement.ROW, (request, answer) -> answer).inlineInRow(false)
                     .confirmation(ConfirmationSpec.destructive(HohenheimMicrocopy.DNS_RECORD
                         .of("dyndns_revoke_confirm"))).build()));
     }

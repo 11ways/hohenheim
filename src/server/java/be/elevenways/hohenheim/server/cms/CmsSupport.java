@@ -168,8 +168,8 @@ public final class CmsSupport {
             @NonNull Operation<?, ?, Integer> operation, @NonNull BiFunction<String, Integer, String> landing,
             @NonNull Microcopy verb, @NonNull Microcopy body) {
         return PanelAction.<Row, Integer>places(operation, ActionPlacement.ROW,
-                (request, result) -> CmsActionResult.redirect(new Uri(landing.apply(request.request().panelSlug(),
-                    Objects.requireNonNull(result.value(), "the operation answers the record it made")))))
+                (request, made) -> CmsActionResult.redirect(new Uri(landing.apply(request.request().panelSlug(),
+                    Objects.requireNonNull(made, "the operation answers the record it made")))))
             .inlineOnRecord(false)
             .inlineInRow(false)
             .confirmation(ConfirmationSpec.verb(verb, body, ActionStyle.DEFAULT));

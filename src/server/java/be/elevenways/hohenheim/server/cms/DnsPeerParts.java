@@ -76,7 +76,7 @@ public final class DnsPeerParts {
             .deleteConfirmation(DeleteConfirmation.<Row>of(parts.deleteConfirmation())
                 .forRow((row, request) -> parts.deleteConfirmationFor(row)))
             .actions(List.of(PanelAction.<Row, CmsActionResult>places(DnsOperations.NEGOTIATE_KEY,
-                ActionPlacement.ROW, (request, result) -> result.value())
+                ActionPlacement.ROW, (request, answer) -> answer)
                 .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.DNS_PEER.of("negotiate_key"),
                     HohenheimMicrocopy.DNS_PEER.of("negotiate_key_confirm"), ActionStyle.DEFAULT)).build()))
             .tabs(ResourceTabs.<Row>none().withHistory().withContributions()).build();

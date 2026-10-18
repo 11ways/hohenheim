@@ -16,7 +16,6 @@ import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.common.operation.Operation;
-import be.elevenways.zenit.common.operation.OperationResult;
 import be.elevenways.zenit.common.operation.ResultStep;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -26,7 +25,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Objects;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -80,8 +78,7 @@ class RollbackActionsAgreeTest {
         PanelRequest request = new PanelRequest(Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN)),
             TenantConduits.stubFor(null), AccessContext.anonymous(), null);
         var step = (ResultStep<ActionRequest<Row>, Void, CmsActionResult>) Objects.requireNonNull(action.result());
-        var result = (CmsActionResult.Refresh) step.answer(new ActionRequest<>(request, List.of(subject), null),
-            new OperationResult<>(UUID.randomUUID(), null));
+        var result = (CmsActionResult.Refresh) step.answer(new ActionRequest<>(request, List.of(subject), null), null);
         return Objects.requireNonNull(result.toastMessage());
     }
 }
