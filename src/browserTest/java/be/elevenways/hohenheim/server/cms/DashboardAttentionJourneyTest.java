@@ -37,6 +37,7 @@ import be.elevenways.hohenheim.server.task.BackupControlPlane;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.InOrder;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.database.EngineHandles;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -937,8 +938,8 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             assertThat(adminGet("/admin/instances/" + refusedId + "/page/overview").body())
                 .as("step 2: the page's band reads the words, then the technical text")
                 .contains("Could not start")
-                .containsSubsequence("It never got to run.",
-                    "Technically: Conflict. The container name /conflict is already in use")
+                .containsPattern(InOrder.of("It never got to run.",
+                    "Technically: Conflict. The container name /conflict is already in use"))
                 .doesNotContain("What refused it");
 
             // 3. A crash whose automatic restart the start gates refused is recorded as that, so the app does not

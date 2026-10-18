@@ -22,6 +22,7 @@ import be.elevenways.hohenheim.server.instance.InstanceStats;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.InOrder;
 import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
 import be.elevenways.hohenheim.test.RecordedChanges;
@@ -507,7 +508,8 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
             String failed = adminGet("/admin/instances/" + id + "/page/overview").body();
             assertThat(failed).as("step 2: the band reads a failed start in words, the failure's text after them")
                 .contains("Could not start")
-                .containsSubsequence("It never got to run.", "Technically: image app-journey:missing was not found")
+                .containsPattern(InOrder.of("It never got to run.",
+                    "Technically: image app-journey:missing was not found"))
                 .doesNotContain("What refused it")
                 .doesNotContain("Stopped after an error");
             // A record left claiming running beside that failed start still names no start.
