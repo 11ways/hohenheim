@@ -10,7 +10,7 @@ import be.elevenways.hohenheim.model.WebhookDeliveryModel;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.source.GitWebhookHandler;
-import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;

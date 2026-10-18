@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.server.incus;
 
 import be.elevenways.hohenheim.server.runtime.ConsoleStreamSupport;
 import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
-import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.kvm.server.ScreenRefusalReason;

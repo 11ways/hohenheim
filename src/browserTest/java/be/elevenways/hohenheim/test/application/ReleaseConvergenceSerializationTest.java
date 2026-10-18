@@ -13,12 +13,12 @@ import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.instance.InstanceService;
-import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.hohenheim.test.host.HostFixtures;
-import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.testsupport.thread.Racers;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -36,7 +36,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -67,7 +66,7 @@ class ReleaseConvergenceSerializationTest {
     private static Integer savedProbeInterval;
     private static Integer savedDrain;
 
-    private final JobRunner convergers = JobRunner.create("release-convergers");
+    private final Racers convergers = Racers.named("converges of one application");
 
     @BeforeAll
     static void setUp() throws Exception {
@@ -102,7 +101,7 @@ class ReleaseConvergenceSerializationTest {
 
     @AfterEach
     void stopConvergers() {
-        this.convergers.shutdownNow();
+        this.convergers.close();
     }
 
     /**
@@ -135,9 +134,7 @@ class ReleaseConvergenceSerializationTest {
                 aStalled.countDown();
                 awaitLatch(resumeA);
             });
-            AtomicReference<ApplicationReleases.Release> aResult = new AtomicReference<>();
-            AtomicReference<Throwable> aFailure = new AtomicReference<>();
-            Thread a = converger(applicationId, aResult, aFailure);
+            Racers.Running<ApplicationReleases.Release> a = converger("converge A", applicationId);
             assertThat(aStalled.await(120, TimeUnit.SECONDS))
                 .as("step 2: converge A reached its stall point inside the candidate's start")
                 .isTrue();
@@ -147,22 +144,16 @@ class ReleaseConvergenceSerializationTest {
             //    inferred from a sleep. The `!isAlive` arm is what keeps the falsification
             //    honest: with the lock removed B simply runs to completion here instead,
             //    the overlap still happens, and the invariants below are what fail.
-            AtomicReference<ApplicationReleases.Release> bResult = new AtomicReference<>();
-            AtomicReference<Throwable> bFailure = new AtomicReference<>();
-            Thread b = converger(applicationId, bResult, bFailure);
+            Racers.Running<ApplicationReleases.Release> b = converger("converge B", applicationId);
             await("step 3: converge B either queued on the lock or ran past it",
-                () -> queuedOn(applicationId, b) || !b.isAlive());
-            boolean bQueuedOnTheLock = queuedOn(applicationId, b);
+                () -> queuedOn(applicationId, b.thread()) || !b.isRunning());
+            boolean bQueuedOnTheLock = queuedOn(applicationId, b.thread());
 
             // 4. Both finish. B waited (it did not coalesce away), so it converged for
             //    real -- onto the release A had just made serving.
             resumeA.countDown();
-            a.join(TimeUnit.SECONDS.toMillis(120));
-            b.join(TimeUnit.SECONDS.toMillis(120));
-            assertThat(a.isAlive()).as("step 4: converge A finished").isFalse();
-            assertThat(b.isAlive()).as("step 4: converge B finished").isFalse();
-            assertThat(aFailure.get()).as("step 4: converge A did not fail").isNull();
-            assertThat(bFailure.get()).as("step 4: converge B did not fail").isNull();
+            ApplicationReleases.Release aResult = a.await(Duration.ofSeconds(120)).value();
+            ApplicationReleases.Release bResult = b.await(Duration.ofSeconds(120)).value();
 
             Db.run(datasource, () -> {
                 int servingId = ApplicationReleases.ownedServing(applicationId)
@@ -175,10 +166,10 @@ class ReleaseConvergenceSerializationTest {
                 assertThat(servingId)
                     .as("step 5: the release the flip produced, not the one both read")
                     .isNotEqualTo(firstId);
-                assertThat(aResult.get().instanceId())
+                assertThat(aResult.instanceId())
                     .as("step 5: which is the release converge A produced")
                     .isEqualTo(servingId);
-                assertThat(bResult.get().instanceId())
+                assertThat(bResult.instanceId())
                     .as("step 5: and converge B returned that same release rather than"
                         + " minting a rival for the source it was asked to deploy")
                     .isEqualTo(servingId);
@@ -368,20 +359,12 @@ class ReleaseConvergenceSerializationTest {
     /**
      * Start one converge of the application on its own thread.
      *
-     * AIDEV-NOTE: a platform thread (startBlockingThread): converge waits for SQLite's write lock inside the
-     * driver's native code, which would pin a virtual thread's carrier, and queuedOn asks the lock about this
-     * very Thread.
+     * AIDEV-NOTE: Racers runs it on a platform thread: converge waits for SQLite's write lock inside the driver's
+     * native code, which would pin a virtual thread's carrier, and queuedOn asks the lock about this very Thread.
      */
-    private Thread converger(int applicationId, AtomicReference<ApplicationReleases.Release> result,
-                             AtomicReference<Throwable> failure) {
-        return this.convergers.startBlockingThread(() -> {
-            try {
-                Db.run(datasource, () ->
-                    result.set(ApplicationReleases.converge(applicationId, Map.of())));
-            } catch (Throwable refused) {
-                failure.set(refused);
-            }
-        });
+    private Racers.Running<ApplicationReleases.Release> converger(String name, int applicationId) {
+        return this.convergers.start(name, () -> Db.supply(datasource,
+            () -> ApplicationReleases.converge(applicationId, Map.of())));
     }
 
     /**

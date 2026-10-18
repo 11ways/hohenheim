@@ -11,7 +11,7 @@ import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.testsupport.thread.Racers;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -21,14 +21,9 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
+import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -128,35 +123,14 @@ class HostRemovalAgreementTest {
             .as("step 1: the local host row is gone").isNull();
 
         // 2. Eight first calls behind one barrier.
-        int racers = 8;
-        CyclicBarrier start = new CyclicBarrier(racers);
-        JobRunner racing = JobRunner.create("local-host-racers");
-        List<CompletableFuture<Integer>> calls = new ArrayList<>();
-        try {
-            for (int i = 0; i < racers; i++) {
-                AtomicReference<Integer> id = new AtomicReference<>();
-                calls.add(racing.runAsync(() -> {
-                    try {
-                        start.await(10, TimeUnit.SECONDS);
-                    } catch (Exception barrier) {
-                        throw new IllegalStateException("the racers never met at the barrier", barrier);
-                    }
-                    id.set(Db.supply(datasource, ServerModel::localServerId));
-                }).thenApply(done -> id.get()));
-            }
-            Set<Integer> ids = new HashSet<>();
-            for (CompletableFuture<Integer> call : calls) {
-                ids.add(call.get(30, TimeUnit.SECONDS));
-            }
+        Set<Integer> ids = new HashSet<>(Racers.race("eight first calls for the local host",
+            Duration.ofSeconds(30), 8, slot -> Db.supply(datasource, ServerModel::localServerId)).values());
 
-            // 3. Every caller got the same row, and exactly one exists.
-            assertThat(ids).as("step 3: every racing caller resolved the same id").hasSize(1);
-            assertThat(Db.supply(datasource, () -> Models.get(ServerModel.class).find()
-                    .where(ServerModel.NAME.eq(ServerModel.LOCAL_HOST_NAME)).count()))
-                .as("step 3: and exactly one local host row was written").isEqualTo(1L);
-        } finally {
-            racing.shutdownNow();
-        }
+        // 3. Every caller got the same row, and exactly one exists.
+        assertThat(ids).as("step 3: every racing caller resolved the same id").hasSize(1);
+        assertThat(Db.supply(datasource, () -> Models.get(ServerModel.class).find()
+                .where(ServerModel.NAME.eq(ServerModel.LOCAL_HOST_NAME)).count()))
+            .as("step 3: and exactly one local host row was written").isEqualTo(1L);
     }
 
     private static String violationKeyOf(Throwable thrown) {

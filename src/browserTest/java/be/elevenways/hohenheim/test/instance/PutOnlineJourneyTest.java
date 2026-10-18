@@ -14,7 +14,7 @@ import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
-import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.time.Now;

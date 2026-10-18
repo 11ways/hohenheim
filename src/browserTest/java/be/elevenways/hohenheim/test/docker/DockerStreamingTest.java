@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.test.docker;
 
-import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.protoblast.testsupport.time.Poll;
 import java.time.Duration;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.ContainerStream;

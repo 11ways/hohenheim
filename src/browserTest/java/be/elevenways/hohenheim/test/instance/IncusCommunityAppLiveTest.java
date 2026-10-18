@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
-import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.hohenheim.server.ControllerScope;

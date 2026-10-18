@@ -12,7 +12,7 @@ import be.elevenways.hohenheim.server.instance.VmSpice;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
-import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.pepperglass.fixture.ScriptedSpiceServer;
 import be.elevenways.pepperglass.link.Capabilities;
 import be.elevenways.pepperglass.session.SessionOptions;
@@ -23,7 +23,7 @@ import be.elevenways.pepperglass.wire.MainMessages;
 import be.elevenways.pepperglass.wire.Rect;
 import be.elevenways.pepperglass.wire.WireReader;
 import be.elevenways.pepperglass.wire.WireWriter;
-import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.testsupport.thread.Racers;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -49,8 +49,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -238,29 +236,8 @@ class VmScreenJourneyTest extends HohenheimTestBase {
 
             // 1. Two viewers open the VM's screen at the same moment: both are drawn from ONE console operation,
             //    whose control websocket holds it open.
-            CountDownLatch go = new CountDownLatch(1);
-            JobRunner openers = JobRunner.create("vm-screen-openers");
-            try {
-                CompletableFuture<?>[] opening = new CompletableFuture<?>[2];
-                for (int i = 0; i < 2; i++) {
-                    opening[i] = openers.runAsync(() -> {
-                        try {
-                            go.await();
-                        } catch (InterruptedException interrupted) {
-                            Thread.currentThread().interrupt();
-                            return;
-                        }
-                        RecordingScreenSocket opened = open(consoleId, instanceId);
-                        synchronized (viewers) {
-                            viewers.add(opened);
-                        }
-                    });
-                }
-                go.countDown();
-                CompletableFuture.allOf(opening).get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
-            } finally {
-                openers.shutdownNow();
-            }
+            viewers.addAll(Racers.race("two viewers opening one VM screen", WAIT, 2,
+                slot -> open(consoleId, instanceId)).values());
             assertThat(viewers).as("step 1: both viewers opened").hasSize(2);
             for (RecordingScreenSocket viewer : viewers) {
                 viewer.await(ScreenMessage.FrameEnd.class, end -> true);

@@ -1,13 +1,13 @@
 package be.elevenways.hohenheim.server.security;
 
-import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.testsupport.thread.Racers;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.revision.RevisionModel;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -21,9 +21,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -145,27 +142,16 @@ class SecurityReportEnvTest {
         configureSpamservice();
         recordEnsures();
         int siteId = createSite("Env Concurrent");
-        JobRunner callers = JobRunner.create("security-report-env-callers");
-        try {
-            List<CompletableFuture<Map<String, String>>> calls = new ArrayList<>();
-            for (int i = 0; i < 8; i++) {
-                AtomicReference<Map<String, String>> env = new AtomicReference<>();
-                calls.add(callers.runAsync(() -> env.set(SecurityReportEnv.forSite(siteId)))
-                    .thenApply(done -> env.get()));
-            }
-            String canonical = null;
-            for (var call : calls) {
-                String key = call.get(5, TimeUnit.SECONDS).get(SecurityReportEnv.TOKEN_VAR);
-                if (canonical == null) canonical = key;
-                assertThat(key).isEqualTo(canonical);
-            }
-            String canonicalKey = canonical;
-            assertThat(Models.get(SiteModel.class).findById(siteId)
-                .get(SiteModel.SECURITY_REPORT_TOKEN)).isEqualTo(canonicalKey);
-            assertThat(ensured).allSatisfy(value -> assertThat(value).endsWith("|" + canonicalKey));
-        } finally {
-            callers.shutdownNow();
+        // Eight first calls released together: every one answers the same persisted key.
+        List<Map<String, String>> envs = Racers.race("eight first calls for one site's report key",
+            Duration.ofSeconds(30), 8, slot -> SecurityReportEnv.forSite(siteId)).values();
+        String canonicalKey = envs.getFirst().get(SecurityReportEnv.TOKEN_VAR);
+        for (Map<String, String> env : envs) {
+            assertThat(env.get(SecurityReportEnv.TOKEN_VAR)).isEqualTo(canonicalKey);
         }
+        assertThat(Models.get(SiteModel.class).findById(siteId)
+            .get(SiteModel.SECURITY_REPORT_TOKEN)).isEqualTo(canonicalKey);
+        assertThat(ensured).allSatisfy(value -> assertThat(value).endsWith("|" + canonicalKey));
     }
 
     @Test

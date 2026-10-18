@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.test.database;
 
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.docker.TestImages;
-import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import java.time.Duration;
 import be.elevenways.hohenheim.model.DatabaseModel;

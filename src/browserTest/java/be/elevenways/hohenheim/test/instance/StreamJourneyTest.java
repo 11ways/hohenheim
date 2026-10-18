@@ -16,7 +16,7 @@ import be.elevenways.hohenheim.server.cms.SiteWrites;
 import be.elevenways.hohenheim.server.proxy.ProxyReloadHooks;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
-import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.i18n.LocaleChain;

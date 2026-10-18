@@ -6,8 +6,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.List;
 import java.time.Duration;
 import be.elevenways.zenit.common.orm.lease.Leases;
-import be.elevenways.protoblast.common.thread.JobRunner;
-import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.protoblast.testsupport.thread.Racers;
+import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -23,9 +23,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -51,10 +49,10 @@ class InstanceOperationSerializationTest {
     /**
      * The journeys' second operations.
      *
-     * AIDEV-NOTE: platform threads (runAsync, startBlockingThread): an operation waits for SQLite's write lock in
-     * the driver's native code, which would pin a virtual thread's carrier.
+     * AIDEV-NOTE: Racers runs each on a platform thread: an operation waits for SQLite's write lock in the driver's
+     * native code, which would pin a virtual thread's carrier.
      */
-    private final JobRunner operations = JobRunner.create("instance-operations");
+    private final Racers operations = Racers.named("operations on one instance record");
 
     @BeforeAll
     static void setUp() throws Exception {
@@ -72,7 +70,7 @@ class InstanceOperationSerializationTest {
 
     @AfterEach
     void stopOperations() {
-        this.operations.shutdownNow();
+        this.operations.close();
     }
 
     @Test
@@ -91,16 +89,13 @@ class InstanceOperationSerializationTest {
                     return;
                 }
                 fired[0] = true;
-                try {
-                    this.operations.runAsync(() -> Db.run(datasource, () -> {
+                this.operations.start("the rival deploy and stop", () -> {
+                    Db.run(datasource, () -> {
                         rivalDeploy.set(catchThrowable(() -> new InstanceService().deploy(id)));
                         rivalStop.set(catchThrowable(() -> new InstanceService().stop(id)));
-                    })).get(60, TimeUnit.SECONDS);
-                } catch (InterruptedException interrupted) {
-                    Thread.currentThread().interrupt();
-                } catch (ExecutionException | TimeoutException unfinished) {
-                    throw new IllegalStateException("the rival operations did not finish", unfinished);
-                }
+                    });
+                    return null;
+                }).await(Duration.ofSeconds(60)).value();
             });
             driving.deploy(id);
 
@@ -223,11 +218,14 @@ class InstanceOperationSerializationTest {
         //    first released it.
         CountDownLatch holding = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
-        Thread holder = this.operations.startBlockingThread(() -> Db.run(datasource, () ->
-            InstanceOperationLock.of(first).exclusive(id, InstanceOperationLock.Contention.REFUSE, () -> {
-                holding.countDown();
-                await(release);
-            })));
+        Racers.Running<Object> holder = this.operations.start("the holding operation", () -> {
+            Db.run(datasource, () -> InstanceOperationLock.of(first).exclusive(id,
+                InstanceOperationLock.Contention.REFUSE, () -> {
+                    holding.countDown();
+                    await(release);
+                }));
+            return null;
+        });
         assertThat(holding.await(30, TimeUnit.SECONDS)).as("step 1: the first operation holds the record").isTrue();
         Db.run(datasource, () -> assertThatThrownBy(() -> InstanceOperationLock.of(rival).exclusive(id,
                 InstanceOperationLock.Contention.REFUSE, () -> {}))
@@ -235,15 +233,17 @@ class InstanceOperationSerializationTest {
             .isInstanceOfSatisfying(Violations.class, refused -> assertThat(refused.all()).anySatisfy(violation ->
                 assertThat(violation.message().key()).isEqualTo("instance_operation_in_progress"))));
         AtomicLong queuedRanAt = new AtomicLong();
-        Thread queued = this.operations.startBlockingThread(() -> Db.run(datasource, () ->
-            InstanceOperationLock.of(first).exclusive(id, InstanceOperationLock.Contention.QUEUE,
-                () -> queuedRanAt.set(System.nanoTime()))));
+        Racers.Running<Object> queued = this.operations.start("the queued operation", () -> {
+            Db.run(datasource, () -> InstanceOperationLock.of(first).exclusive(id,
+                InstanceOperationLock.Contention.QUEUE, () -> queuedRanAt.set(System.nanoTime())));
+            return null;
+        });
         Poll.until("step 1: the second operation waits for the record", Duration.ofSeconds(30),
-            () -> InstanceOperationLock.of(first).isQueued(id, queued));
+            () -> InstanceOperationLock.of(first).isQueued(id, queued.thread()));
         long releasedAt = System.nanoTime();
         release.countDown();
-        holder.join(TimeUnit.SECONDS.toMillis(30));
-        queued.join(TimeUnit.SECONDS.toMillis(30));
+        holder.await(Duration.ofSeconds(30));
+        queued.await(Duration.ofSeconds(30));
         assertThat(queuedRanAt.get()).as("step 1: the queued operation ran only after the release")
             .isGreaterThan(releasedAt);
 
@@ -252,14 +252,17 @@ class InstanceOperationSerializationTest {
         CountDownLatch stalled = new CountDownLatch(1);
         CountDownLatch resume = new CountDownLatch(1);
         AtomicReference<Throwable> lateWrite = new AtomicReference<>();
-        Thread stale = this.operations.startBlockingThread(() -> Db.run(datasource, () ->
-            InstanceOperationLock.of(crashed).exclusive(id, InstanceOperationLock.Contention.REFUSE, () -> {
-                stalled.countDown();
-                await(resume);
-                // 3. It resumes and writes its outcome through its old claim.
-                lateWrite.set(catchThrowable(() ->
-                    new InstanceService(crashed, () -> {}).assignRuntimeRole(id, InstanceModel.ROLE_RETIRED)));
-            })));
+        Racers.Running<Object> stale = this.operations.start("the stale holder", () -> {
+            Db.run(datasource, () -> InstanceOperationLock.of(crashed).exclusive(id,
+                InstanceOperationLock.Contention.REFUSE, () -> {
+                    stalled.countDown();
+                    await(resume);
+                    // 3. It resumes and writes its outcome through its old claim.
+                    lateWrite.set(catchThrowable(() ->
+                        new InstanceService(crashed, () -> {}).assignRuntimeRole(id, InstanceModel.ROLE_RETIRED)));
+                }));
+            return null;
+        });
         assertThat(stalled.await(30, TimeUnit.SECONDS)).as("step 2: the stale holder holds the record").isTrue();
         String claimKey = InstanceOperationLock.KEY_PREFIX + id;
         Poll.until("step 2: the stalled claim lapsed", Duration.ofSeconds(30),
@@ -272,7 +275,7 @@ class InstanceOperationSerializationTest {
 
         // 3. The stale holder's late write is refused by name, and the rival's outcome stands.
         resume.countDown();
-        stale.join(TimeUnit.SECONDS.toMillis(60));
+        stale.await(Duration.ofSeconds(60));
         assertThat(lateWrite.get()).as("step 3: the late write is a hard failure, not a shrug")
             .isInstanceOfSatisfying(Violations.class, refused -> assertThat(refused.all()).anySatisfy(violation ->
                 assertThat(violation.message().key()).isEqualTo("instance_fenced_out")));

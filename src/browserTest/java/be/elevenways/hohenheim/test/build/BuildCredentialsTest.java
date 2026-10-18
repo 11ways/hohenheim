@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.test.build;
 
 import be.elevenways.hohenheim.server.build.BuildCredentials;
 import be.elevenways.hohenheim.server.build.BuildLog;
-import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.protoblast.testsupport.time.Poll;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
 

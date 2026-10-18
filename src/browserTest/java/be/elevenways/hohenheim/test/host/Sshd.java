@@ -5,15 +5,17 @@ import be.elevenways.protoblast.common.time.Retry;
 import be.elevenways.protoblast.server.process.RunningProcess;
 import be.elevenways.protoblast.server.process.Subprocess;
 import be.elevenways.protoblast.server.process.SubprocessException;
+import be.elevenways.protoblast.server.process.TextSink;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -137,7 +139,7 @@ public final class Sshd {
             started = Subprocess.of("/usr/sbin/sshd", "-D", "-e",
                     "-f", this.directory.resolve("sshd_config").toString())
                 .mergeStderr()
-                .stdoutTo(log)
+                .stdoutTo(TextSink.lines(StandardCharsets.UTF_8, SshdLog.LINE_LIMIT, log::line))
                 .start();
         } catch (SubprocessException refused) {
             throw new IOException(refused.getMessage(), refused);
@@ -171,42 +173,38 @@ public final class Sshd {
     }
 
     /**
-     * sshd's merged output: a bounded tail for failure messages and the moment its listening line arrived.
-     *
-     * AIDEV-NOTE: bytes are kept as ISO-8859-1 chars, one per byte, so a needle split across two writes still
-     * matches; text() decodes the tail as UTF-8 again.
+     * sshd's merged output: a bounded tail of its lines for failure messages and the moment its listening line
+     * arrived.
      */
-    private static final class SshdLog extends OutputStream {
+    private static final class SshdLog {
+
+        /** The most chars of one sshd log line kept; sshd's own lines are far shorter. */
+        static final int LINE_LIMIT = 4096;
 
         private static final int TAIL_LIMIT = 64 * 1024;
 
         private final String needle;
-        private final StringBuilder tail = new StringBuilder();
+        private final Deque<String> tail = new ArrayDeque<>();
+        private int tailChars;
         final CompletableFuture<Void> listening = new CompletableFuture<>();
 
         SshdLog(String needle) {
             this.needle = needle;
         }
 
-        @Override
-        public void write(int b) {
-            this.write(new byte[] {(byte) b}, 0, 1);
-        }
-
-        @Override
-        public synchronized void write(byte[] bytes, int offset, int length) {
-            int from = Math.max(0, this.tail.length() - this.needle.length());
-            this.tail.append(new String(bytes, offset, length, StandardCharsets.ISO_8859_1));
-            if (!this.listening.isDone() && this.tail.indexOf(this.needle, from) >= 0) {
+        synchronized void line(String line) {
+            if (line.contains(this.needle)) {
                 this.listening.complete(null);
             }
-            if (this.tail.length() > TAIL_LIMIT) {
-                this.tail.delete(0, this.tail.length() - TAIL_LIMIT);
+            this.tail.addLast(line);
+            this.tailChars += line.length() + 1;
+            while (this.tailChars > TAIL_LIMIT && this.tail.size() > 1) {
+                this.tailChars -= this.tail.removeFirst().length() + 1;
             }
         }
 
         synchronized String text() {
-            return new String(this.tail.toString().getBytes(StandardCharsets.ISO_8859_1), StandardCharsets.UTF_8);
+            return String.join("\n", this.tail);
         }
     }
 

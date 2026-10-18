@@ -37,7 +37,7 @@ import be.elevenways.zenit.kvm.server.ScreenOptions;
 import be.elevenways.zenit.kvm.server.ScreenSession;
 import be.elevenways.zenit.kvm.test.support.RecordingScreenSocket;
 import be.elevenways.zenit.kvm.test.support.ScreenAccessTable;
-import be.elevenways.zenit.kvm.test.support.ScreenMessageLog;
+import be.elevenways.protoblast.testsupport.time.Poll;
 import org.junit.jupiter.api.Test;
 
 import javax.imageio.ImageIO;
@@ -127,8 +127,8 @@ class SpiceScreenSourceTest {
                 new Rect(16, 0, 24, 8), Clip.of(List.of(new Rect(16, 0, 20, 8))), true);
             source.streamFrameReceived(new StreamFrame(covered, 6, jpeg(4, 4, 0x0000FF)));
             source.updatesFlushed(0);
-            assertThat(ScreenMessageLog.waitUntil(() -> blue(viewer.picture().pixel(17, 2)), WAIT))
-                .as("step 3: the visible part shows the frame, scaled up").isTrue();
+            Poll.until("step 3: the visible part shows the frame, scaled up", WAIT,
+                () -> blue(viewer.picture().pixel(17, 2)));
             assertThat(viewer.picture().pixel(22, 2)).as("step 3: the covered part keeps the surface").isZero();
 
             // 4. Only MJPEG is announced to the SPICE server, so a VP8 frame cannot come; one that does is dropped
@@ -170,12 +170,12 @@ class SpiceScreenSourceTest {
             assertThat(mic.sampleRate()).as("step 7: at the guest's rate").isEqualTo(44100);
 
             // 8. Once the SPICE session is up, the controller's paste is what the guest receives when it asks.
-            assertThat(ScreenMessageLog.waitUntil(() -> {
+            Poll.until("step 8: the paste is offered to the guest", WAIT, () -> {
                 viewer.send(new ScreenMessage.Clipboard("text/plain;charset=utf-8",
                     "to the guest".getBytes(StandardCharsets.UTF_8)));
                 return source.clipboardRequested(Selection.CLIPBOARD, ClipboardType.UTF8_TEXT)
                     instanceof ClipboardReply.Data;
-            }, WAIT)).as("step 8: the paste is offered to the guest").isTrue();
+            });
             ClipboardReply.Data pasted = (ClipboardReply.Data) source.clipboardRequested(Selection.CLIPBOARD,
                 ClipboardType.UTF8_TEXT);
             assertThat(new String(pasted.data(), StandardCharsets.UTF_8)).as("step 8: its text")

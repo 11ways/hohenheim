@@ -13,7 +13,7 @@ import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
 import be.elevenways.hohenheim.server.task.CleanOldInstanceLogs;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.host.HostFixtures;

@@ -8,7 +8,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.cms.ServerMediaTab;
 import be.elevenways.hohenheim.server.instance.InstallMediaFetches;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
-import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.channel.ChannelHub;

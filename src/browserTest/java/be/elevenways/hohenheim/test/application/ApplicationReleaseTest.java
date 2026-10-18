@@ -7,7 +7,7 @@ import be.elevenways.hohenheim.model.InstanceVolumeModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
 import be.elevenways.hohenheim.server.application.ApplicationDeploys;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;

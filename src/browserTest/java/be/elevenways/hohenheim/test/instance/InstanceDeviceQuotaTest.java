@@ -10,7 +10,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
-import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.testsupport.thread.Racers;
 import be.elevenways.zenit.auth.cms.SubjectTag;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.PermissionGroupModel;
@@ -30,10 +30,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
+import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -131,28 +128,11 @@ class InstanceDeviceQuotaTest extends HohenheimTestBase {
 
         // 1. Two threads behind a barrier both write a 2 GB disk row: only one can win
         //    the last 2 GB -- the ledger's guarded statement is the enforcement.
-        CyclicBarrier barrier = new CyclicBarrier(2);
-        AtomicReference<Throwable>[] failures = new AtomicReference[] {
-            new AtomicReference<>(), new AtomicReference<>()};
-        JobRunner racing = JobRunner.create("disk-quota-racers");
-        try {
-            CompletableFuture<?>[] racers = new CompletableFuture<?>[2];
-            for (int i = 0; i < 2; i++) {
-                int slot = i;
-                racers[slot] = racing.runAsync(() -> {
-                    try {
-                        barrier.await();
-                        Models.get(InstanceDeviceModel.class)
-                            .save(diskRow(instanceId, NAME_PREFIX + "race" + slot, 2));
-                    } catch (Throwable refused) {
-                        failures[slot].set(refused);
-                    }
-                });
-            }
-            CompletableFuture.allOf(racers).get(60, TimeUnit.SECONDS);
-        } finally {
-            racing.shutdownNow();
-        }
+        Racers.Race<Object> race = Racers.race("two 2 GB disk attaches on 2 GB of headroom",
+            Duration.ofSeconds(60), 2, slot -> {
+                Models.get(InstanceDeviceModel.class).save(diskRow(instanceId, NAME_PREFIX + "race" + slot, 2));
+                return null;
+            });
 
         List<Row> raceRows = Models.get(InstanceDeviceModel.class).find()
             .where(InstanceDeviceModel.NAME.startsWith(NAME_PREFIX + "race")).all();
@@ -161,7 +141,8 @@ class InstanceDeviceQuotaTest extends HohenheimTestBase {
         assertThat(Quotas.usedOf(DISK_BUCKET))
             .as("step 1: the ledger counts exactly the winner's 2 GB")
             .isEqualTo(usedBefore + 2);
-        Throwable loser = failures[0].get() != null ? failures[0].get() : failures[1].get();
+        assertThat(race.failures()).as("step 1: the other racer was refused").hasSize(1);
+        Throwable loser = race.failures().getFirst();
         assertThat(violationKeyOf(loser))
             .as("step 1: the loser got the NAMED disk-quota refusal")
             .isEqualTo("disk_quota_reached");

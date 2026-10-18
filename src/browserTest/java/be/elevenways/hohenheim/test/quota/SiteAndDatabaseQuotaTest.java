@@ -7,7 +7,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.SiteWrites;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
-import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.testsupport.thread.Racers;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -20,9 +20,7 @@ import org.junit.jupiter.api.Test;
 import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.TimeUnit;
+import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -97,28 +95,9 @@ class SiteAndDatabaseQuotaTest extends HohenheimTestBase {
         Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Quota.MAX_SITES_PER_OWNER, (int) limit);
 
-        CyclicBarrier barrier = new CyclicBarrier(2);
-        HttpResponse<?>[] responses = new HttpResponse<?>[2];
-        Throwable[] failures = new Throwable[2];
-        JobRunner racing = JobRunner.create("site-quota-racers");
-        try {
-            CompletableFuture<?>[] racers = new CompletableFuture<?>[2];
-            for (int i = 0; i < 2; i++) {
-                int slot = i;
-                racers[slot] = racing.runAsync(() -> {
-                    try {
-                        barrier.await();
-                        responses[slot] = postCreate(SITE_PREFIX + "race" + slot);
-                    } catch (Throwable error) {
-                        failures[slot] = error;
-                    }
-                });
-            }
-            CompletableFuture.allOf(racers).get(60, TimeUnit.SECONDS);
-        } finally {
-            racing.shutdownNow();
-        }
-        assertThat(failures).as("step 2: both submits completed").containsOnlyNulls();
+        // Racers.values() fails with a racer's own failure: both submits completed.
+        List<? extends HttpResponse<?>> responses = Racers.race("step 2: two creates for the last site slot",
+            Duration.ofSeconds(60), 2, slot -> postCreate(SITE_PREFIX + "race" + slot)).values();
 
         // 3. STATE first: exactly one racing row landed and the ledger is exactly full.
         List<Row> raced = liveSitesNamed(SITE_PREFIX + "race");

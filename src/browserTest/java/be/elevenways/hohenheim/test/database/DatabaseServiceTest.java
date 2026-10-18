@@ -5,7 +5,7 @@ import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
 import be.elevenways.hohenheim.test.live.LiveLane;
-import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;

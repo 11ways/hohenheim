@@ -12,7 +12,7 @@ import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.instance.InstanceStatusReconciler;
 import be.elevenways.hohenheim.server.instance.InstanceStatusReconciler.Verdict;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
-import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;

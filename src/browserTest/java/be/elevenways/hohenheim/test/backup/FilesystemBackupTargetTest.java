@@ -2,19 +2,16 @@ package be.elevenways.hohenheim.test.backup;
 
 import be.elevenways.hohenheim.server.backup.BackupTarget;
 import be.elevenways.hohenheim.server.backup.FilesystemBackupTarget;
-import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.testsupport.thread.Racers;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
+import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -111,27 +108,16 @@ class FilesystemBackupTargetTest {
 
         // 4. Stores and deletes racing in one folder: every store lands, though each delete may take the folder.
         int rounds = 200;
-        JobRunner racers = JobRunner.create("backup-target-lanes");
-        try {
-            List<CompletableFuture<Void>> lanes = new ArrayList<>();
-            for (String lane : List.of("x", "y")) {
-                lanes.add(racers.runAsync(() -> {
-                    try {
-                        for (int round = 0; round < rounds; round++) {
-                            String key = "owner/instance-2/" + lane + "-" + round + ".hib";
-                            target.store(key, file);
-                            assertThat(target.exists(key)).as("step 4: " + key + " landed").isTrue();
-                            target.delete(key);
-                        }
-                    } catch (IOException failed) {
-                        throw new UncheckedIOException(failed);
-                    }
-                }));
+        List<String> lanes = List.of("x", "y");
+        Racers.race("stores and deletes in one folder", Duration.ofSeconds(60), lanes.size(), slot -> {
+            for (int round = 0; round < rounds; round++) {
+                String key = "owner/instance-2/" + lanes.get(slot) + "-" + round + ".hib";
+                target.store(key, file);
+                assertThat(target.exists(key)).as("step 4: " + key + " landed").isTrue();
+                target.delete(key);
             }
-            CompletableFuture.allOf(lanes.toArray(CompletableFuture[]::new)).get(60, TimeUnit.SECONDS);
-        } finally {
-            racers.shutdownNow();
-        }
+            return null;
+        }).values();
         assertThat(Files.exists(root.resolve("owner")))
             .as("step 4: the last delete left no empty folder").isFalse();
     }

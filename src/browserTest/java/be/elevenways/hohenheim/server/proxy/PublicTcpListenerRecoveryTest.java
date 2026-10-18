@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.server.proxy;
 
-import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;

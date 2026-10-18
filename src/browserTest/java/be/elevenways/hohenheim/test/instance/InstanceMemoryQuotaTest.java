@@ -6,7 +6,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
-import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.testsupport.thread.Racers;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -23,9 +23,7 @@ import java.net.http.HttpResponse;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.TimeUnit;
+import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -142,28 +140,9 @@ class InstanceMemoryQuotaTest extends HohenheimTestBase {
         Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Quota.MAX_INSTANCES_PER_OWNER, 0);
 
-        CyclicBarrier barrier = new CyclicBarrier(2);
-        HttpResponse<?>[] responses = new HttpResponse<?>[2];
-        Throwable[] failures = new Throwable[2];
-        JobRunner racing = JobRunner.create("memory-quota-racers");
-        try {
-            CompletableFuture<?>[] racers = new CompletableFuture<?>[2];
-            for (int i = 0; i < 2; i++) {
-                int slot = i;
-                racers[slot] = racing.runAsync(() -> {
-                    try {
-                        barrier.await();
-                        responses[slot] = postCreate(PREFIX + "race" + slot);
-                    } catch (Throwable error) {
-                        failures[slot] = error;
-                    }
-                });
-            }
-            CompletableFuture.allOf(racers).get(60, TimeUnit.SECONDS);
-        } finally {
-            racing.shutdownNow();
-        }
-        assertThat(failures).as("step 3: both submits completed").containsOnlyNulls();
+        // Racers.values() fails with a racer's own failure: both submits completed.
+        List<? extends HttpResponse<?>> responses = Racers.race("step 3: two creates for the last megabytes",
+            Duration.ofSeconds(60), 2, slot -> postCreate(PREFIX + "race" + slot)).values();
 
         // 4. STATE first: exactly ONE racing row landed and the budget is exactly full.
         //    Two rows, or used == limit + 512, would both mean the same last megabyte was

@@ -2,20 +2,21 @@ package be.elevenways.hohenheim.server.security;
 
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
-import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.testsupport.thread.Racers;
+import be.elevenways.protoblast.testsupport.time.Poll;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -28,7 +29,7 @@ class NftTableMutationLockTest {
 
     private static boolean initialized = false;
 
-    private final JobRunner writers = JobRunner.create("nft-table-lock-writers");
+    private final Racers writers = Racers.named("a removal and a deploy on one table");
 
     @BeforeAll
     static void initDb() throws Exception {
@@ -40,7 +41,7 @@ class NftTableMutationLockTest {
 
     @AfterEach
     void stopWriters() {
-        this.writers.shutdownNow();
+        this.writers.close();
     }
 
     @Test
@@ -59,42 +60,30 @@ class NftTableMutationLockTest {
 
         // 2. The remover's emptiness listing is held open -- the race window.
         kernel.holdNextTableListing();
-        AtomicReference<Throwable> removerFailure = new AtomicReference<>();
-        Thread removing = writers.startThread(() -> {
-            try {
-                remover.remove(1001, "gone");
-            } catch (Throwable failure) {
-                removerFailure.set(failure);
-            }
+        Racers.Running<Object> removing = this.writers.start("the removal", () -> {
+            remover.remove(1001, "gone");
+            return null;
         });
         assertThat(kernel.listingHeld.await(5, TimeUnit.SECONDS))
             .as("step 2: the remover has seen an empty table and not yet deleted it").isTrue();
 
         // 3. A deploy starts inside that window. It must wait, not write.
-        AtomicReference<Throwable> deployFailure = new AtomicReference<>();
-        Thread deploying = writers.startThread(() -> {
-            try {
-                deployer.apply(1002, "fresh");
-            } catch (Throwable failure) {
-                deployFailure.set(failure);
-            }
+        Racers.Running<Object> deploying = this.writers.start("the deploy", () -> {
+            deployer.apply(1002, "fresh");
+            return null;
         });
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        while (deploying.getState() != Thread.State.WAITING
-                && deploying.isAlive() && System.nanoTime() < deadline) {
-            Thread.onSpinWait();
-        }
+        Poll.until("step 3: the deploy parked on the table lock, or ended", Duration.ofSeconds(5),
+            () -> deploying.thread().getState() == Thread.State.WAITING || !deploying.isRunning());
         assertThat(kernel.sawChain("out_uid_1002"))
             .as("step 3: the deploy did not write while the removal was in flight").isFalse();
-        assertThat(deploying.getState())
+        assertThat(deploying.thread().getState())
             .as("step 3: it is parked on the table lock").isEqualTo(Thread.State.WAITING);
 
         // 4. The removal finishes (deleting the empty table), THEN the deploy runs.
         kernel.releaseListing.countDown();
-        removing.join(5_000);
-        deploying.join(5_000);
-        assertThat(removerFailure.get()).as("step 4: the removal succeeded").isNull();
-        assertThat(deployFailure.get()).as("step 4: the deploy verified its own chain").isNull();
+        assertThat(removing.await(Duration.ofSeconds(5)).failure()).as("step 4: the removal succeeded").isNull();
+        assertThat(deploying.await(Duration.ofSeconds(5)).failure())
+            .as("step 4: the deploy verified its own chain").isNull();
 
         // 5. The deploy's policy survived: table and chain are in the kernel.
         assertThat(deployer.isEnforced(1002, "fresh"))

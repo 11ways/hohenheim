@@ -1,11 +1,11 @@
 package be.elevenways.hohenheim.test.host;
 
-import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.live.LiveLane;
-import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.testsupport.thread.Racers;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -133,23 +133,21 @@ class HostFencingTest {
             InstanceService controllerB = new InstanceService(
                 new HostLeases(d -> rivalCoordinator, Leases.DEFAULT_TTL), () -> {});
 
-            AtomicReference<Throwable> aOutcome = new AtomicReference<>();
-            // A runner's thread carries the test's operator identity, as a request's continuation carries its
-            // caller: bare, the fail-closed gates refuse the deploy outright. A platform thread
-            // (startBlockingThread): the deploy waits for SQLite's write lock in the driver's native code.
-            JobRunner controllers = JobRunner.create("controller-a");
+            // A racer carries the test's operator identity, as a request's continuation carries its caller: bare,
+            // the fail-closed gates refuse the deploy outright. Racers runs it on a platform thread: the deploy waits
+            // for SQLite's write lock in the driver's native code.
+            Racers controllers = Racers.named("two controllers deploying one instance");
 
             try {
                 // 1. A deploys and STALLS after create+start, before its outcome write.
-                Thread aThread = controllers.startBlockingThread(() -> Db.run(datasource, () ->
-                    aOutcome.set(catchThrowable(() -> controllerA.deploy(id)))));
+                Racers.Running<Throwable> a = controllers.start("controller A's deploy", () ->
+                    Db.supply(datasource, () -> catchThrowable(() -> controllerA.deploy(id))));
                 boolean stalled = false;
-                for (int wait = 0; wait < 600 && !stalled && aThread.isAlive(); wait++) {
+                for (int wait = 0; wait < 600 && !stalled && a.isRunning(); wait++) {
                     stalled = aStalled.await(200, TimeUnit.MILLISECONDS);
                 }
                 if (!stalled) {
-                    aThread.join(TimeUnit.SECONDS.toMillis(5));
-                    assertThat(aOutcome.get())
+                    assertThat(a.await(Duration.ofSeconds(5)).value())
                         .as("step 1: controller A ended before its stall point with this outcome")
                         .isNull();
                 }
@@ -171,9 +169,7 @@ class HostFencingTest {
                 // 3. A resumes and finishes its deploy: the fenced write matches ZERO
                 //    rows and A RAISES the named fenced-out violation.
                 resumeA.countDown();
-                aThread.join(TimeUnit.SECONDS.toMillis(120));
-                assertThat(aThread.isAlive()).as("step 3: controller A finished").isFalse();
-                assertThat(aOutcome.get())
+                assertThat(a.await(Duration.ofSeconds(120)).value())
                     .as("step 3: A's resumed write is a hard failure, not a shrug")
                     .isInstanceOfSatisfying(Violations.class, violations ->
                         assertThat(violations.all()).anySatisfy(violation ->
@@ -225,7 +221,7 @@ class HostFencingTest {
                 throw new RuntimeException(e);
             } finally {
                 resumeA.countDown();
-                controllers.shutdownNow();
+                controllers.close();
                 cleanup(docker, handle);
             }
         });

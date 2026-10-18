@@ -10,7 +10,7 @@ import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
-import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.source.TestSources;
 import be.elevenways.hohenheim.ports.PortLedger;

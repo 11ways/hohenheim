@@ -15,7 +15,7 @@ import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TestDatabases;
-import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.testsupport.thread.Racers;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
@@ -36,10 +36,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -299,33 +295,14 @@ class InstanceCapacityTest {
         // few microseconds wide. Six racers all read before any of them writes, so the
         // non-atomic shape overbooks reliably. Never lower it to "keep the test fast".
         int racers = 6;
-        CyclicBarrier barrier = new CyclicBarrier(racers);
-        AtomicReference<Throwable>[] failures = new AtomicReference[racers];
-        for (int i = 0; i < racers; i++) {
-            failures[i] = new AtomicReference<>();
-        }
-        JobRunner racing = JobRunner.create("capacity-racers");
-        try {
-            CompletableFuture<?>[] runs = new CompletableFuture<?>[racers];
-            for (int i = 0; i < racers; i++) {
-                int slot = i;
-                // runAsync carries the test's operator into the racer, as any JobRunner job does.
-                runs[slot] = racing.runAsync(() -> {
-                    try {
-                        barrier.await();
-                        Db.run(datasource, () -> {
-                            Models.get(InstanceModel.class)
-                                .save(newWorkload(alpha, "racer" + slot, 1024));
-                        });
-                    } catch (Throwable refused) {
-                        failures[slot].set(refused);
-                    }
+        // A racer carries the test's operator, as any JobRunner job does.
+        Racers.Race<Object> race = Racers.race("six 1024 MB creates on 1024 MB of budget", Duration.ofSeconds(60),
+            racers, slot -> {
+                Db.run(datasource, () -> {
+                    Models.get(InstanceModel.class).save(newWorkload(alpha, "racer" + slot, 1024));
                 });
-            }
-            CompletableFuture.allOf(runs).get(60, TimeUnit.SECONDS);
-        } finally {
-            racing.shutdownNow();
-        }
+                return null;
+            });
 
         Db.run(datasource, () -> {
             List<Row> landed = Models.get(InstanceModel.class).find()
@@ -338,17 +315,11 @@ class InstanceCapacityTest {
             assertThat(InstanceCapacity.bookedMbOn(alpha))
                 .as("step 1: the ledger counts exactly the winner's 1024 MB")
                 .isEqualTo(1024);
-            Throwable loser = null;
-            int refusedCount = 0;
-            for (AtomicReference<Throwable> failure : failures) {
-                if (failure.get() != null) {
-                    refusedCount++;
-                    loser = failure.get();
-                }
-            }
-            assertThat(refusedCount)
+            List<Throwable> refused = race.failures();
+            assertThat(refused.size())
                 .as("step 1: and the other five were each refused, none silently dropped")
                 .isEqualTo(racers - 1);
+            Throwable loser = refused.getLast();
             assertThat(keyOf("step 1: the racing loser was REFUSED rather than admitted"
                     + " onto a host with no headroom left", loser))
                 .as("step 1: and the refusal is the NAMED host-capacity one, not a 500")

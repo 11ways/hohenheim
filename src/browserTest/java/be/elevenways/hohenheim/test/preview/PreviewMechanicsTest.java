@@ -13,7 +13,7 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StoredRows;
-import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.source.TestSources;
 import be.elevenways.hohenheim.HohenheimCapabilities;

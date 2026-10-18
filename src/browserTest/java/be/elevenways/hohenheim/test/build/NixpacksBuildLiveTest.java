@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.test.build;
 
 import be.elevenways.hohenheim.model.OperationStatus;
-import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.server.ControllerScope;

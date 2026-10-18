@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.server.spamservice;
 
 import be.elevenways.hohenheim.server.SystemUsers;
-import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.protoblast.server.process.Subprocess;
 import org.junit.jupiter.api.Test;
 

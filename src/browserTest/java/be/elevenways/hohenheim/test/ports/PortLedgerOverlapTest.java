@@ -9,7 +9,7 @@ import be.elevenways.hohenheim.server.ports.PortClaimFence;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
-import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.testsupport.thread.Racers;
 import be.elevenways.zenit.common.orm.OrmConstants;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -25,11 +25,8 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.TimeUnit;
+import java.time.Duration;
 import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -189,28 +186,11 @@ class PortLedgerOverlapTest {
             localId[0] = ServerModel.localServerId();
         });
         String[] binds = {"0.0.0.0", "127.0.0.1"};
-        CyclicBarrier barrier = new CyclicBarrier(2);
-        List<Throwable> refusals = Collections.synchronizedList(new ArrayList<>());
-        JobRunner racing = JobRunner.create("port-overlap-racers");
-        try {
-            CompletableFuture<?>[] racers = new CompletableFuture<?>[2];
-            for (int i = 0; i < 2; i++) {
-                int ownerId = owners[i];
-                String bind = binds[i];
-                racers[i] = racing.runAsync(() -> Db.run(datasource, () -> {
-                    try {
-                        barrier.await();
-                        PortLedger.claim(localId[0], bind, 8420, "tcp",
-                            InstanceModel.MODEL_ID, ownerId, null);
-                    } catch (Exception refused) {
-                        refusals.add(refused);
-                    }
-                }));
-            }
-            CompletableFuture.allOf(racers).get(60, TimeUnit.SECONDS);
-        } finally {
-            racing.shutdownNow();
-        }
+        List<Throwable> refusals = Racers.race("two binds of one port", Duration.ofSeconds(60), 2, slot -> {
+            Db.run(datasource, () -> PortLedger.claim(localId[0], binds[slot], 8420, "tcp",
+                InstanceModel.MODEL_ID, owners[slot], null));
+            return null;
+        }).failures();
         Db.run(datasource, () -> {
             // 1. Exactly one of the two impossible-together binds holds the port.
             assertThat(rowsOn(localId[0], 8420))

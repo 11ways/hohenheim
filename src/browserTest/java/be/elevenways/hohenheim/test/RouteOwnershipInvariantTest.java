@@ -11,7 +11,8 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.ReleasedClaimParts;
 import be.elevenways.hohenheim.server.proxy.ReleasedClaims;
 import be.elevenways.hohenheim.server.proxy.RouteClaims;
-import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.testsupport.thread.Racers;
+import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.cms.SubjectTag;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -62,16 +63,16 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
     /**
      * The racing writers.
      *
-     * AIDEV-NOTE: platform threads (startBlockingThread): a writer queues on SQLite's write lock inside the
-     * driver's native code, which would pin a virtual thread's carrier, and awaitQueuedOnWriteLock reads that
-     * very thread's stack.
+     * AIDEV-NOTE: Racers runs each writer on a platform thread: a writer queues on SQLite's write lock inside the
+     * driver's native code, which would pin a virtual thread's carrier, and awaitQueuedOnWriteLock reads that very
+     * thread's stack.
      */
-    private final JobRunner racers = JobRunner.create("route-race-writers");
+    private final Racers racers = Racers.named("route race writers");
 
     @AfterEach
     void cleanUp() {
         SiteEnableWriteBarrier.clear();
-        this.racers.shutdownNow();
+        this.racers.close();
         SiteDomainWriteBarrier.clear();
         SiteWriteFault.disarm();
         Model siteModel = Models.get(SiteModel.class);
@@ -213,18 +214,14 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         //    transaction holds the database's single write lock from BEGIN, so A parks
         //    holding that lock: the scan it just ran can no longer go stale, because no
         //    other writer can commit until A finishes.
-        Throwable[] failureOfA = new Throwable[1];
         SiteEnableWriteBarrier.Coordinator coordinator = new SiteEnableWriteBarrier.Coordinator();
         SiteEnableWriteBarrier.install(coordinator);
-        Thread enableA = this.racers.startBlockingThread(() -> {
+        Racers.Running<Object> enableA = this.racers.start("tenant A's enable", () -> {
             coordinator.holdWriteOf(Thread.currentThread());
-            try {
-                Row replay = siteModel.findById(siteA.get(SiteModel.ID));
-                replay.set(SiteModel.ENABLED, true);
-                siteModel.save(replay);
-            } catch (Throwable error) {
-                failureOfA[0] = error;
-            }
+            Row replay = siteModel.findById(siteA.get(SiteModel.ID));
+            replay.set(SiteModel.ENABLED, true);
+            siteModel.save(replay);
+            return null;
         });
         assertThat(coordinator.awaitParked())
             .as("step 2: tenant A must reach the barrier past its conflict scan").isTrue();
@@ -232,38 +229,32 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         // 3. Tenant B enables at the same instant. Its write must QUEUE behind A's held
         //    write lock -- it can neither interleave with A's half-done claim (the pre-fix
         //    shared-connection corruption) nor complete while A is parked.
-        Throwable[] failureOfB = new Throwable[1];
-        Thread enableB = this.racers.startBlockingThread(() -> {
-            try {
-                Row liveB = siteModel.findById(siteB.get(SiteModel.ID));
-                liveB.set(SiteModel.ENABLED, true);
-                siteModel.save(liveB);
-            } catch (Throwable error) {
-                failureOfB[0] = error;
-            }
+        Racers.Running<Object> enableB = this.racers.start("tenant B's enable", () -> {
+            Row liveB = siteModel.findById(siteB.get(SiteModel.ID));
+            liveB.set(SiteModel.ENABLED, true);
+            siteModel.save(liveB);
+            return null;
         });
-        awaitQueuedOnWriteLock(enableB,
+        awaitQueuedOnWriteLock(enableB.thread(),
             "step 3: tenant B must queue behind A's write transaction, not slip inside it");
-        assertThat(enableB.isAlive())
+        assertThat(enableB.isRunning())
             .as("step 3: tenant B is still waiting while A holds the write lock")
             .isTrue();
 
         // 4. Release A: it entered first, so it wins -- its scan and its claim were one
         //    atomic serialized transaction.
         coordinator.releaseHeldWriter();
-        enableA.join(15_000);
-        assertThat(enableA.isAlive()).as("step 4: tenant A's write must complete").isFalse();
-        assertThat(failureOfA[0]).as("step 4: the winner's enable must succeed").isNull();
+        Racers.Outcome<Object> outcomeOfA = enableA.await(Duration.ofSeconds(15));
+        assertThat(outcomeOfA.failure()).as("step 4: the winner's enable must succeed").isNull();
 
         // 5. B's queued write now runs its conflict scan against A's COMMITTED claim and
         //    is REFUSED -- with the real route-conflict violation, not a driver error the
         //    tenant cannot read.
-        enableB.join(15_000);
-        assertThat(enableB.isAlive()).as("step 5: tenant B's write must complete").isFalse();
-        assertThat(failureOfB[0])
+        Throwable failureOfB = enableB.await(Duration.ofSeconds(15)).failure();
+        assertThat(failureOfB)
             .as("step 5: the loser of the race is TOLD, never silently dropped")
             .isInstanceOf(Violations.class);
-        assertThat(hasViolation((Violations) failureOfB[0], "enabled", "enable_route_conflict"))
+        assertThat(hasViolation((Violations) failureOfB, "enabled", "enable_route_conflict"))
             .as("step 5: the refusal is the route conflict, anchored on 'enabled'").isTrue();
 
         // 6. The invariant that actually matters: the hostname has exactly ONE live owner,
@@ -391,20 +382,16 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
 
         // 2. Writer A (all interfaces) starts and is parked AFTER its conflict scan
         //    passed and BEFORE its row reaches the datasource.
-        Throwable[] failureOfA = new Throwable[1];
         SiteEnableWriteBarrier.Coordinator coordinator = new SiteEnableWriteBarrier.Coordinator();
         SiteDomainWriteBarrier.install(coordinator);
-        Thread writeA = this.racers.startBlockingThread(() -> {
+        Racers.Running<Object> writeA = this.racers.start("writer A on every interface", () -> {
             coordinator.holdWriteOf(Thread.currentThread());
-            try {
-                Row row = domainModel.createEmptyRow();
-                row.set(SiteDomainModel.SITE_ID, siteAny.get(SiteModel.ID));
-                row.set(SiteDomainModel.HOSTNAME, contested);
-                row.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
-                domainModel.save(row);
-            } catch (Throwable error) {
-                failureOfA[0] = error;
-            }
+            Row row = domainModel.createEmptyRow();
+            row.set(SiteDomainModel.SITE_ID, siteAny.get(SiteModel.ID));
+            row.set(SiteDomainModel.HOSTNAME, contested);
+            row.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+            domainModel.save(row);
+            return null;
         });
         assertThat(coordinator.awaitParked())
             .as("step 2: writer A must reach the barrier past its conflict scan").isTrue();
@@ -412,31 +399,25 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         // 3. Writer B (pinned address) races in while A is parked. Its scan cannot see
         //    A's unwritten row, so only write-transaction serialization can save the
         //    invariant: B must queue behind A's held write lock.
-        Throwable[] failureOfB = new Throwable[1];
-        Thread writeB = this.racers.startBlockingThread(() -> {
-            try {
-                Row row = domainModel.createEmptyRow();
-                row.set(SiteDomainModel.SITE_ID, sitePinned.get(SiteModel.ID));
-                row.set(SiteDomainModel.HOSTNAME, contested);
-                row.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
-                row.set(SiteDomainModel.LISTEN_ON, "127.0.0.1");
-                domainModel.save(row);
-            } catch (Throwable error) {
-                failureOfB[0] = error;
-            }
+        Racers.Running<Object> writeB = this.racers.start("writer B on one address", () -> {
+            Row row = domainModel.createEmptyRow();
+            row.set(SiteDomainModel.SITE_ID, sitePinned.get(SiteModel.ID));
+            row.set(SiteDomainModel.HOSTNAME, contested);
+            row.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+            row.set(SiteDomainModel.LISTEN_ON, "127.0.0.1");
+            domainModel.save(row);
+            return null;
         });
-        awaitQueuedOnWriteLock(writeB,
+        awaitQueuedOnWriteLock(writeB.thread(),
             "step 3: writer B must be contending for the write lock A holds, not arrive late");
-        assertThat(writeB.isAlive())
+        assertThat(writeB.isRunning())
             .as("step 3: writer B is still waiting while A holds the write lock").isTrue();
 
         // 4. Release A and let both writers finish (promptly: a queued writer times out
         //    on SQLite's busy_timeout if the winner parks too long).
         coordinator.releaseHeldWriter();
-        writeA.join(15_000);
-        writeB.join(15_000);
-        assertThat(writeA.isAlive()).as("step 4: writer A must complete").isFalse();
-        assertThat(writeB.isAlive()).as("step 4: writer B must complete").isFalse();
+        Throwable failureOfA = writeA.await(Duration.ofSeconds(15)).failure();
+        Throwable failureOfB = writeB.await(Duration.ofSeconds(15)).failure();
 
         // 5. THE invariant: the storage never holds two claims routing considers one
         //    route, no matter how the two writes interleaved.
@@ -447,11 +428,11 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
 
         // 6. A entered first and holds the write lock across scan+write, so A wins and
         //    B is refused with the readable cross-site route conflict.
-        assertThat(failureOfA[0]).as("step 6: the first writer's claim must succeed").isNull();
-        assertThat(failureOfB[0])
+        assertThat(failureOfA).as("step 6: the first writer's claim must succeed").isNull();
+        assertThat(failureOfB)
             .as("step 6: the loser is TOLD, never silently accepted")
             .isInstanceOf(Violations.class);
-        assertThat(hasViolation((Violations) failureOfB[0], "hostname", "route_taken_other_site"))
+        assertThat(hasViolation((Violations) failureOfB, "hostname", "route_taken_other_site"))
             .as("step 6: the refusal names the route conflict on 'hostname'").isTrue();
     }
 

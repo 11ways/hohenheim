@@ -6,7 +6,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
-import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.testsupport.thread.Racers;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -21,9 +21,7 @@ import org.junit.jupiter.api.Test;
 import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.TimeUnit;
+import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -105,28 +103,9 @@ class InstanceQuotaTest extends HohenheimTestBase {
         // 1. Two threads behind a barrier both submit the REAL create (the zenit-cms
         //    create submit endpoint), for the SAME owner: at create time no record and
         //    therefore no grant exists, so both charge the operator bucket.
-        CyclicBarrier barrier = new CyclicBarrier(2);
-        HttpResponse<?>[] responses = new HttpResponse<?>[2];
-        Throwable[] failures = new Throwable[2];
-        JobRunner racing = JobRunner.create("instance-quota-racers");
-        try {
-            CompletableFuture<?>[] racers = new CompletableFuture<?>[2];
-            for (int i = 0; i < 2; i++) {
-                int slot = i;
-                racers[slot] = racing.runAsync(() -> {
-                    try {
-                        barrier.await();
-                        responses[slot] = postCreate(NAME_PREFIX + slot);
-                    } catch (Throwable error) {
-                        failures[slot] = error;
-                    }
-                });
-            }
-            CompletableFuture.allOf(racers).get(60, TimeUnit.SECONDS);
-        } finally {
-            racing.shutdownNow();
-        }
-        assertThat(failures).as("step 1: both submits completed").containsOnlyNulls();
+        // Racers.values() fails with a racer's own failure: both submits completed.
+        List<? extends HttpResponse<?>> responses = Racers.race("step 1: two creates for the last operator slot",
+            Duration.ofSeconds(60), 2, slot -> postCreate(NAME_PREFIX + slot)).values();
 
         // 2. STATE first: exactly one live row exists -- two would mean both creates
         //    spent the same last slot, the defect the reservation exists to prevent.

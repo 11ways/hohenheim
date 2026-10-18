@@ -8,7 +8,7 @@ import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.incus.IncusEndpoint;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
 import be.elevenways.zenit.common.orm.datasource.Db;

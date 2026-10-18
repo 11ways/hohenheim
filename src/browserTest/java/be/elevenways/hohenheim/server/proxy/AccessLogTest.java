@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;

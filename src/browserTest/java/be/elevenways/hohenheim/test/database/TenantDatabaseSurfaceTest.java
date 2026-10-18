@@ -22,7 +22,7 @@ import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.testsupport.thread.Racers;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -53,9 +53,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.TimeUnit;
+import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -737,28 +735,11 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         long instancesUsed = Quotas.usedOf(instanceBucketOf(tenantAId));
         capTenantAt(tenantAId, (int) used + 1);   // EXACTLY one remaining slot
 
-        CyclicBarrier barrier = new CyclicBarrier(2);
-        Throwable[] failures = new Throwable[2];
-        JobRunner racing = JobRunner.create("database-allocation-racers");
-        try {
-            CompletableFuture<?>[] racers = new CompletableFuture<?>[2];
-            for (int i = 0; i < 2; i++) {
-                int slot = i;
-                racers[slot] = racing.runAsync(() -> {
-                    try {
-                        barrier.await();
-                        post(sessionA, csrfA, "/manage/databases/new",
-                            "name=race" + slot + "&engine=postgres");
-                    } catch (Throwable error) {
-                        failures[slot] = error;
-                    }
-                });
-            }
-            CompletableFuture.allOf(racers).get(60, TimeUnit.SECONDS);
-        } finally {
-            racing.shutdownNow();
-        }
-        assertThat(failures).as("step 1: both submits completed").containsOnlyNulls();
+        // Racers.values() fails with a racer's own failure: both submits completed.
+        Racers.race("step 1: two database submits for the last slot", Duration.ofSeconds(60), 2, slot -> {
+            post(sessionA, csrfA, "/manage/databases/new", "name=race" + slot + "&engine=postgres");
+            return null;
+        }).values();
 
         // 2. STATE first: exactly ONE of the two raced allocations exists. Two would mean
         //    both spent the same last slot -- the defect a form-render check cannot catch.

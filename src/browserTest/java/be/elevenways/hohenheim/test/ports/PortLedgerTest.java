@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.test.ports;
 
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.TestDatabases;
-import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.testsupport.thread.Racers;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -22,12 +22,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.TimeUnit;
+import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -391,29 +387,13 @@ class PortLedgerTest {
                 ids[i] = rival.get(InstanceModel.ID);
             }
         });
-        CyclicBarrier barrier = new CyclicBarrier(2);
-        List<Throwable> refusals = Collections.synchronizedList(new ArrayList<>());
-        JobRunner racing = JobRunner.create("port-ledger-racers");
-        try {
-            CompletableFuture<?>[] racers = new CompletableFuture<?>[2];
-            for (int i = 0; i < 2; i++) {
-                int ownerId = ids[i];
-                racers[i] = racing.runAsync(() -> Db.run(datasource, () -> {
-                    try {
-                        barrier.await();
-                        PortLedger.claimPreallocated(ServerModel.localServerId(), "", 8351,
-                            "udp", InstanceModel.MODEL_ID, ownerId, null);
-                    } catch (PortLedger.PortConflict conflict) {
-                        refusals.add(conflict);
-                    } catch (Exception unexpected) {
-                        refusals.add(unexpected);
-                    }
-                }));
-            }
-            CompletableFuture.allOf(racers).get(60, TimeUnit.SECONDS);
-        } finally {
-            racing.shutdownNow();
-        }
+        // The loser's refusal is its outcome: the ledger's PortConflict, or whatever else it threw.
+        List<Throwable> refusals = Racers.race("two claims of one preallocated port", Duration.ofSeconds(60), 2,
+            slot -> {
+                Db.run(datasource, () -> PortLedger.claimPreallocated(ServerModel.localServerId(), "", 8351,
+                    "udp", InstanceModel.MODEL_ID, ids[slot], null));
+                return null;
+            }).failures();
         Db.run(datasource, () -> {
             List<Row> rows = Models.get(PortAllocationModel.class).find()
                 .where(PortAllocationModel.SERVER_ID.eq(ServerModel.localServerId()))

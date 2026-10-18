@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.security.BanScope;
 import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.testsupport.thread.Racers;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.security.SecurityEventTypes;
@@ -328,29 +329,11 @@ class BanServiceTest {
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.AUTO_BAN_BUDGET_PER_HOUR, 2);
         BanService service = newService(false);
         int workers = 12;
-        CountDownLatch ready = new CountDownLatch(workers);
-        CountDownLatch start = new CountDownLatch(1);
-        JobRunner rotations = JobRunner.create("ban-rotation-racers");
-        try {
-            List<CompletableFuture<Void>> racers = new ArrayList<>();
-            for (int i = 0; i < workers; i++) {
-                String ip = "2001:db8:77:88::" + Integer.toHexString(i + 1);
-                racers.add(rotations.runAsync(() -> {
-                    ready.countDown();
-                    try {
-                        start.await();
-                        service.autoBan(ip, "reputation", "concurrent rotation");
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                    }
-                }));
-            }
-            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
-            start.countDown();
-            CompletableFuture.allOf(racers.toArray(CompletableFuture[]::new)).get(5, TimeUnit.SECONDS);
-        } finally {
-            rotations.shutdownNow();
-        }
+        // Racers.values() fails with a rotation's own failure: every rotation completed.
+        Racers.race("twelve concurrent IPv6 rotations", Duration.ofSeconds(30), workers, slot -> {
+            service.autoBan("2001:db8:77:88::" + Integer.toHexString(slot + 1), "reputation", "concurrent rotation");
+            return null;
+        }).values();
 
         service.autoBan("192.0.2.71", "reputation", "second unique");
         service.autoBan("192.0.2.72", "reputation", "over budget");

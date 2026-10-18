@@ -7,7 +7,7 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.server.cms.StackOperations;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
-import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.TestDatabases;

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.ArtifactOperationModel;

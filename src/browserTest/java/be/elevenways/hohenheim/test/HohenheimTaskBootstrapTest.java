@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
