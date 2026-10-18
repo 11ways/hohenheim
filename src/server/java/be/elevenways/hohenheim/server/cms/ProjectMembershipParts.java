@@ -143,15 +143,11 @@ public final class ProjectMembershipParts {
         return values(row).get(column.name());
     }
 
-    /** The member kind in words, one value per grant subject type, keyed by the type's stored key. */
+    /** The member kind in words: each grant subject type's own label, keyed by the type's stored key. */
     private static @NonNull EnumField kindField() {
         EnumField.Builder kind = EnumField.builder("kind").label(HohenheimMicrocopy.PROJECT.of("member_kind"));
         for (GrantSubjectType type : GrantSubjectType.values()) {
-            Microcopy label = switch (type) {
-                case USER -> HohenheimMicrocopy.PROJECT.of("member_kind_person");
-                case GROUP -> HohenheimMicrocopy.PROJECT.of("member_kind_group");
-            };
-            kind.value(type.key(), label);
+            kind.value(type.key(), type.label());
         }
         return kind.build();
     }

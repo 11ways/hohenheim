@@ -18715,7 +18715,5 @@
   "add_member": {"scope": "project", "text": "Add someone"},
   "quota_used_of": {"scope": "project", "text": "{$used} of {$limit}"},
   "quota_no_limit": {"scope": "project", "text": "{$used}, no limit"},
-  "member_kind_person": {"scope": "project", "text": "Person"},
-  "member_kind_group": {"scope": "project", "text": "Group"},
   "value_withheld": {"scope": "instance_provisioning", "text": "Not shown"}
 }
