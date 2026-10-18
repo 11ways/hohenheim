@@ -1,4 +1,10 @@
 {
+    "laneBudgets": {
+        "default": {
+            "seconds": 1500,
+            "reason": "the whole browser lane is ~1660 tests over three buckets: 480-570s on an idle machine at 3-4 forks, and a run on a loaded machine reached test 697 at 600s"
+        }
+    },
     "reuse": {
         "lanes": {
             "hohenheim": {
