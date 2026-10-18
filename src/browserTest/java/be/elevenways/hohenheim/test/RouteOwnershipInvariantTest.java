@@ -35,6 +35,7 @@ import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.zenit.server.operation.OperationRequest;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -61,13 +62,21 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
     private final List<Row> createdSites = new ArrayList<>();
 
     /**
-     * The racing writers.
+     * The racing writers, opened per test: a Racers is single-use after close().
+     *
+     * AIDEV-NOTE: HawkeyeBrowserTestBase is @TestInstance(PER_CLASS), so a field initializer runs once per class and
+     * would hand every later test the Racers an earlier @AfterEach closed.
      *
      * AIDEV-NOTE: Racers runs each writer on a platform thread: a writer queues on SQLite's write lock inside the
      * driver's native code, which would pin a virtual thread's carrier, and awaitQueuedOnWriteLock reads that very
      * thread's stack.
      */
-    private final Racers racers = Racers.named("route race writers");
+    private Racers racers;
+
+    @BeforeEach
+    void openRacers() {
+        this.racers = Racers.named("route race writers");
+    }
 
     @AfterEach
     void cleanUp() {

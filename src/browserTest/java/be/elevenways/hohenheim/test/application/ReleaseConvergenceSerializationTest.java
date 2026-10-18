@@ -28,6 +28,7 @@ import be.elevenways.zenit.common.orm.query.SortOrder;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -66,7 +67,8 @@ class ReleaseConvergenceSerializationTest {
     private static Integer savedProbeInterval;
     private static Integer savedDrain;
 
-    private final Racers convergers = Racers.named("converges of one application");
+    /** Opened per test: a Racers is single-use after close(). */
+    private Racers convergers;
 
     @BeforeAll
     static void setUp() throws Exception {
@@ -97,6 +99,11 @@ class ReleaseConvergenceSerializationTest {
         Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Releases.PROBE_INTERVAL_MS, savedProbeInterval);
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, savedDrain);
+    }
+
+    @BeforeEach
+    void openConvergers() {
+        this.convergers = Racers.named("converges of one application");
     }
 
     @AfterEach

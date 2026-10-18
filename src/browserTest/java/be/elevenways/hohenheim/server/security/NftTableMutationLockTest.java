@@ -7,6 +7,7 @@ import be.elevenways.protoblast.testsupport.time.Poll;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
@@ -29,7 +30,8 @@ class NftTableMutationLockTest {
 
     private static boolean initialized = false;
 
-    private final Racers writers = Racers.named("a removal and a deploy on one table");
+    /** Opened per test: a Racers is single-use after close(). */
+    private Racers writers;
 
     @BeforeAll
     static void initDb() throws Exception {
@@ -37,6 +39,11 @@ class NftTableMutationLockTest {
         initialized = true;
         TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();
+    }
+
+    @BeforeEach
+    void openWriters() {
+        this.writers = Racers.named("a removal and a deploy on one table");
     }
 
     @AfterEach

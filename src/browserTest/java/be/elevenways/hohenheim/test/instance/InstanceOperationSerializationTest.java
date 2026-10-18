@@ -21,6 +21,7 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.TimeUnit;
@@ -47,12 +48,12 @@ class InstanceOperationSerializationTest {
     private static int hostId;
 
     /**
-     * The journeys' second operations.
+     * The journeys' second operations, opened per test: a Racers is single-use after close().
      *
      * AIDEV-NOTE: Racers runs each on a platform thread: an operation waits for SQLite's write lock in the driver's
      * native code, which would pin a virtual thread's carrier.
      */
-    private final Racers operations = Racers.named("operations on one instance record");
+    private Racers operations;
 
     @BeforeAll
     static void setUp() throws Exception {
@@ -66,6 +67,11 @@ class InstanceOperationSerializationTest {
         FakeNativeDaemons.DURING_SNAPSHOT.set(null);
         FakeNativeDaemons.DURING_RESTORE.set(null);
         BackupLaneFixture.uninstall();
+    }
+
+    @BeforeEach
+    void openOperations() {
+        this.operations = Racers.named("operations on one instance record");
     }
 
     @AfterEach
