@@ -8,6 +8,7 @@ import be.elevenways.zenit.common.Zenit;
 import be.elevenways.hohenheim.server.cms.InstanceAttention;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.instance.InstanceService;
+import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.instance.InstanceStatusReconciler;
 import be.elevenways.hohenheim.server.instance.InstanceStatusReconciler.Verdict;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
@@ -365,8 +366,7 @@ class InstanceStatusReconcileTest {
             assertThat(reconciler.reconcile(id).verdict())
                 .as("step 1: the death is corrected")
                 .isEqualTo(Verdict.CORRECTED);
-            awaitStatus(id, InstanceModel.STATUS_RUNNING,
-                "step 1: and crash policy restart brings the workload back");
+            awaitRedeployed(id, "step 1: and crash policy restart brings the workload back");
 
             // 2. Second death inside the flap window: still restarted.
             FakeNativeDaemons.daemonOf(hostId)
@@ -374,8 +374,7 @@ class InstanceStatusReconcileTest {
             assertThat(reconciler.reconcile(id).verdict())
                 .as("step 2: corrected again")
                 .isEqualTo(Verdict.CORRECTED);
-            awaitStatus(id, InstanceModel.STATUS_RUNNING,
-                "step 2: and restarted again");
+            awaitRedeployed(id, "step 2: and restarted again");
 
             // 3. Third death inside the window trips flap protection: the record settles
             //    to ERROR, restarts are suspended, and the loop is stored as what stopped it.
@@ -454,6 +453,18 @@ class InstanceStatusReconcileTest {
     private static void awaitStatus(int instanceId, String expected, String what) {
         Poll.until(what + " (status " + expected + ")", Duration.ofSeconds(15),
             () -> expected.equals(statusOf(instanceId)));
+    }
+
+    /**
+     * Waits until the crash restart's redeploy has stamped running AND left the record: the redeploy stamps the
+     * column while it still holds the record's operation claim, and a sweep meeting a held claim answers SKIPPED.
+     *
+     * AIDEV-NOTE: the wait queues behind that claim on the operation lock itself (Contention.QUEUE), exactly as an
+     * operation arriving during the redeploy would; running is stamped inside the claim, so the claim is taken by then.
+     */
+    private static void awaitRedeployed(int instanceId, String what) {
+        awaitStatus(instanceId, InstanceModel.STATUS_RUNNING, what);
+        InstanceOperationLock.production().exclusive(instanceId, InstanceOperationLock.Contention.QUEUE, () -> { });
     }
 
     private static String statusOf(int instanceId) {
