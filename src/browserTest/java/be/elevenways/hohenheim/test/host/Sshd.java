@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.test.host;
 
 import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.protoblast.common.time.Backoff;
+import be.elevenways.protoblast.common.time.Retry;
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -27,6 +29,10 @@ public final class Sshd {
 
     /** Fresh ports tried before a lost bind race is reported as a failure. */
     private static final int BIND_ATTEMPTS = 5;
+
+    /** Probes of this server's port: every 50 ms, 200 at most, again only after an I/O failure. */
+    private static final Retry PORT_PROBES = Retry.of(Backoff.fixed(Duration.ofMillis(50)), 200)
+        .judgedBy(failure -> failure instanceof IOException ? Retry.Verdict.AGAIN : Retry.Verdict.FINAL);
 
     private final Path directory;
     private final int port;
@@ -156,39 +162,30 @@ public final class Sshd {
     }
 
     private void waitUntilClosed() throws IOException {
-        for (int attempt = 0; attempt < 200; attempt++) {
+        PORT_PROBES.run(() -> {
             try (Socket socket = new Socket("127.0.0.1", this.port)) {
                 if (!socket.isConnected()) {
-                    return;
+                    return null;
                 }
             } catch (IOException expected) {
-                return;   // nothing is bound any more
+                return null;   // nothing is bound any more
             }
-            sleep();
-        }
-        throw new PortTaken("port " + this.port + " never became free");
+            throw new PortTaken("port " + this.port + " never became free");
+        });
     }
 
     private void waitUntilListening() throws IOException {
-        IOException last = null;
-        for (int attempt = 0; attempt < 200; attempt++) {
-            try (Socket socket = new Socket("127.0.0.1", this.port)) {
-                if (socket.isConnected()) {
-                    return;
-                }
-            } catch (IOException e) {
-                last = e;
-            }
-            sleep();
-        }
-        throw new IOException("sshd never listened on 127.0.0.1:" + this.port, last);
-    }
-
-    private static void sleep() {
         try {
-            Thread.sleep(50);
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
+            PORT_PROBES.run(() -> {
+                try (Socket socket = new Socket("127.0.0.1", this.port)) {
+                    if (socket.isConnected()) {
+                        return null;
+                    }
+                }
+                throw new IOException("the connect reached nothing");
+            });
+        } catch (IOException last) {
+            throw new IOException("sshd never listened on 127.0.0.1:" + this.port, last);
         }
     }
 

@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.time.Now;
@@ -50,12 +51,12 @@ import be.elevenways.zenit.server.http.RateLimitMiddleware;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.function.BooleanSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
@@ -558,18 +559,10 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
     }
 
     /** Polls until the run has ended, failing after twenty seconds. */
-    static OperationRun ended(long runId, AccessContext viewer, String step) throws InterruptedException {
-        long deadline = System.nanoTime() + 20_000_000_000L;
-        BooleanSupplier done = () -> {
+    static OperationRun ended(long runId, AccessContext viewer, String step) {
+        return Poll.value(step + ": run " + runId + " ends", Duration.ofSeconds(20), Duration.ofMillis(50), () -> {
             OperationRun run = OperationRuns.of(runId, viewer);
-            return run != null && run.status() != OperationRunStatus.RUNNING;
-        };
-        while (!done.getAsBoolean()) {
-            if (System.nanoTime() > deadline) {
-                throw new AssertionError(step + ": run " + runId + " did not end within twenty seconds");
-            }
-            Thread.sleep(50);
-        }
-        return Objects.requireNonNull(OperationRuns.of(runId, viewer));
+            return run != null && run.status() != OperationRunStatus.RUNNING ? run : null;
+        });
     }
 }

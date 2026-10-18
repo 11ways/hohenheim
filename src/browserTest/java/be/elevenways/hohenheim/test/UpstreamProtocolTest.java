@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.proxy.SiteDispatcher;
 import be.elevenways.hohenheim.server.tls.UpstreamTrust;
 import be.elevenways.hohenheim.server.upstream.TenantUpstreams;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.common.time.Pace;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -52,13 +53,16 @@ import java.security.KeyPairGenerator;
 import java.security.KeyStore;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
+import java.time.Duration;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static be.elevenways.hohenheim.test.ProxyTestSupport.*;
@@ -78,6 +82,8 @@ class UpstreamProtocolTest {
     private com.sun.net.httpserver.HttpServer plainUpstream;
     /** The SNI names the HTTPS upstream stub was offered, one entry per name per exchange. */
     private final List<String> upstreamServerNames = new CopyOnWriteArrayList<>();
+    /** Ends the streaming upstream's withheld body: completed once the test is done measuring it. */
+    private final CompletableFuture<Void> streamBodyReleased = new CompletableFuture<>();
 
     @BeforeAll
     static void initRuntime() throws Exception {
@@ -89,6 +95,7 @@ class UpstreamProtocolTest {
     @AfterEach
     void cleanup() {
         SiteDispatcher.overrideTrustedUpstreamSslContextForTests(null);
+        streamBodyReleased.complete(null);
         if (proxy != null) {
             proxy.stop();
             proxy = null;
@@ -596,7 +603,7 @@ class UpstreamProtocolTest {
             new InetSocketAddress("127.0.0.1", 0), 0);
         plainUpstream.createContext("/", ex -> {
             try {
-                Thread.sleep(delayMs);
+                Pace.sleep(Duration.ofMillis(delayMs));
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
@@ -649,10 +656,10 @@ class UpstreamProtocolTest {
     // -------------------------------------------------------------------
 
     /**
-     * h2c upstream that commits its response headers immediately and only writes the
-     * body {@code delayMs} later -- the shape of every long-lived streaming gRPC
-     * service (NetBird's SignalExchange sends a registration header on stream open,
-     * then nothing until a peer message arrives).
+     * h2c upstream that commits its response headers immediately and withholds the body
+     * until the test released it ({@link #streamBodyReleased}), {@code delayMs} at most --
+     * the shape of every long-lived streaming gRPC service (NetBird's SignalExchange sends
+     * a registration header on stream open, then nothing until a peer message arrives).
      */
     private int startHeadersThenDelayedBodyUpstream(long delayMs) {
         undertowUpstream = Undertow.builder()
@@ -668,7 +675,11 @@ class UpstreamProtocolTest {
                         while (!channel.flush()) {
                             Thread.onSpinWait();
                         }
-                        Thread.sleep(delayMs);
+                        try {
+                            Pace.await(streamBodyReleased, Duration.ofMillis(delayMs));
+                        } catch (TimeoutException bounded) {
+                            // Never released: the body follows at its bound all the same.
+                        }
                         var buffer = java.nio.ByteBuffer.wrap(
                             "stream-payload".getBytes(StandardCharsets.UTF_8));
                         while (buffer.hasRemaining()) channel.write(buffer);
@@ -677,7 +688,7 @@ class UpstreamProtocolTest {
                             Thread.onSpinWait();
                         }
                         exchange.endExchange();
-                    } catch (IOException | InterruptedException e) {
+                    } catch (IOException | InterruptedException | ExecutionException e) {
                         exchange.endExchange();
                     }
                 });
@@ -792,16 +803,18 @@ class UpstreamProtocolTest {
 
     /**
      * Opens an h2c stream with HEADERS only: no END_STREAM, no DATA -- exactly how a
-     * bidirectional gRPC client starts a stream before it has a message to send.
+     * bidirectional gRPC client starts a stream before it has a message to send -- and
+     * keeps it open until the upstream reports a request.
      *
      * Hand-rolled because neither Undertow client can express it: they write the HEADERS
      * frame lazily, on the first body write, so a body-less request never reaches the wire
      * at all. That same laziness is what the proxy trips over, which is why this test needs
      * to own the bytes. HPACK here is literal-without-indexing (0x00) and never Huffman,
      * which every HTTP/2 implementation must accept.
+     *
+     * @return the path the upstream saw while the stream was still open, null when it saw none within 5 s
      */
-    private static void sendRawH2cHeadersOnly(int port, String host, String path,
-                                              long holdOpenMs) throws Exception {
+    private String sendRawH2cHeadersOnly(int port, String host, String path) throws Exception {
         try (java.net.Socket socket = new java.net.Socket("127.0.0.1", port)) {
             socket.setTcpNoDelay(true);
             var out = socket.getOutputStream();
@@ -821,7 +834,7 @@ class UpstreamProtocolTest {
             writeFrame(out, 0x1, 0x4, 1, hpack.toByteArray());
             out.flush();
 
-            Thread.sleep(holdOpenMs);
+            return upstreamSawPaths.poll(5, TimeUnit.SECONDS);
         }
     }
 
@@ -872,14 +885,12 @@ class UpstreamProtocolTest {
         // Control: the upstream sees a headers-only stream when spoken to directly, so a
         // miss below can only mean the proxy withheld it.
         upstreamSawPaths.clear();
-        sendRawH2cHeadersOnly(upstreamPort, "bidi.test", "/direct", 600);
-        assertThat(upstreamSawPaths.poll(5, TimeUnit.SECONDS))
+        assertThat(sendRawH2cHeadersOnly(upstreamPort, "bidi.test", "/direct"))
             .as("fixture sanity: a headers-only stream reaches the upstream directly")
             .isEqualTo("/direct");
 
         upstreamSawPaths.clear();
-        sendRawH2cHeadersOnly(httpPort(proxy), "bidi.test", "/proxied", 1500);
-        assertThat(upstreamSawPaths.poll(5, TimeUnit.SECONDS))
+        assertThat(sendRawH2cHeadersOnly(httpPort(proxy), "bidi.test", "/proxied"))
             .as("the proxy must forward the request headers before any body arrives")
             .isEqualTo("/proxied");
     }
@@ -901,8 +912,7 @@ class UpstreamProtocolTest {
         proxy = startProxy();
 
         upstreamSawPaths.clear();
-        sendRawH2cHeadersOnly(httpPort(proxy), "bidi-h1.test", "/proxied-h1", 1500);
-        assertThat(upstreamSawPaths.poll(5, TimeUnit.SECONDS))
+        assertThat(sendRawH2cHeadersOnly(httpPort(proxy), "bidi-h1.test", "/proxied-h1"))
             .as("an h1 upstream must see a headers-only request before any body arrives")
             .isEqualTo("/proxied-h1");
     }

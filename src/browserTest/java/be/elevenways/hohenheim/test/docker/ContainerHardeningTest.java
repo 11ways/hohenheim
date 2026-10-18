@@ -955,26 +955,28 @@ class ContainerHardeningTest {
      */
     private static void waitForLog(DockerClient docker, String container, String needle,
                                    int times, String step) throws IOException {
-        for (int attempt = 0; attempt < 120; attempt++) {
-            String logs = docker.containerLogs(container, true, true, LOG_TAIL);
-            if (occurrences(logs, needle) >= times) {
-                return;
-            }
-            Object state = docker.inspectContainer(container).get("State");
-            if (state instanceof Map<?, ?> map && !Boolean.TRUE.equals(map.get("Running"))) {
-                throw new AssertionError(step + ": the container EXITED before logging \""
-                    + needle + "\" " + times + " time(s). Its own log says:\n" + logs);
-            }
-            try {
-                Thread.sleep(500);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                break;
-            }
+        boolean logged = Boolean.TRUE.equals(Poll.latest(step + ": \"" + needle + "\" logged " + times
+            + " time(s)", Duration.ofSeconds(60), Duration.ofMillis(500), () -> {
+                try {
+                    String logs = docker.containerLogs(container, true, true, LOG_TAIL);
+                    if (occurrences(logs, needle) >= times) {
+                        return true;
+                    }
+                    Object state = docker.inspectContainer(container).get("State");
+                    if (state instanceof Map<?, ?> map && !Boolean.TRUE.equals(map.get("Running"))) {
+                        throw new AssertionError(step + ": the container EXITED before logging \""
+                            + needle + "\" " + times + " time(s). Its own log says:\n" + logs);
+                    }
+                    return false;
+                } catch (IOException unreadable) {
+                    throw new UncheckedIOException(unreadable);
+                }
+            }, Boolean::booleanValue));
+        if (!logged) {
+            throw new AssertionError(step + ": never logged \"" + needle + "\" " + times
+                + " time(s) within 60s:\n"
+                + docker.containerLogs(container, true, true, LOG_TAIL));
         }
-        throw new AssertionError(step + ": never logged \"" + needle + "\" " + times
-            + " time(s) within 60s:\n"
-            + docker.containerLogs(container, true, true, LOG_TAIL));
     }
 
     private static void assertRefused(DockerClient docker, ContainerHardening.Profile profile,

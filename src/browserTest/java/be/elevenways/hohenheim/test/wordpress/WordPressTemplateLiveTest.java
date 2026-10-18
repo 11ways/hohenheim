@@ -40,7 +40,6 @@ import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -183,15 +182,6 @@ class WordPressTemplateLiveTest {
             });
     }
 
-    private static void pause(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException(interrupted);
-        }
-    }
-
     private static HttpResponse<String> awaitFront(int port, Duration limit) {
         HttpClient client = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NEVER)
@@ -201,22 +191,18 @@ class WordPressTemplateLiveTest {
             .uri(URI.create("http://127.0.0.1:" + port + "/"))
             .timeout(Duration.ofSeconds(20))
             .GET().build();
-        Instant deadline = Now.instant().plus(limit);
-        HttpResponse<String> last = null;
-        while (Now.instant().isBefore(deadline)) {
-            try {
-                last = client.send(request, HttpResponse.BodyHandlers.ofString());
-                if (last.statusCode() < 500) {
-                    return last;
+        HttpResponse<String> last = Poll.latest("the front page on port " + port + " answers below 500", limit,
+            Duration.ofSeconds(3), () -> {
+                try {
+                    return client.send(request, HttpResponse.BodyHandlers.ofString());
+                } catch (IOException notYet) {
+                    // Apache still starting, or the entrypoint still copying WordPress in.
+                    return null;
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException(interrupted);
                 }
-            } catch (IOException notYet) {
-                // Apache still starting, or the entrypoint still copying WordPress in.
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                throw new RuntimeException(interrupted);
-            }
-            pause(3000);
-        }
+            }, answer -> answer.statusCode() < 500);
         if (last == null) {
             throw new AssertionError("the front page never answered on port " + port);
         }

@@ -23,6 +23,7 @@ import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.common.time.Pace;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -722,7 +723,7 @@ class ApplicationReleaseLiveTest {
                             } else {
                                 bodies.add(marker);
                             }
-                            Thread.sleep(10);
+                            Pace.sleep(Duration.ofMillis(10));
                         } catch (InterruptedException interrupted) {
                             Thread.currentThread().interrupt();
                             return;

@@ -31,6 +31,7 @@ import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.common.time.Pace;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
@@ -49,8 +50,11 @@ import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
 import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeoutException;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -104,19 +108,28 @@ class InstanceShellLiveTest {
     private static PrivateNetns netns;
     private static long startedAt;
 
+    /** Completed when the running test ends, which disarms its stall dump. */
+    private static CompletableFuture<Void> testEnded = CompletableFuture.completedFuture(null);
+
     /**
-     * Dump every stack after a stall so a hang NAMES its blocking frame.
+     * Dump every stack once the test has run 60 s, so a hang NAMES its blocking frame.
      *
      * AIDEV-NOTE: kept, not scaffolding. A live-lane hang costs the whole budget and the
      * harness reports it as "in flight", which says nothing about where. This plus the
      * markers below turn that into evidence. Both are the reason the 2026-08-23
-     * ten-minute stall was traced to a probe exec riding DockerClient's 600s cap.
+     * ten-minute stall was traced to a probe exec riding DockerClient's 600s cap. The
+     * dump waits on the test's end, so a test that finished never dumps into a later one.
      */
     private static void startStallDump() {
+        CompletableFuture<Void> ended = new CompletableFuture<>();
+        testEnded = ended;
         Thread thread = new Thread(() -> {
             try {
-                Thread.sleep(60_000);
-            } catch (InterruptedException e) {
+                Pace.await(ended, Duration.ofSeconds(60));
+                return;
+            } catch (TimeoutException stalled) {
+                // Still running at the bound: dump below.
+            } catch (Exception gone) {
                 return;
             }
             System.out.println("=== SHELL LIVE STALL DUMP ===");
@@ -130,6 +143,11 @@ class InstanceShellLiveTest {
         });
         thread.setDaemon(true);
         thread.start();
+    }
+
+    @AfterEach
+    void disarmStallDump() {
+        testEnded.complete(null);
     }
 
     /** Timestamped progress marker: a hang must name the step it hung ON. */

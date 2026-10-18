@@ -19,6 +19,7 @@ import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
@@ -26,10 +27,12 @@ import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleRunModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleRuns;
 import be.elevenways.zenit.common.task.record.RecordScheduleStepModel;
+import be.elevenways.zenit.common.task.record.RecordScheduleStepRunModel;
 import be.elevenways.zenit.common.task.record.RunStatus;
 import be.elevenways.zenit.common.task.record.StepFailurePolicy;
 import be.elevenways.zenit.common.task.record.StepStatus;
@@ -40,6 +43,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -183,28 +187,32 @@ class InstanceScheduleLiveTest {
         }
     }
 
-    /** Sweeps until the run has a verdict: a step with an offset is a due row, run by a later sweep. */
+    /**
+     * Sweeps until the run has a verdict, moving {@link Now} onto each pending step's due time: a step with an
+     * offset is a due row, which the sweep runs once the clock reaches it.
+     */
     private static Row finished(RecordSchedules recordSchedules, Row run) {
         if (run == null) {
             return null;
         }
         int runId = run.get(RecordScheduleRunModel.ID);
-        long deadline = System.nanoTime() + Duration.ofSeconds(60).toNanos();
-        Row current = run;
-        while (RunStatus.RUNNING.storageKey().equals(current.get(RecordScheduleRunModel.STATUS))
-                && System.nanoTime() < deadline) {
-            try {
-                Thread.sleep(250);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return current;
+        return Poll.value("run " + runId + " has a verdict", Duration.ofSeconds(60), POLL_INTERVAL, () -> {
+            RecordSchedules.awaitRunningSteps(Duration.ofSeconds(60));
+            Row pending = Models.get(RecordScheduleStepRunModel.class).find().noCache()
+                .where(RecordScheduleStepRunModel.RUN_ID.eq(runId))
+                .and(RecordScheduleStepRunModel.ENDED_AT.isNull())
+                .orderBy(RecordScheduleStepRunModel.DUE_AT, SortOrder.ASC).first();
+            Instant due = pending == null ? null : pending.get(RecordScheduleStepRunModel.DUE_AT);
+            Instant now = Now.instant();
+            if (due != null && due.isAfter(now)) {
+                Now.setOffset(Now.offset().plus(Duration.between(now, due)));
             }
             recordSchedules.runDue(null);
             RecordSchedules.awaitRunningSteps(Duration.ofSeconds(60));
-            current = Models.get(RecordScheduleRunModel.class).find().noCache()
+            Row current = Models.get(RecordScheduleRunModel.class).find().noCache()
                 .where(RecordScheduleRunModel.ID.eq(runId)).first();
-        }
-        return current;
+            return RunStatus.RUNNING.storageKey().equals(current.get(RecordScheduleRunModel.STATUS)) ? null : current;
+        });
     }
 
     /** The run's steps through the one reader, as status and error maps. */
@@ -225,6 +233,8 @@ class InstanceScheduleLiveTest {
     void warnRestartRevocationBackupAndDestroyJourney() throws Exception {
         assumeLiveDaemon();
         DockerClient docker = new DockerClient();
+        // finished() moves the clock onto due steps; the journey hands it back as it found it.
+        Duration clockOffset = Now.offset();
 
         // The schedule's OWNER: a real user with a real manage grant, both revocable.
         UUID tenantId = ApiSupport.user("schedule-tenant@hohenheim.local", "Schedule Tenant");
@@ -256,7 +266,7 @@ class InstanceScheduleLiveTest {
                     Map.of("command", "echo warned >> /data/marker"));
                 step(chainId, 2, InstanceOperations.RESTART.id().toString(), 2, null);
 
-                // The restart waits its 2 s offset as a due row; the sweep runs it once due.
+                // The restart waits its 2 s offset as a due row; the clock moves onto it and the sweep runs it.
                 Row chainRun = finished(recordSchedules, recordSchedules.runNow(chainId));
                 assertThat(chainRun).as("step 2: the chain ran").isNotNull();
                 assertThat(chainRun.get(RecordScheduleRunModel.STATUS))
@@ -358,6 +368,7 @@ class InstanceScheduleLiveTest {
                 } catch (IOException ignored) {
                     // never created
                 }
+                Now.setOffset(clockOffset);
             }
         });
     }

@@ -22,12 +22,14 @@ import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.cert.X509Certificate;
@@ -43,6 +45,7 @@ import static be.elevenways.hohenheim.test.ProxyTestSupport.bootRuntime;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.resetDatabase;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.setupSite;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Wire-level coverage for mixed TLS termination, SNI passthrough, and PROXY v2 identity. */
 class TlsPassthroughTest {
@@ -221,16 +224,23 @@ class TlsPassthroughTest {
 
         byte[] hello = clientHello("slow.example.test", false);
         try (Socket client = new Socket("127.0.0.1", proxy.getHttpsAddress().getPort())) {
-            client.setSoTimeout(3_000);
-            for (int i = 0; i < 6; i++) {
+            // A byte every 250 ms never lets an idle timer fire, so only an ABSOLUTE deadline closes the
+            // handshake; between bytes the client waits for that close itself. Twelve bytes span three
+            // deadlines, so a late accept under load still closes mid-trickle.
+            client.setSoTimeout(250);
+            boolean closedWhileTrickling = false;
+            for (int i = 0; i < 12 && !closedWhileTrickling; i++) {
                 try {
                     client.getOutputStream().write(hello[i]);
                     client.getOutputStream().flush();
-                } catch (Exception closed) {
-                    break;
+                    closedWhileTrickling = closedWithin(client);
+                } catch (IOException closed) {
+                    closedWhileTrickling = true;
                 }
-                Thread.sleep(250);
             }
+            assertThat(closedWhileTrickling)
+                .as("the incomplete handshake is closed at its deadline while bytes still arrive").isTrue();
+            client.setSoTimeout(3_000);
             assertClosed(client, "the incomplete handshake is closed at its absolute deadline");
         }
         assertThat(backendAccepted()).isFalse();
@@ -267,7 +277,13 @@ class TlsPassthroughTest {
             client.getOutputStream().flush();
             assertThat(client.getInputStream().readNBytes(4)).containsExactly(
                 "PONG".getBytes(StandardCharsets.US_ASCII));
-            Thread.sleep(1_250);
+            // The 1 s prologue deadline passes while the relay idles: a relay still holding it closes the
+            // client now, which this read sees as an end of stream instead of its own timeout.
+            client.setSoTimeout(1_250);
+            assertThatThrownBy(() -> client.getInputStream().read())
+                .as("the relay outlives the handshake deadline")
+                .isInstanceOf(SocketTimeoutException.class);
+            client.setSoTimeout(5_000);
             client.getOutputStream().write("PING".getBytes(StandardCharsets.US_ASCII));
             client.getOutputStream().flush();
             assertThat(client.getInputStream().readNBytes(4)).containsExactly(
@@ -369,6 +385,17 @@ class TlsPassthroughTest {
             assertThat(socket.getInputStream().read()).as(step).isEqualTo(-1);
         } catch (SocketException reset) {
             assertThat(reset).as(step).hasMessageContaining("Connection reset");
+        }
+    }
+
+    /** @return true once the peer closed or reset the socket within its read timeout, false while it stays open */
+    private static boolean closedWithin(Socket socket) throws IOException {
+        try {
+            return socket.getInputStream().read() == -1;
+        } catch (SocketTimeoutException open) {
+            return false;
+        } catch (SocketException reset) {
+            return true;
         }
     }
 

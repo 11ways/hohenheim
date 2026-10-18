@@ -21,6 +21,8 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.protoblast.common.time.Backoff;
+import be.elevenways.protoblast.common.time.Retry;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -37,6 +39,7 @@ import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.Enumeration;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -58,6 +61,15 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class PublicPortLiveTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
+
+    /** HTTP attempts: every 400 ms, 20 at most, again after any I/O failure or a blank answer. */
+    private static final Retry HTTP_ATTEMPTS = Retry.of(Backoff.fixed(Duration.ofMillis(400)), 20)
+        .judgedBy(failure -> failure instanceof IOException ? Retry.Verdict.AGAIN : Retry.Verdict.FINAL);
+
+    /** Datagram exchanges: every 300 ms, 20 at most, again only after an unanswered one. */
+    private static final Retry UDP_EXCHANGES = Retry.of(Backoff.fixed(Duration.ofMillis(300)), 20)
+        .judgedBy(failure -> failure instanceof SocketTimeoutException
+            ? Retry.Verdict.AGAIN : Retry.Verdict.FINAL);
 
     private static SqlDatasource datasource;
     private static PrivateNetns netns;
@@ -408,40 +420,46 @@ class PublicPortLiveTest {
      * deadline (throws the last error, or returns the empty body for the assertion).
      */
     private static String httpGet(InetAddress address, int port) throws IOException {
-        IOException last = null;
-        String lastBody = "";
-        for (int attempt = 0; attempt < 20; attempt++) {
-            try (Socket socket = new Socket()) {
-                socket.connect(new InetSocketAddress(address, port), 1_500);
-                socket.setSoTimeout(3_000);
-                socket.getOutputStream().write(
-                    ("GET / HTTP/1.0\r\nHost: test\r\n\r\n").getBytes(StandardCharsets.UTF_8));
-                String body = new String(socket.getInputStream().readAllBytes(),
-                    StandardCharsets.UTF_8);
-                if (!body.isBlank()) {
+        try {
+            return HTTP_ATTEMPTS.run(() -> {
+                try (Socket socket = new Socket()) {
+                    socket.connect(new InetSocketAddress(address, port), 1_500);
+                    socket.setSoTimeout(3_000);
+                    socket.getOutputStream().write(
+                        ("GET / HTTP/1.0\r\nHost: test\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+                    String body = new String(socket.getInputStream().readAllBytes(),
+                        StandardCharsets.UTF_8);
+                    if (body.isBlank()) {
+                        throw new BlankAnswer(body);
+                    }
                     return body;
                 }
-                last = null;
-                lastBody = body;
-            } catch (IOException e) {
-                last = e;
-            }
-            sleep(400);
-        }
-        if (last != null) {
+            });
+        } catch (BlankAnswer blank) {
+            return blank.body;
+        } catch (IOException last) {
             // Name the vantage point: a bare "Connect timed out" hides WHICH address
             // never answered, and that is the first diagnostic question.
             throw new IOException("no HTTP answer from " + address.getHostAddress() + ":"
                 + port + " within the poll deadline", last);
         }
-        return lastBody;
+    }
+
+    /** A relayed connection that closed without a word: retried like any I/O failure. */
+    private static final class BlankAnswer extends IOException {
+
+        private final String body;
+
+        BlankAnswer(String body) {
+            super("the relayed connection answered a blank body");
+            this.body = body;
+        }
     }
 
     /** Send one datagram and await the reply, retried (the responder loops per second). */
     private static String udpExchange(InetAddress address, int port, String payload)
             throws IOException {
-        IOException last = null;
-        for (int attempt = 0; attempt < 20; attempt++) {
+        return UDP_EXCHANGES.run(() -> {
             try (DatagramSocket socket = new DatagramSocket()) {
                 socket.setSoTimeout(1_500);
                 byte[] request = (payload + "\n").getBytes(StandardCharsets.UTF_8);
@@ -451,12 +469,8 @@ class PublicPortLiveTest {
                 socket.receive(reply);
                 return new String(reply.getData(), 0, reply.getLength(),
                     StandardCharsets.UTF_8).trim();
-            } catch (SocketTimeoutException timeout) {
-                last = timeout;
-                sleep(300);
             }
-        }
-        throw last;
+        });
     }
 
     private static DockerClient requireDaemon(String image) {
@@ -482,14 +496,6 @@ class PublicPortLiveTest {
             docker.removeVolume(handle + "-vol-data", true);
         } catch (IOException | RuntimeException ignored) {
             // these instances declare no volumes; remove is pure belt-and-braces
-        }
-    }
-
-    private static void sleep(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
         }
     }
 }

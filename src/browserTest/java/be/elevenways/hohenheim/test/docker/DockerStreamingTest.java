@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.docker.ProcessDockerTransport;
 import be.elevenways.hohenheim.server.runtime.ConsoleStream;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.common.time.Pace;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
@@ -24,6 +25,7 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Tag;
@@ -46,13 +48,17 @@ class DockerStreamingTest {
 
     // -- wire parsing over scripted connections (always runs) ----------------
 
-    /** One scripted read after another; an empty script yields EOF; close unblocks a BLOCK step. */
+    /**
+     * One scripted read after another; an empty script yields EOF; close unblocks a BLOCK step, and {@link #blocked}
+     * completes once a read sits in one.
+     */
     private static final class ScriptedConnection implements DockerStreamConnection {
 
         static final byte[] BLOCK = new byte[0];
 
         private final Deque<byte[]> reads = new ArrayDeque<>();
         private final CountDownLatch closed = new CountDownLatch(1);
+        private final CompletableFuture<Void> blocked = new CompletableFuture<>();
         private final ByteArrayOutputStream written = new ByteArrayOutputStream();
         private boolean failAtEnd;
 
@@ -82,6 +88,7 @@ class DockerStreamingTest {
             }
             if (step == BLOCK) {
                 try {
+                    this.blocked.complete(null);
                     this.closed.await(10, TimeUnit.SECONDS);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
@@ -271,15 +278,16 @@ class DockerStreamingTest {
 
         Thread closer = new Thread(() -> {
             try {
-                Thread.sleep(150);
-            } catch (InterruptedException ignored) {
-                Thread.currentThread().interrupt();
+                Pace.await(connection.blocked, Duration.ofSeconds(5));
+            } catch (Exception neverBlocked) {
+                // Closed all the same; the assertion below names the missing block.
             }
             stream.close();
         });
         closer.start();
         assertThat(stream.next()).as("step 4: blocked next() unblocks to null").isNull();
         closer.join(2000);
+        assertThat(connection.blocked).as("step 4: the close came while next() blocked on the wire").isDone();
         assertThat(stream.termination()).as("step 4: our close is CONSUMER_CLOSED, not a"
             + " daemon failure").isEqualTo(ConsoleStream.Termination.CONSUMER_CLOSED);
     }

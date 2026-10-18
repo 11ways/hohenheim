@@ -46,6 +46,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -515,30 +516,19 @@ class GameDomainLiveTest {
      * assertion loudly with the real output. Never replace this with a fixed sleep.
      */
     private static DockerClient.ExecResult awaitFetch(DockerClient docker, String fromHandle,
-                                                      String url, String expectedBody)
-            throws IOException {
-        long deadline = Now.millis() + 45_000L;
-        DockerClient.ExecResult last;
-        while (true) {
-            last = docker.exec(fromHandle, List.of("wget", "-T", "5", "-qO-", url));
-            if ((last.exitCode() == 0 && last.stdout().contains(expectedBody))
-                    || Now.millis() >= deadline) {
-                return last;
-            }
-            sleep(500);
-        }
+                                                      String url, String expectedBody) {
+        return Poll.latest("a fetch of " + url + " from " + fromHandle + " answering " + expectedBody,
+            Duration.ofSeconds(45), Duration.ofMillis(500), () -> {
+                try {
+                    return docker.exec(fromHandle, List.of("wget", "-T", "5", "-qO-", url));
+                } catch (IOException unreachable) {
+                    throw new UncheckedIOException(unreachable);
+                }
+            }, last -> last.exitCode() == 0 && last.stdout().contains(expectedBody));
     }
 
     private static void await(String what, long timeoutMs, BooleanSupplier condition) {
         Poll.until(what, Duration.ofMillis(timeoutMs), Duration.ofMillis(150), condition);
-    }
-
-    private static void sleep(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
     }
 
     private static void quietDestroy(InstanceService service, int instanceId) {
