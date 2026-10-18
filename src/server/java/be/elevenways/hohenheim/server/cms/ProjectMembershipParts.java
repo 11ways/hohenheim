@@ -15,6 +15,7 @@ import be.elevenways.zenit.auth.server.cms.AuthAdminParts;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.ChildList;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
@@ -28,6 +29,7 @@ import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.cms.common.schema.TableView;
+import be.elevenways.zenit.cms.server.panel.PartsReads;
 import be.elevenways.zenit.common.data.RecordPage;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.operation.SubjectType;
@@ -35,6 +37,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.StringField;
+import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -115,9 +118,10 @@ public final class ProjectMembershipParts {
             .parent(ResourceParent.<Membership>of(HohenheimSlugs.PROJECTS, Membership::projectId)
                 .tab(HohenheimSlugs.Tab.MEMBERS))
             .form(ResourceForm.<Membership>of(FormSpec.builder().add(PROJECT).add(MEMBER).add(KIND).build()).build())
+            // The member leads: it is the row's title, which opens the member's own page (memberPage).
             .list(ResourceList.store(TableSpec.<Membership>builder()
-                    .column(ColumnSpec.fromField(PROJECT).filterable().build())
                     .column(ColumnSpec.fromField(MEMBER).filterable().build())
+                    .column(ColumnSpec.fromField(PROJECT).filterable().build())
                     .column(ColumnSpec.fromField(KIND).build())
                     .filter(FilterSpec.leaf(PROJECT, CoreTypes.CONTAINS).build())
                     .filter(FilterSpec.leaf(MEMBER, CoreTypes.CONTAINS).build())
@@ -125,7 +129,7 @@ public final class ProjectMembershipParts {
                     (projectKey, applied, access) -> PAGES.inMemory(applied, memberships(access).stream()
                         .filter(row -> String.valueOf(row.projectId()).equals(String.valueOf(projectKey)))
                         .toList(), ProjectMembershipParts::cell, access))
-                .chrome(ListChrome.MINIMAL).build())
+                .chrome(ListChrome.MINIMAL).rowLink(ProjectMembershipParts::memberPage).build())
             .reads(ResourceReads.<Membership>typed(Membership::key)
                 .load((key, access) -> memberships(access).stream().filter(row -> row.key().equals(key))
                     .findFirst().orElse(null))
@@ -141,6 +145,18 @@ public final class ProjectMembershipParts {
 
     private static @Nullable Object cell(@NonNull Membership row, @NonNull ColumnSpec column) {
         return values(row).get(column.name());
+    }
+
+    /**
+     * The member's own page (a person's, a group's) for a viewer this panel lets open it.
+     *
+     * AIDEV-NOTE: a viewer who may not open it keeps the framework's fallback, the membership's own page: a row title
+     * never loses its link (PanelRowLinks).
+     */
+    private static @Nullable RouteTarget memberPage(@NonNull Membership row, @NonNull PanelRequest request) {
+        GrantSubjectType type = GrantSubjectType.fromStored(row.subjectType());
+        return type == null ? null
+            : PartsReads.openRoute(request.panel(), type.modelId(), row.subjectId(), request.access());
     }
 
     /** The member kind in words: each grant subject type's own label, keyed by the type's stored key. */

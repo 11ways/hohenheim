@@ -10,6 +10,8 @@ import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.auth.server.cms.AuthAdminParts;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceForm;
@@ -44,10 +46,11 @@ class ProjectPagesJourneyTest extends HohenheimTestBase {
     private static Integer projectId;
     private static Integer environmentId;
     private static String memberSession;
+    private static UUID memberId;
 
     @BeforeAll
     static void seed() {
-        UUID memberId = ApiSupport.user("ppj-member@project.test", PREFIX + "Member");
+        memberId = ApiSupport.user("ppj-member@project.test", PREFIX + "Member");
         memberSession = sessionFor(memberId).token();
         projectId = project(PREFIX + "webshop");
         Integer otherId = project(PREFIX + "elsewhere");
@@ -110,9 +113,13 @@ class ProjectPagesJourneyTest extends HohenheimTestBase {
         assertThat(variables).as("step 3: the secret value never is, and says it is withheld")
             .doesNotContain(PREFIX + "secret-value").contains("Not shown");
 
-        // 4. The environment's page leads back through its project, not straight to Apps.
+        // 4. The environment's page leads back through its project, not straight to Apps, and its own crumb names it
+        //    bare beneath the project's: the project is the crumb before it, never repeated in its title.
         assertThat(variables).as("step 4: the trail names the project and links its Environments tab")
             .contains(PREFIX + "webshop").contains(projectTab(HohenheimSlugs.ADMIN, "environments"));
+        assertThat(trailOf(variables)).as("step 4: the environment's crumb is its bare name, beneath the project's")
+            .containsSubsequence(PREFIX + "webshop", PREFIX + "production")
+            .doesNotContain(PREFIX + "webshop" + EnvironmentModel.PROJECT_SEPARATOR);
 
         // 5. A new variable starts as a plain one, so its value field is there before anything is picked.
         PanelResource<Row> variableEntry = (PanelResource<Row>) Objects.requireNonNull(
@@ -137,6 +144,27 @@ class ProjectPagesJourneyTest extends HohenheimTestBase {
         assertThat(httpGet("/manage/" + HohenheimSlugs.PROJECT_MEMBERS, memberSession).body())
             .as("step 7: the Team roster reads the kind in words too")
             .contains("Person").doesNotContainPattern(RAW_SUBJECT_CELL);
+
+        // 8. Outside its project's page an environment is named with its project, so two projects' environments of
+        //    one name are told apart: the top-level variables list, and the variable's own trail below the
+        //    project's crumb names it bare again.
+        String allVariables = httpGet("/admin/" + HohenheimSlugs.ENVIRONMENT_VARIABLES, sessionToken).body();
+        assertThat(allVariables).as("step 8: the variables list names the environment with its project")
+            .contains(PREFIX + "webshop" + EnvironmentModel.PROJECT_SEPARATOR + PREFIX + "production");
+        Integer variableId = Models.get(InstanceVariableModel.class).find()
+            .where(InstanceVariableModel.KEY.eq("PPJ_CURRENCY")).first().get(InstanceVariableModel.ID);
+        String variable = httpGet("/admin/" + HohenheimSlugs.ENVIRONMENT_VARIABLES + "/" + variableId, sessionToken)
+            .body();
+        assertThat(trailOf(variable)).as("step 8: a variable's trail names its environment bare beneath the project")
+            .containsSubsequence(PREFIX + "webshop", PREFIX + "production")
+            .doesNotContain(PREFIX + "webshop" + EnvironmentModel.PROJECT_SEPARATOR);
+
+        // 9. A member's name opens that person's page for an operator who may open it, and never for a tenant whose
+        //    panel offers no people.
+        assertThat(members.body()).as("step 9: the operator's Members tab links the member to their person page")
+            .contains(CmsRoutes.open(HohenheimSlugs.ADMIN, AuthAdminParts.USERS_SLUG, memberId).toUrl());
+        assertThat(tenantMembers.body()).as("step 9: the tenant's does not")
+            .doesNotContain("/" + AuthAdminParts.USERS_SLUG + "/" + memberId);
     }
 
     private static String projectTab(String panel, String tab) {
