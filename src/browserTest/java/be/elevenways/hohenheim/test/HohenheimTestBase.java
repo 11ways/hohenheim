@@ -119,8 +119,8 @@ public abstract class HohenheimTestBase extends ZenitBrowserTestBase {
 
         sessionToken = seedAuthenticatedAdmin();
 
-        // Endpoint rate limits (deploy/db-io/download) share one JVM-wide
-        // bucket per principal; a full suite would trip them across classes.
+        // Endpoint rate limits (deploy/db-io/download) are exempted here; an operation's own budget is not, and
+        // ZenitBrowserTestBase empties every bucket before each test, so no budget carries over between tests.
         // The dedicated rate-limit test lifts the exemption for its hammer.
         RateLimitExemption.exemptAll();
     }
