@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.common.thread.JobRunnerGroup;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -43,6 +44,9 @@ public final class SecondaryZoneService {
 
     private static final Duration TICK = Duration.ofSeconds(30);
 
+    /** How long {@link #stop} waits for an interrupted transfer to end before it gives up on it. */
+    private static final long STOP_TIMEOUT_MS = 10_000L;
+
     private final DnsZoneStore store;
     private final JobRunner jobs = JobRunner.create("dns-secondary");
     private final Map<Integer, ZoneState> state = new ConcurrentHashMap<>();
@@ -50,6 +54,8 @@ public final class SecondaryZoneService {
     private final Set<Integer> pendingNotifyPulls = ConcurrentHashMap.newKeySet();
 
     private volatile boolean started;
+    /** Set once {@link #stop} began: no refresh starts and no failed transfer is recorded after it. */
+    private volatile boolean stopping;
 
     public SecondaryZoneService(@NonNull DnsZoneStore store) {
         this.store = store;
@@ -111,8 +117,18 @@ public final class SecondaryZoneService {
         }
     }
 
+    /**
+     * Stops replication and returns once no refresh or transfer still runs.
+     *
+     * AIDEV-NOTE: it WAITS: the caller closes the datasource next, and a transfer still running then failed its
+     * zone-row write with "Datasource is required but was null" on every stop. An in-flight transfer is
+     * interrupted, and the failure that interruption causes is not recorded as the zone's transfer error.
+     */
     public void stop() {
-        jobs.shutdownNow();
+        this.stopping = true;
+        if (!jobs.stop(JobRunnerGroup.StopMode.CANCEL, STOP_TIMEOUT_MS)) {
+            Blast.log("DNS: a secondary zone transfer still ran", STOP_TIMEOUT_MS, "ms after the stop");
+        }
     }
 
     /**
@@ -222,6 +238,9 @@ public final class SecondaryZoneService {
     }
 
     private void refreshAllDue() {
+        if (this.stopping) {
+            return;
+        }
         long now = Now.millis();
         for (Row zone : Models.get(DnsZoneModel.class).findSecondaries()) {
             int zoneId = zone.get(DnsZoneModel.ID);
@@ -272,6 +291,10 @@ public final class SecondaryZoneService {
 
             if (!force) {
                 Long remoteSerial = DnsSoaProbe.serial(host.trim(), port, origin);
+                if (this.stopping) {
+                    // The stop interrupted the probe, whose answer it swallows: no stamp, and no transfer starts.
+                    return false;
+                }
                 stampChecked(zone);
                 if (remoteSerial != null && serialNotNewer(remoteSerial, localSerial)
                         && DnsZoneModel.TRANSFER_OK.equals(zone.get(DnsZoneModel.TRANSFER_STATUS))) {
@@ -304,6 +327,10 @@ public final class SecondaryZoneService {
             return true;
         }
         catch (Exception e) {
+            if (this.stopping) {
+                // The stop interrupted it: the zone keeps its last recorded state.
+                return false;
+            }
             expireOrRetry(zone, zs, e.getMessage());
             return false;
         }

@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.async.AsyncFailures;
 import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.common.thread.JobRunnerGroup;
 import be.elevenways.protoblast.common.time.Backoff;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.time.Pace;
@@ -70,6 +71,9 @@ public class AcmeService {
     static final Duration POLL_BUDGET = Duration.ofMinutes(5);
     private static final Backoff POLL = Backoff.fixed(POLL_CADENCE).honouringUpTo(POLL_BUDGET);
     private static final long MANUAL_DNS_ORDER_MINUTES = 30;
+
+    /** How long {@link #stop} waits for an interrupted renewal check to end before it gives up on it. */
+    private static final long STOP_TIMEOUT_MS = 10_000L;
 
     private volatile Pace.Pause pollPause = Pace.Pause.REAL;
 
@@ -211,8 +215,14 @@ public class AcmeService {
         Blast.log("ACME renewal scheduler started (every", RENEWAL_CHECK_HOURS, "hours)");
     }
 
+    /**
+     * Stops renewals and returns once no renewal check still runs: the caller closes the datasource next, which a
+     * check still writing its certificate rows would then fail on.
+     */
     public void stop() {
-        scheduler.shutdownNow();
+        if (!scheduler.stop(JobRunnerGroup.StopMode.CANCEL, STOP_TIMEOUT_MS)) {
+            Blast.log("ACME: a renewal check still ran", STOP_TIMEOUT_MS, "ms after the stop");
+        }
         manualDnsOrders.forEach((token, pending) -> abandonManualDnsOrder(token, pending,
             "Manual DNS challenge interrupted by server shutdown"));
     }

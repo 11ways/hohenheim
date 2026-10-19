@@ -37,7 +37,9 @@ import be.elevenways.hohenheim.server.security.SshAuthWatcher;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.hohenheim.server.stack.StackInstances;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
-import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.common.thread.JobRunnerGroup;
+import be.elevenways.zenit.common.bootstrap.RuntimeJobs;
+import be.elevenways.hohenheim.server.security.BanService;
 import be.elevenways.zenit.auth.AuthSettings;
 import be.elevenways.zenit.auth.server.AuthRegistry;
 import be.elevenways.zenit.auth.server.AuthRequirement;
@@ -54,6 +56,7 @@ import be.elevenways.zenit.server.task.TaskRuntime;
 import be.elevenways.zenit.server.task.TaskService;
 
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Server entry point for Hohenheim.
@@ -63,6 +66,14 @@ public class ServerMain {
     private static ProxyServer proxyServer;
     private static DnsServer dnsServer;
     private static SecondaryZoneService secondaryZoneService;
+    private static final AtomicBoolean SHUT_DOWN = new AtomicBoolean();
+
+    /**
+     * The boot's recovery sweeps: a runtime member, so the runtime's stop lets a sweep still writing its settle
+     * finish before the datasource closes.
+     */
+    private static final JobRunnerGroup.Member BOOT_RECOVERY =
+        RuntimeJobs.GROUP.member("hohenheim-boot-recovery", JobRunnerGroup.StopMode.DRAIN);
 
     public static void main(String[] args) {
         // THE process entry point declares the system identity: the command lines, the boot
@@ -124,12 +135,12 @@ public class ServerMain {
             // a common reason for the restart -- must never hold the proxy, DNS and
             // security engine off the wire for it. A monitor tick racing the sweep
             // is safe: both serialize on the per-stack worker.
-            JobRunner.startVirtualThread(() -> StackRuntime.get().resetInterruptedDeploys());
+            BOOT_RECOVERY.get().fireAndForget(() -> StackRuntime.get().resetInterruptedDeploys());
             // The documented migration of the stack lowering onto instances: a stack whose
             // services own no instances is re-deployed under the contract onto its
             // EXISTING volumes, and its pre-lowering containers are retired one by one
             // (only where the daemon still attributes them to that stack). Idempotent.
-            JobRunner.startVirtualThread(StackInstances::adoptExisting);
+            BOOT_RECOVERY.get().fireAndForget(StackInstances::adoptExisting);
         } else {
             roleSkip(HohenheimRoles.Role.STACKS,
                 "stack runtime not started, interrupted-deploy sweep skipped");
@@ -140,7 +151,7 @@ public class ServerMain {
             // onto its EXISTING data volume rather than being abandoned with a running
             // container nothing tracks. Idempotent, so it is a fast no-op once adopted.
             // Virtual thread: it does live daemon work per record.
-            JobRunner.startVirtualThread(DatabaseInstances::adoptExisting);
+            BOOT_RECOVERY.get().fireAndForget(DatabaseInstances::adoptExisting);
         } else {
             roleSkip(HohenheimRoles.Role.DATABASES,
                 "managed-database adoption skipped, no databases run here");
@@ -164,7 +175,7 @@ public class ServerMain {
             // reads migrate_reserved_mb as truth: run concurrently, its double scan either
             // abstained for the whole boot or corrected a bucket mid-move. Still off the
             // boot thread, like every other daemon-touching settle here.
-            JobRunner.startVirtualThread(() -> {
+            BOOT_RECOVERY.get().fireAndForget(() -> {
                 try {
                     InstanceMigrations.recoverInterrupted();
                 } finally {
@@ -177,8 +188,8 @@ public class ServerMain {
             // payload nothing reclaims. Both settles fence on the process start time,
             // so rows written by THIS process (live operations) are never touched.
             // Virtual threads: both do target/daemon I/O.
-            JobRunner.startVirtualThread(InstanceBackups::recoverInterrupted);
-            JobRunner.startVirtualThread(() -> new InstanceSnapshots().recoverInterrupted());
+            BOOT_RECOVERY.get().fireAndForget(InstanceBackups::recoverInterrupted);
+            BOOT_RECOVERY.get().fireAndForget(() -> new InstanceSnapshots().recoverInterrupted());
             // A controller killed mid-capture or mid-restore leaves the INSTANCE ROW
             // stamped capturing/restoring, and only the in-process outcome paths clear
             // those -- so the record refused deploy, stop, backup and snapshot forever
@@ -186,7 +197,7 @@ public class ServerMain {
             // above; the capture lane settles from daemon truth, an interrupted restore
             // settles to error because the payload may be half-written. Virtual thread:
             // it asks the daemon per record.
-            JobRunner.startVirtualThread(InstanceService::recoverInterrupted);
+            BOOT_RECOVERY.get().fireAndForget(InstanceService::recoverInterrupted);
         } else {
             roleSkip(HohenheimRoles.Role.INSTANCES,
                 "interrupted-migration settle skipped, no instances run here");
@@ -197,7 +208,7 @@ public class ServerMain {
             // never replaced), a half-flipped switch is completed and a lost drain is
             // finished. Virtual thread for the same reason as the stack sweep: it
             // does live daemon work and must never hold the listeners off the wire.
-            JobRunner.startVirtualThread(() -> {
+            BOOT_RECOVERY.get().fireAndForget(() -> {
                 ArtifactDeploys.recoverInterrupted();
                 ReleaseEngine.recoverInterrupted();
             });
@@ -207,7 +218,7 @@ public class ServerMain {
             roleSkip(HohenheimRoles.Role.PROXY,
                 "release recovery skipped, no sites are served here");
         }
-        installShutdownHook();
+        registerShutdown();
         if (HohenheimRoles.enabled(HohenheimRoles.Role.FIREWALL)) {
             // The manager owns its own platform-thread lifecycle lane; never hold
             // HTTP/proxy/DNS startup on its readiness.
@@ -337,22 +348,34 @@ public class ServerMain {
             "skipped", skipped));
     }
 
-    /** Registers cleanup before the first managed child can start. */
-    private static void installShutdownHook() {
-        Runtime.getRuntime().addShutdownHook(new Thread(
-            () -> ExecutionIdentity.runAsSystem(HohenheimSystemPurposes.SHUTDOWN, ServerMain::shutdown),
-            "hohenheim-shutdown"));
+    /**
+     * Hands the shutdown steps to the runtime's own stop, before the first managed child can start.
+     *
+     * AIDEV-NOTE: an OWNED RESOURCE of the runtime, never a JVM shutdown hook of our own. The runtime closes its owned
+     * resources in reverse registration order after its pools ended, and the datasource registered first, so these
+     * steps run (and their workers drain) while it is still open. A hook of our own ran BESIDE the runtime's hook and
+     * lost that race on every stop: the DNS secondary refresh and a proxy reload logged "Datasource is required but
+     * was null".
+     */
+    private static void registerShutdown() {
+        ServerZenitRuntime.registerOwnedResource(
+            () -> ExecutionIdentity.runAsSystem(HohenheimSystemPurposes.SHUTDOWN, ServerMain::shutdown));
     }
 
     /**
-     * Every shutdown step, each one independent of the others.
+     * Every shutdown step, each one independent of the others; a second call does nothing.
      *
      * AIDEV-NOTE: a step that throws is logged and the next one still runs. They used to
      * share one lambda, so a throwing proxy or DNS stop skipped the Spamservice process-group
      * cleanup (a setsid child that outlives the JVM outside systemd), the journalctl follow
-     * and the host lease hand-back.
+     * and the host lease hand-back. The ingress stops first, then what it feeds (the ban
+     * writer), then the workers, and the host leases go back last: every step that writes
+     * the database runs before the runtime closes it.
      */
     static void shutdown() {
+        if (!SHUT_DOWN.compareAndSet(false, true)) {
+            return;
+        }
         shutdownStep("proxy listeners", () -> {
             if (proxyServer != null) {
                 proxyServer.stop();
@@ -372,9 +395,23 @@ public class ServerMain {
         shutdownStep("spamservice", () -> SpamserviceManager.get().shutdown());
         // Destroy the journalctl child; a leaked follow survives the JVM.
         shutdownStep("ssh auth watcher", SshAuthWatcher.INSTANCE::stop);
+        // The automatic bans the stopped listeners and watcher queued are written now, not after the close.
+        shutdownStep("ban writer", ServerMain::drainBanWriter);
+        if (HohenheimRoles.enabled(HohenheimRoles.Role.STACKS)) {
+            shutdownStep("stack workers", () -> StackRuntime.get().stopWorkers());
+        }
         // Hand the host leases back so a successor controller does not have to
         // wait out the TTL; a crash still recovers through expiry.
         shutdownStep("host leases", () -> HostLeases.production().releaseAll());
+    }
+
+    private static void drainBanWriter() {
+        try {
+            BanService.INSTANCE.awaitPendingWrites();
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("interrupted while the ban writer drained", interrupted);
+        }
     }
 
     /** Run one shutdown step, logging instead of propagating whatever it throws. */

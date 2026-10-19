@@ -19,7 +19,8 @@ import be.elevenways.hohenheim.server.cms.TenantScopes;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.common.thread.JobRunnerGroup;
+import be.elevenways.zenit.common.bootstrap.RuntimeJobs;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -67,8 +68,12 @@ import java.util.Objects;
  */
 public final class InstanceTemplateHandlers {
 
-    /** Background installs run here; the durable install_state is the progress record. */
-    private static final JobRunner INSTALL_RUNNER = JobRunner.create("hh-template-install");
+    /**
+     * Background installs run here; the durable install_state is the progress record. A runtime member, so the
+     * runtime's stop interrupts an install still running and waits for it before the datasource closes.
+     */
+    private static final JobRunnerGroup.Member INSTALL_RUNNER =
+        RuntimeJobs.GROUP.member("hh-template-install", JobRunnerGroup.StopMode.CANCEL);
 
     /** The templates a caller may create from: every operation over one selected template reads through it. */
     private static final RecordSource<InstanceTemplateModel> SELECTABLE_TEMPLATES =
@@ -248,7 +253,7 @@ public final class InstanceTemplateHandlers {
         int instanceId = new InstanceTemplates().createFromTemplate(template, Objects.requireNonNull(call.input()),
             call.access());
         if (InstanceTemplates.hasInstallStep(template)) {
-            INSTALL_RUNNER.startVirtualThread(() -> ExecutionIdentity.runAsSystem(
+            INSTALL_RUNNER.get().fireAndForget(() -> ExecutionIdentity.runAsSystem(
                 HohenheimSystemPurposes.TEMPLATE_INSTALL, () -> {
                 try {
                     new InstanceInstalls().install(instanceId);

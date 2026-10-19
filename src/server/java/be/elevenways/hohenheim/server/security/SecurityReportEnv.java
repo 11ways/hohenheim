@@ -2,7 +2,8 @@ package be.elevenways.hohenheim.server.security;
 
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.common.thread.JobRunnerGroup;
+import be.elevenways.zenit.common.bootstrap.RuntimeJobs;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.protoblast.common.time.Backoff;
 import be.elevenways.protoblast.common.time.Now;
@@ -62,9 +63,11 @@ public final class SecurityReportEnv {
     }
 
     private static final Provisioner DEFAULT_PROVISIONER = SecurityReportEnv::ensureViaSpamservice;
-    private static final JobRunner RETRIES = JobRunner.create("security-report-provisioning");
+    /** A runtime member: the runtime's stop drains a provisioning still reading a site row before the datasource closes. */
+    private static final JobRunnerGroup.Member RETRIES =
+        RuntimeJobs.GROUP.member("security-report-provisioning", JobRunnerGroup.StopMode.DRAIN);
     private static final RetryScheduler DEFAULT_RETRY_SCHEDULER =
-        (task, delayMs) -> RETRIES.schedule(task, delayMs);
+        (task, delayMs) -> RETRIES.get().schedule(task, delayMs);
     private static volatile Provisioner provisioner = DEFAULT_PROVISIONER;
     private static volatile RetryScheduler retryScheduler = DEFAULT_RETRY_SCHEDULER;
     private static volatile Supplier<String> baseUrlSource = () -> SpamserviceManager.get().reportingBaseUrl();
@@ -166,7 +169,7 @@ public final class SecurityReportEnv {
 
     /** Re-provisions every persisted site reporter after a managed runtime generation becomes ready. */
     public static void reconcilePersistedReporters() {
-        RETRIES.fireAndForget(() -> {
+        RETRIES.get().fireAndForget(() -> {
             for (Row site : Models.get(SiteModel.class).find()
                     .where(SiteModel.SECURITY_REPORT_TOKEN.isNotNull()).all()) {
                 Integer siteId = site.get(SiteModel.ID);

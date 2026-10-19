@@ -17,6 +17,7 @@ import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.common.thread.JobRunnerGroup;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.time.Pace;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
@@ -76,6 +77,9 @@ public class StackRuntime {
     private static final String REASON_ROLLBACK = "rollback";
 
     private static final StackRuntime INSTANCE = new StackRuntime();
+
+    /** How long {@link #stopWorkers} waits for one interrupted worker to end. */
+    private static final long WORKER_STOP_TIMEOUT_MS = 10_000L;
 
     private final ConcurrentHashMap<Integer, JobRunner> workers = new ConcurrentHashMap<>();
 
@@ -965,6 +969,25 @@ public class StackRuntime {
         // so a lane per ever-touched stack id costs next to nothing, and a daemon one never
         // holds the JVM open.
         return workers.computeIfAbsent(stackId, id -> JobRunner.createDaemonSerial("stack-" + id));
+    }
+
+    /**
+     * Interrupts every stack's worker and waits for each, so no deploy still writes once the runtime closes the
+     * datasource; idempotent.
+     *
+     * AIDEV-NOTE: an interrupted deploy is what a crash leaves behind, and the next boot's resetInterruptedDeploys
+     * sweep settles it. A lane asked for afterwards is a fresh one: the stop is the process's last.
+     */
+    public void stopWorkers() {
+        for (JobRunner worker : workers.values()) {
+            worker.shutdown(JobRunnerGroup.StopMode.CANCEL);
+        }
+        for (Map.Entry<Integer, JobRunner> worker : workers.entrySet()) {
+            if (!worker.getValue().stop(JobRunnerGroup.StopMode.CANCEL, WORKER_STOP_TIMEOUT_MS)) {
+                Blast.log("STACKS: the worker of stack", worker.getKey(), "still ran",
+                    WORKER_STOP_TIMEOUT_MS, "ms after the stop");
+            }
+        }
     }
 
     /** A scoped body that may fail the way the daemon work it wraps fails. */

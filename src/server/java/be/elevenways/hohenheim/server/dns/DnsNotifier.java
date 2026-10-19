@@ -3,7 +3,8 @@ package be.elevenways.hohenheim.server.dns;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.common.thread.JobRunnerGroup;
+import be.elevenways.zenit.common.bootstrap.RuntimeJobs;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -30,7 +31,12 @@ public final class DnsNotifier {
 
     public static final DnsNotifier INSTANCE = new DnsNotifier();
 
-    private final JobRunner jobs = JobRunner.create("dns-notify");
+    /**
+     * The NOTIFY lane: a runtime member, so the runtime's stop drains a NOTIFY still reading its zone before the
+     * datasource closes.
+     */
+    private static final JobRunnerGroup.Member JOBS =
+        RuntimeJobs.GROUP.member("dns-notify", JobRunnerGroup.StopMode.DRAIN);
 
     /**
      * Asynchronously NOTIFY every secondary linked to the zone about {@code serial}.
@@ -40,7 +46,7 @@ public final class DnsNotifier {
      * read the pre-commit serial for every CMS edit; see DnsZoneStore.bumpSerialAndReload.
      */
     public void notifyZonePeers(int zoneId, long serial) {
-        jobs.fireAndForget(() -> notifyZonePeersBlocking(zoneId, serial));
+        JOBS.get().fireAndForget(() -> notifyZonePeersBlocking(zoneId, serial));
     }
 
     public void notifyZonePeersBlocking(int zoneId, long serial) {

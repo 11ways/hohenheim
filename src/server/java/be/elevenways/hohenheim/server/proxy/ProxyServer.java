@@ -108,6 +108,13 @@ public class ProxyServer {
     private volatile boolean httpDownAlertSent;
     private volatile boolean httpsDownAlertSent;
     private volatile LongSupplier clock = Now::millis;
+    /**
+     * Set by {@link #stop()} until the next {@link #start()}: a reload or a supervision pass after the stop changes
+     * nothing. AIDEV-NOTE: a write landing during the shutdown (its after-commit reload) used to read the routes from a
+     * datasource the runtime was closing, and with certificates present the reload restarted the HTTPS listener the
+     * stop had just closed.
+     */
+    private volatile boolean stopped;
 
     private static final int IO_THREADS = Math.max(2, Runtime.getRuntime().availableProcessors());
 
@@ -197,6 +204,7 @@ public class ProxyServer {
      * Never throws -- the admin UI must remain operational.
      */
     public synchronized void start() {
+        stopped = false;
         try {
             loadCertificatesAndRoutes();
             dispatcher.setHttpsAvailable(false);
@@ -513,6 +521,7 @@ public class ProxyServer {
     }
 
     public synchronized void stop() {
+        stopped = true;
         acmeService.stop();
         stopHttpResources();
         stopHttpsResources();
@@ -539,6 +548,9 @@ public class ProxyServer {
      * reload means something actually changed, so the restart backoff does not apply.
      */
     public synchronized void reload() {
+        if (stopped) {
+            return;
+        }
         try {
             reloadListeners(false);
         } finally {
@@ -554,6 +566,9 @@ public class ProxyServer {
      * bind + SSLContext work in the start paths) is only taken when a restart is due.
      */
     public void superviseListeners() {
+        if (stopped) {
+            return;
+        }
         long now = clock.getAsLong();
         boolean httpDue = httpState == State.FAILED && now >= httpNextRestartAttemptAt;
         boolean httpsDue = (httpsState == State.FAILED
