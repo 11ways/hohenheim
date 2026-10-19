@@ -35,7 +35,7 @@
                     {#- The kind badge is neutral on purpose: a green "Allowed network" pill
                         read as "this rule is on", which is the one thing it never said. The
                         state is the pill beside it, which names BOTH states. -#}
-                    <pl-badge variant="outline"><pl-icon name={% rule.iconName %} size="sm"></pl-icon> {{ rule.typeLabel }}</pl-badge>
+                    <pl-badge variant="outline" icon={% rule.iconName %}>{{ rule.typeLabel }}</pl-badge>
                     <span class="hh-rule-summary">{{ rule.summary }}</span>
                     <span class="hh-rule-state" data-rule-state={% rule.enabledBadge.key %}>
                         {% render "zenitcms:cell/enum-badge" var:value=rule.enabledBadge %}

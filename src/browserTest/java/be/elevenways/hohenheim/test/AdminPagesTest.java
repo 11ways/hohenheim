@@ -375,9 +375,9 @@ class AdminPagesTest extends HohenheimTestBase {
         var heading = page.locator(".cms-activity-detail-heading");
         assertThat(heading.locator(":scope > h1").count()).isEqualTo(1);
         assertThat(heading.locator(":scope > h1 + pl-badge[data-activity-verb]").count()).isEqualTo(1);
-        assertThat(heading.locator("pl-badge[data-activity-verb] > pl-icon[data-activity-icon]").count())
+        assertThat(heading.locator("pl-badge[data-activity-verb] > pl-icon.leading").count())
             .isEqualTo(1);
-        assertThat(heading.locator(":scope > pl-icon[data-activity-icon]").count()).isZero();
+        assertThat(heading.locator(":scope > pl-icon").count()).isZero();
     }
 
     // -----------------------------------------------------------------------
