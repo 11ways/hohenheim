@@ -203,15 +203,25 @@ public final class GeneratedRows {
             }
         });
         schema.addBeforeRemoveHook(context -> {
-            if (inSystemScope()) {
-                return;
+            // Checked first so a scoped removal never loads its doomed rows.
+            if (!inSystemScope()) {
+                context.eachDoomedRow(doomed -> requireRemovable(columns, doomed, readOnlyKey));
             }
-            context.eachDoomedRow(doomed -> {
-                if (doomed.get(columns.by()) != null) {
-                    throw readOnly(columns, doomed, readOnlyKey);
-                }
-            });
         });
+    }
+
+    /**
+     * THE removal rule the guards apply, for a caller that must refuse BEFORE side effects
+     * the guarded removal would come too late to undo: a generated row goes only inside a
+     * system scope.
+     *
+     * @throws Violations {@code readOnlyKey} when {@code stored} is generated and no scope is active
+     */
+    public static void requireRemovable(@NonNull Columns columns, @NonNull Row stored,
+                                        @NonNull String readOnlyKey) {
+        if (!inSystemScope() && stored.get(columns.by()) != null) {
+            throw readOnly(columns, stored, readOnlyKey);
+        }
     }
 
     private static @NonNull Violations readOnly(@NonNull Columns columns, @NonNull Row stored,

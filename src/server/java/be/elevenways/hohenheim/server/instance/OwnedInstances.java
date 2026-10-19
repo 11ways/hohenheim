@@ -48,6 +48,11 @@ public final class OwnedInstances {
     private OwnedInstances() {
     }
 
+    private static final GeneratedRows.Columns COLUMNS = new GeneratedRows.Columns(InstanceModel.GENERATED_BY,
+        InstanceModel.GENERATED_FOR_MODEL, InstanceModel.GENERATED_FOR_ID, InstanceModel.GENERATED_AT);
+
+    private static final String READ_ONLY_KEY = "instance_generated_readonly";
+
     /**
      * Install the ownership funnel on the instance write pipeline (MODULES stage): the
      * GeneratedRows attribution guard plus the generated-only kind refusal. Idempotent,
@@ -58,11 +63,8 @@ public final class OwnedInstances {
             return;
         }
         installed = true;
-        GeneratedRows.installGuards(InstanceModel.SCHEMA, InstanceModel.class,
-            new GeneratedRows.Columns(InstanceModel.GENERATED_BY,
-                InstanceModel.GENERATED_FOR_MODEL, InstanceModel.GENERATED_FOR_ID,
-                InstanceModel.GENERATED_AT),
-            "instance_generated_readonly", "instance_generated_attribution");
+        GeneratedRows.installGuards(InstanceModel.SCHEMA, InstanceModel.class, COLUMNS,
+            READ_ONLY_KEY, "instance_generated_attribution");
         InstanceModel.SCHEMA.addBeforeValidateHook(context -> {
             Row row = context.getRow();
             if (row == null || GeneratedRows.inSystemScope()) {
@@ -76,6 +78,16 @@ public final class OwnedInstances {
             // changed runtime stays deletable.
             requireHostRuntime(row);
         });
+    }
+
+    /**
+     * Refuse removing a generated instance outside its owner's scope, by the guard's own rule,
+     * before a destroy touches its workload: the trash write's refusal comes after the teardown.
+     *
+     * @throws Violations {@code instance_generated_readonly}
+     */
+    public static void requireRemovable(@NonNull Row instance) {
+        GeneratedRows.requireRemovable(COLUMNS, instance, READ_ONLY_KEY);
     }
 
     /**

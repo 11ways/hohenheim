@@ -44,6 +44,7 @@ import be.elevenways.zenit.common.orm.lease.Lease;
 import be.elevenways.zenit.common.orm.lease.Leases;
 import be.elevenways.protoblast.testsupport.thread.Racers;
 import be.elevenways.protoblast.testsupport.time.Poll;
+import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -435,6 +436,35 @@ class InstanceOperationSerializationTest {
                 .delete(), "step 4: the delete is refused");
             assertThat(stateOf(live)).as("step 4: the owned record is untouched")
                 .startsWith("live ");
+        });
+    }
+
+    /**
+     * A fresh destroy of an owned record outside its owner's scope is refused by the ownership guard's own rule BEFORE
+     * any runtime work, so the record never stays live with its workload gone; inside the owner's scope it destroys.
+     */
+    @Test
+    void anUnscopedFreshDestroyOfAnOwnedRecordIsRefusedBeforeItsWorkloadIsTouched() {
+        Db.run(datasource, () -> {
+            int id = BackupLaneFixture.instanceRecord("destroy-owned-unscoped", hostId);
+            new InstanceService().deploy(id);
+            int ownerId = 9_100_000 + id;
+            attributeTo(id, DatabaseInstances.SOURCE, DatabaseModel.MODEL_ID, ownerId);
+            String handle = FakeNativeDaemons.handleOf(id);
+
+            // 1. Unscoped, the destroy is refused by the ownership code and never asks the runtime for anything.
+            assertGeneratedReadonly(() -> new InstanceService().destroy(id), "step 1: the unscoped destroy is refused");
+            assertThat(FakeNativeDaemons.DESTROY_CALLS.getOrDefault(handle, 0))
+                .as("step 1: no runtime destroy was made").isZero();
+            assertThat(FakeNativeDaemons.daemonOf(hostId)).as("step 1: the workload still exists").containsKey(handle);
+            assertThat(stateOf(id)).as("step 1: the record stays live").startsWith("live ");
+
+            // 2. Inside the owner's scope the same destroy tears the workload down and trashes the record.
+            OwnedInstances.inScopeUnchecked(DatabaseInstances.SOURCE, DatabaseModel.MODEL_ID, ownerId,
+                () -> new InstanceService().destroy(id));
+            assertThat(FakeNativeDaemons.DESTROY_CALLS.get(handle)).as("step 2: one runtime destroy").isEqualTo(1);
+            assertThat(FakeNativeDaemons.daemonOf(hostId)).as("step 2: the workload is gone").doesNotContainKey(handle);
+            assertThat(stateOf(id)).as("step 2: trashed and stopped").isEqualTo("trashed " + InstanceModel.STATUS_STOPPED);
         });
     }
 

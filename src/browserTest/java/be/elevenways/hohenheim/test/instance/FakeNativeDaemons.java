@@ -247,6 +247,9 @@ final class FakeNativeDaemons {
      */
     static final AtomicReference<Runnable> DURING_START = new AtomicReference<>();
 
+    /** handle -> how many times a runtime was asked to destroy it, so a refusal can prove it touched nothing. */
+    static final Map<String, Integer> DESTROY_CALLS = new ConcurrentHashMap<>();
+
     // -- the install lane -----------------------------------------------------
 
     /**
@@ -432,6 +435,7 @@ final class FakeNativeDaemons {
 
         @Override
         public void destroy(@NonNull String handle) {
+            DESTROY_CALLS.merge(handle, 1, Integer::sum);
             this.daemon.remove(handle);
         }
 

@@ -527,6 +527,12 @@ public final class InstanceService {
         // Through the SHARED resolver, so the panel's dead Delete and this refusal are one
         // decision with one text (HohenheimAccess.destroyUnavailableReason).
         HohenheimAccess.requireDestroyPermitted(instanceId);
+        // Ownership BEFORE any teardown, by the attribution guard's own rule: the staged trash
+        // would refuse an owned record outside its owner's scope only after its workload is gone.
+        Row stored = liveRow(instanceId);
+        if (stored != null) {
+            OwnedInstances.requireRemovable(stored);
+        }
         if (releaseManaged(instanceId)) {
             ApplicationReleases.destroyFor(instanceId, policy);
             GitCheckout.discard(InstanceModel.MODEL_ID, instanceId);
