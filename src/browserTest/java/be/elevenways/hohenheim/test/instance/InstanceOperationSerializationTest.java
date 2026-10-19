@@ -1,9 +1,14 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.server.database.DatabaseService;
+import be.elevenways.hohenheim.server.database.DatabaseEngines;
 import be.elevenways.hohenheim.server.database.DatabaseWrites;
-import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.test.database.EngineHandles;
+import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
+import be.elevenways.zenit.test.support.DatasourceProbe;
+import java.util.function.Consumer;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.AttentionSubject;
@@ -736,25 +741,19 @@ class InstanceOperationSerializationTest {
     /**
      * A move onto a shared engine that could not destroy the old dedicated engine leaves it held under a database that
      * is live on the shared engine: its Delete would drop that live database, so the dashboard routes to the
-     * database's own "finish removing the old engine" action, which retries only the leftover. The move's automatic
-     * cleanup keeps its budget.
+     * database's own "finish removing the old engine" action, which retries only the leftover and never asks the
+     * serving shared engine for anything. The move's automatic cleanup keeps its budget.
      */
     @Test
     void aSharedDatabasesOldEngineIsFinishedByItsOwnActionAndTheDatabaseSurvives() {
         int leftoverId = leftDestroying("destroy-held-old-engine");
         AtomicInteger attempts = new AtomicInteger();
         InstanceService failingEnds = failingEnds(new AtomicBoolean(true), attempts);
-        Db.run(datasource, () -> {
-            // 1. The database moved onto a shared engine (the switch runMove writes); the old engine's destroy was
-            //    left unfinished, carried the stoppage from an earlier controller, and failed once here: held.
-            DatabaseService databases = new DatabaseService();
-            Row database = databases.insertRecord("moved-db", ManagedDatabase.Engine.POSTGRES, null, "app", "pw",
-                "app", false, ServerService.LOCAL_HOST_NAME, ResourceLimits.none(), DatabaseModel.STATUS_ACTIVE,
-                DatabaseModel.PLACEMENT_DEDICATED, null);
-            int databaseId = database.get(DatabaseModel.ID);
-            Models.get(DatabaseModel.class).find().where(DatabaseModel.ID.eq(databaseId))
-                .assign(DatabaseModel.PLACEMENT, DatabaseModel.PLACEMENT_SHARED)
-                .updateAll();
+        onFakeLocalDocker(docker -> Db.run(datasource, () -> {
+            // 1. The database moved onto a serving shared engine; the old engine's destroy was left unfinished,
+            //    carried the stoppage from an earlier controller, and failed once here: held.
+            Row engine = servingSharedEngine("old-engine-shared");
+            int databaseId = databaseRecord("moved-db", engine);
             heldFor(leftoverId, DatabaseInstances.SOURCE, DatabaseModel.MODEL_ID, databaseId, failingEnds);
             assertThat(attempts.get()).as("step 1: one automatic attempt, then held").isEqualTo(1);
             Row moved = Models.get(DatabaseModel.class).findById(databaseId);
@@ -778,10 +777,15 @@ class InstanceOperationSerializationTest {
             assertThat(stateOf(leftoverId)).as("step 3: still destroying")
                 .isEqualTo("live " + InstanceModel.STATUS_DESTROYING);
 
-            // 4. The action finishes the leftover; the database stays live and shared, and the action no longer applies.
+            // 4. The action finishes the leftover; the database stays live and shared, the shared engine is never
+            //    asked to drop it, remove its user or remove its data, and the action no longer applies.
             DatabaseWrites.finishOldEngine(moved);
             assertThat(stateOf(leftoverId)).as("step 4: the old engine is trashed and stopped")
                 .isEqualTo("trashed " + InstanceModel.STATUS_STOPPED);
+            assertThat(docker.callCount(execOn(engine)))
+                .as("step 4: no logical drop or user removal ran on the shared engine").isZero();
+            assertThat(docker.callCount(volumeRemovalOf(engine)))
+                .as("step 4: the shared engine's data volume stays").isZero();
             Row survivor = Models.get(DatabaseModel.class).findById(databaseId);
             assertThat(survivor).as("step 4: the database survives").isNotNull();
             assertThat((String) survivor.get(DatabaseModel.STATUS)).as("step 4: still active")
@@ -790,7 +794,214 @@ class InstanceOperationSerializationTest {
             assertThat(DatabaseInstances.holdOldEngines(List.of(survivor))).as("step 4: nothing left to finish")
                 .containsExactly(false);
             Models.get(DatabaseModel.class).find().where(DatabaseModel.ID.eq(databaseId)).delete();
+        }));
+    }
+
+    /**
+     * A shared database's Delete finishes the old engine it still owns BEFORE it drops anything: while that finish
+     * fails the shared engine is never asked to drop the live database and the record stays; once the finish succeeds
+     * the Delete reaches the shared engine, which shows the fixture records a drop when there is one.
+     */
+    @Test
+    void aSharedDeleteWhoseOldEngineFinishFailsDropsNothingAndKeepsTheRecord() {
+        int leftoverId = leftDestroying("destroy-held-delete-engine");
+        InstanceService failingEnds = failingEnds(new AtomicBoolean(true), new AtomicInteger());
+        onFakeLocalDocker(docker -> Db.run(datasource, () -> {
+            // 1. A database moved onto a serving shared engine still owns its held old engine.
+            Row engine = servingSharedEngine("delete-engine-shared");
+            int databaseId = databaseRecord("moved-delete-db", engine);
+            heldFor(leftoverId, DatabaseInstances.SOURCE, DatabaseModel.MODEL_ID, databaseId, failingEnds);
+
+            // 2. Another controller holds the old engine's claim, so the Delete cannot finish it and fails.
+            Lease rivalClaim = Leases.independent(datasource).acquire(InstanceOperationLock.KEY_PREFIX + leftoverId, 0);
+            assertThat(rivalClaim).as("step 2: the rival holds the old engine").isNotNull();
+            try {
+                assertThatThrownBy(() -> DatabaseWrites.destroy(Models.get(DatabaseModel.class).findById(databaseId)))
+                    .as("step 2: the Delete fails").isInstanceOf(Violations.class);
+            } finally {
+                rivalClaim.release();
+            }
+            assertThat(docker.callCount(execOn(engine)))
+                .as("step 2: the live logical database and its user were never dropped").isZero();
+            Row kept = Models.get(DatabaseModel.class).findById(databaseId);
+            assertThat(kept).as("step 2: the record is kept").isNotNull();
+            assertThat((String) kept.get(DatabaseModel.STATUS)).as("step 2: marked as a failed destroy")
+                .isEqualTo(DatabaseModel.STATUS_DESTROY_FAILED);
+            assertThat(stateOf(leftoverId)).as("step 2: the old engine is still destroying")
+                .isEqualTo("live " + InstanceModel.STATUS_DESTROYING);
+
+            // 3. With the claim free the Delete finishes the old engine and only then asks the shared engine to drop;
+            //    this fake daemon answers no exec, so the drop is unconfirmed and the record kept, but it was asked.
+            assertThatThrownBy(() -> DatabaseWrites.destroy(Models.get(DatabaseModel.class).findById(databaseId)))
+                .as("step 3: the fake engine cannot confirm the drop").isInstanceOf(Violations.class);
+            assertThat(stateOf(leftoverId)).as("step 3: the old engine is trashed and stopped")
+                .isEqualTo("trashed " + InstanceModel.STATUS_STOPPED);
+            assertThat(docker.callCount(execOn(engine))).as("step 3: the drop reached the shared engine once")
+                .isEqualTo(1);
+            assertThat(docker.callCount(volumeRemovalOf(engine))).as("step 3: the shared data volume stays")
+                .isZero();
+            assertThat(Models.get(DatabaseModel.class).findById(databaseId)).as("step 3: the record is kept")
+                .isNotNull();
+            Models.get(DatabaseModel.class).find().where(DatabaseModel.ID.eq(databaseId)).delete();
+        }));
+    }
+
+    /**
+     * The automatic cleanup can end the old engine after the action read it and before the action claims it: the
+     * action then meets no record to claim, and since a fresh read finds the old engine ended, it reports success.
+     */
+    @Test
+    void anOldEngineFinishOvertakenByTheAutomaticCleanupSucceeds() {
+        int leftoverId = leftDestroying("destroy-raced-old-engine");
+        onFakeLocalDocker(docker -> Db.run(datasource, () -> {
+            int databaseId = databaseRecord("raced-db", sharedEngine("raced-engine-shared"));
+            attributeTo(leftoverId, DatabaseInstances.SOURCE, DatabaseModel.MODEL_ID, databaseId);
+            Row moved = Models.get(DatabaseModel.class).findById(databaseId);
+            AtomicReference<String> inWindow = new AtomicReference<>();
+
+            // 1. The action's teardown reads the old engine; before it claims it, the move's automatic cleanup (the
+            //    same teardown under the automatic policy, inside the owner's scope) ends it.
+            assertThatCode(() -> DatabaseInstances.destroyFor(EngineHost.dedicated(moved), false,
+                    UnfinishedDestroys.Policy.REQUESTED, () -> {
+                        unchecked(() -> DatabaseInstances.destroyFor(moved, false));
+                        inWindow.set(stateOf(leftoverId));
+                    }))
+                .as("step 1: the action reports success").doesNotThrowAnyException();
+            assertThat(inWindow.get()).as("step 1: the automatic cleanup ended the old engine inside the window")
+                .isEqualTo("trashed " + InstanceModel.STATUS_STOPPED);
+
+            // 2. The database is untouched and nothing is left to finish.
+            Row survivor = Models.get(DatabaseModel.class).findById(databaseId);
+            assertThat((String) survivor.get(DatabaseModel.STATUS)).as("step 2: still active")
+                .isEqualTo(DatabaseModel.STATUS_ACTIVE);
+            assertThat(DatabaseInstances.holdOldEngines(List.of(survivor))).as("step 2: nothing left to finish")
+                .containsExactly(false);
+            Models.get(DatabaseModel.class).find().where(DatabaseModel.ID.eq(databaseId)).delete();
+        }));
+    }
+
+    /** Which databases of a page offer the old-engine action is one read, however many rows the page holds. */
+    @Test
+    void theOldEngineActionOfAPageIsDecidedInOneRead() {
+        int firstLeftover = leftDestroying("destroy-page-old-engine-1");
+        int secondLeftover = leftDestroying("destroy-page-old-engine-2");
+        InstanceService failingEnds = failingEnds(new AtomicBoolean(true), new AtomicInteger());
+        Db.run(datasource, () -> {
+            Row engine = sharedEngine("page-engine-shared");
+            List<Integer> ids = new ArrayList<>();
+
+            // 1. A page of two: a shared database whose old engine is held, and a dedicated one.
+            ids.add(databaseRecord("page-held-1", engine));
+            heldFor(firstLeftover, DatabaseInstances.SOURCE, DatabaseModel.MODEL_ID, ids.get(0), failingEnds);
+            ids.add(databaseRecord("page-dedicated-1", null));
+            DatasourceProbe probe = DatasourceProbe.on(datasource);
+            DatabaseInstances.holdOldEngines(page(ids));
+            List<Row> two = page(ids);
+            probe.reset();
+            assertThat(DatabaseInstances.holdOldEngines(two)).as("step 1: only the held one applies")
+                .containsExactly(true, false);
+            int instanceReads = probe.queriesAgainst(InstanceModel.MODEL_ID);
+            int roundTrips = probe.roundTrips();
+
+            // 2. Twice the rows, another held one and a shared one with no old engine among them: the same reads.
+            ids.add(databaseRecord("page-held-2", engine));
+            heldFor(secondLeftover, DatabaseInstances.SOURCE, DatabaseModel.MODEL_ID, ids.get(2), failingEnds);
+            ids.add(databaseRecord("page-clean", engine));
+            List<Row> four = page(ids);
+            probe.reset();
+            assertThat(DatabaseInstances.holdOldEngines(four)).as("step 2: each answered in order")
+                .containsExactly(true, false, true, false);
+            assertThat(probe.queriesAgainst(InstanceModel.MODEL_ID)).as("step 2: one instance read for any page")
+                .isEqualTo(instanceReads).isEqualTo(1);
+            assertThat(probe.roundTrips()).as("step 2: no round trip per row").isEqualTo(roundTrips);
+            Models.get(DatabaseModel.class).find().where(DatabaseModel.ID.in(ids)).delete();
         });
+    }
+
+    /** The database rows of a page, in order. */
+    private static List<Row> page(List<Integer> ids) {
+        List<Row> rows = new ArrayList<>();
+        for (int id : ids) {
+            rows.add(Models.get(DatabaseModel.class).findById(id));
+        }
+        return rows;
+    }
+
+    /** Runs {@code journey} with the local host's Docker daemon faked, so every call to it is recorded. */
+    private static void onFakeLocalDocker(Consumer<FakeDockerDaemon> journey) {
+        FakeDockerDaemon daemon = new FakeDockerDaemon();
+        DockerClient.overrideLocalTransportForTest(() -> daemon);
+        try {
+            journey.accept(daemon);
+        } finally {
+            DockerClient.overrideLocalTransportForTest(null);
+            daemon.close();
+        }
+    }
+
+    /** A shared engine row on the local host that owns no instance. */
+    private static Row sharedEngine(String name) {
+        Row engine = Models.get(DatabaseEngineModel.class).createEmptyRow();
+        engine.set(DatabaseEngineModel.NAME, name);
+        engine.set(DatabaseEngineModel.ENGINE, DatabaseModel.ENGINE_POSTGRES);
+        engine.set(DatabaseEngineModel.SERVER_ID, ServerModel.localServerId());
+        engine.set(DatabaseEngineModel.ROOT_USER, "root");
+        engine.set(DatabaseEngineModel.ROOT_PASSWORD, "shared-root-pw");
+        engine.set(DatabaseEngineModel.STATUS, DatabaseModel.STATUS_ACTIVE);
+        Models.get(DatabaseEngineModel.class).save(engine);
+        return engine;
+    }
+
+    /**
+     * A shared engine that SERVES: its owned instance is deployed and answers running, while its logical-database
+     * commands and volume removals go to the local host's daemon, which a test fakes ({@link #onFakeLocalDocker}).
+     */
+    private static Row servingSharedEngine(String name) {
+        int instanceId = BackupLaneFixture.instanceRecord(name + "-instance", hostId);
+        new InstanceService().deploy(instanceId);
+        Row engine = sharedEngine(name);
+        attributeTo(instanceId, DatabaseEngines.SOURCE, DatabaseEngineModel.MODEL_ID,
+            engine.get(DatabaseEngineModel.ID));
+        assertThat(DatabaseInstances.liveStatus(EngineHost.ofEngine(engine)).running())
+            .as("the shared engine serves").isTrue();
+        return engine;
+    }
+
+    /** A database record on the local host: dedicated without an engine, a logical database on it with one. */
+    private static int databaseRecord(String name, @Nullable Row engine) {
+        String identifier = name.replace('-', '_');
+        Row row = Models.get(DatabaseModel.class).createEmptyRow();
+        row.set(DatabaseModel.NAME, name);
+        row.set(DatabaseModel.ENGINE, DatabaseModel.ENGINE_POSTGRES);
+        row.set(DatabaseModel.DB_NAME, identifier);
+        row.set(DatabaseModel.DB_USER, identifier);
+        row.set(DatabaseModel.DB_PASSWORD, "database-pw");
+        row.set(DatabaseModel.SERVER_ID, ServerModel.localServerId());
+        row.set(DatabaseModel.PLACEMENT, engine == null
+            ? DatabaseModel.PLACEMENT_DEDICATED : DatabaseModel.PLACEMENT_SHARED);
+        row.set(DatabaseModel.ENGINE_ID, engine == null ? null : engine.get(DatabaseEngineModel.ID));
+        row.set(DatabaseModel.STATUS, DatabaseModel.STATUS_ACTIVE);
+        Models.get(DatabaseModel.class).save(row);
+        return row.get(DatabaseModel.ID);
+    }
+
+    /** The exec a logical-database command (a drop, a user removal) asks of the engine's container. */
+    private static String execOn(Row engine) {
+        return "api:POST /containers/" + EngineHandles.ofEngine(engine) + "/exec";
+    }
+
+    /** The removal of the shared engine's data volume. */
+    private static String volumeRemovalOf(Row engine) {
+        return "api:DELETE /volumes/" + EngineHost.ofEngine(engine).dataVolume();
+    }
+
+    /** Attributes an instance record to an owning tier's record, as that tier's generated rows carry it. */
+    private static void attributeTo(int id, String source, Identifier ownerModel, int ownerId) {
+        Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(id))
+            .assign(InstanceModel.GENERATED_BY, source)
+            .assign(InstanceModel.GENERATED_FOR_MODEL, ownerModel.toString())
+            .assign(InstanceModel.GENERATED_FOR_ID, ownerId)
+            .updateAll();
     }
 
     /**
@@ -799,10 +1010,8 @@ class InstanceOperationSerializationTest {
      */
     private static void heldFor(int id, String source, Identifier ownerModel, int ownerId,
                                 InstanceService failingEnds) {
+        attributeTo(id, source, ownerModel, ownerId);
         Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(id))
-            .assign(InstanceModel.GENERATED_BY, source)
-            .assign(InstanceModel.GENERATED_FOR_MODEL, ownerModel.toString())
-            .assign(InstanceModel.GENERATED_FOR_ID, ownerId)
             .assign(InstanceModel.STOPPAGE_CAUSE, HohenheimActivityAction.DESTROY_UNFINISHED.id().getPath())
             .updateAll();
         new InstanceStatusReconciler(failingEnds).reconcile(id);

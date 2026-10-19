@@ -88,6 +88,9 @@ public final class InstanceOperationLock {
     private static final LeaseKeys KEYS = InstanceOperations.KEYS;
     public static final String KEY_PREFIX = KEYS.prefix();
 
+    /** The refusal of a record with no live row to hold, {@link #exclusive}'s answer once another claim ended it. */
+    private static final String NOT_FOUND = "instance_not_found";
+
     private static final Map<HostLeases, InstanceOperationLock> BY_CONTROLLER = new ConcurrentHashMap<>();
 
     private final @NonNull ClaimedRows<Integer> rows;
@@ -407,8 +410,18 @@ public final class InstanceOperationLock {
     private static @NonNull Violations refusalFor(int instanceId) {
         Row row = Models.get(InstanceModel.class).findById(instanceId);
         if (row == null) {
-            return Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("instance_not_found").withArg("id", instanceId));
+            return Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of(NOT_FOUND).withArg("id", instanceId));
         }
         return HohenheimViolations.instanceRefusal("instance_operation_in_progress", row, null);
+    }
+
+    /**
+     * Whether {@code refused} is only the refusal of a record with no live row to hold and a fresh read confirms the
+     * record is no longer live: a teardown that met it was overtaken by another finish of the same destroy.
+     */
+    public static boolean refusedAsEnded(@NonNull Violations refused, int instanceId) {
+        return !refused.isEmpty()
+            && refused.all().stream().allMatch(violation -> NOT_FOUND.equals(violation.message().key()))
+            && Models.get(InstanceModel.class).findById(instanceId) == null;
     }
 }

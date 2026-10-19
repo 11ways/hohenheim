@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
+import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.instance.PlaintextEnvironments;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
@@ -385,17 +386,35 @@ public final class DatabaseInstances {
      */
     public static void destroyFor(@NonNull EngineHost host, boolean removeData,
                                   UnfinishedDestroys.@NonNull Policy policy) throws IOException {
+        destroyFor(host, removeData, policy, () -> {});
+    }
+
+    /**
+     * {@link #destroyFor(EngineHost, boolean, UnfinishedDestroys.Policy)} with a test seam: {@code beforeClaim} runs
+     * between reading the owned instance and claiming it, the window another finish of its destroy can end it in.
+     */
+    public static void destroyFor(@NonNull EngineHost host, boolean removeData,
+                                  UnfinishedDestroys.@NonNull Policy policy, @NonNull Runnable beforeClaim)
+            throws IOException {
         String serverName = ServerModel.nameOf(host.serverId());
         Row instance = ownedBy(host);
         if (instance != null) {
             int instanceId = instance.get(InstanceModel.ID);
+            beforeClaim.run();
             try {
                 OwnedInstances.inScope(SOURCE, host.ownerModel(), host.ownerId(), () -> {
                     new InstanceService().destroy(instanceId, policy);
                     return null;
                 });
             } catch (Violations refused) {
-                throw new IOException(refused.getMessage(), refused);
+                // AIDEV-NOTE: an automatic finish of the same destroy (a move's cleanup) can end the instance between
+                // the read above and this claim, which then refuses it as missing though the teardown asked for is
+                // done. Only that refusal of an instance a fresh read finds no longer live counts as done.
+                if (!InstanceOperationLock.refusedAsEnded(refused, instanceId)) {
+                    throw new IOException(refused.getMessage(), refused);
+                }
+                Blast.log("DB: engine instance", instanceId, "of", host.name(),
+                    "was ended by another finish of its destroy first");
             } catch (RuntimeException | Error unchecked) {
                 throw unchecked;
             } catch (Exception e) {
