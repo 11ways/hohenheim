@@ -92,6 +92,12 @@ public class InstanceModel extends Model {
     public static final String STATUS_MIGRATING = "migrating";
 
     /**
+     * {@link #STATUS}: a destroy's durable intent, written inside its claim once its cleanup is done; only the end
+     * (stopped, trashed) remains, which whoever claims the record next writes ({@link InstanceStatus#terminating}).
+     */
+    public static final String STATUS_DESTROYING = "destroying";
+
+    /**
      * The statuses under which a workload may be ON THE BRIDGE, and therefore the ones an
      * isolation sweep must verify: DERIVED from {@link InstanceStatus#liveGuest}.
      *
@@ -127,6 +133,9 @@ public class InstanceModel extends Model {
      */
     public static final List<String> SERVABLE_STATUSES = InstanceStatus.tokensWhere(InstanceStatus::servable);
 
+    /** The statuses a record is being destroyed in, which a claim finishes: {@link InstanceStatus#terminating}'s. */
+    public static final List<String> TERMINATING_STATUSES = InstanceStatus.tokensWhere(InstanceStatus::terminating);
+
     /**
      * Whether another operator operation may start on this record right now.
      *
@@ -140,6 +149,16 @@ public class InstanceModel extends Model {
         String token = row.get(STATUS);
         InstanceStatus status = InstanceStatus.forToken(token == null ? STATUS_CREATED : token);
         return status != null && status.operable();
+    }
+
+    /**
+     * Whether this record is being destroyed, so a claim of it finishes the destroy; false for an unknown token.
+     *
+     * @see InstanceStatus#terminating
+     */
+    public static boolean isTerminating(@NonNull Row row) {
+        InstanceStatus status = InstanceStatus.forToken(row.get(STATUS));
+        return status != null && status.terminating();
     }
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());

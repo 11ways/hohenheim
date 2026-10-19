@@ -217,12 +217,15 @@ class SoftDeleteJourneyTest {
                 .as("step 1: and is kept trashed").isNotNull();
 
             // 2. BUG FIXED: the application lane saved deleted_at bare, recorded as an
-            //    "update"; it now takes the one trash write every destroy shares.
+            //    "update"; it now takes the one trash write every destroy shares. (The destroy's fenced status
+            //    stamps, destroying and then stopped, are status writes like every operation's, not the trash.)
             List<RecordedChanges.Recorded> deletes = activityFor(Models.get(InstanceModel.class), applicationId,
                 ZenitActivityAction.TRASHED);
             assertThat(deletes).as("step 2: the destroy is recorded as one trash").hasSize(1);
             assertThat(RecordedChanges.of(Models.get(InstanceModel.class), applicationId, ChangeOp.UPDATE).stream()
-                    .filter(recorded -> recorded.facts().isEmpty()).toList())
+                    .filter(recorded -> recorded.facts().isEmpty()
+                        && recorded.delta().containsKey(InstanceModel.DELETED_AT.getName()))
+                    .toList())
                 .as("step 2: and never as a bare update").isEmpty();
 
             // 3. BUG FIXED: the plain (soft) delete removes the git checkout, which used to stay on the

@@ -6866,6 +6866,10 @@
     "text": "Bezig met migratie",
     "scope": "instance_status"
   },
+  "destroying": {
+    "text": "Bezig met verwijderen",
+    "scope": "instance_status"
+  },
   "uploading": {
     "text": "Bezig met upload",
     "scope": "backup_status"

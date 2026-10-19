@@ -145,6 +145,9 @@ public final class InstanceService {
     /** Test seam: runs between the daemon operations and the fenced outcome write. */
     private final Runnable beforeOutcomeWrite;
 
+    /** Test seam: runs as a destroy's staged end is written, once the destroy let go of the record. */
+    private final Runnable beforeEndWrite;
+
     public InstanceService() {
         this(HostLeases.production(), () -> {});
     }
@@ -154,9 +157,19 @@ public final class InstanceService {
      * the pause hook is the injectable SIGSTOP between daemon work and the outcome write.
      */
     public InstanceService(@NonNull HostLeases leases, @NonNull Runnable beforeOutcomeWrite) {
+        this(leases, beforeOutcomeWrite, () -> {});
+    }
+
+    /**
+     * Test seam: {@code beforeEndWrite} runs where a destroy's late end is written, after its release: the window a
+     * rival controller's claim can take the record in.
+     */
+    public InstanceService(@NonNull HostLeases leases, @NonNull Runnable beforeOutcomeWrite,
+                           @NonNull Runnable beforeEndWrite) {
         this.leases = leases;
         this.operations = InstanceOperationLock.of(leases);
         this.beforeOutcomeWrite = beforeOutcomeWrite;
+        this.beforeEndWrite = beforeEndWrite;
     }
 
     /**
@@ -471,15 +484,22 @@ public final class InstanceService {
      * AIDEV-NOTE: the trash is the destroy's OUTCOME, staged last and written once the destroy let go of the record
      * ({@link InstanceOperationGuard#stageEnd}): a client that reads the record destroyed and asks to delete its data
      * at once is never refused by the destroy it just read about. Everything the record takes with it (reservations,
-     * schedules, game domains, database links, exposing sites, the checkout) goes BEFORE, under the claim. The trash
-     * itself rides the soft delete's save(), never a set-based updateAll, because the instance-quota release lives
-     * in a beforeWrite hook on the deleted_at transition and updateAll is hook-free by contract; the end narrows it
-     * to the destroy's claim instead, so a rival controller that took the record meanwhile keeps it.
+     * schedules, game domains, database links, exposing sites, the checkout) goes BEFORE, under the claim, and then
+     * the record's durable intent, {@code destroying} ({@link InstanceOperationGuard#stampDestroying}), still under
+     * the claim: a rival controller that claims the record before the end is published drops that end, and the
+     * intent is what makes it FINISH the destroy instead of running a record whose cleanup is done
+     * (InstanceOperationLock). The trash itself rides the soft delete's save(), never a set-based updateAll,
+     * because the instance-quota release lives in a beforeWrite hook on the deleted_at transition and updateAll is
+     * hook-free by contract; the end narrows it to the destroy's claim instead.
      *
      * @throws Violations when the daemon cannot confirm removal: the record is KEPT
      *         (status {@code error}), the claims are parked, and the operator retries
      */
     public void destroy(int instanceId) {
+        // A record an earlier destroy left being destroyed: this destroy is its end.
+        if (this.operations.finishTerminating(instanceId)) {
+            return;
+        }
         operation(instanceId, () -> {
             destroyNow(instanceId);
             return null;
@@ -497,9 +517,11 @@ public final class InstanceService {
             GitCheckout.discard(InstanceModel.MODEL_ID, instanceId);
             InstanceExposure.disableForDestroyedInstance(instanceId);
             Row application = liveRow(instanceId);
-            InstanceOperationGuard.stageEnd(this.leases, instanceId, null, null,
-                application == null ? instanceId : String.valueOf((Object) application.get(InstanceModel.NAME)),
-                InstanceService::trash);
+            Object applicationName = application == null ? instanceId
+                : String.valueOf((Object) application.get(InstanceModel.NAME));
+            InstanceOperationGuard.stampDestroying(this.leases, instanceId, null, applicationName);
+            InstanceOperationGuard.stageEnd(this.leases, instanceId, null, InstanceModel.STATUS_STOPPED,
+                applicationName, InstanceService::trash, this.beforeEndWrite);
             return;
         }
         Resolved resolved = resolve(instanceId);
@@ -551,9 +573,11 @@ public final class InstanceService {
         // SITE's, and re-pointing it at another instance is one toggle away.
         InstanceExposure.disableForDestroyedInstance(instanceId);
         GitCheckout.discard(InstanceModel.MODEL_ID, instanceId);
+        // The durable intent, still inside the claim: everything above is done, only the end remains.
+        InstanceOperationGuard.stampDestroying(this.leases, instanceId, resolved.serverId(), name);
         // The end, LAST: stopped and trashed once the claim is let go (see the method's note).
         InstanceOperationGuard.stageEnd(this.leases, instanceId, resolved.serverId(), InstanceModel.STATUS_STOPPED,
-            name, InstanceService::trash);
+            name, InstanceService::trash, this.beforeEndWrite);
         Blast.log("INSTANCE: destroyed", resolved.spec().handle(),
             "- container removed, volumes kept; the record is trashed once the destroy lets go of it");
     }
@@ -660,7 +684,7 @@ public final class InstanceService {
      * @param record the record, narrowed to the claim of the destroy that ends it
      * @return the rows trashed: 0 when the record is missing, already trashed or another claim took it
      */
-    private static int trash(@NonNull QueryBuilder<Row> record) {
+    static int trash(@NonNull QueryBuilder<Row> record) {
         // The soft delete is the behaviour's own: it writes deleted_at alone (the quota release,
         // grant cleanup and claim releases ride that transition), and the destroy verb wrapped
         // around it is what the activity log records, since the behaviour's own verb yields to it.
@@ -830,8 +854,13 @@ public final class InstanceService {
      * rival holds is skipped (its work is its own to settle) and a host taken purely to
      * settle is handed straight back, instead of {@code settleInterrupted -> requireFence}
      * seizing it for this process's lifetime and fencing the rightful controller out.
+     *
+     * A record a destroy left {@code destroying} is FINISHED first, before anything settles the protected statuses:
+     * its cleanup is done and only its end remains ({@link #finishInterruptedDestroys}).
      */
     public static void recoverInterrupted() {
+        InstanceService service = new InstanceService();
+        service.finishInterruptedDestroys();
         List<Row> stuck = Models.get(InstanceModel.class).find()
             .where(Criteria.or(
                 InstanceModel.STATUS.eq(InstanceModel.STATUS_CAPTURING),
@@ -840,7 +869,6 @@ public final class InstanceService {
         if (stuck.isEmpty()) {
             return;
         }
-        InstanceService service = new InstanceService();
         for (Row row : stuck) {
             Instant written = row.get(InstanceModel.UPDATED_AT);
             if (written == null) {
@@ -877,6 +905,31 @@ public final class InstanceService {
                     "failed:", error.getMessage());
             }
         }
+    }
+
+    /**
+     * Finishes every destroy a record was left in ({@link InstanceModel#TERMINATING_STATUSES}): its cleanup was done
+     * before the status was written, so its claim writes the end, stopped and trashed. A record an operation still
+     * holds (the destroy itself, or a rival's) is left to it.
+     *
+     * @return the ids it ended
+     */
+    @NonNull List<Integer> finishInterruptedDestroys() {
+        List<Integer> ended = new ArrayList<>();
+        for (Row row : Models.get(InstanceModel.class).find()
+                .where(InstanceModel.STATUS.in(InstanceModel.TERMINATING_STATUSES))
+                .all()) {
+            int id = row.get(InstanceModel.ID);
+            try {
+                if (this.operations.finishTerminating(id)) {
+                    ended.add(id);
+                }
+            } catch (RuntimeException failed) {
+                // One record must never stop the rest; the next boot or sweep claims it again.
+                Blast.log("INSTANCE: could not finish the destroy of", id, "-", failed.getMessage());
+            }
+        }
+        return List.copyOf(ended);
     }
 
     /**

@@ -221,7 +221,7 @@ record DatabaseVerdict(@NonNull State state, @Nullable Microcopy reason) {
             case ERROR -> new DatabaseVerdict(State.STOPPED_AFTER_ERROR,
                 HohenheimMicrocopy.ATTENTION_DETAIL.of("database_engine_error"));
             case CREATED,
-                STOPPED -> new DatabaseVerdict(State.NOT_RUNNING,
+                STOPPED, DESTROYING -> new DatabaseVerdict(State.NOT_RUNNING,
                 HohenheimMicrocopy.ATTENTION_DETAIL.of("database_engine_stopped"));
         };
     }

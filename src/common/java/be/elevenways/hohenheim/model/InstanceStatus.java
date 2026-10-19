@@ -36,7 +36,8 @@ public enum InstanceStatus {
     ERROR(InstanceModel.STATUS_ERROR, "Error", "circle-exclamation", ColorHue.RED),
     CAPTURING(InstanceModel.STATUS_CAPTURING, "Capturing", "camera", ColorHue.BLUE),
     RESTORING(InstanceModel.STATUS_RESTORING, "Restoring", "clock-rotate-left", ColorHue.BLUE),
-    MIGRATING(InstanceModel.STATUS_MIGRATING, "Migrating", "arrow-right-arrow-left", ColorHue.BLUE);
+    MIGRATING(InstanceModel.STATUS_MIGRATING, "Migrating", "arrow-right-arrow-left", ColorHue.BLUE),
+    DESTROYING(InstanceModel.STATUS_DESTROYING, "Destroying", "trash-can", ColorHue.BLUE);
 
     private final String token;
     private final String displayName;
@@ -78,13 +79,28 @@ public enum InstanceStatus {
     /**
      * Whether another operator operation may start on a record in this status: false for
      * the in-flight statuses whose operation must finish first (capture, restore,
-     * migration), which {@code InstanceOperationGuard.requireOperable} refuses on and the
+     * migration, a destroy), which {@code InstanceOperationGuard.requireOperable} refuses on and the
      * admin surfaces ask to explain a dead control.
      */
     public boolean operable() {
         return switch (this) {
             case CREATED, STARTING, RUNNING, STOPPED, ERROR -> true;
-            case CAPTURING, RESTORING, MIGRATING -> false;
+            case CAPTURING, RESTORING, MIGRATING, DESTROYING -> false;
+        };
+    }
+
+    /**
+     * Whether a record in this status is being destroyed: its cleanup is done and only its end (stopped, trashed)
+     * remains, so whoever claims it next FINISHES the destroy and never runs or resumes it.
+     *
+     * AIDEV-NOTE: the durable half of a destroy whose end is written once its claim was let go: a rival controller
+     * that claims the record before that publication drops the end, and this status is what tells it to write the end
+     * itself (InstanceOperationLock, InstanceStatusReconciler, InstanceService.recoverInterrupted).
+     */
+    public boolean terminating() {
+        return switch (this) {
+            case DESTROYING -> true;
+            case CREATED, STARTING, RUNNING, STOPPED, ERROR, CAPTURING, RESTORING, MIGRATING -> false;
         };
     }
 
@@ -97,12 +113,13 @@ public enum InstanceStatus {
      * statuses are deliberately OUT although their guests can be live: a sweep's terminal
      * action is a stop, and stop is exactly what their declared contract refuses; their
      * exposure is bounded by the operation's own lifetime and the next sweep after it.
-     * {@code created} and {@code stopped} name no guest at all.
+     * {@code created} and {@code stopped} name no guest at all, and neither does
+     * {@code destroying}: its workload was removed before the status was written.
      */
     public boolean liveGuest() {
         return switch (this) {
             case STARTING, RUNNING, ERROR -> true;
-            case CREATED, STOPPED, CAPTURING, RESTORING, MIGRATING -> false;
+            case CREATED, STOPPED, CAPTURING, RESTORING, MIGRATING, DESTROYING -> false;
         };
     }
 
@@ -112,13 +129,14 @@ public enum InstanceStatus {
      *
      * AIDEV-NOTE: wider than {@link #liveGuest}: the protected statuses keep their
      * container running (a backup must not 503 the site it protects) and {@code error}'s
-     * own words are "the daemon may disagree". Only the pair that claims no workload is
-     * out, which is what lets the status reconciler's correction reach the proxy.
+     * own words are "the daemon may disagree". Only the statuses that claim no workload
+     * are out, which is what lets the status reconciler's correction reach the proxy;
+     * {@code destroying}'s workload and exposing sites are gone before it is written.
      */
     public boolean servable() {
         return switch (this) {
             case STARTING, RUNNING, ERROR, CAPTURING, RESTORING, MIGRATING -> true;
-            case CREATED, STOPPED -> false;
+            case CREATED, STOPPED, DESTROYING -> false;
         };
     }
 
@@ -128,20 +146,20 @@ public enum InstanceStatus {
      */
     public boolean deployed() {
         return switch (this) {
-            case STARTING, RUNNING, STOPPED, ERROR, CAPTURING, RESTORING, MIGRATING -> true;
+            case STARTING, RUNNING, STOPPED, ERROR, CAPTURING, RESTORING, MIGRATING, DESTROYING -> true;
             case CREATED -> false;
         };
     }
 
     /**
      * Whether starting a record in this status would bring something up: false while it already runs or is starting,
-     * and while another operation holds it. A machine offers Start only here; a code deploy is offered regardless,
-     * because deploying again ships its code again.
+     * and while another operation holds it or it is being destroyed. A machine offers Start only here; a code deploy is
+     * offered regardless, because deploying again ships its code again.
      */
     public boolean startable() {
         return switch (this) {
             case CREATED, STOPPED, ERROR -> true;
-            case STARTING, RUNNING, CAPTURING, RESTORING, MIGRATING -> false;
+            case STARTING, RUNNING, CAPTURING, RESTORING, MIGRATING, DESTROYING -> false;
         };
     }
 

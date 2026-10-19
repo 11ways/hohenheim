@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.security.IsolationUnenforceable;
+import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.history.Change;
@@ -300,30 +301,48 @@ final class InstanceOperationGuard {
     }
 
     /**
-     * A destroy's END: {@code status} (when given) and then the record's soft delete as ONE outcome, proven against
-     * the fence now and written through it once the destroy let go of the record, so a client that reads the record
-     * destroyed may act on it at once (a delete-with-data straight after the destroy is admitted).
+     * A destroy's durable intent, written NOW inside its claim once its cleanup is done: the record reads
+     * {@code destroying}, which tells whoever claims it next to finish the destroy ({@link #finishDestroy}) if the end
+     * staged after it ({@link #stageEnd}) is dropped by a rival controller's newer claim.
+     *
+     * @param serverId the host the record must still be on, null for a hostless application
+     * @throws Violations {@code instance_fenced_out}
+     */
+    static void stampDestroying(@NonNull HostLeases leases, int instanceId, @Nullable Integer serverId,
+                                @NonNull Object instanceName) {
+        InstanceOperationLock lock = InstanceOperationLock.of(leases);
+        lock.settle(instanceId);
+        requireMatched(statusOf(InstanceModel.STATUS_DESTROYING, null, null, false)
+            .apply(scoped(lock.owned(instanceId), serverId)).updateAll(), serverId, instanceName);
+    }
+
+    /**
+     * A destroy's END: {@code status} and then the record's soft delete as ONE outcome, proven against the fence now
+     * and written through it once the destroy let go of the record, so a client that reads the record destroyed may
+     * act on it at once (a delete-with-data straight after the destroy is admitted).
      *
      * AIDEV-NOTE: the soft delete must run the model's write hooks (the quota release, the grant cleanup, the trash in
      * the activity), which the fenced updateAll skips by contract, and it hides the record from every fenced write
      * after it. So the end overrides zenit's RowOutcome.write: the status and the trash land in one transaction, both
      * narrowed to the destroy's claim, so a rival controller's newer claim drops the whole end, and an operation of
-     * this controller that takes the record first writes it before it stamps (and then finds no live record). Stage
-     * it LAST: any fenced write after it settles it early, inside the claim.
+     * this controller that takes the record first writes it before it stamps (and then finds no live record). A
+     * dropped end is not lost: the record still reads {@code destroying} ({@link #stampDestroying}), and the rival
+     * that took it writes the end itself ({@link #finishDestroy}). Stage it LAST: any fenced write after it settles it
+     * early, inside the claim.
      *
-     * @param serverId the host the record must still be on, null for a hostless application
-     * @param status   the status the record ends in, null to leave the stored one
-     * @param trash    the soft delete of the record the statement names; returns the rows it trashed
+     * @param serverId    the host the record must still be on, null for a hostless application
+     * @param status      the status the record ends in
+     * @param trash       the soft delete of the record the statement names; returns the rows it trashed
+     * @param beforeWrite a test seam run where the end is written (InstanceService's beforeEndWrite)
      * @throws Violations {@code instance_fenced_out} for the proof
      */
     static void stageEnd(@NonNull HostLeases leases, int instanceId, @Nullable Integer serverId,
-                         @Nullable String status, @NonNull Object instanceName,
-                         @NonNull ToIntFunction<QueryBuilder<Row>> trash) {
+                         @NonNull String status, @NonNull Object instanceName,
+                         @NonNull ToIntFunction<QueryBuilder<Row>> trash, @NonNull Runnable beforeWrite) {
         InstanceOperationLock lock = InstanceOperationLock.of(leases);
         Supplier<QueryBuilder<Row>> owned = lock.ownedLater(instanceId);
         requireMatched((int) scoped(owned.get(), serverId).count(), serverId, instanceName);
-        UnaryOperator<QueryBuilder<Row>> stamped = status == null ? UnaryOperator.identity()
-            : statusOf(status, null, null, false);
+        UnaryOperator<QueryBuilder<Row>> stamped = statusOf(status, null, null, false);
         lock.stageOutcome(instanceId, new ClaimedRows.RowOutcome() {
             @Override
             public @NonNull QueryBuilder<Row> assign(@NonNull QueryBuilder<Row> statement) {
@@ -332,13 +351,8 @@ final class InstanceOperationGuard {
 
             @Override
             public int write(@NonNull QueryBuilder<Row> assigned) {
-                int[] trashed = {0};
-                Models.get(InstanceModel.class).getResolvedDatasource().withTransaction(transaction -> {
-                    if (status == null || assigned.updateAll() > 0) {
-                        trashed[0] = trash.applyAsInt(scoped(owned.get(), serverId));
-                    }
-                });
-                return trashed[0];
+                beforeWrite.run();
+                return writeEnd(assigned, () -> scoped(owned.get(), serverId), trash);
             }
 
             @Override
@@ -346,6 +360,46 @@ final class InstanceOperationGuard {
                 requireMatched(0, serverId, instanceName);
             }
         });
+    }
+
+    /**
+     * Finishes the destroy a record this thread's operation just claimed was left in
+     * ({@link InstanceStatus#terminating}): the end the destroy staged, stopped and trashed, written now through this
+     * claim. Never runs or resumes it.
+     *
+     * AIDEV-NOTE: the claim's own fence is the whole authority: the destroy's cleanup was done before its intent was
+     * written, so nothing here needs the host's daemon, and a record another claim owns matches nothing.
+     *
+     * @param trash the soft delete of the record the statement names; returns the rows it trashed
+     * @return whether this ended the record; false when it was not being destroyed
+     */
+    static boolean finishDestroy(@NonNull InstanceOperationLock lock, int instanceId,
+                                 @NonNull ToIntFunction<QueryBuilder<Row>> trash) {
+        Row record = lock.owned(instanceId).first();
+        if (record == null || !InstanceModel.isTerminating(record)) {
+            return false;
+        }
+        int ended = writeEnd(statusOf(InstanceModel.STATUS_STOPPED, null, null, false).apply(lock.owned(instanceId)),
+            () -> lock.owned(instanceId), trash);
+        Blast.log("INSTANCE: finished the destroy of", record.get(InstanceModel.NAME), "(" + instanceId + ")",
+            ended > 0 ? "- stopped and trashed" : "- another claim took it first");
+        return ended > 0;
+    }
+
+    /**
+     * Writes a destroy's end in one transaction: the stamped status, then the trash, both through the same claim.
+     *
+     * @return the rows trashed: 0 when the claim no longer owns the live record
+     */
+    private static int writeEnd(@NonNull QueryBuilder<Row> stamped, @NonNull Supplier<QueryBuilder<Row>> owned,
+                                @NonNull ToIntFunction<QueryBuilder<Row>> trash) {
+        int[] trashed = {0};
+        Models.get(InstanceModel.class).getResolvedDatasource().withTransaction(transaction -> {
+            if (stamped.updateAll() > 0) {
+                trashed[0] = trash.applyAsInt(owned.get());
+            }
+        });
+        return trashed[0];
     }
 
     /** The statement on this host, when the record has one. */

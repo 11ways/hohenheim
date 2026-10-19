@@ -67,7 +67,10 @@ public final class InstanceStatusReconciler {
         COULD_NOT_ASK,
 
         /** A transitional record (in flight here, held by a rival, or mid-install). */
-        SKIPPED
+        SKIPPED,
+
+        /** A record a destroy was left in ({@code destroying}): its claim wrote the destroy's end. */
+        FINISHED
     }
 
     /**
@@ -105,11 +108,16 @@ public final class InstanceStatusReconciler {
             InstanceModel.STATUS.eq(InstanceModel.STATUS_STARTING));
     }
 
-    /** Reconcile every record whose status claims a live workload. */
+    /** What the sweep visits: every live-claiming record, and every record a destroy was left in to finish it. */
+    private static @NonNull Criteria swept() {
+        return Criteria.or(claimsALiveWorkload(), InstanceModel.STATUS.in(InstanceModel.TERMINATING_STATUSES));
+    }
+
+    /** Reconcile every record whose status claims a live workload, and finish every destroy a record was left in. */
     public @NonNull List<Outcome> sweep() {
         List<Outcome> outcomes = new ArrayList<>();
         for (Row instance : Models.get(InstanceModel.class).find()
-                .where(claimsALiveWorkload())
+                .where(swept())
                 .all()) {
             Integer id = instance.get(InstanceModel.ID);
             if (id == null) {
@@ -147,6 +155,12 @@ public final class InstanceStatusReconciler {
         }
         String stored = String.valueOf((Object) instance.get(InstanceModel.STATUS));
 
+        // A record a destroy was left in is FINISHED, never observed or corrected: its cleanup is done and only the
+        // destroy's end remains, which its claim writes (an operation still holding it is left to it).
+        if (InstanceModel.isTerminating(instance)) {
+            return new Outcome(instanceId, this.instances.operations().finishTerminating(instanceId)
+                ? Verdict.FINISHED : Verdict.SKIPPED, stored, null);
+        }
         // A protected status (capturing/restoring/migrating) is an operation in flight
         // with its OWN settle; the query does not select them, and this states why.
         if (!InstanceModel.isOperable(instance)) {

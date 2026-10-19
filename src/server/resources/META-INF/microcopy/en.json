@@ -6866,6 +6866,10 @@
     "text": "Migrating",
     "scope": "instance_status"
   },
+  "destroying": {
+    "text": "Destroying",
+    "scope": "instance_status"
+  },
   "uploading": {
     "text": "Uploading",
     "scope": "backup_status"

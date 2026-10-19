@@ -168,6 +168,26 @@ public final class InstanceOperationLock {
     }
 
     /**
+     * Takes a record no operation holds and, when an earlier destroy left it being destroyed
+     * ({@link InstanceModel#isTerminating}), finishes that destroy: the destroy's own end, stopped and trashed.
+     *
+     * @return whether this ended the record; false when it was held, gone, or not being destroyed
+     */
+    public boolean finishTerminating(int instanceId) {
+        if (this.rows.heldHere(instanceId) != null) {
+            return false;
+        }
+        ClaimedRows<Integer>.Held hold = this.rows.hold(instanceId, 0, InstanceModel.ID.isNotNull(),
+            UnaryOperator.identity());
+        if (hold == null) {
+            return false;
+        }
+        try (hold) {
+            return InstanceOperationGuard.finishDestroy(this, instanceId, InstanceService::trash);
+        }
+    }
+
+    /**
      * Runs {@code publish} once this thread's operation on the record has let go of it, at once when it holds none:
      * the way an operation states the outcome of its own row (a build, a backup, a deploy record), so a caller that
      * reads the outcome and acts is never refused by the operation it just read about.
@@ -294,12 +314,30 @@ public final class InstanceOperationLock {
         if (wait > 0 && own == null) {
             threads.add(current);
         }
+        ClaimedRows<Integer>.Held held;
         try {
-            return this.rows.hold(instanceId, wait, InstanceModel.ID.isNotNull(),
+            held = this.rows.hold(instanceId, wait, InstanceModel.ID.isNotNull(),
                 stored ? query -> query.withTrashed() : UnaryOperator.identity());
         } finally {
             threads.remove(current);
         }
+        if (held == null || own != null) {
+            return held;
+        }
+        // A fresh claim of a record an earlier destroy left being destroyed FINISHES that destroy and never runs it: a
+        // live operation is then refused as for a missing record, a stored one goes on with the trashed record.
+        boolean finished;
+        try {
+            finished = InstanceOperationGuard.finishDestroy(this, instanceId, InstanceService::trash);
+        } catch (RuntimeException failed) {
+            held.close();
+            throw failed;
+        }
+        if (finished && !stored) {
+            held.close();
+            return null;
+        }
+        return held;
     }
 
     private static @NonNull Violations refusalFor(int instanceId) {

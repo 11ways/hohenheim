@@ -5,10 +5,12 @@ import be.elevenways.protoblast.common.util.BlastLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import java.util.Arrays;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.CountDownLatch;
 import java.util.List;
 import java.time.Duration;
+import be.elevenways.zenit.common.orm.lease.Lease;
 import be.elevenways.zenit.common.orm.lease.Leases;
 import be.elevenways.protoblast.testsupport.thread.Racers;
 import be.elevenways.protoblast.testsupport.time.Poll;
@@ -17,6 +19,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.instance.InstanceService;
+import be.elevenways.hohenheim.server.instance.InstanceStatusReconciler;
 import be.elevenways.hohenheim.server.instance.InstanceSnapshots;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -212,7 +215,8 @@ class InstanceOperationSerializationTest {
     /**
      * A destroy's end is the record's outcome: the record reads destroyed only once the destroy let go of its claim,
      * so a client that sees it destroyed and removes its data at once is never refused by the destroy it just read
-     * about (InstanceConsoleGenerationTest.aReadinessFlipReadsRunningOnlyOnceTheWatchLetGoOfTheRecord's shape).
+     * about (InstanceConsoleGenerationTest.aReadinessFlipReadsRunningOnlyOnceTheWatchLetGoOfTheRecord's shape). While
+     * it holds the record, the record reads destroying: the durable intent a rival's claim would finish.
      */
     @Test
     void aDestroyReadsDestroyedOnlyOnceItLetGoOfTheRecord() {
@@ -254,8 +258,9 @@ class InstanceOperationSerializationTest {
         } finally {
             BlastLog.setLogSink(previous);
         }
-        assertThat(readAtEnd).as("step 1: while the destroy held the record it read neither destroyed nor stopped")
-            .containsExactly("live " + InstanceModel.STATUS_RUNNING);
+        assertThat(readAtEnd).as("step 1: while the destroy held the record it read neither destroyed nor stopped,"
+                + " but being destroyed")
+            .containsExactly("live " + InstanceModel.STATUS_DESTROYING);
         Db.run(datasource, () -> assertThat(stateOf(id)).as("step 2: the destroy's end stands")
             .isEqualTo("trashed " + InstanceModel.STATUS_STOPPED));
     }
@@ -264,6 +269,112 @@ class InstanceOperationSerializationTest {
     private static String stateOf(int id) {
         Row row = Models.get(InstanceModel.class).find().withTrashed().where(InstanceModel.ID.eq(id)).first();
         return (row.get(InstanceModel.DELETED_AT) == null ? "live " : "trashed ") + row.get(InstanceModel.STATUS);
+    }
+
+    /**
+     * A rival controller that claims the record between the destroy's release and the publication of its end (which
+     * that newer claim drops, ClaimedRowsHoldJourneyTest's "newer claim elsewhere") meets a record that already reads
+     * destroying, and FINISHES the destroy instead of running it: the record ends trashed and stopped, never live with
+     * its cleanup done.
+     */
+    @Test
+    void aRivalClaimBetweenReleaseAndPublicationFinishesTheDestroy() {
+        int[] record = new int[1];
+        Db.run(datasource, () -> {
+            record[0] = BackupLaneFixture.instanceRecord("destroy-rival", hostId);
+            new InstanceService().deploy(record[0]);
+        });
+        int id = record[0];
+        Leases rivalCoordinator = Leases.independent(datasource);
+        HostLeases rival = new HostLeases(d -> rivalCoordinator, Leases.DEFAULT_TTL);
+        AtomicReference<String> readByRival = new AtomicReference<>();
+        AtomicReference<Throwable> rivalClaim = new AtomicReference<>();
+        AtomicBoolean rivalRan = new AtomicBoolean();
+
+        // 1. The destroy lets go of the record, and before its end is written a rival controller claims the record to
+        //    run something on it.
+        Db.run(datasource, () -> new InstanceService(HostLeases.production(), () -> {}, () -> {
+            if (readByRival.get() != null) {
+                return;
+            }
+            readByRival.set(stateOf(id));
+            rivalClaim.set(catchThrowable(() -> InstanceOperationLock.of(rival).exclusive(id,
+                InstanceOperationLock.Contention.REFUSE, () -> rivalRan.set(true))));
+        }).destroy(id));
+        assertThat(readByRival.get()).as("step 1: the rival met a record whose destroy was under way")
+            .isEqualTo("live " + InstanceModel.STATUS_DESTROYING);
+
+        // 2. The rival never ran the record: its claim finished the destroy, so it found no record left to run.
+        assertThat(rivalRan.get()).as("step 2: the rival's operation never ran").isFalse();
+        assertThat(rivalClaim.get()).as("step 2: it was refused as for a missing record")
+            .isInstanceOfSatisfying(Violations.class, refused -> assertThat(refused.all()).anySatisfy(violation ->
+                assertThat(violation.message().key()).isEqualTo("instance_not_found")));
+
+        // 3. The record ends destroyed (trashed and stopped) and its workload is gone, though the destroy's own end
+        //    was dropped by the newer claim.
+        Db.run(datasource, () -> assertThat(stateOf(id)).as("step 3: trashed and stopped, never live")
+            .isEqualTo("trashed " + InstanceModel.STATUS_STOPPED));
+        assertThat(FakeNativeDaemons.daemonOf(hostId)).as("step 3: the workload is gone")
+            .doesNotContainKey(FakeNativeDaemons.handleOf(id));
+    }
+
+    /**
+     * A record left destroying (its cleanup done, the end its destroy staged dropped by a newer claim that never came
+     * back) is finished by the status reconciler and by the boot settle, which never observe or run it.
+     */
+    @Test
+    void theReconcilerAndTheBootSettleFinishARecordLeftDestroying() {
+        int reconciled = leftDestroying("destroy-left-reconciled");
+        int settled = leftDestroying("destroy-left-boot");
+        Db.run(datasource, () -> {
+            // 1. Both read destroying, their workloads already gone.
+            assertThat(List.of(stateOf(reconciled), stateOf(settled))).as("step 1: left destroying")
+                .containsOnly("live " + InstanceModel.STATUS_DESTROYING);
+            assertThat(FakeNativeDaemons.daemonOf(hostId)).as("step 1: the cleanup was done")
+                .doesNotContainKey(FakeNativeDaemons.handleOf(reconciled))
+                .doesNotContainKey(FakeNativeDaemons.handleOf(settled));
+
+            // 2. The reconciler finishes the first: trashed and stopped.
+            assertThat(new InstanceStatusReconciler().reconcile(reconciled).verdict())
+                .as("step 2: the reconciler finished the destroy")
+                .isEqualTo(InstanceStatusReconciler.Verdict.FINISHED);
+            assertThat(stateOf(reconciled)).as("step 2: trashed and stopped")
+                .isEqualTo("trashed " + InstanceModel.STATUS_STOPPED);
+
+            // 3. The boot settle finishes the second.
+            InstanceService.recoverInterrupted();
+            assertThat(stateOf(settled)).as("step 3: the boot settle finished it")
+                .isEqualTo("trashed " + InstanceModel.STATUS_STOPPED);
+
+            // 4. Nothing is left for the next sweep.
+            assertThat(new InstanceStatusReconciler().reconcile(reconciled).verdict())
+                .as("step 4: a finished record is gone from the sweep")
+                .isEqualTo(InstanceStatusReconciler.Verdict.SKIPPED);
+        });
+    }
+
+    /**
+     * A deployed record whose destroy's end is dropped: a rival controller claims the record between the release and
+     * the end (its lease, and its fence stamped on the row, as ClaimedRows stamps it) and dies before it does anything
+     * else.
+     */
+    private static int leftDestroying(String name) {
+        int[] record = new int[1];
+        Db.run(datasource, () -> {
+            record[0] = BackupLaneFixture.instanceRecord(name, hostId);
+            new InstanceService().deploy(record[0]);
+        });
+        int id = record[0];
+        Leases dyingRival = Leases.independent(datasource);
+        Db.run(datasource, () -> new InstanceService(HostLeases.production(), () -> {}, () -> {
+            Lease claim = dyingRival.acquire(InstanceOperationLock.KEY_PREFIX + id, 0);
+            assertThat(claim).as("the rival takes the record's claim once the destroy let go of it").isNotNull();
+            Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(id))
+                .assign(InstanceModel.CLAIM_FENCE, claim.fence())
+                .updateAll();
+            claim.release();
+        }).destroy(id));
+        return id;
     }
 
     /**

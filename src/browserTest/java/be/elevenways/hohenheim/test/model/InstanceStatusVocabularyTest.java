@@ -35,11 +35,15 @@ class InstanceStatusVocabularyTest {
         assertThat(InstanceModel.PROTECTED_STATUSES)
             .as("step 2: the protected statuses are the non-operable ones")
             .containsExactlyInAnyOrder(InstanceModel.STATUS_CAPTURING,
-                InstanceModel.STATUS_RESTORING, InstanceModel.STATUS_MIGRATING);
+                InstanceModel.STATUS_RESTORING, InstanceModel.STATUS_MIGRATING, InstanceModel.STATUS_DESTROYING);
         assertThat(InstanceModel.SERVABLE_STATUSES)
-            .as("step 2: everything but created and stopped is servable")
-            .doesNotContain(InstanceModel.STATUS_CREATED, InstanceModel.STATUS_STOPPED)
-            .hasSize(InstanceStatus.values().length - 2);
+            .as("step 2: everything but created, stopped and destroying is servable")
+            .doesNotContain(InstanceModel.STATUS_CREATED, InstanceModel.STATUS_STOPPED, InstanceModel.STATUS_DESTROYING)
+            .hasSize(InstanceStatus.values().length - 3);
+        assertThat(InstanceModel.TERMINATING_STATUSES)
+            .as("step 2: only destroying is finished by whoever claims it")
+            .containsExactlyElementsOf(InstanceStatus.tokensWhere(InstanceStatus::terminating))
+            .containsExactly(InstanceModel.STATUS_DESTROYING);
 
         // 3. isOperable follows the fact, reads a null status as the declared default, and
         //    FAILS CLOSED on a token no member declares.
@@ -54,6 +58,10 @@ class InstanceStatusVocabularyTest {
             .isFalse();
         assertThat(InstanceStatus.forToken("hibernating"))
             .as("step 3: and resolves to no member at all").isNull();
+        assertThat(InstanceModel.isTerminating(rowWith("hibernating")))
+            .as("step 3: an unknown status is never finished as a destroy").isFalse();
+        assertThat(InstanceModel.isTerminating(rowWith(InstanceModel.STATUS_DESTROYING)))
+            .as("step 3: destroying is").isTrue();
     }
 
     private static Row rowWith(String status) {

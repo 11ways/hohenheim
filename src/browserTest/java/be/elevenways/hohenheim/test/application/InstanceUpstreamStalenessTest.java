@@ -95,9 +95,10 @@ class InstanceUpstreamStalenessTest {
             String handle = FakeDockerDaemon.handleOf(instanceId);
             try {
                 // 0. THE VOCABULARY the resolution reads: every status the column can
-                //    store is classified, and the two that claim no workload are the only
-                //    unroutable ones. A status added without a decision here would
-                //    silently become routable (or silently take a site down).
+                //    store is classified, and the three that claim no workload (destroying's
+                //    workload is removed before it is written) are the only unroutable ones.
+                //    A status added without a decision here would silently become routable
+                //    (or silently take a site down).
                 List<String> unservable =
                     new ArrayList<>(InstanceModel.STATUS.getValues().keySet());
                 unservable.removeAll(InstanceModel.SERVABLE_STATUSES);
@@ -105,10 +106,10 @@ class InstanceUpstreamStalenessTest {
                     .as("step 0: every servable status is a status the column can store")
                     .containsAll(InstanceModel.SERVABLE_STATUSES);
                 assertThat(unservable)
-                    .as("step 0: and exactly the two that claim no workload are unroutable"
+                    .as("step 0: and exactly the three that claim no workload are unroutable"
                         + " -- a new status must be classified in SERVABLE_STATUSES")
                     .containsExactlyInAnyOrder(InstanceModel.STATUS_CREATED,
-                        InstanceModel.STATUS_STOPPED);
+                        InstanceModel.STATUS_STOPPED, InstanceModel.STATUS_DESTROYING);
 
                 // 1. THE ROUTE IS BUILT WHILE THE WORKLOAD IS DOWN. This is the ordinary
                 //    case -- a controller restart, an edit to the site, anything that

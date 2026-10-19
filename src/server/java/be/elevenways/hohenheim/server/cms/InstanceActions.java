@@ -96,7 +96,8 @@ final class InstanceActions {
      * kind's own {@code generatedOnly()} declaration), and a start would do something
      * ({@link InstanceKinds#offersStart}: a running machine offers Restart and Stop instead). Dead, with the database
      * and its state on screen, while an
-     * attached managed database is not active: the same words the handler refuses a direct POST with.
+     * attached managed database is not active: the same words the handler refuses a direct POST with. Never on a
+     * record being destroyed ({@link InstanceModel#isTerminating}): no power action runs it, its Delete finishes it.
      *
      * AIDEV-NOTE: deliberately NOT ActionStyle.PRIMARY (reverted 2026-08-22): the style renders the button FILLED, a
      * solid accent Deploy beside the red Delete on every row; it already leads as the first declared verb.
@@ -109,7 +110,7 @@ final class InstanceActions {
             .dynamicLabel(row -> startWords("deploy", row))
             .icon(Icon.of("play"))
             .hiddenWhen(row -> !InstanceKinds.isUserDeployable(row.get(InstanceModel.KIND))
-                || !InstanceKinds.offersStart(row))
+                || !InstanceKinds.offersStart(row) || InstanceModel.isTerminating(row))
             .disabledWhen((row, access) -> {
                 Integer id = row.get(InstanceModel.ID);
                 Microcopy database = id == null ? null : InstanceDatabaseLinks.notReadyReason(id);
@@ -149,7 +150,7 @@ final class InstanceActions {
 
     /**
      * Stop and start again: the restart operation, ONE lock hold across both halves. Hidden on a record nobody
-     * deployed yet: there is nothing to restart, and Deploy is its verb.
+     * deployed yet: there is nothing to restart, and Deploy is its verb; and on a record being destroyed.
      *
      * @param delegated whether the button is drawn on /manage, where the host is operator inventory
      */
@@ -161,7 +162,7 @@ final class InstanceActions {
             .icon(Icon.of("rotate-right"))
             .inlineInRow(false)
             .hiddenWhen(row -> !(InstanceStatus.forToken(row.get(InstanceModel.STATUS)) instanceof InstanceStatus status
-                && status.deployed()))
+                && status.deployed() && !status.terminating()))
             .disabledWhen((row, access) -> OwnedInstances.placementReasonOf(row, delegated, access))
             .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.INSTANCE.of("restart"),
                 HohenheimMicrocopy.INSTANCE.of("restart_confirm"), ActionStyle.DEFAULT))

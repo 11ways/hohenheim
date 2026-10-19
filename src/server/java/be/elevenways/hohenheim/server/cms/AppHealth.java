@@ -473,7 +473,7 @@ final class AppHealth {
                 : RecordHealth.unknown(HohenheimMicrocopy.APP_HEALTH.of("not_deployed"))
                     .detail(HohenheimMicrocopy.APP_HEALTH.of("not_running_detail"))
                     .fixedBy(InstanceOperations.START.id());
-            case STARTING, CAPTURING, RESTORING, MIGRATING -> RecordHealth.unknown(status.label());
+            case STARTING, CAPTURING, RESTORING, MIGRATING, DESTROYING -> RecordHealth.unknown(status.label());
         };
         // A running workload whose site turns visitors away serves nothing, though it runs.
         return new Verdict(health, workloadServes(status) && health.tone() != HealthTone.BROKEN, root);
