@@ -539,9 +539,16 @@ task browserTestSolo(type: Test) {
 // shutdown banner never reaches the captured log (its pipe is gone by teardown), so this
 // finalizer -- which runs on task FAILURE too, that being the point -- reads what the
 // worker left on disk and says it where the log is actually read.
+//
+// AIDEV-NOTE: only the lanes whose Test task RAN in this build, after it ended. zenit-dev runs
+// each lane in its own build at once (two-phase test runs, 2026-10-19 run 2942): a sibling
+// build's markers are its live JVMs' progress, and reading them printed "KILLED IN FLIGHT"
+// for tests that went on to pass. A lane's markers and its verdicts now come from one task.
 task reportTruncatedBrowserTests {
     doLast {
-        ['browserTest', 'browserTestStandalone', 'browserTestSolo'].each { lane ->
+        def ran = gradle.taskGraph.allTasks.findAll { it instanceof Test && it.project == project
+            && it.state.executed && !it.state.skipped }*.name as Set
+        ['browserTest', 'browserTestStandalone', 'browserTestSolo'].findAll { ran.contains(it) }.each { lane ->
             def dir = file("${buildDir}/live-lane-truncations/${lane}")
             if (dir.directory) {
                 dir.eachFile { marker -> System.err.print(marker.text) }
