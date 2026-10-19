@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.server.instance.UnfinishedDestroys;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.activity.OperationSentences;
@@ -219,7 +220,7 @@ public final class StackOperations {
     private static @NonNull Integer deleteStack(@NonNull Row stack) {
         Integer stackId = stack.get(StackModel.ID);
         try {
-            StackRuntime.get().destroy(stackId, false);
+            StackRuntime.get().destroy(stackId, false, UnfinishedDestroys.Policy.REQUESTED);
         } catch (IOException teardown) {
             Blast.log("STACK: delete of stack", stackId, "refused -- the runtime teardown failed:",
                 teardown.getMessage());
@@ -249,7 +250,7 @@ public final class StackOperations {
                 StackServiceModel.NAME)));
         }
         try {
-            StackInstances.destroyFor(serviceId);
+            StackInstances.destroyFor(serviceId, UnfinishedDestroys.Policy.REQUESTED);
         } catch (IOException undeletable) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("stack_destroy_failed"));
         }

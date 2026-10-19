@@ -482,9 +482,11 @@ public class InstanceModel extends Model {
      * (2026-10-08, converted by M017); null while none was stamped.
      *
      * AIDEV-NOTE: health reads THIS row, never the activity log (folio-history-DESIGN-v3.2 G.7): the log may be
-     * pruned and stops carrying prose. Written only by InstanceOperationGuard's ERROR stamps, in the same statement
-     * as the status; a later non-error status leaves it, since only an ERROR status reads it. A plain string, never
-     * rendered: the verb vocabulary is its home, and {@link #stoppageCauseOf} reads an unknown key as none.
+     * pruned and stops carrying prose. Written by InstanceOperationGuard's ERROR stamps, in the same statement as the
+     * status, and by its stampDestroyUnfinished on a record left {@code destroying} whose end failed too often (cause
+     * {@code destroy_unfinished}); a later status leaves it, since only an ERROR status, and a destroying one for that
+     * cause alone, reads it. A plain string, never rendered: the verb vocabulary is its home, and
+     * {@link #stoppageCauseOf} reads an unknown key as none.
      */
     public static final StringField STOPPAGE_CAUSE = SCHEMA.addField(
         StringField.builder().name("stoppage_cause").filterable(false).build());

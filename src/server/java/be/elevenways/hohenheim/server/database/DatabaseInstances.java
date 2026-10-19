@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.database;
 
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
@@ -16,6 +17,7 @@ import be.elevenways.hohenheim.server.instance.PlaintextEnvironments;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
+import be.elevenways.hohenheim.server.instance.UnfinishedDestroys;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.Blast;
@@ -90,6 +92,31 @@ public final class DatabaseInstances {
     /** The engine instance owned by one host record, or null before it has one. */
     public static @Nullable Row ownedBy(@NonNull EngineHost host) {
         return OwnedInstances.soleOwnedBy(host.ownerModel(), host.ownerId());
+    }
+
+    /**
+     * Which SHARED databases still own the dedicated engine instance a move left being destroyed and then held
+     * (UnfinishedDestroys): the leftover their FINISH_OLD_ENGINE action retries. One grouped read for all.
+     *
+     * @return per database, in order
+     */
+    public static @NonNull List<Boolean> holdOldEngines(@NonNull List<? extends Row> databases) {
+        List<Integer> shared = new ArrayList<>();
+        for (Row database : databases) {
+            Integer id = database.get(DatabaseModel.ID);
+            if (id != null && DatabaseModel.isShared(database)) {
+                shared.add(id);
+            }
+        }
+        Map<Integer, Row> owned = shared.isEmpty() ? Map.of()
+            : OwnedInstances.soleOwnedAmong(DatabaseModel.MODEL_ID, shared);
+        List<Boolean> held = new ArrayList<>(databases.size());
+        for (Row database : databases) {
+            Row instance = DatabaseModel.isShared(database) ? owned.get(database.get(DatabaseModel.ID)) : null;
+            held.add(instance != null && InstanceModel.isTerminating(instance)
+                && InstanceModel.stoppageCauseOf(instance) == HohenheimActivityAction.DESTROY_UNFINISHED);
+        }
+        return held;
     }
 
     /**
@@ -349,13 +376,22 @@ public final class DatabaseInstances {
      */
     public static void destroyFor(@NonNull EngineHost host, boolean removeData)
             throws IOException {
+        destroyFor(host, removeData, UnfinishedDestroys.Policy.AUTOMATIC);
+    }
+
+    /**
+     * {@link #destroyFor(EngineHost, boolean)}, the engine instance destroyed under {@code policy}: the owner's
+     * requested Delete is the one way to retry an engine instance whose destroy was left unfinished.
+     */
+    public static void destroyFor(@NonNull EngineHost host, boolean removeData,
+                                  UnfinishedDestroys.@NonNull Policy policy) throws IOException {
         String serverName = ServerModel.nameOf(host.serverId());
         Row instance = ownedBy(host);
         if (instance != null) {
             int instanceId = instance.get(InstanceModel.ID);
             try {
                 OwnedInstances.inScope(SOURCE, host.ownerModel(), host.ownerId(), () -> {
-                    new InstanceService().destroy(instanceId);
+                    new InstanceService().destroy(instanceId, policy);
                     return null;
                 });
             } catch (Violations refused) {
@@ -387,6 +423,12 @@ public final class DatabaseInstances {
     /** {@link #destroyFor(EngineHost, boolean)} for a DEDICATED database record. */
     public static void destroyFor(@NonNull Row database, boolean removeData) throws IOException {
         destroyFor(EngineHost.dedicated(database), removeData);
+    }
+
+    /** {@link #destroyFor(EngineHost, boolean, UnfinishedDestroys.Policy)} for a DEDICATED database record. */
+    public static void destroyFor(@NonNull Row database, boolean removeData,
+                                  UnfinishedDestroys.@NonNull Policy policy) throws IOException {
+        destroyFor(EngineHost.dedicated(database), removeData, policy);
     }
 
     /**

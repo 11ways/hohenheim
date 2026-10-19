@@ -598,7 +598,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Maximum memory in megabytes; its host reserves the same amount. Leave blank for the default limit of its kind.",
+      "text": "Maximum memory; its host reserves the same amount. Leave blank for the default limit of its kind.",
       "scope": "help"
     }
   ],
@@ -6283,6 +6283,10 @@
     "text": "Destroy of {$name} failed: {$reason}. The record is kept; retry once the host is reachable.",
     "scope": "violations"
   },
+  "instance_destroy_unfinished": {
+    "text": "{$name} is still being destroyed: its end could not be written ({$reason}). Delete it again to retry.",
+    "scope": "violations"
+  },
   "instance_data_destroy_failed": {
     "text": "The data of {$name} could not be removed: {$reason}. The volumes the host still holds are reported by the reconciler; retry once it is reachable.",
     "scope": "violations"
@@ -9200,7 +9204,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Size of the workload's own root disk in GB. Leave blank to inherit the image size. It can only grow, and only while the workload is stopped.",
+      "text": "Size of the workload's own root disk. Leave blank to inherit the image size. It can only grow, and only while the workload is stopped.",
       "scope": "help"
     }
   ],
@@ -12420,7 +12424,7 @@
     "scope": "hohenheim_field"
   },
   "volume_quota_mb": {
-    "text": "Maximum size of this volume in megabytes. Leave blank for no limit.",
+    "text": "Maximum size of this volume. Leave blank for no limit.",
     "scope": "help"
   },
   "volume_unknown": {
@@ -14676,7 +14680,7 @@
   "settings.hohenheim.auth_proteus.realm_client.label": "Realm client",
   "settings.hohenheim.auth_proteus.realm_client.help": "Slug of the Proteus realm client.",
   "settings.hohenheim.backup.max_archive_mb.label": "Max archive size",
-  "settings.hohenheim.backup.max_archive_mb.help": "Upper bound in MiB for one captured volume archive, which is buffered through controller memory; a larger volume refuses to snapshot.",
+  "settings.hohenheim.backup.max_archive_mb.help": "Upper bound for one captured volume archive, which is buffered through controller memory; a larger volume refuses to snapshot.",
   "settings.hohenheim.backup.retention.label": "Backup retention",
   "settings.hohenheim.backup.retention.help": "Completed backups kept per instance; 0 or less keeps everything.",
   "settings.hohenheim.backup.snapshot_path.label": "Snapshot path",
@@ -14694,17 +14698,17 @@
   "settings.hohenheim.builds.detector_image.label": "Detector image",
   "settings.hohenheim.builds.detector_image.help": "Base image the nixpacks detection phase runs in without network access, needing only a POSIX shell.",
   "settings.hohenheim.builds.disk_limit_mb.label": "Disk limit",
-  "settings.hohenheim.builds.disk_limit_mb.help": "Ceiling in MiB on a build container's writable layer, its pushed build context and the artifact read back out; a build crossing it is killed.",
+  "settings.hohenheim.builds.disk_limit_mb.help": "Ceiling on a build container's writable layer, its pushed build context and the artifact read back out; a build crossing it is killed.",
   "settings.hohenheim.builds.history_per_owner.label": "Build history per owner",
   "settings.hohenheim.builds.history_per_owner.help": "Build operations kept per owning record; older ones are pruned when a build completes.",
   "settings.hohenheim.builds.log_limit_kb.label": "Build log limit",
-  "settings.hohenheim.builds.log_limit_kb.help": "Size in KiB of the build log kept on the build operation; output past it is dropped with a marker line.",
+  "settings.hohenheim.builds.log_limit_kb.help": "Size of the build log kept on the build operation; output past it is dropped with a marker line.",
   "settings.hohenheim.builds.max_artifact_mb.label": "Max artifact size",
-  "settings.hohenheim.builds.max_artifact_mb.help": "Upper bound in MiB for the image tar read back out of a build sandbox through controller memory; a larger artifact fails the build.",
+  "settings.hohenheim.builds.max_artifact_mb.help": "Upper bound for the image tar read back out of a build sandbox through controller memory; a larger artifact fails the build.",
   "settings.hohenheim.builds.max_upload_mb.label": "Max upload size",
-  "settings.hohenheim.builds.max_upload_mb.help": "Upper bound in MiB for an artifact uploaded to be released, which streams to disk and so guards disk rather than memory.",
+  "settings.hohenheim.builds.max_upload_mb.help": "Upper bound for an artifact uploaded to be released, which streams to disk and so guards disk rather than memory.",
   "settings.hohenheim.builds.memory_limit_mb.label": "Memory limit",
-  "settings.hohenheim.builds.memory_limit_mb.help": "Memory ceiling in MiB of one build container, above which the kernel kills the build rather than the host.",
+  "settings.hohenheim.builds.memory_limit_mb.help": "Memory ceiling of one build container, above which the kernel kills the build rather than the host.",
   "settings.hohenheim.builds.nixpacks_sha256.label": "Nixpacks SHA-256",
   "settings.hohenheim.builds.nixpacks_sha256.help": "sha256 of the pinned nixpacks x86_64-musl release archive, verified before extraction; a mismatch refuses the build.",
   "settings.hohenheim.builds.nixpacks_version.label": "Nixpacks version",
@@ -14716,7 +14720,7 @@
   "settings.hohenheim.capacity.facts_max_age_hours.label": "Capacity reading maximum age",
   "settings.hohenheim.capacity.facts_max_age_hours.help": "Hours a host's stored preflight memory reading stays valid for placement, after which the host is not chosen until a new preflight; 0 or less removes the bound.",
   "settings.hohenheim.capacity.host_memory_reserve_mb.label": "Host memory reserve",
-  "settings.hohenheim.capacity.host_memory_reserve_mb.help": "Memory in MB subtracted from a host's measured total before any workload is booked against it, left for the kernel, the container or VM daemon and the page cache.",
+  "settings.hohenheim.capacity.host_memory_reserve_mb.help": "Memory subtracted from a host's measured total before any workload is booked against it, left for the kernel, the container or VM daemon and the page cache.",
   "settings.hohenheim.capacity.memory_overcommit_ratio.label": "Memory overcommit ratio",
   "settings.hohenheim.capacity.memory_overcommit_ratio.help": "Multiplier on the bookable memory after the reserve, where 1.0 books no more than the host physically has and a higher value bets that workloads will not all use their declared memory at once.",
   "settings.hohenheim.database.backup_path.label": "Backup path",
@@ -14726,7 +14730,7 @@
   "settings.hohenheim.database.control_plane_backup_target.label": "Control-plane backup target",
   "settings.hohenheim.database.control_plane_backup_target.help": "Required backup target that receives the control-plane recovery archives, which carry the master keys in the clear, so pick a target in another failure domain and protect it like the keyring file.",
   "settings.hohenheim.database.max_dump_mb.label": "Max dump size",
-  "settings.hohenheim.database.max_dump_mb.help": "Upper bound in MiB for one managed-database dump; a dump that grows past it is cut off and its partial file deleted.",
+  "settings.hohenheim.database.max_dump_mb.help": "Upper bound for one managed-database dump; a dump that grows past it is cut off and its partial file deleted.",
   "settings.hohenheim.database.path.label": "Database file (retired)",
   "settings.hohenheim.database.path.help": "Retired: at the next start a value set here moves to zenit's database.url as the jdbc:sqlite: url of that file, a relative path resolved against the settings root; set database.url in settings/local.dry instead.",
   "settings.hohenheim.database.url.label": "Database URL (deprecated)",
@@ -14746,7 +14750,7 @@
   "settings.hohenheim.files.max_entries.label": "Max directory entries",
   "settings.hohenheim.files.max_entries.help": "Upper bound on the entries one directory listing returns; a larger directory refuses to list rather than show a truncated listing.",
   "settings.hohenheim.files.max_file_kb.label": "Max file size",
-  "settings.hohenheim.files.max_file_kb.help": "Upper bound in KiB for one file read or written through the file manager, enforced during the transfer so a partial file never lands.",
+  "settings.hohenheim.files.max_file_kb.help": "Upper bound for one file read or written through the file manager, enforced during the transfer so a partial file never lands.",
   "settings.hohenheim.sftp.enabled.label": "SFTP for app files",
   "settings.hohenheim.sftp.enabled.help": "Run Hohenheim's own SFTP server: accounts sign in with an SFTP password or their SSH key and reach the same files, under the same rights, as the Files tab. Never the host's sshd or its accounts.",
   "settings.hohenheim.sftp.port.label": "SFTP port",
@@ -14756,7 +14760,7 @@
   "settings.hohenheim.sftp.public_host.label": "SFTP address shown",
   "settings.hohenheim.sftp.public_host.help": "The address the Files tab tells people to connect to; blank shows the address the admin page was opened on.",
   "settings.hohenheim.sftp.max_file_mb.label": "Max SFTP file size",
-  "settings.hohenheim.sftp.max_file_mb.help": "Largest file in MiB one SFTP read or upload moves; separate from the Files tab's limit because SFTP spools to disk.",
+  "settings.hohenheim.sftp.max_file_mb.help": "Largest file one SFTP read or upload moves; separate from the Files tab's limit because SFTP spools to disk.",
   "settings.hohenheim.sftp.max_sessions.label": "Max SFTP sessions",
   "settings.hohenheim.sftp.max_sessions.help": "Open SFTP sessions across all accounts; one more is refused when it signs in.",
   "settings.hohenheim.sftp.max_sessions_per_account.label": "Max SFTP sessions per account",
@@ -14862,13 +14866,13 @@
   "settings.hohenheim.quota.max_databases_per_owner.label": "Max managed databases per owner",
   "settings.hohenheim.quota.max_databases_per_owner.help": "Default cap on the number of managed databases one owner may hold, charged on top of the engine container's instance slot and overridden by a per-owner Instance Quota record; 0 or less means no cap.",
   "settings.hohenheim.quota.max_disk_gb_per_owner.label": "Max disk per owner",
-  "settings.hohenheim.quota.max_disk_gb_per_owner.help": "Default cap in GB on the total attached-disk size one owner may hold, summed over instance device rows and overridden by a per-owner Instance Quota record; 0 or less means no cap.",
+  "settings.hohenheim.quota.max_disk_gb_per_owner.help": "Default cap on the total attached-disk size one owner may hold, summed over instance device rows and overridden by a per-owner Instance Quota record; 0 or less means no cap.",
   "settings.hohenheim.quota.max_extra_nics_per_owner.label": "Max extra NICs per owner",
   "settings.hohenheim.quota.max_extra_nics_per_owner.help": "Default cap on the extra NICs, beyond the driver's primary one, that one owner may attach across instances, overridden by a per-owner Instance Quota record; 0 or less means no cap.",
   "settings.hohenheim.quota.max_instances_per_owner.label": "Max instances per owner",
   "settings.hohenheim.quota.max_instances_per_owner.help": "Default maximum number of live instances one owner may hold, overridden by a per-owner Instance Quota record; 0 or less means no cap, and usage is counted either way.",
   "settings.hohenheim.quota.max_memory_mb_per_owner.label": "Max workload memory per owner",
-  "settings.hohenheim.quota.max_memory_mb_per_owner.help": "Default cap in MB on the total workload memory one owner may hold across live instances, each workload charged its memory limit or its kind's declared footprint, overridden by a per-owner Instance Quota record; 0 or less means no cap.",
+  "settings.hohenheim.quota.max_memory_mb_per_owner.help": "Default cap on the total workload memory one owner may hold across live instances, each workload charged its memory limit or its kind's declared footprint, overridden by a per-owner Instance Quota record; 0 or less means no cap.",
   "settings.hohenheim.quota.max_sites_per_owner.label": "Max sites per owner",
   "settings.hohenheim.quota.max_sites_per_owner.help": "Default cap on the number of live sites one owner may hold, counted per site record and overridden by a per-owner Instance Quota record; 0 or less means no cap.",
   "settings.hohenheim.releases.drain_seconds.label": "Drain time",
@@ -15928,6 +15932,18 @@
     "text": "Open {$name}",
     "scope": "attention_action"
   },
+  "act_delete_again": {
+    "text": "Open {$name} and delete it again",
+    "scope": "attention_action"
+  },
+  "act_delete_owner_again": {
+    "text": "Open {$name}: deleting it retries this teardown",
+    "scope": "attention_action"
+  },
+  "instance_unfinished_destroy": {
+    "text": "{$name} could not be fully destroyed",
+    "scope": "attention_title"
+  },
   "act_see_deploy": {
     "text": "See the deploy",
     "scope": "attention_action"
@@ -16676,6 +16692,12 @@
   "move_not_active": {"text": "Only a running database can move.", "scope": "database"},
   "move_not_serving": {"text": "It cannot move now. {$reason}.", "scope": "database"},
   "back_up_database": {"text": "{$actor} backed up database {$subject}", "scope": "hohenheim", "target": "happened"},
+  "finish_database_old_engine": {"text": "{$actor} finished removing the old engine of database {$subject}", "scope": "hohenheim", "target": "happened"},
+  "finish_old_engine": {"text": "Finish removing the old engine", "scope": "database"},
+  "finish_old_engine_hint": {"text": "Removes the dedicated engine a move onto a shared engine could not remove; the database itself stays.", "scope": "database"},
+  "finish_old_engine_done": {"text": "Removed the old engine of {$name}", "scope": "database"},
+  "act_finish_old_engine": {"text": "Open {$name} and finish removing its old engine", "scope": "attention_action"},
+  "database_old_engine_failed": {"text": "The old engine of '{$name}' could not be removed: {$reason}. The database itself is untouched; retry once the host answers.", "scope": "violations"},
   "runs_on_column": {"text": "Runs on", "scope": "database_list"},
   "last_backup_column": {"text": "Last backup", "scope": "database_list"},
   "runs_on": {"text": "Runs on", "scope": "database_overview"},
@@ -18327,6 +18349,18 @@
     },
     {
       "text": "{$subject} stopped and its automatic restart was refused",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "destroy_unfinished": [
+    {
+      "text": "Destroy not finished",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": "The destroy of {$subject} could not be finished; Delete retries it",
       "scope": "hohenheim",
       "target": "happened"
     }

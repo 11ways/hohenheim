@@ -15,6 +15,7 @@ import be.elevenways.hohenheim.server.cms.PutOnline;
 import be.elevenways.hohenheim.server.cms.SiteWrites;
 import be.elevenways.hohenheim.server.proxy.ProxyReloadHooks;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
+import be.elevenways.hohenheim.test.FreePorts;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
@@ -49,8 +50,6 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -58,7 +57,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.ThreadLocalRandom;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -78,9 +76,6 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
 class StreamJourneyTest extends HohenheimTestBase {
 
     private static final String KIND = "hohenheim:stream";
-
-    /** The lowest port a journey's stream takes: above the well-known and most registered services' ports. */
-    private static final int LOWEST_PUBLIC_PORT = 20_000;
 
     private static ProxyServer proxy;
     private static ServerSocket tcpEcho;
@@ -137,7 +132,7 @@ class StreamJourneyTest extends HohenheimTestBase {
             throws Exception {
         RateLimitMiddleware.limiter().clear();
         AccessContext operator = TenantConduits.operator();
-        int publicPort = publicPort();
+        int publicPort = FreePorts.tcpAndUdp();
 
         // 1. The chooser offers a TCP/UDP stream among the addresses, and its card opens a wizard of its own: what it
         //    forwards to, then its public port; no address and no HTTPS step.
@@ -229,7 +224,7 @@ class StreamJourneyTest extends HohenheimTestBase {
         int basic = accessList("r4a basic auth", AccessRuleModel.TYPE_BASIC_AUTH,
             Map.of("username", "someone", "password", "secret-words"));
         DomainRefusal wizardRefusal = catchThrowableOfType(DomainRefusal.class,
-            () -> OperationPipeline.invoke(request(stream("basic", publicPort(), "tcp", basic))));
+            () -> OperationPipeline.invoke(request(stream("basic", FreePorts.tcpAndUdp(), "tcp", basic))));
         assertThat(List.of(String.valueOf(wizardRefusal.field()),
                 Objects.requireNonNull(wizardRefusal.words()).key()))
             .as("step 7: the wizard refuses it before any run")
@@ -434,52 +429,6 @@ class StreamJourneyTest extends HohenheimTestBase {
             client.getInputStream().transferTo(client.getOutputStream());
         } catch (IOException ended) {
             // the relay closed its side
-        }
-    }
-
-    /**
-     * @return a port free for TCP and UDP alike, below the kernel's ephemeral range
-     *
-     * AIDEV-NOTE: a stream forwards both transports on one number, so the port must be free for both, and it must lie
-     * outside the range the kernel hands any process's outgoing sockets (a DNS lookup's UDP source port): a number from
-     * that range can be taken between this probe and the stream's bind. A full lane lost step 5 that way, the UDP
-     * rebind refused with "Address already in use".
-     */
-    private static int publicPort() throws IOException {
-        int ceiling = ephemeralFloor();
-        if (ceiling <= LOWEST_PUBLIC_PORT) {
-            throw new IllegalStateException("the kernel's ephemeral range starts at " + ceiling
-                + ", leaving no port below it for a stream");
-        }
-        for (int attempt = 0; attempt < 100; attempt++) {
-            int port = ThreadLocalRandom.current().nextInt(LOWEST_PUBLIC_PORT, ceiling);
-            if (freeForBoth(port)) {
-                return port;
-            }
-        }
-        throw new IOException("no port below " + ceiling + " is free for TCP and UDP");
-    }
-
-    /** @return the first port of the kernel's ephemeral range, Linux's default when the host does not say */
-    private static int ephemeralFloor() {
-        try {
-            // AIDEV-NOTE: never Files.readString here: a /proc file reports size 0, and JDK 25's readString then
-            // returned only its first byte ("3" of "32768").
-            List<String> range = Files.readAllLines(Path.of("/proc/sys/net/ipv4/ip_local_port_range"));
-            return Integer.parseInt(range.getFirst().trim().split("\\s+")[0]);
-        } catch (IOException | RuntimeException unreadable) {
-            return 32_768;
-        }
-    }
-
-    /** @return whether nothing holds the port on any address, for TCP or for UDP */
-    private static boolean freeForBoth(int port) {
-        try (ServerSocket tcp = new ServerSocket(); DatagramSocket udp = new DatagramSocket(null)) {
-            tcp.bind(new InetSocketAddress("0.0.0.0", port));
-            udp.bind(new InetSocketAddress("0.0.0.0", port));
-            return true;
-        } catch (IOException taken) {
-            return false;
         }
     }
 }

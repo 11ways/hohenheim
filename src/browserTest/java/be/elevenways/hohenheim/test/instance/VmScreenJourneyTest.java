@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.instance.VmScreens;
 import be.elevenways.hohenheim.server.instance.VmSpice;
+import be.elevenways.hohenheim.test.FreePorts;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -42,7 +43,6 @@ import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.Cookie;
 import org.junit.jupiter.api.Test;
 
-import java.net.ServerSocket;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -281,10 +281,7 @@ class VmScreenJourneyTest extends HohenheimTestBase {
             VmSpice.SEAM.restoreInstalled(previous);
         }
 
-        int closedPort;
-        try (ServerSocket probe = new ServerSocket(0)) {
-            closedPort = probe.getLocalPort();
-        }
+        int closedPort = FreePorts.tcpAndUdp();
         try {
             // 5. A console whose SPICE server cannot be reached fails its source: the viewer reads the screen as
             //    unavailable, and the console it started is ended all the same.

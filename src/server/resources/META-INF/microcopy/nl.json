@@ -598,7 +598,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Maximaal geheugen in megabytes; de host reserveert evenveel. Laat leeg voor de standaardlimiet van dit soort.",
+      "text": "Maximaal geheugen; de host reserveert evenveel. Laat leeg voor de standaardlimiet van dit soort.",
       "scope": "help"
     }
   ],
@@ -6283,6 +6283,10 @@
     "text": "Vernietigen van {$name} is mislukt: {$reason}. Het record blijft bewaard; probeer opnieuw zodra de host bereikbaar is.",
     "scope": "violations"
   },
+  "instance_destroy_unfinished": {
+    "text": "{$name} wordt nog vernietigd: het einde ervan kon niet worden weggeschreven ({$reason}). Verwijder het opnieuw om het nog eens te proberen.",
+    "scope": "violations"
+  },
   "instance_data_destroy_failed": {
     "text": "De data van {$name} kon niet verwijderd worden: {$reason}. De volumes die de host nog vasthoudt meldt de reconciler; probeer opnieuw zodra hij bereikbaar is.",
     "scope": "violations"
@@ -9200,7 +9204,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Grootte van de eigen rootschijf van de workload in GB. Laat leeg om de grootte van de image over te nemen. Ze kan enkel groeien, en enkel wanneer de workload gestopt is.",
+      "text": "Grootte van de eigen rootschijf van de workload. Laat leeg om de grootte van de image over te nemen. Ze kan enkel groeien, en enkel wanneer de workload gestopt is.",
       "scope": "help"
     }
   ],
@@ -12420,7 +12424,7 @@
     "scope": "hohenheim_field"
   },
   "volume_quota_mb": {
-    "text": "Maximale grootte van dit volume in megabytes. Laat leeg voor geen limiet.",
+    "text": "Maximale grootte van dit volume. Laat leeg voor geen limiet.",
     "scope": "help"
   },
   "volume_unknown": {
@@ -14676,7 +14680,7 @@
   "settings.hohenheim.auth_proteus.realm_client.label": "Realmclient",
   "settings.hohenheim.auth_proteus.realm_client.help": "Slug van de Proteus-realmclient.",
   "settings.hohenheim.backup.max_archive_mb.label": "Max. archiefgrootte",
-  "settings.hohenheim.backup.max_archive_mb.help": "Bovengrens in MiB voor een vastgelegd volumearchief, dat via het geheugen van de controller loopt; een groter volume weigert een snapshot.",
+  "settings.hohenheim.backup.max_archive_mb.help": "Bovengrens voor een vastgelegd volumearchief, dat via het geheugen van de controller loopt; een groter volume weigert een snapshot.",
   "settings.hohenheim.backup.retention.label": "Bewaarde back-ups",
   "settings.hohenheim.backup.retention.help": "Aantal voltooide back-ups dat per instantie bewaard blijft; 0 of minder bewaart alles.",
   "settings.hohenheim.backup.snapshot_path.label": "Snapshotpad",
@@ -14694,17 +14698,17 @@
   "settings.hohenheim.builds.detector_image.label": "Detectie-image",
   "settings.hohenheim.builds.detector_image.help": "Basisimage waarin de nixpacks-detectiefase zonder netwerk draait, en die alleen een POSIX-shell nodig heeft.",
   "settings.hohenheim.builds.disk_limit_mb.label": "Schijflimiet",
-  "settings.hohenheim.builds.disk_limit_mb.help": "Plafond in MiB op de schrijfbare laag van een buildcontainer, de meegestuurde buildcontext en het teruggelezen artefact; een build die het overschrijdt, wordt gestopt.",
+  "settings.hohenheim.builds.disk_limit_mb.help": "Plafond op de schrijfbare laag van een buildcontainer, de meegestuurde buildcontext en het teruggelezen artefact; een build die het overschrijdt, wordt gestopt.",
   "settings.hohenheim.builds.history_per_owner.label": "Buildgeschiedenis per eigenaar",
   "settings.hohenheim.builds.history_per_owner.help": "Aantal buildbewerkingen dat per eigenaarsrecord bewaard blijft; oudere worden opgeruimd wanneer een build afloopt.",
   "settings.hohenheim.builds.log_limit_kb.label": "Buildloglimiet",
-  "settings.hohenheim.builds.log_limit_kb.help": "Grootte in KiB van het buildlog dat bij de buildbewerking bewaard wordt; uitvoer daarboven valt weg met een markeringsregel.",
+  "settings.hohenheim.builds.log_limit_kb.help": "Grootte van het buildlog dat bij de buildbewerking bewaard wordt; uitvoer daarboven valt weg met een markeringsregel.",
   "settings.hohenheim.builds.max_artifact_mb.label": "Max. artefactgrootte",
-  "settings.hohenheim.builds.max_artifact_mb.help": "Bovengrens in MiB voor de image-tar die via het geheugen van de controller uit een buildsandbox teruggelezen wordt; een groter artefact laat de build mislukken.",
+  "settings.hohenheim.builds.max_artifact_mb.help": "Bovengrens voor de image-tar die via het geheugen van de controller uit een buildsandbox teruggelezen wordt; een groter artefact laat de build mislukken.",
   "settings.hohenheim.builds.max_upload_mb.label": "Max. uploadgrootte",
-  "settings.hohenheim.builds.max_upload_mb.help": "Bovengrens in MiB voor een artefact dat aangeleverd wordt om uit te rollen; het gaat rechtstreeks naar schijf, dus deze limiet beschermt de schijf en niet het geheugen.",
+  "settings.hohenheim.builds.max_upload_mb.help": "Bovengrens voor een artefact dat aangeleverd wordt om uit te rollen; het gaat rechtstreeks naar schijf, dus deze limiet beschermt de schijf en niet het geheugen.",
   "settings.hohenheim.builds.memory_limit_mb.label": "Geheugenlimiet",
-  "settings.hohenheim.builds.memory_limit_mb.help": "Geheugenplafond in MiB van een buildcontainer, waarboven de kernel de build stopt in plaats van de host.",
+  "settings.hohenheim.builds.memory_limit_mb.help": "Geheugenplafond van een buildcontainer, waarboven de kernel de build stopt in plaats van de host.",
   "settings.hohenheim.builds.nixpacks_sha256.label": "Nixpacks-SHA-256",
   "settings.hohenheim.builds.nixpacks_sha256.help": "sha256 van het vastgezette nixpacks-releasearchief voor x86_64-musl, gecontroleerd voor het uitpakken; bij een afwijking wordt de build geweigerd.",
   "settings.hohenheim.builds.nixpacks_version.label": "Nixpacks-versie",
@@ -14716,7 +14720,7 @@
   "settings.hohenheim.capacity.facts_max_age_hours.label": "Maximale leeftijd van de capaciteitsmeting",
   "settings.hohenheim.capacity.facts_max_age_hours.help": "Aantal uren dat de opgeslagen preflight-geheugenmeting van een host geldig blijft voor plaatsing, waarna de host pas na een nieuwe preflight weer gekozen wordt; 0 of minder heft de grens op.",
   "settings.hohenheim.capacity.host_memory_reserve_mb.label": "Geheugenreserve van de host",
-  "settings.hohenheim.capacity.host_memory_reserve_mb.help": "Geheugen in MB dat van het gemeten totaal van een host afgetrokken wordt voordat er een workload op geboekt wordt, voor de kernel, de container- of VM-daemon en de paginacache.",
+  "settings.hohenheim.capacity.host_memory_reserve_mb.help": "Geheugen dat van het gemeten totaal van een host afgetrokken wordt voordat er een workload op geboekt wordt, voor de kernel, de container- of VM-daemon en de paginacache.",
   "settings.hohenheim.capacity.memory_overcommit_ratio.label": "Overcommitfactor voor geheugen",
   "settings.hohenheim.capacity.memory_overcommit_ratio.help": "Vermenigvuldiger op het boekbare geheugen na de reserve, waarbij 1.0 niet meer boekt dan de host fysiek heeft en een hogere waarde erop gokt dat workloads niet allemaal tegelijk hun gedeclareerde geheugen gebruiken.",
   "settings.hohenheim.database.backup_path.label": "Back-uppad",
@@ -14726,7 +14730,7 @@
   "settings.hohenheim.database.control_plane_backup_target.label": "Back-updoel van het control plane",
   "settings.hohenheim.database.control_plane_backup_target.help": "Verplicht back-updoel dat de herstelarchieven van het control plane ontvangt; die bevatten de hoofdsleutels onversleuteld, dus kies een doel in een ander faaldomein en bescherm het zoals het sleutelbestand.",
   "settings.hohenheim.database.max_dump_mb.label": "Max. dumpgrootte",
-  "settings.hohenheim.database.max_dump_mb.help": "Bovengrens in MiB voor een dump van een beheerde database; een dump die groter wordt, wordt afgebroken en het deelbestand verwijderd.",
+  "settings.hohenheim.database.max_dump_mb.help": "Bovengrens voor een dump van een beheerde database; een dump die groter wordt, wordt afgebroken en het deelbestand verwijderd.",
   "settings.hohenheim.database.path.label": "Databasebestand (vervallen)",
   "settings.hohenheim.database.path.help": "Vervallen: bij de volgende start verhuist een waarde hier naar database.url van zenit als de jdbc:sqlite:-url van dat bestand, een relatief pad opgelost tegen de instellingenmap; stel in plaats daarvan database.url in settings/local.dry in.",
   "settings.hohenheim.database.url.label": "Database-URL (verouderd)",
@@ -14746,7 +14750,7 @@
   "settings.hohenheim.files.max_entries.label": "Max. items per map",
   "settings.hohenheim.files.max_entries.help": "Bovengrens op het aantal items dat een maplijst teruggeeft; een grotere map wordt niet getoond in plaats van als afgekapte lijst.",
   "settings.hohenheim.files.max_file_kb.label": "Max. bestandsgrootte",
-  "settings.hohenheim.files.max_file_kb.help": "Bovengrens in KiB voor een bestand dat via het bestandsbeheer gelezen of geschreven wordt, afgedwongen tijdens de overdracht zodat er nooit een half bestand achterblijft.",
+  "settings.hohenheim.files.max_file_kb.help": "Bovengrens voor een bestand dat via het bestandsbeheer gelezen of geschreven wordt, afgedwongen tijdens de overdracht zodat er nooit een half bestand achterblijft.",
   "settings.hohenheim.sftp.enabled.label": "SFTP voor app-bestanden",
   "settings.hohenheim.sftp.enabled.help": "Draai de eigen SFTP-server van Hohenheim: accounts melden zich aan met een SFTP-wachtwoord of hun SSH-sleutel en bereiken dezelfde bestanden, met dezelfde rechten, als het tabblad Bestanden. Nooit de sshd of de accounts van de host.",
   "settings.hohenheim.sftp.port.label": "SFTP-poort",
@@ -14756,7 +14760,7 @@
   "settings.hohenheim.sftp.public_host.label": "Getoond SFTP-adres",
   "settings.hohenheim.sftp.public_host.help": "Het adres dat het tabblad Bestanden opgeeft om mee te verbinden; leeg toont het adres waarop de beheerpagina geopend werd.",
   "settings.hohenheim.sftp.max_file_mb.label": "Max. SFTP-bestandsgrootte",
-  "settings.hohenheim.sftp.max_file_mb.help": "Grootste bestand in MiB dat een SFTP-lees- of uploadactie verplaatst; los van de limiet van het tabblad Bestanden omdat SFTP via schijf werkt.",
+  "settings.hohenheim.sftp.max_file_mb.help": "Grootste bestand dat een SFTP-lees- of uploadactie verplaatst; los van de limiet van het tabblad Bestanden omdat SFTP via schijf werkt.",
   "settings.hohenheim.sftp.max_sessions.label": "Max. SFTP-sessies",
   "settings.hohenheim.sftp.max_sessions.help": "Open SFTP-sessies over alle accounts samen; een extra sessie wordt bij het aanmelden geweigerd.",
   "settings.hohenheim.sftp.max_sessions_per_account.label": "Max. SFTP-sessies per account",
@@ -14862,13 +14866,13 @@
   "settings.hohenheim.quota.max_databases_per_owner.label": "Max. beheerde databases per eigenaar",
   "settings.hohenheim.quota.max_databases_per_owner.help": "Standaardlimiet op het aantal beheerde databases van een eigenaar, bovenop het instantieslot van de enginecontainer aangerekend en te overschrijven met een instantiequotum per eigenaar; 0 of minder betekent geen limiet.",
   "settings.hohenheim.quota.max_disk_gb_per_owner.label": "Max. schijf per eigenaar",
-  "settings.hohenheim.quota.max_disk_gb_per_owner.help": "Standaardlimiet in GB op de totale grootte van de gekoppelde schijven van een eigenaar, opgeteld over de apparaatrijen van instanties en te overschrijven met een instantiequotum per eigenaar; 0 of minder betekent geen limiet.",
+  "settings.hohenheim.quota.max_disk_gb_per_owner.help": "Standaardlimiet op de totale grootte van de gekoppelde schijven van een eigenaar, opgeteld over de apparaatrijen van instanties en te overschrijven met een instantiequotum per eigenaar; 0 of minder betekent geen limiet.",
   "settings.hohenheim.quota.max_extra_nics_per_owner.label": "Max. extra NIC's per eigenaar",
   "settings.hohenheim.quota.max_extra_nics_per_owner.help": "Standaardlimiet op de extra NIC's, naast de primaire van de driver, die een eigenaar over zijn instanties mag koppelen, te overschrijven met een instantiequotum per eigenaar; 0 of minder betekent geen limiet.",
   "settings.hohenheim.quota.max_instances_per_owner.label": "Max. instanties per eigenaar",
   "settings.hohenheim.quota.max_instances_per_owner.help": "Standaard maximaal aantal actieve instanties per eigenaar, te overschrijven met een instantiequotum per eigenaar; 0 of minder betekent geen limiet, en het gebruik wordt hoe dan ook geteld.",
   "settings.hohenheim.quota.max_memory_mb_per_owner.label": "Max. workloadgeheugen per eigenaar",
-  "settings.hohenheim.quota.max_memory_mb_per_owner.help": "Standaardlimiet in MB op het totale workloadgeheugen van een eigenaar over zijn actieve instanties, waarbij elke workload zijn geheugenlimiet of de gedeclareerde voetafdruk van zijn soort aangerekend krijgt, te overschrijven met een instantiequotum per eigenaar; 0 of minder betekent geen limiet.",
+  "settings.hohenheim.quota.max_memory_mb_per_owner.help": "Standaardlimiet op het totale workloadgeheugen van een eigenaar over zijn actieve instanties, waarbij elke workload zijn geheugenlimiet of de gedeclareerde voetafdruk van zijn soort aangerekend krijgt, te overschrijven met een instantiequotum per eigenaar; 0 of minder betekent geen limiet.",
   "settings.hohenheim.quota.max_sites_per_owner.label": "Max. sites per eigenaar",
   "settings.hohenheim.quota.max_sites_per_owner.help": "Standaardlimiet op het aantal actieve sites van een eigenaar, geteld per siterecord en te overschrijven met een instantiequotum per eigenaar; 0 of minder betekent geen limiet.",
   "settings.hohenheim.releases.drain_seconds.label": "Afbouwtijd",
@@ -15928,6 +15932,18 @@
     "text": "{$name} openen",
     "scope": "attention_action"
   },
+  "act_delete_again": {
+    "text": "{$name} openen en opnieuw verwijderen",
+    "scope": "attention_action"
+  },
+  "act_delete_owner_again": {
+    "text": "{$name} openen: het verwijderen ervan probeert deze afbraak opnieuw",
+    "scope": "attention_action"
+  },
+  "instance_unfinished_destroy": {
+    "text": "{$name} kon niet volledig vernietigd worden",
+    "scope": "attention_title"
+  },
   "act_see_deploy": {
     "text": "Uitrol bekijken",
     "scope": "attention_action"
@@ -16676,6 +16692,12 @@
   "move_not_active": {"text": "Alleen een draaiende database kan verhuizen.", "scope": "database"},
   "move_not_serving": {"text": "Verhuizen kan nu niet. {$reason}.", "scope": "database"},
   "back_up_database": {"text": "{$actor} maakte een backup van database {$subject}", "scope": "hohenheim", "target": "happened"},
+  "finish_database_old_engine": {"text": "{$actor} verwijderde de oude engine van database {$subject}", "scope": "hohenheim", "target": "happened"},
+  "finish_old_engine": {"text": "Oude engine verder verwijderen", "scope": "database"},
+  "finish_old_engine_hint": {"text": "Verwijdert de eigen engine die een verhuizing naar een gedeelde engine niet kon verwijderen; de database zelf blijft.", "scope": "database"},
+  "finish_old_engine_done": {"text": "De oude engine van {$name} is verwijderd", "scope": "database"},
+  "act_finish_old_engine": {"text": "{$name} openen en de oude engine verder verwijderen", "scope": "attention_action"},
+  "database_old_engine_failed": {"text": "De oude engine van '{$name}' kon niet worden verwijderd: {$reason}. De database zelf is ongewijzigd; probeer opnieuw zodra de host antwoordt.", "scope": "violations"},
   "runs_on_column": {"text": "Draait op", "scope": "database_list"},
   "last_backup_column": {"text": "Laatste backup", "scope": "database_list"},
   "runs_on": {"text": "Draait op", "scope": "database_overview"},
@@ -18327,6 +18349,18 @@
     },
     {
       "text": "{$subject} stopte en de automatische herstart werd geweigerd",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "destroy_unfinished": [
+    {
+      "text": "Vernietigen niet afgerond",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": "Het vernietigen van {$subject} kon niet worden afgerond; Verwijderen probeert het opnieuw",
       "scope": "hohenheim",
       "target": "happened"
     }

@@ -390,10 +390,7 @@ class TlsPassthroughTest {
     @Test
     void passthroughTargetCannotLoopBackIntoThePublicTlsListener() throws Exception {
         resetDatabase();
-        int publicPort;
-        try (ServerSocket reservation = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
-            publicPort = reservation.getLocalPort();
-        }
+        int publicPort = FreePorts.tcpAndUdp();
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, publicPort);
         setupPassthrough("loop.example.test", "exact", publicPort, false);
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
@@ -412,10 +409,7 @@ class TlsPassthroughTest {
     @Test
     void unreachableExactPassthroughNeverFallsThroughToWildcard() throws Exception {
         resetDatabase();
-        int unusedPort;
-        try (ServerSocket reservation = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
-            unusedPort = reservation.getLocalPort();
-        }
+        int unusedPort = FreePorts.tcpAndUdp();
         setupPassthrough("exact.example.test", "exact", unusedPort, false);
         rawBackend = new ServerSocket(0, 10, InetAddress.getLoopbackAddress());
         setupPassthrough("*.example.test", "wildcard", rawBackend.getLocalPort(), false);

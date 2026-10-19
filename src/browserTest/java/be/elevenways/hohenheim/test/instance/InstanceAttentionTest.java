@@ -1,6 +1,12 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.AttentionItem;
+import be.elevenways.hohenheim.AttentionSubject;
+import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.model.PreviewDeploymentModel;
+import be.elevenways.hohenheim.model.StackModel;
+import be.elevenways.hohenheim.model.StackServiceModel;
+import be.elevenways.zenit.test.support.DatasourceProbe;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
@@ -302,6 +308,83 @@ class InstanceAttentionTest {
         row.set(SystemTaskHistoryModel.STATUS, status.name());
         row.set(SystemTaskHistoryModel.STARTED_AT, startedAt);
         model.save(row);
+    }
+
+    /**
+     * The unfinished-destroy collector reads the records whose Delete retries a held generated row in one query per
+     * owning model: as many round trips for one application, preview and stack service as for three of each, and
+     * every item names its owner's Delete.
+     */
+    @Test
+    void unfinishedDestroysReadTheirOwnersInFlatQueriesAsOwnersGrow() {
+        Db.run(datasource, () -> {
+            DatasourceProbe probe = DatasourceProbe.on(datasource);
+            Map<Integer, String> ownerOf = new LinkedHashMap<>();
+            List<Integer> roundTrips = new ArrayList<>();
+            int made = 0;
+            for (int round : List.of(1, 3)) {
+                // 1. Each owner holds one generated row whose destroy was given up on: a release of an application,
+                //    a preview's instance of that application, and a stack service's workload.
+                while (made < round) {
+                    made++;
+                    int application = instance("attn-owner-app-" + made, InstanceModel.STATUS_RUNNING);
+                    int release = instance("attn-held-release-" + made, InstanceModel.STATUS_DESTROYING);
+                    held(release, InstanceModel.MODEL_ID.toString(), application);
+                    ownerOf.put(release, "/admin/instances/" + application + "/");
+
+                    Row preview = Models.get(PreviewDeploymentModel.class).createEmptyRow();
+                    preview.set(PreviewDeploymentModel.APPLICATION_ID, application);
+                    preview.set(PreviewDeploymentModel.REF, "feature/held-" + made);
+                    preview.set(PreviewDeploymentModel.STATUS, PreviewDeploymentModel.STATUS_RUNNING);
+                    Models.get(PreviewDeploymentModel.class).save(preview);
+                    int previewInstance = instance("attn-held-preview-" + made, InstanceModel.STATUS_DESTROYING);
+                    held(previewInstance, PreviewDeploymentModel.MODEL_ID.toString(),
+                        preview.get(PreviewDeploymentModel.ID));
+                    ownerOf.put(previewInstance, "/admin/instances/" + application + "/");
+
+                    Row stack = Models.get(StackModel.class).createEmptyRow();
+                    stack.set(StackModel.NAME, "attn-owner-stack-" + made);
+                    Models.get(StackModel.class).save(stack);
+                    Row service = Models.get(StackServiceModel.class).createEmptyRow();
+                    service.set(StackServiceModel.STACK_ID, stack.get(StackModel.ID));
+                    service.set(StackServiceModel.NAME, "attn-owner-service-" + made);
+                    service.set(StackServiceModel.IMAGE, "alpine:latest");
+                    Models.get(StackServiceModel.class).save(service);
+                    int workload = instance("attn-held-workload-" + made, InstanceModel.STATUS_DESTROYING);
+                    held(workload, StackServiceModel.MODEL_ID.toString(), service.get(StackServiceModel.ID));
+                    ownerOf.put(workload, "/" + service.get(StackServiceModel.ID) + "/");
+                }
+
+                // 2. One collection: every held row names its owner's Delete and links that owner.
+                probe.reset();
+                List<AttentionItem> items = new ArrayList<>();
+                InstanceAttention.unfinishedDestroys(items);
+                roundTrips.add(probe.roundTrips());
+                assertThat(items).as("step 2: one item per held row, round of %s", round).hasSize(ownerOf.size());
+                for (AttentionItem item : items) {
+                    assertThat(item.action().key()).as("step 2: the owner's Delete retries it")
+                        .isEqualTo("act_delete_owner_again");
+                    String owner = ownerOf.entrySet().stream()
+                        .filter(entry -> AttentionSubject.instance(entry.getKey()).equals(item.about()))
+                        .map(Map.Entry::getValue).findFirst().orElseThrow();
+                    assertThat(targetUrl(item)).as("step 2: it links the owner").contains(owner);
+                }
+            }
+
+            // 3. Three times the owners, the same round trips.
+            assertThat(roundTrips.get(1)).as("step 3: flat as owners grow, %s", roundTrips)
+                .isEqualTo(roundTrips.get(0));
+        });
+    }
+
+    /** Marks a record a generated row of {@code ownerModel}'s record whose destroy was given up on. */
+    private static void held(int instanceId, String ownerModel, int ownerId) {
+        Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(instanceId))
+            .assign(InstanceModel.GENERATED_BY, "attention-test")
+            .assign(InstanceModel.GENERATED_FOR_MODEL, ownerModel)
+            .assign(InstanceModel.GENERATED_FOR_ID, ownerId)
+            .assign(InstanceModel.STOPPAGE_CAUSE, HohenheimActivityAction.DESTROY_UNFINISHED.id().getPath())
+            .updateAll();
     }
 
     private static void trash(int instanceId) {

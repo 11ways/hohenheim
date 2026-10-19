@@ -32,6 +32,7 @@ import be.elevenways.hohenheim.server.instance.PlaintextEnvironments;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
+import be.elevenways.hohenheim.server.instance.UnfinishedDestroys;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.proxy.ProxyReloadHooks;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
@@ -381,6 +382,11 @@ public final class PreviewDeployments {
      *         stays live (status failed, error recorded) rather than lying
      */
     public static void destroy(int previewId, @NonNull String reason) {
+        destroy(previewId, reason, UnfinishedDestroys.Policy.AUTOMATIC);
+    }
+
+    /** {@link #destroy(int, String)}, the preview's instance destroyed under {@code policy}. */
+    public static void destroy(int previewId, @NonNull String reason, UnfinishedDestroys.@NonNull Policy policy) {
         PreviewDeploymentModel model = Models.get(PreviewDeploymentModel.class);
         // Read ONLY to learn the lock key: (application, ref) never change on a row.
         Row keyed = model.findById(previewId);
@@ -404,7 +410,7 @@ public final class PreviewDeployments {
                     Integer instanceId = preview.get(PreviewDeploymentModel.INSTANCE_ID);
                     if (instanceId != null) {
                         if (Models.get(InstanceModel.class).findById(instanceId) != null) {
-                            new InstanceService().destroy(instanceId);
+                            new InstanceService().destroy(instanceId, policy);
                         }
                     }
                     removeGeneratedDomains(previewId);
@@ -475,9 +481,17 @@ public final class PreviewDeployments {
 
     /** Every live preview of one application; the application-delete cascade. */
     public static void destroyForApplication(int applicationId) {
+        destroyForApplication(applicationId, UnfinishedDestroys.Policy.AUTOMATIC);
+    }
+
+    /**
+     * {@link #destroyForApplication(int)}, each preview's instance destroyed under {@code policy}: the application's
+     * requested Delete retries a preview instance whose destroy was left unfinished.
+     */
+    public static void destroyForApplication(int applicationId, UnfinishedDestroys.@NonNull Policy policy) {
         for (Row preview : Models.get(PreviewDeploymentModel.class)
                 .findLiveByApplicationId(applicationId)) {
-            destroy(preview.get(PreviewDeploymentModel.ID), "application_deleted");
+            destroy(preview.get(PreviewDeploymentModel.ID), "application_deleted", policy);
         }
     }
 

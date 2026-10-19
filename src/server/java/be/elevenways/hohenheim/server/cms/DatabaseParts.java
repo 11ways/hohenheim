@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.HohenheimCounts;
 import be.elevenways.hohenheim.server.database.DatabaseBackups;
+import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.i18n.wording.Wording;
 import be.elevenways.zenit.cms.common.CmsMicrocopy;
@@ -216,6 +217,21 @@ public final class DatabaseParts {
             .register();
 
     /**
+     * Finishes removing the dedicated engine a move onto a shared engine left held; applies only while one is, and
+     * the database itself stays (DatabaseService.finishOldEngine).
+     */
+    public static final Operation<Row, Void, Void> FINISH_OLD_ENGINE =
+        Operation.declare(HohenheimIds.id("finish_database_old_engine"))
+            .happened(OperationSentences.of("finish_database_old_engine"))
+            .label(HohenheimMicrocopy.DATABASE.of("finish_old_engine"))
+            .description(HohenheimMicrocopy.DATABASE.of("finish_old_engine_hint"))
+            .icon(Icon.of("broom"))
+            .one(DATABASE)
+            .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
+            .command(CmsCommands.EXTERNAL)
+            .register();
+
+    /**
      * Dumps the database next to its nightly dumps, now, in the background; offered dead on a temporary database and
      * on one that is not running.
      */
@@ -291,6 +307,13 @@ public final class DatabaseParts {
             .availability(Availability.batch((databases, access) -> moveUnavailable(databases)))
             .handle(call -> {
                 new DatabaseService().moveToSharedEngineInBackground(call.subject().get(DatabaseModel.NAME));
+                return null;
+            });
+        OperationHandlers.attach(FINISH_OLD_ENGINE)
+            // The leftovers of the page's databases read once.
+            .applies(Applicability.batch((databases, access, source) -> DatabaseInstances.holdOldEngines(databases)))
+            .handle(call -> {
+                DatabaseWrites.finishOldEngine(call.subject());
                 return null;
             });
         OperationHandlers.attach(FORCE_DELETE)
@@ -402,7 +425,7 @@ public final class DatabaseParts {
                 .build())
             .deleteConfirmation(deleteConfirmation())
             .actions(List.of(backUpNow(), backupLink(HohenheimIds.id("backup_database"), false), moveToShared(),
-                forceDelete(FORCE_DELETE, HohenheimMicrocopy.DATABASE, DatabaseModel.NAME)))
+                finishOldEngine(), forceDelete(FORCE_DELETE, HohenheimMicrocopy.DATABASE, DatabaseModel.NAME)))
             // The overview first (the record's front door), then the restore tab; no history, as the legacy subpages()
             // override had it; contributed tabs (zenit-auth's Access tab) join like on every converted entry.
             .tabs(ResourceTabs.<Row>of(List.of(DatabaseOverview.tab(), new DatabaseRestorePage())).withContributions())
@@ -600,6 +623,17 @@ public final class DatabaseParts {
                 HohenheimMicrocopy.DATABASE.of("move_shared_ok"),
                 HohenheimMicrocopy.DATABASE.of("move_shared_confirm").withArg("name", database.get(DatabaseModel.NAME)),
                 ActionStyle.PRIMARY))
+            .build();
+    }
+
+    /** "Finish removing the old engine", in the More menus only: it applies once in a database's life, if ever. */
+    private static @NonNull PanelAction<Row> finishOldEngine() {
+        return PanelAction.<Row, Void>places(FINISH_OLD_ENGINE, ActionPlacement.ROW,
+                (request, result) -> CmsActionResult.refreshWithToast(
+                    HohenheimMicrocopy.DATABASE.of("finish_old_engine_done")
+                        .withArg("name", request.subject().get(DatabaseModel.NAME))))
+            .inlineInRow(false)
+            .inlineOnRecord(false)
             .build();
     }
 

@@ -144,6 +144,7 @@ public final class AttentionCollector {
         }
         if (HohenheimRoles.enabled(Role.INSTANCES)) {
             InstanceAttention.crashedInstances(items, sitesHeld);
+            InstanceAttention.unfinishedDestroys(items);
             InstanceAttention.failedInstanceBackups(items);
             InstanceAttention.staleInstanceBackups(items);
             InstanceAttention.instancesLowOnDisk(items);

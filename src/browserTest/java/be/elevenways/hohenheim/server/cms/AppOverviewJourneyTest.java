@@ -20,6 +20,7 @@ import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.instance.InstanceStats;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
+import be.elevenways.hohenheim.test.FreePorts;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.testsupport.time.Poll;
@@ -339,10 +340,7 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
 
     @Test
     void aProxyWhoseUpstreamDoesNotAnswerIsAnErrorPageBeforeAnyVisitor() throws Exception {
-        int closedPort;
-        try (ServerSocket probe = new ServerSocket(0)) {
-            closedPort = probe.getLocalPort();
-        }
+        int closedPort = FreePorts.tcpAndUdp();
         Row site = ProxyTestSupport.setupSite("hohenheim:address", "app-journey-refused", "app-journey-refused",
             Map.of("forward_host", "127.0.0.1", "forward_port", closedPort));
         ProxyTestSupport.addDomain(site, "refused.app-journey.test", "exact", null, false);

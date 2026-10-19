@@ -27,6 +27,7 @@ import be.elevenways.hohenheim.server.runtime.ExecSupport;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
+import be.elevenways.hohenheim.test.FreePorts;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
@@ -43,7 +44,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -778,8 +778,8 @@ class WorkspaceKindTest {
 
             // A port NOTHING on the controller listens on: bound and released again.
             int port;
-            try (ServerSocket probe = new ServerSocket(0)) {
-                port = probe.getLocalPort();
+            try {
+                port = FreePorts.tcpAndUdp();
             } catch (IOException unbindable) {
                 throw new IllegalStateException(unbindable);
             }

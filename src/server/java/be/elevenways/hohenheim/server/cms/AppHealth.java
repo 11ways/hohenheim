@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.AttentionSubject;
 import be.elevenways.hohenheim.CertCoverage;
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.CertificateModel;
@@ -506,10 +507,20 @@ final class AppHealth {
                 : RecordHealth.unknown(HohenheimMicrocopy.APP_HEALTH.of("not_deployed"))
                     .detail(HohenheimMicrocopy.APP_HEALTH.of("not_running_detail"))
                     .fixedBy(InstanceOperations.START.id());
-            case STARTING, CAPTURING, RESTORING, MIGRATING, DESTROYING -> RecordHealth.unknown(status.label());
+            // A destroy whose end failed too often waits for an operator's Delete (UnfinishedDestroys): it says why.
+            case DESTROYING -> InstanceModel.stoppageCauseOf(runtime) == HohenheimActivityAction.DESTROY_UNFINISHED
+                ? destroyUnfinished(runtime, delegated, status) : RecordHealth.unknown(status.label());
+            case STARTING, CAPTURING, RESTORING, MIGRATING -> RecordHealth.unknown(status.label());
         };
         // A running workload whose site turns visitors away serves nothing, though it runs.
         return new Verdict(health, workloadServes(status) && health.tone() != HealthTone.BROKEN, root);
+    }
+
+    /** @return the verdict of a record whose destroy's end was given up on: why, and the failure's own words */
+    private static @NonNull RecordHealth destroyUnfinished(@NonNull Row runtime, boolean delegated,
+                                                           @NonNull InstanceStatus status) {
+        WorkloadErrors.Reading reading = WorkloadErrors.readingOf(runtime, !delegated);
+        return RecordHealth.attention(status.label()).detail(reading.worded()).technical(reading.technical());
     }
 
     /**

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.stack;
 
+import be.elevenways.hohenheim.server.instance.UnfinishedDestroys;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
@@ -226,6 +227,15 @@ public class StackRuntime {
      * lane per ever-touched stack id holds no thread, so keeping it costs nothing.
      */
     public void destroy(int stackId, boolean removeVolumes) throws IOException {
+        destroy(stackId, removeVolumes, UnfinishedDestroys.Policy.AUTOMATIC);
+    }
+
+    /**
+     * {@link #destroy(int, boolean)}, every service's workload destroyed under {@code policy}: the stack's requested
+     * Delete is the one way to retry a workload whose destroy was left unfinished.
+     */
+    public void destroy(int stackId, boolean removeVolumes, UnfinishedDestroys.@NonNull Policy policy)
+            throws IOException {
         onWorker(stackId, () -> {
             // Unordered on purpose: a broken dependency graph must not make a stack
             // undeletable, and teardown does not need the order.
@@ -233,7 +243,7 @@ public class StackRuntime {
             if (spec == null) {
                 return null;
             }
-            destroyServices(spec, removeVolumes);
+            destroyServices(spec, removeVolumes, policy);
             setStatus(stackId, StackModel.STATUS_INACTIVE);
             return null;
         });
@@ -441,7 +451,8 @@ public class StackRuntime {
             if (spec == null) {
                 throw new IOException("Stack " + stackId + " does not exist");
             }
-            destroyServices(spec, true);
+            // Not a Delete: the stack survives a purge, so a held workload keeps its budget for the stack's Delete.
+            destroyServices(spec, true, UnfinishedDestroys.Policy.AUTOMATIC);
             setStatus(stackId, StackModel.STATUS_INACTIVE);
             recordSettled(stackId, Change.fact(HohenheimActivityAction.VOLUMES_PURGED));
             return null;
@@ -792,14 +803,14 @@ public class StackRuntime {
      * AND ones whose row was disabled since), then the shared network, then -- only when
      * asked -- the volumes the stack's name scopes.
      */
-    private void destroyServices(@NonNull StackSpec spec, boolean removeVolumes)
-            throws IOException {
+    private void destroyServices(@NonNull StackSpec spec, boolean removeVolumes,
+                                 UnfinishedDestroys.@NonNull Policy policy) throws IOException {
         List<StackSpec.ServiceSpec> reversed = new ArrayList<>(spec.services());
         java.util.Collections.reverse(reversed);
         Set<Integer> destroyed = new LinkedHashSet<>();
         for (StackSpec.ServiceSpec service : reversed) {
             IOException failure = scopedThrowing(() -> {
-                StackInstances.destroyFor(service.serviceId());
+                StackInstances.destroyFor(service.serviceId(), policy);
                 return null;
             });
             if (failure != null) {
@@ -815,7 +826,7 @@ public class StackRuntime {
                 continue;
             }
             IOException failure = scopedThrowing(() -> {
-                StackInstances.destroyFor(owned.getKey());
+                StackInstances.destroyFor(owned.getKey(), policy);
                 return null;
             });
             if (failure != null) {

@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.preview;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.preview.PreviewOperations;
+import be.elevenways.hohenheim.server.instance.UnfinishedDestroys;
 import be.elevenways.zenit.common.operation.ZenitPlacementSurface;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -47,11 +48,15 @@ public final class PreviewOperationHandlers {
         // The static initializer did the work.
     }
 
-    /** The deadline's step reclaims as expired; every other surface is a person's click. */
+    /**
+     * The deadline's step reclaims as expired, under the retry budget; every other surface is a person's click, the
+     * requested retry of a preview instance whose destroy was left unfinished.
+     */
     private static @NonNull String expire(@NonNull OperationCall<Row, Void> call) {
         Integer id = call.subject().get(PreviewDeploymentModel.ID);
-        String reason = call.surface() == ZenitPlacementSurface.SCHEDULE_STEP ? EXPIRED : OPERATOR;
-        PreviewDeployments.destroy(id, reason);
-        return reason;
+        boolean scheduled = call.surface() == ZenitPlacementSurface.SCHEDULE_STEP;
+        PreviewDeployments.destroy(id, scheduled ? EXPIRED : OPERATOR,
+            scheduled ? UnfinishedDestroys.Policy.AUTOMATIC : UnfinishedDestroys.Policy.REQUESTED);
+        return scheduled ? EXPIRED : OPERATOR;
     }
 }

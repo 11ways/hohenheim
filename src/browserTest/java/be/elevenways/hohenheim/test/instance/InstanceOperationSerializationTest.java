@@ -1,14 +1,39 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.server.database.DatabaseService;
+import be.elevenways.hohenheim.server.database.DatabaseWrites;
+import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.AttentionItem;
+import be.elevenways.hohenheim.AttentionSeverity;
+import be.elevenways.hohenheim.AttentionSubject;
+import be.elevenways.hohenheim.server.cms.InstanceAttention;
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.server.instance.UnfinishedDestroys;
+import be.elevenways.hohenheim.model.DatabaseEngineModel;
+import be.elevenways.hohenheim.model.StackModel;
+import be.elevenways.hohenheim.model.StackServiceModel;
+import be.elevenways.hohenheim.server.database.DatabaseInstances;
+import be.elevenways.hohenheim.server.database.EngineHost;
+import be.elevenways.hohenheim.server.database.ManagedDatabase;
+import be.elevenways.hohenheim.server.docker.ResourceLimits;
+import be.elevenways.hohenheim.server.stack.StackInstances;
+import be.elevenways.protoblast.common.registry.Identifier;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.util.BlastLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.CountDownLatch;
 import java.util.List;
+import java.util.Map;
 import java.time.Duration;
 import be.elevenways.zenit.common.orm.lease.Lease;
 import be.elevenways.zenit.common.orm.lease.Leases;
@@ -351,6 +376,469 @@ class InstanceOperationSerializationTest {
                 .as("step 4: a finished record is gone from the sweep")
                 .isEqualTo(InstanceStatusReconciler.Verdict.SKIPPED);
         });
+    }
+
+    /**
+     * A destroy whose end keeps failing (a write hook of the trash throws) is retried only as its backoff allows and,
+     * after the bound, no more: the record says why (its report retried by a later claim when the bound was reached
+     * inside a transaction), the dashboard names it, every other operation and every background destroy is refused by
+     * name instead of meeting the raw failure, and only the operator's requested Delete retries it, finishing the
+     * destroy once the end can be written.
+     */
+    @Test
+    void anUnfinishableDestroyIsRetriedWithBackoffThenHeldWithItsReason() {
+        int id = leftDestroying("destroy-unfinishable");
+        AtomicBoolean failing = new AtomicBoolean(true);
+        AtomicInteger attempts = new AtomicInteger();
+        InstanceService failingEnds = failingEnds(failing, attempts);
+        InstanceStatusReconciler sweep = new InstanceStatusReconciler(failingEnds);
+        Duration offset = Now.offset();
+        try {
+            Db.run(datasource, () -> {
+                // 1. The first sweep tries the end once; it fails, and the record stays destroying.
+                assertThat(sweep.reconcile(id).verdict()).as("step 1: the failed end finished nothing")
+                    .isEqualTo(InstanceStatusReconciler.Verdict.SKIPPED);
+                assertThat(attempts.get()).as("step 1: one attempt").isEqualTo(1);
+                assertThat(stateOf(id)).as("step 1: still destroying")
+                    .isEqualTo("live " + InstanceModel.STATUS_DESTROYING);
+
+                // 2. Each next attempt waits its backoff: a sweep before it is due tries nothing, one after it does.
+                //    The last one runs inside a transaction, which the failure must roll back.
+                Duration waited = Duration.ZERO;
+                for (int failed = 1; failed < UnfinishedDestroys.AUTOMATIC_ATTEMPTS; failed++) {
+                    waited = waited.plus(UnfinishedDestroys.BACKOFF.delayAfter(failed));
+                    Now.setOffset(offset.plus(waited).minusSeconds(30));
+                    sweep.reconcile(id);
+                    assertThat(attempts.get()).as("step 2: no attempt before the wait after failure %s", failed)
+                        .isEqualTo(failed);
+                    Now.setOffset(offset.plus(waited));
+                    if (failed + 1 < UnfinishedDestroys.AUTOMATIC_ATTEMPTS) {
+                        sweep.reconcile(id);
+                    } else {
+                        // The end fails AFTER it wrote the stopped status (the seam runs where the trash's hooks
+                        // do), and the caller swallows the failure inside its callback: the transaction must still
+                        // roll back, never commit stopped-without-trash.
+                        AtomicReference<Throwable> inTransaction = new AtomicReference<>();
+                        Throwable commit = catchThrowable(() -> datasource.withTransaction(tx ->
+                            inTransaction.set(catchThrowable(() -> sweep.reconcile(id)))));
+                        assertThat(inTransaction.get()).as("step 2: inside a transaction the failure is thrown, named")
+                            .isInstanceOf(Violations.class);
+                        assertThat(commit).as("step 2: the swallowed failure still vetoed the commit").isNotNull();
+                        assertThat(stateOf(id)).as("step 2: rolled back, never committed stopped")
+                            .isEqualTo("live " + InstanceModel.STATUS_DESTROYING);
+                    }
+                    assertThat(attempts.get()).as("step 2: an attempt once the wait after failure %s passed", failed)
+                        .isEqualTo(failed + 1);
+                }
+                assertThat(InstanceModel.stoppageCauseOf(Models.get(InstanceModel.class).findById(id)))
+                    .as("step 2: the bound was reached inside a transaction, so its report is still owed").isNull();
+
+                // 3. After the bound neither the sweep nor the boot tries the end again; the next sweep writes the
+                //    owed report, and the record says why.
+                Now.setOffset(offset.plus(waited).plusDays(1));
+                sweep.reconcile(id);
+                InstanceService.recoverInterrupted();
+                assertThat(attempts.get()).as("step 3: no automatic attempt past the bound")
+                    .isEqualTo(UnfinishedDestroys.AUTOMATIC_ATTEMPTS);
+                assertThat(stateOf(id)).as("step 3: still destroying, never trashed by a seamless boot finish")
+                    .isEqualTo("live " + InstanceModel.STATUS_DESTROYING);
+                Row held = Models.get(InstanceModel.class).findById(id);
+                assertThat(InstanceModel.stoppageCauseOf(held)).as("step 3: the record says its destroy is unfinished")
+                    .isEqualTo(HohenheimActivityAction.DESTROY_UNFINISHED);
+                assertThat((String) held.get(InstanceModel.STOPPAGE_DETAIL)).as("step 3: and why")
+                    .contains("the quota release hook failed");
+
+                // 4. The dashboard names it, pointing at the record its Delete is on.
+                List<AttentionItem> items = new ArrayList<>();
+                InstanceAttention.unfinishedDestroys(items);
+                assertThat(items).as("step 4: one attention item for the record").filteredOn(item ->
+                        AttentionSubject.instance(id).equals(item.about()))
+                    .singleElement().satisfies(item -> {
+                        assertThat(item.severity()).isEqualTo(AttentionSeverity.ERROR);
+                        assertThat(item.title().key()).isEqualTo("instance_unfinished_destroy");
+                        assertThat(item.action().key()).isEqualTo("act_delete_again");
+                        assertThat(item.target()).isNotNull();
+                    });
+
+                // 5. Another operation, and a background destroy, are refused by name with that reason.
+                assertThatThrownBy(() -> new InstanceService().stop(id)).as("step 5: a stop is refused by name")
+                    .isInstanceOfSatisfying(Violations.class, refused -> assertThat(refused.all())
+                        .anySatisfy(violation -> {
+                            assertThat(violation.message().key()).isEqualTo("instance_destroy_unfinished");
+                            assertThat(String.valueOf(violation.message().args().get("reason")))
+                                .contains("the quota release hook failed");
+                        }));
+                assertUnfinished(() -> failingEnds.destroy(id), "step 5: a background destroy keeps the budget");
+                assertThat(attempts.get()).as("step 5: neither tried the end")
+                    .isEqualTo(UnfinishedDestroys.AUTOMATIC_ATTEMPTS);
+
+                // 6. The operator's requested Delete retries it at once; while the end still fails, it is refused too.
+                assertUnfinished(() -> failingEnds.destroy(id, UnfinishedDestroys.Policy.REQUESTED),
+                    "step 6: the requested Delete is refused by name");
+                assertThat(attempts.get()).as("step 6: the Delete tried the end")
+                    .isEqualTo(UnfinishedDestroys.AUTOMATIC_ATTEMPTS + 1);
+
+                // 7. A requested Delete that succeeds inside a transaction which then rolls back keeps the budget:
+                //    the record is still held, so a sweep does not finish it even now that the end can be written.
+                failing.set(false);
+                assertThat(catchThrowable(() -> datasource.withTransaction(tx -> {
+                    failingEnds.destroy(id, UnfinishedDestroys.Policy.REQUESTED);
+                    throw new IllegalStateException("the caller rolls back");
+                }))).as("step 7: the caller's transaction rolled back").hasMessageContaining("the caller rolls back");
+                assertThat(stateOf(id)).as("step 7: the rollback restored the unfinished destroy")
+                    .isEqualTo("live " + InstanceModel.STATUS_DESTROYING);
+                sweep.reconcile(id);
+                assertThat(stateOf(id)).as("step 7: still held, so no sweep finished it")
+                    .isEqualTo("live " + InstanceModel.STATUS_DESTROYING);
+
+                // 8. Once the end can be written, the requested Delete finishes the destroy.
+                failingEnds.destroy(id, UnfinishedDestroys.Policy.REQUESTED);
+                assertThat(stateOf(id)).as("step 8: trashed and stopped")
+                    .isEqualTo("trashed " + InstanceModel.STATUS_STOPPED);
+            });
+        } finally {
+            Now.setOffset(offset);
+        }
+    }
+
+    /**
+     * A destroy whose OWN staged end fails as it is published (not one a newer claim dropped) is refused by name and
+     * counted once; a later claim, inside a transaction or outside one, never replays that failed end outside the
+     * budget, and the sweep finishes the destroy once it is due and the end can be written.
+     */
+    @Test
+    void aFailedStagedEndIsCountedOnceAndNeverReplayedByALaterClaim() {
+        int[] record = new int[1];
+        Db.run(datasource, () -> {
+            record[0] = BackupLaneFixture.instanceRecord("destroy-staged-failure", hostId);
+            new InstanceService().deploy(record[0]);
+        });
+        int id = record[0];
+        AtomicBoolean failing = new AtomicBoolean(true);
+        AtomicInteger attempts = new AtomicInteger();
+        InstanceService failingEnds = failingEnds(failing, attempts);
+        Duration offset = Now.offset();
+        try {
+            Db.run(datasource, () -> {
+                // 1. The destroy's end fails as it is published: the destroy is refused by name, never the raw failure.
+                assertUnfinished(() -> failingEnds.destroy(id), "step 1: the destroy is refused by name");
+                assertThat(attempts.get()).as("step 1: one attempt").isEqualTo(1);
+                assertThat(stateOf(id)).as("step 1: left destroying, its cleanup done")
+                    .isEqualTo("live " + InstanceModel.STATUS_DESTROYING);
+
+                // 2. A later claim inside a transaction meets no replay of the failed end: refused as not due yet.
+                assertUnfinished(() -> datasource.withTransaction(tx -> new InstanceService().stop(id)),
+                    "step 2: a claim inside a transaction is refused by name");
+                assertThat(attempts.get()).as("step 2: the failed end was not replayed").isEqualTo(1);
+
+                // 3. Nor outside one: a sweep before the backoff tries nothing.
+                InstanceStatusReconciler sweep = new InstanceStatusReconciler(failingEnds);
+                sweep.reconcile(id);
+                assertThat(attempts.get()).as("step 3: still one attempt").isEqualTo(1);
+                assertThat(stateOf(id)).as("step 3: still destroying")
+                    .isEqualTo("live " + InstanceModel.STATUS_DESTROYING);
+
+                // 4. Once due, with the end writable, the sweep finishes the destroy.
+                failing.set(false);
+                Now.setOffset(offset.plus(UnfinishedDestroys.BACKOFF.delayAfter(1)));
+                assertThat(sweep.reconcile(id).verdict()).as("step 4: the sweep finished it")
+                    .isEqualTo(InstanceStatusReconciler.Verdict.FINISHED);
+                assertThat(stateOf(id)).as("step 4: trashed and stopped")
+                    .isEqualTo("trashed " + InstanceModel.STATUS_STOPPED);
+            });
+        } finally {
+            Now.setOffset(offset);
+        }
+    }
+
+    /**
+     * A claim that let go of a record's failed ends inside a transaction forgets only the failures it saw: its
+     * after-commit hook, running late, never erases a destroy that failed its end in between, which keeps its backoff.
+     */
+    @Test
+    void aLateAfterCommitHookNeverForgetsANewerFailedDestroy() {
+        int[] record = new int[1];
+        Db.run(datasource, () -> {
+            record[0] = BackupLaneFixture.instanceRecord("destroy-late-forget", hostId);
+            new InstanceService().deploy(record[0]);
+        });
+        int id = record[0];
+        AtomicInteger attempts = new AtomicInteger();
+        InstanceService failingEnds = failingEnds(new AtomicBoolean(true), attempts);
+        InstanceStatusReconciler sweep = new InstanceStatusReconciler(failingEnds);
+
+        // 1. No failure was counted when the earlier claim asked: while its hook is held back, a destroy fails its end.
+        this.meanwhileAfterCommit(id, () -> Db.run(datasource,
+            () -> assertUnfinished(() -> failingEnds.destroy(id), "step 1: the destroy's end failed")));
+        Db.run(datasource, () -> sweep.reconcile(id));
+        assertThat(attempts.get()).as("step 1: the late hook kept the failure, so a sweep waits its backoff")
+            .isEqualTo(1);
+
+        // 2. A failure was counted when it asked (a record no longer destroying, as another controller can leave
+        //    it): a destroy failing in between is newer, and the late hook keeps it too.
+        Db.run(datasource, () -> Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(id))
+            .assign(InstanceModel.STATUS, InstanceModel.STATUS_STOPPED)
+            .updateAll());
+        this.meanwhileAfterCommit(id, () -> Db.run(datasource,
+            () -> assertUnfinished(() -> failingEnds.destroy(id), "step 2: the destroy's end failed again")));
+        Db.run(datasource, () -> sweep.reconcile(id));
+        assertThat(attempts.get()).as("step 2: the newer failure kept its backoff").isEqualTo(2);
+        assertThat(Db.supply(datasource, () -> stateOf(id))).as("step 2: still destroying")
+            .isEqualTo("live " + InstanceModel.STATUS_DESTROYING);
+    }
+
+    /**
+     * Runs {@code meanwhile} after an earlier transaction claimed the record (not being destroyed, so it lets go of
+     * the record's failed ends) and committed, while that transaction's after-commit hooks are still held back.
+     */
+    private void meanwhileAfterCommit(int id, Runnable meanwhile) {
+        CountDownLatch committed = new CountDownLatch(1);
+        CountDownLatch proceed = new CountDownLatch(1);
+        Racers.Running<Object> earlier = this.operations.start("an earlier transaction claiming the record", () -> {
+            Db.run(datasource, () -> datasource.withTransaction(tx -> {
+                // Registered first, so the claim's own after-commit hook runs behind it.
+                datasource.afterCommit(() -> {
+                    committed.countDown();
+                    await(proceed);
+                });
+                assertThat(InstanceOperationLock.of(HostLeases.production()).finishTerminating(id,
+                    UnfinishedDestroys.Policy.AUTOMATIC, () -> {})).as("the record is not being destroyed").isFalse();
+            }));
+            return null;
+        });
+        try {
+            await(committed);
+            meanwhile.run();
+        } finally {
+            proceed.countDown();
+        }
+        earlier.await(Duration.ofSeconds(30));
+    }
+
+    /**
+     * A release takes no Delete of its own, so its application's Delete is the requested retry of a release whose
+     * destroy was left unfinished: the dashboard points there, a background teardown of the application keeps the
+     * release's budget (and is refused by name), and the application's requested Delete finishes the release and then
+     * the application.
+     */
+    @Test
+    void anApplicationsRequestedDeleteRetriesAHeldReleaseItTearsDown() {
+        int releaseId = leftDestroying("destroy-held-release");
+        AtomicBoolean failing = new AtomicBoolean(true);
+        AtomicInteger attempts = new AtomicInteger();
+        InstanceService failingEnds = failingEnds(failing, attempts);
+        Db.run(datasource, () -> {
+            // 1. The release belongs to an application, and it is held: it carried the unfinished stoppage from an
+            //    earlier controller, and its one automatic attempt here failed.
+            Row app = Models.get(InstanceModel.class).createEmptyRow();
+            app.set(InstanceModel.NAME, "held-release-app");
+            app.set(InstanceModel.KIND, "hohenheim:application");
+            // Hostless: an application's host must run Docker, the fixture's is Incus, and its release is what ran.
+            app.set(InstanceModel.SETTINGS, Map.of());
+            Models.get(InstanceModel.class).save(app);
+            int appId = app.get(InstanceModel.ID);
+            Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(releaseId))
+                .assign(InstanceModel.GENERATED_BY, "hohenheim:release")
+                .assign(InstanceModel.GENERATED_FOR_MODEL, InstanceModel.MODEL_ID.toString())
+                .assign(InstanceModel.GENERATED_FOR_ID, appId)
+                .assign(InstanceModel.STOPPAGE_CAUSE, HohenheimActivityAction.DESTROY_UNFINISHED.id().getPath())
+                .updateAll();
+            new InstanceStatusReconciler(failingEnds).reconcile(releaseId);
+            assertThat(attempts.get()).as("step 1: one automatic attempt, then held").isEqualTo(1);
+
+            // 2. The dashboard points at the application, whose Delete retries it.
+            List<AttentionItem> items = new ArrayList<>();
+            InstanceAttention.unfinishedDestroys(items);
+            assertThat(items).filteredOn(item -> AttentionSubject.instance(releaseId).equals(item.about()))
+                .as("step 2: the item names the application's Delete").singleElement().satisfies(item -> {
+                    assertThat(item.action().key()).isEqualTo("act_delete_owner_again");
+                    assertThat(String.valueOf(item.action().args().get("name"))).isEqualTo("held-release-app");
+                });
+
+            // 3. A background teardown of the application keeps the release's budget: refused by name, untried.
+            failing.set(false);
+            assertUnfinished(() -> failingEnds.destroy(appId), "step 3: the automatic teardown is refused");
+            assertThat(stateOf(releaseId)).as("step 3: the release is still destroying")
+                .isEqualTo("live " + InstanceModel.STATUS_DESTROYING);
+            assertThat(stateOf(appId)).as("step 3: the application stands").startsWith("live ");
+
+            // 4. The application's requested Delete finishes the release, then ends the application.
+            failingEnds.destroy(appId, UnfinishedDestroys.Policy.REQUESTED);
+            assertThat(stateOf(releaseId)).as("step 4: the release is trashed and stopped")
+                .isEqualTo("trashed " + InstanceModel.STATUS_STOPPED);
+            assertThat(stateOf(appId)).as("step 4: the application is destroyed").startsWith("trashed ");
+        });
+    }
+
+    /**
+     * A stack service's workload and a database engine's instance take no Delete of their own either: the service's
+     * requested Delete (its stack's carries the same policy) retries a held workload and the dashboard points there,
+     * the engine's requested destroy retries its held instance, and every automatic teardown keeps the budget.
+     */
+    @Test
+    void aStackServicesRequestedDeleteRetriesAHeldWorkloadAndAnEnginesRetriesItsInstance() {
+        int workloadId = leftDestroying("destroy-held-service");
+        int engineInstanceId = leftDestroying("destroy-held-engine");
+        AtomicInteger attempts = new AtomicInteger();
+        InstanceService failingEnds = failingEnds(new AtomicBoolean(true), attempts);
+        Db.run(datasource, () -> {
+            // 1. A stack service owns the workload and a shared engine the other instance; both are held: they
+            //    carried the unfinished stoppage from an earlier controller, and one automatic attempt here failed.
+            Row stack = Models.get(StackModel.class).createEmptyRow();
+            stack.set(StackModel.NAME, "held-workload-stack");
+            Models.get(StackModel.class).save(stack);
+            Row service = Models.get(StackServiceModel.class).createEmptyRow();
+            service.set(StackServiceModel.STACK_ID, stack.get(StackModel.ID));
+            service.set(StackServiceModel.NAME, "held-workload-service");
+            service.set(StackServiceModel.IMAGE, "alpine:latest");
+            Models.get(StackServiceModel.class).save(service);
+            int serviceId = service.get(StackServiceModel.ID);
+            // The engine instance is found by its attribution alone, so its owner id needs no engine row.
+            int engineId = 9_000_000 + engineInstanceId;
+            heldFor(workloadId, StackInstances.SOURCE, StackServiceModel.MODEL_ID, serviceId, failingEnds);
+            heldFor(engineInstanceId, DatabaseInstances.SOURCE, DatabaseEngineModel.MODEL_ID, engineId, failingEnds);
+            assertThat(attempts.get()).as("step 1: one automatic attempt each, then held").isEqualTo(2);
+
+            // 2. The dashboard points at the service, whose Delete retries it.
+            List<AttentionItem> items = new ArrayList<>();
+            InstanceAttention.unfinishedDestroys(items);
+            assertThat(items).filteredOn(item -> AttentionSubject.instance(workloadId).equals(item.about()))
+                .as("step 2: the item names the service's Delete").singleElement().satisfies(item -> {
+                    assertThat(item.action().key()).isEqualTo("act_delete_owner_again");
+                    assertThat(String.valueOf(item.action().args().get("name"))).contains("held-workload-service");
+                });
+
+            // 3. The automatic teardowns keep the budget: refused by name, untried.
+            EngineHost engine = new EngineHost(DatabaseEngineModel.MODEL_ID, engineId, "held-engine",
+                ManagedDatabase.Engine.POSTGRES, null, false, "root", "secret", "postgres",
+                ServerModel.canonicalServerId(hostId), ResourceLimits.of(null, null), true);
+            assertUnfinished(() -> unchecked(() -> StackInstances.destroyFor(serviceId)),
+                "step 3: a stack deploy's prune is refused");
+            assertUnfinished(() -> unchecked(() -> DatabaseInstances.destroyFor(engine, false)),
+                "step 3: an automatic engine teardown is refused");
+            assertThat(stateOf(workloadId)).as("step 3: the workload is still destroying")
+                .isEqualTo("live " + InstanceModel.STATUS_DESTROYING);
+            assertThat(stateOf(engineInstanceId)).as("step 3: the engine instance is still destroying")
+                .isEqualTo("live " + InstanceModel.STATUS_DESTROYING);
+
+            // 4. The service's requested Delete finishes its workload, the engine's its instance. Past the instance
+            //    the engine teardown asks the host's Docker daemon, which this lane's Incus host is not: only the
+            //    instance is this test's to judge.
+            unchecked(() -> StackInstances.destroyFor(serviceId, UnfinishedDestroys.Policy.REQUESTED));
+            assertThat(stateOf(workloadId)).as("step 4: the workload is trashed and stopped")
+                .isEqualTo("trashed " + InstanceModel.STATUS_STOPPED);
+            catchThrowable(() -> DatabaseInstances.destroyFor(engine, false, UnfinishedDestroys.Policy.REQUESTED));
+            assertThat(stateOf(engineInstanceId)).as("step 4: the engine instance is trashed and stopped")
+                .isEqualTo("trashed " + InstanceModel.STATUS_STOPPED);
+        });
+    }
+
+    /**
+     * A move onto a shared engine that could not destroy the old dedicated engine leaves it held under a database that
+     * is live on the shared engine: its Delete would drop that live database, so the dashboard routes to the
+     * database's own "finish removing the old engine" action, which retries only the leftover. The move's automatic
+     * cleanup keeps its budget.
+     */
+    @Test
+    void aSharedDatabasesOldEngineIsFinishedByItsOwnActionAndTheDatabaseSurvives() {
+        int leftoverId = leftDestroying("destroy-held-old-engine");
+        AtomicInteger attempts = new AtomicInteger();
+        InstanceService failingEnds = failingEnds(new AtomicBoolean(true), attempts);
+        Db.run(datasource, () -> {
+            // 1. The database moved onto a shared engine (the switch runMove writes); the old engine's destroy was
+            //    left unfinished, carried the stoppage from an earlier controller, and failed once here: held.
+            DatabaseService databases = new DatabaseService();
+            Row database = databases.insertRecord("moved-db", ManagedDatabase.Engine.POSTGRES, null, "app", "pw",
+                "app", false, ServerService.LOCAL_HOST_NAME, ResourceLimits.none(), DatabaseModel.STATUS_ACTIVE,
+                DatabaseModel.PLACEMENT_DEDICATED, null);
+            int databaseId = database.get(DatabaseModel.ID);
+            Models.get(DatabaseModel.class).find().where(DatabaseModel.ID.eq(databaseId))
+                .assign(DatabaseModel.PLACEMENT, DatabaseModel.PLACEMENT_SHARED)
+                .updateAll();
+            heldFor(leftoverId, DatabaseInstances.SOURCE, DatabaseModel.MODEL_ID, databaseId, failingEnds);
+            assertThat(attempts.get()).as("step 1: one automatic attempt, then held").isEqualTo(1);
+            Row moved = Models.get(DatabaseModel.class).findById(databaseId);
+            assertThat(DatabaseInstances.holdOldEngines(List.of(moved))).as("step 1: the action applies")
+                .containsExactly(true);
+
+            // 2. The dashboard points at the database's own action, never its Delete.
+            List<AttentionItem> items = new ArrayList<>();
+            InstanceAttention.unfinishedDestroys(items);
+            assertThat(items).filteredOn(item -> AttentionSubject.instance(leftoverId).equals(item.about()))
+                .as("step 2: the item names the old-engine action").singleElement().satisfies(item -> {
+                    assertThat(item.action().key()).isEqualTo("act_finish_old_engine");
+                    assertThat(String.valueOf(item.action().args().get("name"))).contains("moved-db");
+                    assertThat(item.target().toUrl()).contains("/" + databaseId + "/");
+                });
+
+            // 3. The move's own cleanup is automatic: refused by name, untried, the leftover still destroying.
+            assertUnfinished(() -> unchecked(() -> DatabaseInstances.destroyFor(moved, false)),
+                "step 3: the automatic cleanup keeps the budget");
+            assertThat(attempts.get()).as("step 3: untried").isEqualTo(1);
+            assertThat(stateOf(leftoverId)).as("step 3: still destroying")
+                .isEqualTo("live " + InstanceModel.STATUS_DESTROYING);
+
+            // 4. The action finishes the leftover; the database stays live and shared, and the action no longer applies.
+            DatabaseWrites.finishOldEngine(moved);
+            assertThat(stateOf(leftoverId)).as("step 4: the old engine is trashed and stopped")
+                .isEqualTo("trashed " + InstanceModel.STATUS_STOPPED);
+            Row survivor = Models.get(DatabaseModel.class).findById(databaseId);
+            assertThat(survivor).as("step 4: the database survives").isNotNull();
+            assertThat((String) survivor.get(DatabaseModel.STATUS)).as("step 4: still active")
+                .isEqualTo(DatabaseModel.STATUS_ACTIVE);
+            assertThat(DatabaseModel.isShared(survivor)).as("step 4: still shared").isTrue();
+            assertThat(DatabaseInstances.holdOldEngines(List.of(survivor))).as("step 4: nothing left to finish")
+                .containsExactly(false);
+            Models.get(DatabaseModel.class).find().where(DatabaseModel.ID.eq(databaseId)).delete();
+        });
+    }
+
+    /**
+     * Attributes a record left destroying to an owning tier's record and holds it, as a restarted controller finds
+     * one that carried the unfinished stoppage: its one automatic attempt here fails.
+     */
+    private static void heldFor(int id, String source, Identifier ownerModel, int ownerId,
+                                InstanceService failingEnds) {
+        Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(id))
+            .assign(InstanceModel.GENERATED_BY, source)
+            .assign(InstanceModel.GENERATED_FOR_MODEL, ownerModel.toString())
+            .assign(InstanceModel.GENERATED_FOR_ID, ownerId)
+            .assign(InstanceModel.STOPPAGE_CAUSE, HohenheimActivityAction.DESTROY_UNFINISHED.id().getPath())
+            .updateAll();
+        new InstanceStatusReconciler(failingEnds).reconcile(id);
+    }
+
+    /** An owning tier's teardown, its refusal unwrapped from the IOException that tier reports it as. */
+    private static void unchecked(IoWork work) {
+        try {
+            work.run();
+        } catch (IOException failed) {
+            if (failed.getCause() instanceof Violations refused) {
+                throw refused;
+            }
+            throw new UncheckedIOException(failed);
+        }
+    }
+
+    private interface IoWork {
+        void run() throws IOException;
+    }
+
+    /** A service whose destroy ends fail while {@code failing} holds, counting each attempt. */
+    private static InstanceService failingEnds(AtomicBoolean failing, AtomicInteger attempts) {
+        return new InstanceService(HostLeases.production(), () -> {}, () -> {
+            if (failing.get()) {
+                attempts.incrementAndGet();
+                throw new IllegalStateException("the quota release hook failed");
+            }
+        });
+    }
+
+    private static void assertUnfinished(Runnable call, String step) {
+        assertThatThrownBy(call::run).as(step)
+            .isInstanceOfSatisfying(Violations.class, refused -> assertThat(refused.all())
+                .anySatisfy(violation ->
+                    assertThat(violation.message().key()).isEqualTo("instance_destroy_unfinished")));
     }
 
     /**

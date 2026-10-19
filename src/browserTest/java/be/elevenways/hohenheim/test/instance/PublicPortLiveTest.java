@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.test.FreePorts;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.live.LiveLane;
@@ -273,12 +274,12 @@ class PublicPortLiveTest {
     @Test
     void fixedPortConflictIsRefusedByTheLedgerBeforeAnyContainer() throws Exception {
         DockerClient docker = requireDaemon("nginx:alpine");
+        int fixedPort = FreePorts.tcpAndUdp();
 
         Db.run(datasource, () -> {
             HostFixtures.admitLocal();
             int localId = ServerModel.localServerId();
             InstanceService service = new InstanceService();
-            int fixedPort = 30777;
             Map<String, Object> first = new LinkedHashMap<>();
             first.put("image", "nginx");
             first.put("tag", "alpine");

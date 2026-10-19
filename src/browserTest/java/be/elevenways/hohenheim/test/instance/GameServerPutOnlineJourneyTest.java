@@ -19,6 +19,7 @@ import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.game.GameAddresses;
 import be.elevenways.hohenheim.server.game.GameTemplateSeeder;
+import be.elevenways.hohenheim.test.FreePorts;
 import be.elevenways.hohenheim.test.DnsFixtures;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -48,8 +49,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
-import java.net.ServerSocket;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -394,7 +393,7 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
     @Test
     void aChosenHostPortIsRefusedWhenTakenAndPublishedWhenFree() throws Exception {
         AccessContext operator = TenantConduits.operator();
-        int taken = freePort();
+        int taken = FreePorts.tcpAndUdp();
         PortLedger.claimPreallocated(hostId, "", taken, PublishedPort.TCP, InstanceModel.MODEL_ID, holderId,
             "game put online test");
 
@@ -420,7 +419,7 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
 
         // 2. A free port the operator chooses is claimed and published as chosen; without a game address that step
         //    is skipped.
-        int chosen = freePort();
+        int chosen = FreePorts.tcpAndUdp();
         OperationRun run = PutOnlineJourneyTest.ended(PutOnlineJourneyTest.runOf(OperationPipeline.invoke(
                 OperationRequest.of(PutOnline.PUT_SERVICE_ONLINE, CmsPlacementSurface.ADMIN_ACTION).caller(operator)
                     .subjects(List.of(minecraft)).form(serviceForm(PREFIX + "creative", String.valueOf(chosen), "")))),
@@ -859,13 +858,6 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
             .and(DnsRecordModel.NAME.eq(name))
             .and(DnsRecordModel.TYPE.eq(type))
             .first();
-    }
-
-    /** @return a port nothing on this machine listens on right now, which the local host's probe admits */
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
     }
 
     /** @return the opening tag of the first element carrying the marker attribute, empty when none does */

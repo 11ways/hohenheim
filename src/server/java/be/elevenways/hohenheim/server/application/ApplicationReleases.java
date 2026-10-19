@@ -33,6 +33,7 @@ import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.instance.RuntimeImages;
 import be.elevenways.hohenheim.server.instance.SourceBuildDetail;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
+import be.elevenways.hohenheim.server.instance.UnfinishedDestroys;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
@@ -327,12 +328,20 @@ public final class ApplicationReleases {
      *         rather than leaving a running container behind a dead record
      */
     public static void destroyFor(int applicationId) {
+        destroyFor(applicationId, UnfinishedDestroys.Policy.AUTOMATIC);
+    }
+
+    /**
+     * {@link #destroyFor(int)}, each release destroyed under {@code policy}: the application's own requested Delete
+     * is the one way to retry a release whose destroy was left unfinished (a release takes no Delete of its own).
+     */
+    public static void destroyFor(int applicationId, UnfinishedDestroys.@NonNull Policy policy) {
         List<Row> owned = ownedInstances(applicationId);
         ApplicationUpstreams.invalidate(applicationId);
         // Previews are releases of THIS application on their own hostnames; they cannot
         // outlive the record whose source they build (the soft delete fires no remove hook
         // that would ever reclaim them).
-        PreviewDeployments.destroyForApplication(applicationId);
+        PreviewDeployments.destroyForApplication(applicationId, policy);
         if (owned.isEmpty()) {
             return;
         }
@@ -346,7 +355,7 @@ public final class ApplicationReleases {
                 for (Row instance : owned) {
                     int releaseId = instance.get(InstanceModel.ID);
                     try {
-                        new InstanceService().destroy(releaseId);
+                        new InstanceService().destroy(releaseId, policy);
                     } catch (Violations refused) {
                         // The engine's own drain may have removed a superseded release since the list was read:
                         // a release already gone is at its end of life, anything else still refuses.

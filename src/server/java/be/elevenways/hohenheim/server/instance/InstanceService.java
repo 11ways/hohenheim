@@ -493,27 +493,40 @@ public final class InstanceService {
      * hook-free by contract; the end narrows it to the destroy's claim instead.
      *
      * @throws Violations when the daemon cannot confirm removal: the record is KEPT
-     *         (status {@code error}), the claims are parked, and the operator retries
+     *         (status {@code error}), the claims are parked, and the operator retries;
+     *         {@code instance_destroy_unfinished} when the record was left being destroyed and its end failed or is
+     *         held back by its retry budget
      */
     public void destroy(int instanceId) {
-        // A record an earlier destroy left being destroyed: this destroy is its end.
-        if (this.operations.finishTerminating(instanceId)) {
+        destroy(instanceId, UnfinishedDestroys.Policy.AUTOMATIC);
+    }
+
+    /**
+     * {@link #destroy(int)} under an explicit policy: only an operator's Delete is {@code REQUESTED}, which finishes a
+     * record left being destroyed even where its automatic retries stopped (UnfinishedDestroys), and so does every
+     * generated row an owner's requested Delete tears down with it (an application's releases and previews, a
+     * database's or engine's engine instance, a stack's or service's workloads); every background teardown (release
+     * recovery and reclamation, preview expiry, a database move, a stack deploy's prune) stays {@code AUTOMATIC}.
+     */
+    public void destroy(int instanceId, UnfinishedDestroys.@NonNull Policy policy) {
+        // A record an earlier destroy left being destroyed: this destroy is its end, when the policy admits it now.
+        if (this.operations.finishTerminating(instanceId, policy, this.beforeEndWrite)) {
             return;
         }
         operation(instanceId, () -> {
-            destroyNow(instanceId);
+            destroyNow(instanceId, policy);
             return null;
         });
     }
 
     /** {@link #destroy}'s body; the operation lock is the wrapper's job. */
-    private void destroyNow(int instanceId) {
+    private void destroyNow(int instanceId, UnfinishedDestroys.@NonNull Policy policy) {
         // Destroy is its OWN verb, not a power action: stopping is reversible, this is not.
         // Through the SHARED resolver, so the panel's dead Delete and this refusal are one
         // decision with one text (HohenheimAccess.destroyUnavailableReason).
         HohenheimAccess.requireDestroyPermitted(instanceId);
         if (releaseManaged(instanceId)) {
-            ApplicationReleases.destroyFor(instanceId);
+            ApplicationReleases.destroyFor(instanceId, policy);
             GitCheckout.discard(InstanceModel.MODEL_ID, instanceId);
             InstanceExposure.disableForDestroyedInstance(instanceId);
             Row application = liveRow(instanceId);
@@ -910,26 +923,44 @@ public final class InstanceService {
     /**
      * Finishes every destroy a record was left in ({@link InstanceModel#TERMINATING_STATUSES}): its cleanup was done
      * before the status was written, so its claim writes the end, stopped and trashed. A record an operation still
-     * holds (the destroy itself, or a rival's) is left to it.
+     * holds (the destroy itself, or a rival's) is left to it, and so is one whose retries are spaced or held
+     * ({@link UnfinishedDestroys}).
      *
      * @return the ids it ended
      */
     @NonNull List<Integer> finishInterruptedDestroys() {
+        this.operations.pruneUnfinished();
         List<Integer> ended = new ArrayList<>();
         for (Row row : Models.get(InstanceModel.class).find()
                 .where(InstanceModel.STATUS.in(InstanceModel.TERMINATING_STATUSES))
                 .all()) {
             int id = row.get(InstanceModel.ID);
             try {
-                if (this.operations.finishTerminating(id)) {
+                if (this.finishTerminating(id)) {
                     ended.add(id);
                 }
             } catch (RuntimeException failed) {
-                // One record must never stop the rest; the next boot or sweep claims it again.
+                // One record must never stop the rest; a failed end is counted inside, this is the claim itself.
                 Blast.log("INSTANCE: could not finish the destroy of", id, "-", failed.getMessage());
             }
         }
         return List.copyOf(ended);
+    }
+
+    /**
+     * Finishes the destroy a record was left in when an automatic finish of it is due
+     * ({@link InstanceOperationLock#finishTerminating}); a failed end is counted, never thrown outside a transaction.
+     *
+     * @return whether this ended the record
+     */
+    boolean finishTerminating(int instanceId) {
+        return this.operations.finishTerminating(instanceId, UnfinishedDestroys.Policy.AUTOMATIC,
+            this.beforeEndWrite);
+    }
+
+    /** Forgets the unfinished destroys of records another controller finished or that are gone. */
+    void pruneUnfinishedDestroys() {
+        this.operations.pruneUnfinished();
     }
 
     /**

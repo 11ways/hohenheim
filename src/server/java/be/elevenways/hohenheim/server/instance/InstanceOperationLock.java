@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.HohenheimIds;
@@ -94,6 +95,9 @@ public final class InstanceOperationLock {
     /** The threads waiting for a record's claim, for {@link #isQueued}. */
     private final Map<Integer, Set<Thread>> waiting = new ConcurrentHashMap<>();
 
+    /** The records this controller failed to finish a destroy of. */
+    private final UnfinishedDestroys unfinished = new UnfinishedDestroys();
+
     private InstanceOperationLock(@NonNull HostLeases controller) {
         this.rows = ClaimedRows.of(Models.get(InstanceModel.class), InstanceModel.ID, InstanceModel.CLAIM_FENCE,
                 KEYS)
@@ -169,11 +173,17 @@ public final class InstanceOperationLock {
 
     /**
      * Takes a record no operation holds and, when an earlier destroy left it being destroyed
-     * ({@link InstanceModel#isTerminating}), finishes that destroy: the destroy's own end, stopped and trashed.
+     * ({@link InstanceModel#isTerminating}) and {@code policy} admits a finish now ({@link UnfinishedDestroys}),
+     * finishes that destroy: the destroy's own end, stopped and trashed.
      *
-     * @return whether this ended the record; false when it was held, gone, or not being destroyed
+     * @param beforeWrite a test seam run where the end is written (InstanceService's beforeEndWrite)
+     * @return whether this ended the record; false when it was held, gone, not being destroyed, or (automatic) not
+     *         admitted or failed
+     * @throws Violations {@code instance_destroy_unfinished} when a requested end failed, or any failed end inside a
+     *         transaction, which must roll back what it wrote
      */
-    public boolean finishTerminating(int instanceId) {
+    public boolean finishTerminating(int instanceId, UnfinishedDestroys.@NonNull Policy policy,
+                                     @NonNull Runnable beforeWrite) {
         if (this.rows.heldHere(instanceId) != null) {
             return false;
         }
@@ -183,8 +193,61 @@ public final class InstanceOperationLock {
             return false;
         }
         try (hold) {
-            return InstanceOperationGuard.finishDestroy(this, instanceId, InstanceService::trash);
+            return this.finishClaimed(instanceId, beforeWrite, policy, policy.overridesBudget());
         }
+    }
+
+    /** Forgets the unfinished destroys of records another controller finished or that are gone. */
+    void pruneUnfinished() {
+        this.unfinished.prune();
+    }
+
+    /** @return this controller's failed destroy ends */
+    @NonNull UnfinishedDestroys unfinished() {
+        return this.unfinished;
+    }
+
+    /**
+     * Finishes the destroy the record this thread just claimed was left in, when it was left in one; first writes the
+     * report a held record still owes.
+     *
+     * @param refuse whether a record left being destroyed refuses the caller when this did not end it
+     * @return whether this ended the record
+     * @throws Violations {@code instance_destroy_unfinished} when refusing (the end failed, or is held or not due),
+     *         and for a failed end inside a transaction
+     */
+    private boolean finishClaimed(int instanceId, @NonNull Runnable beforeWrite,
+                                  UnfinishedDestroys.@NonNull Policy policy, boolean refuse) {
+        Row record = this.owned(instanceId).first();
+        if (record == null || !InstanceModel.isTerminating(record)) {
+            this.unfinished.forgetOnCommit(instanceId);
+            return false;
+        }
+        this.unfinished.report(this, instanceId);
+        if (!this.unfinished.admits(instanceId, policy)) {
+            if (refuse) {
+                throw this.unfinished.refusal(instanceId, record);
+            }
+            return false;
+        }
+        boolean ended;
+        try {
+            ended = InstanceOperationGuard.finishDestroy(this, instanceId, InstanceService::trash, beforeWrite);
+        } catch (RuntimeException failure) {
+            this.unfinished.failed(instanceId, InstanceModel.nameOf(record),
+                InstanceModel.stoppageCauseOf(record) == HohenheimActivityAction.DESTROY_UNFINISHED, failure);
+            // Written now when owed (report skips it inside a transaction, which may still roll back).
+            this.unfinished.report(this, instanceId);
+            // AIDEV-NOTE: the end joins an enclosing transaction (no savepoints), so a failure inside one may have
+            // written the stopped status already: it is thrown so that transaction rolls back, never swallowed.
+            if (refuse || Models.get(InstanceModel.class).getResolvedDatasource().hasActiveTransaction()) {
+                throw this.unfinished.refusal(instanceId, record);
+            }
+            return false;
+        }
+        // Ended here, or another claim took the record first: either way it is no longer this controller's to retry.
+        this.unfinished.forgetOnCommit(instanceId);
+        return ended;
     }
 
     /**
@@ -325,10 +388,11 @@ public final class InstanceOperationLock {
             return held;
         }
         // A fresh claim of a record an earlier destroy left being destroyed FINISHES that destroy and never runs it: a
-        // live operation is then refused as for a missing record, a stored one goes on with the trashed record.
+        // live operation is then refused as for a missing record, a stored one goes on with the trashed record. One
+        // whose end failed, or is not due again yet, is refused by name with why (UnfinishedDestroys).
         boolean finished;
         try {
-            finished = InstanceOperationGuard.finishDestroy(this, instanceId, InstanceService::trash);
+            finished = this.finishClaimed(instanceId, () -> {}, UnfinishedDestroys.Policy.AUTOMATIC, true);
         } catch (RuntimeException failed) {
             held.close();
             throw failed;

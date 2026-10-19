@@ -127,6 +127,11 @@ public enum HohenheimActivityAction implements ActivityAction {
     WORKLOAD_COPY_LOST("workload_copy_lost", ErrorCause.PLAIN),
     /** It stopped and the crash policy's automatic restart was refused; the detail is the refusal's own message. */
     WORKLOAD_RESTART_REFUSED("workload_restart_refused", ErrorCause.MESSAGE),
+    /**
+     * A destroy's end (stopped, trashed) failed too often, so its record is left destroying, not ERROR, until an
+     * operator's Delete retries it; the detail is the failure's own message.
+     */
+    DESTROY_UNFINISHED("destroy_unfinished", ErrorCause.MESSAGE),
     /** A changed host key quarantined the host: it takes no new workload until an operator re-pins it. */
     QUARANTINED("quarantined"),
 
@@ -446,11 +451,12 @@ public enum HohenheimActivityAction implements ActivityAction {
                  ADMISSION_UNCORDONED, ADMISSION_ADMITTED, FORCED -> FactShape.NONE;
             case WORKLOAD_EXITED, WORKLOAD_CRASH_LOOPED, WORKLOAD_START_FAILED, WORKLOAD_ISOLATION_REFUSED,
                  WORKLOAD_NEVER_READY, WORKLOAD_STOP_FAILED, WORKLOAD_REMOVE_FAILED, WORKLOAD_RESTORE_FAILED,
-                 WORKLOAD_RESTORE_INTERRUPTED, WORKLOAD_COPY_LOST, WORKLOAD_RESTART_REFUSED -> switch (this.errorCause) {
-                case EXIT_CODE -> FactShape.of(FactShape.optionalKey(EXIT_CODE_KEY, CoreTypes.TEXT));
-                case MESSAGE -> FactShape.of(FactShape.optionalKey(MESSAGE_KEY, CoreTypes.TEXT));
-                case NONE, PLAIN, HOST_ISOLATION -> FactShape.NONE;
-            };
+                 WORKLOAD_RESTORE_INTERRUPTED, WORKLOAD_COPY_LOST, WORKLOAD_RESTART_REFUSED, DESTROY_UNFINISHED ->
+                switch (this.errorCause) {
+                    case EXIT_CODE -> FactShape.of(FactShape.optionalKey(EXIT_CODE_KEY, CoreTypes.TEXT));
+                    case MESSAGE -> FactShape.of(FactShape.optionalKey(MESSAGE_KEY, CoreTypes.TEXT));
+                    case NONE, PLAIN, HOST_ISOLATION -> FactShape.NONE;
+                };
         };
     }
 
@@ -503,7 +509,7 @@ public enum HohenheimActivityAction implements ActivityAction {
                  SHELL_CLOSE, WORKLOAD_EXITED, WORKLOAD_CRASH_LOOPED, WORKLOAD_START_FAILED,
                  WORKLOAD_ISOLATION_REFUSED, WORKLOAD_NEVER_READY, WORKLOAD_STOP_FAILED, WORKLOAD_REMOVE_FAILED,
                  WORKLOAD_RESTORE_FAILED, WORKLOAD_RESTORE_INTERRUPTED, WORKLOAD_COPY_LOST,
-                 WORKLOAD_RESTART_REFUSED -> List.of(InstanceModel.MODEL_ID);
+                 WORKLOAD_RESTART_REFUSED, DESTROY_UNFINISHED -> List.of(InstanceModel.MODEL_ID);
         };
     }
 

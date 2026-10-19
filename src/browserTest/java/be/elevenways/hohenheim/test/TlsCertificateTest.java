@@ -405,10 +405,7 @@ public class TlsCertificateTest {
         // not be hardcoded either: a fixed 8443 fails wherever anything else already owns
         // that port (a mitmproxy on the dev workstation was enough) because the listener
         // never binds and force-ssl answers 503. Reserve a free port and configure that.
-        int httpsPort;
-        try (java.net.ServerSocket reservation = new java.net.ServerSocket(0)) {
-            httpsPort = reservation.getLocalPort();
-        }
+        int httpsPort = FreePorts.tcpAndUdp();
 
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, httpsPort);

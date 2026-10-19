@@ -20,6 +20,7 @@ import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceService;
+import be.elevenways.hohenheim.server.instance.UnfinishedDestroys;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
@@ -865,6 +866,15 @@ public class DatabaseService extends DatasourceScoped {
      * @throws IOException when the teardown could not be confirmed
      */
     public void destroy(String name, boolean removeData) throws IOException {
+        destroy(name, removeData, UnfinishedDestroys.Policy.AUTOMATIC);
+    }
+
+    /**
+     * {@link #destroy(String, boolean)}, a dedicated record's engine instance destroyed under {@code policy}: the
+     * record's requested Delete is the one way to retry an engine instance whose destroy was left unfinished.
+     */
+    public void destroy(String name, boolean removeData, UnfinishedDestroys.@NonNull Policy policy)
+            throws IOException {
         Row row = query(() -> model().findByName(name));
         if (row != null) {
             Integer recordId = row.get(DatabaseModel.ID);
@@ -874,9 +884,11 @@ public class DatabaseService extends DatasourceScoped {
             try {
                 scoped(() -> {
                     if (DatabaseModel.isShared(row)) {
+                        // The dedicated engine a move left behind goes with the record, never orphaned by it.
+                        finishDedicatedLeftover(row, removeData, policy);
                         dropLogical(row, removeData);
                     } else {
-                        DatabaseInstances.destroyFor(row, removeData);
+                        DatabaseInstances.destroyFor(row, removeData, policy);
                     }
                     return null;
                 });
@@ -893,6 +905,35 @@ public class DatabaseService extends DatasourceScoped {
             }
         }
         exec(() -> model().find().where(DatabaseModel.NAME.eq(name)).delete());
+    }
+
+    /**
+     * Finishes removing the dedicated engine instance a SHARED database still owns after its move onto a shared engine
+     * could not destroy it; the database, its logical data and its user stay. A database without one is left alone.
+     *
+     * AIDEV-NOTE: the move's own cleanup stays AUTOMATIC (budgeted, UnfinishedDestroys); this is the operator's
+     * REQUESTED retry of a held leftover, the database's FINISH_OLD_ENGINE action, so it never goes through Delete,
+     * which on a shared database would drop the live logical database to reach the leftover.
+     *
+     * @throws IOException when the teardown could not be confirmed; the old instance stays
+     */
+    public void finishOldEngine(@NonNull String name, UnfinishedDestroys.@NonNull Policy policy) throws IOException {
+        Row row = query(() -> model().findByName(name));
+        if (row == null || !DatabaseModel.isShared(row)) {
+            return;
+        }
+        scoped(() -> {
+            finishDedicatedLeftover(row, false, policy);
+            return null;
+        });
+    }
+
+    /** Destroys the dedicated engine instance a shared record still owns, when it owns one, as the move would have. */
+    private static void finishDedicatedLeftover(@NonNull Row shared, boolean removeData,
+                                                UnfinishedDestroys.@NonNull Policy policy) throws IOException {
+        if (DatabaseInstances.ownedBy(EngineHost.dedicated(shared)) != null) {
+            DatabaseInstances.destroyFor(shared, removeData, policy);
+        }
     }
 
     /**

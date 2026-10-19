@@ -730,7 +730,7 @@ public class HohenheimSettings {
         public static final SettingDefinition<Integer> MAX_DUMP_MB = GROUP.buildSetting("max_dump_mb", Integer.class)
             .defaultValue(2048)
             .byteSize(ByteUnit.MEGABYTE)
-            .description("Upper bound in MiB for one managed-database dump written out of a "
+            .description("Upper bound for one managed-database dump written out of a "
                 + "container. Dumps stream to disk and are cut off (partial file deleted) the "
                 + "moment they grow past this, so a runaway dump can neither fill the disk nor "
                 + "pass for a backup; a mongodump archive is uncompressed BSON, so size it "
@@ -1074,7 +1074,7 @@ public class HohenheimSettings {
             .buildSetting("max_disk_gb_per_owner", Integer.class)
             .defaultValue(0)
             .byteSize(ByteUnit.GIGABYTE)
-            .description("Default cap on the total attached-disk size (GB, summed over "
+            .description("Default cap on the total attached-disk size (summed over "
                 + "instance device rows) one owner may hold. A per-owner Instance Quota "
                 + "record overrides this. 0 or less means NO cap; usage is counted "
                 + "either way")
@@ -1375,7 +1375,7 @@ public class HohenheimSettings {
             .buildSetting("max_artifact_mb", Integer.class)
             .defaultValue(1024)
             .byteSize(ByteUnit.MEGABYTE)
-            .description("Upper bound in MiB for the image tar read back out of a build "
+            .description("Upper bound for the image tar read back out of a build "
                 + "sandbox. The read is buffered through controller memory (the same "
                 + "limitation snapshot capture has), so this cap is the heap guard: a "
                 + "larger artifact FAILS the build instead of taking the controller down")
@@ -1385,7 +1385,7 @@ public class HohenheimSettings {
             .buildSetting("max_upload_mb", Integer.class)
             .defaultValue(512)
             .byteSize(ByteUnit.MEGABYTE)
-            .description("Upper bound in MiB for an artifact uploaded to be released. "
+            .description("Upper bound for an artifact uploaded to be released. "
                 + "Deliberately NOT max_artifact_mb: that one guards the heap because the "
                 + "image tar is read through controller memory, while an upload is streamed "
                 + "straight to disk and never enters the heap, so this cap guards DISK")
@@ -1493,7 +1493,7 @@ public class HohenheimSettings {
             .buildSetting("max_file_kb", Integer.class)
             .defaultValue(8192)
             .byteSize(ByteUnit.KILOBYTE)
-            .description("Upper bound in KiB for one file read or written through the file "
+            .description("Upper bound for one file read or written through the file "
                 + "manager. Enforced DURING the transfer in both directions: an oversized "
                 + "download aborts mid-read and an oversized upload is refused before a "
                 + "single byte reaches the workload, so a partial file never lands")
@@ -1636,7 +1636,7 @@ public class HohenheimSettings {
             .buildSetting("max_archive_mb", Integer.class)
             .defaultValue(1024)
             .byteSize(ByteUnit.MEGABYTE)
-            .description("Upper bound in MiB for one captured volume archive. Captures are "
+            .description("Upper bound for one captured volume archive. Captures are "
                 + "buffered through controller memory (there is no streaming "
                 + "transport), so this cap is what protects the heap -- a volume larger than "
                 + "this refuses to snapshot instead of taking the controller down")

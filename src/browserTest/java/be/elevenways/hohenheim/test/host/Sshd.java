@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.host;
 
+import be.elevenways.hohenheim.test.FreePorts;
 import be.elevenways.protoblast.common.time.Backoff;
 import be.elevenways.protoblast.common.time.Retry;
 import be.elevenways.protoblast.server.process.RunningProcess;
@@ -8,7 +9,6 @@ import be.elevenways.protoblast.server.process.SubprocessException;
 import be.elevenways.protoblast.server.process.TextSink;
 
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -72,10 +72,7 @@ public final class Sshd {
         Files.createDirectories(directory);
         PortTaken lost = null;
         for (int attempt = 0; attempt < BIND_ATTEMPTS; attempt++) {
-            int port;
-            try (ServerSocket probe = new ServerSocket(0)) {
-                port = probe.getLocalPort();
-            }
+            int port = FreePorts.tcpAndUdp();
             try {
                 return startOn(directory, port);
             } catch (PortTaken taken) {

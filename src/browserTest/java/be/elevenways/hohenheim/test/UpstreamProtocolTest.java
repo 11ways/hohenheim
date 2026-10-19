@@ -45,7 +45,6 @@ import javax.net.ssl.SSLContext;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.net.InetSocketAddress;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
@@ -280,10 +279,7 @@ class UpstreamProtocolTest {
             assertThat(TenantUpstreams.publicOnly(site)).as("step 1: the site is tenant-owned").isTrue();
             proxy = startProxy();
 
-            int refusing;
-            try (ServerSocket closed = new ServerSocket(0)) {
-                refusing = closed.getLocalPort();
-            }
+            int refusing = FreePorts.tcpAndUdp();
             try (OutboundFixture upstream = OutboundFixture.route(upstreamHost, refusing, first)) {
                 // 2. The name's first vetted address refuses the connection: the proxy dials the next
                 //    vetted one instead of answering 503.

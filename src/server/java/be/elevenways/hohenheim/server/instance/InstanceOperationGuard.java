@@ -343,16 +343,37 @@ final class InstanceOperationGuard {
         Supplier<QueryBuilder<Row>> owned = lock.ownedLater(instanceId);
         requireMatched((int) scoped(owned.get(), serverId).count(), serverId, instanceName);
         UnaryOperator<QueryBuilder<Row>> stamped = statusOf(status, null, null, false);
+        UnfinishedDestroys unfinished = lock.unfinished();
         lock.stageOutcome(instanceId, new ClaimedRows.RowOutcome() {
+
+            /** Whether a write of this end failed: its retries are then UnfinishedDestroys', never this outcome's. */
+            private volatile boolean handedOff;
+
             @Override
             public @NonNull QueryBuilder<Row> assign(@NonNull QueryBuilder<Row> statement) {
                 return stamped.apply(scoped(statement, serverId));
             }
 
+            // AIDEV-NOTE: a failed write stays pending in ClaimedRows, and every later claim of the record would
+            // replay it (ClaimedRows.overtake, inside a transaction its handOver) outside the budget. So the first
+            // failure is counted and refused by name, and every later write of this outcome gives itself up
+            // (ABANDONED): ClaimedRows then owes it no more (inside a claimant's transaction once that commits), and
+            // the record still reads destroying, which the next claim finishes as budgeted (UnfinishedDestroys).
             @Override
-            public int write(@NonNull QueryBuilder<Row> assigned) {
-                beforeWrite.run();
-                return writeEnd(assigned, () -> scoped(owned.get(), serverId), trash);
+            public ClaimedRows.@NonNull OutcomeWrite write(@NonNull QueryBuilder<Row> assigned) {
+                if (this.handedOff) {
+                    return ClaimedRows.OutcomeWrite.ABANDONED;
+                }
+                try {
+                    beforeWrite.run();
+                    return ClaimedRows.OutcomeWrite.matching(
+                        writeEnd(assigned, () -> scoped(owned.get(), serverId), trash));
+                } catch (RuntimeException failed) {
+                    this.handedOff = true;
+                    unfinished.failed(instanceId, instanceName, false, failed);
+                    // Thrown, never swallowed: inside a claimant's transaction what the end wrote must roll back.
+                    throw unfinished.refusal(instanceId, instanceName, null);
+                }
             }
 
             @Override
@@ -368,26 +389,58 @@ final class InstanceOperationGuard {
      * claim. Never runs or resumes it.
      *
      * AIDEV-NOTE: the claim's own fence is the whole authority: the destroy's cleanup was done before its intent was
-     * written, so nothing here needs the host's daemon, and a record another claim owns matches nothing.
+     * written, so nothing here needs the host's daemon, and a record another claim owns matches nothing. A failed end
+     * leaves the record destroying; InstanceOperationLock spaces and bounds the retries ({@link UnfinishedDestroys}).
      *
-     * @param trash the soft delete of the record the statement names; returns the rows it trashed
+     * @param trash       the soft delete of the record the statement names; returns the rows it trashed
+     * @param beforeWrite a test seam run where the end is written, after the status and before the trash, the way a
+     *                    failing write hook of the trash fails (InstanceService's beforeEndWrite)
      * @return whether this ended the record; false when it was not being destroyed
      */
     static boolean finishDestroy(@NonNull InstanceOperationLock lock, int instanceId,
-                                 @NonNull ToIntFunction<QueryBuilder<Row>> trash) {
+                                 @NonNull ToIntFunction<QueryBuilder<Row>> trash, @NonNull Runnable beforeWrite) {
         Row record = lock.owned(instanceId).first();
         if (record == null || !InstanceModel.isTerminating(record)) {
             return false;
         }
         int ended = writeEnd(statusOf(InstanceModel.STATUS_STOPPED, null, null, false).apply(lock.owned(instanceId)),
-            () -> lock.owned(instanceId), trash);
+            () -> lock.owned(instanceId), statement -> {
+                beforeWrite.run();
+                return trash.applyAsInt(statement);
+            });
         Blast.log("INSTANCE: finished the destroy of", record.get(InstanceModel.NAME), "(" + instanceId + ")",
             ended > 0 ? "- stopped and trashed" : "- another claim took it first");
         return ended > 0;
     }
 
     /**
+     * Records on a record left being destroyed why its end was given up on, in one transaction through the claim:
+     * the stoppage {@link HohenheimActivityAction#DESTROY_UNFINISHED} with the failure's first line, then its history
+     * fact. The status stays {@code destroying}.
+     *
+     * @param reason the failure's own words
+     * @return whether it was recorded; false when the claim no longer owns the live record
+     */
+    static boolean stampDestroyUnfinished(@NonNull InstanceOperationLock lock, int instanceId,
+                                          @NonNull String reason) {
+        HohenheimActivityAction cause = HohenheimActivityAction.DESTROY_UNFINISHED;
+        boolean[] stamped = {false};
+        Models.get(InstanceModel.class).getResolvedDatasource().withTransaction(transaction -> {
+            if (InstanceModel.withStoppage(lock.owned(instanceId), cause, reason).updateAll() > 0) {
+                History.event(Models.get(InstanceModel.class), instanceId, InstanceModel.stoppageFact(cause, reason));
+                stamped[0] = true;
+            }
+        });
+        return stamped[0];
+    }
+
+    /**
      * Writes a destroy's end in one transaction: the stamped status, then the trash, both through the same claim.
+     *
+     * AIDEV-NOTE: inside an enclosing transaction this one JOINS it (no savepoints), so a failed trash leaves the
+     * stopped status written there. The transaction is marked rollback-only before the failure propagates: a caller
+     * that catches it inside its callback (a sweep's per-record catch) can never commit stopped-without-trash, which
+     * would take the record out of the destroying set with its cleanup done.
      *
      * @return the rows trashed: 0 when the claim no longer owns the live record
      */
@@ -395,8 +448,13 @@ final class InstanceOperationGuard {
                                 @NonNull ToIntFunction<QueryBuilder<Row>> trash) {
         int[] trashed = {0};
         Models.get(InstanceModel.class).getResolvedDatasource().withTransaction(transaction -> {
-            if (stamped.updateAll() > 0) {
-                trashed[0] = trash.applyAsInt(owned.get());
+            try {
+                if (stamped.updateAll() > 0) {
+                    trashed[0] = trash.applyAsInt(owned.get());
+                }
+            } catch (RuntimeException failed) {
+                transaction.setRollbackOnly(failed);
+                throw failed;
             }
         });
         return trashed[0];

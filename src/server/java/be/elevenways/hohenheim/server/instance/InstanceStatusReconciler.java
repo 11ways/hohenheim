@@ -116,6 +116,8 @@ public final class InstanceStatusReconciler {
     /** Reconcile every record whose status claims a live workload, and finish every destroy a record was left in. */
     public @NonNull List<Outcome> sweep() {
         List<Outcome> outcomes = new ArrayList<>();
+        // A record another controller finished, or one deleted since, never reaches the sweep again: its count goes.
+        this.instances.pruneUnfinishedDestroys();
         for (Row instance : Models.get(InstanceModel.class).find()
                 .where(swept())
                 .all()) {
@@ -156,9 +158,10 @@ public final class InstanceStatusReconciler {
         String stored = String.valueOf((Object) instance.get(InstanceModel.STATUS));
 
         // A record a destroy was left in is FINISHED, never observed or corrected: its cleanup is done and only the
-        // destroy's end remains, which its claim writes (an operation still holding it is left to it).
+        // destroy's end remains, which its claim writes (an operation still holding it is left to it, and a failed end
+        // is retried only as UnfinishedDestroys spaces and bounds it).
         if (InstanceModel.isTerminating(instance)) {
-            return new Outcome(instanceId, this.instances.operations().finishTerminating(instanceId)
+            return new Outcome(instanceId, this.instances.finishTerminating(instanceId)
                 ? Verdict.FINISHED : Verdict.SKIPPED, stored, null);
         }
         // A protected status (capturing/restoring/migrating) is an operation in flight

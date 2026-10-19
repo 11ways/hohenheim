@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.database;
 
+import be.elevenways.hohenheim.server.instance.UnfinishedDestroys;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
@@ -130,7 +131,7 @@ public final class DatabaseWrites {
         String name = database.get(DatabaseModel.NAME);
         refuseWhileAttached(name, database.get(DatabaseModel.ID));
         try {
-            new DatabaseService().destroy(name, true);
+            new DatabaseService().destroy(name, true, UnfinishedDestroys.Policy.REQUESTED);
         } catch (IOException e) {
             String detail = WithheldFailure.operatorDetail(e);
             throw Violations.ofForm(detail == null
@@ -141,6 +142,27 @@ public final class DatabaseWrites {
         }
         // Links to soft-deleted owners are debris once the database is gone: the row delete inside destroy takes them
         // along through the model funnel (InstanceDatabaseLinks).
+    }
+
+    /**
+     * The operator's requested retry of the dedicated engine a move onto a shared engine left held; the database stays.
+     *
+     * @throws Violations {@code instance_destroy_unfinished} when the end still fails, else
+     *                    {@code database_old_engine_failed} when the teardown is unconfirmed
+     */
+    public static void finishOldEngine(@NonNull Row database) {
+        String name = database.get(DatabaseModel.NAME);
+        try {
+            new DatabaseService().finishOldEngine(name, UnfinishedDestroys.Policy.REQUESTED);
+        } catch (IOException e) {
+            if (e.getCause() instanceof Violations named) {
+                throw named;
+            }
+            String detail = WithheldFailure.operatorDetail(e);
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("database_old_engine_failed")
+                .withArg("name", name)
+                .withArg("reason", detail != null ? detail : String.valueOf(e.getMessage())));
+        }
     }
 
     /**
@@ -234,7 +256,7 @@ public final class DatabaseWrites {
             return;
         }
         try {
-            DatabaseEngines.destroy(engineId, true);
+            DatabaseEngines.destroy(engineId, true, UnfinishedDestroys.Policy.REQUESTED);
         } catch (IOException e) {
             throw engineDestroyFailed(engine, e);
         }

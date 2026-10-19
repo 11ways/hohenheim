@@ -78,7 +78,8 @@ class DeleteConfirmationTest {
     }
 
     @Test
-    void everyDeleteDialogNamesWhatThisRecordTakesWithIt() {
+    void everyDeleteDialogNamesWhatThisRecordTakesWithIt() throws Exception {
+        int streamPort = FreePorts.tcpAndUdp();
         Db.run(datasource, () -> {
             DnsZoneParts zones = new DnsZoneParts();
 
@@ -214,7 +215,7 @@ class DeleteConfirmationTest {
             //     forwarding and are freed, in both languages, and nothing a website has.
             Row stream = Models.get(SiteModel.class).findById(site("relay", null));
             stream.set(SiteModel.UPSTREAM_KIND, "hohenheim:stream");
-            stream.set(SiteModel.SETTINGS, Map.of("listen_port", 47123, "protocol", "both",
+            stream.set(SiteModel.SETTINGS, Map.of("listen_port", streamPort, "protocol", "both",
                 "forward_host", "10.0.0.20", "forward_port", 22));
             Models.get(SiteModel.class).save(stream);
             ConfirmationSpec relay = sites.forRow(Models.get(SiteModel.class).findById(stream.get(SiteModel.ID)),
@@ -222,21 +223,21 @@ class DeleteConfirmationTest {
             assertThat(relay.body().key()).as("step 7b: the stream's own wording").isEqualTo("delete_confirm_ports");
             assertThat(relay.body().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
                 .as("step 7b: naming the stream and both its ports")
-                .contains("relay").contains("47123/tcp").contains("47123/udp")
+                .contains("relay").contains(streamPort + "/tcp").contains(streamPort + "/udp")
                 .doesNotContain("hostname").doesNotContain("preview");
             assertThat(relay.body().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
-                .as("step 7b: and in Dutch").contains("poorten").contains("47123/udp")
+                .as("step 7b: and in Dutch").contains("poorten").contains(streamPort + "/udp")
                 .doesNotContain("hostnamen").doesNotContain("preview");
 
             // 7c. A stream on one port names it in the singular, in both languages.
-            stream.set(SiteModel.SETTINGS, Map.of("listen_port", 47123, "protocol", "tcp",
+            stream.set(SiteModel.SETTINGS, Map.of("listen_port", streamPort, "protocol", "tcp",
                 "forward_host", "10.0.0.20", "forward_port", 22));
             Models.get(SiteModel.class).save(stream);
             ConfirmationSpec onePort = sites.forRow(Models.get(SiteModel.class).findById(stream.get(SiteModel.ID)),
                 request);
             assertThat(onePort.body().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
                 .as("step 7c: THE ASSERTION, one port reads in the singular").contains("This port stops forwarding")
-                .contains("47123/tcp").doesNotContain("These ports");
+                .contains(streamPort + "/tcp").doesNotContain("These ports");
             assertThat(onePort.body().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
                 .as("step 7c: and in Dutch").contains("Deze poort stuurt").doesNotContain("poorten");
 

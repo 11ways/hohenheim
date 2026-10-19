@@ -1,30 +1,44 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.model.OperationStatus;
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.AttentionSubject;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.resource.RecordOverview;
+import be.elevenways.zenit.common.routing.BoundEndpoint;
+import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
+import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static be.elevenways.hohenheim.server.cms.AttentionItems.item;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.literal;
@@ -100,6 +114,162 @@ public final class InstanceAttention {
     static @Nullable Microcopy sitesHeldText(@Nullable Integer sites) {
         return sites == null || sites == 0 ? null : HohenheimMicrocopy.ATTENTION_DETAIL.of("sites_held_back")
             .withArg("count", sites);
+    }
+
+    /**
+     * Instances whose destroy's end was given up on after its automatic retries (UnfinishedDestroys): left
+     * destroying until an operator's requested Delete retries it, with the failure as stored on the record.
+     *
+     * AIDEV-NOTE: a generated row takes no Delete of its own: the Delete of the record it was generated for carries
+     * the request down (ApplicationReleases, DatabaseService, DatabaseEngines, StackRuntime and StackInstances pass
+     * UnfinishedDestroys.Policy.REQUESTED), so its item opens that owner. A tier that starts owning instances must
+     * pass the policy the same way. One owner retries WITHOUT its Delete: a shared database still owning the
+     * dedicated engine its move left behind, whose Delete would drop the live logical database (its
+     * FINISH_OLD_ENGINE action is the retry). The owners are read in one query per owning model, however many rows
+     * are held.
+     */
+    public static void unfinishedDestroys(List<AttentionItem> items) {
+        List<Row> held = Models.get(InstanceModel.class).find()
+            .where(InstanceModel.STATUS.in(InstanceModel.TERMINATING_STATUSES))
+            .and(InstanceModel.STOPPAGE_CAUSE.eq(HohenheimActivityAction.DESTROY_UNFINISHED.id().getPath()))
+            .all();
+        Map<Integer, RetryingOwner> owners = retryingOwnersOf(held);
+        for (Row instance : held) {
+            WorkloadErrors.Reading reading = WorkloadErrors.readingOf(instance, true);
+            String name = instance.get(InstanceModel.NAME);
+            RouteTarget route;
+            Microcopy action;
+            if (instance.get(InstanceModel.GENERATED_BY) == null) {
+                // Its own Delete is the requested retry.
+                route = InstanceParts.recordRoute(ADMIN, instance, null);
+                action = HohenheimMicrocopy.ATTENTION_ACTION.of("act_delete_again").withArg("name", name);
+            } else {
+                RetryingOwner owner = owners.get(instance.get(InstanceModel.ID));
+                // An owner that is gone, or served by no admin entry, leaves the row to be opened where it is.
+                route = owner == null ? InstanceParts.recordRoute(ADMIN, instance, null) : owner.route();
+                action = owner == null
+                    ? HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_app").withArg("name", name)
+                    : owner.action();
+            }
+            items.add(item(AttentionSeverity.ERROR, "trash-can",
+                HohenheimMicrocopy.ATTENTION_TITLE.of("instance_unfinished_destroy").withArg("name", name),
+                reading.worded(), route, action)
+                .about(AttentionSubject.instance(instance.get(InstanceModel.ID)), null)
+                .withNote(reading.technical()));
+        }
+    }
+
+    /** The live record whose requested action retries a held generated row, that action's words, and its page. */
+    private record RetryingOwner(@NonNull Microcopy action, @NonNull RouteTarget route) {
+
+        /** @return the owner whose requested Delete tears the row down */
+        static @NonNull RetryingOwner deleting(@NonNull String name, @NonNull RouteTarget route) {
+            return new RetryingOwner(HohenheimMicrocopy.ATTENTION_ACTION.of("act_delete_owner_again")
+                .withArg("name", name), route);
+        }
+    }
+
+    /**
+     * Reads the retrying owner of every generated row in {@code rows} at once: a release's application, a preview
+     * instance's application (through its preview), and otherwise the record it was generated for.
+     *
+     * @return by instance id; a row whose owner is gone or unserved is absent
+     */
+    private static @NonNull Map<Integer, RetryingOwner> retryingOwnersOf(@NonNull List<Row> rows) {
+        String applications = InstanceModel.MODEL_ID.toString();
+        String previews = PreviewDeploymentModel.MODEL_ID.toString();
+        Map<String, Set<Integer>> idsByModel = new LinkedHashMap<>();
+        for (Row row : rows) {
+            String model = row.get(InstanceModel.GENERATED_FOR_MODEL);
+            Integer id = row.get(InstanceModel.GENERATED_FOR_ID);
+            if (row.get(InstanceModel.GENERATED_BY) != null && model != null && id != null) {
+                idsByModel.computeIfAbsent(model, ignored -> new HashSet<>()).add(id);
+            }
+        }
+        Map<Integer, Integer> applicationOfPreview = new HashMap<>();
+        Set<Integer> previewIds = idsByModel.remove(previews);
+        if (previewIds != null) {
+            for (Row preview : Models.get(PreviewDeploymentModel.class).find()
+                    .where(PreviewDeploymentModel.ID.in(List.copyOf(previewIds)))
+                    .all()) {
+                Integer application = preview.get(PreviewDeploymentModel.APPLICATION_ID);
+                if (application != null) {
+                    applicationOfPreview.put(preview.get(PreviewDeploymentModel.ID), application);
+                }
+            }
+        }
+        Set<Integer> applicationIds = new HashSet<>(applicationOfPreview.values());
+        Set<Integer> ownedByApplications = idsByModel.remove(applications);
+        if (ownedByApplications != null) {
+            applicationIds.addAll(ownedByApplications);
+        }
+        Map<Integer, RetryingOwner> byApplication = new HashMap<>();
+        if (!applicationIds.isEmpty()) {
+            for (Row application : Models.get(InstanceModel.class).find()
+                    .where(InstanceModel.ID.in(List.copyOf(applicationIds)))
+                    .all()) {
+                int id = application.get(InstanceModel.ID);
+                byApplication.put(id, RetryingOwner.deleting(application.get(InstanceModel.NAME),
+                    CmsRoutes.subpage(ADMIN, HohenheimSlugs.INSTANCES, id, RecordOverview.SLUG)));
+            }
+        }
+        Map<String, Map<Integer, RetryingOwner>> byOtherModel = new HashMap<>();
+        idsByModel.forEach((model, ids) -> byOtherModel.put(model, recordOwners(model, ids)));
+
+        Map<Integer, RetryingOwner> owners = new HashMap<>();
+        for (Row row : rows) {
+            String model = row.get(InstanceModel.GENERATED_FOR_MODEL);
+            Integer id = row.get(InstanceModel.GENERATED_FOR_ID);
+            if (row.get(InstanceModel.GENERATED_BY) == null || model == null || id == null) {
+                continue;
+            }
+            RetryingOwner owner;
+            if (applications.equals(model)) {
+                owner = byApplication.get(id);
+            } else if (previews.equals(model)) {
+                Integer application = applicationOfPreview.get(id);
+                owner = application == null ? null : byApplication.get(application);
+            } else {
+                owner = byOtherModel.getOrDefault(model, Map.of()).get(id);
+            }
+            if (owner != null) {
+                owners.put(row.get(InstanceModel.ID), owner);
+            }
+        }
+        return owners;
+    }
+
+    /**
+     * The live records of one owning model among {@code ids}, each opened at its front door on the admin panel.
+     *
+     * @return by record id; empty for a model this application does not know or no admin entry serves
+     */
+    @SuppressWarnings("unchecked")
+    private static @NonNull Map<Integer, RetryingOwner> recordOwners(@NonNull String modelToken,
+                                                                     @NonNull Set<Integer> ids) {
+        Identifier modelId = Identifier.tryParse(modelToken);
+        Model model = modelId == null ? null : Models.get(modelId);
+        if (model == null) {
+            return Map.of();
+        }
+        // Every owning model is keyed by an integer id (GENERATED_FOR_ID), so its key field takes these ids as-is.
+        Field<Object, ?> key = (Field<Object, ?>) model.getPrimaryKeyField();
+        Map<Integer, RetryingOwner> owners = new HashMap<>();
+        for (Row owner : model.find().where(key.in(List.<Object>copyOf(ids))).all()) {
+            Object id = model.getPrimaryKeyValue(owner);
+            BoundEndpoint<?> route = id == null ? null : AdminRecordLinks.detail(model.getModelId(), String.valueOf(id));
+            if (route != null) {
+                String title = model.getDisplayTitle(owner);
+                String name = title != null ? title : modelToken + " #" + id;
+                // A shared database's held instance is the engine its move left behind: its own action retries it.
+                boolean oldEngine = DatabaseModel.MODEL_ID.equals(model.getModelId()) && DatabaseModel.isShared(owner);
+                owners.put(((Number) id).intValue(), oldEngine
+                    ? new RetryingOwner(HohenheimMicrocopy.ATTENTION_ACTION.of("act_finish_old_engine")
+                        .withArg("name", name), route)
+                    : RetryingOwner.deleting(name, route));
+            }
+        }
+        return owners;
     }
 
     /**

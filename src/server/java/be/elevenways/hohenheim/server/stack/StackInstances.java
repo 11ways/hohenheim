@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
+import be.elevenways.hohenheim.server.instance.UnfinishedDestroys;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.Egress;
@@ -271,12 +272,20 @@ public final class StackInstances {
      * @throws IOException when the daemon cannot confirm the teardown
      */
     public static void destroyFor(int serviceId) throws IOException {
+        destroyFor(serviceId, UnfinishedDestroys.Policy.AUTOMATIC);
+    }
+
+    /**
+     * {@link #destroyFor(int)} under {@code policy}: the service's or its stack's requested Delete is the one way to
+     * retry a workload whose destroy was left unfinished; a deploy's prune stays automatic.
+     */
+    public static void destroyFor(int serviceId, UnfinishedDestroys.@NonNull Policy policy) throws IOException {
         Row instance = owned(serviceId);
         if (instance == null) {
             return;
         }
         int instanceId = instance.get(InstanceModel.ID);
-        run(serviceId, () -> new InstanceService().destroy(instanceId));
+        run(serviceId, () -> new InstanceService().destroy(instanceId, policy));
     }
 
     private interface Work {

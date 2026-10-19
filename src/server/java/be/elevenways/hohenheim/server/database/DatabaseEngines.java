@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.database;
 
+import be.elevenways.hohenheim.server.instance.UnfinishedDestroys;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
@@ -307,6 +308,15 @@ public final class DatabaseEngines {
      *         as {@code destroy_failed} with the reason
      */
     public static void destroy(int engineId, boolean removeData) throws IOException {
+        destroy(engineId, removeData, UnfinishedDestroys.Policy.AUTOMATIC);
+    }
+
+    /**
+     * {@link #destroy(int, boolean)}, the engine's instance destroyed under {@code policy}: the engine's requested
+     * Delete is the one way to retry an engine instance whose destroy was left unfinished.
+     */
+    public static void destroy(int engineId, boolean removeData, UnfinishedDestroys.@NonNull Policy policy)
+            throws IOException {
         Row row = require(engineId);
         List<Row> hosted = databasesOn(engineId);
         if (!hosted.isEmpty()) {
@@ -315,7 +325,7 @@ public final class DatabaseEngines {
                 .withArg("databases", names(hosted)));
         }
         try {
-            DatabaseInstances.destroyFor(EngineHost.ofEngine(row), removeData);
+            DatabaseInstances.destroyFor(EngineHost.ofEngine(row), removeData, policy);
         } catch (IOException e) {
             setStatus(engineId, DatabaseModel.STATUS_DESTROY_FAILED, e.getMessage());
             throw new IOException("Destroy of engine '" + row.get(DatabaseEngineModel.NAME)
