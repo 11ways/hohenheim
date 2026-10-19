@@ -16,6 +16,7 @@ import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.render.action.PageFormState;
 import be.elevenways.zenit.cms.server.page.PageActions;
+import be.elevenways.zenit.cms.server.render.table.TableStateTranslator;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
@@ -136,7 +137,7 @@ public final class InstanceDevicesPage implements RecordTab.Rendered<Row> {
             entry.put("typeColorSet", colors.colorSet());
             List<String> details = new ArrayList<>();
             for (DeviceDetail detail : columns) {
-                details.add(detailText(type, detail, device));
+                details.add(detailText(type, detail, device, conduit));
             }
             entry.put("details", details);
             entry.put("editTarget", CmsRoutes.detail(panel, HohenheimSlugs.INSTANCE_DEVICES,
@@ -211,16 +212,20 @@ public final class InstanceDevicesPage implements RecordTab.Rendered<Row> {
     }
 
     /**
-     * @return the detail's text for the device: empty where its type does not mean the detail (an unknown type means
-     *         none), "-" where it does but holds no value
+     * @return the detail's text for the device, with the unit its field declares as a list cell reads it: empty where
+     *         its type does not mean the detail (an unknown type means none), "-" where it does but holds no value
      */
     private static @NonNull String detailText(@Nullable DeviceType type, @NonNull DeviceDetail detail,
-                                              @NonNull Row device) {
+                                              @NonNull Row device, @NonNull Conduit conduit) {
         if (type == null || !type.details().contains(detail)) {
             return "";
         }
         Object value = device.get(detail.field().getName());
-        return value == null ? "-" : String.valueOf(value);
+        if (value == null) {
+            return "-";
+        }
+        Object worded = TableStateTranslator.withDeclaredUnit(detail.field(), value);
+        return worded instanceof Microcopy words ? words.asString(conduit) : String.valueOf(value);
     }
 
     /** The device create form under this instance (its fixed parent), opened with its kind prefilled. */

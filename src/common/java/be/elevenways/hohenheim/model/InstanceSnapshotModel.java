@@ -119,7 +119,7 @@ public class InstanceSnapshotModel extends Model {
 
     public static final LongField TOTAL_BYTES = SCHEMA.addField(
         LongField.builder("total_bytes").filterable(false)
-            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("total_bytes")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("total_bytes")).suffix("bytes").build());
 
     public static final TextField ERROR = SCHEMA.addField(TextField.builder().name("error").build());
 

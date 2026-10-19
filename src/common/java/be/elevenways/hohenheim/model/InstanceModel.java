@@ -398,7 +398,7 @@ public class InstanceModel extends Model {
      * edit. A migration moves this charge between host buckets rather than re-deriving it.
      */
     public static final IntegerField CAPACITY_MB = SCHEMA.addField(
-        IntegerField.builder().name("capacity_mb").filterable(false).build());
+        IntegerField.builder().name("capacity_mb").filterable(false).suffix("MB").build());
 
     /**
      * The memory (MB) booked for this workload against its OWNER's memory budget, stamped
@@ -413,7 +413,7 @@ public class InstanceModel extends Model {
      * prevent.
      */
     public static final IntegerField QUOTA_MEMORY_MB = SCHEMA.addField(
-        IntegerField.builder().name("quota_memory_mb").filterable(false).build());
+        IntegerField.builder().name("quota_memory_mb").filterable(false).suffix("MB").build());
 
     /**
      * The owner disk-GB bucket this workload's ROOT disk reservation was charged to,
@@ -436,11 +436,11 @@ public class InstanceModel extends Model {
      * as "no news" instead of computing a percentage from zeros.
      */
     public static final LongField DISK_USED_BYTES = SCHEMA.addField(
-        LongField.builder("disk_used_bytes").filterable(false).build());
+        LongField.builder("disk_used_bytes").filterable(false).suffix("bytes").build());
 
     /** The ENFORCED root-disk ceiling the daemon reports, or 0 when there is none. */
     public static final LongField DISK_LIMIT_BYTES = SCHEMA.addField(
-        LongField.builder("disk_limit_bytes").filterable(false).build());
+        LongField.builder("disk_limit_bytes").filterable(false).suffix("bytes").build());
 
     /** When the two figures above were last observed; null while never measured. */
     public static final DateTimeField DISK_OBSERVED_AT = SCHEMA.addField(
@@ -627,7 +627,7 @@ public class InstanceModel extends Model {
      * the handoff this IS what the destination bucket holds for the row.
      */
     public static final IntegerField MIGRATE_RESERVED_MB = SCHEMA.addField(
-        IntegerField.builder().name("migrate_reserved_mb").filterable(false).build());
+        IntegerField.builder().name("migrate_reserved_mb").filterable(false).suffix("MB").build());
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("created_at")).build());

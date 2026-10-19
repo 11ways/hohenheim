@@ -116,7 +116,7 @@ public class InstanceBackupModel extends Model {
 
     public static final LongField SIZE_BYTES = SCHEMA.addField(
         LongField.builder("size_bytes").filterable(false)
-            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("size_bytes")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("size_bytes")).suffix("bytes").build());
 
     /**
      * NON-sensitive manifest summary (name, kind, image, volume inventory with

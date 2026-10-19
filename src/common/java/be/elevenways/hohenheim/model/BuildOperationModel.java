@@ -156,24 +156,24 @@ public class BuildOperationModel extends Model {
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("cpu_limit")).build());
     public static final IntegerField MEMORY_LIMIT_MB = SCHEMA.addField(
         IntegerField.builder().name(InstanceKindFields.MEMORY_LIMIT_MB).filterable(false)
-            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("memory_limit")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("memory_limit")).suffix("MiB").build());
     public static final IntegerField DISK_LIMIT_MB = SCHEMA.addField(
         IntegerField.builder().name("disk_limit_mb").filterable(false)
-            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("disk_limit_mb")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("disk_limit_mb")).suffix("MiB").build());
     public static final IntegerField PIDS_LIMIT = SCHEMA.addField(
         IntegerField.builder().name("pids_limit").filterable(false)
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("pids_limit")).build());
     public static final IntegerField TIMEOUT_SECONDS = SCHEMA.addField(
         IntegerField.builder().name("timeout_seconds").filterable(false)
-            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("timeout_seconds")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("timeout_seconds")).suffix("s").build());
 
     /** Largest writable-layer size the disk watchdog OBSERVED, not a promise. */
     public static final LongField PEAK_DISK_BYTES = SCHEMA.addField(
         LongField.builder("peak_disk_bytes").filterable(false)
-            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("peak_disk_bytes")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("peak_disk_bytes")).suffix("bytes").build());
     public static final LongField ARTIFACT_BYTES = SCHEMA.addField(
         LongField.builder("artifact_bytes").filterable(false)
-            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("artifact_bytes")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("artifact_bytes")).suffix("bytes").build());
 
     public static final DateTimeField STARTED_AT = SCHEMA.addField(
         DateTimeField.builder().name("started_at").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("started_at")).build());
@@ -181,7 +181,7 @@ public class BuildOperationModel extends Model {
         DateTimeField.builder().name("finished_at").build());
     public static final IntegerField DURATION_MS = SCHEMA.addField(
         IntegerField.builder().name("duration_ms")
-            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("duration_ms")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("duration_ms")).suffix("ms").build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(
         DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(

@@ -126,7 +126,7 @@ public class ReleaseOperationModel extends Model {
         DateTimeField.builder().name("finished_at").build());
     public static final IntegerField DURATION_MS = SCHEMA.addField(
         IntegerField.builder().name("duration_ms")
-            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("duration_ms")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("duration_ms")).suffix("ms").build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(
         DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(

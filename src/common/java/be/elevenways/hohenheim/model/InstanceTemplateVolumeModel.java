@@ -60,6 +60,7 @@ public class InstanceTemplateVolumeModel extends Model {
         LongField.builder().name("quota_bytes")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("quota_bytes"))
             .help(HohenheimMicrocopy.HELP.of("quota_bytes"))
+            .suffix("bytes")
             .build());
 
     public static final BooleanField EXCLUSIVE = SCHEMA.addField(

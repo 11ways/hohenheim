@@ -729,6 +729,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<Integer> MAX_DUMP_MB = GROUP.buildSetting("max_dump_mb", Integer.class)
             .defaultValue(2048)
+            .suffix("MiB")
             .description("Upper bound in MiB for one managed-database dump written out of a "
                 + "container. Dumps stream to disk and are cut off (partial file deleted) the "
                 + "moment they grow past this, so a runaway dump can neither fill the disk nor "
@@ -1058,7 +1059,7 @@ public class HohenheimSettings {
         public static final SettingDefinition<Integer> MAX_MEMORY_MB_PER_OWNER = GROUP
             .buildSetting("max_memory_mb_per_owner", Integer.class)
             .defaultValue(0)
-            .label("Max workload memory per owner (MB)")
+            .label("Max workload memory per owner")
             .suffix("MB")
             .description("Default cap on the total workload memory one owner may hold, summed "
                 + "over their live instances. Each workload is charged the memory its "
@@ -1072,6 +1073,7 @@ public class HohenheimSettings {
         public static final SettingDefinition<Integer> MAX_DISK_GB_PER_OWNER = GROUP
             .buildSetting("max_disk_gb_per_owner", Integer.class)
             .defaultValue(0)
+            .suffix("GB")
             .description("Default cap on the total attached-disk size (GB, summed over "
                 + "instance device rows) one owner may hold. A per-owner Instance Quota "
                 + "record overrides this. 0 or less means NO cap; usage is counted "
@@ -1121,7 +1123,8 @@ public class HohenheimSettings {
         public static final SettingDefinition<Integer> HOST_MEMORY_RESERVE_MB = GROUP
             .buildSetting("host_memory_reserve_mb", Integer.class)
             .defaultValue(768)
-            .label("Host memory reserve (MB)")
+            .label("Host memory reserve")
+            .suffix("MB")
             .description("Memory subtracted from a host's measured total before any "
                 + "workload may be booked against it -- the kernel, the container/VM "
                 + "daemon and page cache live here. Raise it on a host that also runs "
@@ -1141,7 +1144,8 @@ public class HohenheimSettings {
         public static final SettingDefinition<Integer> FACTS_MAX_AGE_HOURS = GROUP
             .buildSetting("facts_max_age_hours", Integer.class)
             .defaultValue(168)
-            .label("Capacity reading maximum age (hours)")
+            .label("Capacity reading maximum age")
+            .suffix("h")
             .description("How old a host's stored preflight memory reading may be before "
                 + "it stops counting as a budget. Past this, placement will not choose "
                 + "the host and says by name that it needs a preflight; workloads already "
@@ -1160,7 +1164,8 @@ public class HohenheimSettings {
         public static final SettingDefinition<Integer> CONTACT_MAX_AGE_MINUTES = GROUP
             .buildSetting("contact_max_age_minutes", Integer.class)
             .defaultValue(180)
-            .label("Host contact maximum age (minutes)")
+            .label("Host contact maximum age")
+            .suffix("min")
             .description("How long ago a host's daemon may last have ANSWERED before new "
                 + "workloads stop being placed on it. Every sweep that reaches a daemon "
                 + "refreshes this: the Incus presence sweep every 15 minutes, the Docker "
@@ -1194,7 +1199,8 @@ public class HohenheimSettings {
         public static final SettingDefinition<Integer> CONTROLLER_PRESENCE_GRACE_HOURS = GROUP
             .buildSetting("controller_presence_grace_hours", Integer.class)
             .defaultValue(168)
-            .label("Controller presence grace (hours)")
+            .label("Controller presence grace")
+            .suffix("h")
             .description("How long another controller's presence stamp may go unrefreshed "
                 + "before its unreferenced shared objects count as abandoned. A live "
                 + "controller refreshes its stamp every 30 minutes, so this is also how "
@@ -1486,6 +1492,7 @@ public class HohenheimSettings {
         public static final SettingDefinition<Integer> MAX_FILE_KB = GROUP
             .buildSetting("max_file_kb", Integer.class)
             .defaultValue(8192)
+            .suffix("KiB")
             .description("Upper bound in KiB for one file read or written through the file "
                 + "manager. Enforced DURING the transfer in both directions: an oversized "
                 + "download aborts mid-read and an oversized upload is refused before a "
@@ -1618,6 +1625,7 @@ public class HohenheimSettings {
         public static final SettingDefinition<Integer> STALE_AFTER_DAYS = GROUP
             .buildSetting("stale_after_days", Integer.class)
             .defaultValue(7)
+            .suffix("d")
             .description("Days without a COMPLETED backup before an instance with a "
                 + "configured backup target raises a dashboard attention item (an "
                 + "instance with a target but no completed backup at all always "
@@ -1627,6 +1635,7 @@ public class HohenheimSettings {
         public static final SettingDefinition<Integer> MAX_ARCHIVE_MB = GROUP
             .buildSetting("max_archive_mb", Integer.class)
             .defaultValue(1024)
+            .suffix("MiB")
             .description("Upper bound in MiB for one captured volume archive. Captures are "
                 + "buffered through controller memory (there is no streaming "
                 + "transport), so this cap is what protects the heap -- a volume larger than "

@@ -59,7 +59,7 @@ public final class InstanceKindFields {
     public static @NonNull IntegerField memoryLimit() {
         return IntegerField.builder().name(MEMORY_LIMIT_MB)
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("memory_limit"))
-            .help(HohenheimMicrocopy.HELP.of("memory_limit")).build();
+            .help(HohenheimMicrocopy.HELP.of("memory_limit")).suffix("MB").build();
     }
 
     public static @NonNull DoubleField cpuLimit() {

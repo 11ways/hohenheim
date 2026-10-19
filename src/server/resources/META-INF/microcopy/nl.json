@@ -7403,7 +7403,7 @@
     }
   ],
   "variable_generate_bytes": {
-    "text": "Gegenereerde entropie (bytes)",
+    "text": "Gegenereerde entropie",
     "scope": "hohenheim_field"
   },
   "variable_value": {
@@ -9125,12 +9125,12 @@
     }
   ],
   "device_size_gb": {
-    "text": "Grootte (GB)",
+    "text": "Grootte",
     "scope": "hohenheim_field"
   },
   "max_disk_gb": [
     {
-      "text": "Max schijf (GB)",
+      "text": "Max schijf",
       "scope": "hohenheim_field"
     },
     {
@@ -10507,7 +10507,7 @@
   },
   "max_memory_mb": [
     {
-      "text": "Max geheugen (MB)",
+      "text": "Max geheugen",
       "scope": "hohenheim_field"
     },
     {
@@ -12333,7 +12333,7 @@
   },
   "home_quota": [
     {
-      "text": "Limiet home (MB)",
+      "text": "Limiet home",
       "scope": "hohenheim_field"
     },
     {
@@ -14673,7 +14673,7 @@
   "settings.hohenheim.backup.snapshot_retention.help": "Aantal voltooide snapshots dat per instantie bewaard blijft, opgeruimd wanneer een nieuwe voltooid is; 0 of minder bewaart alles.",
   "settings.hohenheim.backup.staging_path.label": "Werkmap voor back-ups",
   "settings.hohenheim.backup.staging_path.help": "Werkmap waarin back-uparchieven gebouwd en gecontroleerd worden voordat ze naar hun doel verstuurd worden.",
-  "settings.hohenheim.backup.stale_after_days.label": "Back-up verouderd na (dagen)",
+  "settings.hohenheim.backup.stale_after_days.label": "Back-up verouderd na",
   "settings.hohenheim.backup.stale_after_days.help": "Aantal dagen zonder voltooide back-up waarna een instantie met een back-updoel een aandachtspunt op het dashboard meldt; 0 of minder schakelt de controle uit.",
   "settings.hohenheim.builds.builder_image.label": "Builder-image",
   "settings.hohenheim.builds.builder_image.help": "Daemonloze imagebuilder voor Dockerfile-builds, die moet werken zonder Docker-daemon, zonder rechten en zonder route naar het control plane.",
@@ -14701,9 +14701,9 @@
   "settings.hohenheim.builds.pids_limit.help": "Procesplafond in een buildcontainer, dat security.container_pids_limit alleen kan verlagen en nooit verhogen.",
   "settings.hohenheim.builds.timeout_seconds.label": "Build-time-out",
   "settings.hohenheim.builds.timeout_seconds.help": "Maximale kloktijd van een build, waarna de container gestopt en verwijderd wordt en de bewerking timed_out registreert.",
-  "settings.hohenheim.capacity.facts_max_age_hours.label": "Maximale leeftijd van de capaciteitsmeting (uren)",
+  "settings.hohenheim.capacity.facts_max_age_hours.label": "Maximale leeftijd van de capaciteitsmeting",
   "settings.hohenheim.capacity.facts_max_age_hours.help": "Aantal uren dat de opgeslagen preflight-geheugenmeting van een host geldig blijft voor plaatsing, waarna de host pas na een nieuwe preflight weer gekozen wordt; 0 of minder heft de grens op.",
-  "settings.hohenheim.capacity.host_memory_reserve_mb.label": "Geheugenreserve van de host (MB)",
+  "settings.hohenheim.capacity.host_memory_reserve_mb.label": "Geheugenreserve van de host",
   "settings.hohenheim.capacity.host_memory_reserve_mb.help": "Geheugen in MB dat van het gemeten totaal van een host afgetrokken wordt voordat er een workload op geboekt wordt, voor de kernel, de container- of VM-daemon en de paginacache.",
   "settings.hohenheim.capacity.memory_overcommit_ratio.label": "Overcommitfactor voor geheugen",
   "settings.hohenheim.capacity.memory_overcommit_ratio.help": "Vermenigvuldiger op het boekbare geheugen na de reserve, waarbij 1.0 niet meer boekt dan de host fysiek heeft en een hogere waarde erop gokt dat workloads niet allemaal tegelijk hun gedeclareerde geheugen gebruiken.",
@@ -14751,9 +14751,9 @@
   "settings.hohenheim.sftp.max_sessions_per_account.help": "Open SFTP-sessies die een account tegelijk mag hebben.",
   "settings.hohenheim.sftp.idle_timeout_minutes.label": "SFTP-inactiviteitslimiet",
   "settings.hohenheim.sftp.idle_timeout_minutes.help": "Minuten zonder verkeer waarna een SFTP-sessie gesloten wordt.",
-  "settings.hohenheim.hosts.contact_max_age_minutes.label": "Maximale leeftijd van het hostcontact (minuten)",
+  "settings.hohenheim.hosts.contact_max_age_minutes.label": "Maximale leeftijd van het hostcontact",
   "settings.hohenheim.hosts.contact_max_age_minutes.help": "Aantal minuten sinds het laatste antwoord van de daemon van een host waarna er geen nieuwe workloads meer op geplaatst worden, terwijl de workloads die er al draaien ongemoeid blijven; 0 of minder heft de grens op.",
-  "settings.hohenheim.incus.controller_presence_grace_hours.label": "Respijt voor controlleraanwezigheid (uren)",
+  "settings.hohenheim.incus.controller_presence_grace_hours.label": "Respijt voor controlleraanwezigheid",
   "settings.hohenheim.incus.controller_presence_grace_hours.help": "Aantal uren dat de aanwezigheidsstempel van een andere controller niet vernieuwd mag worden voordat zijn ongebruikte gedeelde objecten als achtergelaten gelden; 0 of minder schakelt het opruimen uit.",
   "settings.hohenheim.incus.reap_departed_controllers.label": "Gedeelde objecten van vertrokken controllers opruimen",
   "settings.hohenheim.incus.reap_departed_controllers.help": "Verwijdert de isolatie-ACL, de extra-NIC-bridge en de aanwezigheidsmarkering van een andere controller waarvan de aanwezigheidsstempel langer dan de respijtperiode niet vernieuwd is en waarvan niets de objecten gebruikt; uit maakt van elke ronde alleen een rapport.",
@@ -14849,13 +14849,13 @@
   "settings.hohenheim.proxy_auth.session_ttl_seconds.help": "Levensduur in seconden van een proxy-auth-sessie.",
   "settings.hohenheim.quota.max_databases_per_owner.label": "Max. beheerde databases per eigenaar",
   "settings.hohenheim.quota.max_databases_per_owner.help": "Standaardlimiet op het aantal beheerde databases van een eigenaar, bovenop het instantieslot van de enginecontainer aangerekend en te overschrijven met een instantiequotum per eigenaar; 0 of minder betekent geen limiet.",
-  "settings.hohenheim.quota.max_disk_gb_per_owner.label": "Max. schijf per eigenaar (GB)",
+  "settings.hohenheim.quota.max_disk_gb_per_owner.label": "Max. schijf per eigenaar",
   "settings.hohenheim.quota.max_disk_gb_per_owner.help": "Standaardlimiet in GB op de totale grootte van de gekoppelde schijven van een eigenaar, opgeteld over de apparaatrijen van instanties en te overschrijven met een instantiequotum per eigenaar; 0 of minder betekent geen limiet.",
   "settings.hohenheim.quota.max_extra_nics_per_owner.label": "Max. extra NIC's per eigenaar",
   "settings.hohenheim.quota.max_extra_nics_per_owner.help": "Standaardlimiet op de extra NIC's, naast de primaire van de driver, die een eigenaar over zijn instanties mag koppelen, te overschrijven met een instantiequotum per eigenaar; 0 of minder betekent geen limiet.",
   "settings.hohenheim.quota.max_instances_per_owner.label": "Max. instanties per eigenaar",
   "settings.hohenheim.quota.max_instances_per_owner.help": "Standaard maximaal aantal actieve instanties per eigenaar, te overschrijven met een instantiequotum per eigenaar; 0 of minder betekent geen limiet, en het gebruik wordt hoe dan ook geteld.",
-  "settings.hohenheim.quota.max_memory_mb_per_owner.label": "Max. workloadgeheugen per eigenaar (MB)",
+  "settings.hohenheim.quota.max_memory_mb_per_owner.label": "Max. workloadgeheugen per eigenaar",
   "settings.hohenheim.quota.max_memory_mb_per_owner.help": "Standaardlimiet in MB op het totale workloadgeheugen van een eigenaar over zijn actieve instanties, waarbij elke workload zijn geheugenlimiet of de gedeclareerde voetafdruk van zijn soort aangerekend krijgt, te overschrijven met een instantiequotum per eigenaar; 0 of minder betekent geen limiet.",
   "settings.hohenheim.quota.max_sites_per_owner.label": "Max. sites per eigenaar",
   "settings.hohenheim.quota.max_sites_per_owner.help": "Standaardlimiet op het aantal actieve sites van een eigenaar, geteld per siterecord en te overschrijven met een instantiequotum per eigenaar; 0 of minder betekent geen limiet.",
@@ -18336,7 +18336,7 @@
     "scope": "hohenheim_field"
   },
   "disk_limit_mb": {
-    "text": "Schijflimiet (MB)",
+    "text": "Schijflimiet",
     "scope": "hohenheim_field"
   },
   "pids_limit": {
@@ -18344,19 +18344,19 @@
     "scope": "hohenheim_field"
   },
   "timeout_seconds": {
-    "text": "Tijdslimiet (seconden)",
+    "text": "Tijdslimiet",
     "scope": "hohenheim_field"
   },
   "peak_disk_bytes": {
-    "text": "Hoogste schijfgebruik (bytes)",
+    "text": "Hoogste schijfgebruik",
     "scope": "hohenheim_field"
   },
   "artifact_bytes": {
-    "text": "Artefactgrootte (bytes)",
+    "text": "Artefactgrootte",
     "scope": "hohenheim_field"
   },
   "duration_ms": {
-    "text": "Duur (ms)",
+    "text": "Duur",
     "scope": "hohenheim_field"
   },
   "candidate_instance": {
@@ -18392,7 +18392,7 @@
     "scope": "hohenheim_field"
   },
   "max_heap_mb": {
-    "text": "Maximale heap (MB)",
+    "text": "Maximale heap",
     "scope": "hohenheim_field"
   },
   "system_user": {

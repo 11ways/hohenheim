@@ -7403,7 +7403,7 @@
     }
   ],
   "variable_generate_bytes": {
-    "text": "Generated entropy (bytes)",
+    "text": "Generated entropy",
     "scope": "hohenheim_field"
   },
   "variable_value": {
@@ -9125,12 +9125,12 @@
     }
   ],
   "device_size_gb": {
-    "text": "Size (GB)",
+    "text": "Size",
     "scope": "hohenheim_field"
   },
   "max_disk_gb": [
     {
-      "text": "Max disk (GB)",
+      "text": "Max disk",
       "scope": "hohenheim_field"
     },
     {
@@ -10507,7 +10507,7 @@
   },
   "max_memory_mb": [
     {
-      "text": "Max memory (MB)",
+      "text": "Max memory",
       "scope": "hohenheim_field"
     },
     {
@@ -12333,7 +12333,7 @@
   },
   "home_quota": [
     {
-      "text": "Home size limit (MB)",
+      "text": "Home size limit",
       "scope": "hohenheim_field"
     },
     {
@@ -14673,7 +14673,7 @@
   "settings.hohenheim.backup.snapshot_retention.help": "Completed snapshots kept per instance, pruned when a new one completes; 0 or less keeps everything.",
   "settings.hohenheim.backup.staging_path.label": "Staging path",
   "settings.hohenheim.backup.staging_path.help": "Working directory where backup archives are built and verified before they are uploaded to their target.",
-  "settings.hohenheim.backup.stale_after_days.label": "Backup stale after (days)",
+  "settings.hohenheim.backup.stale_after_days.label": "Backup stale after",
   "settings.hohenheim.backup.stale_after_days.help": "Days without a completed backup before an instance with a backup target raises a dashboard attention item; 0 or less disables the check.",
   "settings.hohenheim.builds.builder_image.label": "Builder image",
   "settings.hohenheim.builds.builder_image.help": "Daemonless image builder used for Dockerfile builds, which must work without the Docker daemon, without privileges and without a route to the control plane.",
@@ -14701,9 +14701,9 @@
   "settings.hohenheim.builds.pids_limit.help": "Process ceiling inside one build container, which can only tighten security.container_pids_limit and never raise it.",
   "settings.hohenheim.builds.timeout_seconds.label": "Build timeout",
   "settings.hohenheim.builds.timeout_seconds.help": "Wall-clock ceiling on one build, after which the container is killed and removed and the operation records timed_out.",
-  "settings.hohenheim.capacity.facts_max_age_hours.label": "Capacity reading maximum age (hours)",
+  "settings.hohenheim.capacity.facts_max_age_hours.label": "Capacity reading maximum age",
   "settings.hohenheim.capacity.facts_max_age_hours.help": "Hours a host's stored preflight memory reading stays valid for placement, after which the host is not chosen until a new preflight; 0 or less removes the bound.",
-  "settings.hohenheim.capacity.host_memory_reserve_mb.label": "Host memory reserve (MB)",
+  "settings.hohenheim.capacity.host_memory_reserve_mb.label": "Host memory reserve",
   "settings.hohenheim.capacity.host_memory_reserve_mb.help": "Memory in MB subtracted from a host's measured total before any workload is booked against it, left for the kernel, the container or VM daemon and the page cache.",
   "settings.hohenheim.capacity.memory_overcommit_ratio.label": "Memory overcommit ratio",
   "settings.hohenheim.capacity.memory_overcommit_ratio.help": "Multiplier on the bookable memory after the reserve, where 1.0 books no more than the host physically has and a higher value bets that workloads will not all use their declared memory at once.",
@@ -14751,9 +14751,9 @@
   "settings.hohenheim.sftp.max_sessions_per_account.help": "Open SFTP sessions one account may hold at once.",
   "settings.hohenheim.sftp.idle_timeout_minutes.label": "SFTP idle timeout",
   "settings.hohenheim.sftp.idle_timeout_minutes.help": "Minutes without traffic after which an SFTP session is closed.",
-  "settings.hohenheim.hosts.contact_max_age_minutes.label": "Host contact maximum age (minutes)",
+  "settings.hohenheim.hosts.contact_max_age_minutes.label": "Host contact maximum age",
   "settings.hohenheim.hosts.contact_max_age_minutes.help": "Minutes since a host's daemon last answered after which new workloads are no longer placed on it, while workloads already on it stay untouched; 0 or less removes the bound.",
-  "settings.hohenheim.incus.controller_presence_grace_hours.label": "Controller presence grace (hours)",
+  "settings.hohenheim.incus.controller_presence_grace_hours.label": "Controller presence grace",
   "settings.hohenheim.incus.controller_presence_grace_hours.help": "Hours another controller's presence stamp may go unrefreshed before its unreferenced shared objects count as abandoned; 0 or less disables reaping.",
   "settings.hohenheim.incus.reap_departed_controllers.label": "Reap departed controllers' shared objects",
   "settings.hohenheim.incus.reap_departed_controllers.help": "Removes the isolation ACL, extra-NIC bridge and presence marker of another controller whose presence stamp went unrefreshed past the grace period and whose objects nothing references; off makes every sweep report-only.",
@@ -14849,13 +14849,13 @@
   "settings.hohenheim.proxy_auth.session_ttl_seconds.help": "Lifetime in seconds of a proxy-auth session.",
   "settings.hohenheim.quota.max_databases_per_owner.label": "Max managed databases per owner",
   "settings.hohenheim.quota.max_databases_per_owner.help": "Default cap on the number of managed databases one owner may hold, charged on top of the engine container's instance slot and overridden by a per-owner Instance Quota record; 0 or less means no cap.",
-  "settings.hohenheim.quota.max_disk_gb_per_owner.label": "Max disk per owner (GB)",
+  "settings.hohenheim.quota.max_disk_gb_per_owner.label": "Max disk per owner",
   "settings.hohenheim.quota.max_disk_gb_per_owner.help": "Default cap in GB on the total attached-disk size one owner may hold, summed over instance device rows and overridden by a per-owner Instance Quota record; 0 or less means no cap.",
   "settings.hohenheim.quota.max_extra_nics_per_owner.label": "Max extra NICs per owner",
   "settings.hohenheim.quota.max_extra_nics_per_owner.help": "Default cap on the extra NICs, beyond the driver's primary one, that one owner may attach across instances, overridden by a per-owner Instance Quota record; 0 or less means no cap.",
   "settings.hohenheim.quota.max_instances_per_owner.label": "Max instances per owner",
   "settings.hohenheim.quota.max_instances_per_owner.help": "Default maximum number of live instances one owner may hold, overridden by a per-owner Instance Quota record; 0 or less means no cap, and usage is counted either way.",
-  "settings.hohenheim.quota.max_memory_mb_per_owner.label": "Max workload memory per owner (MB)",
+  "settings.hohenheim.quota.max_memory_mb_per_owner.label": "Max workload memory per owner",
   "settings.hohenheim.quota.max_memory_mb_per_owner.help": "Default cap in MB on the total workload memory one owner may hold across live instances, each workload charged its memory limit or its kind's declared footprint, overridden by a per-owner Instance Quota record; 0 or less means no cap.",
   "settings.hohenheim.quota.max_sites_per_owner.label": "Max sites per owner",
   "settings.hohenheim.quota.max_sites_per_owner.help": "Default cap on the number of live sites one owner may hold, counted per site record and overridden by a per-owner Instance Quota record; 0 or less means no cap.",
@@ -18336,7 +18336,7 @@
     "scope": "hohenheim_field"
   },
   "disk_limit_mb": {
-    "text": "Disk limit (MB)",
+    "text": "Disk limit",
     "scope": "hohenheim_field"
   },
   "pids_limit": {
@@ -18344,19 +18344,19 @@
     "scope": "hohenheim_field"
   },
   "timeout_seconds": {
-    "text": "Time limit (seconds)",
+    "text": "Time limit",
     "scope": "hohenheim_field"
   },
   "peak_disk_bytes": {
-    "text": "Peak disk use (bytes)",
+    "text": "Peak disk use",
     "scope": "hohenheim_field"
   },
   "artifact_bytes": {
-    "text": "Artifact size (bytes)",
+    "text": "Artifact size",
     "scope": "hohenheim_field"
   },
   "duration_ms": {
-    "text": "Duration (ms)",
+    "text": "Duration",
     "scope": "hohenheim_field"
   },
   "candidate_instance": {
@@ -18392,7 +18392,7 @@
     "scope": "hohenheim_field"
   },
   "max_heap_mb": {
-    "text": "Maximum heap (MB)",
+    "text": "Maximum heap",
     "scope": "hohenheim_field"
   },
   "system_user": {

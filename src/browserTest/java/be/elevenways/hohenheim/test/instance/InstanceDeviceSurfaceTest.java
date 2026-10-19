@@ -303,19 +303,19 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         assertThat(rows).as("step 1: one row per device")
             .containsOnlyKeys(NAME_PREFIX + "data", NAME_PREFIX + "net", NAME_PREFIX + "cd");
         assertThat(rows.get(NAME_PREFIX + "data")).as("step 1: the columns, in order")
-            .containsOnlyKeys("Name", "Type", "Size (GB)", "Install media (ISO volume)");
+            .containsOnlyKeys("Name", "Type", "Size", "Install media (ISO volume)");
 
-        // 2. The disk shows its size and no medium.
+        // 2. The disk shows its size, in the unit its field declares, and no medium.
         assertThat(rows.get(NAME_PREFIX + "data")).as("step 2: the disk's size, no medium")
-            .containsEntry("Size (GB)", "2").containsEntry("Install media (ISO volume)", "");
+            .containsEntry("Size", "2 GB").containsEntry("Install media (ISO volume)", "");
 
         // 3. The install media shows its ISO under its own column, never under the size.
         assertThat(rows.get(NAME_PREFIX + "cd")).as("step 3: the ISO under install media, no size")
-            .containsEntry("Size (GB)", "").containsEntry("Install media (ISO volume)", "debian.iso");
+            .containsEntry("Size", "").containsEntry("Install media (ISO volume)", "debian.iso");
 
         // 4. The NIC declares neither.
         assertThat(rows.get(NAME_PREFIX + "net")).as("step 4: a NIC fills neither column")
-            .containsEntry("Size (GB)", "").containsEntry("Install media (ISO volume)", "");
+            .containsEntry("Size", "").containsEntry("Install media (ISO volume)", "");
     }
 
     /**

@@ -70,6 +70,7 @@ public class InstanceDeviceModel extends Model {
     public static final IntegerField SIZE_GB = SCHEMA.addField(
         IntegerField.builder().name("size_gb")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("device_size_gb"))
+            .suffix("GB")
             .build());
 
     /** The host-side ISO volume name a cdrom row attaches; null for disks and NICs. */
