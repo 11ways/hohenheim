@@ -37,6 +37,7 @@ import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.server.task.record.RecordSchedules;
 import be.elevenways.zenit.common.validation.Violations;
@@ -467,12 +468,13 @@ public final class InstanceService {
      * ({@link InstanceExposure}); the site itself, its hostnames and its certificate are
      * never touched.
      *
-     * AIDEV-NOTE: the deleted_at write itself rides save() ({@link #trash}), NOT the
-     * guarded updateAll, because the instance-quota release lives in a beforeWrite hook on
-     * the deleted_at transition and updateAll is hook-free by contract (and, since instances
-     * carry SoftDeleteBehaviour, scoped to live rows). The guarded stamp immediately before
-     * is the fence proof; the small window between it and the save is covered by the held
-     * lease, not by a row guard.
+     * AIDEV-NOTE: the trash is the destroy's OUTCOME, staged last and written once the destroy let go of the record
+     * ({@link InstanceOperationGuard#stageEnd}): a client that reads the record destroyed and asks to delete its data
+     * at once is never refused by the destroy it just read about. Everything the record takes with it (reservations,
+     * schedules, game domains, database links, exposing sites, the checkout) goes BEFORE, under the claim. The trash
+     * itself rides the soft delete's save(), never a set-based updateAll, because the instance-quota release lives
+     * in a beforeWrite hook on the deleted_at transition and updateAll is hook-free by contract; the end narrows it
+     * to the destroy's claim instead, so a rival controller that took the record meanwhile keeps it.
      *
      * @throws Violations when the daemon cannot confirm removal: the record is KEPT
      *         (status {@code error}), the claims are parked, and the operator retries
@@ -492,9 +494,12 @@ public final class InstanceService {
         HohenheimAccess.requireDestroyPermitted(instanceId);
         if (releaseManaged(instanceId)) {
             ApplicationReleases.destroyFor(instanceId);
-            trash(instanceId);
             GitCheckout.discard(InstanceModel.MODEL_ID, instanceId);
             InstanceExposure.disableForDestroyedInstance(instanceId);
+            Row application = liveRow(instanceId);
+            InstanceOperationGuard.stageEnd(this.leases, instanceId, null, null,
+                application == null ? instanceId : String.valueOf((Object) application.get(InstanceModel.NAME)),
+                InstanceService::trash);
             return;
         }
         Resolved resolved = resolve(instanceId);
@@ -520,17 +525,12 @@ public final class InstanceService {
             throw HohenheimViolations.instanceRefusal("instance_destroy_failed", resolved.row(), e);
         }
         this.beforeOutcomeWrite.run();
-        stampGuarded(resolved, InstanceModel.STATUS_STOPPED);
-        // AIDEV-NOTE: written NOW, inside the claim, unlike every other outcome: the soft delete below hides the record
-        // from the fenced write, and the delete (hooks, quota, grants) and its cleanup are the destroy's own work under
-        // the claim. The stamp is bookkeeping before the delete, not the outcome a client acts on.
-        this.operations.settle(instanceId);
+        String name = String.valueOf((Object) resolved.row().get(InstanceModel.NAME));
+        // Fence first, cleanup second: a fenced-out loser must not release the winner's reservations.
+        InstanceOperationGuard.requireOwned(this.leases, instanceId, resolved.serverId(), name);
         // End of life: pre-allocated reservations die WITH the instance -- unlike stop,
         // which keeps them (the stable number is what DNS points at across restarts).
         PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, instanceId);
-        if (!trash(instanceId)) {
-            return;
-        }
         // Schedules must die with their record, and destroy SOFT-deletes (remove hooks
         // never fire here), so the cleanup is explicit -- nothing else will do it.
         new RecordSchedules(Db.currentOrDefault())
@@ -551,8 +551,11 @@ public final class InstanceService {
         // SITE's, and re-pointing it at another instance is one toggle away.
         InstanceExposure.disableForDestroyedInstance(instanceId);
         GitCheckout.discard(InstanceModel.MODEL_ID, instanceId);
+        // The end, LAST: stopped and trashed once the claim is let go (see the method's note).
+        InstanceOperationGuard.stageEnd(this.leases, instanceId, resolved.serverId(), InstanceModel.STATUS_STOPPED,
+            name, InstanceService::trash);
         Blast.log("INSTANCE: destroyed", resolved.spec().handle(),
-            "- container removed, volumes kept, record soft-deleted");
+            "- container removed, volumes kept; the record is trashed once the destroy lets go of it");
     }
 
     /**
@@ -646,18 +649,18 @@ public final class InstanceService {
 
     /**
      * Soft-delete a record whose runtime consequences are already settled: THE trash write of
-     * every destroy lane, container and application alike.
+     * every destroy lane, container and application alike, written as the destroy's staged end.
      *
-     * AIDEV-NOTE: an application has no container, so the destroy verb's fenced
-     * stamp-then-trash sequence has nothing to fence against; what makes ITS delete safe is
+     * AIDEV-NOTE: an application has no container, so what makes ITS delete safe is
      * that {@code ApplicationReleases.destroyFor} refused unless every release was verified
      * gone first. The application lane used to save deleted_at bare -- recorded as a plain
      * "update" and judged by TenantWrites as a tenant authoring a frozen column -- while the
      * container lane wrapped it; both now take this one write.
      *
-     * @return false when the record is missing or already trashed (nothing written)
+     * @param record the record, narrowed to the claim of the destroy that ends it
+     * @return the rows trashed: 0 when the record is missing, already trashed or another claim took it
      */
-    private boolean trash(int instanceId) {
+    private static int trash(@NonNull QueryBuilder<Row> record) {
         // The soft delete is the behaviour's own: it writes deleted_at alone (the quota release,
         // grant cleanup and claim releases ride that transition), and the destroy verb wrapped
         // around it is what the activity log records, since the behaviour's own verb yields to it.
@@ -668,8 +671,8 @@ public final class InstanceService {
         // This delete is the ONE hook-firing write in the whole teardown, so the verb belongs
         // around it rather than around the caller's call: every destroy caller (the release
         // engine, preview expiry, database teardown) records the same trash of the record.
-        boolean[] trashed = {false};
-        TenantWrites.inAuthorizedOperation(() -> trashed[0] = Models.get(InstanceModel.class).delete(instanceId));
+        int[] trashed = {0};
+        TenantWrites.inAuthorizedOperation(() -> trashed[0] = record.delete());
         return trashed[0];
     }
 

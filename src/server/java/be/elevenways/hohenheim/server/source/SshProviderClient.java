@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.source;
 
 import be.elevenways.hohenheim.server.DataDirectory;
+import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.server.util.FileTrees;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -125,9 +126,10 @@ final class SshProviderClient implements GitProviderClient {
                 PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")));
             Files.writeString(file, key, StandardCharsets.UTF_8);
             // LogLevel=ERROR keeps ssh's own notices (a host key pinned on first use) out of the reason a refusal shows.
-            String command = "ssh -i " + quoted(file) + " -o IdentitiesOnly=yes -o IdentityAgent=none"
+            String command = "ssh -i " + HostShell.quote(file.toAbsolutePath().toString())
+                + " -o IdentitiesOnly=yes -o IdentityAgent=none"
                 + " -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR"
-                + " -o UserKnownHostsFile=" + quoted(pinned);
+                + " -o UserKnownHostsFile=" + HostShell.quote(pinned.toAbsolutePath().toString());
             return new KeyAccess(directory, Map.of("GIT_SSH_COMMAND", command, "GIT_TERMINAL_PROMPT", "0"));
         }
 
@@ -167,11 +169,6 @@ final class SshProviderClient implements GitProviderClient {
             Files.createDirectories(directory);
             Files.setPosixFilePermissions(directory, PosixFilePermissions.fromString("rwx------"));
             return directory;
-        }
-
-        /** A path as one shell word: git runs {@code GIT_SSH_COMMAND} through the shell. */
-        private static @NonNull String quoted(@NonNull Path path) {
-            return "'" + path.toAbsolutePath().toString().replace("'", "'\\''") + "'";
         }
     }
 }

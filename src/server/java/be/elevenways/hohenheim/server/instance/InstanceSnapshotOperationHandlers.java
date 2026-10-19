@@ -18,7 +18,7 @@ import be.elevenways.zenit.server.operation.OperationHandlers;
 public final class InstanceSnapshotOperationHandlers {
     static {
         OperationHandlers.attach(InstanceSnapshotOperations.RESTORE)
-            .applies(row -> InstanceSnapshotModel.STATUS_COMPLETE.equals(row.get(InstanceSnapshotModel.STATUS)))
+            .applies(InstanceSnapshotModel::isRestorable)
             .authorize((row, input, access) -> HohenheimAccess.reachesRecord(access, InstanceModel.MODEL_ID,
                 row.get(InstanceSnapshotModel.INSTANCE_ID), HohenheimCapabilities.SNAPSHOTS) ? null
                 : new DomainRefusal(ZenitRefusalReason.FORBIDDEN,

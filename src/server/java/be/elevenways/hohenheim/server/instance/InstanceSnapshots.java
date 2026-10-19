@@ -133,11 +133,14 @@ public final class InstanceSnapshots {
         return snapshot[0].get(InstanceSnapshotModel.ID);
     }
 
-    /** A new snapshot row, FAILED until its capture completes (a killed capture stays evidence). */
+    /**
+     * A new snapshot row, CAPTURING until its capture completes or fails: an operator reads a running capture as
+     * running, and a capture a killed controller left behind is settled by {@link #recoverInterrupted}.
+     */
     private static @NonNull Row newSnapshotRow(int instanceId, @Nullable String note) {
         Row snapshot = Models.get(InstanceSnapshotModel.class).createEmptyRow();
         snapshot.set(InstanceSnapshotModel.INSTANCE_ID, instanceId);
-        snapshot.set(InstanceSnapshotModel.STATUS, InstanceSnapshotModel.STATUS_FAILED);
+        snapshot.set(InstanceSnapshotModel.STATUS, InstanceSnapshotModel.STATUS_CAPTURING);
         snapshot.set(InstanceSnapshotModel.NOTE, note);
         Models.get(InstanceSnapshotModel.class).save(snapshot);
         return snapshot;
@@ -146,7 +149,7 @@ public final class InstanceSnapshots {
     /**
      * The cold capture itself: tar every volume into {@code directory} and complete the row once the instance's
      * claim is let go (a client restoring the snapshot it saw complete is never refused by this capture); any failure
-     * removes the payload and records the error on the row before it propagates.
+     * removes the payload and fails the row, with its error, once the claim is let go, before it propagates.
      */
     private static void captureInto(@NonNull Row snapshot, @NonNull Path directory,
                                     @NonNull VolumeSnapshotSupport support,
@@ -181,11 +184,16 @@ public final class InstanceSnapshots {
                     .write());
         } catch (IOException | RuntimeException error) {
             FileTrees.deleteQuietly(directory);
-            RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot)
-                .set(InstanceSnapshotModel.ERROR, HohenheimViolations.reasonOf(error))
-                .write();
+            operations.afterRelease(resolved.row().get(InstanceModel.ID), failed(snapshot, error)::write);
             throw error;
         }
+    }
+
+    /** The stamp that settles a capture's row as FAILED with what failed it. */
+    private static @NonNull RecordStamp failed(@NonNull Row snapshot, @NonNull Throwable error) {
+        return RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot)
+            .set(InstanceSnapshotModel.STATUS, InstanceSnapshotModel.STATUS_FAILED)
+            .set(InstanceSnapshotModel.ERROR, HohenheimViolations.reasonOf(error));
     }
 
     /**
@@ -227,9 +235,7 @@ public final class InstanceSnapshots {
                                     InstanceSnapshotModel.STATUS_COMPLETE)
                                 .write());
                     } catch (IOException | RuntimeException error) {
-                        RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot[0])
-                            .set(InstanceSnapshotModel.ERROR, HohenheimViolations.reasonOf(error))
-                            .write();
+                        this.instances.operations().afterRelease(instanceId, failed(snapshot[0], error)::write);
                         throw error;
                     }
                 });
@@ -251,9 +257,7 @@ public final class InstanceSnapshots {
      */
     public void restore(int snapshotId) {
         Row snapshot = Models.get(InstanceSnapshotModel.class).findById(snapshotId);
-        if (snapshot == null
-                || !InstanceSnapshotModel.STATUS_COMPLETE.equals(
-                    snapshot.get(InstanceSnapshotModel.STATUS))) {
+        if (snapshot == null || !InstanceSnapshotModel.isRestorable(snapshot)) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("snapshot_not_restorable")
                 .withArg("id", snapshotId));
         }
@@ -425,22 +429,22 @@ public final class InstanceSnapshots {
     }
 
     /**
-     * Boot recovery: reclaim the payload of FAILED rows a killed controller left behind.
+     * Boot recovery: settle every capture a killed controller left behind, and reclaim its payload.
      *
-     * A FAILED row normally holds no payload (the capture's catch removed it), so the
-     * never-prune-FAILED rule is sound -- EXCEPT for a controller killed DURING a
-     * capture, which leaves a FAILED-first row whose directory (volume lane) or
-     * daemon-side snapshot (native lane) still exists with nothing left to reclaim it.
-     * Same fence as {@code InstanceBackups.recoverInterrupted}: only rows whose last
-     * write predates THIS process's start are touched -- captures are synchronous and
-     * in-process, so such a row cannot belong to a live capture. The ROW is kept: it is
-     * the evidence, and after this sweep it once again holds no payload.
+     * A CAPTURING row is settled FAILED, naming the interruption, and its payload reclaimed: the directory (volume
+     * lane) or the daemon-side snapshot (native lane). FAILED rows are swept for payload too, because an older release
+     * stamped a capture FAILED from its start, so the captures it left interrupted read FAILED with their payload
+     * still there, and a native capture that failed mid-call may leave its daemon snapshot. Same fence as
+     * {@code InstanceBackups.recoverInterrupted}: only rows whose last write predates THIS process's start are
+     * touched -- captures are synchronous and in-process, so such a row cannot belong to a live capture. The ROW is
+     * kept: it is the evidence, and after this sweep it holds no payload.
      */
     public void recoverInterrupted() {
-        List<Row> failed = Models.get(InstanceSnapshotModel.class).find()
-            .where(InstanceSnapshotModel.STATUS.eq(InstanceSnapshotModel.STATUS_FAILED))
+        List<Row> unsettled = Models.get(InstanceSnapshotModel.class).find()
+            .where(InstanceSnapshotModel.STATUS.in(List.of(InstanceSnapshotModel.STATUS_CAPTURING,
+                InstanceSnapshotModel.STATUS_FAILED)))
             .all();
-        for (Row row : failed) {
+        for (Row row : unsettled) {
             Instant written = row.get(InstanceSnapshotModel.UPDATED_AT);
             if (written == null) {
                 written = row.get(InstanceSnapshotModel.CREATED_AT);
@@ -465,6 +469,13 @@ public final class InstanceSnapshots {
             String nativeName = row.get(InstanceSnapshotModel.NATIVE_NAME);
             if (nativeName != null && !nativeName.isBlank()) {
                 reclaimNative(row, nativeName);
+            }
+            if (InstanceSnapshotModel.STATUS_CAPTURING.equals(row.get(InstanceSnapshotModel.STATUS))) {
+                RecordStamp.on(Models.get(InstanceSnapshotModel.class), row)
+                    .set(InstanceSnapshotModel.STATUS, InstanceSnapshotModel.STATUS_FAILED)
+                    .set(InstanceSnapshotModel.ERROR, "Interrupted by a controller restart mid-capture")
+                    .write();
+                Blast.log("SNAPSHOT: settled interrupted capture row", id, "as failed");
             }
         }
     }

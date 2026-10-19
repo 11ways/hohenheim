@@ -6848,10 +6848,16 @@
     "text": "Backup of {$name} exported and verified",
     "scope": "instance"
   },
-  "capturing": {
-    "text": "Capturing",
-    "scope": "instance_status"
-  },
+  "capturing": [
+    {
+      "text": "Capturing",
+      "scope": "instance_status"
+    },
+    {
+      "text": "Capturing",
+      "scope": "snapshot_status"
+    }
+  ],
   "restoring": {
     "text": "Restoring",
     "scope": "instance_status"

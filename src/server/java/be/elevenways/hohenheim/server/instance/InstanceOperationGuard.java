@@ -27,6 +27,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
+import java.util.function.ToIntFunction;
 import java.util.function.UnaryOperator;
 
 
@@ -252,17 +254,30 @@ final class InstanceOperationGuard {
     private static void write(@NonNull HostLeases leases, int instanceId, int serverId,
                               @NonNull String status, @NonNull Object instanceName,
                               @Nullable HohenheimActivityAction cause, @Nullable String detail, boolean started) {
-        // AIDEV-NOTE: UPDATED_AT is assigned HERE because this is a set-based updateAll
-        // that fires no write hooks -- without it a CAPTURING/RESTORING stamp leaves the
-        // row's timestamp at whatever save() last wrote, and the boot settle
-        // (InstanceService.recoverInterrupted) could not tell a status this process just
-        // stamped from one a dead controller left behind. The process-start fence rides
-        // this column.
-        // AIDEV-NOTE: an operation also CLEARS the observed kill (see
-        // InstanceModel.WORKLOAD_KILLED_AT): a deploy, stop or restart replaces the container
-        // that carried it, and a kill that survives the operation is re-observed next sweep.
+        land(leases, instanceId, serverId, instanceName, isOutcome(status), statusOf(status, cause, detail, started),
+            () -> {
+                if (cause != null) {
+                    recordCause(instanceId, cause, detail);
+                }
+            });
+    }
+
+    /**
+     * The columns every fenced status write assigns.
+     *
+     * AIDEV-NOTE: UPDATED_AT is assigned HERE because this is a set-based updateAll that fires no write hooks --
+     * without it a CAPTURING/RESTORING stamp leaves the row's timestamp at whatever save() last wrote, and the boot
+     * settle (InstanceService.recoverInterrupted) could not tell a status this process just stamped from one a dead
+     * controller left behind. The process-start fence rides this column.
+     * AIDEV-NOTE: an operation also CLEARS the observed kill (see InstanceModel.WORKLOAD_KILLED_AT): a deploy, stop
+     * or restart replaces the container that carried it, and a kill that survives the operation is re-observed next
+     * sweep.
+     */
+    private static @NonNull UnaryOperator<QueryBuilder<Row>> statusOf(@NonNull String status,
+                                                                     @Nullable HohenheimActivityAction cause,
+                                                                     @Nullable String detail, boolean started) {
         Instant now = Now.instant();
-        land(leases, instanceId, serverId, instanceName, isOutcome(status), query -> {
+        return query -> {
             var statement = query
                 .assign(InstanceModel.STATUS, status)
                 .assign(InstanceModel.UPDATED_AT, now)
@@ -271,11 +286,71 @@ final class InstanceOperationGuard {
                 statement = statement.assign(InstanceModel.STARTED_AT, now);
             }
             return InstanceModel.withStoppage(statement, cause, detail);
-        }, () -> {
-            if (cause != null) {
-                recordCause(instanceId, cause, detail);
+        };
+    }
+
+    /**
+     * Proves the operation still owns the record on this host, writing nothing: the fence-first half of work that
+     * changes other records before the record's own outcome is staged.
+     *
+     * @throws Violations {@code instance_fenced_out}
+     */
+    static void requireOwned(@NonNull HostLeases leases, int instanceId, int serverId, @NonNull Object instanceName) {
+        requireMatched((int) fenced(leases, instanceId, serverId).count(), serverId, instanceName);
+    }
+
+    /**
+     * A destroy's END: {@code status} (when given) and then the record's soft delete as ONE outcome, proven against
+     * the fence now and written through it once the destroy let go of the record, so a client that reads the record
+     * destroyed may act on it at once (a delete-with-data straight after the destroy is admitted).
+     *
+     * AIDEV-NOTE: the soft delete must run the model's write hooks (the quota release, the grant cleanup, the trash in
+     * the activity), which the fenced updateAll skips by contract, and it hides the record from every fenced write
+     * after it. So the end overrides zenit's RowOutcome.write: the status and the trash land in one transaction, both
+     * narrowed to the destroy's claim, so a rival controller's newer claim drops the whole end, and an operation of
+     * this controller that takes the record first writes it before it stamps (and then finds no live record). Stage
+     * it LAST: any fenced write after it settles it early, inside the claim.
+     *
+     * @param serverId the host the record must still be on, null for a hostless application
+     * @param status   the status the record ends in, null to leave the stored one
+     * @param trash    the soft delete of the record the statement names; returns the rows it trashed
+     * @throws Violations {@code instance_fenced_out} for the proof
+     */
+    static void stageEnd(@NonNull HostLeases leases, int instanceId, @Nullable Integer serverId,
+                         @Nullable String status, @NonNull Object instanceName,
+                         @NonNull ToIntFunction<QueryBuilder<Row>> trash) {
+        InstanceOperationLock lock = InstanceOperationLock.of(leases);
+        Supplier<QueryBuilder<Row>> owned = lock.ownedLater(instanceId);
+        requireMatched((int) scoped(owned.get(), serverId).count(), serverId, instanceName);
+        UnaryOperator<QueryBuilder<Row>> stamped = status == null ? UnaryOperator.identity()
+            : statusOf(status, null, null, false);
+        lock.stageOutcome(instanceId, new ClaimedRows.RowOutcome() {
+            @Override
+            public @NonNull QueryBuilder<Row> assign(@NonNull QueryBuilder<Row> statement) {
+                return stamped.apply(scoped(statement, serverId));
+            }
+
+            @Override
+            public int write(@NonNull QueryBuilder<Row> assigned) {
+                int[] trashed = {0};
+                Models.get(InstanceModel.class).getResolvedDatasource().withTransaction(transaction -> {
+                    if (status == null || assigned.updateAll() > 0) {
+                        trashed[0] = trash.applyAsInt(scoped(owned.get(), serverId));
+                    }
+                });
+                return trashed[0];
+            }
+
+            @Override
+            public void lost() {
+                requireMatched(0, serverId, instanceName);
             }
         });
+    }
+
+    /** The statement on this host, when the record has one. */
+    private static @NonNull QueryBuilder<Row> scoped(@NonNull QueryBuilder<Row> statement, @Nullable Integer serverId) {
+        return serverId == null ? statement : statement.where(hostScope(serverId));
     }
 
     /**
@@ -501,7 +576,7 @@ final class InstanceOperationGuard {
      *
      * @throws Violations {@code instance_fenced_out}
      */
-    private static void requireMatched(int matched, int serverId, @NonNull Object instanceName) {
+    private static void requireMatched(int matched, @Nullable Integer serverId, @NonNull Object instanceName) {
         if (matched == 0) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("instance_fenced_out")
                 .withArg("name", String.valueOf(instanceName))

@@ -116,7 +116,13 @@ public interface HostShell {
         return new ProcessHostShell(null);
     }
 
-    /** POSIX single-quoting: the only quoting that survives an arbitrary path. */
+    /**
+     * POSIX single-quoting, THE shell quoter of this controller: one shell word for any text, an embedded quote
+     * closed, escaped and reopened, null and empty both the empty word.
+     *
+     * AIDEV-NOTE: the one home: the workspace checkout script, the git ssh command and the live Incus exec used to
+     * spell the same expression by hand; HostShellQuoteTest pins what they relied on.
+     */
     static @NonNull String quote(@Nullable String value) {
         String text = value == null ? "" : value;
         return "'" + text.replace("'", "'\\''") + "'";

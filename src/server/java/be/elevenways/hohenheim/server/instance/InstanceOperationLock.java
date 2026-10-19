@@ -242,6 +242,17 @@ public final class InstanceOperationLock {
         return this.rows.owned(this.requireHeld(instanceId).rowClaim());
     }
 
+    /**
+     * The statement narrowed to the record this thread's operation owns now, buildable after the operation let go of
+     * it: what a staged outcome writes beyond its own statement (zenit RowOutcome.write) goes through the same claim.
+     *
+     * @throws IllegalStateException when this thread holds no claim on the record
+     */
+    @NonNull Supplier<QueryBuilder<Row>> ownedLater(int instanceId) {
+        ClaimedRows.RowClaim<Integer> claim = this.requireHeld(instanceId).rowClaim();
+        return () -> this.rows.owned(claim);
+    }
+
     /** @throws IllegalStateException when this thread holds no claim on the record */
     private ClaimedRows<Integer>.@NonNull Held requireHeld(int instanceId) {
         ClaimedRows<Integer>.Held hold = this.rows.heldHere(instanceId);

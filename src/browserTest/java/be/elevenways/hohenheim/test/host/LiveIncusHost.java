@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostKeys;
+import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.incus.ControllerPresence;
 import be.elevenways.hohenheim.server.incus.IncusClient;
@@ -746,7 +747,7 @@ public final class LiveIncusHost {
     /** Run one shell command INSIDE the instance, over the host's own CLI. */
     public String exec(String handle, String command) throws IOException {
         return ssh(List.of("incus", "exec", handle, "--", "sh", "-c",
-            "'" + command.replace("'", "'\\''") + "'")).trim();
+            HostShell.quote(command))).trim();
     }
 
     /** Force-remove one instance over the host's own CLI (cleanup; absent is fine). */

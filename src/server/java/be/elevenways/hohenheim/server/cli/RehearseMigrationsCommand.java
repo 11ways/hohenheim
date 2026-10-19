@@ -23,7 +23,8 @@ import java.util.List;
  * operator can prove a new jar's migration chain before touching the real file.
  *
  * AIDEV-NOTE: exists because the hand-rolled rehearsal was proven false on 2026-09-01. The
- * installer seeds an ABSOLUTE {@code database.path}, so "copy the tree to a scratch
+ * installer then seeded an ABSOLUTE {@code database.path} (a fresh install now writes zenit's equally absolute
+ * {@code database.url}), so "copy the tree to a scratch
  * directory and run {@code --run-migrations} from there" read the copied settings and then
  * migrated the LIVE file anyway -- the rehearsal reported "1 applied" while the real swap
  * reported "0 applied", which is exactly backwards. This lane takes the copy EXPLICITLY,
@@ -32,9 +33,9 @@ import java.util.List;
  * message, never a silent live migration.
  *
  * AIDEV-NOTE: it needs the SETTINGS, never the host's datasource ({@link Needs#SETTINGS}): the settings name the live
- * file it refuses ({@code database.path}) and carry what a migration's data step may read (the encryption keyring),
- * but opening the configured datasource opened the LIVE database during every deploy's rehearsal (seen on starfleet,
- * 2026-10-14) although only the copy is migrated.
+ * file it refuses (zenit's {@code database.url}, else hohenheim's deprecated {@code database.path}) and carry what a
+ * migration's data step may read (the encryption keyring), but opening the configured datasource opened the LIVE
+ * database during every deploy's rehearsal (seen on starfleet, 2026-10-14) although only the copy is migrated.
  *
  * @author Jelle De Loecker
  * @since 0.7.0

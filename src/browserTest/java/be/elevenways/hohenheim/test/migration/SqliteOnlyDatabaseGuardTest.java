@@ -71,9 +71,10 @@ class SqliteOnlyDatabaseGuardTest {
                 .as("step 4: the file a control-plane restore replaces is the one the server opens")
                 .isEqualTo(chosen);
 
-            // 5. Unset, the deprecated hohenheim path is still honoured as the fallback, so an
-            //    upgraded production install opens the same file it always did. The path is a plain file, as an
-            //    install writes it (a test database's path also carries its URL parameters).
+            // 5. Unset, the deprecated hohenheim path is still honoured as the fallback, so an upgraded production
+            //    install opens the same file it always did. The path is a plain file, as the installer wrote it until
+            //    2026-09-24 (a fresh install now writes zenit's database.url; an existing host is never re-pointed),
+            //    while a test database's path also carries its URL parameters.
             ServerSettings.VALUES.setValue(ServerSettings.Database.URL, null);
             Path fallback = Files.createTempFile("hohenheim-fallback", ".db");
             Files.deleteIfExists(fallback);

@@ -4,10 +4,13 @@ import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.ui.ColorHue;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * A driver-level snapshot of one instance's volumes: a point-in-time copy stored on
@@ -21,11 +24,60 @@ public class InstanceSnapshotModel extends Model {
     public static final Identifier MODEL_ID = HohenheimIds.id("instance_snapshot");
     public static final Schema SCHEMA = new Schema();
 
-    /** {@link #STATUS}: capture finished and every payload checksum was verified. */
-    public static final String STATUS_COMPLETE = "complete";
+    /** The {@link #STATUS} vocabulary; each member states whether a snapshot in it can be restored. */
+    public enum Status {
 
-    /** {@link #STATUS}: capture failed; the files are gone and restore refuses the row. */
-    public static final String STATUS_FAILED = "failed";
+        /** The capture is running: the row exists from its start, its payload is still being written. */
+        CAPTURING("capturing", "Capturing", "camera", ColorHue.BLUE),
+
+        /** Capture finished and every payload checksum was verified. */
+        COMPLETE("complete", "Complete", "circle-check", ColorHue.GREEN),
+
+        /**
+         * Capture failed, or a controller restart interrupted it ({@code InstanceSnapshots.recoverInterrupted});
+         * the payload is removed, the row kept as evidence, and restore refuses it.
+         */
+        FAILED("failed", "Failed", "circle-exclamation", ColorHue.RED);
+
+        private final @NonNull String key;
+        private final @NonNull String displayName;
+        private final @NonNull String icon;
+        private final @NonNull ColorHue color;
+
+        Status(@NonNull String key, @NonNull String displayName, @NonNull String icon, @NonNull ColorHue color) {
+            this.key = key;
+            this.displayName = displayName;
+            this.icon = icon;
+            this.color = color;
+        }
+
+        /** The stored key this member round-trips through. */
+        public @NonNull String key() {
+            return this.key;
+        }
+
+        /** Whether a snapshot in this status holds a verified payload a restore may read. */
+        public boolean restorable() {
+            return switch (this) {
+                case COMPLETE -> true;
+                case CAPTURING, FAILED -> false;
+            };
+        }
+
+        /** @return the member stored under this key, null for a blank or unknown one */
+        public static @Nullable Status parse(@Nullable String key) {
+            for (Status status : values()) {
+                if (status.key.equals(key)) {
+                    return status;
+                }
+            }
+            return null;
+        }
+    }
+
+    public static final String STATUS_CAPTURING = Status.CAPTURING.key();
+    public static final String STATUS_COMPLETE = Status.COMPLETE.key();
+    public static final String STATUS_FAILED = Status.FAILED.key();
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 
@@ -34,13 +86,11 @@ public class InstanceSnapshotModel extends Model {
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("instance"))
             .build());
 
-    public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
-        .value(STATUS_COMPLETE, v -> v.displayName("Complete").icon("circle-check")
-            .label(HohenheimMicrocopy.SNAPSHOT_STATUS.of("complete")).color(ColorHue.GREEN))
-        .value(STATUS_FAILED, v -> v.displayName("Failed").icon("circle-exclamation")
-            .label(HohenheimMicrocopy.SNAPSHOT_STATUS.of("failed")).color(ColorHue.RED))
-        .defaultValue(STATUS_FAILED)
-        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("status")).build());
+    /**
+     * AIDEV-NOTE: the default stays FAILED, as instance_backups' does: a row no capture stamped never reads
+     * restorable. A capture stamps CAPTURING itself when it creates its row.
+     */
+    public static final EnumField STATUS = SCHEMA.addField(statusField());
 
     /** Free-form operator note ("before 1.20 upgrade"). */
     public static final StringField NOTE = SCHEMA.addField(StringField.builder().name("note")
@@ -89,6 +139,21 @@ public class InstanceSnapshotModel extends Model {
     @Override public String getModelName() { return "InstanceSnapshot"; }
     @Override public String getTableName() { return "instance_snapshots"; }
     @Override public Schema getSchema() { return SCHEMA; }
+
+    /** Whether this snapshot can be restored: its status holds a verified payload; an unknown status never does. */
+    public static boolean isRestorable(@NonNull Row snapshot) {
+        Status status = Status.parse(snapshot.get(STATUS));
+        return status != null && status.restorable();
+    }
+
+    private static EnumField statusField() {
+        EnumField.Builder builder = EnumField.builder("status");
+        for (Status status : Status.values()) {
+            builder.value(status.key, value -> value.displayName(status.displayName).icon(status.icon)
+                .label(HohenheimMicrocopy.SNAPSHOT_STATUS.of(status.key)).color(status.color));
+        }
+        return builder.defaultValue(Status.FAILED.key).label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("status")).build();
+    }
 
     /** A snapshot's change is filed on its instance. */
     public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.optional().changes()

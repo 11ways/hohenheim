@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.build.BuildLog;
 import be.elevenways.hohenheim.server.build.BuildQuota;
 import be.elevenways.hohenheim.server.build.SandboxedBuilds;
+import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
 import be.elevenways.hohenheim.server.orm.RecordStamp;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
@@ -272,9 +273,9 @@ public final class WorkspaceBuilds {
         // new repository's config, which is exactly how a token ends up written into the
         // volume this method promises never to write it into. The credential travels only
         // in GIT_CONFIG_* environment variables, which git reads and never records.
-        String quotedRef = shellQuote(ref);
-        String quotedUrl = shellQuote(repository);
-        String quotedDir = shellQuote(CHECKOUT_PATH);
+        String quotedRef = HostShell.quote(ref);
+        String quotedUrl = HostShell.quote(repository);
+        String quotedDir = HostShell.quote(CHECKOUT_PATH);
         String script = "set -e\n"
             + "if [ -d " + quotedDir + "/.git ]; then\n"
             + "  git -C " + quotedDir + " remote set-url -- origin " + quotedUrl + "\n"
@@ -284,7 +285,7 @@ public final class WorkspaceBuilds {
             + "  rm -rf " + quotedDir + "\n"
             + "  git clone --branch " + quotedRef + " -- " + quotedUrl + " " + quotedDir + "\n"
             + "fi\n"
-            + "echo " + shellQuote(COMMIT_MARKER) + "$(git -C " + quotedDir
+            + "echo " + HostShell.quote(COMMIT_MARKER) + "$(git -C " + quotedDir
             + " rev-parse HEAD)\n";
 
         ExecSupport.ExecOutcome run = exec(resolved, script,
@@ -428,11 +429,6 @@ public final class WorkspaceBuilds {
         if (!WorkspaceKind.ID.equals(resolved.handler().typeId())) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("workspace_kind_required"));
         }
-    }
-
-    /** POSIX single-quoting: the only quoting that survives an arbitrary ref or URL. */
-    static @NonNull String shellQuote(@NonNull String value) {
-        return "'" + value.replace("'", "'\\''") + "'";
     }
 
     /**

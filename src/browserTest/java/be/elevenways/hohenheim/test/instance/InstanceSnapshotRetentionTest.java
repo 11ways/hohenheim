@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceSnapshotModel;
@@ -16,6 +17,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -30,6 +32,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
  * Snapshot retention and the snapshot record's write discipline, as daemon-free
@@ -190,6 +193,63 @@ class InstanceSnapshotRetentionTest {
     }
 
     /**
+     * A snapshot's status says what its capture is doing: capturing while it runs (never failed, which an operator
+     * reads as a capture that broke), complete once it finished, and failed only when it really failed.
+     */
+    @Test
+    void aSnapshotReadsCapturingWhileItRunsAndFailedOnlyOnARealFailure() {
+        Db.run(datasource, () -> {
+            InstanceService service = new InstanceService();
+            InstanceSnapshots snapshots = new InstanceSnapshots();
+            int instanceId = instanceRecord("snap-status", hostId);
+            service.deploy(instanceId);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.SNAPSHOT_RETENTION, 0);
+            try {
+                // 1. While the daemon takes the capture, the capture's own row reads capturing.
+                List<String> whileRunning = new ArrayList<>();
+                FakeNativeDaemons.DURING_SNAPSHOT.set(() -> whileRunning.add(
+                    newest(instanceId).get(InstanceSnapshotModel.STATUS)));
+                int completed = snapshots.create(instanceId, "status journey");
+                assertThat(whileRunning).as("step 1: the running capture reads capturing, not failed")
+                    .containsExactly(InstanceSnapshotModel.STATUS_CAPTURING);
+
+                // 2. Once it finished, complete, and restorable.
+                Row done = Models.get(InstanceSnapshotModel.class).findById(completed);
+                assertThat((String) done.get(InstanceSnapshotModel.STATUS)).as("step 2: the capture completed")
+                    .isEqualTo(InstanceSnapshotModel.STATUS_COMPLETE);
+                assertThat(InstanceSnapshotModel.isRestorable(done)).as("step 2: and can be restored").isTrue();
+
+                // 3. A capture the daemon refuses ends failed, naming what failed it, and cannot be restored.
+                FakeNativeDaemons.DURING_SNAPSHOT.set(() -> {
+                    throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("snapshots_unsupported")
+                        .withArg("kind", "fake"));
+                });
+                assertThat(catchThrowable(() -> snapshots.create(instanceId, "refused")))
+                    .as("step 3: the capture fails").isInstanceOf(Violations.class);
+                Row refused = newest(instanceId);
+                assertThat((String) refused.get(InstanceSnapshotModel.STATUS))
+                    .as("step 3: the failed capture reads failed").isEqualTo(InstanceSnapshotModel.STATUS_FAILED);
+                assertThat((String) refused.get(InstanceSnapshotModel.ERROR)).as("step 3: naming what failed it")
+                    .isNotBlank();
+                assertThat(InstanceSnapshotModel.isRestorable(refused)).as("step 3: and it is not restorable")
+                    .isFalse();
+            } finally {
+                FakeNativeDaemons.DURING_SNAPSHOT.set(null);
+                Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.SNAPSHOT_RETENTION, 7);
+            }
+            service.destroy(instanceId);
+        });
+    }
+
+    /** The instance's newest snapshot row: by id, which two captures inside one second never share. */
+    private static Row newest(int instanceId) {
+        return Models.get(InstanceSnapshotModel.class).find()
+            .where(InstanceSnapshotModel.INSTANCE_ID.eq(instanceId))
+            .orderBy(InstanceSnapshotModel.ID, SortOrder.DESC)
+            .first();
+    }
+
+    /**
      * The VOLUME lane's retention, and the failure it used to swallow. Both lanes of one
      * mechanism must agree: a payload that could not be removed KEEPS its row, because a
      * row deleted while its tars are still on disk is a prune that reports success for
@@ -288,15 +348,14 @@ class InstanceSnapshotRetentionTest {
     }
 
     /**
-     * Boot reclaim of interrupted captures: a FAILED row normally holds no payload, but a
-     * controller killed DURING a capture leaves one that does (the FAILED-first write
-     * discipline), and the never-prune-FAILED rule then preserves that payload forever.
-     * The settle removes the payload of rows whose last write predates the process start
-     * and KEEPS the rows as evidence; fresh FAILED rows (a capture in flight) are never
-     * touched.
+     * Boot settle of interrupted captures: a controller killed DURING a capture leaves its row capturing with its
+     * payload on disk or on the daemon. The settle marks such a row failed, naming the interruption, and removes its
+     * payload; a failed row an older release left mid-capture (it stamped failed from the start) loses its payload
+     * too. Only rows whose last write predates the process start are touched, so a capture this process has in
+     * flight keeps both its status and its payload. The rows are KEPT as evidence.
      */
     @Test
-    void bootReclaimRemovesTheOrphanedPayloadOfAnInterruptedCaptureAndKeepsTheRow()
+    void bootSettleFailsAnInterruptedCaptureRemovesItsPayloadAndKeepsTheRow()
             throws IOException {
         Db.run(datasource, () -> {
             InstanceService service = new InstanceService();
@@ -310,9 +369,9 @@ class InstanceSnapshotRetentionTest {
                 java.lang.management.ManagementFactory.getRuntimeMXBean().getStartTime())
                 .minusSeconds(3600);
 
-            // 1. A dead VOLUME capture: FAILED row, directory on disk. A dead NATIVE
-            //    capture: FAILED row, snapshot still held by the daemon. And a FRESH
-            //    failed row standing in for a capture this process has in flight.
+            // 1. A dead VOLUME capture: capturing row, directory on disk. A dead NATIVE capture of an older release:
+            //    failed row, snapshot still held by the daemon. And a FRESH capturing row standing in for a capture
+            //    this process has in flight.
             Path orphanDir;
             Path liveDir;
             try {
@@ -323,12 +382,13 @@ class InstanceSnapshotRetentionTest {
             } catch (IOException impossible) {
                 throw new IllegalStateException(impossible);
             }
-            int deadVolume = failedRow(instanceId, orphanDir.toString(), null,
-                beforeThisProcess);
+            int deadVolume = snapshotRow(instanceId, InstanceSnapshotModel.STATUS_CAPTURING, orphanDir.toString(),
+                null, beforeThisProcess);
             daemon.get(handle).snapshots.add("hib-test-orphan");
-            int deadNative = failedRow(instanceId, null, "hib-test-orphan",
+            int deadNative = snapshotRow(instanceId, InstanceSnapshotModel.STATUS_FAILED, null, "hib-test-orphan",
                 beforeThisProcess);
-            failedRow(instanceId, liveDir.toString(), null, null);
+            int live = snapshotRow(instanceId, InstanceSnapshotModel.STATUS_CAPTURING, liveDir.toString(), null,
+                null);
 
             // 2. The settle.
             snapshots.recoverInterrupted();
@@ -346,22 +406,36 @@ class InstanceSnapshotRetentionTest {
                     + " leak")
                 .isEqualTo(Map.of("volumeRow", "true", "volumePayload", "false",
                     "nativeRow", "true", "nativePayload", "false"));
+            Row interrupted = Models.get(InstanceSnapshotModel.class).findById(deadVolume);
+            assertThat((String) interrupted.get(InstanceSnapshotModel.STATUS))
+                .as("step 2: the interrupted capture reads failed, no longer capturing")
+                .isEqualTo(InstanceSnapshotModel.STATUS_FAILED);
+            assertThat((String) interrupted.get(InstanceSnapshotModel.ERROR))
+                .as("step 2: naming the interruption").contains("Interrupted");
+            assertThat((String) Models.get(InstanceSnapshotModel.class).findById(deadNative)
+                    .get(InstanceSnapshotModel.STATUS))
+                .as("step 2: the older release's failed row stays failed")
+                .isEqualTo(InstanceSnapshotModel.STATUS_FAILED);
             assertThat(Files.exists(liveDir.resolve("data.tar")))
                 .as("step 2: the FRESH row's payload -- a capture this process has in"
                     + " flight -- was left alone; settling it would destroy a capture"
                     + " mid-write")
                 .isTrue();
+            assertThat((String) Models.get(InstanceSnapshotModel.class).findById(live)
+                    .get(InstanceSnapshotModel.STATUS))
+                .as("step 2: and it still reads capturing")
+                .isEqualTo(InstanceSnapshotModel.STATUS_CAPTURING);
 
             service.destroy(instanceId);
         });
     }
 
-    /** A FAILED snapshot row; {@code writtenAt} null keeps save-time stamps (a live row). */
-    private static int failedRow(int instanceId, String directory, String nativeName,
-                                 java.time.Instant writtenAt) {
+    /** A snapshot row in {@code status}; {@code writtenAt} null keeps save-time stamps (a live row). */
+    private static int snapshotRow(int instanceId, String status, String directory, String nativeName,
+                                   java.time.Instant writtenAt) {
         Row row = Models.get(InstanceSnapshotModel.class).createEmptyRow();
         row.set(InstanceSnapshotModel.INSTANCE_ID, instanceId);
-        row.set(InstanceSnapshotModel.STATUS, InstanceSnapshotModel.STATUS_FAILED);
+        row.set(InstanceSnapshotModel.STATUS, status);
         row.set(InstanceSnapshotModel.DIRECTORY, directory);
         row.set(InstanceSnapshotModel.NATIVE_NAME, nativeName);
         Models.get(InstanceSnapshotModel.class).save(row);

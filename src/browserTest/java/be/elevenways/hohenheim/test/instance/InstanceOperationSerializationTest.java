@@ -1,6 +1,10 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.protoblast.common.util.BlastLog;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import java.util.Arrays;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.CountDownLatch;
 import java.util.List;
@@ -27,6 +31,7 @@ import org.junit.jupiter.api.Test;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -202,6 +207,63 @@ class InstanceOperationSerializationTest {
 
     private static String statusOf(int id) {
         return Models.get(InstanceModel.class).findById(id).get(InstanceModel.STATUS);
+    }
+
+    /**
+     * A destroy's end is the record's outcome: the record reads destroyed only once the destroy let go of its claim,
+     * so a client that sees it destroyed and removes its data at once is never refused by the destroy it just read
+     * about (InstanceConsoleGenerationTest.aReadinessFlipReadsRunningOnlyOnceTheWatchLetGoOfTheRecord's shape).
+     */
+    @Test
+    void aDestroyReadsDestroyedOnlyOnceItLetGoOfTheRecord() {
+        int[] record = new int[1];
+        Db.run(datasource, () -> {
+            record[0] = BackupLaneFixture.instanceRecord("destroy-release", hostId);
+            new InstanceService().deploy(record[0]);
+        });
+        int id = record[0];
+        String handle = FakeNativeDaemons.handleOf(id);
+
+        // 1. The destroy logs its end while it still holds the record's claim; what the record reads at that moment
+        //    is what a client polling it could act on.
+        List<String> readAtEnd = new CopyOnWriteArrayList<>();
+        BlastLog.LogSink previous = BlastLog.getLogSink();
+        try {
+            BlastLog.setLogSink(args -> {
+                if (Arrays.toString(args).contains("INSTANCE: destroyed, " + handle)) {
+                    readAtEnd.add(stateOf(id));
+                }
+                if (previous != null) {
+                    previous.log(args);
+                }
+            });
+            Racers.Running<Object> destroying = this.operations.start("the destroy", () -> {
+                Db.run(datasource, () -> new InstanceService().destroy(id));
+                return null;
+            });
+
+            // 2. A client waits for the record to read destroyed and removes its data at once: the record is free.
+            Db.run(datasource, () -> {
+                Poll.until("step 2: the record reads destroyed", Duration.ofSeconds(30),
+                    () -> stateOf(id).startsWith("trashed"));
+                assertThatCode(() -> new InstanceService().destroyWithData(id))
+                    .as("step 2: the delete-with-data right after the destroy is admitted")
+                    .doesNotThrowAnyException();
+            });
+            destroying.await(Duration.ofSeconds(60)).value();
+        } finally {
+            BlastLog.setLogSink(previous);
+        }
+        assertThat(readAtEnd).as("step 1: while the destroy held the record it read neither destroyed nor stopped")
+            .containsExactly("live " + InstanceModel.STATUS_RUNNING);
+        Db.run(datasource, () -> assertThat(stateOf(id)).as("step 2: the destroy's end stands")
+            .isEqualTo("trashed " + InstanceModel.STATUS_STOPPED));
+    }
+
+    /** Whether the record is trashed, and its status, read with the trash included. */
+    private static String stateOf(int id) {
+        Row row = Models.get(InstanceModel.class).find().withTrashed().where(InstanceModel.ID.eq(id)).first();
+        return (row.get(InstanceModel.DELETED_AT) == null ? "live " : "trashed ") + row.get(InstanceModel.STATUS);
     }
 
     /**

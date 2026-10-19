@@ -6848,10 +6848,16 @@
     "text": "Back-up van {$name} geëxporteerd en geverifieerd",
     "scope": "instance"
   },
-  "capturing": {
-    "text": "Bezig met kopie",
-    "scope": "instance_status"
-  },
+  "capturing": [
+    {
+      "text": "Bezig met kopie",
+      "scope": "instance_status"
+    },
+    {
+      "text": "Bezig met opname",
+      "scope": "snapshot_status"
+    }
+  ],
   "restoring": {
     "text": "Bezig met herstel",
     "scope": "instance_status"

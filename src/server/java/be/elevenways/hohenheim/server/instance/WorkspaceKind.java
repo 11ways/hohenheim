@@ -352,14 +352,14 @@ public final class WorkspaceKind implements InstanceKindHandler {
         if (!SiteSources.hasRepository(settings)) {
             return command;
         }
-        String checkout = WorkspaceBuilds.shellQuote(WorkspaceBuilds.CHECKOUT_PATH);
+        String checkout = HostShell.quote(WorkspaceBuilds.CHECKOUT_PATH);
         // exec, twice, because PID 1 is the process a stop signals: a non-interactive bash
         // waiting on a forked child never forwards SIGTERM to it, so every graceful stop
         // would be a hard kill wearing a ten-second delay. The inner `bash -lc` is what the
         // command already ran under, so a compound command behaves exactly as it did.
         return "if [ ! -d " + checkout + " ]; then exec " + IDLE_COMMAND + "; fi;"
             + " cd " + checkout + "; exec /bin/bash -lc "
-            + WorkspaceBuilds.shellQuote(command);
+            + HostShell.quote(command);
     }
 
     /** What the record and the image say to run, before the source lane wraps it. */
