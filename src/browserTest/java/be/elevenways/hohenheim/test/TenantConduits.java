@@ -56,7 +56,19 @@ public final class TenantConduits {
      * (its authorizers ask who is acting, so the harness's system identity is no caller there).
      */
     public static AccessContext operator() {
-        return AccessContext.of(stubFor(new UserPrincipal(operatorUser().get(UserModel.ID), "Test Admin")));
+        return AccessContext.of(stubFor(operatorPrincipal()));
+    }
+
+    /**
+     * The installation operator as a caller on a request opened under one parent record ({@code ?parent=}): a
+     * programmatic create of a child whose parent is fixed, written under that parent.
+     */
+    public static AccessContext operatorUnder(Object parentKey) {
+        return AccessContext.of(stubUnder(operatorPrincipal(), parentKey));
+    }
+
+    private static UserPrincipal operatorPrincipal() {
+        return new UserPrincipal(operatorUser().get(UserModel.ID), "Test Admin");
     }
 
     /**

@@ -72,7 +72,7 @@ public final class TemplateChildParts {
         return entry(InstanceTemplateVariableModel.MODEL_ID, HohenheimSlugs.INSTANCE_TEMPLATE_VARIABLES,
             HohenheimMicrocopy.TEMPLATE_VARIABLE, 17,
             Icon.of("sliders"),
-                InstanceTemplateVariableModel.TEMPLATE_ID)
+                contents(InstanceTemplateVariableModel.TEMPLATE_ID))
             .form(ResourceForm.<Row>of(spec).quickCreate(QuickCreateSpec.of(InstanceTemplateVariableModel.KEY.getName(),
                     InstanceTemplateVariableModel.LABEL.getName(), InstanceTemplateVariableModel.TYPE.getName(),
                     InstanceTemplateVariableModel.REQUIRED.getName())
@@ -101,7 +101,7 @@ public final class TemplateChildParts {
         return entry(InstanceTemplateFileModel.MODEL_ID, HohenheimSlugs.INSTANCE_TEMPLATE_FILES,
             HohenheimMicrocopy.TEMPLATE_FILE, 18,
             Icon.of("file-code"),
-                InstanceTemplateFileModel.TEMPLATE_ID)
+                contents(InstanceTemplateFileModel.TEMPLATE_ID))
             .form(ResourceForm.<Row>of(spec)
                 .inlineEditable(InstanceTemplateFileModel.CONTAINER_PATH, InstanceTemplateFileModel.MODE).build())
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).search(InstanceTemplateFileModel.CONTAINER_PATH)
@@ -111,7 +111,8 @@ public final class TemplateChildParts {
     /**
      * A template's volumes: the size limit is entered in megabytes, the volume's own form field ({@link
      * VolumeOperations#QUOTA_MB}), and stored in bytes through the volume's one conversion; the list says it as a
-     * size.
+     * size. The template is the volume's fixed parent, as an instance is an instance volume's: named on every view,
+     * written from the create's parent, never posted.
      */
     public static @NonNull PanelResource<Row> volumes() {
         FormSpec spec = FormSpec.builder()
@@ -132,7 +133,7 @@ public final class TemplateChildParts {
         return entry(InstanceTemplateVolumeModel.MODEL_ID, HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES,
             HohenheimMicrocopy.TEMPLATE_VOLUME, 20,
             Icon.of("folder-open"),
-                InstanceTemplateVolumeModel.TEMPLATE_ID)
+                contents(InstanceTemplateVolumeModel.TEMPLATE_ID).fixed())
             .reads(ResourceReads.rows().mapValues(Set.of(quotaMb), (row, values) -> {
                 Map<String, Object> mapped = new LinkedHashMap<>(values);
                 mapped.put(quotaMb, VolumeOperations.quotaMegabytes(row.get(InstanceTemplateVolumeModel.QUOTA_BYTES)));
@@ -153,7 +154,10 @@ public final class TemplateChildParts {
                 .emptyDescription(HohenheimMicrocopy.TEMPLATE_CONTENTS.of("no_volumes_description")).build()).build();
     }
 
-    /** The template's databases: the env prefix names one, its engine under it, so a phone keeps both in view. */
+    /**
+     * The template's databases: the env prefix names one, its engine under it, so a phone keeps both in view. The
+     * template is the declaration's fixed parent, like a volume's.
+     */
     public static @NonNull PanelResource<Row> databases() {
         FormSpec spec = FormSpec.builder()
             .add(RelationPick.of(InstanceTemplateDatabaseModel.TEMPLATE_ID, InstanceTemplateModel.MODEL_ID).build())
@@ -171,7 +175,7 @@ public final class TemplateChildParts {
         return entry(InstanceTemplateDatabaseModel.MODEL_ID, HohenheimSlugs.INSTANCE_TEMPLATE_DATABASES,
             HohenheimMicrocopy.TEMPLATE_DATABASE, 19,
             Icon.of("database"),
-                InstanceTemplateDatabaseModel.TEMPLATE_ID)
+                contents(InstanceTemplateDatabaseModel.TEMPLATE_ID).fixed())
             .form(ResourceForm.<Row>of(spec).createDefaults((access, panel) -> {
                 Map<String, Object> values = new LinkedHashMap<>(spec.defaultValues());
                 values.put(InstanceTemplateDatabaseModel.ENV_PREFIX.getName(), InstanceDatabaseModel.DEFAULT_PREFIX);
@@ -181,15 +185,20 @@ public final class TemplateChildParts {
                 .emptyDescription(HohenheimMicrocopy.TEMPLATE_CONTENTS.of("no_databases_description")).build()).build();
     }
 
+    /** @return the template a declaration belongs to, reached through its Contents tab */
+    private static @NonNull ResourceParent<Row> contents(@NonNull IntegerField owner) {
+        return ResourceParent.of(HohenheimSlugs.INSTANCE_TEMPLATES, owner).tab(HohenheimSlugs.Tab.CONTENTS);
+    }
+
     private static PanelResource.@NonNull Builder<Row> entry(Identifier model, String slug, HohenheimMicrocopy scope,
         int order,
-            Icon icon, IntegerField owner) {
+            Icon icon, ResourceParent<Row> parent) {
         TemplateDeclarationGuards.init();
         return PanelResource.builder(model, slug, SubjectType.record(model))
             .label(scope.of("plural"))
             .recordLabel(scope.of("singular"))
             .navGroup(HohenheimPanel.DEPLOY_GROUP).navOrder(order).icon(icon).showInNav(false)
-            .parent(ResourceParent.of(HohenheimSlugs.INSTANCE_TEMPLATES, owner).tab(HohenheimSlugs.Tab.CONTENTS))
+            .parent(parent)
             .reads(ResourceReads.rows()).writes(ResourceMutations.rows().create().update().delete().build())
             .tabs(ResourceTabs.<Row>none().withHistory().withContributions());
     }

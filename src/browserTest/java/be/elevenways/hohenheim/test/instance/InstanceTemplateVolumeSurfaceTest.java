@@ -5,6 +5,9 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVolumeModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
+import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.InstanceTemplateDatabaseModel;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
@@ -44,6 +47,8 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
 
     private static final String PREFIX = "tpl-vol-ui-";
+    private static final String VOLUMES = HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES;
+    private static final String DATABASES = HohenheimSlugs.INSTANCE_TEMPLATE_DATABASES;
 
     @AfterAll
     static void cleanUp() {
@@ -59,6 +64,8 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
             int templateId = row.get(InstanceTemplateModel.ID);
             Models.get(InstanceTemplateVolumeModel.class).find()
                 .where(InstanceTemplateVolumeModel.TEMPLATE_ID.eq(templateId)).delete();
+            Models.get(InstanceTemplateDatabaseModel.class).find()
+                .where(InstanceTemplateDatabaseModel.TEMPLATE_ID.eq(templateId)).delete();
             templates.delete(templateId);
         }
     }
@@ -77,14 +84,14 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
             .as("step 1: it is reached through the template, not the sidebar").isFalse();
 
         // 2. An operator declares a volume on a template through the resource -- the only
-        //    thing that used to require writing the row by hand. The limit is entered in MB, as a volume's own is.
+        //    thing that used to require writing the row by hand. The limit is entered in MB, as a volume's own is,
+        //    and the template is the one the create was opened under (the volume's fixed parent).
         int templateId = template(PREFIX + "carrier", ApplicationKind.ID.toString());
         PanelResourceCalls.create("admin", HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES, Map.of(
-            "template_id", templateId,
             "name", "data",
             "container_path", "/var/lib/app",
             "quota_mb", 256,
-             "exclusive", true), TenantConduits.operator());
+             "exclusive", true), TenantConduits.operatorUnder(templateId));
         List<Row> declared = Models.get(InstanceTemplateVolumeModel.class)
             .findByTemplateId(templateId);
         assertThat(declared).as("step 2: the declaration was stored").hasSize(1);
@@ -119,17 +126,17 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
     @Test
     void theResourceRefusesADeclarationTheCreateCouldNeverHonour() throws Exception {
         int templateId = template(PREFIX + "refusing", ApplicationKind.ID.toString());
-        PanelResourceCalls.create("admin", HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES, Map.of("template_id", templateId,
+        PanelResourceCalls.create("admin", HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES, Map.of(
             "name", "data",
-            "container_path", "/var/lib/app", "exclusive", false), TenantConduits.operator());
+            "container_path", "/var/lib/app", "exclusive", false), TenantConduits.operatorUnder(templateId));
 
         // 1. A second declaration of one NAME would become a single volume on every
         //    instance (the copy re-declares that one name), so one of the two would be
         //    silently lost.
         assertThat(violationKeys(catchThrowable(() -> PanelResourceCalls.create("admin",
             HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES,
-                Map.of("template_id", templateId, "name", "data",
-                     "container_path", "/var/other", "exclusive", false), TenantConduits.operator()))))
+                Map.of("name", "data", "container_path", "/var/other", "exclusive", false),
+                TenantConduits.operatorUnder(templateId)))))
             .as("step 1: a duplicate volume name is refused, named")
             .contains("template_volume_name_taken");
 
@@ -137,16 +144,16 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
         //    path -- the volume tier's own collision rule, asked at authoring time.
         assertThat(violationKeys(catchThrowable(() -> PanelResourceCalls.create("admin",
             HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES,
-                Map.of("template_id", templateId, "name", "cache",
-                     "container_path", "/var/lib/app", "exclusive", false), TenantConduits.operator()))))
+                Map.of("name", "cache", "container_path", "/var/lib/app", "exclusive", false),
+                TenantConduits.operatorUnder(templateId)))))
             .as("step 2: a colliding container path is refused, named")
             .contains("volume_container_path_conflict");
 
         // 3. A name that is not a plain directory name is the containment guarantee.
         assertThat(violationKeys(catchThrowable(() -> PanelResourceCalls.create("admin",
             HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES,
-                Map.of("template_id", templateId, "name", "../etc",
-                     "container_path", "/var/cache/app", "exclusive", false), TenantConduits.operator()))))
+                Map.of("name", "../etc", "container_path", "/var/cache/app", "exclusive", false),
+                TenantConduits.operatorUnder(templateId)))))
             .as("step 3: a traversing volume name is refused, named")
             .contains("volume_name_invalid");
 
@@ -154,9 +161,9 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
         //    enforced.
         assertThat(violationKeys(catchThrowable(() -> PanelResourceCalls.create("admin",
             HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES,
-                Map.of("template_id", templateId, "name", "cache",
+                Map.of("name", "cache",
                     "container_path", "/var/cache/app", "quota_mb", 0,
-                     "exclusive", false), TenantConduits.operator()))))
+                     "exclusive", false), TenantConduits.operatorUnder(templateId)))))
             .as("step 4: a non-positive quota is refused, named")
             .contains("volume_quota_invalid");
 
@@ -173,18 +180,92 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
             .contains("data-cms-child-list=\"" + HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES + "\"");
         assertThat(violationKeys(catchThrowable(() -> PanelResourceCalls.create("admin",
             HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES,
-                Map.of("template_id", wrongKind, "name", "data",
-                     "container_path", "/var/lib/app", "exclusive", false), TenantConduits.operator()))))
+                Map.of("name", "data", "container_path", "/var/lib/app", "exclusive", false),
+                TenantConduits.operatorUnder(wrongKind)))))
             .as("step 5: a kind that mounts none is refused, named")
             .contains("template_volume_kind_unsupported");
 
         // 6. FALSIFIED: a free name at a free path on the same template is accepted, so
         //    every refusal above discriminates rather than forbidding a second volume.
-        PanelResourceCalls.create("admin", HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES, Map.of("template_id", templateId,
+        PanelResourceCalls.create("admin", HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES, Map.of(
             "name", "cache",
-            "container_path", "/var/cache/app", "exclusive", false), TenantConduits.operator());
+            "container_path", "/var/cache/app", "exclusive", false), TenantConduits.operatorUnder(templateId));
         assertThat(Models.get(InstanceTemplateVolumeModel.class).findByTemplateId(templateId))
             .as("step 6: the template carries both volumes").hasSize(2);
+    }
+
+    /**
+     * A template's volume and database declarations belong to the template they were declared on, as an instance
+     * volume belongs to its instance: both forms name the template and offer nothing to change it, a create is written
+     * under the template its form was opened from, and neither a create nor an edit posting another template moves
+     * the declaration.
+     */
+    @Test
+    void theTemplateIsTheFixedParentOfItsVolumesAndDatabasesJourney() throws Exception {
+        int owner = template(PREFIX + "owner", ApplicationKind.ID.toString());
+        int other = template(PREFIX + "elsewhere", ApplicationKind.ID.toString());
+        List<String> slugs = List.of(VOLUMES, DATABASES);
+
+        // 1. The Contents tab opens each declaration's create under this template.
+        String contents = adminGet("/admin/instance-templates/" + owner + "/page/contents").body();
+        for (String slug : slugs) {
+            assertThat(contents).as("step 1: the %s add opens under the template", slug)
+                .contains("/admin/" + slug + "/new?parent=" + owner);
+        }
+
+        // 2. Each create form names the template, and offers no picker to re-point the declaration.
+        for (String slug : slugs) {
+            assertNamesTheOwnerReadOnly(adminGet("/admin/" + slug + "/new?parent=" + owner).body(),
+                "step 2: the " + slug + " create form");
+        }
+
+        // 3. A create posting the other template is written under the one its form was opened from.
+        assertThat(httpPostForm("/admin/" + VOLUMES + "/new?parent=" + owner,
+            "template_id=" + other + "&name=data&container_path=%2Fvar%2Flib%2Fapp&quota_mb=64&"
+                + PanelResourceCalls.createEnvelope(), sessionToken, csrfToken).statusCode())
+            .as("step 3: the volume create is accepted").isIn(302, 303);
+        assertThat(httpPostForm("/admin/" + DATABASES + "/new?parent=" + owner,
+            "template_id=" + other + "&engine=" + DatabaseModel.ENGINE_POSTGRES + "&env_prefix=APPDB&"
+                + PanelResourceCalls.createEnvelope(), sessionToken, csrfToken).statusCode())
+            .as("step 3: the database create is accepted").isIn(302, 303);
+        List<Row> volumes = Models.get(InstanceTemplateVolumeModel.class).findByTemplateId(owner);
+        List<Row> databases = Models.get(InstanceTemplateDatabaseModel.class).findByTemplateId(owner);
+        assertThat(volumes).as("step 3: THE ASSERTION -- the volume is the owner's, never the posted template's")
+            .hasSize(1);
+        assertThat(databases).as("step 3: THE ASSERTION -- and so is the database").hasSize(1);
+        assertThat(Models.get(InstanceTemplateVolumeModel.class).findByTemplateId(other))
+            .as("step 3: nothing landed under the posted template").isEmpty();
+        assertThat(Models.get(InstanceTemplateDatabaseModel.class).findByTemplateId(other))
+            .as("step 3: nothing landed under the posted template").isEmpty();
+        int volumeId = volumes.get(0).get(InstanceTemplateVolumeModel.ID);
+        int databaseId = databases.get(0).get(InstanceTemplateDatabaseModel.ID);
+
+        // 4. Each edit form names the template read-only too.
+        assertNamesTheOwnerReadOnly(adminGet(CmsRoutes.detail("admin", VOLUMES, volumeId).toUrl()).body(),
+            "step 4: the volume edit form");
+        assertNamesTheOwnerReadOnly(adminGet(CmsRoutes.detail("admin", DATABASES, databaseId).toUrl()).body(),
+            "step 4: the database edit form");
+
+        // 5. An edit posting the other template writes its other fields and keeps the template.
+        assertThat(httpPostForm("/admin/" + VOLUMES + "/" + volumeId,
+            "template_id=" + other + "&name=data&container_path=%2Fvar%2Flib%2Fmoved&quota_mb=64&"
+                + PanelResourceCalls.editEnvelope(HohenheimSlugs.ADMIN, VOLUMES, volumeId, TenantConduits.operator()),
+            sessionToken, csrfToken).statusCode()).as("step 5: the volume edit is accepted").isIn(302, 303);
+        assertThat(httpPostForm("/admin/" + DATABASES + "/" + databaseId,
+            "template_id=" + other + "&engine=" + DatabaseModel.ENGINE_POSTGRES + "&env_prefix=MOVED&"
+                + PanelResourceCalls.editEnvelope(HohenheimSlugs.ADMIN, DATABASES, databaseId,
+                    TenantConduits.operator()),
+            sessionToken, csrfToken).statusCode()).as("step 5: the database edit is accepted").isIn(302, 303);
+        Row volume = Models.get(InstanceTemplateVolumeModel.class).findById(volumeId);
+        assertThat((String) volume.get(InstanceTemplateVolumeModel.CONTAINER_PATH))
+            .as("step 5: the volume edit was written").isEqualTo("/var/lib/moved");
+        assertThat((Integer) volume.get(InstanceTemplateVolumeModel.TEMPLATE_ID))
+            .as("step 5: THE ASSERTION -- the posted template never re-points the volume").isEqualTo(owner);
+        Row database = Models.get(InstanceTemplateDatabaseModel.class).findById(databaseId);
+        assertThat((String) database.get(InstanceTemplateDatabaseModel.ENV_PREFIX))
+            .as("step 5: the database edit was written").isEqualTo("MOVED");
+        assertThat((Integer) database.get(InstanceTemplateDatabaseModel.TEMPLATE_ID))
+            .as("step 5: THE ASSERTION -- the posted template never re-points the database").isEqualTo(owner);
     }
 
     // -- fixtures ---------------------------------------------------------------
@@ -193,6 +274,13 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
         Panel panel = PanelRegistry.getBySlug("admin");
         assertThat(panel).as("the admin panel is registered").isNotNull();
         return panel.entryBySlug(slug) instanceof PanelResource<?> resource ? resource : null;
+    }
+
+    /** A declaration form naming its template, with no editable template field a post could carry. */
+    private static void assertNamesTheOwnerReadOnly(String form, String step) {
+        assertThat(form).as(step + " names the template").contains(PREFIX + "owner")
+            .as(step + " has no editable template picker").doesNotContain("name=\"template_id\"")
+            .doesNotContain("<zf-relation-field");
     }
 
     private static int template(String name, String kind) {
