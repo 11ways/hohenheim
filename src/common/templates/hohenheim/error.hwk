@@ -31,14 +31,14 @@
 </head>
 <body>
     {% declare statusCode: String %}
-    {% declare title: String %}
-    {% declare message: String %}
+    {% declare title: Microcopy %}
+    {% declare message: Microcopy = null %}
     {% declare hostname: String = "" %}
 
     <div class="error">
         <div class="error-code">{{ statusCode }}</div>
         <div class="error-title">{{ title }}</div>
-        {% if message != "" %}
+        {% if message != null %}
             <div class="error-message">{{ message }}</div>
         {% /if %}
         {% if hostname != "" %}

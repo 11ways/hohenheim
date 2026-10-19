@@ -236,8 +236,11 @@ public final class InstallMediaFetches {
                     Change.fact(HohenheimActivityAction.MEDIA_FETCHED, Map.of(HohenheimActivityAction.NAME_KEY, name)));
             });
         } catch (IOException | RuntimeException failure) {
-            String reason = failure.getMessage() != null && !failure.getMessage().isBlank()
-                ? failure.getMessage() : failure.getClass().getSimpleName();
+            // A refusal reads as its own words (a cap, its size worded), never as its debug rendering.
+            String reason = HohenheimViolations.reasonOf(failure);
+            if (reason.isBlank()) {
+                reason = failure.getClass().getSimpleName();
+            }
             Blast.log("MEDIA: fetching", name, "onto host", serverId, "failed -", reason);
             String stored = reason.length() > MAX_REASON ? reason.substring(0, MAX_REASON) : reason;
             held.afterRelease(() -> write(fetchId, InstallMediaFetchState.FAILED, null, stored, true));

@@ -213,25 +213,65 @@ public final class IncusDefinitions {
             + " devices until its default profile carries a pooled root disk.");
     }
 
-    /** Parse a daemon size value ("2GiB" or raw bytes) into whole GB, null when unreadable. */
+    /**
+     * Parse a daemon size value into whole GB, rounded up, null when it is no size the daemon accepts.
+     *
+     * AIDEV-NOTE: every form the daemon accepts, since a volume may come from another tool: raw bytes, "B", a binary
+     * unit ("500MiB", "1TiB") and a decimal one ("10GB", "1000kB", powers of 1000). Each step is a {@link ByteUnit}, by
+     * its symbol prefix; a unit past the vocabulary (PiB, EB) reads as no size rather than a guess. Rounded up, so a
+     * claim made from a volume's size always holds the volume; what Hohenheim writes ("20GiB") reads back exactly.
+     */
     static @Nullable Integer parseSizeGb(@Nullable Object size) {
-        if (size == null) {
+        Long bytes = size == null ? null : parseSizeBytes(String.valueOf(size).trim());
+        if (bytes == null) {
             return null;
         }
-        String text = String.valueOf(size).trim();
-        if (text.endsWith("GiB")) {
-            try {
-                return Integer.parseInt(text.substring(0, text.length() - 3).trim());
-            } catch (NumberFormatException unreadable) {
-                return null;
-            }
+        long gigabytes = Math.ceilDiv(bytes, ByteUnit.GIGABYTE.factor());
+        return gigabytes > Integer.MAX_VALUE ? null : (int) gigabytes;
+    }
+
+    /** @return the bytes a daemon size spells, null when it spells none */
+    private static @Nullable Long parseSizeBytes(@NonNull String text) {
+        int digits = 0;
+        while (digits < text.length() && Character.isDigit(text.charAt(digits))) {
+            digits++;
+        }
+        String unit = text.substring(digits).trim();
+        long scale = unitScale(unit);
+        if (digits == 0 || scale <= 0) {
+            return null;
         }
         try {
-            long bytes = Long.parseLong(text);
-            return (int) (bytes / ByteUnit.GIGABYTE.factor());
-        } catch (NumberFormatException unreadable) {
+            return Math.multiplyExact(Long.parseLong(text.substring(0, digits)), scale);
+        } catch (NumberFormatException | ArithmeticException unreadable) {
             return null;
         }
+    }
+
+    /** @return the bytes one of the daemon's size unit holds ("" and "B" a byte), 0 for no unit it spells */
+    private static long unitScale(@NonNull String unit) {
+        if (unit.isEmpty() || unit.equals("B")) {
+            return 1;
+        }
+        boolean binary = unit.endsWith("iB");
+        if (!binary && !unit.endsWith("B")) {
+            return 0;
+        }
+        String prefix = unit.substring(0, unit.length() - (binary ? 2 : 1));
+        for (ByteUnit step : ByteUnit.values()) {
+            if (!step.symbolPrefix().isEmpty() && step.symbolPrefix().equalsIgnoreCase(prefix)) {
+                if (binary) {
+                    return step.factor();
+                }
+                // The decimal unit of the same step counts powers of 1000 where the binary one counts powers of 1024.
+                long decimal = 1;
+                for (int power = Long.numberOfTrailingZeros(step.factor()) / 10; power > 0; power--) {
+                    decimal *= 1000;
+                }
+                return decimal;
+            }
+        }
+        return 0;
     }
 
     /** A per-NIC MAC the daemon minted ({@code volatile.<nic>.hwaddr}). */

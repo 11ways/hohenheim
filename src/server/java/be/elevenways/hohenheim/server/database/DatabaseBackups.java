@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.util.UtcStamp;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.Zenit;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -80,10 +81,12 @@ public final class DatabaseBackups {
             return null;
         } catch (Exception e) {
             Blast.log("BACKUP: database", name, "failed:", e.getMessage());
+            // A refusal carrying the operator's words (the dump cap, its sizes worded) is read in them.
+            Microcopy words = DumpOverCap.wordsOf(e);
+            Microcopy body = HohenheimMicrocopy.ALERT.of("database_backup_failed_body").withArg("name", name);
             Alerts.trySend(NotificationEvents.BACKUP_FAILED, Alerts.about(DatabaseModel.MODEL_ID, name),
                 HohenheimMicrocopy.ALERT.of("database_backup_failed_subject").withArg("name", name),
-                HohenheimMicrocopy.ALERT.of("database_backup_failed_body")
-                    .withArg("name", name).withArg("reason", String.valueOf(e.getMessage())));
+                words != null ? body.withArg("reason", words) : body.withArg("reason", String.valueOf(e.getMessage())));
             return name + ": " + e.getMessage();
         }
     }

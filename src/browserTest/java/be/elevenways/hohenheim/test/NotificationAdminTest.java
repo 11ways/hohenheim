@@ -206,9 +206,11 @@ class NotificationAdminTest extends HohenheimTestBase {
         assertThat(sheet.getByRole(AriaRole.CHECKBOX).count())
             .as("step 1: one box per event per channel").isEqualTo(NotificationEvents.values().length * 2);
 
-        // 2. Unticking one box and saving stops exactly that event for that channel.
+        // 2. Unticking one box and saving stops exactly that event for that channel. The save answers by refreshing
+        //    the list it was opened over: the step waits for that page, never for the database alone.
         backupToPager.click();
-        sheet.getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions().setName("Save")).click();
+        waitForNavigationRendered(() -> sheet.getByRole(AriaRole.BUTTON,
+            new Locator.GetByRoleOptions().setName("Save")).click());
         PlaywrightAssertions.assertThat(sheet).isHidden();
         List<String> pagerEvents = Models.get(NotificationChannelModel.class)
             .findById(pager.get(NotificationChannelModel.ID)).get(NotificationChannelModel.EVENTS);
@@ -219,9 +221,7 @@ class NotificationAdminTest extends HohenheimTestBase {
         assertThat(opsEvents == null ? List.<String>of() : opsEvents)
             .as("step 2: a channel left fully ticked keeps receiving everything, stored as no subscription").isEmpty();
 
-        // 3. The list names what the pager skips instead of the sixteen events it keeps.
-        navigateToApp("/admin/notifications");
-        waitForHydration();
+        // 3. The refreshed list names what the pager skips instead of the sixteen events it keeps.
         assertThat(page.content()).as("step 3: the summary names the skipped event")
             .contains("Every event except Backup failed");
     }

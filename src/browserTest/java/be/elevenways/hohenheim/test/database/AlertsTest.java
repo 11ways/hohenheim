@@ -13,6 +13,12 @@ import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.server.database.DatabaseBackups;
+import be.elevenways.hohenheim.server.database.DatabaseService;
+import be.elevenways.hohenheim.server.database.ManagedDatabase;
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantModel;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -43,6 +49,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.InetAddress;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -312,6 +319,39 @@ class AlertsTest {
                 .map(change -> (String) change.get(ChangeModel.MODEL)).toList())
             .as("step 7: sending it changed no record but the notifications module's own")
             .isSubsetOf(NotificationInboxModel.MODEL_ID.toString(), DeliveryModel.MODEL_ID.toString());
+    }
+
+    /** A nightly dump refused at its cap reaches the administrator in words, its sizes worded as sizes. */
+    @Test
+    void aDumpOverItsCapAlertsTheAdministratorWithItsSizesWorded() {
+        seedUser("cap-admin@hohenheim.local", true, true);
+        Integer previous = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.MAX_DUMP_MB);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.MAX_DUMP_MB, 1);
+        try {
+            // 1. One database's dump is half a megabyte over the cap; the backup refuses it and alerts.
+            ScriptedDumpDocker docker = new ScriptedDumpDocker(new byte[(int) (ByteUnit.MEGABYTE.factor() * 3 / 2)]);
+            DatabaseService capped = new DatabaseService() {
+                @Override
+                public Path backupToFile(String name, Path directory, String baseName) throws IOException {
+                    Path target = directory.resolve(baseName + ".rdb");
+                    new ManagedDatabase(docker).backupToFile("db-" + name, ManagedDatabase.Engine.REDIS, "user",
+                        "secret", name, target);
+                    return target;
+                }
+            };
+            String failure = DatabaseBackups.backUpOrAlert(capped, "shop");
+            assertThat(failure).as("step 1: the run names the refusal technically").contains("max_dump_mb");
+
+            // 2. THE ASSERTION: the administrator reads the dump's size and the cap as sizes, never a hand-built count.
+            List<Row> items = Models.get(NotificationInboxModel.class).find().all();
+            assertThat(items).as("step 2: one inbox item").hasSize(1);
+            assertThat((String) items.get(0).get(NotificationInboxModel.BODY))
+                .as("step 2: the reason in words").isEqualTo("The scheduled backup of database shop failed: the dump is"
+                    + " 1.5 MB, more than the 1 MB the Max dump size setting allows; raise it to at least 1.5 MB."
+                    + " Nothing was transferred.");
+        } finally {
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.MAX_DUMP_MB, previous);
+        }
     }
 
     private static Microcopy lit(String text) {

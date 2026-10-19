@@ -9638,6 +9638,10 @@
     "text": "Fetching media '{$media}' failed: {$reason}",
     "scope": "violations"
   },
+  "media_too_large": {
+    "text": "The download is larger than the {$cap :bytes} an install medium may hold",
+    "scope": "violations"
+  },
   "media_in_use": {
     "text": "Media '{$media}' is attached to: {$instances}. Detach it there first.",
     "scope": "violations"
@@ -14605,6 +14609,14 @@
   },
   "database_backup_failed_body": {
     "text": "The scheduled backup of database {$name} failed: {$reason}",
+    "scope": "alert"
+  },
+  "dump_over_cap": {
+    "text": "the dump is {$size :bytes}, more than the {$cap :bytes} the Max dump size setting allows; raise it to at least {$size :bytes}. Nothing was transferred.",
+    "scope": "alert"
+  },
+  "dump_cut_off": {
+    "text": "the dump grew past the {$cap :bytes} the Max dump size setting allows and was cut off; its partial file was deleted.",
     "scope": "alert"
   },
   "isolation_contained_subject": {

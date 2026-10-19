@@ -480,11 +480,13 @@ class DnsListEditingTest extends HohenheimTestBase {
             .isEqualTo("dns-records-list-form");
 
         // 3. And it INVOKES: a register that only looked right would leave the operator
-        //    with the sole reachable copy of every action dead.
+        //    with the sole reachable copy of every action dead. The mint answers by refreshing
+        //    the tab, and the next step loads that tab itself: it waits for the refresh first.
         assertThat(DynamicDnsService.credentialFor(recordId))
             .as("step 3: the record is not dynamic yet").isNull();
-        click(compactMint);
-        page.waitForCondition(() -> DynamicDnsService.credentialFor(recordId) != null);
+        waitForNavigationRendered(() -> click(compactMint));
+        assertThat(DynamicDnsService.credentialFor(recordId))
+            .as("step 3: the compact copy minted the credential").isNotNull();
 
         // 4. FALSIFICATION: on a wide window the very same page shows the lane again and
         //    the compact trigger is gone -- so step 1 measured the register, not a

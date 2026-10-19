@@ -1,16 +1,19 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.server.database.DumpOverCap;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
-import be.elevenways.hohenheim.server.docker.DockerClient;
-import be.elevenways.hohenheim.server.docker.DockerTransport;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
+import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -26,72 +29,10 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * engine hand one tenant the other's archive, and left the last dump in /tmp.
  *
  * What this class cannot prove: no real redis or docker daemon is involved, so the
- * exec/archive plumbing itself stays with {@code ManagedDatabaseTest}'s live journeys.
+ * exec/archive plumbing itself stays with {@code ManagedDatabaseTest}'s live journeys. The dump cap's refusal is
+ * proved here too, before any transfer.
  */
 class RedisDumpMagicTest {
-
-    /**
-     * A docker whose exec "succeeds", answers {@code stat} with the scripted dump's size,
-     * records every command with its env, and serves the scripted bytes from any path.
-     */
-    private static final class ScriptedDocker extends DockerClient {
-
-        final List<List<String>> commands = new ArrayList<>();
-        final List<List<String>> envs = new ArrayList<>();
-        final List<String> fetched = new ArrayList<>();
-        private final byte[] dumpBytes;
-
-        ScriptedDocker(byte[] dumpBytes) {
-            super((DockerTransport) null);
-            this.dumpBytes = dumpBytes;
-        }
-
-        @Override
-        public ExecResult exec(String containerId, List<String> command) throws IOException {
-            return exec(containerId, command, List.of());
-        }
-
-        @Override
-        public ExecResult exec(String containerId, List<String> command,
-                               List<String> env) throws IOException {
-            this.commands.add(List.copyOf(command));
-            this.envs.add(List.copyOf(env));
-            if (!command.isEmpty() && command.get(0).equals("stat")) {
-                return new ExecResult(0, this.dumpBytes.length + "\n", "");
-            }
-            return new ExecResult(0, "", "");
-        }
-
-        @Override
-        public long getArchiveFileTo(String containerId, String path,
-                                     Path outFile, long maxBytes) throws IOException {
-            this.fetched.add(path);
-            Files.write(outFile, this.dumpBytes);
-            return this.dumpBytes.length;
-        }
-
-        /** The directory argument of the {@code mkdir -m 700 <dir>} this capture ran. */
-        String privateDirectory() {
-            for (List<String> command : this.commands) {
-                if (command.size() == 4 && command.get(0).equals("mkdir")) {
-                    return command.get(3);
-                }
-            }
-            return null;
-        }
-
-        /** Whether an {@code rm -rf} removed the directory (and the legacy fixed dump paths). */
-        boolean removed(String directory) {
-            for (List<String> command : this.commands) {
-                if (command.size() > 2 && command.get(0).equals("rm") && command.contains(directory)
-                        && command.contains("/tmp/hohenheim-dump.rdb")
-                        && command.contains("/tmp/hohenheim-dump.archive")) {
-                    return true;
-                }
-            }
-            return false;
-        }
-    }
 
     @Test
     void aDumpThatIsNotAnRdbFailsAtCaptureEvenWhenRedisCliExitsZero() throws IOException {
@@ -101,7 +42,7 @@ class RedisDumpMagicTest {
         // 1. redis-cli "succeeded" (exit 0) but the file it left holds an error reply:
         //    the capture must refuse NOW, naming the magic, never ship the file.
         Path bad = staging.resolve("bad.rdb");
-        ScriptedDocker failingDocker = new ScriptedDocker(
+        ScriptedDumpDocker failingDocker = new ScriptedDumpDocker(
             "NOAUTH Authentication required.\n".getBytes(StandardCharsets.US_ASCII));
         Throwable refusal = catchThrowable(() -> new ManagedDatabase(failingDocker)
             .backupToFile("db-handle", ManagedDatabase.Engine.REDIS, "user", "secret", "db", bad));
@@ -114,7 +55,7 @@ class RedisDumpMagicTest {
         // 2. A genuine RDB header passes and lands byte-for-byte.
         Path good = staging.resolve("good.rdb");
         byte[] genuine = "REDIS0011payload".getBytes(StandardCharsets.US_ASCII);
-        new ManagedDatabase(new ScriptedDocker(genuine))
+        new ManagedDatabase(new ScriptedDumpDocker(genuine))
             .backupToFile("db-handle", ManagedDatabase.Engine.REDIS, "user", "secret",
                 "db", good);
         assertThat(Files.readAllBytes(good))
@@ -130,7 +71,7 @@ class RedisDumpMagicTest {
 
         // 1. A redis dump creates a 0700 directory with a random name under /tmp, dumps
         //    INSIDE it, fetches from inside it, and removes it.
-        ScriptedDocker first = new ScriptedDocker(rdb);
+        ScriptedDumpDocker first = new ScriptedDumpDocker(rdb);
         new ManagedDatabase(first).backupToFile("engine", ManagedDatabase.Engine.REDIS,
             "user", "secret", "db", staging.resolve("one.rdb"));
         String firstDirectory = first.privateDirectory();
@@ -148,7 +89,7 @@ class RedisDumpMagicTest {
 
         // 2. A second, overlapping dump on the SAME engine gets a different directory: the
         //    fixed path is what handed one tenant another's archive.
-        ScriptedDocker second = new ScriptedDocker(rdb);
+        ScriptedDumpDocker second = new ScriptedDumpDocker(rdb);
         new ManagedDatabase(second).backupToFile("engine", ManagedDatabase.Engine.REDIS,
             "user", "secret", "db", staging.resolve("two.rdb"));
         assertThat(second.privateDirectory())
@@ -156,7 +97,7 @@ class RedisDumpMagicTest {
             .isNotEqualTo(firstDirectory);
 
         // 3. A FAILED capture still removes its directory.
-        ScriptedDocker failing = new ScriptedDocker("NOAUTH".getBytes(StandardCharsets.US_ASCII));
+        ScriptedDumpDocker failing = new ScriptedDumpDocker("NOAUTH".getBytes(StandardCharsets.US_ASCII));
         catchThrowable(() -> new ManagedDatabase(failing).backupToFile("engine",
             ManagedDatabase.Engine.REDIS, "user", "secret", "db", staging.resolve("three.rdb")));
         assertThat(failing.removed(failing.privateDirectory()))
@@ -165,7 +106,7 @@ class RedisDumpMagicTest {
 
         // 4. mongodump: same private directory, and the password never rides the argv --
         //    it reaches mongodump through a --config file written from the env.
-        ScriptedDocker mongo = new ScriptedDocker("archive".getBytes(StandardCharsets.US_ASCII));
+        ScriptedDumpDocker mongo = new ScriptedDumpDocker("archive".getBytes(StandardCharsets.US_ASCII));
         new ManagedDatabase(mongo).backupToFile("engine", ManagedDatabase.Engine.MONGO,
             "root", "p4ssw0rd-secret", "tenantdb", staging.resolve("four.archive"));
         String mongoDirectory = mongo.privateDirectory();
@@ -183,5 +124,43 @@ class RedisDumpMagicTest {
         assertThat(mongo.removed(mongoDirectory))
             .as("step 4: and the directory, config file included, is removed")
             .isTrue();
+    }
+
+    /**
+     * A dump sized over {@code database.max_dump_mb} before any transfer is refused by name: its technical message
+     * names the setting and the value to raise it to, and its words for the operator carry both sizes as sizes.
+     */
+    @Test
+    void anOverCapDumpIsRefusedWithItsSizesWordedForTheOperator() throws IOException {
+        Path staging = Files.createTempDirectory("hohenheim-dump-cap");
+        staging.toFile().deleteOnExit();
+        Integer previous = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.MAX_DUMP_MB);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.MAX_DUMP_MB, 1);
+        try {
+            // 1. A dump of one and a half megabytes against a one-megabyte cap is refused before it is fetched.
+            ScriptedDumpDocker docker = new ScriptedDumpDocker(new byte[(int) (ByteUnit.MEGABYTE.factor() * 3 / 2)]);
+            Throwable refusal = catchThrowable(() -> new ManagedDatabase(docker).backupToFile("db-handle",
+                ManagedDatabase.Engine.REDIS, "user", "secret", "db", staging.resolve("big.rdb")));
+            assertThat(refusal).as("step 1: refused, naming the setting and the value that admits the dump")
+                .isInstanceOf(IOException.class).hasMessageContaining("database.max_dump_mb")
+                .hasMessageContaining("at least 2").hasMessageContaining("nothing was transferred");
+            assertThat(docker.fetched).as("step 1: nothing was fetched").isEmpty();
+
+            // 2. THE ASSERTION: the operator's words carry the dump's size and the cap as sizes, in their language.
+            Microcopy words = DumpOverCap.wordsOf(refusal);
+            assertThat(words).as("step 2: the refusal carries words for the operator").isNotNull();
+            ShippedCatalogs catalogs = new ShippedCatalogs();
+            assertThat(words.resolve(LocaleChain.ofTags("en"), catalogs)).as("step 2: in English")
+                .isEqualTo("the dump is 1.5 MB, more than the 1 MB the Max dump size setting allows; raise it to at"
+                    + " least 1.5 MB. Nothing was transferred.");
+            assertThat(words.resolve(LocaleChain.ofTags("nl"), catalogs)).as("step 2: in Dutch")
+                .contains("Max. dumpgrootte").contains(" MB");
+
+            // 3. The technical message spells no size by hand: a size is worded for its reader.
+            assertThat(refusal.getMessage()).as("step 3: no hand-built size").doesNotContain("MB")
+                .doesNotContain("bytes");
+        } finally {
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.MAX_DUMP_MB, previous);
+        }
     }
 }

@@ -9638,6 +9638,10 @@
     "text": "Ophalen van media '{$media}' is mislukt: {$reason}",
     "scope": "violations"
   },
+  "media_too_large": {
+    "text": "De download is groter dan de {$cap :bytes} die een installatiemedium mag bevatten",
+    "scope": "violations"
+  },
   "media_in_use": {
     "text": "Media '{$media}' is aangekoppeld aan: {$instances}. Koppel het daar eerst af.",
     "scope": "violations"
@@ -14605,6 +14609,14 @@
   },
   "database_backup_failed_body": {
     "text": "De geplande back-up van database {$name} is mislukt: {$reason}",
+    "scope": "alert"
+  },
+  "dump_over_cap": {
+    "text": "de dump is {$size :bytes}, meer dan de {$cap :bytes} die de instelling Max. dumpgrootte toestaat; verhoog die tot minstens {$size :bytes}. Er is niets overgedragen.",
+    "scope": "alert"
+  },
+  "dump_cut_off": {
+    "text": "de dump werd groter dan de {$cap :bytes} die de instelling Max. dumpgrootte toestaat en is afgebroken; het gedeeltelijke bestand is verwijderd.",
     "scope": "alert"
   },
   "isolation_contained_subject": {

@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hawkeye.common.Hawkeye;
 import be.elevenways.hawkeye.common.render.RenderBlock;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
@@ -11,6 +10,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.text.HtmlEscape;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.setting.ContentLocales;
+import be.elevenways.zenit.common.result.RenderDecorators;
 import be.elevenways.zenit.common.setting.SettingDefinition;
 import be.elevenways.zenit.server.http.AcceptLanguageMiddleware;
 import io.undertow.server.HttpServerExchange;
@@ -38,10 +38,8 @@ public final class ErrorPages {
 
     static void send404(HttpServerExchange exchange, String hostname) {
         LocaleChain locales = localesOf(exchange);
-        String html = render(locales, "404", HohenheimMicrocopy.PROXY_ERROR.of("not_found_title")
-            .resolve(locales, Zenit.getMessageResolver()),
-            override(HohenheimSettings.Proxy.NOT_FOUND_MESSAGE, locales, "not_found_message"),
-            hostname);
+        String html = render(locales, "404", HohenheimMicrocopy.PROXY_ERROR.of("not_found_title"),
+            override(HohenheimSettings.Proxy.NOT_FOUND_MESSAGE, "not_found_message"), hostname);
 
         exchange.setStatusCode(404);
         exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/html; charset=UTF-8");
@@ -51,12 +49,8 @@ public final class ErrorPages {
     /** 503 for a dev-namespace subdomain with no live registration. */
     public static void sendDevOffline(HttpServerExchange exchange, String name) {
         LocaleChain locales = localesOf(exchange);
-        String html = render(locales, "503", HohenheimMicrocopy.PROXY_ERROR.of("dev_offline_title")
-            .resolve(locales, Zenit.getMessageResolver()),
-            HohenheimMicrocopy.PROXY_ERROR.of("dev_offline_message")
-                .withArg("name", name)
-                .resolve(locales, Zenit.getMessageResolver()),
-            name);
+        String html = render(locales, "503", HohenheimMicrocopy.PROXY_ERROR.of("dev_offline_title"),
+            HohenheimMicrocopy.PROXY_ERROR.of("dev_offline_message").withArg("name", name), name);
 
         exchange.setStatusCode(503);
         exchange.getResponseHeaders().put(Headers.RETRY_AFTER, "5");
@@ -67,10 +61,8 @@ public final class ErrorPages {
     /** 503 for a force-SSL route while HTTPS termination is down: refuse, never serve cleartext. */
     static void sendHttpsRequired(HttpServerExchange exchange, String hostname) {
         LocaleChain locales = localesOf(exchange);
-        String html = render(locales, "503", HohenheimMicrocopy.PROXY_ERROR.of("https_required_title")
-            .resolve(locales, Zenit.getMessageResolver()),
-            HohenheimMicrocopy.PROXY_ERROR.of("https_required_message")
-                .resolve(locales, Zenit.getMessageResolver()), hostname);
+        String html = render(locales, "503", HohenheimMicrocopy.PROXY_ERROR.of("https_required_title"),
+            HohenheimMicrocopy.PROXY_ERROR.of("https_required_message"), hostname);
 
         exchange.setStatusCode(503);
         exchange.getResponseHeaders().put(Headers.RETRY_AFTER, "30");
@@ -86,11 +78,8 @@ public final class ErrorPages {
      */
     static void send502(HttpServerExchange exchange) {
         LocaleChain locales = localesOf(exchange);
-        String html = render(locales, "502", HohenheimMicrocopy.PROXY_ERROR.of("bad_gateway_title")
-            .resolve(locales, Zenit.getMessageResolver()),
-            override(HohenheimSettings.Proxy.UNREACHABLE_MESSAGE, locales,
-                "unreachable_message"),
-            null);
+        String html = render(locales, "502", HohenheimMicrocopy.PROXY_ERROR.of("bad_gateway_title"),
+            override(HohenheimSettings.Proxy.UNREACHABLE_MESSAGE, "unreachable_message"), null);
 
         exchange.setStatusCode(502);
         exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/html; charset=UTF-8");
@@ -106,36 +95,35 @@ public final class ErrorPages {
             exchange.getRequestHeaders().getFirst(Headers.ACCEPT_LANGUAGE)));
     }
 
-    /** The operator's own copy when they set one, else the localized default. */
-    private static String override(SettingDefinition<String> setting, LocaleChain locales,
-                                  String key) {
+    /** The operator's own copy when they set one, as their literal words, else the localized default. */
+    private static Microcopy override(SettingDefinition<String> setting, String key) {
         String configured = Zenit.SETTINGS_VALUES.getValue(setting);
-        return configured != null && !configured.isBlank() ? configured : HohenheimMicrocopy.PROXY_ERROR.of(key)
-            .resolve(locales, Zenit.getMessageResolver());
+        return configured != null && !configured.isBlank() ? Microcopy.literal(configured)
+            : HohenheimMicrocopy.PROXY_ERROR.of(key);
     }
 
-    private static String render(LocaleChain locales, String statusCode, String title,
-                                 String message, String hostname) {
+    /** The page through zenit's server render lifecycle, its words resolved inside the render. */
+    private static String render(LocaleChain locales, String statusCode, Microcopy title,
+                                 Microcopy message, String hostname) {
         try {
-            Hawkeye hawkeye = Zenit.getHawkeye();
-            var engine = hawkeye.createRenderEngine();
-
             Map<String, Object> vars = new HashMap<>();
             vars.put("statusCode", statusCode);
             vars.put("title", title);
-            vars.put("message", message != null ? message : "");
+            vars.put("message", message);
             vars.put("hostname", hostname != null ? hostname : "");
 
-            // AIDEV-NOTE: this is an alternate server-side render path (no Conduit), so it
-            // must stamp what RenderTemplateResult.performRender stamps -- the template's
-            // {% Locales.current() %} in <html lang> reads the chain off this context, and the
-            // reader's zone is the viewer's stamp, which a proxied site's visitor never carries:
-            // unknown, so the reader takes the office zone as not the visitor's own.
-            RenderBlock block = engine.render(ERROR_TEMPLATE, vars, ctx -> {
-                ctx.setLocales(locales);
-                ctx.setMessageResolver(Zenit.getMessageResolver());
-                ctx.setReaderZone(null);
-            });
+            // AIDEV-NOTE: this render has no Conduit (the proxy answers before any Zenit request), so its setup stamps
+            // what a request render's does: the template's Locales.current() for the html lang reads the chain off
+            // the context, and the reader's zone is the viewer's stamp, which a proxied site's visitor never carries
+            // (unknown, so the reader takes the office zone as not the visitor's own). RenderDecorators.render runs
+            // the decorators around it, so the catalog validates once for the page; a word resolved before the
+            // render would validate on its own, which is why title and message reach the template unresolved.
+            RenderBlock block = RenderDecorators.render(Zenit.getHawkeye().createRenderEngine(), ERROR_TEMPLATE, vars,
+                ctx -> {
+                    ctx.setLocales(locales);
+                    ctx.setMessageResolver(Zenit.getMessageResolver());
+                    ctx.setReaderZone(null);
+                });
             if (block != null) {
                 return block.getAsHtml();
             }
@@ -143,7 +131,8 @@ public final class ErrorPages {
             // Fall through to hardcoded fallback
         }
 
-        return fallback(locales, statusCode, title, message);
+        return fallback(locales, statusCode, title.resolve(locales, Zenit.getMessageResolver()),
+            message.resolve(locales, Zenit.getMessageResolver()));
     }
 
     private static String fallback(LocaleChain locales, String statusCode, String title,

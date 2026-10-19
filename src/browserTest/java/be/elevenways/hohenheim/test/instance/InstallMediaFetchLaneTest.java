@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.instance.InstallMediaView;
 import be.elevenways.hohenheim.model.InstallMediaFetchModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.cms.ServerMediaTab;
+import be.elevenways.hohenheim.server.instance.InstallMedia;
 import be.elevenways.hohenheim.server.instance.InstallMediaFetches;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.testsupport.time.Poll;
@@ -147,6 +148,14 @@ class InstallMediaFetchLaneTest extends HohenheimTestBase {
             .as("step 1: with the transfer's reason").isEqualTo("download answered HTTP 404");
         assertThat(adminGet("/admin/servers/" + hostId + "/page/install-media").body())
             .as("step 1: the reason reaches the tab").contains("download answered HTTP 404");
+
+        // 1b. A download past the install-media cap ends FAILED in the refusal's own words, its cap worded as a size.
+        int tooLargeId = InstallMediaFetches.start(host, PREFIX + "huge", progress -> {
+            throw InstallMedia.downloadTooLarge();
+        });
+        assertThat((String) awaitEnding(tooLargeId).get(InstallMediaFetchModel.ERROR))
+            .as("step 1b: the cap's refusal reads as its words")
+            .isEqualTo("The download is larger than the 16 GB an install medium may hold");
 
         // 2. Two fetches in flight are the installation-wide cap: a third is refused.
         CountDownLatch release = new CountDownLatch(1);

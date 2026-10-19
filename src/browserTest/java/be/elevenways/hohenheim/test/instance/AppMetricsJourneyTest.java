@@ -17,14 +17,18 @@ import be.elevenways.zenit.common.orm.generation.ModelGenerationModel;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.http.SessionCookies;
 import be.elevenways.zenit.test.support.DatasourceProbe;
+import be.elevenways.zenit.microcopy.MicrocopyEndpoints;
+import be.elevenways.zenit.microcopy.server.TranslationModel;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Route;
+import com.microsoft.playwright.Request;
 import com.microsoft.playwright.options.BoundingBox;
 import com.microsoft.playwright.options.Cookie;
 import com.microsoft.playwright.options.WaitUntilState;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestReporter;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -32,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -72,7 +77,7 @@ class AppMetricsJourneyTest extends HohenheimTestBase {
     }
 
     @Test
-    void theMetricsTabPlotsChartSizedSeriesAndReadsEveryFigureInWords() throws Exception {
+    void theMetricsTabPlotsChartSizedSeriesAndReadsEveryFigureInWords(TestReporter reporter) throws Exception {
         List<InstanceStats.Sample> seen = new CopyOnWriteArrayList<>();
         InstanceStats.Subscription viewer = InstanceStats.subscribe(instanceId, seen::add);
         Duration offset = Now.offset();
@@ -119,20 +124,70 @@ class AppMetricsJourneyTest extends HohenheimTestBase {
             // 4. A sample arriving after the render updates the words through the live link: 200 KB more received
             //    reads as the rate between the two samples' own moments (the seconds between them include the page
             //    load), in the size words a rate takes. A push is the hub's frame on the link, no server render, so
-            //    it validates no translation.
+            //    it validates and reads no translation: a word the page draws for the first time (a rate in KB/s) is
+            //    the BROWSER's to fetch. Its key fetches are held at the wire, so every read before they are released
+            //    is the push's own. The words this test expects are resolved only after that count: resolved outside
+            //    a render they validate once per key they ask (the rate's message, the size and its unit word), and
+            //    counted inside the window they read as the push's.
             Now.setOffset(Now.offset().plus(Duration.ofSeconds(1)));
             DatasourceProbe probe = DatasourceProbe.on((SqlDatasource) Models.get(InstanceModel.class)
                 .getResolvedDatasource());
+            Predicate<String> keyFetch = url -> url.contains(MicrocopyEndpoints.FIND_RECORDS_BATCH.toUrl());
+            List<Route> heldFetches = new CopyOnWriteArrayList<>();
+            List<String> keyFetches = new CopyOnWriteArrayList<>();
+            Consumer<Request> countFetches = request -> {
+                if (keyFetch.test(request.url())) {
+                    keyFetches.add(request.url());
+                }
+            };
+            page.onRequest(countFetches);
+            page.route(keyFetch, heldFetches::add);
+            String shown = nowText("rx");
             probe.reset();
             stream.push(sample(1_300_000_000L, 11_200_000_000L, 200_700, 1_000) + "\n");
             Poll.until("sample 4 reached the ring", WAIT, () -> seen.size() >= 4);
+            page.waitForCondition(() -> !heldFetches.isEmpty() || !nowText("rx").equals(shown),
+                new Page.WaitForConditionOptions().setTimeout(WAIT.toMillis()));
+            List<Integer> pushReads = List.of(probe.queriesAgainst(TranslationModel.MODEL_ID),
+                probe.queriesAgainst(ModelGenerationModel.MODEL_ID));
+            page.unroute(keyFetch);
+            heldFetches.forEach(Route::resume);
+            page.waitForCondition(() -> !nowText("rx").isEmpty() && !nowText("rx").equals(shown),
+                new Page.WaitForConditionOptions().setTimeout(WAIT.toMillis()));
+            List<Integer> fetchReads = List.of(probe.queriesAgainst(TranslationModel.MODEL_ID),
+                probe.queriesAgainst(ModelGenerationModel.MODEL_ID));
+            probe.reset();
             String expected = rateWords(seen.get(2), seen.get(3));
+            List<Integer> expectationReads = List.of(probe.queriesAgainst(TranslationModel.MODEL_ID),
+                probe.queriesAgainst(ModelGenerationModel.MODEL_ID));
             page.waitForFunction("w => document.querySelector(\"[data-stats-now='rx']\").textContent.trim() === w",
                 expected, new Page.WaitForFunctionOptions().setTimeout(WAIT.toMillis()));
             assertThat(nowText("rx")).as("step 4: the received rate updated live").isEqualTo(expected)
                 .endsWith(" KB/s");
-            assertThat(probe.queriesAgainst(ModelGenerationModel.MODEL_ID))
-                .as("step 4: a live push validates no translation").isZero();
+            reporter.publishEntry(Map.of("push_reads", pushReads.toString(),
+                "push_and_key_fetch_reads", fetchReads.toString(),
+                "browser_key_fetches", String.valueOf(keyFetches.size()),
+                "expected_words_reads", expectationReads.toString()));
+            assertThat(pushReads).as("step 4: THE ASSERTION, a live push reads and validates no translation "
+                + "(translations, generations; key fetches %s, the test's own expected words %s)",
+                keyFetches.size(), expectationReads).containsExactly(0, 0);
+
+            // 4b. A second sample in the same units, a faster rate: the page holds every word it draws, so neither the
+            //     push nor the browser reads a translation.
+            Now.setOffset(Now.offset().plus(Duration.ofSeconds(1)));
+            keyFetches.clear();
+            probe.reset();
+            stream.push(sample(1_400_000_000L, 11_600_000_000L, 500_700, 1_200) + "\n");
+            Poll.until("sample 5 reached the ring", WAIT, () -> seen.size() >= 5);
+            page.waitForCondition(() -> !nowText("rx").isEmpty() && !nowText("rx").equals(expected),
+                new Page.WaitForConditionOptions().setTimeout(WAIT.toMillis()));
+            List<Integer> warmReads = List.of(probe.queriesAgainst(TranslationModel.MODEL_ID),
+                probe.queriesAgainst(ModelGenerationModel.MODEL_ID), keyFetches.size());
+            page.offRequest(countFetches);
+            String again = rateWords(seen.get(3), seen.get(4));
+            assertThat(nowText("rx")).as("step 4b: the rate updated again").isEqualTo(again);
+            assertThat(warmReads).as("step 4b: a push in words the page holds reads no translation, validates none "
+                + "and fetches no key").containsExactly(0, 0, 0);
         } finally {
             viewer.close();
             Now.setOffset(offset);

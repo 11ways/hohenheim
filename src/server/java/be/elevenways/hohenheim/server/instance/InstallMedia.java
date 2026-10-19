@@ -63,6 +63,11 @@ public final class InstallMedia {
      */
     public static final long MAX_ISO_BYTES = ByteUnit.GIGABYTE.bytes(16);
 
+    /** @return the refusal of a download larger than {@link #MAX_ISO_BYTES}, the cap worded for its reader */
+    public static @NonNull Violations downloadTooLarge() {
+        return Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("media_too_large").withArg("cap", MAX_ISO_BYTES));
+    }
+
     private static final UrlPolicy FETCH_POLICY = UrlPolicy.builder()
         .schemes("http", "https")
         .build();
@@ -368,7 +373,7 @@ public final class InstallMedia {
             outcome = FETCHER.fetch(FetchRequest.get(url), sink);
         }
         if (outcome instanceof FetchOutcome.Failed failed && failed.kind() == FetchFailure.TOO_LARGE) {
-            throw new IOException("download exceeds the " + (MAX_ISO_BYTES / ByteUnit.GIGABYTE.factor()) + " GiB install-media cap");
+            throw downloadTooLarge();
         }
         outcome.requireSuccess("download");
         if (sink.total == 0) {
