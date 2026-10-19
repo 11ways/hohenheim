@@ -118,6 +118,29 @@ class DnsZoneApiTest extends HohenheimTestBase {
 
     // -- the journeys ----------------------------------------------------------
 
+    /** The nameservers setting keeps canonical hostnames of two labels or more and refuses every other name. */
+    @Test
+    void theNameserversSettingKeepsHostnamesAndRefusesTheRest() {
+        // 1. Names are trimmed, lowercased, stripped of the root dot and listed once.
+        assertThat(HohenheimSettings.Dns.NAMESERVERS.coerce(List.of(" NS1.Example.be. ", "ns2.example.be",
+            "ns1.example.be", "")).value()).as("step 1: canonical and deduplicated")
+            .containsExactly("ns1.example.be", "ns2.example.be");
+
+        // 2. A single label, an edge hyphen, an empty or overlong label, a glob or a foreign character is refused.
+        for (String refused : List.of("localhost", "-ns.example.be", "ns-.example.be", "ns..example.be",
+                "a".repeat(64) + ".example.be", "*.example.be", "ns_1.example.be", "ns1.example.be:53")) {
+            assertThat(HohenheimSettings.Dns.NAMESERVERS.coerce(List.of(refused)).accepted())
+                .as("step 2: %s is refused", refused).isFalse();
+        }
+
+        // 3. A label of 63 characters is the longest one kept, and a non-list value is refused.
+        String longest = "a".repeat(63) + ".example.be";
+        assertThat(HohenheimSettings.Dns.NAMESERVERS.coerce(List.of(longest)).value())
+            .as("step 3: a 63-character label").containsExactly(longest);
+        assertThat(HohenheimSettings.Dns.NAMESERVERS.coerce("ns1.example.be").accepted())
+            .as("step 3: a bare string is no list").isFalse();
+    }
+
     /** A created primary zone carries the declared nameservers; the declared set is a yardstick. */
     @Test
     void aCreatedPrimaryZoneIsSeededWithTheDeclaredNameservers() throws Exception {

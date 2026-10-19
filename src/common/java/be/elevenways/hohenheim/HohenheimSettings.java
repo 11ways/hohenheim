@@ -27,7 +27,6 @@ import be.elevenways.hohenheim.net.Hostnames;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.regex.Pattern;
 
 /**
  * All Hohenheim configuration settings, organized by group.
@@ -440,9 +439,6 @@ public class HohenheimSettings {
                 + "the other side creates. Blank uses the system hostname")
             .build();
 
-        private static final Pattern NAMESERVER_NAME = Pattern.compile(
-            "^(?!-)[a-z0-9-]{1,63}(?<!-)(\\.(?!-)[a-z0-9-]{1,63}(?<!-))+$");
-
         public static final SettingDefinition<List<String>> NAMESERVERS = GROUP
             .buildStringListSetting("nameservers")
             .defaultValue(List.of())
@@ -469,7 +465,9 @@ public class HohenheimSettings {
                 if (name.isEmpty()) {
                     continue;
                 }
-                if (!NAMESERVER_NAME.matcher(name).matches()) {
+                // AIDEV-NOTE: Hostnames' one grammar, never a Pattern field: this class is common, and a regex
+                // compiled in its static init was translated by TeaVM on every browser page load.
+                if (!Hostnames.isValidHostname(name)) {
                     return SettingDefinition.CoercionResult.rejected();
                 }
                 if (!result.contains(name)) {
