@@ -1,8 +1,9 @@
 package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.thread.ExecutionContext;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.protoblast.common.time.Pace;
 import be.elevenways.protoblast.common.util.Closeables;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -25,7 +26,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * AIDEV-NOTE: UDP has no connection to accept or refuse, so the router is asked once per NEW client address (its
  * access list and the upstream's address); a refused client's datagrams are dropped one by one without a session.
  * A session's own socket is what tells two clients' answers apart, the shape every UDP proxy (nginx stream, npmplus)
- * uses. The upstream sees the proxy's address, never the client's.
+ * uses. The upstream sees the proxy's address, never the client's. Its runner (the receive loop, one answer thread per
+ * session and the idle sweep) starts detached, so no session runs as whoever started the stream, and close() stops it.
  */
 final class PublicUdpRelay implements AutoCloseable {
 
@@ -48,6 +50,7 @@ final class PublicUdpRelay implements AutoCloseable {
     private final Map<SocketAddress, Session> sessions = new ConcurrentHashMap<>();
     private volatile @Nullable DatagramChannel channel;
     private volatile boolean running;
+    private volatile @Nullable JobRunner threads;
 
     PublicUdpRelay(String bindAddress, int port, Router router) {
         this.bindAddress = bindAddress;
@@ -67,11 +70,15 @@ final class PublicUdpRelay implements AutoCloseable {
         }
         this.channel = created;
         this.running = true;
-        Thread.ofPlatform().daemon(true).name("stream-udp-" + this.port).start(() -> receiveLoop(created));
-        Thread.ofVirtual().name("stream-udp-sweep-" + this.port).start(this::sweepLoop);
+        JobRunner runner = JobRunner.create("stream-udp-" + this.port);
+        this.threads = runner;
+        ExecutionContext.detached().run(() -> {
+            runner.startBlockingThread(() -> receiveLoop(created, runner));
+            runner.scheduleRepeating(this::sweep, SWEEP.toMillis());
+        });
     }
 
-    private void receiveLoop(DatagramChannel public_) {
+    private void receiveLoop(DatagramChannel public_, JobRunner runner) {
         ByteBuffer buffer = ByteBuffer.allocate(MAX_DATAGRAM);
         while (this.running) {
             buffer.clear();
@@ -89,7 +96,7 @@ final class PublicUdpRelay implements AutoCloseable {
             Session session = this.sessions.get(client);
             try {
                 if (session == null) {
-                    session = open(public_, client);
+                    session = open(public_, client, runner);
                     if (session == null) continue;
                 }
                 session.lastSeen().set(Now.millis());
@@ -102,7 +109,8 @@ final class PublicUdpRelay implements AutoCloseable {
     }
 
     /** @return the new client's session, or null when it is refused or the relay is full */
-    private @Nullable Session open(DatagramChannel public_, InetSocketAddress client) throws IOException {
+    private @Nullable Session open(DatagramChannel public_, InetSocketAddress client, JobRunner runner)
+            throws IOException {
         if (this.sessions.size() >= MAX_SESSIONS) return null;
         InetSocketAddress upstream = this.router.upstreamFor(client);
         if (upstream == null) return null;
@@ -115,7 +123,13 @@ final class PublicUdpRelay implements AutoCloseable {
         }
         Session session = new Session(towards, new AtomicLong(Now.millis()));
         this.sessions.put(client, session);
-        Thread.ofVirtual().name("stream-udp-back-" + this.port).start(() -> answerLoop(public_, client, session));
+        try {
+            runner.startThread(() -> answerLoop(public_, client, session));
+        } catch (IllegalStateException stopped) {
+            this.sessions.remove(client, session);
+            Closeables.closeQuietly(towards);
+            throw new IOException("the stream relay on port " + this.port + " is closing", stopped);
+        }
         return session;
     }
 
@@ -138,21 +152,15 @@ final class PublicUdpRelay implements AutoCloseable {
         }
     }
 
-    private void sweepLoop() {
-        while (this.running) {
-            try {
-                Pace.sleep(SWEEP);
-            } catch (InterruptedException interrupted) {
-                return;
+    /** Closes every session idle for longer than {@link #IDLE}; runs every {@link #SWEEP}. */
+    private void sweep() {
+        long oldest = Now.millis() - IDLE.toMillis();
+        this.sessions.forEach((client, session) -> {
+            if (session.lastSeen().get() < oldest) {
+                this.sessions.remove(client, session);
+                Closeables.closeQuietly(session.upstream());
             }
-            long oldest = Now.millis() - IDLE.toMillis();
-            this.sessions.forEach((client, session) -> {
-                if (session.lastSeen().get() < oldest) {
-                    this.sessions.remove(client, session);
-                    Closeables.closeQuietly(session.upstream());
-                }
-            });
-        }
+        });
     }
 
     /** @return the bound public address, null before start or after close */
@@ -177,5 +185,10 @@ final class PublicUdpRelay implements AutoCloseable {
         this.channel = null;
         this.sessions.values().forEach(session -> Closeables.closeQuietly(session.upstream()));
         this.sessions.clear();
+        JobRunner runner = this.threads;
+        this.threads = null;
+        if (runner != null) {
+            runner.shutdownNow();
+        }
     }
 }

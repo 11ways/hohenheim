@@ -4,12 +4,16 @@ import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.PinnedImages;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.server.process.ProcessOutcome;
+import be.elevenways.protoblast.server.process.Subprocess;
+import be.elevenways.protoblast.server.process.Termination;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.time.Duration;
 import java.security.NoSuchAlgorithmException;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -191,21 +195,13 @@ public final class TestImages {
     }
 
     private static void run(Path directory, List<String> command) throws IOException {
-        try {
-            Process process = new ProcessBuilder(command).directory(directory.toFile())
-                .redirectErrorStream(true).start();
-            byte[] output = process.getInputStream().readAllBytes();
-            if (!process.waitFor(60, java.util.concurrent.TimeUnit.SECONDS)) {
-                process.destroyForcibly();
-                throw new IOException("tar timed out");
-            }
-            if (process.exitValue() != 0) {
-                throw new IOException("tar failed (exit " + process.exitValue() + "): "
-                    + new String(output, StandardCharsets.UTF_8));
-            }
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            throw new IOException("tar interrupted");
+        ProcessOutcome outcome = Subprocess.of(command).directory(directory).mergeStderr()
+            .timeout(Duration.ofSeconds(60)).runChecked();
+        if (outcome.termination() == Termination.TIMED_OUT) {
+            throw new IOException("tar timed out");
+        }
+        if (outcome.exitCode() != 0) {
+            throw new IOException("tar failed (exit " + outcome.exitCode() + "): " + outcome.stdout().text());
         }
     }
 

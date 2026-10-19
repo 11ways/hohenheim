@@ -28,6 +28,8 @@ import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.server.process.ProcessOutcome;
+import be.elevenways.protoblast.server.process.Subprocess;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -393,17 +395,11 @@ class PreviewDeploymentLiveTest {
     }
 
     private static String gitIn(Path repo, String... args) throws Exception {
-        String[] command = new String[args.length + 1];
-        command[0] = "git";
-        System.arraycopy(args, 0, command, 1, args.length);
-        Process process = new ProcessBuilder(command)
-            .directory(repo.toFile())
-            .redirectErrorStream(true)
-            .start();
-        String output = new String(process.getInputStream().readAllBytes());
-        if (!process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS)
-                || process.exitValue() != 0) {
-            throw new AssertionError("git " + String.join(" ", args) + " failed: " + output);
+        ProcessOutcome outcome = Subprocess.of("git", args).directory(repo).timeout(Duration.ofSeconds(30))
+            .mergeStderr().run();
+        String output = outcome.stdout().text();
+        if (!outcome.succeeded()) {
+            throw new AssertionError("git " + String.join(" ", args) + " failed: " + outcome.describe());
         }
         return output;
     }

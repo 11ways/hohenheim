@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.network;
 
 import be.elevenways.hohenheim.server.security.NftRunner;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
+import be.elevenways.protoblast.server.process.RunningProcess;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -30,7 +31,7 @@ public final class PrivateNetns implements AutoCloseable {
 
     private static final long COMMAND_TIMEOUT_SECONDS = 20;
 
-    private final List<Process> holders = new ArrayList<>();
+    private final List<RunningProcess> holders = new ArrayList<>();
     private final long hostPid;
 
     /**
@@ -137,7 +138,7 @@ public final class PrivateNetns implements AutoCloseable {
 
     /** Start a background TCP listener inside a nested namespace and leave it running. */
     public void listen(long pid, int port) throws IOException {
-        Process listener = hold(enter(pid, List.of("python3", "-c",
+        RunningProcess listener = hold(enter(pid, List.of("python3", "-c",
             "import socket,time\n"
             + "s = socket.socket(socket.AF_INET6)\n"
             + "s.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)\n"
@@ -150,7 +151,7 @@ public final class PrivateNetns implements AutoCloseable {
 
     /** Start a background TCP listener in the fixture's own (the "host") namespace. */
     public void listenInHost(int port) throws IOException {
-        Process listener = hold(enter(hostPid, List.of("python3", "-c",
+        RunningProcess listener = hold(enter(hostPid, List.of("python3", "-c",
             "import socket,time\n"
             + "s = socket.socket(socket.AF_INET6)\n"
             + "s.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)\n"
@@ -163,8 +164,8 @@ public final class PrivateNetns implements AutoCloseable {
 
     @Override
     public void close() {
-        for (Process holder : this.holders) {
-            holder.destroyForcibly();
+        for (RunningProcess holder : this.holders) {
+            holder.stop();
         }
     }
 
@@ -174,8 +175,8 @@ public final class PrivateNetns implements AutoCloseable {
      * AIDEV-NOTE: unshare and nsenter exec their command in the SAME process, so the pid we get is
      * the pid whose {@code /proc/<pid>/ns/*} the next nsenter must target.
      */
-    private Process hold(List<String> argv, String program) throws IOException {
-        Process process = NamespaceHolders.start(argv, program);
+    private RunningProcess hold(List<String> argv, String program) throws IOException {
+        RunningProcess process = NamespaceHolders.start(argv, program);
         this.holders.add(process);
         return process;
     }

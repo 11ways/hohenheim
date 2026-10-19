@@ -17,6 +17,8 @@ import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.protoblast.server.process.ProcessOutcome;
+import be.elevenways.protoblast.server.process.Subprocess;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -25,10 +27,10 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -373,20 +375,17 @@ class LiveRemoteHostTest {
         try {
             directory = Files.createTempDirectory("hohenheim-foreign-key");
             Path key = directory.resolve("decoy");
-            Process process = new ProcessBuilder("/usr/bin/ssh-keygen", "-q", "-t", "ed25519",
+            ProcessOutcome minted = Subprocess.of("/usr/bin/ssh-keygen", "-q", "-t", "ed25519",
                 "-N", "", "-C", "decoy", "-f", key.toString())
-                .redirectErrorStream(true).start();
-            if (!process.waitFor(30, TimeUnit.SECONDS) || process.exitValue() != 0) {
-                throw new IOException("ssh-keygen did not produce a decoy key");
+                .mergeStderr().timeout(Duration.ofSeconds(30)).runChecked();
+            if (!minted.succeeded()) {
+                throw new IOException("ssh-keygen did not produce a decoy key: " + minted.describe());
             }
             String[] parts = Files.readString(directory.resolve("decoy.pub"),
                 StandardCharsets.UTF_8).trim().split("\\s+");
             return parts[0] + " " + parts[1];
         } catch (IOException e) {
             throw new IllegalStateException("could not mint a decoy host key", e);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("interrupted minting a decoy host key", e);
         } finally {
             deleteTree(directory);
         }

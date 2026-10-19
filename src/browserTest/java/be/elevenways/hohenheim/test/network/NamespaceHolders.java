@@ -1,10 +1,14 @@
 package be.elevenways.hohenheim.test.network;
 
+import be.elevenways.protoblast.server.process.RunningProcess;
+import be.elevenways.protoblast.server.process.Subprocess;
+import be.elevenways.protoblast.server.process.SubprocessException;
 import be.elevenways.protoblast.testsupport.time.Poll;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -37,21 +41,23 @@ final class NamespaceHolders {
     }
 
     /**
-     * Start {@code argv} and wait until its process has exec'd {@code program}; a holder that fails is destroyed.
+     * Start {@code argv} and wait until its process has exec'd {@code program}; a holder that fails is stopped.
      *
      * @param program the file name of the command the chain finally execs ("sleep", "python3")
      * @throws IOException when the holder dies first or never gets there
      */
-    static @NonNull Process start(@NonNull List<String> argv, @NonNull String program) throws IOException {
-        Process process = new ProcessBuilder(argv)
-            .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-            .redirectError(ProcessBuilder.Redirect.DISCARD)
-            .start();
+    static @NonNull RunningProcess start(@NonNull List<String> argv, @NonNull String program) throws IOException {
+        RunningProcess process;
+        try {
+            process = Subprocess.of(argv).stdoutTo(OutputStream.nullOutputStream()).start();
+        } catch (SubprocessException refused) {
+            throw new IOException(refused.getMessage(), refused);
+        }
         try {
             Poll.until("namespace holder exec'd " + program + ": " + String.join(" ", argv), READY_TIMEOUT,
                 () -> !process.isAlive() || program.equals(execName(process.pid())));
         } catch (AssertionError notReady) {
-            process.destroyForcibly();
+            process.close();
             throw new IOException(notReady.getMessage(), notReady);
         }
         if (!process.isAlive()) {
@@ -65,7 +71,7 @@ final class NamespaceHolders {
      *
      * @throws IOException when the listener dies first or never binds
      */
-    static void awaitTcpListen(@NonNull Process process, int port) throws IOException {
+    static void awaitTcpListen(@NonNull RunningProcess process, int port) throws IOException {
         awaitSocket(process, port, "TCP listen", List.of("tcp", "tcp6"), TCP_LISTEN);
     }
 
@@ -74,11 +80,11 @@ final class NamespaceHolders {
      *
      * @throws IOException when the responder dies first or never binds
      */
-    static void awaitUdpBound(@NonNull Process process, int port) throws IOException {
+    static void awaitUdpBound(@NonNull RunningProcess process, int port) throws IOException {
         awaitSocket(process, port, "UDP bind", List.of("udp", "udp6"), null);
     }
 
-    private static void awaitSocket(@NonNull Process process, int port, @NonNull String what,
+    private static void awaitSocket(@NonNull RunningProcess process, int port, @NonNull String what,
                                     @NonNull List<String> tables, @Nullable String state) throws IOException {
         try {
             Poll.until(what + " on port " + port + " by pid " + process.pid(), READY_TIMEOUT,

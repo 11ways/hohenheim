@@ -2,6 +2,8 @@ package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.server.security.IpLiterals;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.thread.ExecutionContext;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Backoff;
 import be.elevenways.protoblast.common.util.Closeables;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -22,9 +24,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -75,8 +74,6 @@ public final class PublicTcpListener implements AutoCloseable {
     private final boolean readsPrologue;
     private final Semaphore pendingPrologues;
     private final Set<Socket> activeSockets = ConcurrentHashMap.newKeySet();
-    private final ExecutorService connections = Executors.newThreadPerTaskExecutor(
-        Thread.ofVirtual().name("public-tcp-listener-", 0).factory());
     private final AtomicLong nextFailureLogNanos = new AtomicLong();
     private final AtomicInteger suppressedFailures = new AtomicInteger();
 
@@ -88,6 +85,8 @@ public final class PublicTcpListener implements AutoCloseable {
 
     private volatile boolean running;
     private volatile ServerSocket listener;
+    /* The accept loop, every connection and its relay: started detached in start(), stopped by close(). */
+    private volatile @Nullable JobRunner threads;
 
     public PublicTcpListener(String bindAddress, int port, int prologueTimeoutMillis,
                              ConnectionRouter router, Supplier<List<String>> trustedProxySources,
@@ -157,9 +156,10 @@ public final class PublicTcpListener implements AutoCloseable {
         created.bind(new InetSocketAddress(InetAddress.getByName(bindAddress), port));
         listener = created;
         running = true;
-        Thread.ofPlatform().daemon(true)
-            .name("public-tcp-accept-" + created.getLocalPort())
-            .start(this::acceptLoop);
+        // AIDEV-NOTE: detached, so no connection ever runs as whoever (re)started the listener (boot runs as system).
+        JobRunner runner = JobRunner.create("public-tcp-" + created.getLocalPort());
+        threads = runner;
+        ExecutionContext.detached().run(() -> runner.startBlockingThread(() -> acceptLoop(runner)));
     }
 
     public @Nullable InetSocketAddress getLocalAddress() {
@@ -167,7 +167,7 @@ public final class PublicTcpListener implements AutoCloseable {
         return current != null ? (InetSocketAddress) current.getLocalSocketAddress() : null;
     }
 
-    private void acceptLoop() {
+    private void acceptLoop(JobRunner runner) {
         int consecutiveAcceptFailures = 0;
         while (running) {
             Socket client;
@@ -208,10 +208,10 @@ public final class PublicTcpListener implements AutoCloseable {
                 }
                 activeSockets.add(client);
                 Socket accepted = client;
-                connections.submit(() -> handle(accepted));
+                runner.startThread(() -> handle(accepted, runner));
                 client = null;
                 admitted = false;
-            } catch (IOException | RejectedExecutionException e) {
+            } catch (IOException | IllegalStateException e) {
                 if (client != null) activeSockets.remove(client);
                 Closeables.closeQuietly(client);
                 if (admitted) pendingPrologues.release();
@@ -220,7 +220,7 @@ public final class PublicTcpListener implements AutoCloseable {
         }
     }
 
-    private void handle(Socket client) {
+    private void handle(Socket client, JobRunner runner) {
         Socket backend = null;
         InetSocketAddress registeredInternalSource = null;
         boolean pendingPrologue = true;
@@ -279,7 +279,7 @@ public final class PublicTcpListener implements AutoCloseable {
             byte[] replay = decision.replayBytes();
             if (replay.length > 0) backendOutput.write(replay);
             backendOutput.flush();
-            relay(client, backend, input);
+            relay(client, backend, input, runner);
         } catch (IOException | RuntimeException failure) {
             // AIDEV-NOTE: never close the backend here -- the finally block must unregister the
             // loopback identity BEFORE the socket dies, or a new connection reusing that ephemeral
@@ -339,9 +339,9 @@ public final class PublicTcpListener implements AutoCloseable {
         }
     }
 
-    private static void relay(Socket client, Socket backend, InputStream clientInput) {
-        Thread upstream = Thread.ofVirtual().start(() -> copy(clientInput, backend));
-        Thread downstream = Thread.ofVirtual().start(() -> copy(backend, client));
+    private static void relay(Socket client, Socket backend, InputStream clientInput, JobRunner runner) {
+        Thread upstream = runner.startThread(() -> copy(clientInput, backend));
+        Thread downstream = runner.startThread(() -> copy(backend, client));
         try {
             upstream.join();
             downstream.join();
@@ -398,6 +398,8 @@ public final class PublicTcpListener implements AutoCloseable {
         }
         for (Socket socket : activeSockets) Closeables.closeQuietly(socket);
         activeSockets.clear();
-        connections.shutdownNow();
+        JobRunner runner = threads;
+        threads = null;
+        if (runner != null) runner.shutdownNow();
     }
 }

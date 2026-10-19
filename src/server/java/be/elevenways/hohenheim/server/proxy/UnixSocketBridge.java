@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.server.util.LoopbackPeers;
 import be.elevenways.hohenheim.server.util.SameUidListener;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Backoff;
 import be.elevenways.protoblast.common.time.Retry;
 import be.elevenways.protoblast.common.util.Closeables;
@@ -98,10 +99,10 @@ public final class UnixSocketBridge {
             return;
         }
         // One virtual thread per direction; the first to see EOF/error closes both so the peer's
-        // copy loop unblocks.
-        Thread.ofVirtual().start(() -> { copy(tcp, unix); Closeables.closeQuietly(tcp);
+        // copy loop unblocks. Untracked on purpose: closing the bridge leaves in-flight splices to their peers.
+        JobRunner.startVirtualThread(() -> { copy(tcp, unix); Closeables.closeQuietly(tcp);
                 Closeables.closeQuietly(unix); });
-        Thread.ofVirtual().start(() -> { copy(unix, tcp); Closeables.closeQuietly(tcp);
+        JobRunner.startVirtualThread(() -> { copy(unix, tcp); Closeables.closeQuietly(tcp);
                 Closeables.closeQuietly(unix); });
     }
 

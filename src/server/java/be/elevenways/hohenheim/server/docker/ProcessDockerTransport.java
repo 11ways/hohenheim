@@ -11,7 +11,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.time.Duration;
 import java.util.List;
-import java.util.concurrent.ScheduledFuture;
 
 /**
  * A {@link DockerTransport} that runs an external command whose stdio bridges to a Docker daemon
@@ -102,7 +101,7 @@ public class ProcessDockerTransport implements DockerTransport, DockerStreamTran
             start(Subprocess.of(command).stderrLimit(STDERR_TAIL_BYTES)));
         // Bound only the request write: ssh may take seconds to connect, but once the
         // stream is live its lifetime belongs to the consumer.
-        ScheduledFuture<?> watchdog = Watchdog.schedule(connection::close, connectTimeoutMs);
+        Watchdog.Deadline watchdog = Watchdog.schedule(connection::close, connectTimeoutMs);
         try {
             connection.write(request);
         } catch (IOException e) {
@@ -110,7 +109,7 @@ public class ProcessDockerTransport implements DockerTransport, DockerStreamTran
             throw new IOException("Docker stream request could not be sent ("
                 + command.get(0) + "): " + connection.diagnostics(), e);
         } finally {
-            watchdog.cancel(false);
+            watchdog.cancel();
         }
         return connection;
     }

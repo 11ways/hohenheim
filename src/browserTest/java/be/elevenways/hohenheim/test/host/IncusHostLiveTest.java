@@ -14,6 +14,8 @@ import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.protoblast.server.process.ProcessOutcome;
+import be.elevenways.protoblast.server.process.Subprocess;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -22,9 +24,9 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -312,20 +314,17 @@ class IncusHostLiveTest {
             directory = Files.createTempDirectory("hohenheim-decoy-cert");
             Path key = directory.resolve("decoy.key");
             Path cert = directory.resolve("decoy.crt");
-            Process process = new ProcessBuilder("openssl", "req", "-x509", "-newkey", "ec",
+            ProcessOutcome minted = Subprocess.of("openssl", "req", "-x509", "-newkey", "ec",
                 "-pkeyopt", "ec_paramgen_curve:prime256v1", "-sha384", "-days", "1",
                 "-nodes", "-subj", "/CN=decoy",
                 "-keyout", key.toString(), "-out", cert.toString())
-                .redirectErrorStream(true).start();
-            if (!process.waitFor(30, TimeUnit.SECONDS) || process.exitValue() != 0) {
-                throw new IOException("openssl did not produce a decoy certificate");
+                .mergeStderr().timeout(Duration.ofSeconds(30)).runChecked();
+            if (!minted.succeeded()) {
+                throw new IOException("openssl did not produce a decoy certificate: " + minted.describe());
             }
             return Files.readString(cert, StandardCharsets.UTF_8);
         } catch (IOException e) {
             throw new IllegalStateException("could not mint a decoy certificate", e);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("interrupted minting a decoy certificate", e);
         } finally {
             deleteTree(directory);
         }

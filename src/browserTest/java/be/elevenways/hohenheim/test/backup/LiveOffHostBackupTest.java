@@ -28,6 +28,9 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
 import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
+import be.elevenways.protoblast.server.process.ProcessOutcome;
+import be.elevenways.protoblast.server.process.Subprocess;
+import be.elevenways.protoblast.server.process.Termination;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -36,11 +39,11 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -320,33 +323,23 @@ class LiveOffHostBackupTest {
      * backup target -- so "the file is there" is never the target vouching for itself.
      */
     private static String remoteExec(String command) throws IOException {
-        try {
-            List<String> argv = HostKeys.pinnedArgv("hohenheim-livetest",
-                pinnedKeyLine, remote.target(),
-                List.of("-o", "IdentitiesOnly=yes", "-i", identityPath,
-                    "-o", "ConnectTimeout=10"));
-            argv.add(command);
-            // stderr stays SEPARATE: the ssh client prints advisories there (the
-            // post-quantum-kex warning against an older sshd, for one) and folding them
-            // into stdout would corrupt every answer this helper is asked for.
-            Process process = new ProcessBuilder(argv).start();
-            String output = new String(process.getInputStream().readAllBytes(),
-                StandardCharsets.UTF_8);
-            String errors = new String(process.getErrorStream().readAllBytes(),
-                StandardCharsets.UTF_8);
-            if (!process.waitFor(60, TimeUnit.SECONDS)) {
-                process.destroyForcibly();
-                throw new IOException("remote command timed out: " + command);
-            }
-            if (process.exitValue() != 0) {
-                throw new IOException("remote command failed (" + process.exitValue()
-                    + "): " + command + " -- " + errors.trim());
-            }
-            return output.trim();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("interrupted running " + command);
+        List<String> argv = HostKeys.pinnedArgv("hohenheim-livetest",
+            pinnedKeyLine, remote.target(),
+            List.of("-o", "IdentitiesOnly=yes", "-i", identityPath,
+                "-o", "ConnectTimeout=10"));
+        argv.add(command);
+        // stderr stays SEPARATE: the ssh client prints advisories there (the
+        // post-quantum-kex warning against an older sshd, for one) and folding them
+        // into stdout would corrupt every answer this helper is asked for.
+        ProcessOutcome outcome = Subprocess.of(argv).timeout(Duration.ofSeconds(60)).runChecked();
+        if (outcome.termination() == Termination.TIMED_OUT) {
+            throw new IOException("remote command timed out: " + command);
         }
+        if (outcome.exitCode() != 0) {
+            throw new IOException("remote command failed (" + outcome.exitCode()
+                + "): " + command + " -- " + outcome.stderr().text().trim());
+        }
+        return outcome.stdout().text().trim();
     }
 
     private static String localHostname() {
@@ -362,17 +355,14 @@ class LiveOffHostBackupTest {
         Path directory = Files.createTempDirectory("hohenheim-offhost-decoy");
         try {
             Path key = directory.resolve("decoy");
-            Process process = new ProcessBuilder("ssh-keygen", "-q", "-t", "ed25519",
+            ProcessOutcome minted = Subprocess.of("ssh-keygen", "-q", "-t", "ed25519",
                 "-N", "", "-C", "decoy", "-f", key.toString())
-                .redirectErrorStream(true).start();
-            if (!process.waitFor(30, TimeUnit.SECONDS) || process.exitValue() != 0) {
-                throw new IOException("ssh-keygen did not produce a decoy key");
+                .mergeStderr().timeout(Duration.ofSeconds(30)).runChecked();
+            if (!minted.succeeded()) {
+                throw new IOException("ssh-keygen did not produce a decoy key: " + minted.describe());
             }
             return HostKeys.keyLineOf(Files.readString(directory.resolve("decoy.pub"),
                 StandardCharsets.UTF_8));
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("interrupted minting a decoy host key");
         } finally {
             deleteTree(directory);
         }

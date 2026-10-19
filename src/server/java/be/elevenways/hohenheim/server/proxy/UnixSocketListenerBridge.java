@@ -2,6 +2,8 @@ package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.server.util.PermissionBits;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.thread.ExecutionContext;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.util.Closeables;
 
 import java.io.IOException;
@@ -20,7 +22,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static be.elevenways.hohenheim.RawValues.trimmed;
 
-/** AF_UNIX front listener that splices accepted clients into a loopback TCP listener. */
+/**
+ * AF_UNIX front listener that splices accepted clients into a loopback TCP listener.
+ *
+ * AIDEV-NOTE: its runner starts detached (the listener serves every client, never as whoever built it); closing it
+ * stops accepting and leaves splices already running to their peers.
+ */
 public final class UnixSocketListenerBridge {
 
     private static final int BUFFER_SIZE = 16384;
@@ -29,6 +36,7 @@ public final class UnixSocketListenerBridge {
     private final InetSocketAddress upstream;
     private final ServerSocketChannel server;
     private final AtomicBoolean closed = new AtomicBoolean(false);
+    private final JobRunner threads;
 
     public UnixSocketListenerBridge(Path socketPath, int upstreamPort, String permissions) throws IOException {
         this.socketPath = socketPath.toAbsolutePath();
@@ -46,7 +54,8 @@ public final class UnixSocketListenerBridge {
             throw failure;
         }
         this.server = opened;
-        Thread.ofVirtual().name("unix-front-accept-" + this.socketPath.getFileName()).start(this::acceptLoop);
+        this.threads = JobRunner.create("unix-front-" + this.socketPath.getFileName());
+        ExecutionContext.detached().run(() -> this.threads.startThread(this::acceptLoop));
     }
 
     private static Set<PosixFilePermission> parsePermissions(String value) {
@@ -96,8 +105,14 @@ public final class UnixSocketListenerBridge {
             return;
         }
         AtomicInteger liveDirections = new AtomicInteger(2);
-        Thread.ofVirtual().start(() -> copy(unix, tcp, liveDirections));
-        Thread.ofVirtual().start(() -> copy(tcp, unix, liveDirections));
+        try {
+            this.threads.startThread(() -> copy(unix, tcp, liveDirections));
+            this.threads.startThread(() -> copy(tcp, unix, liveDirections));
+        } catch (IllegalStateException stopped) {
+            // Closed since the accept: a direction already started fails on the closed channels and ends.
+            Closeables.closeQuietly(unix);
+            Closeables.closeQuietly(tcp);
+        }
     }
 
     private static void copy(SocketChannel from, SocketChannel to, AtomicInteger liveDirections) {
@@ -126,6 +141,7 @@ public final class UnixSocketListenerBridge {
     public void close() {
         if (!closed.compareAndSet(false, true)) return;
         Closeables.closeQuietly(server);
+        this.threads.shutdown();
         try {
             Files.deleteIfExists(socketPath);
         } catch (IOException e) {

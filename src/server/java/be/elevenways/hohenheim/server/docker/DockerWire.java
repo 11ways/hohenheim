@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.docker;
 import be.elevenways.hohenheim.server.util.Http11;
 import be.elevenways.hohenheim.server.util.Watchdog;
 import be.elevenways.protoblast.common.time.Pace;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.server.io.BulkInputStream;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -18,7 +19,6 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ScheduledFuture;
 
 /**
  * The STREAMED exchanges of {@link DockerClient}, over the {@link DockerStreamTransport}
@@ -35,6 +35,9 @@ final class DockerWire {
 
     /** Cap on an error body read for its evidence (protects the heap, not UX). */
     static final int MAX_ERROR_BODY = 64 * 1024;
+
+    /** Reads an upload's answer while the caller still writes its body. */
+    private static final JobRunner ANSWER_READERS = JobRunner.createProcessGlobal("docker-upload-answer");
 
     private DockerWire() {
     }
@@ -57,7 +60,7 @@ final class DockerWire {
                                long maxBytes) throws IOException {
         byte[] request = Http11.request("GET", path, "docker", null, null, null);
         DockerStreamConnection connection = transport.openStream(request, connectTimeoutMs);
-        ScheduledFuture<?> watchdog = Watchdog.schedule(connection::close, deadlineMs);
+        Watchdog.Deadline watchdog = Watchdog.schedule(connection::close, deadlineMs);
         try (InputStream in = new ConnectionInputStream(connection)) {
             Http11.Head head = Http11.readHead(in, PEER);
             if ((head.status() < 200 || head.status() >= 300) && head.status() != 304) {
@@ -71,13 +74,13 @@ final class DockerWire {
                 throw e;
             }
         } catch (IOException e) {
-            if (watchdog.isDone()) {
+            if (watchdog.expired()) {
                 throw new IOException("Docker archive download timed out after "
                     + deadlineMs + "ms", e);
             }
             throw e;
         } finally {
-            watchdog.cancel(false);
+            watchdog.cancel();
             connection.close();
         }
     }
@@ -104,11 +107,11 @@ final class DockerWire {
                                   long maxAnswerBytes) throws IOException {
         byte[] head = Http11.chunkedRequestHead(method, path, "docker", contentType, null);
         DockerStreamConnection connection = transport.openStream(head, connectTimeoutMs);
-        ScheduledFuture<?> watchdog = Watchdog.schedule(connection::close, deadlineMs);
+        Watchdog.Deadline watchdog = Watchdog.schedule(connection::close, deadlineMs);
         ConnectionOutputStream wire = new ConnectionOutputStream(connection);
         InputStream in = new ConnectionInputStream(connection);
         CompletableFuture<Answer> answer = new CompletableFuture<>();
-        Thread reader = Thread.ofPlatform().daemon().name("docker-upload-answer").start(() -> {
+        Thread reader = ANSWER_READERS.startBlockingThread(() -> {
             try {
                 answer.complete(readAnswer(in, maxAnswerBytes));
             } catch (Throwable failure) {
@@ -148,13 +151,13 @@ final class DockerWire {
             }
             return result.body();
         } catch (IOException e) {
-            if (watchdog.isDone()) {
+            if (watchdog.expired()) {
                 throw new IOException("Docker upload " + method + " timed out after "
                     + deadlineMs + "ms", e);
             }
             throw e;
         } finally {
-            watchdog.cancel(false);
+            watchdog.cancel();
             connection.close();
             try {
                 reader.join(2_000);

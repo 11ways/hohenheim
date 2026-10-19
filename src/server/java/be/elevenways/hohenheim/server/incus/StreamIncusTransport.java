@@ -23,7 +23,6 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.Locale;
-import java.util.concurrent.ScheduledFuture;
 
 /**
  * The shared half of both Incus transports: one fresh channel per REST exchange
@@ -79,20 +78,20 @@ abstract class StreamIncusTransport implements IncusTransport {
         byte[] request = Http11.request(method, pathAndQuery, hostHeader(), body,
             body != null ? "application/json" : null, headers);
         Channel channel = open(timeoutMs);
-        ScheduledFuture<?> watchdog = Watchdog.schedule(() -> Closeables.closeQuietly(channel), timeoutMs);
+        Watchdog.Deadline watchdog = Watchdog.schedule(() -> Closeables.closeQuietly(channel), timeoutMs);
         try {
             OutputStream out = channel.out();
             out.write(request);
             out.flush();
             return readAnswer(channel.in(), MAX_RESPONSE_BYTES);
         } catch (IOException e) {
-            if (watchdog.isDone()) {
+            if (watchdog.expired()) {
                 throw new IOException("Incus request to " + describe() + " timed out after "
                     + timeoutMs + "ms");
             }
             throw e;
         } finally {
-            watchdog.cancel(false);
+            watchdog.cancel();
             Closeables.closeQuietly(channel);
         }
     }
@@ -118,7 +117,7 @@ abstract class StreamIncusTransport implements IncusTransport {
             length, extraHeaders);
 
         Channel channel = open(timeoutMs);
-        ScheduledFuture<?> watchdog = Watchdog.schedule(() -> Closeables.closeQuietly(channel), timeoutMs);
+        Watchdog.Deadline watchdog = Watchdog.schedule(() -> Closeables.closeQuietly(channel), timeoutMs);
         try {
             OutputStream out = channel.out();
             out.write(head);
@@ -126,13 +125,13 @@ abstract class StreamIncusTransport implements IncusTransport {
             out.flush();
             return readAnswer(channel.in(), MAX_RESPONSE_BYTES);
         } catch (IOException e) {
-            if (watchdog.isDone()) {
+            if (watchdog.expired()) {
                 throw new IOException("Incus upload to " + describe() + " timed out after "
                     + timeoutMs + "ms");
             }
             throw e;
         } finally {
-            watchdog.cancel(false);
+            watchdog.cancel();
             Closeables.closeQuietly(channel);
         }
     }
@@ -145,7 +144,7 @@ abstract class StreamIncusTransport implements IncusTransport {
             throws IOException {
         byte[] request = Http11.request(method, pathAndQuery, hostHeader(), null, null, null);
         Channel channel = open(timeoutMs);
-        ScheduledFuture<?> watchdog = Watchdog.schedule(() -> Closeables.closeQuietly(channel), timeoutMs);
+        Watchdog.Deadline watchdog = Watchdog.schedule(() -> Closeables.closeQuietly(channel), timeoutMs);
         try {
             OutputStream out = channel.out();
             out.write(request);
@@ -167,13 +166,13 @@ abstract class StreamIncusTransport implements IncusTransport {
             Http11.copyBody(in, head, body, (int) ByteUnit.MEGABYTE.factor(), describe());
             return new Http11.Raw(head.status(), head.headers(), body.toByteArray());
         } catch (IOException e) {
-            if (watchdog.isDone()) {
+            if (watchdog.expired()) {
                 throw new IOException("Incus download from " + describe()
                     + " timed out after " + timeoutMs + "ms");
             }
             throw e;
         } finally {
-            watchdog.cancel(false);
+            watchdog.cancel();
             Closeables.closeQuietly(channel);
         }
     }
@@ -194,7 +193,7 @@ abstract class StreamIncusTransport implements IncusTransport {
         Channel channel = open(connectTimeoutMs);
         // The watchdog covers connect + handshake ONLY: an established stream lives
         // until a side closes it.
-        ScheduledFuture<?> watchdog = Watchdog.schedule(() -> Closeables.closeQuietly(channel),
+        Watchdog.Deadline watchdog = Watchdog.schedule(() -> Closeables.closeQuietly(channel),
             connectTimeoutMs);
         try {
             OutputStream out = channel.out();
@@ -203,17 +202,17 @@ abstract class StreamIncusTransport implements IncusTransport {
             InputStream in = channel.in();
             String response = readHandshakeHead(in);
             verifyHandshake(response, key);
-            watchdog.cancel(false);
+            watchdog.cancel();
             return new Rfc6455WebSocket(in, out, channel);
         } catch (IOException e) {
             Closeables.closeQuietly(channel);
-            if (watchdog.isDone()) {
+            if (watchdog.expired()) {
                 throw new IOException("Incus websocket handshake with " + describe()
                     + " timed out after " + connectTimeoutMs + "ms");
             }
             throw e;
         } finally {
-            watchdog.cancel(false);
+            watchdog.cancel();
         }
     }
 

@@ -3,6 +3,8 @@ package be.elevenways.hohenheim.server.security;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.thread.ExecutionContext;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.spamservice.client.Reputation;
 import be.elevenways.spamservice.client.SpamserviceClient;
@@ -11,9 +13,8 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.Set;
-import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.LongSupplier;
@@ -76,18 +77,18 @@ public final class ReputationBanPolicy {
 
     private final ConcurrentHashMap<String, Long> recentlyChecked = new ConcurrentHashMap<>();
 
-    // AIDEV-NOTE: ONE named daemon platform thread drains the lookup queue.
-    // Each lookup can block up to the client's 10s HTTP timeout, so a
-    // thread-per-lookup executor would mint unbounded blocked threads under a
-    // flood; and blocking HTTP on a virtual thread risks carrier pinning (see
-    // the deleted process lane's pump-thread incident) -- a single platform
-    // thread is correct. Queue overflow DROPS the lookup: reputation banning
-    // is fail-open by contract, a missed lookup only delays a ban.
+    // AIDEV-NOTE: ONE named daemon platform thread (a serial lane, named exactly
+    // "reputation-lookup") runs the lookups in order. Each lookup can block up to the
+    // client's 10s HTTP timeout, so a thread-per-lookup executor would mint unbounded
+    // blocked threads under a flood; and blocking HTTP on a virtual thread risks carrier
+    // pinning (see the deleted process lane's pump-thread incident) -- a single platform
+    // thread is correct. At most LOOKUP_QUEUE_CAPACITY wait; overflow DROPS the lookup:
+    // reputation banning is fail-open by contract, a missed lookup only delays a ban.
+    // Lookups run detached: they are the system's reaction, never the requester's action.
     private static final int LOOKUP_QUEUE_CAPACITY = 256;
     private static final long DROP_LOG_THROTTLE_MS = 60_000;
-    private final ArrayBlockingQueue<Runnable> lookupQueue =
-        new ArrayBlockingQueue<>(LOOKUP_QUEUE_CAPACITY);
-    private final AtomicBoolean workerStarted = new AtomicBoolean();
+    private final JobRunner lookups = JobRunner.createDaemonSerial("reputation-lookup");
+    private final AtomicInteger pendingLookups = new AtomicInteger();
     private final AtomicLong droppedLookups = new AtomicLong();
     private volatile long lastDropLogMs = 0;
 
@@ -106,34 +107,29 @@ public final class ReputationBanPolicy {
         this.executor = this::enqueueLookup;
     }
 
-    /** Offer the lookup to the bounded queue (lazily starting the worker), dropping on overflow. */
+    /** Offer the lookup to the bounded lane, dropping on overflow. */
     private void enqueueLookup(@NonNull Runnable task) {
-        if (this.workerStarted.compareAndSet(false, true)) {
-            Thread.ofPlatform().daemon().name("reputation-lookup")
-                .start(this::drainLookups);
+        if (this.pendingLookups.incrementAndGet() <= LOOKUP_QUEUE_CAPACITY) {
+            ExecutionContext.detached().run(() -> this.lookups.fireAndForget(() -> runLookup(task)));
+            return;
         }
-        if (!this.lookupQueue.offer(task)) {
-            this.droppedLookups.incrementAndGet();
-            long now = this.clock.getAsLong();
-            if (now - this.lastDropLogMs >= DROP_LOG_THROTTLE_MS) {
-                this.lastDropLogMs = now;
-                Blast.log("SECURITY: reputation lookup queue full -",
-                    this.droppedLookups.getAndSet(0), "lookup(s) dropped (fail-open)");
-            }
+        this.pendingLookups.decrementAndGet();
+        this.droppedLookups.incrementAndGet();
+        long now = this.clock.getAsLong();
+        if (now - this.lastDropLogMs >= DROP_LOG_THROTTLE_MS) {
+            this.lastDropLogMs = now;
+            Blast.log("SECURITY: reputation lookup queue full -",
+                this.droppedLookups.getAndSet(0), "lookup(s) dropped (fail-open)");
         }
     }
 
-    private void drainLookups() {
-        while (true) {
-            try {
-                this.lookupQueue.take().run();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return;
-            } catch (RuntimeException e) {
-                // evaluate() already guards; nothing may kill the single worker.
-                Blast.log("SECURITY: reputation lookup task failed -", e.getMessage());
-            }
+    private void runLookup(@NonNull Runnable task) {
+        this.pendingLookups.decrementAndGet();
+        try {
+            task.run();
+        } catch (RuntimeException e) {
+            // evaluate() already guards; a failed lookup is logged, the lane runs the next one.
+            Blast.log("SECURITY: reputation lookup task failed -", e.getMessage());
         }
     }
 

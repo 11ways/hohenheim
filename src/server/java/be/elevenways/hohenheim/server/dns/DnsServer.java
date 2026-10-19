@@ -3,6 +3,8 @@ package be.elevenways.hohenheim.server.dns;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.util.Watchdog;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.thread.ExecutionContext;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.util.Closeables;
 import be.elevenways.zenit.common.Zenit;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -22,10 +24,6 @@ import java.net.SocketTimeoutException;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.Semaphore;
 
 import org.xbill.DNS.Flags;
@@ -93,7 +91,9 @@ public final class DnsServer {
     private volatile @Nullable String startupError;
     private @Nullable DatagramSocket udpSocket;
     private @Nullable ServerSocket tcpSocket;
-    private @Nullable ExecutorService workers;
+    /* One runner per transport and start: its loop, then a virtual thread per query or connection. */
+    private @Nullable JobRunner udpThreads;
+    private @Nullable JobRunner tcpThreads;
 
     /** @return true when the server is enabled in settings and both listeners bound */
     public boolean startIfEnabled() {
@@ -153,17 +153,20 @@ public final class DnsServer {
 
         this.udpSocket = udpBound;
         this.tcpSocket = tcpBound;
-        this.workers = Executors.newVirtualThreadPerTaskExecutor();
+        JobRunner udpRunner = JobRunner.create("hohenheim-dns-udp");
+        JobRunner tcpRunner = JobRunner.create("hohenheim-dns-tcp");
+        this.udpThreads = udpRunner;
+        this.tcpThreads = tcpRunner;
         this.running = true;
         this.startupError = null;
 
-        Thread udpThread = new Thread(() -> this.udpLoop(udpBound), "hohenheim-dns-udp");
-        udpThread.setDaemon(true);
-        udpThread.start();
-
-        Thread tcpThread = new Thread(() -> this.tcpLoop(tcpBound), "hohenheim-dns-tcp");
-        tcpThread.setDaemon(true);
-        tcpThread.start();
+        // AIDEV-NOTE: detached, so no query is ever answered as whoever started the listeners (boot runs as
+        // system). Each loop runs until ITS runner stops, never on the shared running flag: a stop() and a quick
+        // start() used to leave the old loop spinning on its closed socket.
+        ExecutionContext.detached().run(() -> {
+            udpRunner.startBlockingThread(() -> this.udpLoop(udpBound, udpRunner));
+            tcpRunner.startBlockingThread(() -> this.tcpLoop(tcpBound, tcpRunner));
+        });
 
         Blast.log("DNS: authoritative listeners on", bindAddress + ":" + udpBound.getLocalPort(), "(udp+tcp)");
     }
@@ -173,14 +176,19 @@ public final class DnsServer {
             return;
         }
         this.running = false;
+        // The runners first: a loop that sees its socket closed then knows it was stopped.
+        if (this.udpThreads != null) {
+            this.udpThreads.shutdown();
+            this.udpThreads = null;
+        }
+        if (this.tcpThreads != null) {
+            this.tcpThreads.shutdown();
+            this.tcpThreads = null;
+        }
         Closeables.closeQuietly(this.udpSocket);
         Closeables.closeQuietly(this.tcpSocket);
         this.udpSocket = null;
         this.tcpSocket = null;
-        if (this.workers != null) {
-            this.workers.shutdown();
-            this.workers = null;
-        }
     }
 
     public boolean isRunning() {
@@ -212,15 +220,15 @@ public final class DnsServer {
         return socket != null ? socket.getLocalPort() : -1;
     }
 
-    private void udpLoop(@NonNull DatagramSocket socket) {
-        while (this.running) {
+    private void udpLoop(@NonNull DatagramSocket socket, @NonNull JobRunner runner) {
+        while (!runner.isShutdown()) {
             byte[] buffer = new byte[UDP_RECEIVE_SIZE];
             DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
             try {
                 socket.receive(packet);
             }
             catch (IOException e) {
-                if (this.running) {
+                if (!runner.isShutdown()) {
                     Blast.log("DNS: udp receive failed:", e.getMessage());
                 }
                 continue;
@@ -230,11 +238,7 @@ public final class DnsServer {
             System.arraycopy(packet.getData(), packet.getOffset(), wire, 0, packet.getLength());
             InetSocketAddress client = (InetSocketAddress) packet.getSocketAddress();
 
-            ExecutorService pool = this.workers;
-            if (pool == null) {
-                return;
-            }
-            pool.execute(() -> {
+            Runnable respond = () -> {
                 Message parsed = tryParse(wire);
                 byte[] reply;
                 if (parsed != null && parsed.getHeader().getOpcode() == Opcode.NOTIFY) {
@@ -289,18 +293,24 @@ public final class DnsServer {
                         Blast.log("DNS: udp send failed:", e.getMessage());
                     }
                 }
-            });
+            };
+            try {
+                runner.startThread(respond);
+            }
+            catch (IllegalStateException stopping) {
+                return;
+            }
         }
     }
 
-    private void tcpLoop(@NonNull ServerSocket serverSocket) {
-        while (this.running) {
+    private void tcpLoop(@NonNull ServerSocket serverSocket, @NonNull JobRunner runner) {
+        while (!runner.isShutdown()) {
             Socket socket;
             try {
                 socket = serverSocket.accept();
             }
             catch (IOException e) {
-                if (this.running) {
+                if (!runner.isShutdown()) {
                     Blast.log("DNS: tcp accept failed:", e.getMessage());
                 }
                 continue;
@@ -312,31 +322,24 @@ public final class DnsServer {
                 continue;
             }
 
-            ExecutorService pool = this.workers;
-            if (pool == null) {
-                this.releaseTcpSlot(peer);
-                Closeables.closeQuietly(socket);
-                return;
-            }
+            // The shared watchdog, so a connection still in flight when stop() runs keeps its deadline.
+            Watchdog.Deadline deadline = Watchdog.schedule(() -> Closeables.closeQuietly(socket),
+                this.tcpConnectionDeadlineMs);
             try {
-                // The shared watchdog, so a connection still in flight when stop() runs
-                // keeps its deadline.
-                ScheduledFuture<?> deadline = Watchdog.schedule(() -> Closeables.closeQuietly(socket),
-                    this.tcpConnectionDeadlineMs);
-                pool.execute(() -> {
+                runner.startThread(() -> {
                     try {
                         this.handleTcpConnection(socket);
                     }
                     finally {
-                        deadline.cancel(false);
+                        deadline.cancel();
                         this.releaseTcpSlot(peer);
                         Closeables.closeQuietly(socket);
                     }
                 });
             }
-            catch (RejectedExecutionException stopping) {
-                // stop() shut the pool down between the accept and here; the pending
-                // deadline only closes the socket closed below.
+            catch (IllegalStateException stopping) {
+                // stop() stopped the runner between the accept and here.
+                deadline.cancel();
                 this.releaseTcpSlot(peer);
                 Closeables.closeQuietly(socket);
                 return;

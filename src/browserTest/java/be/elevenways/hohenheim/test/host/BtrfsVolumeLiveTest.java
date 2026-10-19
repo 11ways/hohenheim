@@ -7,6 +7,9 @@ import be.elevenways.hohenheim.server.host.VolumeBackends;
 import be.elevenways.hohenheim.server.host.VolumeOperations;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.protoblast.server.process.ProcessOutcome;
+import be.elevenways.protoblast.server.process.Subprocess;
+import be.elevenways.protoblast.server.process.Termination;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -14,10 +17,9 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -208,21 +210,11 @@ class BtrfsVolumeLiveTest {
             "-o", "StrictHostKeyChecking=accept-new", HOST, "sh", "-c",
             HostShell.quote(script));
         try {
-            Process process = new ProcessBuilder(argv).redirectErrorStream(true).start();
-            try {
-                byte[] output = process.getInputStream().readAllBytes();
-                if (!process.waitFor(60, TimeUnit.SECONDS)) {
-                    process.destroyForcibly();
-                    return new HostShell.Result(1, "the ssh command timed out");
-                }
-                return new HostShell.Result(process.exitValue(),
-                    new String(output, StandardCharsets.UTF_8).trim());
-            } finally {
-                process.destroyForcibly();
+            ProcessOutcome outcome = Subprocess.of(argv).mergeStderr().timeout(Duration.ofSeconds(60)).runChecked();
+            if (outcome.termination() == Termination.TIMED_OUT) {
+                return new HostShell.Result(1, "the ssh command timed out");
             }
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            return new HostShell.Result(1, "interrupted");
+            return new HostShell.Result(outcome.exitCode(), outcome.stdout().text().trim());
         } catch (IOException failed) {
             return new HostShell.Result(1, String.valueOf(failed.getMessage()));
         }

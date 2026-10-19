@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.hohenheim.server.util.Tar;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.time.Pace;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -521,15 +522,13 @@ public final class BuildSandbox {
      */
     private static @NonNull Thread drainInto(@NonNull ConsoleStream stream, @NonNull BuildLog log,
                                              @NonNull String handle) {
-        Thread reader = new Thread(() -> {
+        // A runner of its own names the reader after the build; it ends with the stream and holds nothing after.
+        return JobRunner.createProcessGlobal("build-log-" + handle).startBlockingThread(() -> {
             ConsoleStream.Chunk chunk;
             while ((chunk = stream.next()) != null) {
                 log.append(new String(chunk.data(), StandardCharsets.UTF_8));
             }
-        }, "build-log-" + handle);
-        reader.setDaemon(true);
-        reader.start();
-        return reader;
+        });
     }
 
     private static void joinQuietly(@NonNull Thread thread) {

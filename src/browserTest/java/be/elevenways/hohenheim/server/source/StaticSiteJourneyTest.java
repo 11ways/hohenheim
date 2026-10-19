@@ -27,6 +27,8 @@ import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.server.process.ProcessOutcome;
+import be.elevenways.protoblast.server.process.Subprocess;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.operation.OperationRunStatus;
@@ -50,7 +52,6 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -256,13 +257,11 @@ class StaticSiteJourneyTest extends HohenheimTestBase {
     }
 
     private static String git(String... args) throws Exception {
-        String[] command = new String[args.length + 1];
-        command[0] = "git";
-        System.arraycopy(args, 0, command, 1, args.length);
-        Process process = new ProcessBuilder(command).directory(upstream.toFile()).redirectErrorStream(true).start();
-        String output = new String(process.getInputStream().readAllBytes());
-        if (!process.waitFor(30, TimeUnit.SECONDS) || process.exitValue() != 0) {
-            throw new AssertionError("git " + String.join(" ", args) + " failed: " + output);
+        ProcessOutcome outcome = Subprocess.of("git", args).directory(upstream).timeout(Duration.ofSeconds(30))
+            .mergeStderr().run();
+        String output = outcome.stdout().text();
+        if (!outcome.succeeded()) {
+            throw new AssertionError("git " + String.join(" ", args) + " failed: " + outcome.describe());
         }
         return output;
     }

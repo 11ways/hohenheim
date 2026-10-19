@@ -8,6 +8,8 @@ import be.elevenways.hohenheim.server.runtime.StatsFeed;
 import be.elevenways.hohenheim.server.runtime.StatsReading;
 import be.elevenways.hohenheim.server.runtime.StatsStreamSupport;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.thread.ExecutionContext;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -163,6 +165,7 @@ public final class InstanceStats {
         private final List<Sample> ring = new ArrayList<>();
 
         private @Nullable StatsFeed stream;
+        private @Nullable JobRunner pumps;
         private volatile boolean running;
 
         Session(int instanceId) {
@@ -184,9 +187,11 @@ public final class InstanceStats {
             }
             this.stream = support.openStats(resolved.spec().handle());
             this.running = true;
-            Thread pump = new Thread(this::pump, "hohenheim-instance-stats-" + this.instanceId);
-            pump.setDaemon(true);
-            pump.start();
+            // AIDEV-NOTE: the pump reads a daemon socket or pipe (a platform thread), serves every viewer, so it is
+            // detached from the viewer whose subscribe started it; the stream's close is what ends its read.
+            JobRunner runner = JobRunner.create("hohenheim-instance-stats-" + this.instanceId);
+            this.pumps = runner;
+            ExecutionContext.detached().run(() -> runner.startBlockingThread(this::pump));
         }
 
         void attach(@NonNull Consumer<Sample> viewer) {
@@ -212,6 +217,11 @@ public final class InstanceStats {
             this.stream = null;
             if (stream != null) {
                 stream.close();
+            }
+            JobRunner runner = this.pumps;
+            this.pumps = null;
+            if (runner != null) {
+                runner.shutdown();
             }
         }
 

@@ -2,6 +2,8 @@ package be.elevenways.hohenheim.server.security;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.thread.ExecutionContext;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Backoff;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.time.Pace;
@@ -89,7 +91,7 @@ public final class SshAuthWatcher {
     private final AtomicLong signals = new AtomicLong();
 
     private volatile boolean running;
-    private volatile @Nullable Thread thread;
+    private volatile @Nullable JobRunner threads;
     private volatile @Nullable RunningProcess child;
     private volatile @Nullable String lastError;
     private volatile @Nullable String reportedError;
@@ -114,16 +116,17 @@ public final class SshAuthWatcher {
 
     /**
      * Start the supervising thread; idempotent, so a repeated boot does not fork a second
-     * journalctl.
+     * journalctl. Detached: the scoring it drives is the system's reaction, never its starter's.
      */
     public synchronized void start() {
         if (this.running) {
             return;
         }
         this.running = true;
-        Thread supervisor = Thread.ofPlatform().daemon().name("ssh-auth-watch").unstarted(this::supervise);
-        this.thread = supervisor;
-        supervisor.start();
+        JobRunner runner = JobRunner.create("ssh-auth-watch");
+        this.threads = runner;
+        // A pipe read, so a platform thread.
+        ExecutionContext.detached().run(() -> runner.startBlockingThread(this::supervise));
         Blast.slog("hohenheim.ssh_watch_started", Map.of("command", String.join(" ", COMMAND)));
     }
 
@@ -134,11 +137,11 @@ public final class SshAuthWatcher {
         if (current != null) {
             current.stop();
         }
-        Thread supervisor = this.thread;
-        if (supervisor != null) {
-            supervisor.interrupt();
+        JobRunner runner = this.threads;
+        if (runner != null) {
+            runner.shutdownNow();
         }
-        this.thread = null;
+        this.threads = null;
     }
 
     /** What the firewall-role health surface reports. */

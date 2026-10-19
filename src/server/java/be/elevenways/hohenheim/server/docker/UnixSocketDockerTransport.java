@@ -11,7 +11,6 @@ import java.net.UnixDomainSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SocketChannel;
-import java.util.concurrent.ScheduledFuture;
 
 /**
  * The default {@link DockerTransport}: HTTP/1.1 over the daemon's local unix socket.
@@ -41,7 +40,7 @@ public class UnixSocketDockerTransport implements DockerTransport, DockerStreamT
     @Override
     public byte[] roundTrip(byte[] request, long timeoutMs, long maxResponseBytes) throws IOException {
         SocketChannel channel = SocketChannel.open(StandardProtocolFamily.UNIX);
-        ScheduledFuture<?> watchdog = Watchdog.schedule(() -> Closeables.closeQuietly(channel), timeoutMs);
+        Watchdog.Deadline watchdog = Watchdog.schedule(() -> Closeables.closeQuietly(channel), timeoutMs);
         try {
             channel.connect(address);
             try {
@@ -71,7 +70,7 @@ public class UnixSocketDockerTransport implements DockerTransport, DockerStreamT
         } catch (ClosedChannelException e) {
             throw new IOException("Docker request timed out after " + timeoutMs + "ms");
         } finally {
-            watchdog.cancel(false);
+            watchdog.cancel();
             Closeables.closeQuietly(channel);
         }
     }
@@ -116,7 +115,7 @@ public class UnixSocketDockerTransport implements DockerTransport, DockerStreamT
         SocketChannel channel = SocketChannel.open(StandardProtocolFamily.UNIX);
         // The watchdog covers connect + request write ONLY: once the stream is
         // handed over, its lifetime is the consumer's decision, not a deadline's.
-        ScheduledFuture<?> watchdog = Watchdog.schedule(() -> Closeables.closeQuietly(channel),
+        Watchdog.Deadline watchdog = Watchdog.schedule(() -> Closeables.closeQuietly(channel),
             connectTimeoutMs);
         try {
             channel.connect(address);
@@ -127,7 +126,7 @@ public class UnixSocketDockerTransport implements DockerTransport, DockerStreamT
             Closeables.closeQuietly(channel);
             throw e;
         } finally {
-            watchdog.cancel(false);
+            watchdog.cancel();
         }
         return new SocketStreamConnection(channel);
     }

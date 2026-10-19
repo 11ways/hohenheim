@@ -6,6 +6,8 @@ import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.security.SshKeyType;
+import be.elevenways.protoblast.server.process.ProcessOutcome;
+import be.elevenways.protoblast.server.process.Subprocess;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.IOException;
@@ -13,8 +15,8 @@ import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.Properties;
-import java.util.concurrent.TimeUnit;
 
 /**
  * The enrollment facts for a GENUINELY REMOTE Docker host, supplied out of band by an
@@ -129,31 +131,23 @@ public final class LiveRemoteHost {
      * @throws IllegalStateException when the scan disagrees with the recorded fingerprint
      */
     public String scanVerifiedKeyLine() throws IOException {
-        try {
-            // AIDEV-NOTE: -t ed25519, the one type read below: ssh-keyscan otherwise opens one unauthenticated
-            // connection per key type, and OpenSSH 10's PerSourcePenalties (noauth) on daystrom then refused this
-            // machine's next real connection mid-test ("Connection reset", run 1957).
-            Process scan = new ProcessBuilder("ssh-keyscan", "-T", "10", "-t", SshKeyType.ED25519.keyscanType(), "--",
-                HostKeys.parseTarget(this.target).host()).start();
-            String output = new String(scan.getInputStream().readAllBytes(),
-                StandardCharsets.UTF_8);
-            scan.waitFor(30, TimeUnit.SECONDS);
-            for (String line : output.split("\n")) {
-                if (!line.startsWith("#") && line.contains("ssh-ed25519 ")) {
-                    String keyLine = HostKeys.keyLineOf(line);
-                    String scanned = HostKeys.fingerprintOf(keyLine);
-                    if (!scanned.equals(this.fingerprint)) {
-                        throw new IllegalStateException("Scanned " + scanned + " but the"
-                            + " out-of-band fingerprint is " + this.fingerprint);
-                    }
-                    return keyLine;
+        // AIDEV-NOTE: -t ed25519, the one type read below: ssh-keyscan otherwise opens one unauthenticated
+        // connection per key type, and OpenSSH 10's PerSourcePenalties (noauth) on daystrom then refused this
+        // machine's next real connection mid-test ("Connection reset", run 1957).
+        ProcessOutcome scan = Subprocess.of("ssh-keyscan", "-T", "10", "-t", SshKeyType.ED25519.keyscanType(), "--",
+            HostKeys.parseTarget(this.target).host()).timeout(Duration.ofSeconds(30)).runChecked();
+        for (String line : scan.stdout().text().split("\n")) {
+            if (!line.startsWith("#") && line.contains("ssh-ed25519 ")) {
+                String keyLine = HostKeys.keyLineOf(line);
+                String scanned = HostKeys.fingerprintOf(keyLine);
+                if (!scanned.equals(this.fingerprint)) {
+                    throw new IllegalStateException("Scanned " + scanned + " but the"
+                        + " out-of-band fingerprint is " + this.fingerprint);
                 }
+                return keyLine;
             }
-            throw new IOException("ssh-keyscan offered no ed25519 key for " + this.target);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("interrupted scanning " + this.target);
         }
+        throw new IOException("ssh-keyscan offered no ed25519 key for " + this.target);
     }
 
     private static String require(Properties properties, String key) throws IOException {

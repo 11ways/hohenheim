@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.server.security.IpLiterals;
 import be.elevenways.hohenheim.server.upstream.TenantUpstreams;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.zenit.server.net.OutboundNetwork;
 import be.elevenways.zenit.server.net.OutboundUrlGuard;
 
@@ -16,13 +17,10 @@ import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -36,18 +34,20 @@ import java.util.concurrent.TimeoutException;
  * such as backend_1, which the resolver accepts. Every address is dialed through
  * {@link OutboundNetwork#connect}. An operator lookup that fails is never remembered, so a backend
  * that starts resolving is dialed on the next connection. What stays here is the passthrough's own
- * need: a lookup the accept path waits for at most until the connect deadline (a bounded pool, one
- * lookup per host in flight), the address-family interleave and the refusal to dial Hohenheim's own
- * public listener.
+ * need: a lookup the accept path waits for at most until the connect deadline (bounded: at most
+ * {@link #LOOKUP_WORKERS} resolve at once and {@link #LOOKUP_QUEUE} more wait, one lookup per host in
+ * flight), the address-family interleave and the refusal to dial Hohenheim's own public listener.
  */
 final class BackendConnector {
 
-    private static final ExecutorService VETTING = new ThreadPoolExecutor(
-        4, 4, 0, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<>(64), runnable -> {
-            Thread thread = new Thread(runnable, "tls-backend-vetting");
-            thread.setDaemon(true);
-            return thread;
-        }, new ThreadPoolExecutor.AbortPolicy());
+    /** Lookups resolving at once; the rest wait their turn, parked on a virtual thread. */
+    private static final int LOOKUP_WORKERS = 4;
+    /** Lookups that may wait for a worker before a new one is refused as a full queue. */
+    private static final int LOOKUP_QUEUE = 64;
+
+    private static final JobRunner VETTING = JobRunner.createProcessGlobal("tls-backend-vetting");
+    private static final Semaphore RESOLVING = new Semaphore(LOOKUP_WORKERS);
+    private static final Semaphore ADMITTED = new Semaphore(LOOKUP_WORKERS + LOOKUP_QUEUE);
     private static final ConcurrentHashMap<String, CompletableFuture<List<InetAddress>>> IN_FLIGHT =
         new ConcurrentHashMap<>();
 
@@ -149,30 +149,33 @@ final class BackendConnector {
         CompletableFuture<List<InetAddress>> created = new CompletableFuture<>();
         CompletableFuture<List<InetAddress>> existing = IN_FLIGHT.putIfAbsent(key, created);
         if (existing != null) return existing;
-        try {
-            VETTING.execute(() -> {
-                List<InetAddress> answer = null;
-                Throwable failure = null;
-                try {
-                    answer = addresses(host, publicOnly);
-                } catch (Throwable thrown) {
-                    failure = thrown;
-                }
-                // AIDEV-NOTE: the lookup leaves IN_FLIGHT BEFORE its answer is published. A waiter
-                // woken by the answer (a dependent stage runs on this very thread) must start a fresh
-                // lookup when it asks again; removing after completion handed it this finished,
-                // failed future back, so a failed operator lookup WAS remembered for that retry.
-                IN_FLIGHT.remove(key, created);
-                if (failure == null) {
-                    created.complete(answer);
-                } else {
-                    created.completeExceptionally(failure);
-                }
-            });
-        } catch (RejectedExecutionException e) {
+        if (!ADMITTED.tryAcquire()) {
             IN_FLIGHT.remove(key, created);
-            throw new IOException("backend DNS queue is full", e);
+            throw new IOException("backend DNS queue is full");
         }
+        VETTING.startThread(() -> {
+            List<InetAddress> answer = null;
+            Throwable failure = null;
+            RESOLVING.acquireUninterruptibly();
+            try {
+                answer = addresses(host, publicOnly);
+            } catch (Throwable thrown) {
+                failure = thrown;
+            } finally {
+                RESOLVING.release();
+                ADMITTED.release();
+            }
+            // AIDEV-NOTE: the lookup leaves IN_FLIGHT BEFORE its answer is published. A waiter
+            // woken by the answer (a dependent stage runs on this very thread) must start a fresh
+            // lookup when it asks again; removing after completion handed it this finished,
+            // failed future back, so a failed operator lookup WAS remembered for that retry.
+            IN_FLIGHT.remove(key, created);
+            if (failure == null) {
+                created.complete(answer);
+            } else {
+                created.completeExceptionally(failure);
+            }
+        });
         return created;
     }
 

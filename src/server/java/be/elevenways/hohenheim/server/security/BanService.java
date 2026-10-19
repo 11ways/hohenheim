@@ -29,12 +29,15 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.LongSupplier;
@@ -81,7 +84,7 @@ public final class BanService {
     private final AtomicLong droppedAutoBans = new AtomicLong();
     private volatile long lastDropLogMs;
     private final AtomicBoolean nftBootStarted = new AtomicBoolean();
-    private volatile @Nullable Thread nftBootThread;
+    private volatile @Nullable CompletableFuture<Void> nftBoot;
 
     /**
      * The active ban set, bound to its datasource by {@link DatasourceDerived}.
@@ -174,13 +177,18 @@ public final class BanService {
     public void boot() {
         refreshCache();
         if (nft.isEnabled() && this.nftBootStarted.compareAndSet(false, true)) {
-            this.nftBootThread = Thread.ofPlatform().daemon().name("nft-resync").start(() ->
+            // Its own daemon lane, named exactly "nft-resync": a sudo nft call can be slow, and nothing waits for it.
+            this.nftBoot = JobRunner.createDaemonSerial("nft-resync").runAsync(() ->
                 ExecutionIdentity.runDetachedAsSystem(HohenheimSystemPurposes.NFT_RESYNC, () -> {
                     Blast.log("NFT: background boot reconciliation started");
                     nft.setup(NftService.configuredPorts(), NftService.configuredSshPorts());
                     resyncNftables();
                     Blast.log("NFT: background boot reconciliation finished");
-                }));
+                })).whenComplete((done, failure) -> {
+                    if (failure != null) {
+                        Blast.log("NFT: background boot reconciliation failed -", failure);
+                    }
+                });
         }
     }
 
@@ -580,11 +588,14 @@ public final class BanService {
 
     /** Test seam: wait for the one background boot reconciliation. */
     void awaitNftBootForTests() throws InterruptedException {
-        Thread thread = this.nftBootThread;
-        if (thread != null) {
-            thread.join(5_000);
-            if (thread.isAlive()) {
+        CompletableFuture<Void> boot = this.nftBoot;
+        if (boot != null) {
+            try {
+                boot.get(5, TimeUnit.SECONDS);
+            } catch (TimeoutException running) {
                 throw new IllegalStateException("nft boot reconciliation did not finish");
+            } catch (ExecutionException failed) {
+                // Reported where it ran; the test reads its effects.
             }
         }
     }

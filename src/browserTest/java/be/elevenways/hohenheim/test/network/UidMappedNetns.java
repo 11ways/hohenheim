@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.network;
 
 import be.elevenways.hohenheim.server.security.NftRunner;
 import be.elevenways.hohenheim.server.security.ProcessNetworkPolicy;
+import be.elevenways.protoblast.server.process.RunningProcess;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -36,7 +37,7 @@ public final class UidMappedNetns implements AutoCloseable {
     /** Inner uids start at 1: 0 stays the fixture's own root (the mapped caller). */
     private static final int FIRST_MAPPED_INNER_UID = 1;
 
-    private final List<Process> holders = new ArrayList<>();
+    private final List<RunningProcess> holders = new ArrayList<>();
     private final long hostPid;
 
     public UidMappedNetns() throws IOException {
@@ -162,7 +163,7 @@ public final class UidMappedNetns implements AutoCloseable {
 
     /** Start a background TCP listener on one address inside the fixture. */
     public void listen(String address, int port) throws IOException {
-        Process listener = hold(enter(List.of("python3", "-c",
+        RunningProcess listener = hold(enter(List.of("python3", "-c",
             "import socket,time\n"
             + "s = socket.socket()\n"
             + "s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)\n"
@@ -174,7 +175,7 @@ public final class UidMappedNetns implements AutoCloseable {
 
     /** Start a background UDP responder that answers DNS queries with their own header id. */
     public void listenDns(String address) throws IOException {
-        Process responder = hold(enter(List.of("python3", "-c",
+        RunningProcess responder = hold(enter(List.of("python3", "-c",
             "import socket\n"
             + "s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)\n"
             + "s.bind(('" + address + "', 53))\n"
@@ -186,14 +187,14 @@ public final class UidMappedNetns implements AutoCloseable {
 
     @Override
     public void close() {
-        for (Process holder : this.holders) {
-            holder.destroyForcibly();
+        for (RunningProcess holder : this.holders) {
+            holder.stop();
         }
     }
 
     /** Start a holder and wait until it runs {@code program}; see {@link NamespaceHolders}. */
-    private Process hold(List<String> argv, String program) throws IOException {
-        Process process = NamespaceHolders.start(argv, program);
+    private RunningProcess hold(List<String> argv, String program) throws IOException {
+        RunningProcess process = NamespaceHolders.start(argv, program);
         this.holders.add(process);
         return process;
     }

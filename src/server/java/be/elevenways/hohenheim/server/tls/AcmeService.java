@@ -1102,7 +1102,7 @@ public class AcmeService {
         X509Certificate leaf = chain.get(0);
 
         return new OrderResult(
-            certificateChainToPem(chain),
+            CertificatePem.pemOf(chain),
             privateKeyToPem(context.domainKeyPair()),
             leaf.getNotAfter().toInstant()
         );
@@ -1230,15 +1230,14 @@ public class AcmeService {
         }
 
         KeyPair keyPair = KeyPairUtils.createKeyPair(2048);
-        StringWriter sw = new StringWriter();
-        KeyPairUtils.writeKeyPair(keyPair, sw);
+        String keyPem = privateKeyToPem(keyPair);
 
         Row newRow = certModel.createEmptyRow();
         newRow.set(CertificateModel.NICE_NAME, normalizedEmail.isEmpty()
             ? "ACME Account Key"
             : "ACME Account Key (" + normalizedEmail + ")");
         newRow.set(CertificateModel.PROVIDER, CertificateModel.PROVIDER_ACME_ACCOUNT);
-        newRow.set(CertificateModel.PRIVATE_KEY_PEM, sw.toString());
+        newRow.set(CertificateModel.PRIVATE_KEY_PEM, keyPem);
         newRow.set(CertificateModel.STATUS, CertificateModel.STATUS_ACTIVE);
         if (!normalizedEmail.isEmpty()) {
             newRow.set(CertificateModel.LETSENCRYPT_EMAIL, normalizedEmail);
@@ -1251,16 +1250,6 @@ public class AcmeService {
     // -----------------------------------------------------------------------
     // PEM serialization
     // -----------------------------------------------------------------------
-
-    private static String certificateChainToPem(List<X509Certificate> chain) throws Exception {
-        StringBuilder sb = new StringBuilder();
-        for (X509Certificate cert : chain) {
-            sb.append("-----BEGIN CERTIFICATE-----\n");
-            sb.append(Base64.getMimeEncoder(64, "\n".getBytes()).encodeToString(cert.getEncoded()));
-            sb.append("\n-----END CERTIFICATE-----\n");
-        }
-        return sb.toString();
-    }
 
     private static String privateKeyToPem(KeyPair keyPair) throws Exception {
         StringWriter sw = new StringWriter();

@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.util.PermissionBits;
 import be.elevenways.hohenheim.server.util.Tar;
 import be.elevenways.hohenheim.server.util.Watchdog;
 import be.elevenways.protoblast.common.dry.Dry;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -17,7 +18,6 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.concurrent.ScheduledFuture;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -127,6 +127,9 @@ public class DockerClient {
     // assert this counter stays at zero on a docker-less boot.
     private static final java.util.concurrent.atomic.AtomicLong CONSTRUCTED =
         new java.util.concurrent.atomic.AtomicLong();
+
+    /** Feeds an exec's stdin while the caller drains its output; a pipe or file read, so a platform thread. */
+    private static final JobRunner STDIN_FEEDERS = JobRunner.createProcessGlobal("docker-exec-stdin");
 
     public DockerClient(DockerTransport transport, long timeoutMillis) {
         this.transport = transport;
@@ -848,7 +851,7 @@ public class DockerClient {
         String execId = this.createExec(containerId, command, env, false, null, null);
         byte[] request = execStartRequest(execId);
         DockerStreamConnection connection = streamTransport().openStream(request, timeoutMillis);
-        ScheduledFuture<?> watchdog = Watchdog.schedule(connection::close, LONG_OP_TIMEOUT_MS);
+        Watchdog.Deadline watchdog = Watchdog.schedule(connection::close, LONG_OP_TIMEOUT_MS);
         DockerWire.FrameDemuxStream demux = new DockerWire.FrameDemuxStream(out, maxStdoutBytes);
         try (InputStream in = new DockerWire.ConnectionInputStream(connection)) {
             Http11.Head head = Http11.readHead(in, DockerWire.PEER);
@@ -858,13 +861,13 @@ public class DockerClient {
             Http11.copyBody(in, head, demux, Long.MAX_VALUE, DockerWire.PEER);
             demux.finish();
         } catch (IOException e) {
-            if (watchdog.isDone()) {
+            if (watchdog.expired()) {
                 throw new IOException("Docker exec stream timed out after "
                     + LONG_OP_TIMEOUT_MS + "ms", e);
             }
             throw e;
         } finally {
-            watchdog.cancel(false);
+            watchdog.cancel();
             connection.close();
         }
 
@@ -898,8 +901,8 @@ public class DockerClient {
         IOException[] feedFailure = new IOException[1];
         try (ContainerStream stream = ContainerStream.open(streamTransport(), request,
                 timeoutMillis, true, false)) {
-            ScheduledFuture<?> watchdog = Watchdog.schedule(stream::close, LONG_OP_TIMEOUT_MS);
-            Thread feeder = new Thread(() -> {
+            Watchdog.Deadline watchdog = Watchdog.schedule(stream::close, LONG_OP_TIMEOUT_MS);
+            Thread feeder = STDIN_FEEDERS.startBlockingThread(() -> {
                 byte[] chunk = new byte[64 * 1024];
                 try {
                     int read;
@@ -913,20 +916,18 @@ public class DockerClient {
                 } catch (IOException e) {
                     feedFailure[0] = e;
                 }
-            }, "docker-exec-stdin");
-            feeder.setDaemon(true);
-            feeder.start();
+            });
             try {
                 ContainerStream.Chunk chunk;
                 while ((chunk = stream.next()) != null) {
                     appendBounded(chunk.stderr() ? stderr : stdout, chunk.data(), 64 * 1024);
                 }
-                if (watchdog.isDone()) {
+                if (watchdog.expired()) {
                     throw new IOException("Docker exec stream timed out after "
                         + LONG_OP_TIMEOUT_MS + "ms");
                 }
             } finally {
-                watchdog.cancel(false);
+                watchdog.cancel();
                 stream.close();
                 try {
                     feeder.join(10_000);

@@ -1,12 +1,13 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.protoblast.server.process.ProcessOutcome;
+import be.elevenways.protoblast.server.process.Subprocess;
+import be.elevenways.protoblast.server.process.Termination;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.concurrent.TimeUnit;
+import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -25,25 +26,22 @@ import static org.assertj.core.api.Assertions.assertThat;
 class HohCliTest {
 
     @Test
-    void thePaasCliSmokeSuitePasses() throws IOException, InterruptedException {
+    void thePaasCliSmokeSuitePasses() {
         Path suite = Path.of("tools/hoh.test.js");
         assertThat(Files.isRegularFile(suite))
             .as("the CLI suite is where the wiring expects it (working dir = project root)")
             .isTrue();
 
-        Process process = new ProcessBuilder("node", suite.toString())
-            .redirectErrorStream(true)
-            .start();
-        String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-        boolean finished = process.waitFor(2, TimeUnit.MINUTES);
-        if (!finished) {
-            process.destroyForcibly();
-        }
-        assertThat(finished).as("the CLI suite terminated:\n" + output).isTrue();
+        ProcessOutcome outcome = Subprocess.of("node", suite.toString())
+            .mergeStderr()
+            .timeout(Duration.ofMinutes(2))
+            .run();
+        String output = outcome.stdout().text();
+        assertThat(outcome.termination()).as("the CLI suite terminated:\n" + output).isEqualTo(Termination.EXITED);
 
         // Both halves matter: the exit code is the verdict, and the banner proves the
         // suite RAN to the end rather than exiting 0 after asserting nothing.
-        assertThat(process.exitValue())
+        assertThat(outcome.exitCode())
             .as("node tools/hoh.test.js exited cleanly:\n" + output)
             .isEqualTo(0);
         assertThat(output)

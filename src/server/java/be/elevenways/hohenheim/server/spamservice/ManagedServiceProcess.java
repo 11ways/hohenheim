@@ -3,11 +3,11 @@ package be.elevenways.hohenheim.server.spamservice;
 import be.elevenways.protoblast.server.process.ProcessOutcome;
 import be.elevenways.protoblast.server.process.RunningProcess;
 import be.elevenways.protoblast.server.process.Subprocess;
+import be.elevenways.protoblast.server.process.TextSink;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -20,8 +20,9 @@ import java.util.function.UnaryOperator;
  * Owns one long-lived service process and keeps the redacted tail of what it writes.
  *
  * AIDEV-NOTE: the process is a {@link Subprocess} the caller describes (its session, stop operator and stop grace
- * come from {@code SystemUsers.execution}); this class only adds the merged output, which a platform thread reads
- * into a bounded tail, and the one stdin line, written through a pipe so its bytes can be cleared afterwards.
+ * come from {@code SystemUsers.execution}); this class only adds the merged output, which the subprocess's own pump
+ * decodes into a bounded tail ({@link TextSink}), and the one stdin line, written through a pipe so its bytes can be
+ * cleared afterwards. The outcome resolves only once that pump drained, so a stop leaves the tail complete.
  *
  * @author Jelle De Loecker
  * @since 0.1.0
@@ -34,19 +35,22 @@ public final class ManagedServiceProcess {
     private final RunningProcess process;
     private final UnaryOperator<String> redactor;
     private final StringBuilder output = new StringBuilder();
-    private final Thread outputPump;
 
-    private ManagedServiceProcess(@NonNull RunningProcess process, @NonNull UnaryOperator<String> redactor,
+    private ManagedServiceProcess(@NonNull Subprocess process, @NonNull UnaryOperator<String> redactor,
                                   @Nullable String stdinLine) throws IOException {
-        this.process = process;
         this.redactor = redactor;
-        this.outputPump = Thread.ofPlatform().daemon().name("managed-service-" + process.pid() + "-output")
-            .start(() -> pump(process.stdout()));
+        try {
+            this.process = process.mergeStderr()
+                .stdoutTo(TextSink.chunks(StandardCharsets.UTF_8, this::append))
+                .stdinPipe()
+                .start();
+        } catch (RuntimeException refused) {
+            throw new IOException("Could not start " + process.command().get(0), refused);
+        }
         try {
             writeStdin(stdinLine);
         } catch (IOException e) {
             this.process.stopTree();
-            awaitPump();
             throw e;
         }
     }
@@ -65,13 +69,7 @@ public final class ManagedServiceProcess {
     public static @NonNull ManagedServiceProcess start(@NonNull Subprocess process,
                                                         @NonNull UnaryOperator<String> redactor,
                                                         @Nullable String stdinLine) throws IOException {
-        RunningProcess running;
-        try {
-            running = process.mergeStderr().streamStdout().stdinPipe().start();
-        } catch (RuntimeException refused) {
-            throw new IOException("Could not start " + process.command().get(0), refused);
-        }
-        return new ManagedServiceProcess(running, redactor, stdinLine);
+        return new ManagedServiceProcess(process, redactor, stdinLine);
     }
 
     public long pid() {
@@ -119,9 +117,7 @@ public final class ManagedServiceProcess {
      * @return true when nothing of the session is known to run afterwards
      */
     public synchronized boolean stop() {
-        boolean ended = this.process.stopTree();
-        awaitPump();
-        return ended;
+        return this.process.stopTree();
     }
 
     public @NonNull String output() {
@@ -144,18 +140,6 @@ public final class ManagedServiceProcess {
         }
     }
 
-    private void pump(InputStream input) {
-        byte[] buffer = new byte[8_192];
-        try (input) {
-            int count;
-            while ((count = input.read(buffer)) != -1) {
-                append(new String(buffer, 0, count, StandardCharsets.UTF_8));
-            }
-        } catch (IOException ignored) {
-            // The stream closing during session cleanup is normal.
-        }
-    }
-
     private void append(String text) {
         if (text == null || text.isEmpty()) {
             return;
@@ -166,18 +150,6 @@ public final class ManagedServiceProcess {
             if (overflow > 0) {
                 this.output.delete(0, overflow);
             }
-        }
-    }
-
-    private void awaitPump() {
-        boolean interrupted = Thread.interrupted();
-        try {
-            this.outputPump.join(2_000);
-        } catch (InterruptedException e) {
-            interrupted = true;
-        }
-        if (interrupted) {
-            Thread.currentThread().interrupt();
         }
     }
 }

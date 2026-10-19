@@ -9,7 +9,6 @@ import java.time.Duration;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.concurrent.ScheduledFuture;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -103,7 +102,7 @@ public final class ContainerStream implements ConsoleStream {
                                          boolean stdinOpen, boolean rawStream) throws IOException {
         DockerStreamConnection connection = transport.openStream(request, headerTimeoutMs);
         // Bounds the header wait at open time; a stalled daemon must not pin the opener.
-        ScheduledFuture<?> watchdog = Watchdog.schedule(connection::close, headerTimeoutMs);
+        Watchdog.Deadline watchdog = Watchdog.schedule(connection::close, headerTimeoutMs);
         try {
             return new ContainerStream(connection, stdinOpen, rawStream, headerTimeoutMs);
         } catch (IOException e) {
@@ -122,7 +121,7 @@ public final class ContainerStream implements ConsoleStream {
             }
             throw new IOException(e.getMessage() + " (" + evidence + ")", e);
         } finally {
-            watchdog.cancel(false);
+            watchdog.cancel();
         }
     }
 
@@ -268,7 +267,7 @@ public final class ContainerStream implements ConsoleStream {
      */
     private @NonNull String readErrorBody(long contentLength) {
         ByteArrayOutputStream body = new ByteArrayOutputStream();
-        ScheduledFuture<?> deadline = Watchdog.schedule(this.connection::close, ERROR_BODY_TIMEOUT_MS);
+        Watchdog.Deadline deadline = Watchdog.schedule(this.connection::close, ERROR_BODY_TIMEOUT_MS);
         try {
             long wanted = contentLength < 0 ? MAX_ERROR_BODY : Math.min(contentLength, MAX_ERROR_BODY);
             while (body.size() < wanted) {
@@ -277,7 +276,7 @@ public final class ContainerStream implements ConsoleStream {
                     break;
                 }
                 if (filled == 0) {
-                    if (deadline.isDone()) {
+                    if (deadline.expired()) {
                         break;
                     }
                     idle();
@@ -290,7 +289,7 @@ public final class ContainerStream implements ConsoleStream {
         } catch (IOException ignored) {
             // whatever was read is the evidence (the deadline closing the connection included)
         } finally {
-            deadline.cancel(false);
+            deadline.cancel();
         }
         return body.toString(StandardCharsets.UTF_8);
     }

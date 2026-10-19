@@ -12,17 +12,19 @@ import java.io.IOException;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.security.PrivateKey;
+import java.security.cert.CertificateEncodingException;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * THE reading of certificate PEM text: a chain is the text's CERTIFICATE blocks only, a key is the first private key
- * of the key text.
+ * THE certificate PEM text: a chain read is the text's CERTIFICATE blocks only, a key is the first private key of the
+ * key text, and a chain written is its certificates' CERTIFICATE blocks ({@link #pemOf}).
  *
  * AIDEV-NOTE: a stored certificate text may also hold its private key (a bundle pasted or written as one). The proxy's
  * store, the public chain download and an upload all split through here, so none of them parses a key block as a
@@ -91,6 +93,21 @@ public final class CertificatePem {
                 new ByteArrayInputStream(block.getBytes(StandardCharsets.UTF_8))));
         }
         return chain;
+    }
+
+    /**
+     * @return the certificates as CERTIFICATE blocks, in the order given, each ended by a newline
+     * @throws CertificateEncodingException when a certificate cannot be encoded
+     */
+    public static @NonNull String pemOf(@NonNull List<X509Certificate> chain) throws CertificateEncodingException {
+        Base64.Encoder lines = Base64.getMimeEncoder(64, new byte[] {'\n'});
+        StringBuilder text = new StringBuilder();
+        for (X509Certificate certificate : chain) {
+            text.append("-----BEGIN CERTIFICATE-----\n")
+                .append(lines.encodeToString(certificate.getEncoded()))
+                .append("\n-----END CERTIFICATE-----\n");
+        }
+        return text.toString();
     }
 
     /**

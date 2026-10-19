@@ -21,19 +21,22 @@ import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
 import be.elevenways.zenit.server.orm.crypto.KeyringGuard;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import be.elevenways.zenit.server.setting.ServerSettings;
+import be.elevenways.protoblast.server.process.ProcessOutcome;
+import be.elevenways.protoblast.server.process.Subprocess;
+import be.elevenways.protoblast.server.process.Termination;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.io.OutputStream;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -293,21 +296,17 @@ class LiveControlPlaneOffHostBackupTest {
 
     /** Stream a remote file down over the pinned ssh seam, with no controller state involved. */
     private static void remoteFetch(String remotePath, Path destination) throws IOException {
-        try {
-            List<String> argv = HostKeys.pinnedArgv("hohenheim-livetest",
-                pinnedKeyLine, remote.target(),
-                List.of("-o", "IdentitiesOnly=yes", "-i", identityPath,
-                    "-o", "ConnectTimeout=10"));
-            argv.add("cat " + shellQuoted(remotePath));
-            Process process = new ProcessBuilder(argv)
-                .redirectOutput(destination.toFile()).start();
-            if (!process.waitFor(120, TimeUnit.SECONDS) || process.exitValue() != 0) {
-                process.destroyForcibly();
-                throw new IOException("remote fetch failed for " + remotePath);
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("interrupted fetching " + remotePath);
+        List<String> argv = HostKeys.pinnedArgv("hohenheim-livetest",
+            pinnedKeyLine, remote.target(),
+            List.of("-o", "IdentitiesOnly=yes", "-i", identityPath,
+                "-o", "ConnectTimeout=10"));
+        argv.add("cat " + shellQuoted(remotePath));
+        ProcessOutcome outcome;
+        try (OutputStream file = Files.newOutputStream(destination)) {
+            outcome = Subprocess.of(argv).stdoutTo(file).timeout(Duration.ofSeconds(120)).runChecked();
+        }
+        if (!outcome.succeeded()) {
+            throw new IOException("remote fetch failed for " + remotePath + ": " + outcome.describe());
         }
     }
 
@@ -316,30 +315,20 @@ class LiveControlPlaneOffHostBackupTest {
      * target -- so "the file is there" is never the target vouching for itself.
      */
     private static String remoteExec(String command) throws IOException {
-        try {
-            List<String> argv = HostKeys.pinnedArgv("hohenheim-livetest",
-                pinnedKeyLine, remote.target(),
-                List.of("-o", "IdentitiesOnly=yes", "-i", identityPath,
-                    "-o", "ConnectTimeout=10"));
-            argv.add(command);
-            Process process = new ProcessBuilder(argv).start();
-            String output = new String(process.getInputStream().readAllBytes(),
-                StandardCharsets.UTF_8);
-            String errors = new String(process.getErrorStream().readAllBytes(),
-                StandardCharsets.UTF_8);
-            if (!process.waitFor(60, TimeUnit.SECONDS)) {
-                process.destroyForcibly();
-                throw new IOException("remote command timed out: " + command);
-            }
-            if (process.exitValue() != 0) {
-                throw new IOException("remote command failed (" + process.exitValue()
-                    + "): " + command + " -- " + errors.trim());
-            }
-            return output.trim();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("interrupted running " + command);
+        List<String> argv = HostKeys.pinnedArgv("hohenheim-livetest",
+            pinnedKeyLine, remote.target(),
+            List.of("-o", "IdentitiesOnly=yes", "-i", identityPath,
+                "-o", "ConnectTimeout=10"));
+        argv.add(command);
+        ProcessOutcome outcome = Subprocess.of(argv).timeout(Duration.ofSeconds(60)).runChecked();
+        if (outcome.termination() == Termination.TIMED_OUT) {
+            throw new IOException("remote command timed out: " + command);
         }
+        if (outcome.exitCode() != 0) {
+            throw new IOException("remote command failed (" + outcome.exitCode()
+                + "): " + command + " -- " + outcome.stderr().text().trim());
+        }
+        return outcome.stdout().text().trim();
     }
 
     private static String localHostname() {

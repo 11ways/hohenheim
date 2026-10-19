@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.incus;
 
+import be.elevenways.hohenheim.server.tls.CertificatePem;
 import be.elevenways.protoblast.common.util.Closeables;
 import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -27,6 +28,7 @@ import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.Base64;
+import java.util.List;
 
 /**
  * TLS assembly for the Incus HTTPS lane: the per-host CLIENT identity (a self-signed
@@ -62,10 +64,7 @@ final class IncusTls {
     /** Re-encode a certificate as PEM (the pin's stored spelling). */
     static @NonNull String toPem(@NonNull X509Certificate certificate) throws IOException {
         try {
-            return "-----BEGIN CERTIFICATE-----\n"
-                + Base64.getMimeEncoder(64, new byte[] {'\n'})
-                    .encodeToString(certificate.getEncoded())
-                + "\n-----END CERTIFICATE-----\n";
+            return CertificatePem.pemOf(List.of(certificate));
         } catch (CertificateEncodingException e) {
             throw new IOException("cannot encode a certificate", e);
         }
