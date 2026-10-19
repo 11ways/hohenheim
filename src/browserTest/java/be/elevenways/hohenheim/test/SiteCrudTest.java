@@ -63,6 +63,10 @@ class SiteCrudTest extends HohenheimTestBase {
             .as("a new site lands on its Domains tab, where the hostname goes")
             .hasValueSatisfying(location -> assertThat(location)
                 .startsWith("/admin/sites/" + siteId + "/page/domains"));
+        // The create reports itself under its OWN handoff; redeeming it here leaves no unread toast that a later
+        // action's redirect could be mistaken for.
+        assertThat(popFlash(response)).as("the create reports itself as a toast").isNotNull()
+            .extracting(flash -> flash.message().key()).isEqualTo("created");
         navigateToApp("/admin/sites/" + siteId + "/page/domains");
         waitForHydration();
         assertThat(page.content())

@@ -60,7 +60,10 @@ class ShutdownOrderJourneyTest {
 
     @Test
     void aStopEndsEveryDatabaseWorkerBeforeTheDatasourceCloses(@TempDir Path directory) throws Exception {
-        RuntimeStopProbe.Outcome outcome = RuntimeStopProbe.fork(Probe.class, directory.resolve("shutdown.log"));
+        // The fork starts its database from this invocation's migrated template, as every in-JVM class does.
+        String templates = TestDatabases.templateDirForChild();
+        RuntimeStopProbe.Outcome outcome = RuntimeStopProbe.fork(Probe.class, directory.resolve("shutdown.log"),
+            templates == null ? new String[0] : new String[] {templates});
         String output = outcome.output();
 
         // 1. The fork booted the real ServerMain, its secondary refresh reached the primary, and the stop ran.
@@ -85,7 +88,11 @@ class ShutdownOrderJourneyTest {
     /** The fork's entry point: boot, wait for the refresh to reach the primary, stop, report. */
     public static final class Probe {
 
+        /** @param args the shared migrated-template directory ({@link TestDatabases#templateDirForChild}), if any */
         public static void main(String[] args) throws Exception {
+            if (args.length > 0) {
+                System.setProperty(TestDatabases.TEMPLATE_DIR_PROPERTY, args[0]);
+            }
             JobRunner listening = JobRunner.create("silent-primary");
             try (DatagramSocket primary = new DatagramSocket(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0))) {
                 CountDownLatch queried = new CountDownLatch(1);

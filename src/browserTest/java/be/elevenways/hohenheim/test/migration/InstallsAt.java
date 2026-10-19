@@ -5,6 +5,7 @@ import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import be.elevenways.zenit.server.setting.ServerSettings;
+import be.elevenways.zenit.test.support.TestSqliteFiles;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.nio.file.Path;
@@ -39,7 +40,7 @@ public final class InstallsAt {
      * @throws IllegalStateException when that partial migration does not succeed
      */
     public static void migrateThrough(@NonNull Path file, @NonNull String version) {
-        SqliteDatasource datasource = new SqliteDatasource("jdbc:sqlite:" + file.toAbsolutePath());
+        SqliteDatasource datasource = new SqliteDatasource(TestSqliteFiles.url(file));
         try {
             new MigrationRunner(datasource, discoveredThrough(datasource.getDatasourceIdentifier(), version))
                 .migrate().requireSuccess();

@@ -10,6 +10,7 @@ import be.elevenways.zenit.server.orm.migration.MigrationChecksum;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import be.elevenways.zenit.server.setting.DryFileSource;
 import be.elevenways.zenit.server.setting.ServerSettings;
+import be.elevenways.zenit.test.support.TestSqliteFiles;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
@@ -171,7 +172,7 @@ class MigrationIntegrityTest {
             file.delete();
             file.deleteOnExit();
             InstallsAt.migrateThrough(file.toPath(), shipped);
-            SqliteDatasource datasource = new SqliteDatasource("jdbc:sqlite:" + file.getAbsolutePath());
+            SqliteDatasource datasource = new SqliteDatasource(TestSqliteFiles.url(file.toPath()));
             List<String> appended = new ArrayList<>();
             List<String> own = new ArrayList<>();
             for (Migration migration : InstallsAt.hohenheimMigrations(datasource.getDatasourceIdentifier())) {
@@ -525,14 +526,14 @@ class MigrationIntegrityTest {
         File db = File.createTempFile("hohenheim-migration-" + label, ".db");
         db.delete();
         db.deleteOnExit();
-        return new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath() + "?foreign_keys=on");
+        return new SqliteDatasource(TestSqliteFiles.url(db.toPath()) + "&foreign_keys=on");
     }
 
     private static SqliteDatasource emptyDatabase(String label) throws Exception {
         File db = File.createTempFile("hohenheim-migration-" + label, ".db");
         db.delete();
         db.deleteOnExit();
-        return new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
+        return new SqliteDatasource(TestSqliteFiles.url(db.toPath()));
     }
 
     private static List<String> columnsOf(SqliteDatasource datasource, String pragmaSql) {

@@ -32,6 +32,7 @@ import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.server.http.ZenitHttpServer;
 import be.elevenways.zenit.server.setting.ServerSettings;
+import be.elevenways.zenit.test.support.TestSqliteFiles;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Response;
 import com.microsoft.playwright.options.LoadState;
@@ -104,7 +105,9 @@ class EmptyDatabaseWalkthroughBrowserTest extends HawkeyeBrowserTestBase {
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Roles.DATABASES, true);
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Roles.INSTANCES, true);
             HohenheimSettingsBoot.load();
-            Zenit.SETTINGS_VALUES.setValue(ServerSettings.Database.URL, "jdbc:sqlite:" + database);
+            // Production's datasource over the new file, committing without a disk flush (TestSqliteFiles): the
+            // boot's every migration and seed, and each visit's session write, would otherwise wait on the disk.
+            Zenit.SETTINGS_VALUES.setValue(ServerSettings.Database.URL, TestSqliteFiles.url(database));
             Zenit.SETTINGS_VALUES.setValue(ServerSettings.Storage.LOCAL_ROOT, storage);
             Zenit.SETTINGS_VALUES.setValue(ServerSettings.Network.AUTO_START_HTTP, false);
             Zenit.SETTINGS_VALUES.setValue(ServerSettings.Debugging.DEBUG, true);

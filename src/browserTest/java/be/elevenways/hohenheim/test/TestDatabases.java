@@ -17,6 +17,7 @@ import be.elevenways.zenit.server.orm.seed.Seeds;
 import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.server.task.TaskRuntime;
 import be.elevenways.zenit.test.support.TestSqliteFiles;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -43,6 +44,9 @@ import java.nio.file.StandardCopyOption;
  */
 public final class TestDatabases {
 
+    /** The system property naming where forks of one gradle invocation share a migrated template. */
+    public static final String TEMPLATE_DIR_PROPERTY = "hohenheim.testdb.template.dir";
+
     private static Path template;
 
     private TestDatabases() {
@@ -58,8 +62,28 @@ public final class TestDatabases {
      * migration change cannot leak in from a previous run.
      */
     private static Path sharedTemplateDir() {
-        String dir = System.getProperty("hohenheim.testdb.template.dir");
+        String dir = System.getProperty(TEMPLATE_DIR_PROPERTY);
         return dir == null || dir.isBlank() ? null : Path.of(dir);
+    }
+
+    /**
+     * The shared template directory for a JVM this one starts, its template migrated here first when none exists.
+     *
+     * AIDEV-NOTE: a child JVM inherits no system property (Subprocess.ofJavaMain passes the classpath only), so
+     * without this a forked runtime's freshDatabase re-ran the full migration set every time. The child sets
+     * {@link #TEMPLATE_DIR_PROPERTY} from it before its own freshDatabase.
+     *
+     * @return the directory, or null outside gradle
+     */
+    public static synchronized @Nullable String templateDirForChild() throws Exception {
+        Path shared = sharedTemplateDir();
+        if (shared == null) {
+            return null;
+        }
+        if (!Files.isRegularFile(shared.resolve("template.db"))) {
+            freshDatabase();
+        }
+        return shared.toString();
     }
 
     /**

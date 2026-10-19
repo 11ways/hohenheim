@@ -39,6 +39,9 @@ import be.elevenways.zenit.common.flash.FlashNotice;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import be.elevenways.zenit.test.support.FlashHandoff;
+import be.elevenways.hawkeye.common.Hawkeye;
+import be.elevenways.zenit.server.flash.Flash;
+import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -179,13 +182,30 @@ public abstract class HohenheimTestBase extends ZenitBrowserTestBase {
         return popFlash(answer, sessionToken);
     }
 
-    /** Take the flash toast of an ARBITRARY session (a tenant's, not the admin's) that {@code answer} leads to. */
+    /**
+     * Take the flash toast of an ARBITRARY session (a tenant's, not the admin's) that {@code answer} leads to.
+     *
+     * AIDEV-NOTE: a redirect's toast is taken by its handoff token ALONE. Flash.take also serves the load the
+     * untabbed bucket and every handoff of that bucket older than Flash.HANDOFF_REDEEM_MILLIS (10s), as a real
+     * document load would; on a loaded host an earlier action's unread toast ("created") had aged into that fallback
+     * and answered for a later action that handed nothing off (SiteCrudTest, archdev). Redeeming under a fresh tab id
+     * leaves only the token's own bucket eligible, and a redirect without a token reports that nothing was handed off.
+     */
     protected static @Nullable FlashNotice popFlash(@NonNull HttpResponse<?> answer, @NonNull String token) {
         Session session = Zenit.getSessionStore().get(SessionToken.of(token));
         if (session == null) {
             return null;
         }
-        return FlashHandoff.take(session, answer.headers().firstValue("Location").orElse(null));
+        String location = answer.headers().firstValue("Location").orElse(null);
+        if (location == null) {
+            return FlashHandoff.take(session, null);
+        }
+        String handoff = FlashHandoff.token(location);
+        if (handoff == null) {
+            return null;
+        }
+        return Flash.take(FlashHandoff.conduitFor(session, handoff)
+            .setRequestHeader(Hawkeye.TAB_ID_HEADER, SecureTokens.randomToken()));
     }
 
     /** @return the toast's words in {@code languageTag}, resolved from the shipped catalogs the shell reads */

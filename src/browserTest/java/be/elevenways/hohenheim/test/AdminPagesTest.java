@@ -208,7 +208,10 @@ class AdminPagesTest extends HohenheimTestBase {
         assertThat(page.locator(chips).count()).as("the removed chip is gone").isEqualTo(2);
 
         page.click(".cms-settings-actions pl-button");
-        page.waitForCondition(() -> page.locator("pl-toast").count() > 0);
+        // The save's own outcome, never any toast: a toast an earlier write of the shared session left pending could
+        // already show and pass a bare toast count before this save landed.
+        page.waitForCondition(() -> Integer.valueOf(7).equals(Zenit.SETTINGS_VALUES.getValue(
+            HohenheimSettings.Security.DOMAIN_MISS_THRESHOLD)) && page.locator("pl-toast").count() > 0);
 
         // The DIFF-based write-back landed in the framework's settings/local.dry (the lane's
         // settings root, never the checkout's) under the hohenheim group.
