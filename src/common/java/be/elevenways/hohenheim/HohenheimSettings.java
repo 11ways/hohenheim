@@ -729,7 +729,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<Integer> MAX_DUMP_MB = GROUP.buildSetting("max_dump_mb", Integer.class)
             .defaultValue(2048)
-            .suffix("MiB")
+            .byteSize(ByteUnit.MEGABYTE)
             .description("Upper bound in MiB for one managed-database dump written out of a "
                 + "container. Dumps stream to disk and are cut off (partial file deleted) the "
                 + "moment they grow past this, so a runaway dump can neither fill the disk nor "
@@ -765,7 +765,7 @@ public class HohenheimSettings {
         public static final SettingDefinition<Integer> CONTAINER_LOG_MAX_SIZE_MB = GROUP
             .buildSetting("container_log_max_size_mb", Integer.class)
             .defaultValue(10)
-            .suffix("MB")
+            .byteSize(ByteUnit.MEGABYTE)
             .description("Size at which a single managed container's log file rotates. "
                 + "Without a cap the daemon's json-file driver grows one file forever, so "
                 + "a workload that prints in a loop fills the host disk out from under "
@@ -1060,7 +1060,7 @@ public class HohenheimSettings {
             .buildSetting("max_memory_mb_per_owner", Integer.class)
             .defaultValue(0)
             .label("Max workload memory per owner")
-            .suffix("MB")
+            .byteSize(ByteUnit.MEGABYTE)
             .description("Default cap on the total workload memory one owner may hold, summed "
                 + "over their live instances. Each workload is charged the memory its "
                 + "driver actually caps it to: its declared memory limit, or its kind's "
@@ -1073,7 +1073,7 @@ public class HohenheimSettings {
         public static final SettingDefinition<Integer> MAX_DISK_GB_PER_OWNER = GROUP
             .buildSetting("max_disk_gb_per_owner", Integer.class)
             .defaultValue(0)
-            .suffix("GB")
+            .byteSize(ByteUnit.GIGABYTE)
             .description("Default cap on the total attached-disk size (GB, summed over "
                 + "instance device rows) one owner may hold. A per-owner Instance Quota "
                 + "record overrides this. 0 or less means NO cap; usage is counted "
@@ -1124,7 +1124,7 @@ public class HohenheimSettings {
             .buildSetting("host_memory_reserve_mb", Integer.class)
             .defaultValue(768)
             .label("Host memory reserve")
-            .suffix("MB")
+            .byteSize(ByteUnit.MEGABYTE)
             .description("Memory subtracted from a host's measured total before any "
                 + "workload may be booked against it -- the kernel, the container/VM "
                 + "daemon and page cache live here. Raise it on a host that also runs "
@@ -1341,7 +1341,7 @@ public class HohenheimSettings {
         public static final SettingDefinition<Integer> MEMORY_LIMIT_MB = GROUP
             .buildSetting(InstanceKindFields.MEMORY_LIMIT_MB, Integer.class)
             .defaultValue(2048)
-            .suffix("MiB")
+            .byteSize(ByteUnit.MEGABYTE)
             .description("Memory ceiling of one build container; the kernel OOM-kills the "
                 + "build rather than the host")
             .build();
@@ -1349,7 +1349,7 @@ public class HohenheimSettings {
         public static final SettingDefinition<Integer> DISK_LIMIT_MB = GROUP
             .buildSetting("disk_limit_mb", Integer.class)
             .defaultValue(4096)
-            .suffix("MiB")
+            .byteSize(ByteUnit.MEGABYTE)
             .description("Ceiling on the build container's writable layer, on the build "
                 + "context pushed in and on the artifact read back out. A watchdog polls "
                 + "the daemon's own size accounting and kills a build that crosses it -- "
@@ -1374,7 +1374,7 @@ public class HohenheimSettings {
         public static final SettingDefinition<Integer> MAX_ARTIFACT_MB = GROUP
             .buildSetting("max_artifact_mb", Integer.class)
             .defaultValue(1024)
-            .suffix("MiB")
+            .byteSize(ByteUnit.MEGABYTE)
             .description("Upper bound in MiB for the image tar read back out of a build "
                 + "sandbox. The read is buffered through controller memory (the same "
                 + "limitation snapshot capture has), so this cap is the heap guard: a "
@@ -1384,7 +1384,7 @@ public class HohenheimSettings {
         public static final SettingDefinition<Integer> MAX_UPLOAD_MB = GROUP
             .buildSetting("max_upload_mb", Integer.class)
             .defaultValue(512)
-            .suffix("MiB")
+            .byteSize(ByteUnit.MEGABYTE)
             .description("Upper bound in MiB for an artifact uploaded to be released. "
                 + "Deliberately NOT max_artifact_mb: that one guards the heap because the "
                 + "image tar is read through controller memory, while an upload is streamed "
@@ -1394,7 +1394,7 @@ public class HohenheimSettings {
         public static final SettingDefinition<Integer> LOG_LIMIT_KB = GROUP
             .buildSetting("log_limit_kb", Integer.class)
             .defaultValue(512)
-            .suffix("KiB")
+            .byteSize(ByteUnit.KILOBYTE)
             .description("Captured build log kept on the build operation. Output past the "
                 + "cap is dropped with a marker line -- a build that prints forever must "
                 + "not fill the control-plane database")
@@ -1492,7 +1492,7 @@ public class HohenheimSettings {
         public static final SettingDefinition<Integer> MAX_FILE_KB = GROUP
             .buildSetting("max_file_kb", Integer.class)
             .defaultValue(8192)
-            .suffix("KiB")
+            .byteSize(ByteUnit.KILOBYTE)
             .description("Upper bound in KiB for one file read or written through the file "
                 + "manager. Enforced DURING the transfer in both directions: an oversized "
                 + "download aborts mid-read and an oversized upload is refused before a "
@@ -1549,7 +1549,7 @@ public class HohenheimSettings {
         public static final SettingDefinition<Integer> MAX_FILE_MB = GROUP.buildSetting("max_file_mb", Integer.class)
             .hostOnly()
             .defaultValue(4096)
-            .suffix("MiB")
+            .byteSize(ByteUnit.MEGABYTE)
             .description("Largest file one SFTP read or upload moves. Separate from files.max_file_kb because SFTP "
                 + "spools to disk while the browser lane holds a file in memory")
             .restartRequired()
@@ -1635,7 +1635,7 @@ public class HohenheimSettings {
         public static final SettingDefinition<Integer> MAX_ARCHIVE_MB = GROUP
             .buildSetting("max_archive_mb", Integer.class)
             .defaultValue(1024)
-            .suffix("MiB")
+            .byteSize(ByteUnit.MEGABYTE)
             .description("Upper bound in MiB for one captured volume archive. Captures are "
                 + "buffered through controller memory (there is no streaming "
                 + "transport), so this cap is what protects the heap -- a volume larger than "

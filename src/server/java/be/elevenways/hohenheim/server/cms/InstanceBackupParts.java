@@ -271,7 +271,7 @@ public final class InstanceBackupParts {
             .column(ColumnSpec.fromField(InstanceBackupModel.TARGET_ID)
                 .relation(RelationPick.of(InstanceBackupModel.TARGET_ID, BackupTargetModel.MODEL_ID).build())
                 .hidden().build())
-            .column(ColumnSpec.fromField(InstanceBackupModel.SIZE_BYTES).byteSize().hidden().build())
+            .column(ColumnSpec.fromField(InstanceBackupModel.SIZE_BYTES).hidden().build())
             // AIDEV-NOTE: the remote key is what a restore is driven by on the target itself. It stays out of the
             // default layout (it is long and noise on a healthy list) but the picker can bring it back, chip and all.
             .column(ColumnSpec.fromField(InstanceBackupModel.REMOTE_KEY).hidden().copyable().build())

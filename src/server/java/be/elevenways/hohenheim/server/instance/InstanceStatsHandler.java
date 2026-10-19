@@ -60,8 +60,11 @@ public final class InstanceStatsHandler implements ChannelHandler<Object, Object
         }
         this.instanceId = instanceId;
 
+        // AIDEV-NOTE: inside onOpen the link is OPENING, neither open nor closed, and what it submits is queued until
+        // the client hears the open: that is where the hub replays the readings it holds, so a tab whose link opens
+        // after a sample still reads it. An isOpen() guard here dropped the whole replay.
         Consumer<InstanceStats.Sample> viewer = sample -> {
-            if (this.link.isOpen()) {
+            if (!this.link.isClosed()) {
                 this.link.submit(sample.toMap());
             }
         };

@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.host.VolumeBackends;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.protoblast.common.util.BlastString;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -494,7 +495,10 @@ public final class ContainerHardening {
      */
     private static @NonNull Map<String, Object> logConfig() {
         Map<String, Object> config = new LinkedHashMap<>();
-        config.put("max-size", logMaxSizeMb() + "m");
+        // AIDEV-NOTE: in bytes on purpose. The json-file driver parses max-size with go-units' FromHumanSize, which is
+        // decimal ("10m" is ten million bytes), while the setting counts megabytes as every size here does, 1024 x
+        // 1024 bytes each; a bare number is bytes to that parser.
+        config.put("max-size", String.valueOf(ByteUnit.MEGABYTE.bytes(logMaxSizeMb())));
         config.put("max-file", String.valueOf(logMaxFiles()));
         Map<String, Object> logConfig = new LinkedHashMap<>();
         logConfig.put("Type", "json-file");
@@ -502,7 +506,7 @@ public final class ContainerHardening {
         return logConfig;
     }
 
-    /** @return the configured rotation size in MB for one container log file, never below 1 */
+    /** @return the configured rotation size of one container log file in megabytes (1024 x 1024 bytes), at least 1 */
     public static int logMaxSizeMb() {
         return HohenheimSettings.positiveOrDefault(HohenheimSettings.Security.CONTAINER_LOG_MAX_SIZE_MB);
     }

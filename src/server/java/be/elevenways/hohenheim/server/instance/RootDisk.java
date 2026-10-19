@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
+
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.zenit.common.orm.field.IntegerField;
@@ -41,7 +43,7 @@ public final class RootDisk {
         return schema.addField(IntegerField.builder().name(SETTING)
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("root_disk_gb"))
             .help(HohenheimMicrocopy.HELP.of("root_disk_gb"))
-            .suffix("GB")
+            .byteSize(ByteUnit.GIGABYTE)
             .build());
     }
 

@@ -139,6 +139,33 @@ public final class HohenheimStatsFunctions {
     }
 
     /**
+     * Whether an arriving sample was read after the one an element already holds: the hub hands every new link the
+     * readings it holds, which a page seeded from those same readings must not fold a second time.
+     *
+     * @return true when nothing is held yet, or the sample's moment is later than the held one's
+     */
+    @HawkeyeFunction(
+        name = "newer",
+        namespace = "InstanceStats",
+        description = "Whether a sample was read after the held one",
+        returnType = Boolean.class,
+        returnsReference = false,
+        arguments = {
+            @Arg(name = "sample", required = true, type = Map.class, expectsReference = false,
+                 description = "The arrived sample map"),
+            @Arg(name = "held", required = false, type = Map.class, expectsReference = false,
+                 description = "The newest sample the element holds, or null")
+        }
+    )
+    public static boolean newer(@Nullable Object sample, @Nullable Object held) {
+        if (!(sample instanceof Map<?, ?> arrived) || !(arrived.get(AT_KEY) instanceof Number at)) {
+            return false;
+        }
+        return !(held instanceof Map<?, ?> before) || !(before.get(AT_KEY) instanceof Number heldAt)
+            || at.longValue() > heldAt.longValue();
+    }
+
+    /**
      * Folds one sample into a series: the current points (or the seed on the first
      * sample), plus this sample's value for {@code metric}, trimmed to the window.
      *

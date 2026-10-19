@@ -117,7 +117,7 @@ public final class WorkspaceKind implements InstanceKindHandler {
     public static final IntegerField HOME_QUOTA_MB = SETTINGS_SCHEMA.addField(
         IntegerField.builder().name("home_quota_mb")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("home_quota"))
-            .help(HohenheimMicrocopy.HELP.of("home_quota")).suffix("MB").build());
+            .help(HohenheimMicrocopy.HELP.of("home_quota")).byteSize(ByteUnit.MEGABYTE).build());
 
     // secret(): redacted on derived surfaces, masked in forms, kept on blank submit.
     public static final StringMapField ENVIRONMENT_VARIABLES = SETTINGS_SCHEMA.addField(

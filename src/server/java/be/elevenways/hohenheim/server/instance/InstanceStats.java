@@ -194,8 +194,12 @@ public final class InstanceStats {
             runner.startBlockingThread(this::pump);
         }
 
-        void attach(@NonNull Consumer<Sample> viewer) {
-            for (Sample sample : this.history()) {
+        /**
+         * Replays the ring to the viewer and adds it in one step under the session's lock, the lock the pump records
+         * under: a sample read meanwhile waits for the replay, then reaches the viewer live, never in neither.
+         */
+        synchronized void attach(@NonNull Consumer<Sample> viewer) {
+            for (Sample sample : List.copyOf(this.ring)) {
                 viewer.accept(sample);
             }
             this.viewers.add(viewer);
@@ -229,11 +233,13 @@ public final class InstanceStats {
             return List.copyOf(this.ring);
         }
 
-        private synchronized void record(@NonNull Sample sample) {
+        /** Records a sample in the ring and names the viewers it reaches; one attached after this finds it there. */
+        private synchronized @NonNull List<Consumer<Sample>> record(@NonNull Sample sample) {
             this.ring.add(sample);
             while (this.ring.size() > HISTORY) {
                 this.ring.remove(0);
             }
+            return List.copyOf(this.viewers);
         }
 
         /** Turn the driver's readings into samples and fan each out to every viewer. */
@@ -246,8 +252,7 @@ public final class InstanceStats {
                     break;
                 }
                 Sample sample = decoder.next(reading);
-                this.record(sample);
-                for (Consumer<Sample> viewer : this.viewers) {
+                for (Consumer<Sample> viewer : this.record(sample)) {
                     try {
                         viewer.accept(sample);
                     } catch (RuntimeException viewerFailure) {

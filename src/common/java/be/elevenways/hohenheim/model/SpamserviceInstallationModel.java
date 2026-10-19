@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
+
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimIds;
@@ -49,7 +51,7 @@ public class SpamserviceInstallationModel extends Model {
     public static final IntegerField MAX_HEAP_MB = SCHEMA.addField(
         IntegerField.builder().name("max_heap_mb").defaultValue(512)
             .validator(Range.of(MIN_HEAP_SIZE_MB, MAX_HEAP_SIZE_MB))
-        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("max_heap_mb")).suffix("MB").build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("max_heap_mb")).byteSize(ByteUnit.MEGABYTE).build());
     public static final StringField CONTROLLER_KEY = SCHEMA.addField(
         StringField.builder().name("controller_key").secret().encrypted().filterable(false).build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(

@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
+
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -61,7 +63,7 @@ public class InstanceVolumeModel extends Model {
         LongField.builder().name("quota_bytes")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("quota_bytes"))
             .help(HohenheimMicrocopy.HELP.of("quota_bytes"))
-            .suffix("bytes")
+            .byteSize(ByteUnit.BYTE)
             .absent(HohenheimMicrocopy.INSTANCE_VOLUME.of("no_quota"))
             .build());
 
@@ -79,7 +81,7 @@ public class InstanceVolumeModel extends Model {
 
     public static final LongField USED_BYTES = SCHEMA.addField(
         LongField.builder().name("used_bytes").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("used_bytes"))
-            .absent(HohenheimMicrocopy.INSTANCE_VOLUME.of("never_measured")).suffix("bytes").build());
+            .absent(HohenheimMicrocopy.INSTANCE_VOLUME.of("never_measured")).byteSize(ByteUnit.BYTE).build());
 
     public static final DateTimeField OBSERVED_AT = SCHEMA.addField(
         DateTimeField.builder().name("observed_at").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("observed_at"))

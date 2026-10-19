@@ -166,8 +166,8 @@ public final class VolumeParts {
             .column(ColumnSpec.virtual(USAGE_COLUMN, HohenheimMicrocopy.INSTANCE_VOLUME.of("usage"))
                 .renderer(HohenheimTemplateIds.CELL_USAGE).build())
             .column(ColumnSpec.fromField(InstanceVolumeModel.OBSERVED_AT).build())
-            .column(ColumnSpec.fromField(InstanceVolumeModel.QUOTA_BYTES).byteSize().hidden().build())
-            .column(ColumnSpec.fromField(InstanceVolumeModel.USED_BYTES).byteSize().hidden().build())
+            .column(ColumnSpec.fromField(InstanceVolumeModel.QUOTA_BYTES).hidden().build())
+            .column(ColumnSpec.fromField(InstanceVolumeModel.USED_BYTES).hidden().build())
             .column(ColumnSpec.fromField(InstanceVolumeModel.EXCLUSIVE).build()).build();
     }
 

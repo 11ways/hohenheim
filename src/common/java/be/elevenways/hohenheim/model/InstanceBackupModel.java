@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
+
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.RawValues;
@@ -116,7 +118,7 @@ public class InstanceBackupModel extends Model {
 
     public static final LongField SIZE_BYTES = SCHEMA.addField(
         LongField.builder("size_bytes").filterable(false)
-            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("size_bytes")).suffix("bytes").build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("size_bytes")).byteSize(ByteUnit.BYTE).build());
 
     /**
      * NON-sensitive manifest summary (name, kind, image, volume inventory with

@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerTransport;
 import be.elevenways.hohenheim.server.instance.DockerContainerKind;
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.zenit.common.Zenit;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -44,14 +45,16 @@ class ContainerLogLimitTest {
         try {
             // 1. The plainest possible create -- a caller that declares NOTHING about
             //    logging, which is every caller in the tree. The bound must be on the wire
-            //    anyway, because the funnel put it there.
+            //    anyway, because the funnel put it there. It ships as BYTES: the json-file
+            //    driver reads "10m" as ten million bytes (a decimal megabyte), while the
+            //    setting counts megabytes as every size here does, 1024 x 1024 bytes each.
             docker.createContainer("log-cap-probe", spec(), DockerContainerKind.HARDENING);
             assertThat(transport.lastCreateBody)
                 .as("step 1: the create really did reach the daemon").isNotNull();
             assertThat(transport.lastCreateBody)
-                .as("step 1: with a bounded rotating log, not the daemon's unlimited default")
+                .as("step 1: with a bounded rotating log of the configured megabytes, not the daemon's default")
                 .contains("\"LogConfig\"")
-                .contains("\"max-size\":\"10m\"")
+                .contains("\"max-size\":\"" + ByteUnit.MEGABYTE.bytes(10) + "\"")
                 .contains("\"max-file\":\"3\"");
             assertThat(transport.lastCreateBody)
                 .as("step 1: on the driver the console lane can actually read back")
@@ -66,7 +69,7 @@ class ContainerLogLimitTest {
             docker.createContainer("log-cap-probe-tuned", spec(), DockerContainerKind.HARDENING);
             assertThat(transport.lastCreateBody)
                 .as("step 2: the operator's own ceiling is what ships")
-                .contains("\"max-size\":\"4m\"")
+                .contains("\"max-size\":\"" + ByteUnit.MEGABYTE.bytes(4) + "\"")
                 .contains("\"max-file\":\"2\"");
 
             // 3. Nonsense is not obeyed: a zero or negative cap is not "unlimited", it
@@ -79,7 +82,8 @@ class ContainerLogLimitTest {
             docker.createContainer("log-cap-probe-zero", spec(), DockerContainerKind.HARDENING);
             assertThat(transport.lastCreateBody)
                 .as("step 3: 0 or less is the DEFAULT, never 'no limit'")
-                .contains("\"max-size\":\"" + Security.CONTAINER_LOG_MAX_SIZE_MB.getDefaultValue() + "m\"")
+                .contains("\"max-size\":\""
+                    + ByteUnit.MEGABYTE.bytes(Security.CONTAINER_LOG_MAX_SIZE_MB.getDefaultValue()) + "\"")
                 .contains("\"max-file\":\"" + Security.CONTAINER_LOG_MAX_FILES.getDefaultValue() + "\"");
 
             // 4. And a caller cannot hand the unbounded default back: LogConfig is owned by

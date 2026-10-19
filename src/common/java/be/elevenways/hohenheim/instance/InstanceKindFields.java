@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.instance;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
+
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.ports.PublishedPort;
@@ -59,7 +61,7 @@ public final class InstanceKindFields {
     public static @NonNull IntegerField memoryLimit() {
         return IntegerField.builder().name(MEMORY_LIMIT_MB)
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("memory_limit"))
-            .help(HohenheimMicrocopy.HELP.of("memory_limit")).suffix("MB").build();
+            .help(HohenheimMicrocopy.HELP.of("memory_limit")).byteSize(ByteUnit.MEGABYTE).build();
     }
 
     public static @NonNull DoubleField cpuLimit() {

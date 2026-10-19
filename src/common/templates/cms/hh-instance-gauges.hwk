@@ -2,8 +2,9 @@
     /* The overview's live memory and CPU gauges for one running instance. Viewing them is a viewer of the live stats
        hub: the element opens the instance-stats channel in @mount and its link closes with the element (the
        hh-instance-stats shape), so the overview reads on its own and holds no feed once it is left. The hub replays
-       its held readings on connect, so the seed and the live half never disagree. Each gauge is the framework's
-       usage bar; its data comes from the one derivation the server seed uses (InstanceStats.memoryUsage/cpuUsage). */
+       its held readings on connect, the seed among them, so only a sample newer than the newest held one moves the
+       gauges. Each gauge is the framework's usage bar; its data comes from the one derivation the server seed uses
+       (InstanceStats.memoryUsage/cpuUsage). */
     public required instanceId: Integer
     public latestSeed: Map = null
     public previousSeed: Map = null
@@ -33,8 +34,11 @@
     }
 
     function apply(sample: Map) {
-        previous = latest ?? latestSeed
-        latest = sample
+        let prior = latest ?? latestSeed
+        if InstanceStats.newer(sample, prior) {
+            previous = prior
+            latest = sample
+        }
     }
 
     template {

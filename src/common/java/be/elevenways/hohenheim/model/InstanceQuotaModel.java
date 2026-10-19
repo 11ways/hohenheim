@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
+
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -71,7 +73,7 @@ public class InstanceQuotaModel extends Model {
         IntegerField.builder().name("max_memory_mb")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("max_memory_mb"))
             .help(HohenheimMicrocopy.HELP.of("max_memory_mb"))
-            .suffix("MB")
+            .byteSize(ByteUnit.MEGABYTE)
             .build());
 
     /** Attached-disk cap in GB (sum over the owner's device rows); same 0/null semantics. */
@@ -79,7 +81,7 @@ public class InstanceQuotaModel extends Model {
         IntegerField.builder().name("max_disk_gb")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("max_disk_gb"))
             .help(HohenheimMicrocopy.HELP.of("max_disk_gb"))
-            .suffix("GB")
+            .byteSize(ByteUnit.GIGABYTE)
             .build());
 
     /** Extra-NIC cap (count over the owner's device rows); same 0/null semantics. */

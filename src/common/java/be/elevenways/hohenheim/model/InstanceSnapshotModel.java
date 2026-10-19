@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
+
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -119,7 +121,7 @@ public class InstanceSnapshotModel extends Model {
 
     public static final LongField TOTAL_BYTES = SCHEMA.addField(
         LongField.builder("total_bytes").filterable(false)
-            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("total_bytes")).suffix("bytes").build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("total_bytes")).byteSize(ByteUnit.BYTE).build());
 
     public static final TextField ERROR = SCHEMA.addField(TextField.builder().name("error").build());
 

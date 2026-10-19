@@ -5,7 +5,8 @@
        never to a render expression -- hydration revives values without re-running lets,
        so a render-time subscription simply does not exist after a hard load.
        Received and sent are running totals on the wire: they plot, and read, as a rate per
-       second taken between consecutive samples. */
+       second taken between consecutive samples. The hub hands a new link the readings it
+       holds, the seed among them: only a sample newer than the newest held one is folded. */
     public required instanceId: Integer
     public cpuSeed: List = null
     public memorySeed: List = null
@@ -47,16 +48,18 @@
 
     function apply(sample: Map) {
         let prior = latest ?? latestSeed
-        let nextCpu = InstanceStats.appended(cpu, cpuSeed, sample, "cpu")
-        if nextCpu != null { cpu = nextCpu }
-        let nextMemory = InstanceStats.appended(memory, memorySeed, sample, "memory")
-        if nextMemory != null { memory = nextMemory }
-        let nextRx = InstanceStats.appendedRate(rx, rxSeed, sample, prior, "rx")
-        if nextRx != null { rx = nextRx }
-        let nextTx = InstanceStats.appendedRate(tx, txSeed, sample, prior, "tx")
-        if nextTx != null { tx = nextTx }
-        previous = prior
-        latest = sample
+        if InstanceStats.newer(sample, prior) {
+            let nextCpu = InstanceStats.appended(cpu, cpuSeed, sample, "cpu")
+            if nextCpu != null { cpu = nextCpu }
+            let nextMemory = InstanceStats.appended(memory, memorySeed, sample, "memory")
+            if nextMemory != null { memory = nextMemory }
+            let nextRx = InstanceStats.appendedRate(rx, rxSeed, sample, prior, "rx")
+            if nextRx != null { rx = nextRx }
+            let nextTx = InstanceStats.appendedRate(tx, txSeed, sample, prior, "tx")
+            if nextTx != null { tx = nextTx }
+            previous = prior
+            latest = sample
+        }
     }
 
     template {

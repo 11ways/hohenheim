@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
+
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
@@ -156,10 +158,10 @@ public class BuildOperationModel extends Model {
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("cpu_limit")).build());
     public static final IntegerField MEMORY_LIMIT_MB = SCHEMA.addField(
         IntegerField.builder().name(InstanceKindFields.MEMORY_LIMIT_MB).filterable(false)
-            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("memory_limit")).suffix("MiB").build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("memory_limit")).byteSize(ByteUnit.MEGABYTE).build());
     public static final IntegerField DISK_LIMIT_MB = SCHEMA.addField(
         IntegerField.builder().name("disk_limit_mb").filterable(false)
-            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("disk_limit_mb")).suffix("MiB").build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("disk_limit_mb")).byteSize(ByteUnit.MEGABYTE).build());
     public static final IntegerField PIDS_LIMIT = SCHEMA.addField(
         IntegerField.builder().name("pids_limit").filterable(false)
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("pids_limit")).build());
@@ -170,10 +172,10 @@ public class BuildOperationModel extends Model {
     /** Largest writable-layer size the disk watchdog OBSERVED, not a promise. */
     public static final LongField PEAK_DISK_BYTES = SCHEMA.addField(
         LongField.builder("peak_disk_bytes").filterable(false)
-            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("peak_disk_bytes")).suffix("bytes").build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("peak_disk_bytes")).byteSize(ByteUnit.BYTE).build());
     public static final LongField ARTIFACT_BYTES = SCHEMA.addField(
         LongField.builder("artifact_bytes").filterable(false)
-            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("artifact_bytes")).suffix("bytes").build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("artifact_bytes")).byteSize(ByteUnit.BYTE).build());
 
     public static final DateTimeField STARTED_AT = SCHEMA.addField(
         DateTimeField.builder().name("started_at").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("started_at")).build());

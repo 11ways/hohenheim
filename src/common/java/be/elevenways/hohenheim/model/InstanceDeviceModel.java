@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
+
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -70,7 +72,7 @@ public class InstanceDeviceModel extends Model {
     public static final IntegerField SIZE_GB = SCHEMA.addField(
         IntegerField.builder().name("size_gb")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("device_size_gb"))
-            .suffix("GB")
+            .byteSize(ByteUnit.GIGABYTE)
             .build());
 
     /** The host-side ISO volume name a cdrom row attaches; null for disks and NICs. */

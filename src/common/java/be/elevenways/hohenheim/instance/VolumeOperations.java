@@ -33,7 +33,7 @@ public final class VolumeOperations {
     private static final OperationCommand COMMAND = OperationCommand.perSubject();
     public static final IntegerField QUOTA_MB = IntegerField.builder().name("quota_mb")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("quota_mb")).help(HohenheimMicrocopy.HELP.of("volume_quota_mb"))
-        .suffix("MB").build();
+        .byteSize(ByteUnit.MEGABYTE).build();
     /**
      * The volume's owner is its fixed parent (VolumeParts): named on every view, written from the create's parent,
      * never posted.

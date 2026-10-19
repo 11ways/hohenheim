@@ -224,7 +224,7 @@ public final class InstanceDevicesPage implements RecordTab.Rendered<Row> {
         if (value == null) {
             return "-";
         }
-        Object worded = TableStateTranslator.withDeclaredUnit(detail.field(), value);
+        Object worded = TableStateTranslator.withDeclaredUnit(detail.field(), value, value);
         return worded instanceof Microcopy words ? words.asString(conduit) : String.valueOf(value);
     }
 

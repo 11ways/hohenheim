@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
+
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -60,7 +62,7 @@ public class InstanceTemplateVolumeModel extends Model {
         LongField.builder().name("quota_bytes")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("quota_bytes"))
             .help(HohenheimMicrocopy.HELP.of("quota_bytes"))
-            .suffix("bytes")
+            .byteSize(ByteUnit.BYTE)
             .build());
 
     public static final BooleanField EXCLUSIVE = SCHEMA.addField(

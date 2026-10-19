@@ -127,7 +127,7 @@ public final class TemplateChildParts {
         TableSpec<Row> table = TableSpec.<Row>builder()
             .column(ColumnSpec.fromField(InstanceTemplateVolumeModel.NAME).copyable().build())
             .column(ColumnSpec.fromField(InstanceTemplateVolumeModel.CONTAINER_PATH).build())
-            .column(ColumnSpec.fromField(InstanceTemplateVolumeModel.QUOTA_BYTES).byteSize()
+            .column(ColumnSpec.fromField(InstanceTemplateVolumeModel.QUOTA_BYTES)
                 .absent(HohenheimMicrocopy.INSTANCE_VOLUME.of("no_quota")).build())
             .column(ColumnSpec.fromField(InstanceTemplateVolumeModel.EXCLUSIVE).build())
             .column(ColumnSpec.fromField(InstanceTemplateVolumeModel.TEMPLATE_ID)
