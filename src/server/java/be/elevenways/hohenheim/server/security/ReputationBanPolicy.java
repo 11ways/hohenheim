@@ -3,7 +3,6 @@ package be.elevenways.hohenheim.server.security;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.spamservice.client.Reputation;
@@ -84,10 +83,11 @@ public final class ReputationBanPolicy {
     // pinning (see the deleted process lane's pump-thread incident) -- a single platform
     // thread is correct. At most LOOKUP_QUEUE_CAPACITY wait; overflow DROPS the lookup:
     // reputation banning is fail-open by contract, a missed lookup only delays a ban.
-    // Lookups run detached: they are the system's reaction, never the requester's action.
+    // Lookups run on a DETACHED lane: they are the system's reaction, never the requester's action.
     private static final int LOOKUP_QUEUE_CAPACITY = 256;
     private static final long DROP_LOG_THROTTLE_MS = 60_000;
-    private final JobRunner lookups = JobRunner.createDaemonSerial("reputation-lookup");
+    private final JobRunner lookups = JobRunner.createDaemonSerial("reputation-lookup",
+        JobRunner.CallerContext.DETACHED);
     private final AtomicInteger pendingLookups = new AtomicInteger();
     private final AtomicLong droppedLookups = new AtomicLong();
     private volatile long lastDropLogMs = 0;
@@ -110,7 +110,7 @@ public final class ReputationBanPolicy {
     /** Offer the lookup to the bounded lane, dropping on overflow. */
     private void enqueueLookup(@NonNull Runnable task) {
         if (this.pendingLookups.incrementAndGet() <= LOOKUP_QUEUE_CAPACITY) {
-            ExecutionContext.detached().run(() -> this.lookups.fireAndForget(() -> runLookup(task)));
+            this.lookups.fireAndForget(() -> runLookup(task));
             return;
         }
         this.pendingLookups.decrementAndGet();

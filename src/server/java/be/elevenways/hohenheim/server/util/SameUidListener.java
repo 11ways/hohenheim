@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.server.util;
 
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.util.Closeables;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -56,8 +55,9 @@ public final class SameUidListener {
         this.server = ServerSocketChannel.open();
         this.server.bind(new InetSocketAddress("127.0.0.1", 0));
         this.port = ((InetSocketAddress) this.server.getLocalAddress()).getPort();
-        this.threads = JobRunner.create(threadName + port);
-        ExecutionContext.detached().run(() -> this.threads.startThread(this::acceptLoop));
+        // DETACHED: no admitted connection runs as whoever opened the listener.
+        this.threads = JobRunner.create(threadName + port, JobRunner.CallerContext.DETACHED);
+        this.threads.startThread(this::acceptLoop);
     }
 
     /** The loopback TCP port a client dials. */

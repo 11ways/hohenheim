@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim.server.util;
 
-import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.thread.ScheduledJob;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -15,14 +14,16 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * AIDEV-NOTE: a watchdog task only CLOSES something (a socket, a subprocess), which never blocks for long, so every
  * transport shares this runner instead of each class owning a timer of its own. The runner's timer hands every due
  * task to its pool, so one slow {@code destroyForcibly} can never delay another exchange's deadline. Every task runs
- * detached: a deadline or a sweep is this runner's own work, never the continuation of the request that armed it.
+ * detached (a DETACHED runner): a deadline or a sweep is this runner's own work, never the continuation of the
+ * request that armed it.
  *
  * @author  Jelle De Loecker
  * @since   0.1.0
  */
 public final class Watchdog {
 
-    private static final JobRunner RUNNER = JobRunner.createProcessGlobal("hohenheim-watchdog");
+    private static final JobRunner RUNNER = JobRunner.createProcessGlobal("hohenheim-watchdog",
+        JobRunner.CallerContext.DETACHED);
 
     private Watchdog() {
     }
@@ -53,10 +54,10 @@ public final class Watchdog {
     /** Run {@code onExpiry} once after {@code timeoutMs} unless the returned deadline is cancelled first. */
     public static @NonNull Deadline schedule(@NonNull Runnable onExpiry, long timeoutMs) {
         Deadline deadline = new Deadline();
-        deadline.job = ExecutionContext.detached().supply(() -> RUNNER.schedule(() -> {
+        deadline.job = RUNNER.schedule(() -> {
             deadline.expired.set(true);
             onExpiry.run();
-        }, timeoutMs));
+        }, timeoutMs);
         return deadline;
     }
 
@@ -68,6 +69,6 @@ public final class Watchdog {
      * reported to the uncaught-exception handler and runs again at its next interval.
      */
     public static @NonNull ScheduledJob every(@NonNull Runnable sweep, long intervalMs) {
-        return ExecutionContext.detached().supply(() -> RUNNER.scheduleRepeating(sweep, intervalMs));
+        return RUNNER.scheduleRepeating(sweep, intervalMs);
     }
 }

@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.util.Closeables;
@@ -70,12 +69,11 @@ final class PublicUdpRelay implements AutoCloseable {
         }
         this.channel = created;
         this.running = true;
-        JobRunner runner = JobRunner.create("stream-udp-" + this.port);
+        // DETACHED: no datagram is ever relayed as whoever (re)started the relay.
+        JobRunner runner = JobRunner.create("stream-udp-" + this.port, JobRunner.CallerContext.DETACHED);
         this.threads = runner;
-        ExecutionContext.detached().run(() -> {
-            runner.startBlockingThread(() -> receiveLoop(created, runner));
-            runner.scheduleRepeating(this::sweep, SWEEP.toMillis());
-        });
+        runner.startBlockingThread(() -> receiveLoop(created, runner));
+        runner.scheduleRepeating(this::sweep, SWEEP.toMillis());
     }
 
     private void receiveLoop(DatagramChannel public_, JobRunner runner) {

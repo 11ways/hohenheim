@@ -3,7 +3,6 @@ package be.elevenways.hohenheim.server.dns;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.util.Watchdog;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.util.Closeables;
 import be.elevenways.zenit.common.Zenit;
@@ -153,20 +152,18 @@ public final class DnsServer {
 
         this.udpSocket = udpBound;
         this.tcpSocket = tcpBound;
-        JobRunner udpRunner = JobRunner.create("hohenheim-dns-udp");
-        JobRunner tcpRunner = JobRunner.create("hohenheim-dns-tcp");
+        // AIDEV-NOTE: DETACHED runners, so no query is ever answered as whoever started the listeners (boot runs as
+        // system). Each loop runs until ITS runner stops, never on the shared running flag: a stop() and a quick
+        // start() used to leave the old loop spinning on its closed socket.
+        JobRunner udpRunner = JobRunner.create("hohenheim-dns-udp", JobRunner.CallerContext.DETACHED);
+        JobRunner tcpRunner = JobRunner.create("hohenheim-dns-tcp", JobRunner.CallerContext.DETACHED);
         this.udpThreads = udpRunner;
         this.tcpThreads = tcpRunner;
         this.running = true;
         this.startupError = null;
 
-        // AIDEV-NOTE: detached, so no query is ever answered as whoever started the listeners (boot runs as
-        // system). Each loop runs until ITS runner stops, never on the shared running flag: a stop() and a quick
-        // start() used to leave the old loop spinning on its closed socket.
-        ExecutionContext.detached().run(() -> {
-            udpRunner.startBlockingThread(() -> this.udpLoop(udpBound, udpRunner));
-            tcpRunner.startBlockingThread(() -> this.tcpLoop(tcpBound, tcpRunner));
-        });
+        udpRunner.startBlockingThread(() -> this.udpLoop(udpBound, udpRunner));
+        tcpRunner.startBlockingThread(() -> this.tcpLoop(tcpBound, tcpRunner));
 
         Blast.log("DNS: authoritative listeners on", bindAddress + ":" + udpBound.getLocalPort(), "(udp+tcp)");
     }

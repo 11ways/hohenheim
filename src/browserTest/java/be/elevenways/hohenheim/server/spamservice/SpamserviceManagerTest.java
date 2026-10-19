@@ -482,7 +482,7 @@ class SpamserviceManagerTest {
     }
 
     private JobRunner scheduler() {
-        return JobRunner.createDaemonSerial("spamservice-manager-test");
+        return JobRunner.createDaemonSerial("spamservice-manager-test", JobRunner.CallerContext.DETACHED);
     }
 
     private void ensureClient(HttpExchange exchange) throws IOException {

@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.server.security.IpLiterals;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Backoff;
 import be.elevenways.protoblast.common.util.Closeables;
@@ -156,10 +155,10 @@ public final class PublicTcpListener implements AutoCloseable {
         created.bind(new InetSocketAddress(InetAddress.getByName(bindAddress), port));
         listener = created;
         running = true;
-        // AIDEV-NOTE: detached, so no connection ever runs as whoever (re)started the listener (boot runs as system).
-        JobRunner runner = JobRunner.create("public-tcp-" + created.getLocalPort());
+        // AIDEV-NOTE: DETACHED, so no connection ever runs as whoever (re)started the listener (boot runs as system).
+        JobRunner runner = JobRunner.create("public-tcp-" + created.getLocalPort(), JobRunner.CallerContext.DETACHED);
         threads = runner;
-        ExecutionContext.detached().run(() -> runner.startBlockingThread(() -> acceptLoop(runner)));
+        runner.startBlockingThread(() -> acceptLoop(runner));
     }
 
     public @Nullable InetSocketAddress getLocalAddress() {

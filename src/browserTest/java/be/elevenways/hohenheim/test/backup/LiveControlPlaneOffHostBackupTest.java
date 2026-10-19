@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.backup.BackupTarget;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.hohenheim.server.host.HostKeys;
+import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.test.host.LiveRemoteHost;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
@@ -21,22 +22,16 @@ import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
 import be.elevenways.zenit.server.orm.crypto.KeyringGuard;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import be.elevenways.zenit.server.setting.ServerSettings;
-import be.elevenways.protoblast.server.process.ProcessOutcome;
-import be.elevenways.protoblast.server.process.Subprocess;
-import be.elevenways.protoblast.server.process.Termination;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.nio.file.Files;
-import java.io.OutputStream;
 import java.nio.file.Path;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -60,8 +55,8 @@ class LiveControlPlaneOffHostBackupTest {
 
     private static LiveRemoteHost remote;
     private static String remoteBase;
-    private static String pinnedKeyLine;
-    private static String identityPath;
+    /** An independent ssh lane to the remote, never through the backup target. */
+    private static LiveRemoteHost.Shell shell;
     private static int remoteServerId;
     private static Path workspace;
     private static SqliteDatasource datasource;
@@ -93,12 +88,7 @@ class LiveControlPlaneOffHostBackupTest {
         // A per-run remote directory, so a crashed run can never make a later one pass on
         // somebody else's artifact.
         remoteBase = remote.backupPath() + "/cp-run-" + System.nanoTime();
-        pinnedKeyLine = remote.scanVerifiedKeyLine();
-        Properties properties = new Properties();
-        try (var in = Files.newInputStream(LiveRemoteHost.CONFIG)) {
-            properties.load(in);
-        }
-        identityPath = properties.getProperty("identity").trim();
+        shell = remote.verifiedShell();
 
         Db.run(datasource, () -> {
             Row host = remote.enrol(REMOTE_HOST_NAME);
@@ -130,7 +120,7 @@ class LiveControlPlaneOffHostBackupTest {
                     IOException[] failed = new IOException[1];
                     Db.run(controlPlane, () -> {
                         try {
-                            remoteExec("rm -rf " + shellQuoted(remoteBase));
+                            shell.exec("rm -rf " + HostShell.quote(remoteBase));
                         } catch (IOException e) {
                             failed[0] = e;
                         }
@@ -223,16 +213,16 @@ class LiveControlPlaneOffHostBackupTest {
         // 4. The artifact is on the OTHER machine. This exchange is independent of the target
         //    object: its own ssh, its own sha256sum, and it names the host it ran on.
         String remoteFile = remoteBase + "/" + key[0];
-        String[] answer = remoteExec("uname -n; sha256sum -b " + shellQuoted(remoteFile)
-            + " | cut -d' ' -f1; stat -c %s " + shellQuoted(remoteFile)).split("\\s+");
+        String[] answer = shell.exec("uname -n; sha256sum -b " + HostShell.quote(remoteFile)
+            + " | cut -d' ' -f1; stat -c %s " + HostShell.quote(remoteFile)).split("\\s+");
         assertThat(answer[0])
             .as("step 4: the control-plane archive lives on a machine that is not this one")
-            .isNotEqualTo(localHostname());
+            .isNotEqualTo(LiveRemoteHost.localHostname());
         assertThat(answer[1]).as("step 4: and its bytes there hash to what was recorded")
             .isEqualTo(recordedSha[0]);
         assertThat(Long.parseLong(answer[2]))
             .as("step 4: with real bytes, not an empty committed name").isGreaterThan(0L);
-        assertThat(remoteExec("test -f " + shellQuoted(remoteFile + ".part")
+        assertThat(shell.exec("test -f " + HostShell.quote(remoteFile + ".part")
             + " && echo YES || echo NO"))
             .as("step 4: and no staging debris survived the commit").isEqualTo("NO");
 
@@ -261,7 +251,7 @@ class LiveControlPlaneOffHostBackupTest {
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.URL, "");
             ServerSettings.VALUES.setValue(
                 ServerSettings.Database.Encryption.KEY_FILE, keyringFile.toString());
-            remoteFetch(remoteFile, fetched);
+            shell.fetch(remoteFile, fetched);
             assertThat(Files.size(fetched))
                 .as("step 7: the archive came back across the wire with real bytes")
                 .isGreaterThan(0L);
@@ -293,55 +283,6 @@ class LiveControlPlaneOffHostBackupTest {
     }
 
     // -- plumbing -------------------------------------------------------------
-
-    /** Stream a remote file down over the pinned ssh seam, with no controller state involved. */
-    private static void remoteFetch(String remotePath, Path destination) throws IOException {
-        List<String> argv = HostKeys.pinnedArgv("hohenheim-livetest",
-            pinnedKeyLine, remote.target(),
-            List.of("-o", "IdentitiesOnly=yes", "-i", identityPath,
-                "-o", "ConnectTimeout=10"));
-        argv.add("cat " + shellQuoted(remotePath));
-        ProcessOutcome outcome;
-        try (OutputStream file = Files.newOutputStream(destination)) {
-            outcome = Subprocess.of(argv).stdoutTo(file).timeout(Duration.ofSeconds(120)).runChecked();
-        }
-        if (!outcome.succeeded()) {
-            throw new IOException("remote fetch failed for " + remotePath + ": " + outcome.describe());
-        }
-    }
-
-    /**
-     * A remote command over the product's OWN pinned ssh seam, but not through the backup
-     * target -- so "the file is there" is never the target vouching for itself.
-     */
-    private static String remoteExec(String command) throws IOException {
-        List<String> argv = HostKeys.pinnedArgv("hohenheim-livetest",
-            pinnedKeyLine, remote.target(),
-            List.of("-o", "IdentitiesOnly=yes", "-i", identityPath,
-                "-o", "ConnectTimeout=10"));
-        argv.add(command);
-        ProcessOutcome outcome = Subprocess.of(argv).timeout(Duration.ofSeconds(60)).runChecked();
-        if (outcome.termination() == Termination.TIMED_OUT) {
-            throw new IOException("remote command timed out: " + command);
-        }
-        if (outcome.exitCode() != 0) {
-            throw new IOException("remote command failed (" + outcome.exitCode()
-                + "): " + command + " -- " + outcome.stderr().text().trim());
-        }
-        return outcome.stdout().text().trim();
-    }
-
-    private static String localHostname() {
-        try {
-            return java.net.InetAddress.getLocalHost().getHostName();
-        } catch (IOException e) {
-            return "";
-        }
-    }
-
-    private static String shellQuoted(String path) {
-        return "'" + path.replace("'", "'\\''") + "'";
-    }
 
     private static List<Path> archivesUnder(Path root) throws IOException {
         if (!Files.isDirectory(root)) {

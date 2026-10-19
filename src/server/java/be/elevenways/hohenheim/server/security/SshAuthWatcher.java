@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.server.security;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Backoff;
 import be.elevenways.protoblast.common.time.Now;
@@ -123,10 +122,10 @@ public final class SshAuthWatcher {
             return;
         }
         this.running = true;
-        JobRunner runner = JobRunner.create("ssh-auth-watch");
+        JobRunner runner = JobRunner.create("ssh-auth-watch", JobRunner.CallerContext.DETACHED);
         this.threads = runner;
         // A pipe read, so a platform thread.
-        ExecutionContext.detached().run(() -> runner.startBlockingThread(this::supervise));
+        runner.startBlockingThread(this::supervise);
         Blast.slog("hohenheim.ssh_watch_started", Map.of("command", String.join(" ", COMMAND)));
     }
 

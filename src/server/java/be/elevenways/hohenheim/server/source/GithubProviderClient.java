@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.source;
 
+import be.elevenways.hohenheim.server.tls.CertificatePem;
 import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.protoblast.common.dry.Dry;
 import be.elevenways.protoblast.common.http.HttpMethod;
@@ -10,10 +11,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.security.KeyFactory;
 import java.security.PrivateKey;
 import java.security.Signature;
-import java.security.spec.PKCS8EncodedKeySpec;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -184,59 +183,15 @@ public class GithubProviderClient extends ApiProviderClient {
             + ",\"iss\":\"" + this.appId + "\"}").getBytes(StandardCharsets.UTF_8));
         String signingInput = header + "." + payload;
         try {
+            // CertificatePem is the one PEM key reader: PKCS#8 and the PKCS#1 GitHub App key downloads use alike.
+            PrivateKey key = CertificatePem.privateKeyOf(this.appPrivateKeyPem);
             Signature signature = Signature.getInstance("SHA256withRSA");
-            signature.initSign(parsePrivateKey(this.appPrivateKeyPem));
+            signature.initSign(key);
             signature.update(signingInput.getBytes(StandardCharsets.UTF_8));
             return signingInput + "." + base64Url(signature.sign());
-        } catch (java.security.GeneralSecurityException e) {
+        } catch (java.security.GeneralSecurityException | IOException | IllegalArgumentException e) {
             throw new IOException("GitHub App private key unusable: " + e.getMessage());
         }
-    }
-
-    /**
-     * Parse an RSA private key PEM: PKCS#8 directly, PKCS#1 (the format GitHub App key
-     * downloads use) via a minimal PrivateKeyInfo wrapper.
-     */
-    static @NonNull PrivateKey parsePrivateKey(@NonNull String pem)
-            throws java.security.GeneralSecurityException {
-        String body = pem.replaceAll("-----(BEGIN|END)[A-Z ]*-----", "")
-            .replaceAll("\\s", "");
-        byte[] der = Base64.getDecoder().decode(body);
-        if (pem.contains("BEGIN RSA PRIVATE KEY")) {
-            der = wrapPkcs1InPkcs8(der);
-        }
-        return KeyFactory.getInstance("RSA").generatePrivate(new PKCS8EncodedKeySpec(der));
-    }
-
-    /** PrivateKeyInfo(version 0, rsaEncryption, OCTET STRING(pkcs1)) by hand. */
-    private static byte[] wrapPkcs1InPkcs8(byte[] pkcs1) {
-        byte[] algorithm = {0x30, 0x0d, 0x06, 0x09, 0x2a, (byte) 0x86, 0x48,
-            (byte) 0x86, (byte) 0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00};
-        byte[] version = {0x02, 0x01, 0x00};
-        byte[] octetString = derWrap((byte) 0x04, pkcs1);
-        byte[] inner = new byte[version.length + algorithm.length + octetString.length];
-        System.arraycopy(version, 0, inner, 0, version.length);
-        System.arraycopy(algorithm, 0, inner, version.length, algorithm.length);
-        System.arraycopy(octetString, 0, inner, version.length + algorithm.length,
-            octetString.length);
-        return derWrap((byte) 0x30, inner);
-    }
-
-    private static byte[] derWrap(byte tag, byte[] content) {
-        byte[] length;
-        if (content.length < 128) {
-            length = new byte[] {(byte) content.length};
-        } else if (content.length < 256) {
-            length = new byte[] {(byte) 0x81, (byte) content.length};
-        } else {
-            length = new byte[] {(byte) 0x82, (byte) (content.length >> 8),
-                (byte) content.length};
-        }
-        byte[] out = new byte[1 + length.length + content.length];
-        out[0] = tag;
-        System.arraycopy(length, 0, out, 1, length.length);
-        System.arraycopy(content, 0, out, 1 + length.length, content.length);
-        return out;
     }
 
     // -- plumbing -------------------------------------------------------------

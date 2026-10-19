@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.server.util.PermissionBits;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.util.Closeables;
 
@@ -54,8 +53,9 @@ public final class UnixSocketListenerBridge {
             throw failure;
         }
         this.server = opened;
-        this.threads = JobRunner.create("unix-front-" + this.socketPath.getFileName());
-        ExecutionContext.detached().run(() -> this.threads.startThread(this::acceptLoop));
+        this.threads = JobRunner.create("unix-front-" + this.socketPath.getFileName(),
+            JobRunner.CallerContext.DETACHED);
+        this.threads.startThread(this::acceptLoop);
     }
 
     private static Set<PosixFilePermission> parsePermissions(String value) {

@@ -7,7 +7,6 @@ import be.elevenways.hohenheim.server.DataDirectory;
 import be.elevenways.hohenheim.server.SystemUsers;
 import be.elevenways.hohenheim.server.host.PrivilegedHelper;
 import be.elevenways.hohenheim.server.security.SecurityReportEnv;
-import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.thread.ScheduledJob;
 import be.elevenways.protoblast.common.time.Backoff;
@@ -154,6 +153,11 @@ public final class SpamserviceManager {
         this.runtimeRoot = runtimeRoot;
         this.reporterReconciler = reporterReconciler;
         this.portPreflight = portPreflight;
+        // AIDEV-NOTE: lifecycle work is the installation's own, never the asking caller's, so the lane must run every
+        // job detached; an injected carrying lane would start the service as whoever asked.
+        if (lifecycle.callerContext() != JobRunner.CallerContext.DETACHED) {
+            throw new IllegalArgumentException("The spamservice lifecycle lane must be DETACHED");
+        }
         this.lifecycle = lifecycle;
     }
 
@@ -527,7 +531,7 @@ public final class SpamserviceManager {
         long delay = RESTART.delayAfter(Math.max(1, this.consecutiveCrashes)).toMillis();
         // The job reads its own handle under the lock this method holds until the handle is stored.
         ScheduledJob[] scheduled = new ScheduledJob[1];
-        scheduled[0] = this.lifecycle.schedule(lifecycleWork(() -> {
+        scheduled[0] = this.lifecycle.schedule(() -> {
             synchronized (this.lock) {
                 if (this.retry == scheduled[0]) {
                     this.retry = null;
@@ -537,7 +541,7 @@ public final class SpamserviceManager {
                 }
             }
             reconcileGeneration(requested, false);
-        }), delay);
+        }, delay);
         this.retry = scheduled[0];
     }
 
@@ -647,12 +651,7 @@ public final class SpamserviceManager {
 
     private void submit(Runnable task) {
         // A refusal means shutdown won the race with an on-exit callback or queued request.
-        this.lifecycle.offer(lifecycleWork(task));
-    }
-
-    /** Lifecycle work is the installation's own, never the asking caller's: it runs with no carried context. */
-    private static Runnable lifecycleWork(Runnable task) {
-        return () -> ExecutionContext.detached().run(task);
+        this.lifecycle.offer(task);
     }
 
     static @NonNull RuntimePaths prepareRuntimePaths(@NonNull Path configuredDataRoot,
@@ -976,7 +975,7 @@ public final class SpamserviceManager {
     }
 
     private static JobRunner newLifecycleExecutor() {
-        return JobRunner.createDaemonSerial("spamservice-manager");
+        return JobRunner.createDaemonSerial("spamservice-manager", JobRunner.CallerContext.DETACHED);
     }
 
     /** The artifact's digest, read WITHOUT following a symlink planted in its place. */

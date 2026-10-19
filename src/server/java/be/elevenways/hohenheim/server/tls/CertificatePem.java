@@ -111,6 +111,10 @@ public final class CertificatePem {
     }
 
     /**
+     * THE reader of a PEM private key: PKCS#8 ({@code BEGIN PRIVATE KEY}: RSA, EC, Ed25519), PKCS#1
+     * ({@code BEGIN RSA PRIVATE KEY}) and SEC1 ({@code BEGIN EC PRIVATE KEY}); a text that also holds certificates
+     * yields its first key. An encrypted key is no key here.
+     *
      * @return the first private key in the text, written as a bare key pair or as PKCS#8
      * @throws IOException              when the text does not parse as PEM
      * @throws IllegalArgumentException when it holds no unencrypted private key

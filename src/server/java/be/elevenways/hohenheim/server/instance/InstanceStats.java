@@ -8,7 +8,6 @@ import be.elevenways.hohenheim.server.runtime.StatsFeed;
 import be.elevenways.hohenheim.server.runtime.StatsReading;
 import be.elevenways.hohenheim.server.runtime.StatsStreamSupport;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -187,11 +186,12 @@ public final class InstanceStats {
             }
             this.stream = support.openStats(resolved.spec().handle());
             this.running = true;
-            // AIDEV-NOTE: the pump reads a daemon socket or pipe (a platform thread), serves every viewer, so it is
-            // detached from the viewer whose subscribe started it; the stream's close is what ends its read.
-            JobRunner runner = JobRunner.create("hohenheim-instance-stats-" + this.instanceId);
+            // AIDEV-NOTE: the pump reads a daemon socket or pipe (a platform thread) and serves every viewer, so its
+            // runner is DETACHED from the viewer whose subscribe started it; the stream's close is what ends its read.
+            JobRunner runner = JobRunner.create("hohenheim-instance-stats-" + this.instanceId,
+                JobRunner.CallerContext.DETACHED);
             this.pumps = runner;
-            ExecutionContext.detached().run(() -> runner.startBlockingThread(this::pump));
+            runner.startBlockingThread(this::pump);
         }
 
         void attach(@NonNull Consumer<Sample> viewer) {

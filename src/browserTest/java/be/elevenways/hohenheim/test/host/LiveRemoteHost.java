@@ -2,20 +2,25 @@ package be.elevenways.hohenheim.test.host;
 
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostKeys;
+import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.security.SshKeyType;
 import be.elevenways.protoblast.server.process.ProcessOutcome;
 import be.elevenways.protoblast.server.process.Subprocess;
+import be.elevenways.protoblast.server.process.Termination;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.UncheckedIOException;
+import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.List;
 import java.util.Properties;
 
 /**
@@ -42,6 +47,7 @@ public final class LiveRemoteHost {
 
     private final String target;
     private final String identityPrivateKey;
+    private final Path identityPath;
     private final String fingerprint;
     private final String backupPath;
 
@@ -49,8 +55,8 @@ public final class LiveRemoteHost {
         this.target = require(properties, "target");
         this.fingerprint = require(properties, "fingerprint");
         this.backupPath = require(properties, "backup_path");
-        Path identity = Path.of(require(properties, "identity"));
-        this.identityPrivateKey = Files.readString(identity, StandardCharsets.UTF_8);
+        this.identityPath = Path.of(require(properties, "identity"));
+        this.identityPrivateKey = Files.readString(this.identityPath, StandardCharsets.UTF_8);
     }
 
     /** The configured host, or null when no operator enrolled one on this machine. */
@@ -148,6 +154,71 @@ public final class LiveRemoteHost {
             }
         }
         throw new IOException("ssh-keyscan offered no ed25519 key for " + this.target);
+    }
+
+    /**
+     * A shell on this host over the product's OWN pinned ssh argv, pinned to {@link #scanVerifiedKeyLine}, but never
+     * through a backup target: "the file is there" is never the target vouching for itself.
+     */
+    public @NonNull Shell verifiedShell() throws IOException {
+        return new Shell(scanVerifiedKeyLine());
+    }
+
+    /** @return this machine's own host name, what a remote {@code uname -n} must differ from; empty when unknown */
+    public static @NonNull String localHostname() {
+        try {
+            return InetAddress.getLocalHost().getHostName();
+        } catch (IOException e) {
+            return "";
+        }
+    }
+
+    /** Commands and reads on the remote host, each one ssh exchange with the operator-installed identity. */
+    public final class Shell {
+
+        private final String keyLine;
+
+        private Shell(String keyLine) {
+            this.keyLine = keyLine;
+        }
+
+        /**
+         * @return the command's trimmed stdout
+         * @throws IOException when it timed out or exited non-zero, naming its stderr
+         */
+        public @NonNull String exec(@NonNull String command) throws IOException {
+            // stderr stays SEPARATE: the ssh client prints advisories there (the post-quantum-kex warning against an
+            // older sshd, for one) and folding them into stdout would corrupt every answer this is asked for.
+            ProcessOutcome outcome = Subprocess.of(this.argv(command)).timeout(Duration.ofSeconds(60)).runChecked();
+            if (outcome.termination() == Termination.TIMED_OUT) {
+                throw new IOException("remote command timed out: " + command);
+            }
+            if (outcome.exitCode() != 0) {
+                throw new IOException("remote command failed (" + outcome.exitCode()
+                    + "): " + command + " -- " + outcome.stderr().text().trim());
+            }
+            return outcome.stdout().text().trim();
+        }
+
+        /** Stream a remote file down into {@code destination}, with no controller state involved. */
+        public void fetch(@NonNull String remotePath, @NonNull Path destination) throws IOException {
+            ProcessOutcome outcome;
+            try (OutputStream file = Files.newOutputStream(destination)) {
+                outcome = Subprocess.of(this.argv("cat " + HostShell.quote(remotePath))).stdoutTo(file)
+                    .timeout(Duration.ofSeconds(120)).runChecked();
+            }
+            if (!outcome.succeeded()) {
+                throw new IOException("remote fetch failed for " + remotePath + ": " + outcome.describe());
+            }
+        }
+
+        private List<String> argv(String command) {
+            List<String> argv = HostKeys.pinnedArgv("hohenheim-livetest", this.keyLine, LiveRemoteHost.this.target,
+                List.of("-o", "IdentitiesOnly=yes", "-i", LiveRemoteHost.this.identityPath.toString(),
+                    "-o", "ConnectTimeout=10"));
+            argv.add(command);
+            return argv;
+        }
     }
 
     private static String require(Properties properties, String key) throws IOException {

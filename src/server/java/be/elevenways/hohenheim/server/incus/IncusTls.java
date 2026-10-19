@@ -16,9 +16,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.security.GeneralSecurityException;
-import java.security.KeyFactory;
 import java.security.KeyStore;
-import java.security.PrivateKey;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.CertificateException;
@@ -26,8 +24,6 @@ import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
-import java.security.spec.PKCS8EncodedKeySpec;
-import java.util.Base64;
 import java.util.List;
 
 /**
@@ -68,26 +64,6 @@ final class IncusTls {
         } catch (CertificateEncodingException e) {
             throw new IOException("cannot encode a certificate", e);
         }
-    }
-
-    /** Parse a PKCS#8 PEM private key ({@code BEGIN PRIVATE KEY}, EC or RSA). */
-    static @NonNull PrivateKey parsePrivateKey(@NonNull String pem) throws IOException {
-        String base64 = pem.replaceAll("-----[A-Z ]+-----", "").replaceAll("\\s", "");
-        byte[] der;
-        try {
-            der = Base64.getDecoder().decode(base64);
-        } catch (IllegalArgumentException e) {
-            throw new IOException("not a PEM private key");
-        }
-        PKCS8EncodedKeySpec spec = new PKCS8EncodedKeySpec(der);
-        for (String algorithm : new String[] {"EC", "RSA", "Ed25519"}) {
-            try {
-                return KeyFactory.getInstance(algorithm).generatePrivate(spec);
-            } catch (GeneralSecurityException tryNext) {
-                // the spec does not name its algorithm; probing is the JDK way
-            }
-        }
-        throw new IOException("unsupported private key (expected PKCS#8 EC/RSA/Ed25519)");
     }
 
     /**
@@ -198,19 +174,22 @@ final class IncusTls {
         }
     }
 
-    /** KeyManagers presenting the per-host client certificate + key. */
+    /**
+     * KeyManagers presenting the per-host client certificate + key; the key text is read by {@link CertificatePem}, the
+     * one home for PEM keys.
+     */
     private static KeyManager @NonNull [] identity(@NonNull String certPem,
                                                    @NonNull String keyPem) throws IOException {
         try {
             KeyStore store = KeyStore.getInstance("PKCS12");
             store.load(null, null);
-            store.setKeyEntry("identity", parsePrivateKey(keyPem), new char[0],
+            store.setKeyEntry("identity", CertificatePem.privateKeyOf(keyPem), new char[0],
                 new Certificate[] {parseCertificate(certPem)});
             KeyManagerFactory factory = KeyManagerFactory.getInstance(
                 KeyManagerFactory.getDefaultAlgorithm());
             factory.init(store, new char[0]);
             return factory.getKeyManagers();
-        } catch (GeneralSecurityException e) {
+        } catch (GeneralSecurityException | IllegalArgumentException e) {
             throw new IOException("cannot load the client identity: " + e.getMessage(), e);
         }
     }

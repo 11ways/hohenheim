@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.backup.BackupTarget;
 import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.host.HostKeys;
+import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
@@ -30,7 +31,6 @@ import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
 import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
 import be.elevenways.protoblast.server.process.ProcessOutcome;
 import be.elevenways.protoblast.server.process.Subprocess;
-import be.elevenways.protoblast.server.process.Termination;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -73,8 +73,8 @@ class LiveOffHostBackupTest {
     private static String previousStagingPath;
     private static String previousDataPath;
     private static String remoteBase;
-    private static String pinnedKeyLine;
-    private static String identityPath;
+    /** An independent ssh lane to the remote, never through the backup target. */
+    private static LiveRemoteHost.Shell shell;
     private static int remoteServerId;
 
     /** The host record the backup target points at. */
@@ -109,12 +109,7 @@ class LiveOffHostBackupTest {
         // A per-run remote directory, so a crashed run can never make a later one pass
         // on somebody else's artifact.
         remoteBase = remote.backupPath() + "/run-" + System.nanoTime();
-        pinnedKeyLine = remote.scanVerifiedKeyLine();
-        java.util.Properties properties = new java.util.Properties();
-        try (var in = Files.newInputStream(LiveRemoteHost.CONFIG)) {
-            properties.load(in);
-        }
-        identityPath = properties.getProperty("identity").trim();
+        shell = remote.verifiedShell();
         // The destination is an ENROLLED HOST, walked through the real ceremony: enrol,
         // scan, and confirm the digest the operator recorded out of band. Nothing here
         // pastes a key line into a backup target -- there is nowhere left to paste one.
@@ -135,7 +130,7 @@ class LiveOffHostBackupTest {
     @AfterAll
     static void tearDown() throws IOException {
         if (remote != null && remoteBase != null) {
-            remoteExec("rm -rf " + shellQuoted(remoteBase));
+            shell.exec("rm -rf " + HostShell.quote(remoteBase));
         }
         PrivateNetns.uninstall(netns);
         netns = null;
@@ -186,7 +181,7 @@ class LiveOffHostBackupTest {
                 target.healthCheck();
                 return null;
             });
-            assertThat(run(() -> remoteExec("test -d " + shellQuoted(remoteBase)
+            assertThat(run(() -> shell.exec("test -d " + HostShell.quote(remoteBase)
                 + " && echo YES || echo NO")))
                 .as("step 1: the health check created the base directory ON THE REMOTE")
                 .isEqualTo("YES");
@@ -226,19 +221,19 @@ class LiveOffHostBackupTest {
                 //    of the target object: its own ssh, its own sha256sum, and it names
                 //    the host it ran on, which is not this one.
                 String remoteFile = remoteBase + "/" + key;
-                String[] answer = run(() -> remoteExec("uname -n; sha256sum -b "
-                    + shellQuoted(remoteFile) + " | cut -d' ' -f1; stat -c %s "
-                    + shellQuoted(remoteFile))).split("\\s+");
+                String[] answer = run(() -> shell.exec("uname -n; sha256sum -b "
+                    + HostShell.quote(remoteFile) + " | cut -d' ' -f1; stat -c %s "
+                    + HostShell.quote(remoteFile))).split("\\s+");
                 assertThat(answer[0])
                     .as("step 4: the artifact lives on a machine that is not this one")
-                    .isNotEqualTo(localHostname());
+                    .isNotEqualTo(LiveRemoteHost.localHostname());
                 assertThat(answer[1])
                     .as("step 4: and its bytes there hash to what the row recorded")
                     .isEqualTo(recordedSha);
                 assertThat(Long.parseLong(answer[2]))
                     .as("step 4: with real bytes, not an empty committed name")
                     .isGreaterThan(0L);
-                assertThat(run(() -> remoteExec("test -f " + shellQuoted(remoteFile
+                assertThat(run(() -> shell.exec("test -f " + HostShell.quote(remoteFile
                     + ".part") + " && echo YES || echo NO")))
                     .as("step 4: and no staging debris survived the commit")
                     .isEqualTo("NO");
@@ -299,7 +294,7 @@ class LiveOffHostBackupTest {
                 assertThat(run(() -> target.exists(key)))
                     .as("step 8: the target reports the remote artifact present").isTrue();
                 backups.delete(backupId);
-                assertThat(run(() -> remoteExec("test -f " + shellQuoted(remoteFile)
+                assertThat(run(() -> shell.exec("test -f " + HostShell.quote(remoteFile)
                     + " && echo YES || echo NO")))
                     .as("step 8: and deleting the backup removed it FROM THE REMOTE")
                     .isEqualTo("NO");
@@ -318,38 +313,6 @@ class LiveOffHostBackupTest {
 
     // -- plumbing -------------------------------------------------------------
 
-    /**
-     * A remote command over the product's OWN pinned ssh seam, but not through the
-     * backup target -- so "the file is there" is never the target vouching for itself.
-     */
-    private static String remoteExec(String command) throws IOException {
-        List<String> argv = HostKeys.pinnedArgv("hohenheim-livetest",
-            pinnedKeyLine, remote.target(),
-            List.of("-o", "IdentitiesOnly=yes", "-i", identityPath,
-                "-o", "ConnectTimeout=10"));
-        argv.add(command);
-        // stderr stays SEPARATE: the ssh client prints advisories there (the
-        // post-quantum-kex warning against an older sshd, for one) and folding them
-        // into stdout would corrupt every answer this helper is asked for.
-        ProcessOutcome outcome = Subprocess.of(argv).timeout(Duration.ofSeconds(60)).runChecked();
-        if (outcome.termination() == Termination.TIMED_OUT) {
-            throw new IOException("remote command timed out: " + command);
-        }
-        if (outcome.exitCode() != 0) {
-            throw new IOException("remote command failed (" + outcome.exitCode()
-                + "): " + command + " -- " + outcome.stderr().text().trim());
-        }
-        return outcome.stdout().text().trim();
-    }
-
-    private static String localHostname() {
-        try {
-            return java.net.InetAddress.getLocalHost().getHostName();
-        } catch (IOException e) {
-            return "";
-        }
-    }
-
     /** A freshly minted, genuinely valid ed25519 public key that is NOT the host's. */
     private static String foreignHostKeyLine() throws IOException {
         Path directory = Files.createTempDirectory("hohenheim-offhost-decoy");
@@ -366,10 +329,6 @@ class LiveOffHostBackupTest {
         } finally {
             deleteTree(directory);
         }
-    }
-
-    private static String shellQuoted(String path) {
-        return "'" + path.replace("'", "'\\''") + "'";
     }
 
     private static List<Path> archivesUnder(Path root) throws IOException {
