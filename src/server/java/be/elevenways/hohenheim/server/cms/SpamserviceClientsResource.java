@@ -143,8 +143,8 @@ public final class SpamserviceClientsResource {
                     .updateClient(existing.id(), input(values.merged()), existing.revision()))
                 .delete((existing, access) -> SpamserviceRemoteStore.require(clients).deleteClient(existing.id()))
                 .build())
-            .tabs(ResourceTabs.of(List.of(ChildList.<ManagedClient>sections(HohenheimSlugs.Tab.KEYS,
-                HohenheimMicrocopy.SPAMSERVICE_CLIENT.of("keys"), HohenheimSlugs.SPAMSERVICE_KEYS))))
+            .tabs(ResourceTabs.of(List.of(ChildList.<ManagedClient>of(SpamserviceClientKeysResource.create(clients))
+                .label(HohenheimMicrocopy.SPAMSERVICE_CLIENT.of("keys")))))
             .actions(List.of(PanelAction.<ManagedClient>link(HohenheimIds.id("spamservice_client_keys"),
                     ActionPlacement.ROW)
                 .label(HohenheimMicrocopy.SPAMSERVICE_CLIENT.of("keys"))

@@ -126,10 +126,14 @@ public final class SiteParts {
      * The Protection tab, in the overview card's word: the framework's child list over the panel's protected-path entry
      * (its /manage twin there), under the site. A TLS passthrough site terminates nothing here, so it has no paths to
      * protect and no tab.
+     *
+     * @param paths the protected-path entry of the panel the tab is in
      */
-    public static final ChildList<Row> PROTECTED_PATHS = ChildList.<Row>sections(HohenheimSlugs.PROTECTED_PATHS,
-            HohenheimMicrocopy.APP_OVERVIEW.of("protection"), HohenheimSlugs.PROTECTED_PATHS)
-        .visibleWhen((site, access) -> servesHttp(site));
+    private static @NonNull ChildList<Row> protectedPaths(@NonNull PanelResource<Row> paths) {
+        return ChildList.<Row>of(paths)
+            .label(HohenheimMicrocopy.APP_OVERVIEW.of("protection"))
+            .visibleWhen((site, access) -> servesHttp(site));
+    }
 
     private SiteParts() {
     }
@@ -170,8 +174,8 @@ public final class SiteParts {
             .archive(ResourceArchive.of(SiteWrites.RESTORE, SiteWrites.RESTORE_MANY, SiteWrites.PURGE,
                 SiteWrites.PURGE_MANY, ResourceAuthority.<Row>builder().delete(HohenheimPanel.ACCESS, null).build()))
             .actions(SiteActions.operator())
-            .tabs(ResourceTabs.<Row>of(List.of(AppOverview.siteTab(), DOMAINS, PROTECTED_PATHS,
-                    new SiteDevSessionsPage()))
+            .tabs(ResourceTabs.<Row>of(List.of(AppOverview.siteTab(), DOMAINS,
+                    protectedPaths(ProtectedPathParts.admin()), new SiteDevSessionsPage()))
                 .withHistory().historyInStrip().withContributions())
             .relatedPages(
                 // The hostname catalog itself: nav-hidden, so without this entry the only way to the cross-site
@@ -191,7 +195,8 @@ public final class SiteParts {
         // operator tabs a delegate needs plus the CONTRIBUTED ones (the generic access matrix, so a manage holder can
         // delegate from /manage).
         return ManageTwin.reached(entry(ManageTwin.id("site")), TenantScopes.SITES,
-                ResourceTabs.<Row>of(List.of(AppOverview.siteTab(), DOMAINS, PROTECTED_PATHS)).withContributions())
+                ResourceTabs.<Row>of(List.of(AppOverview.siteTab(), DOMAINS,
+                    protectedPaths(ProtectedPathParts.manage()))).withContributions())
             .standsUnder(HohenheimSlugs.APPS)
             // The tenant's words, where the toolbar, the heading and the command palette read them: never the
             // operator's "served from this host".

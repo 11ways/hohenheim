@@ -104,10 +104,11 @@ public final class VolumeParts {
     /**
      * The Volumes tab of an instance whose kind mounts declared volumes: the volume list of the hosting panel narrowed
      * to it; for any other kind a declared row would ride no deploy, so the tab is absent.
+     *
+     * @param operator whether the tab is the operator's, over {@link #admin}, or a delegate's
      */
-    public static @NonNull ChildList<Row> tab() {
-        return ChildList.<Row>sections(HohenheimSlugs.Tab.VOLUMES, HohenheimMicrocopy.INSTANCE_VOLUME.of("plural"),
-                HohenheimSlugs.INSTANCE_VOLUMES)
+    public static @NonNull ChildList<Row> tab(boolean operator) {
+        return ChildList.<Row>of(operator ? admin() : manage())
             .icon(Icon.of("folder-open"))
             .secondary()
             .lead(HohenheimMicrocopy.INSTANCE_VOLUME.of("lead"))

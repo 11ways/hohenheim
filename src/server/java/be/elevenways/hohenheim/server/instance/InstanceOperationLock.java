@@ -6,8 +6,6 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.server.host.HostLeases;
-import be.elevenways.zenit.common.orm.datasource.Datasource;
-import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.lease.ClaimedRows;
 import be.elevenways.zenit.common.orm.lease.LeaseKeys;
@@ -96,9 +94,6 @@ public final class InstanceOperationLock {
     /** The threads waiting for a record's claim, for {@link #isQueued}. */
     private final Map<Integer, Set<Thread>> waiting = new ConcurrentHashMap<>();
 
-    /** The outcome each hold staged and has not written yet ({@link #stageOutcome}). */
-    private final Map<ClaimedRows<Integer>.Held, Runnable> staged = new ConcurrentHashMap<>();
-
     private InstanceOperationLock(@NonNull HostLeases controller) {
         this.rows = ClaimedRows.of(Models.get(InstanceModel.class), InstanceModel.ID, InstanceModel.CLAIM_FENCE,
                 KEYS)
@@ -174,14 +169,15 @@ public final class InstanceOperationLock {
 
     /**
      * Runs {@code publish} once this thread's operation on the record has let go of it, at once when it holds none:
-     * the way an operation states its outcome, so a caller that reads the outcome and acts is never refused by the
-     * operation it just read about.
+     * the way an operation states the outcome of its own row (a build, a backup, a deploy record), so a caller that
+     * reads the outcome and acts is never refused by the operation it just read about.
      *
      * AIDEV-NOTE: a terminal status written INSIDE the claim was visible before the claim's release, and a client that
      * polled a release until it read succeeded and then rolled back met instance_operation_in_progress from that very
-     * release (ApiWireSitesTest on a slow host). The publication rides the claim's lease release (zenit
-     * Lease.afterRelease): a claimant in this process waits it out, so nothing here takes the record between the
-     * release and the outcome; a claimant of a rival controller can, which the record's fence answers.
+     * release (ApiWireSitesTest on a slow host). The publication runs once the claim was given back and forgotten
+     * (zenit Held.afterRelease), and nothing waits for it, so another operation may take the record first: what is
+     * published here is the operation's OWN row, which no later operation writes. The record's state is staged
+     * instead ({@link #stageOutcome}), through its fence.
      *
      * AIDEV-NOTE: a hold that borrowed an operation command's lease publishes at its own close, inside the command
      * (ClaimedRows), so a zero-wait claimant can still meet the command's lease until the runner releases it after
@@ -212,9 +208,10 @@ public final class InstanceOperationLock {
     }
 
     /**
-     * Stages the record's outcome write for when this thread's operation let go of it ({@link #afterRelease}), on the
-     * datasource it was staged on. An outcome staged earlier on the same hold is written first, so the writes keep
-     * their order and each runs once.
+     * Stages the record's outcome for when this thread's operation let go of it (zenit Held.stage): written through
+     * the operation's fence, by its releaser or by an operation of this controller that takes the record first, and
+     * dropped when a rival controller's claim won it. An outcome staged earlier on the same hold is written first, so
+     * the writes keep their order and each runs once.
      *
      * AIDEV-NOTE: the work that stays inside the claim must still read the record as its own writes left it, so a
      * staged outcome is written early ({@link #settle}) by every next write through InstanceOperationGuard and by a
@@ -222,26 +219,15 @@ public final class InstanceOperationLock {
      *
      * @throws IllegalStateException when this thread holds no claim on the record
      */
-    void stageOutcome(int instanceId, @NonNull Runnable write) {
-        ClaimedRows<Integer>.Held hold = this.requireHeld(instanceId);
-        this.settle(hold);
-        Datasource datasource = Db.currentOrDefault();
-        this.staged.put(hold, () -> Db.run(datasource, write::run));
-        hold.afterRelease(() -> this.settle(hold));
+    void stageOutcome(int instanceId, ClaimedRows.@NonNull RowOutcome outcome) {
+        this.requireHeld(instanceId).stage(outcome);
     }
 
     /** Writes the outcome this thread's operation staged on the record now, when there is one. */
     void settle(int instanceId) {
         ClaimedRows<Integer>.Held hold = this.rows.heldHere(instanceId);
         if (hold != null) {
-            this.settle(hold);
-        }
-    }
-
-    private void settle(ClaimedRows<Integer>.@NonNull Held hold) {
-        Runnable write = this.staged.remove(hold);
-        if (write != null) {
-            write.run();
+            hold.settle();
         }
     }
 
@@ -292,7 +278,7 @@ public final class InstanceOperationLock {
         ClaimedRows<Integer>.Held own = this.rows.heldHere(instanceId);
         if (own != null) {
             // A nested operation reads the record as the enclosing one's writes left it.
-            this.settle(own);
+            own.settle();
         }
         if (wait > 0 && own == null) {
             threads.add(current);

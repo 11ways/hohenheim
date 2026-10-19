@@ -380,10 +380,11 @@ public final class InstanceAttachmentParts {
      * The Attached databases tab of an instance on a Docker daemon (injection rides the link network, which an Incus
      * container or VM has none of): the attachment list of the hosting panel narrowed to it, where an operator
      * attaches and detaches.
+     *
+     * @param operator whether the tab is the operator's, over {@link #databasesAdmin}, or a delegate's
      */
-    public static @NonNull ChildList<Row> databasesTab() {
-        return ChildList.<Row>sections(HohenheimSlugs.Tab.DATABASES, HohenheimMicrocopy.INSTANCE_DATABASE.of("plural"),
-                HohenheimSlugs.INSTANCE_DATABASES)
+    public static @NonNull ChildList<Row> databasesTab(boolean operator) {
+        return ChildList.<Row>of(operator ? databasesAdmin() : databasesManage())
             .icon(Icon.of("database"))
             .secondary()
             .lead(HohenheimMicrocopy.INSTANCE_DATABASE.of("lead"))

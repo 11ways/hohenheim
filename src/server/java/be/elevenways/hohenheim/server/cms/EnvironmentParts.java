@@ -103,24 +103,22 @@ public final class EnvironmentParts {
         // The static field initializers did the work.
     }
 
-    /**
-     * The Environments tab of a project's page: this entry narrowed to the project, whose column it hides.
-     *
-     * AIDEV-NOTE: the tab declares its slug (checked against the child's parent tab when a panel builds), so it reads
-     * the same off any entry, panel-built or not; only the admin offers environments.
-     */
-    static final ChildList<Row> PROJECT_ENVIRONMENTS = ChildList.<Row>sections(HohenheimSlugs.Tab.ENVIRONMENTS,
-            HohenheimMicrocopy.ENVIRONMENT.of("plural"), HohenheimSlugs.ENVIRONMENTS)
-        .icon(Icon.of("layer-group"))
-        .lead(HohenheimMicrocopy.PROJECT.of("environments_lead"))
-        .hide(HohenheimSlugs.ENVIRONMENTS, EnvironmentModel.PROJECT_ID.getName());
+    /** The Environments tab of a project's page: this entry narrowed to the project, whose column it hides. */
+    static @NonNull ChildList<Row> projectEnvironments() {
+        return ChildList.<Row>of(admin())
+            .icon(Icon.of("layer-group"))
+            .lead(HohenheimMicrocopy.PROJECT.of("environments_lead"))
+            .hide(HohenheimSlugs.ENVIRONMENTS, EnvironmentModel.PROJECT_ID.getName());
+    }
 
     /** The Variables tab an environment's page opens on: the variable entry narrowed to it. */
-    private static final ChildList<Row> VARIABLES = ChildList.<Row>sections(HohenheimSlugs.Tab.VARIABLES,
-            HohenheimMicrocopy.ENVIRONMENT.of("variables"), HohenheimSlugs.ENVIRONMENT_VARIABLES)
-        .icon(Icon.of("sliders"))
-        .lead(HohenheimMicrocopy.ENVIRONMENT.of("variables_lead"))
-        .hide(HohenheimSlugs.ENVIRONMENT_VARIABLES, InstanceVariableModel.ENVIRONMENT_ID.getName());
+    private static @NonNull ChildList<Row> variablesTab() {
+        return ChildList.<Row>of(variables())
+            .label(HohenheimMicrocopy.ENVIRONMENT.of("variables"))
+            .icon(Icon.of("sliders"))
+            .lead(HohenheimMicrocopy.ENVIRONMENT.of("variables_lead"))
+            .hide(HohenheimSlugs.ENVIRONMENT_VARIABLES, InstanceVariableModel.ENVIRONMENT_ID.getName());
+    }
 
     /** @return the admin environment resource */
     public static @NonNull PanelResource<Row> admin() {
@@ -172,7 +170,7 @@ public final class EnvironmentParts {
             .deleteConfirmation(DeleteConfirmation.of(DeleteConfirmation.body(
                 HohenheimMicrocopy.ENVIRONMENT.of("delete_confirm"))))
             .relatedPages(RelatedPage.toPeer(HohenheimSlugs.ENVIRONMENT_VARIABLES))
-            .tabs(ResourceTabs.<Row>of(List.of(VARIABLES)).withHistory().withContributions())
+            .tabs(ResourceTabs.<Row>of(List.of(variablesTab())).withHistory().withContributions())
             .build();
     }
 

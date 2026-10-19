@@ -17,6 +17,7 @@ import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.lease.ClaimedRows;
 import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.validation.Violations;
@@ -26,6 +27,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.UnaryOperator;
 
 
 /**
@@ -37,9 +39,11 @@ import java.util.Set;
  * mid-restore instance is the operator's explicit abandon-ship.
  *
  * AIDEV-NOTE: an OUTCOME (a status the record leaves operable, an install that ended) is proven against the fence
- * at once but written only once the operation let go of the record (InstanceOperationLock.stageOutcome): a client
- * that sees it and starts the next operation at once must never meet instance_operation_in_progress from the one it
- * read about. Every other write here first writes a staged outcome, so the record's writes keep their order.
+ * at once but written only once the operation let go of the record (InstanceOperationLock.stageOutcome, zenit
+ * Held.stage): a client that sees it and starts the next operation at once must never meet
+ * instance_operation_in_progress from the one it read about. Every other write here first writes a staged outcome, so
+ * the record's writes keep their order. Nobody waits for that late write: an operation of this controller that takes
+ * the record first writes it before it stamps the record, and a rival controller's claim wins over it.
  */
 final class InstanceOperationGuard {
 
@@ -113,7 +117,7 @@ final class InstanceOperationGuard {
                              @NonNull String installState, @Nullable String installError,
                              @NonNull Object instanceName) {
         land(leases, instanceId, serverId, instanceName, !InstanceModel.INSTALL_INSTALLING.equals(installState),
-            fenced(leases, instanceId, serverId)
+            query -> query
                 .assign(InstanceModel.INSTALL_STATE, installState)
                 .assign(InstanceModel.INSTALL_ERROR, installError), () -> { });
     }
@@ -136,7 +140,7 @@ final class InstanceOperationGuard {
     static void stampRole(@NonNull HostLeases leases, int instanceId, int serverId,
                           @NonNull String role, @NonNull Object instanceName) {
         land(leases, instanceId, serverId, instanceName, false,
-            fenced(leases, instanceId, serverId).assign(InstanceModel.RUNTIME_ROLE, role), () -> { });
+            query -> query.assign(InstanceModel.RUNTIME_ROLE, role), () -> { });
     }
 
     /**
@@ -149,7 +153,7 @@ final class InstanceOperationGuard {
                                  @NonNull String fingerprint,
                                  @NonNull Object instanceName) {
         land(leases, instanceId, serverId, instanceName, false,
-            fenced(leases, instanceId, serverId).assign(InstanceModel.IMAGE_FINGERPRINT, fingerprint), () -> { });
+            query -> query.assign(InstanceModel.IMAGE_FINGERPRINT, fingerprint), () -> { });
     }
 
     /**
@@ -258,19 +262,20 @@ final class InstanceOperationGuard {
         // InstanceModel.WORKLOAD_KILLED_AT): a deploy, stop or restart replaces the container
         // that carried it, and a kill that survives the operation is re-observed next sweep.
         Instant now = Now.instant();
-        var statement = fenced(leases, instanceId, serverId)
-            .assign(InstanceModel.STATUS, status)
-            .assign(InstanceModel.UPDATED_AT, now)
-            .assign(InstanceModel.WORKLOAD_KILLED_AT, null);
-        if (started) {
-            statement = statement.assign(InstanceModel.STARTED_AT, now);
-        }
-        land(leases, instanceId, serverId, instanceName, isOutcome(status),
-            InstanceModel.withStoppage(statement, cause, detail), () -> {
-                if (cause != null) {
-                    recordCause(instanceId, cause, detail);
-                }
-            });
+        land(leases, instanceId, serverId, instanceName, isOutcome(status), query -> {
+            var statement = query
+                .assign(InstanceModel.STATUS, status)
+                .assign(InstanceModel.UPDATED_AT, now)
+                .assign(InstanceModel.WORKLOAD_KILLED_AT, null);
+            if (started) {
+                statement = statement.assign(InstanceModel.STARTED_AT, now);
+            }
+            return InstanceModel.withStoppage(statement, cause, detail);
+        }, () -> {
+            if (cause != null) {
+                recordCause(instanceId, cause, detail);
+            }
+        });
     }
 
     /**
@@ -297,19 +302,21 @@ final class InstanceOperationGuard {
                               @Nullable Instant workloadKilledAt, @NonNull Object instanceName,
                               @Nullable HohenheimActivityAction cause) {
         requireCause(changed ? status : "", cause);
-        var statement = fenced(leases, instanceId, serverId)
-            .assign(InstanceModel.STATUS, status)
-            .assign(InstanceModel.STATUS_OBSERVED_AT, Now.instant())
-            .assign(InstanceModel.WORKLOAD_KILLED_AT, workloadKilledAt);
-        if (changed) {
-            statement = statement.assign(InstanceModel.UPDATED_AT, Now.instant());
-        }
-        land(leases, instanceId, serverId, instanceName, isOutcome(status),
-            InstanceModel.withStoppage(statement, cause, null), () -> {
-                if (cause != null) {
-                    recordCause(instanceId, cause, null);
-                }
-            });
+        Instant observed = Now.instant();
+        land(leases, instanceId, serverId, instanceName, isOutcome(status), query -> {
+            var statement = query
+                .assign(InstanceModel.STATUS, status)
+                .assign(InstanceModel.STATUS_OBSERVED_AT, observed)
+                .assign(InstanceModel.WORKLOAD_KILLED_AT, workloadKilledAt);
+            if (changed) {
+                statement = statement.assign(InstanceModel.UPDATED_AT, observed);
+            }
+            return InstanceModel.withStoppage(statement, cause, null);
+        }, () -> {
+            if (cause != null) {
+                recordCause(instanceId, cause, null);
+            }
+        });
     }
 
     /**
@@ -325,7 +332,7 @@ final class InstanceOperationGuard {
     static void stampMigrating(@NonNull HostLeases leases, int instanceId, int serverId,
                                int targetServerId, long reservedMb,
                                @NonNull Object instanceName) {
-        land(leases, instanceId, serverId, instanceName, false, fenced(leases, instanceId, serverId)
+        land(leases, instanceId, serverId, instanceName, false, query -> query
             .assign(InstanceModel.STATUS, InstanceModel.STATUS_MIGRATING)
             .assign(InstanceModel.MIGRATE_TARGET_ID, targetServerId)
             .assign(InstanceModel.MIGRATE_RESERVED_MB, (int) reservedMb), () -> { });
@@ -356,12 +363,10 @@ final class InstanceOperationGuard {
         // the destination is the over-release that clamps its bucket to zero.
         long booked = reservedTargetServerId == null ? 0 : InstanceCapacity.windowReservedOf(
             Models.get(InstanceModel.class).findById(instanceId));
-        var statement = fenced(leases, instanceId, serverId)
+        land(leases, instanceId, serverId, instanceName, isOutcome(status), query -> InstanceModel.withStoppage(query
             .assign(InstanceModel.STATUS, status)
             .assign(InstanceModel.MIGRATE_TARGET_ID, (Object) null)
-            .assign(InstanceModel.MIGRATE_RESERVED_MB, (Object) null);
-        land(leases, instanceId, serverId, instanceName, isOutcome(status),
-            InstanceModel.withStoppage(statement, cause, null), () -> {
+            .assign(InstanceModel.MIGRATE_RESERVED_MB, (Object) null), cause, null), () -> {
                 if (reservedTargetServerId != null) {
                     InstanceCapacity.release(reservedTargetServerId, booked);
                 }
@@ -404,8 +409,7 @@ final class InstanceOperationGuard {
         Row stored = Models.get(InstanceModel.class).findById(instanceId);
         long booked = InstanceCapacity.sourceBookedOf(stored);
         long reserved = InstanceCapacity.windowReservedOf(stored);
-        land(leases, instanceId, sourceServerId, instanceName, isOutcome(status),
-            fenced(leases, instanceId, sourceServerId)
+        land(leases, instanceId, sourceServerId, instanceName, isOutcome(status), query -> query
                 .assign(InstanceModel.SERVER_ID, targetServerId)
                 .assign(InstanceModel.MIGRATE_TARGET_ID, (Object) null)
                 .assign(InstanceModel.MIGRATE_RESERVED_MB, (Object) null)
@@ -425,22 +429,40 @@ final class InstanceOperationGuard {
      * that proof, as it did on the write) and written, with {@code after}, once the operation let go of the record;
      * any other write first writes a staged outcome, then lands with {@code after} now.
      *
-     * @throws Violations {@code instance_fenced_out}, now for the proof or the write, or at the release for a staged
-     *         outcome whose fence a rival controller took meanwhile
+     * AIDEV-NOTE: a staged outcome that matches nothing once the record was let go lost to a rival controller's newer
+     * claim, whose state stands: it is dropped with its {@code after}, never a failure of the operation that already
+     * ended. Matching nothing while still held is the fenced-out failure, as for any other write.
+     *
+     * @param assignments the write, onto the statement already narrowed to the record this operation owns here
+     * @throws Violations {@code instance_fenced_out}, for the proof or a write while the operation holds the record
      */
     private static void land(@NonNull HostLeases leases, int instanceId, int serverId, @NonNull Object instanceName,
-                             boolean outcome, @NonNull QueryBuilder<Row> statement, @NonNull Runnable after) {
+                             boolean outcome, @NonNull UnaryOperator<QueryBuilder<Row>> assignments,
+                             @NonNull Runnable after) {
         InstanceOperationLock lock = InstanceOperationLock.of(leases);
         if (!outcome) {
             lock.settle(instanceId);
-            requireMatched(statement.updateAll(), serverId, instanceName);
+            requireMatched(assignments.apply(fenced(leases, instanceId, serverId)).updateAll(), serverId,
+                instanceName);
             after.run();
             return;
         }
         requireMatched((int) fenced(leases, instanceId, serverId).count(), serverId, instanceName);
-        lock.stageOutcome(instanceId, () -> {
-            requireMatched(statement.updateAll(), serverId, instanceName);
-            after.run();
+        lock.stageOutcome(instanceId, new ClaimedRows.RowOutcome() {
+            @Override
+            public @NonNull QueryBuilder<Row> assign(@NonNull QueryBuilder<Row> owned) {
+                return assignments.apply(owned.where(hostScope(serverId)));
+            }
+
+            @Override
+            public void landed() {
+                after.run();
+            }
+
+            @Override
+            public void lost() {
+                requireMatched(0, serverId, instanceName);
+            }
         });
     }
 

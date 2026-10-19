@@ -744,10 +744,10 @@ public final class InstanceParts {
         // stays operator-only there too.
         tabs.add(new InstanceBackupsPage(operator));
         tabs.add(new InstanceProvisioningPage());
-        tabs.add(VolumeParts.tab());
+        tabs.add(VolumeParts.tab(operator));
         // The attachments resolve in the hosting panel, which declares them only where this boot serves databases.
         if (InstanceAttachmentParts.databasesServed()) {
-            tabs.add(InstanceAttachmentParts.databasesTab());
+            tabs.add(InstanceAttachmentParts.databasesTab(operator));
         }
         if (operator) {
             // The page hides AND 404s itself for a delegate, and the /manage entry never lists it.

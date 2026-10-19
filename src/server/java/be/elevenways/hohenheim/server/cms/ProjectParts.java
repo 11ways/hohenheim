@@ -88,8 +88,8 @@ public final class ProjectParts {
             .writes(ResourceMutations.rows().create().update().delete(DELETE).build())
             .deleteConfirmation(DeleteConfirmation.of(
                 DeleteConfirmation.body(HohenheimMicrocopy.PROJECT.of("delete_confirm"))))
-            .tabs(ResourceTabs.<Row>of(List.of(EnvironmentParts.PROJECT_ENVIRONMENTS,
-                    ProjectMembershipParts.ADMIN_MEMBERS))
+            .tabs(ResourceTabs.<Row>of(List.of(EnvironmentParts.projectEnvironments(),
+                    ProjectMembershipParts.adminMembers()))
                 .withHistory().withContributions())
             .relatedPages(RelatedPage.toPeer(HohenheimSlugs.ENVIRONMENTS))
             .build();
@@ -98,7 +98,7 @@ public final class ProjectParts {
     public static @NonNull PanelResource<Row> manage() {
         // A Team cluster member, shown while the tenant is in a project.
         return ManageTwin.listed(entry(ManageTwin.id("project"), 40), TenantScopes.PROJECTS,
-                ResourceTabs.<Row>of(List.of(ProjectMembershipParts.MANAGE_MEMBERS)),
+                ResourceTabs.<Row>of(List.of(ProjectMembershipParts.manageMembers())),
                 access -> !Projects.visibleTo(access).isEmpty())
             .form(ResourceForm.<Row>of(formSpec()).build())
             .build();
