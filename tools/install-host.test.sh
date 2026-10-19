@@ -41,6 +41,7 @@ expect "the spamservice launch grant carries SETENV for prlimit only" "$PLAN" "h
 expect "no unrestricted root binaries are granted" "$PLAN" "/usr/bin/chown" no
 expect "the health probe follows the loopback bind" "$PLAN" "poll http://127.0.0.1:3000/api/health"
 expect "writes the systemd unit" "$PLAN" "write /etc/systemd/system/hohenheim.service"
+expect "the unit boots from a class-data archive beside the jar" "$PLAN" "class-data archive /opt/hohenheim/hohenheim-server.jsa"
 expect "runs migrations" "$PLAN" "--run-migrations"
 expect "prints the setup step" "$PLAN" "redirects to /setup"
 expect "no docker without a docker role" "$PLAN" "docker-ce" no

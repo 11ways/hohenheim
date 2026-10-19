@@ -16,9 +16,15 @@ import be.elevenways.zenit.cms.server.page.CmsRecordSources;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
 import be.elevenways.zenit.common.orm.field.Field;
+import be.elevenways.protoblast.common.util.BlastLog;
+import be.elevenways.zenit.cms.common.panel.PanelEntry;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.server.panel.PartsForms;
+import be.elevenways.zenit.test.support.LogLines;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -84,6 +90,44 @@ class AdminSourcesTest extends HohenheimTestBase {
         assertThat(names(RecordSourceRegistry.INSTANCE.requireById(SiteAuthProviderModel.MODEL_ID).searchFields()))
             .as("step 4: the auth-provider picker still searches the name")
             .contains(SiteAuthProviderModel.NAME.getName());
+    }
+
+    @Test
+    void noHohenheimPanelEntrySkipsADerivedInlineCreate() {
+        // 1. Re-derive every resource's compact create in every registered panel, as the boot's source wiring does,
+        //    and capture what that says: an unsatisfiable derivation is a cms.chooser.inline_create_skipped line.
+        List<String> logged = new CopyOnWriteArrayList<>();
+        BlastLog.LogSink previous = BlastLog.getLogSink();
+        LogLines.captureInto(logged);
+        int resources = 0;
+        try {
+            for (Panel panel : PanelRegistry.all()) {
+                for (PanelEntry entry : panel.entries()) {
+                    if (entry instanceof PanelResource<?>) {
+                        resources++;
+                        CmsRecordSources.createProviderFor(panel, entry);
+                    }
+                }
+            }
+        } finally {
+            BlastLog.setLogSink(previous);
+        }
+        assertThat(resources).as("step 1: the walk reached the panels' resources").isPositive();
+        assertThat(logged)
+            .as("step 1: a clean panel build skips no derived inline create")
+            .noneMatch(line -> line.startsWith("cms.chooser.inline_create_skipped"));
+
+        // 2. The two resources that used to be skipped say "none" once, on their form, in every panel they sit in.
+        Panel admin = PanelRegistry.getBySlug(HohenheimSlugs.ADMIN);
+        assertThat(admin).as("step 2: the admin panel is registered").isNotNull();
+        for (String slug : List.of(HohenheimSlugs.GAME_DOMAINS, HohenheimSlugs.PREVIEWS)) {
+            PanelEntry entry = admin.entryBySlug(slug);
+            assertThat(entry).as("step 2: %s is an admin entry", slug).isNotNull();
+            assertThat(PartsForms.quickCreateWithheld(entry)).as("step 2: %s withholds its quick create", slug)
+                .isTrue();
+            assertThat(CmsRecordSources.createProviderFor(admin, entry))
+                .as("step 2: %s offers no compact create", slug).isNull();
+        }
     }
 
     private static RecordSourceRegistry.Entry entryOf(Identifier modelId) {

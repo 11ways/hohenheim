@@ -88,8 +88,10 @@ public final class PreviewParts {
             .recordLabel(HohenheimMicrocopy.PREVIEW_DEPLOYMENT.of("singular"))
             .description(CmsSupport.navHint(HohenheimMicrocopy.PREVIEW_DEPLOYMENT))
             .navGroup(HohenheimPanel.DEPLOY_GROUP).icon(Icon.of("flask"))
+            // No compact create: no pick chooses a preview and its list has no quick-add bar, and the required
+            // application is a relation pick no compact form draws (the create page prefills it from a Deploys tab).
             .form(ResourceForm.<Row>of(form).bindings(bindings)
-                .createDefaults((access, panel) -> PreviewParts.createDefaults(access)).build())
+                .createDefaults((access, panel) -> PreviewParts.createDefaults(access)).withoutQuickCreate().build())
             .list(ResourceList.rows(tableSpec()).chrome(ListChrome.MINIMAL)
                 .search(PreviewDeploymentModel.HOSTNAME, PreviewDeploymentModel.REF,
                         PreviewDeploymentModel.HEAD_SHA).build())

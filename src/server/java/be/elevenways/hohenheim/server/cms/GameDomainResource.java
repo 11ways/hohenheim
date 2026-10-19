@@ -71,7 +71,9 @@ public final class GameDomainResource {
             .standsUnder(HohenheimSlugs.INSTANCES)
             .reads(ResourceReads.rows().title(mapping -> Microcopy.literalOrNull(hostname(mapping))))
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).build())
-            .form(ResourceForm.<Row>of(GameDomainOperations.FORM).build())
+            // No compact create: no pick chooses a mapping and its list has no quick-add bar, and the required site
+            // domain is a relation pick no compact form draws; a mapping is created on its own create page.
+            .form(ResourceForm.<Row>of(GameDomainOperations.FORM).withoutQuickCreate().build())
             .writes(ResourceMutations.rows().create(GameDomainOperations.CREATE)
                 .update(GameDomainOperations.UPDATE, mapping -> Objects.requireNonNull(
                     mapping.get(GameDomainModel.VERSION), "a locked mapping carries its version").longValue())
