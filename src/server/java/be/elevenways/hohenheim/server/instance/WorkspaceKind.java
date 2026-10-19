@@ -39,7 +39,6 @@ import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.ui.BadgeColor;
 import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
-import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -403,8 +402,7 @@ public final class WorkspaceKind implements InstanceKindHandler {
     private static @NonNull Row requireInstance(int instanceId) {
         Row instance = Models.get(InstanceModel.class).findById(instanceId);
         if (instance == null) {
-            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("instance_not_found")
-                .withArg("id", String.valueOf(instanceId)));
+            throw InstanceOperationLock.notFound(instanceId);
         }
         return instance;
     }

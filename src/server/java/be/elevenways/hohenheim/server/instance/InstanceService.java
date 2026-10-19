@@ -14,6 +14,8 @@ import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.application.ApplicationUpstreams;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.orm.GeneratedRows;
+import be.elevenways.zenit.common.security.Accountability;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
@@ -646,8 +648,7 @@ public final class InstanceService {
     public void assignRuntimeRole(int instanceId, @NonNull String role) {
         Row row = Models.get(InstanceModel.class).findById(instanceId);
         if (row == null) {
-            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("instance_not_found")
-                .withArg("id", instanceId));
+            throw InstanceOperationLock.notFound(instanceId);
         }
         int serverId = ServerModel.canonicalServerId(row.get(InstanceModel.SERVER_ID));
         this.leases.requireFence(serverId);
@@ -710,6 +711,23 @@ public final class InstanceService {
         // engine, preview expiry, database teardown) records the same trash of the record.
         int[] trashed = {0};
         TenantWrites.inAuthorizedOperation(() -> trashed[0] = record.delete());
+        return trashed[0];
+    }
+
+    /**
+     * {@link #trash} as the FINISH of a destroy an earlier operation authorized and left being destroyed, inside
+     * GeneratedRows' removal-only scope, so a record an owning tier generated (a database's, an engine's, a stack
+     * service's) ends under the unscoped sweep and boot settle as it would under its owner's scope.
+     *
+     * AIDEV-NOTE: only {@link InstanceOperationLock}'s finish of a record that reads {@code destroying}, narrowed to
+     * its claim, may take this: the scope lets that soft delete through the ownership guard and authors nothing. A
+     * destroy started now keeps {@link #trash}, so an unscoped destroy of an owned record is still refused there.
+     *
+     * @return the rows trashed
+     */
+    static int trashFinishing(@NonNull QueryBuilder<Row> record) {
+        int[] trashed = {0};
+        GeneratedRows.sweeping(Accountability.ORIGIN_SYSTEM, () -> trashed[0] = trash(record));
         return trashed[0];
     }
 
@@ -1035,8 +1053,7 @@ public final class InstanceService {
         // Trashed included: removing a destroyed record's data is this verb's whole point.
         Row row = StoredRows.byId(Models.get(InstanceModel.class), instanceId);
         if (row == null) {
-            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("instance_not_found")
-                .withArg("id", instanceId));
+            throw InstanceOperationLock.notFound(instanceId);
         }
         String serverName = ServerModel.canonicalNameOf(row.get(InstanceModel.SERVER_ID));
         // AIDEV-NOTE: an ALREADY destroyed record still has its data, and that is the whole
@@ -1157,8 +1174,7 @@ public final class InstanceService {
     public Resolved resolve(int instanceId) {
         Row row = Models.get(InstanceModel.class).findById(instanceId);
         if (row == null) {
-            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("instance_not_found")
-                .withArg("id", instanceId));
+            throw InstanceOperationLock.notFound(instanceId);
         }
         InstanceKindHandler handler = InstanceKinds.handlerOf(row);
         if (handler == null) {

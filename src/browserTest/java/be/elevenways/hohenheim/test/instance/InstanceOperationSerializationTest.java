@@ -384,6 +384,68 @@ class InstanceOperationSerializationTest {
     }
 
     /**
+     * A record an owning tier generated (a database's, an engine's, a stack service's) and left destroying is finished
+     * by the UNSCOPED reconciler and boot settle exactly like an unowned one: the finish trashes it inside the
+     * removal-only scope instead of meeting the ownership guard and burning its retry budget. That guard still refuses
+     * an unscoped edit and an unscoped delete of an owned record.
+     */
+    @Test
+    void theUnscopedSweepAndBootFinishOwnedRecordsLeftDestroyingWhileTheGuardStillRefusesEdits() {
+        // The finish reads the attribution alone, so the owner ids need no owner rows.
+        int databaseSwept = leftDestroying("destroy-owned-db-swept");
+        int engineSwept = leftDestroying("destroy-owned-engine-swept");
+        int serviceSwept = leftDestroying("destroy-owned-service-swept");
+        int databaseBooted = leftDestroying("destroy-owned-db-booted");
+        int engineBooted = leftDestroying("destroy-owned-engine-booted");
+        Db.run(datasource, () -> {
+            // 1. Each is owned and left destroying, its cleanup done.
+            attributeTo(databaseSwept, DatabaseInstances.SOURCE, DatabaseModel.MODEL_ID, 9_100_000 + databaseSwept);
+            attributeTo(engineSwept, DatabaseEngines.SOURCE, DatabaseEngineModel.MODEL_ID, 9_100_000 + engineSwept);
+            attributeTo(serviceSwept, StackInstances.SOURCE, StackServiceModel.MODEL_ID, 9_100_000 + serviceSwept);
+            attributeTo(databaseBooted, DatabaseInstances.SOURCE, DatabaseModel.MODEL_ID, 9_100_000 + databaseBooted);
+            attributeTo(engineBooted, DatabaseEngines.SOURCE, DatabaseEngineModel.MODEL_ID, 9_100_000 + engineBooted);
+            List<Integer> owned = List.of(databaseSwept, engineSwept, serviceSwept, databaseBooted, engineBooted);
+            assertThat(owned.stream().map(InstanceOperationSerializationTest::stateOf).toList())
+                .as("step 1: left destroying").containsOnly("live " + InstanceModel.STATUS_DESTROYING);
+
+            // 2. The unscoped reconciler finishes the database's, the engine's and the service's.
+            for (int id : List.of(databaseSwept, engineSwept, serviceSwept)) {
+                assertThat(new InstanceStatusReconciler().reconcile(id).verdict())
+                    .as("step 2: the reconciler finished owned record %s", id)
+                    .isEqualTo(InstanceStatusReconciler.Verdict.FINISHED);
+                assertThat(stateOf(id)).as("step 2: owned record %s is trashed and stopped", id)
+                    .isEqualTo("trashed " + InstanceModel.STATUS_STOPPED);
+            }
+
+            // 3. The boot settle finishes the other two.
+            InstanceService.recoverInterrupted();
+            assertThat(List.of(stateOf(databaseBooted), stateOf(engineBooted))).as("step 3: the boot settle finished both")
+                .containsOnly("trashed " + InstanceModel.STATUS_STOPPED);
+            assertThat(owned.stream().map(id -> InstanceModel.stoppageCauseOf(Models.get(InstanceModel.class).find()
+                    .withTrashed().where(InstanceModel.ID.eq(id)).first())).toList())
+                .as("step 3: no finish was counted as unfinished").containsOnlyNulls();
+
+            // 4. An unscoped edit and an unscoped delete of an owned record are still refused by the ownership guard.
+            int live = BackupLaneFixture.instanceRecord("owned-guarded", hostId);
+            attributeTo(live, DatabaseInstances.SOURCE, DatabaseModel.MODEL_ID, 9_100_000 + live);
+            Row edited = Models.get(InstanceModel.class).findById(live);
+            edited.set(InstanceModel.NAME, "owned-guarded-renamed");
+            assertGeneratedReadonly(() -> Models.get(InstanceModel.class).save(edited), "step 4: the edit is refused");
+            assertGeneratedReadonly(() -> Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(live))
+                .delete(), "step 4: the delete is refused");
+            assertThat(stateOf(live)).as("step 4: the owned record is untouched")
+                .startsWith("live ");
+        });
+    }
+
+    private static void assertGeneratedReadonly(Runnable call, String step) {
+        assertThatThrownBy(call::run).as(step)
+            .isInstanceOfSatisfying(Violations.class, refused -> assertThat(refused.all())
+                .anySatisfy(violation ->
+                    assertThat(violation.message().key()).isEqualTo("instance_generated_readonly")));
+    }
+
+    /**
      * A destroy whose end keeps failing (a write hook of the trash throws) is retried only as its backoff allows and,
      * after the bound, no more: the record says why (its report retried by a later claim when the bound was reached
      * inside a transaction), the dashboard names it, every other operation and every background destroy is refused by

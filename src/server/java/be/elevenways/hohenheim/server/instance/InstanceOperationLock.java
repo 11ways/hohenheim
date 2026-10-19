@@ -235,7 +235,8 @@ public final class InstanceOperationLock {
         }
         boolean ended;
         try {
-            ended = InstanceOperationGuard.finishDestroy(this, instanceId, InstanceService::trash, beforeWrite);
+            ended = InstanceOperationGuard.finishDestroy(this, instanceId, InstanceService::trashFinishing,
+                beforeWrite);
         } catch (RuntimeException failure) {
             this.unfinished.failed(instanceId, InstanceModel.nameOf(record),
                 InstanceModel.stoppageCauseOf(record) == HohenheimActivityAction.DESTROY_UNFINISHED, failure);
@@ -410,9 +411,14 @@ public final class InstanceOperationLock {
     private static @NonNull Violations refusalFor(int instanceId) {
         Row row = Models.get(InstanceModel.class).findById(instanceId);
         if (row == null) {
-            return Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of(NOT_FOUND).withArg("id", instanceId));
+            return notFound(instanceId);
         }
         return HohenheimViolations.instanceRefusal("instance_operation_in_progress", row, null);
+    }
+
+    /** @return the refusal of a record with no live row, the one answer every lookup of a missing instance gives */
+    static @NonNull Violations notFound(int instanceId) {
+        return Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of(NOT_FOUND).withArg("id", instanceId));
     }
 
     /**
