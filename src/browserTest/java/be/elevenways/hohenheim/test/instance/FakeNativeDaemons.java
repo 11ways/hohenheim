@@ -247,7 +247,11 @@ final class FakeNativeDaemons {
      */
     static final AtomicReference<Runnable> DURING_START = new AtomicReference<>();
 
-    /** handle -> how many times a runtime was asked to destroy it, so a refusal can prove it touched nothing. */
+    /**
+     * handle -> how many times a runtime was asked to destroy it since a workload was last created under it (by create
+     * or a backup import, both through {@code land}), so a refusal can prove it touched nothing; handles repeat across
+     * tests sharing a JVM, so creation restarts the count.
+     */
     static final Map<String, Integer> DESTROY_CALLS = new ConcurrentHashMap<>();
 
     // -- the install lane -----------------------------------------------------
@@ -413,8 +417,14 @@ final class FakeNativeDaemons {
             workload.ownerModel = owner.model();
             workload.ownerId = owner.id();
             workload.tty = spec.tty();
-            this.daemon.put(spec.handle(), workload);
+            land(spec.handle(), workload);
             return spec.handle();
+        }
+
+        /** Puts a new workload under its handle and restarts that handle's destroy count. */
+        private void land(@NonNull String handle, @NonNull FakeWorkload workload) {
+            this.daemon.put(handle, workload);
+            DESTROY_CALLS.remove(handle);
         }
 
         @Override
@@ -596,7 +606,7 @@ final class FakeNativeDaemons {
                 throw new IOException("Failed creating instance record: Invalid devices: Failed to load network"
                     + " \"hhx-fake\" for project \"default\": Network not found");
             }
-            this.daemon.put(spec.handle(), workload);
+            land(spec.handle(), workload);
             // The definition's devices in the import's own vocabulary, the shape the Incus lane reads back.
             List<ImportedDevice> devices = new ArrayList<>();
             workload.cdroms.forEach((name, medium) -> devices.add(new ImportedDevice(name, DeviceType.CDROM, medium)));
