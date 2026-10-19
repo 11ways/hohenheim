@@ -669,8 +669,11 @@ public class HohenheimSettings {
         // AIDEV-NOTE: path and url are the DEPRECATED app-owned spellings of hohenheim's own
         // database. The server opens zenit's default datasource (database.url in
         // settings/local.dry, or ZENIT__DATABASE__URL) and these two only supply its
-        // FALLBACK (HohenheimDatabase.fallbackUrl), because production installs set path and
-        // an upgrade must open the same file. The engine/username/password keys that sat
+        // FALLBACK (HohenheimDatabase.fallbackUrl). path is RETIRED as a file setting: boot moves
+        // a local.dry value (an adopted hohenheim.dry's included) to zenit's database.url, a
+        // relative path resolved against the settings root, and refuses it in any other source
+        // (HohenheimRetiredNames); it stays declared for its default and the test lanes' in-process
+        // value. The engine/username/password keys that sat
         // here were removed: SQLite ignores credentials and the engine is always SQLite. A
         // settings file still carrying them loads fine (an undeclared key is dropped with an
         // UNKNOWN_KEY slog).
@@ -678,9 +681,8 @@ public class HohenheimSettings {
             .hostOnly()
             .defaultValue("hohenheim.db")
             .filesystemPath(HohenheimPaths.SERVER_FILES, PathKind.FILE)
-            .description("DEPRECATED: SQLite database file used when zenit's database.url is "
-                + "unset (and 'url' here is blank). Prefer database.url = jdbc:sqlite:<file> in "
-                + "settings/local.dry")
+            .description("RETIRED: boot moves a value set here to zenit's database.url = jdbc:sqlite:<absolute "
+                + "file> in settings/local.dry; set database.url there instead")
             .restartRequired()
             .build();
 

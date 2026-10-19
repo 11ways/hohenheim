@@ -904,10 +904,11 @@ LE_ENABLED="false"
 
 # Where the control-plane database is named. A FRESH install (no settings file exists
 # yet) names it the framework's way: zenit's database.url in local.dry. An existing
-# host is never re-pointed: its (retired) hohenheim.dry carries the deprecated
-# database.path the server still honours as its fallback, and seeding a database.url
-# beside it would silently win over a path the operator may have changed. So a host
-# that still has hohenheim.dry gets no database.url, even when local.dry is new.
+# host is never re-pointed: its (retired) hohenheim.dry carries the database.path the
+# server moves to database.url itself on its first boot (a relative path resolved against
+# the settings root), and a database.url seeded beside it would make that boot refuse
+# both, or win over a path the operator may have changed. So a host that still has
+# hohenheim.dry gets no database.url, even when local.dry is new.
 if [ ! -f "$SETTINGS_DIR/hohenheim.dry" ] && [ ! -f "$SETTINGS_DIR/local.dry" ]; then
     info "fresh install: the control-plane database is database.url = jdbc:sqlite:$PREFIX/hohenheim.db in local.dry"
     LOCAL_DATABASE_BLOCK="

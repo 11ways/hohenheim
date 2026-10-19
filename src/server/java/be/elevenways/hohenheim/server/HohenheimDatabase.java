@@ -28,11 +28,12 @@ import java.util.TreeMap;
  * AIDEV-NOTE: the datasource is zenit's DEFAULT datasource, resolved by the framework:
  * {@code database.url} (settings/local.dry, or ZENIT__DATABASE__URL) wins, and the
  * hohenheim settings only supply the FALLBACK url ({@link #fallbackUrl}). The hohenheim
- * keys {@code database.path} and {@code database.url} are deprecated app-owned spellings
- * that production installs still set (the installer seeded an absolute database.path until
- * 2026-09-24; a fresh install now gets zenit's database.url in local.dry, and an existing
- * host is never re-pointed), so they stay honoured as that fallback and an upgraded server
- * opens the same file.
+ * key {@code database.url} is a deprecated app-owned spelling still honoured as that
+ * fallback. Its sibling {@code database.path} (which the installer seeded until 2026-09-24,
+ * relative on the oldest hosts) is RETIRED: boot moves it to zenit's database.url, a relative
+ * path resolved against the settings root (HohenheimRetiredNames), so an upgraded server
+ * opens the same file; only its default, or a test lane's in-process value, still reaches
+ * the fallback here.
  *
  * AIDEV-NOTE: FOREIGN KEYS ARE ON, deliberately. zenit opens every SQLite url with
  * foreign_keys=on unless the url says otherwise (zenit 8a86d3c2, 2026-09-22), and
@@ -103,7 +104,7 @@ public class HohenheimDatabase {
     /**
      * The url the framework falls back to when {@code database.url} is not configured:
      * the deprecated hohenheim {@code database.url} when set, else the SQLite file at the
-     * hohenheim {@code database.path}.
+     * hohenheim {@code database.path} (no settings source carries it past boot, see the class note).
      */
     static @NonNull String fallbackUrl() {
         String legacyUrl = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.URL);
@@ -112,12 +113,7 @@ public class HohenheimDatabase {
                 + " database.url (settings/local.dry or ZENIT__DATABASE__URL)");
             return legacyUrl.trim();
         }
-        String path = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.PATH);
-        if (Zenit.SETTINGS_VALUES.hasValue(HohenheimSettings.Database.PATH)) {
-            Blast.log("Datasource: hohenheim database.path is deprecated; set zenit's"
-                + " database.url to jdbc:sqlite:" + path + " instead");
-        }
-        return "jdbc:sqlite:" + path;
+        return "jdbc:sqlite:" + Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.PATH);
     }
 
     public static SqlDatasource datasource() {

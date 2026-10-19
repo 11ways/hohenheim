@@ -17,7 +17,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * An existing deployment's settings/hohenheim.dry moves into settings/local.dry under hohenheim.* on the first boot,
- * leaving a backup, and a HOHENHEIM__* variable refuses the boot naming its ZENIT__HOHENHEIM__* spelling.
+ * leaving a backup, its database file becoming zenit's database.url, and a HOHENHEIM__* variable refuses the boot
+ * naming its ZENIT__HOHENHEIM__* spelling.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -29,22 +30,26 @@ class HohenheimSettingsMigrationTest {
 
     @Test
     void theOldFileMovesIntoTheFrameworkFileAndTheOldPrefixIsRefused() throws Exception {
-        // 1. An existing deployment: its own file with group-relative keys, and a framework file beside it.
+        // 1. An existing deployment: its own file with group-relative keys, the database file named relative to the
+        //    install as an old hohenheim.dry named it, and a framework file beside it.
         Path old = this.root.resolve("settings/hohenheim.dry");
         Path local = this.root.resolve("settings/local.dry");
         Files.createDirectories(old.getParent());
         String oldContents = "{\"proxy\":{\"http_port\":8080,\"trusted_proxy_keys\":[\"key-one\"]},"
-            + "\"ssl\":{\"letsencrypt_enabled\":false}}";
+            + "\"ssl\":{\"letsencrypt_enabled\":false},\"database\":{\"path\":\"hohenheim.db\",\"backup_retention\":3}}";
         Files.writeString(old, oldContents, StandardCharsets.UTF_8);
         Files.writeString(local, "{\"network\":{\"port\":2999}}", StandardCharsets.UTF_8);
 
-        // 2. The boot's adoption moves every key under hohenheim.* in the framework file and keeps the rest.
+        // 2. The boot's adoption moves every key under hohenheim.* in the framework file and keeps the rest; the
+        //    database file moves on to zenit's database.url, the absolute url of that file under the settings root.
         RetiredConfiguration.adopt(this.root, this.root.resolve("home"), local);
         Map<String, Object> merged = new DryFileSource(local).snapshot();
         assertThat(merged.get("network")).as("step 2: the framework keys stay").isEqualTo(Map.of("port", 2999));
         assertThat(merged.get("hohenheim")).as("step 2: the old keys live under hohenheim.* now")
             .isEqualTo(Map.of("proxy", Map.of("http_port", 8080, "trusted_proxy_keys", List.of("key-one")),
-                "ssl", Map.of("letsencrypt_enabled", false)));
+                "ssl", Map.of("letsencrypt_enabled", false), "database", Map.of("backup_retention", 3)));
+        assertThat(merged.get("database")).as("step 2: the database file is zenit's database.url")
+            .isEqualTo(Map.of("url", "jdbc:sqlite:" + this.root.resolve("hohenheim.db").toAbsolutePath().normalize()));
 
         // 3. The old file is gone, kept verbatim as a dated backup beside it.
         assertThat(Files.exists(old)).as("step 3: the old file is moved away").isFalse();
