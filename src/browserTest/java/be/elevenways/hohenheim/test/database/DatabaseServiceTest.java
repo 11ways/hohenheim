@@ -6,6 +6,8 @@ import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.protoblast.testsupport.time.Poll;
+import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.common.time.Pace;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
@@ -32,6 +34,9 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -63,6 +68,10 @@ class DatabaseServiceTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
     private static final String PG_IMAGE = "postgres:17-alpine";
+    /** How long an uncommitted create is watched: well past the ~100 ms a pool thread took to look before F4. */
+    private static final Duration UNCOMMITTED_WINDOW = Duration.ofSeconds(2);
+    /** How long the transaction holder waits for the outside reader's window to end. */
+    private static final Duration READER_BOUND = Duration.ofSeconds(30);
 
     @Test
     @SuppressWarnings("unchecked")
@@ -187,17 +196,39 @@ class DatabaseServiceTest {
                     .as("step 1: the record is born provisioning")
                     .isEqualTo(DatabaseModel.STATUS_PROVISIONING);
                 // No deterministic signal exists for "the pool has not started": the job is
-                // an after-commit hook the datasource holds privately. So the record and
-                // the daemon are WATCHED for the whole window, never looked at once after
-                // a sleep -- a pool thread reached the row within ~100 ms before F4.
-                Poll.never("step 1: the status left provisioning or a container appeared"
-                        + " while the create was uncommitted (a pool thread that could not"
-                        + " find the row used to leave it here for ever)",
-                    Duration.ofSeconds(2), Duration.ofMillis(200), () -> {
+                // an after-commit hook the datasource holds privately. So the window is WATCHED
+                // from both sides, never looked at once after a sleep -- a pool thread reached
+                // the row within ~100 ms before F4. A reader OUTSIDE the transaction, where the
+                // pool reads, samples that the record stays unfindable for the whole window;
+                // this thread keeps the transaction open meanwhile and samples its own view
+                // between waits on that reader, since a wait paced under the transaction's
+                // claim is refused.
+                CompletableFuture<Void> outside = new CompletableFuture<>();
+                JobRunner.startVirtualThread(() -> {
+                    try {
+                        Poll.never("step 1: the uncommitted record was findable outside its"
+                                + " transaction, where the provisioning pool looks it up",
+                            UNCOMMITTED_WINDOW, Duration.ofMillis(200),
+                            () -> Db.supply(datasource,
+                                () -> Models.get(DatabaseModel.class).findByName(name)) != null);
+                        outside.complete(null);
+                    } catch (Throwable failure) {
+                        outside.completeExceptionally(failure);
+                    }
+                });
+                Poll.latestWhileRunning("step 1: the uncommitted window of the reader outside",
+                    outside, READER_BOUND, Duration.ofMillis(200), () -> {
                         DatabaseService.Detail watched = service.detail(name);
-                        return !DatabaseModel.STATUS_PROVISIONING.equals(watched.status())
-                            || watched.containerState() != ContainerState.ABSENT;
-                    });
+                        if (!DatabaseModel.STATUS_PROVISIONING.equals(watched.status())
+                                || watched.containerState() != ContainerState.ABSENT) {
+                            throw new AssertionError("step 1: the status left provisioning or a"
+                                + " container appeared while the create was uncommitted (a pool"
+                                + " thread that could not find the row used to leave it here for"
+                                + " ever)");
+                        }
+                        return null;
+                    }, nothing -> false);
+                awaitReader(outside);
                 // No engine instance row and no container: the record owns nothing
                 // yet, so the live status is ABSENT (EngineHandles.of would refuse to
                 // even name a handle here).
@@ -262,6 +293,28 @@ class DatabaseServiceTest {
             Duration.ofMillis(timeoutMs), Duration.ofMillis(500),
             () -> wanted.equals(service.detail(name).status()));
         return service.detail(name).status();
+    }
+
+    /**
+     * The verdict of the reader that watched the uncommitted window from outside the transaction.
+     *
+     * @throws AssertionError the reader's own failure, or one naming a reader still running at the bound
+     */
+    private static void awaitReader(CompletableFuture<Void> reader) {
+        try {
+            Pace.await(reader, READER_BOUND);
+        } catch (ExecutionException failed) {
+            if (failed.getCause() instanceof AssertionError violation) {
+                throw violation;
+            }
+            throw new AssertionError("the reader outside the transaction failed", failed.getCause());
+        } catch (TimeoutException stalled) {
+            throw new AssertionError("the reader outside the transaction never ended its window within "
+                + READER_BOUND, stalled);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("interrupted while awaiting the reader outside the transaction", interrupted);
+        }
     }
 
     /**
