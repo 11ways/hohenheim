@@ -325,6 +325,7 @@ class InstancePowerOperationsTest {
                 @Override public Identifier id() { return Identifier.of("test", "elsewhere"); }
                 @Override public Microcopy label() { return Microcopy.literal("Elsewhere"); }
                 @Override public boolean redrawsRefusedForm() { return false; }
+                @Override public boolean acceptsRecordHandles() { return false; }
             };
             assertThatThrownBy(() -> InstanceOperationHandlers.triggerOf(elsewhere))
                 .as("step 4: an undeclared surface has no trigger").isInstanceOf(IllegalStateException.class);

@@ -169,8 +169,8 @@ public final class ApiConduits {
                 }
                 case BAD_REQUEST, METHOD_NOT_ALLOWED, LOGIN_REQUIRED, INTERACTIVE_LOGIN_REQUIRED, RATE_LIMITED,
                      CSRF_ORIGIN, CSRF_TOKEN_MISSING, CSRF_TOKEN_INVALID, STALE, RETRY_MISMATCH, INVALID,
-                     ARCHIVED, CYCLE, IN_USE, STORE_BUSY, AT_CAPACITY, TOO_LARGE, SERVICE_UNAVAILABLE, OUTCOME_UNKNOWN,
-                     SECRET_ALREADY_DISCLOSED -> throw refusal;
+                     ARCHIVED, CYCLE, IN_USE, AMBIGUOUS, STORE_BUSY, AT_CAPACITY, TOO_LARGE, SERVICE_UNAVAILABLE,
+                     OUTCOME_UNKNOWN, SECRET_ALREADY_DISCLOSED -> throw refusal;
             };
         }
         throw refusal;
