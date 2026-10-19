@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceSnapshotModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.cms.InstanceBackupParts;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
@@ -87,6 +88,7 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
         backup.set(InstanceBackupModel.STATUS, InstanceBackupModel.STATUS_COMPLETE);
         backup.set(InstanceBackupModel.REMOTE_KEY, "artifact-tabs/complete.hib");
         backup.set(InstanceBackupModel.SIZE_BYTES, 67_890L);
+        backup.set(InstanceBackupModel.SHA256, "artifact-tabs-sha256-value");
         backup.set(InstanceBackupModel.CREATED_AT, Instant.parse("2026-08-10T13:00:00Z"));
         backup.set(InstanceBackupModel.SUMMARY, Map.of("kind", "hohenheim:docker_container",
             "disks", List.of("artifactdisk-a", "artifactdisk-b")));
@@ -134,11 +136,16 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
             .withFailMessage("step 3: the backup restore operation is not relayed from the panel's backup entry")
             .contains("/admin/instance-backups/invoke/hohenheim.restore_backup?ids=" + backupId);
 
-        // 4. The data disks a backup carries are named in its row and on its own page, read off its stored summary.
-        assertThat(backups.body()).as("step 4: the backup row names the data disks it carries")
-            .contains("artifactdisk-a, artifactdisk-b");
+        // 4. A container attaches no devices and mounts no declared volumes, so its backups section draws neither a
+        //    data disks nor a host volumes column; the data disks a backup carries are still named on its own page,
+        //    read off its stored summary.
+        assertThat(backups.body()).as("step 4: THE ASSERTION -- no column for a fact the kind does not have")
+            .doesNotContain("data-column=\"" + InstanceBackupParts.DATA_DISKS_COLUMN + "\"")
+            .doesNotContain("data-column=\"" + InstanceBackupParts.HOST_VOLUMES_COLUMN + "\"")
+            .as("step 4: and the section leads with when it was taken and how it stands")
+            .contains("data-column=\"created_at\"").contains("data-column=\"status\"");
         String page = httpGet(backupPage(HohenheimSlugs.ADMIN, backupId), sessionToken).body();
-        assertThat(page).as("step 4: and so does the backup's page").contains("artifactdisk-a, artifactdisk-b");
+        assertThat(page).as("step 4: the backup's page names the data disks").contains("artifactdisk-a, artifactdisk-b");
 
         // 5. A backup is titled by when it was taken, also when its archive has a key: the key is a field on the page,
         //    never its heading or its breadcrumb.
@@ -147,6 +154,43 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
         assertThat(title.group(1)).as("step 5: the title is when the backup was taken")
             .contains(taken("2026-08-10T13:00:00Z")).doesNotContain("complete.hib");
         assertThat(page).as("step 5: the key stays a field on the page").contains("artifact-tabs/complete.hib");
+
+        // 6. The page says what the backup is: its state, its checksum, and the instance as a link to its page.
+        assertThat(page).as("step 6: the checksum read back from the target").contains("artifact-tabs-sha256-value")
+            .as("step 6: the instance links to its page")
+            .contains(CmsRoutes.open(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCES, instanceId).toUrl())
+            .as("step 6: the backup's state").contains("Complete");
+    }
+
+    /** An application mounts declared volumes and attaches no devices: its backups name their host volumes. */
+    @Test
+    void theBackupColumnsFollowTheInstanceKind() throws Exception {
+        // 1. An application with a backup carrying two host volumes.
+        var instances = Models.get(InstanceModel.class);
+        Row application = instances.createEmptyRow();
+        application.set(InstanceModel.NAME, "artifact-application");
+        application.set(InstanceModel.KIND, ApplicationKind.ID.toString());
+        application.set(InstanceModel.SETTINGS, Map.of());
+        application.set(InstanceModel.RUNTIME_IMAGE_ID, Models.get(RuntimeImageModel.class).find()
+            .where(RuntimeImageModel.NAME.eq("node-22")).first().get(RuntimeImageModel.ID));
+        instances.save(application);
+        Integer applicationId = application.get(InstanceModel.ID);
+        var backups = Models.get(InstanceBackupModel.class);
+        Row backup = backups.createEmptyRow();
+        backup.set(InstanceBackupModel.INSTANCE_ID, applicationId);
+        backup.set(InstanceBackupModel.STATUS, InstanceBackupModel.STATUS_COMPLETE);
+        backup.set(InstanceBackupModel.CREATED_AT, Instant.parse("2026-08-11T13:00:00Z"));
+        backup.set(InstanceBackupModel.SUMMARY, Map.of("kind", ApplicationKind.ID.toString(),
+            "host_volumes", List.of("uploads", "cache")));
+        backups.save(backup);
+
+        // 2. Its Backups tab names the host volumes in their column, and draws no data disks column.
+        String tab = httpGet(CmsRoutes.subpage(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCES, applicationId,
+            HohenheimSlugs.Tab.BACKUPS).toUrl(), sessionToken).body();
+        assertThat(tab).as("step 2: THE ASSERTION -- the host volumes column on a kind that mounts them")
+            .contains("data-column=\"" + InstanceBackupParts.HOST_VOLUMES_COLUMN + "\"").contains("uploads, cache")
+            .as("step 2: and no data disks column on a kind without devices")
+            .doesNotContain("data-column=\"" + InstanceBackupParts.DATA_DISKS_COLUMN + "\"");
     }
 
     /**

@@ -14,6 +14,13 @@ import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.cms.DatabaseParts;
+import be.elevenways.hohenheim.server.cms.InstanceBackupsPage;
+import be.elevenways.hohenheim.instance.InstanceAttachmentOperations;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
+import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
+import be.elevenways.zenit.test.support.DatasourceProbe;
+import java.net.http.HttpResponse;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.host.HostPreflight;
@@ -172,48 +179,119 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
                     .contains(PREFIX + "web");
             }));
 
-        // 4. That page EXISTS on the instance record and lists the attachment; the
-        //    record band of the database renders the dead delete's reason.
+        // 4. The Attached databases tab is the attachment list narrowed to the instance: the database by name,
+        //    opening the database itself, its engine by its label, what it does as a badge, and the attach offered
+        //    under this instance; the record band of the database renders the dead delete's reason.
         var tab = adminGet(tabUrl);
         assertThat(tab.statusCode()).as("step 4: the Databases tab renders").isEqualTo(200);
         assertThat(tab.body())
             .as("step 4: the tab lists the attached database")
             .contains(PREFIX + "db")
-            .as("step 4: its attach opens the attachment create form preset to this instance")
-            .contains("/admin/instance-databases/new?instance_id=" + instanceId)
+            .as("step 4: the name opens the database, never the attachment form")
+            .contains("/admin/databases/" + databaseId)
+            .as("step 4: the engine by its label, never the raw token")
+            .contains("PostgreSQL")
+            .as("step 4: what the database does is a state badge")
+            .contains("hh-state-line")
+            .as("step 4: the row detaches through the attachment's own delete operation")
+            .contains(InstanceAttachmentOperations.DELETE_DATABASE_LINK.id().getPath())
+            .as("step 4: its attach opens the attachment create form under this instance")
+            .contains("/admin/instance-databases/new?parent=" + instanceId)
             .as("step 4: and its lead sentence stands in the shared record heading")
             .contains("data-cms-tab-lead")
             .contains("Each attached database injects its connection variables");
-        // The first column is headed by the field's label like its siblings, never the record noun "database" a
-        // sentence embeds in lower case.
-        String fromHead = tab.body().substring(tab.body().indexOf("<pl-table-head"));
-        assertThat(fromHead.substring(fromHead.indexOf('>') + 1, fromHead.indexOf("</pl-table-head>"))
-            .replaceAll("<[^>]*>", "").trim())
-            .as("step 4: the first column header is the capitalised field label")
-            .isEqualTo("Database");
         var detail = adminGet(CmsRoutes.detail("admin", "databases", databaseId).toUrl());
         assertThat(detail.statusCode()).isEqualTo(200);
         assertThat(detail.body())
             .as("step 4: the database page names the holding workload in its dead-delete reason")
             .contains(PREFIX + "web");
 
-        // 5. THE BROWSER: the attachment's edit form hydrates BOTH relation pickers
-        //    with their chosen titles (the Database one rendered empty in the QA pass).
+        // 5. The attach form says what it does to which app, and its picker offers only what is not attached yet:
+        //    the attached database is refused on submit by the picker's own narrowing.
+        String createUrl = "/admin/instance-databases/new?parent=" + instanceId;
+        assertThat(adminGet(createUrl).body())
+            .as("step 5: the page names the app it attaches to")
+            .contains("Attach a database to " + PREFIX + "web")
+            .as("step 5: and its submit says Attach").contains("data-cms-form-save");
+        HttpResponse<String> again = httpPostForm(createUrl, "database_id=" + databaseId + "&env_prefix=AGAIN&"
+            + PanelResourceCalls.createEnvelope(), sessionToken, csrfToken);
+        assertThat(again.statusCode()).as("step 5: THE ASSERTION -- an attached database is no offer")
+            .isNotIn(302, 303);
+        assertThat(Models.get(InstanceDatabaseModel.class).findByInstanceId(instanceId))
+            .as("step 5: nothing was attached twice").hasSize(1);
+
+        // 6. Another database attaches, written under the instance the form was opened under whatever is posted, and
+        //    lands back on the instance's Attached databases tab.
+        int otherInstance = instance(PREFIX + "other", hostId);
+        int second = database(PREFIX + "db2", hostId);
+        HttpResponse<String> attached = httpPostForm(createUrl, "instance_id=" + otherInstance + "&database_id="
+            + second + "&env_prefix=SECOND&" + PanelResourceCalls.createEnvelope(), sessionToken, csrfToken);
+        assertThat(attached.statusCode()).as("step 6: the attach is written").isIn(302, 303);
+        assertThat(attached.headers().firstValue("location").orElse(""))
+            .as("step 6: and lands on the Attached databases tab").contains(tabUrl);
+        Row secondLink = Models.get(InstanceDatabaseModel.class).find()
+            .where(InstanceDatabaseModel.DATABASE_ID.eq(second)).first();
+        assertThat(secondLink).isNotNull();
+        assertThat((Object) secondLink.get(InstanceDatabaseModel.INSTANCE_ID))
+            .as("step 6: THE ASSERTION -- under the parent, never the posted instance").isEqualTo(instanceId);
+
+        // 7. The Backups tab names each attached database with its last backup, read in one pass: the attachments
+        //    and the databases are one read each however many are attached.
+        assertThat(adminGet(CmsRoutes.subpage("admin", "instances", instanceId, HohenheimSlugs.Tab.BACKUPS)
+                .toUrl()).body())
+            .as("step 7: the Backups tab names the attached databases")
+            .contains("data-hh-attached-database-backups").contains(PREFIX + "db2")
+            .contains("/admin/databases/" + second);
+        PanelRequest operatorRequest = new PanelRequest(admin, TenantConduits.stubFor(null),
+            TenantConduits.operator(), null);
+        DatasourceProbe probe = DatasourceProbe.on((SqlDatasource) Models.get(InstanceDatabaseModel.class)
+            .getResolvedDatasource());
+        probe.reset();
+        assertThat(InstanceBackupsPage.attachedDatabases(operatorRequest, instanceId)).hasSize(2);
+        int linksForTwo = probe.queriesAgainst(InstanceDatabaseModel.MODEL_ID);
+        int databasesForTwo = probe.queriesAgainst(DatabaseModel.MODEL_ID);
+        // The added database is a temporary one: a persistent database's last-backup verdict asks the engine serving
+        // it once per record (DatabaseInstances.owned, outside this read), which would hide what this read costs.
+        int third = database(PREFIX + "db3", hostId);
+        Row thirdDatabase = Models.get(DatabaseModel.class).findById(third);
+        thirdDatabase.set(DatabaseModel.EPHEMERAL, true);
+        Models.get(DatabaseModel.class).save(thirdDatabase);
+        Row thirdLink = Models.get(InstanceDatabaseModel.class).createEmptyRow();
+        thirdLink.set(InstanceDatabaseModel.INSTANCE_ID, instanceId);
+        thirdLink.set(InstanceDatabaseModel.DATABASE_ID, third);
+        thirdLink.set(InstanceDatabaseModel.ENV_PREFIX, "THIRD");
+        Models.get(InstanceDatabaseModel.class).save(thirdLink);
+        probe.reset();
+        assertThat(InstanceBackupsPage.attachedDatabases(operatorRequest, instanceId)).hasSize(3);
+        assertThat(probe.queriesAgainst(InstanceDatabaseModel.MODEL_ID))
+            .as("step 7: the attachments cost the same however many there are").isEqualTo(linksForTwo);
+        assertThat(probe.queriesAgainst(DatabaseModel.MODEL_ID))
+            .as("step 7: and so are their databases").isEqualTo(databasesForTwo);
+
+        // 8. THE BROWSER: the attachment's edit form names both sides read-only: an attachment is never re-pointed.
         navigateToApp(CmsRoutes.detail("admin", "instance-databases", linkId).toUrl());
         waitForHydration();
-        assertThat(page.locator("pl-select[name='instance_id'] .pl-select-value")
-            .textContent().trim())
-            .as("step 5: the Instance picker shows its chosen record")
+        assertThat(page.locator("pl-field[data-path='instance_id'] .zf-field-readonly").textContent().trim())
+            .as("step 8: the Instance is named, frozen to the parent")
             .isEqualTo(PREFIX + "web");
-        assertThat(page.locator("pl-select[name='database_id'] .pl-select-value")
-            .textContent().trim())
-            .as("step 5: the Database picker shows its chosen record")
+        assertThat(page.locator("pl-field[data-path='database_id'] .zf-field-readonly").textContent().trim())
+            .as("step 8: the Database is named, frozen after the attach")
             .isEqualTo(PREFIX + "db");
+        assertThat(page.locator("pl-select[name='database_id']").count())
+            .as("step 8: no picker to re-point it with").isZero();
 
-        // 6. Detached, the database delete comes alive again.
-        Models.get(InstanceDatabaseModel.class).delete(linkId);
+        // 9. Detached through the row's Detach (the attachment's own delete), the database delete comes alive again.
+        Models.get(InstanceDatabaseModel.class).find().where(InstanceDatabaseModel.ID.in(
+            List.of(secondLink.get(InstanceDatabaseModel.ID), thirdLink.get(InstanceDatabaseModel.ID)))).delete();
+        HttpResponse<String> detach = httpPostForm(CmsRoutes.invoke(HohenheimSlugs.ADMIN,
+                HohenheimSlugs.INSTANCE_DATABASES, InstanceAttachmentOperations.DELETE_DATABASE_LINK.id())
+            .with(CmsEndpoints.SUBJECT_PARAM, String.valueOf(linkId)).toUrl(), confirmed(""), sessionToken,
+            csrfToken);
+        assertThat(detach.statusCode()).as("step 9: the detach answers").isIn(302, 303);
+        assertThat(Models.get(InstanceDatabaseModel.class).findById(linkId))
+            .as("step 9: the attachment is gone").isNull();
         assertThat(deleteUnavailable(database, operator))
-            .as("step 6: no workload holds it, so the delete is available")
+            .as("step 9: no workload holds it, so the delete is available")
             .isNull();
     }
 

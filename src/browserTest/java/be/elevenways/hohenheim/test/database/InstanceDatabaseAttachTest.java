@@ -392,51 +392,45 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
         int remoteInstanceId = p.remoteInstance();
 
         PanelResource<Row> resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCE_DATABASES);
-        AccessContext admin = AccessContext.anonymous();
+        // A programmatic create names the instance it attaches to the way the attach form is opened: ?parent=.
 
         // 1. An Incus instance has no link networks at all, so its container could never
         //    reach the engine -- refused by name rather than at the next deploy.
         assertThat(violationKeys(catchThrowable(() -> PartsWrites.persistRow(resource,
-                Map.of("instance_id", incusInstanceId, "database_id", databaseAId,
-                    "env_prefix", "DB"), admin))))
+                Map.of("database_id", databaseAId, "env_prefix", "DB"), under(null, incusInstanceId)))))
             .as("step 1: a driver without link networks cannot host an attachment")
             .contains("instance_kind_no_injection");
 
         // 2. A link network exists only on the daemon both workloads share.
         assertThat(violationKeys(catchThrowable(() -> PartsWrites.persistRow(resource,
-                Map.of("instance_id", remoteInstanceId, "database_id", databaseAId,
-                    "env_prefix", "DB"), admin))))
+                Map.of("database_id", databaseAId, "env_prefix", "DB"), under(null, remoteInstanceId)))))
             .as("step 2: a cross-host pairing is refused")
             .contains("database_instance_server_mismatch");
 
         // 3. The same database twice on one instance is a duplicate, refused by NAME
         //    before any anonymous constraint error.
         assertThat(violationKeys(catchThrowable(() -> PartsWrites.persistRow(resource,
-                Map.of("instance_id", instanceAId, "database_id", databaseAId,
-                    "env_prefix", "OTHER"), admin))))
+                Map.of("database_id", databaseAId, "env_prefix", "OTHER"), under(null, instanceAId)))))
             .as("step 3: attaching the same database twice is refused")
             .contains("database_already_attached");
 
         // 4. Two databases cannot share one variable family, or the second would silently
         //    overwrite the first's credentials.
         assertThat(violationKeys(catchThrowable(() -> PartsWrites.persistRow(resource,
-                Map.of("instance_id", instanceAId, "database_id", databaseBId,
-                    "env_prefix", "db"), admin))))
+                Map.of("database_id", databaseBId, "env_prefix", "db"), under(null, instanceAId)))))
             .as("step 4: a taken prefix is refused, case-insensitively")
             .contains("prefix_taken");
 
         // 5. A prefix that is not a legal variable name is refused.
         assertThat(violationKeys(catchThrowable(() -> PartsWrites.persistRow(resource,
-                Map.of("instance_id", instanceAId, "database_id", databaseBId,
-                    "env_prefix", "9-bad"), admin))))
+                Map.of("database_id", databaseBId, "env_prefix", "9-bad"), under(null, instanceAId)))))
             .as("step 5: a prefix that cannot be a variable name is refused")
             .contains("prefix_format");
 
         // 6. POSITIVE ANCHOR: a second database on a FREE prefix is accepted, so steps
         //    3-5 discriminate rather than forbid a second attachment.
         assertThat(catchThrowable(() -> PartsWrites.persistRow(resource,
-                Map.of("instance_id", instanceAId, "database_id", databaseBId,
-                    "env_prefix", "CACHE"), admin)))
+                Map.of("database_id", databaseBId, "env_prefix", "CACHE"), under(null, instanceAId))))
             .as("step 6: a second database on its own prefix attaches")
             .isNull();
         assertThat(linksOf(instanceAId)).as("step 6: two attachments now").hasSize(2);
@@ -579,9 +573,7 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
         //    so the collapse above is an ordering, not a form that refuses everyone.
         TenantConduits.as(principalA, () -> PartsWrites.persistRow(
             PanelEntryViews.of(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCE_DATABASES),
-            Map.of("instance_id", probeInstanceId, "database_id", databaseAId,
-                "env_prefix", "DB"),
-            AccessContext.of(TenantConduits.stubFor(principalA))));
+            Map.of("database_id", databaseAId, "env_prefix", "DB"), under(principalA, probeInstanceId)));
         List<Row> links = linksOf(probeInstanceId);
         assertThat(links).as("step 3: the owner's attach landed").hasSize(1);
 
@@ -610,8 +602,7 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
         //    ordering, not a lobotomized validator.
         Throwable operator = catchThrowable(() -> PartsWrites.persistRow(
             PanelEntryViews.of(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCE_DATABASES),
-            Map.of("instance_id", probeInstanceId, "database_id", databaseRemoteId,
-                "env_prefix", "OP"), AccessContext.anonymous()));
+            Map.of("database_id", databaseRemoteId, "env_prefix", "OP"), under(null, probeInstanceId)));
         assertThat(violationKeys(operator))
             .as("step 5: operators keep database_instance_server_mismatch")
             .contains("database_instance_server_mismatch");
@@ -622,9 +613,12 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
                                      Integer databaseId) {
         return catchThrowable(() -> TenantConduits.as(principal,
             () -> PartsWrites.persistRow(PanelEntryViews.of(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCE_DATABASES),
-                Map.of("instance_id", instanceId, "database_id", databaseId,
-                    "env_prefix", "DB"),
-                AccessContext.of(TenantConduits.stubFor(principal)))));
+                Map.of("database_id", databaseId, "env_prefix", "DB"), under(principal, instanceId))));
+    }
+
+    /** @return a caller's access on a request opened under one instance, as the attach form is */
+    private static AccessContext under(Principal principal, int instanceId) {
+        return AccessContext.of(TenantConduits.stubUnder(principal, instanceId));
     }
 
     // -- fixtures -------------------------------------------------------------

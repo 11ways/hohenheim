@@ -77,23 +77,27 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
             .as("step 1: it is reached through the template, not the sidebar").isFalse();
 
         // 2. An operator declares a volume on a template through the resource -- the only
-        //    thing that used to require writing the row by hand.
+        //    thing that used to require writing the row by hand. The limit is entered in MB, as a volume's own is.
         int templateId = template(PREFIX + "carrier", ApplicationKind.ID.toString());
         PanelResourceCalls.create("admin", HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES, Map.of(
             "template_id", templateId,
             "name", "data",
             "container_path", "/var/lib/app",
-            "quota_bytes", 256L * 1024L * 1024L,
+            "quota_mb", 256,
              "exclusive", true), TenantConduits.operator());
         List<Row> declared = Models.get(InstanceTemplateVolumeModel.class)
             .findByTemplateId(templateId);
         assertThat(declared).as("step 2: the declaration was stored").hasSize(1);
+        assertThat((Long) declared.get(0).get(InstanceTemplateVolumeModel.QUOTA_BYTES))
+            .as("step 2: the MB limit is stored in bytes").isEqualTo(256L * 1024L * 1024L);
 
-        // 3. And the template's Contents tab shows it, linking into the same resource.
+        // 3. And the template's Contents tab shows it, linking into the same resource, its limit as a size.
         String contents = adminGet(
             "/admin/instance-templates/" + templateId + "/page/contents").body();
         assertThat(contents).as("step 3: the Contents tab names the declared volume")
-            .contains("/var/lib/app").contains("instance-template-volumes");
+            .contains("/var/lib/app").contains("instance-template-volumes")
+            .as("step 3: the limit reads as a size, never a byte count").contains("256 MB")
+            .doesNotContain(">268435456<");
 
         // 4. Creating from that template copies the declaration onto the instance, with
         //    the facts that decide what the deploy mounts intact.
@@ -113,7 +117,7 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
      * still looking at the form.
      */
     @Test
-    void theResourceRefusesADeclarationTheCreateCouldNeverHonour() {
+    void theResourceRefusesADeclarationTheCreateCouldNeverHonour() throws Exception {
         int templateId = template(PREFIX + "refusing", ApplicationKind.ID.toString());
         PanelResourceCalls.create("admin", HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES, Map.of("template_id", templateId,
             "name", "data",
@@ -151,14 +155,22 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
         assertThat(violationKeys(catchThrowable(() -> PanelResourceCalls.create("admin",
             HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES,
                 Map.of("template_id", templateId, "name", "cache",
-                    "container_path", "/var/cache/app", "quota_bytes", 0L,
+                    "container_path", "/var/cache/app", "quota_mb", 0,
                      "exclusive", false), TenantConduits.operator()))))
             .as("step 4: a non-positive quota is refused, named")
             .contains("volume_quota_invalid");
 
-        // 5. And a template whose kind mounts no volumes at all cannot be given one here,
-        //    rather than being given one that refuses every create it is used for.
+        // 5. And a template whose kind mounts no volumes at all offers no volume section to declare one in, and cannot
+        //    be given one by hand either, rather than being given one that refuses every create it is used for.
         int wrongKind = template(PREFIX + "wrong-kind", "hohenheim:docker_container");
+        assertThat(adminGet("/admin/instance-templates/" + wrongKind + "/page/contents").body())
+            .as("step 5: THE ASSERTION -- no volume section on a kind that mounts none")
+            .doesNotContain("data-cms-child-list=\"" + HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES + "\"")
+            .as("step 5: while its other sections stand")
+            .contains("data-cms-child-list=\"" + HohenheimSlugs.INSTANCE_TEMPLATE_VARIABLES + "\"");
+        assertThat(adminGet("/admin/instance-templates/" + templateId + "/page/contents").body())
+            .as("step 5: the control: a kind that mounts volumes draws the section")
+            .contains("data-cms-child-list=\"" + HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES + "\"");
         assertThat(violationKeys(catchThrowable(() -> PanelResourceCalls.create("admin",
             HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES,
                 Map.of("template_id", wrongKind, "name", "data",

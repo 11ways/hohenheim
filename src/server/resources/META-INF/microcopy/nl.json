@@ -977,6 +977,10 @@
     {
       "text": "Database koppelen",
       "scope": "site_databases"
+    },
+    {
+      "text": "Koppelen",
+      "scope": "instance_database"
     }
   ],
   "auto_deploy_disabled": {
@@ -1332,7 +1336,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Bepaalt de naam van de geinjecteerde variabelen: DB geeft DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME en DB_URL. De eerste koppeling van de site levert ook DATABASE_URL.",
+      "text": "Bepaalt de naam van de geinjecteerde variabelen: DB geeft DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME en DB_URL. De eerste gekoppelde databank van de app levert ook DATABASE_URL.",
       "scope": "help"
     }
   ],
@@ -5742,6 +5746,10 @@
     {
       "text": "Toestand",
       "scope": "app_list"
+    },
+    {
+      "text": "Status",
+      "scope": "database_tab"
     }
   ],
   "add_file": [
@@ -9578,10 +9586,16 @@
     "text": "Installatiemedia is voor een machine die leeg wordt aangemaakt: kies Installatiemedia (lege VM) als image.",
     "scope": "violations"
   },
-  "detach": {
-    "text": "Afkoppelen",
-    "scope": "instance_device"
-  },
+  "detach": [
+    {
+      "text": "Afkoppelen",
+      "scope": "instance_device"
+    },
+    {
+      "text": "Loskoppelen",
+      "scope": "instance_database"
+    }
+  ],
   "detach_confirm": {
     "text": "Dit apparaat afkoppelen verwijdert het onderliggende volume op de daemon. De gegevens erop zijn weg en kunnen hier niet hersteld worden.",
     "scope": "instance_device"
@@ -10948,10 +10962,16 @@
     "text": "Limiet",
     "scope": "instance_overview"
   },
-  "observed_at": {
-    "text": "Waargenomen",
-    "scope": "instance_overview"
-  },
+  "observed_at": [
+    {
+      "text": "Waargenomen",
+      "scope": "instance_overview"
+    },
+    {
+      "text": "Gemeten",
+      "scope": "hohenheim_field"
+    }
+  ],
   "not_measured": [
     {
       "text": "Niet gemeten",
@@ -12346,11 +12366,11 @@
     }
   ],
   "never_measured": {
-    "text": "nog niet gemeten",
+    "text": "Nog niet gemeten",
     "scope": "instance_volume"
   },
   "no_quota": {
-    "text": "geen limiet",
+    "text": "Geen limiet",
     "scope": "instance_volume"
   },
   "destroy_confirm_named": {
@@ -13328,7 +13348,7 @@
     "scope": "template_contents"
   },
   "no_volumes_description": {
-    "text": "Dit sjabloon declareert geen volumes; een instantie uit dit sjabloon bewaart niets wanneer haar container vervangen wordt.",
+    "text": "Dit sjabloon declareert nog geen volumes; voeg er een toe voor elke map die een instantie moet bewaren wanneer haar container vervangen wordt.",
     "scope": "template_contents"
   },
   "template_volume_name_taken": {
@@ -15312,10 +15332,16 @@
     "text": "Middelen",
     "scope": "app_overview"
   },
-  "details": {
-    "text": "Details",
-    "scope": "app_overview"
-  },
+  "details": [
+    {
+      "text": "Details",
+      "scope": "app_overview"
+    },
+    {
+      "text": "Details",
+      "scope": "instance_backup"
+    }
+  ],
   "recent": [
     {
       "text": "Recent",
@@ -15495,10 +15521,16 @@
     { "text": "Host controleren", "scope": "app_health" },
     { "text": "{$actor} controleerde {$subject}", "scope": "hohenheim", "target": "happened" }
   ],
-  "on_host": {
-    "text": "op {$host}",
-    "scope": "app_overview"
-  },
+  "on_host": [
+    {
+      "text": "op {$host}",
+      "scope": "app_overview"
+    },
+    {
+      "text": "Op de host",
+      "scope": "instance_volume"
+    }
+  ],
   "console_modes": {
     "text": "Consolemodi",
     "scope": "instance"
@@ -16628,7 +16660,7 @@
   "how_apps_connect": {"text": "Hoe apps verbinden", "scope": "database_overview"},
   "how_apps_connect_value": {"text": "Gekoppelde apps krijgen deze als omgevingsvariabelen; niemand hoeft ze te plakken.", "scope": "database_overview"},
   "used_by_none": {"text": "Geen app", "scope": "database_overview"},
-  "used_by_none_detail": {"text": "Koppel hem op het tabblad Databases van een app.", "scope": "database_overview"},
+  "used_by_none_detail": {"text": "Koppel hem vanaf de pagina van de app: Meer, dan Gekoppelde databanken.", "scope": "database_overview"},
   "backup_temporary": {"text": "Geen backup", "scope": "database_overview"},
   "backup_temporary_detail": {"text": "Tijdelijke gegevens, weg zodra hij stopt", "scope": "database_overview"},
   "backup_never": {"text": "Nooit", "scope": "database_overview"},
@@ -18762,5 +18794,77 @@
   "title_taken": {
     "text": "{$at :datetime}",
     "scope": "instance_backup"
+  },
+  "usage_of": {
+    "text": "{$used :bytes} van {$quota :bytes}",
+    "scope": "instance_volume"
+  },
+  "usage_unlimited": {
+    "text": "{$used :bytes}, geen limiet",
+    "scope": "instance_volume"
+  },
+  "volume_gauge": {
+    "text": "Volume {$name}",
+    "scope": "instance_volume"
+  },
+  "sha256": {
+    "text": "Controlesom (SHA-256)",
+    "scope": "hohenheim_field"
+  },
+  "attach_title": {
+    "text": "Een databank koppelen aan {$instance}",
+    "scope": "instance_database"
+  },
+  "attached_toast": {
+    "text": "{$database} is gekoppeld aan {$instance}",
+    "scope": "instance_database"
+  },
+  "detach_confirm_any": {
+    "text": "Deze databank loskoppelen? De workload kan haar niet meer bereiken zodra je bevestigt. De databank zelf en haar gegevens blijven behouden.",
+    "scope": "instance_database"
+  },
+  "detached_toast": {
+    "text": "{$database} is losgekoppeld van {$instance}",
+    "scope": "instance_database"
+  },
+  "detached_toast_any": {
+    "text": "De databank is losgekoppeld",
+    "scope": "instance_database"
+  },
+  "none_attachable": {
+    "text": "Elke databank die je hier mag koppelen, is al gekoppeld.",
+    "scope": "instance_database"
+  },
+  "picker_facts": {
+    "text": "{$engine}, {$status}",
+    "scope": "instance_database"
+  },
+  "data_disks_none": {
+    "text": "Geen dataschijven",
+    "scope": "instance_backup"
+  },
+  "host_volumes_none": {
+    "text": "Geen hostvolumes",
+    "scope": "instance_backup"
+  },
+  "databases_heading": {
+    "text": "Gekoppelde databanken",
+    "scope": "instance_backup"
+  },
+  "databases_lead": {
+    "text": "De gegevens van deze app in zijn databanken worden met elke databank geback-upt, niet met de app.",
+    "scope": "instance_backup"
+  },
+  "last_backup": {
+    "text": "Laatste back-up",
+    "scope": "instance_backup"
+  },
+  "failure_none": {
+    "text": "Geen fout",
+    "scope": "instance_artifacts"
+  },
+  "restore_needs_running": {
+    "text": "Een dump kan alleen in een draaiende databank worden teruggezet. Status nu: {$state}.",
+    "scope": "database_tab"
   }
 }

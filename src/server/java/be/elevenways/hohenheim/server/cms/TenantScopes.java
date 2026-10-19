@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceSnapshotModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
+import be.elevenways.hohenheim.model.InstanceVolumeModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -166,6 +167,11 @@ public final class TenantScopes {
     public static final RowScope INSTANCE_DEVICES = InstanceAttachmentParts.DEVICE_ROWS.andPerPrincipal(
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(InstanceDeviceModel.class),
             InstanceModel.MODEL_ID, HohenheimCapabilities.VIEW, InstanceDeviceModel.INSTANCE_ID::in));
+
+    /** Volumes declared on an instance; tenants only those of viewable instances, read-only. */
+    public static final RowScope INSTANCE_VOLUMES = VolumeParts.ROWS.andPerPrincipal(
+        ctx -> HohenheimAccess.grantScope(ctx, Models.get(InstanceVolumeModel.class),
+            InstanceModel.MODEL_ID, HohenheimCapabilities.VIEW, InstanceVolumeModel.INSTANCE_ID::in));
 
     /**
      * Instance-owned variables; tenants only those of viewable instances. VIEW, never MANAGE or CONFIG: the list is

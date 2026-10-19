@@ -10,6 +10,8 @@ import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
+import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
@@ -95,7 +97,9 @@ public final class InstanceTemplateParts {
 
     /**
      * The Contents tab: the framework's child list with a section per declaration kind (variables, config files, the
-     * managed databases where this boot serves them, volumes), each narrowed to the template.
+     * managed databases where this boot serves them, volumes), each narrowed to the template. A section the template's
+     * kind cannot use is not drawn there: volumes need a kind that mounts them, databases a kind on a Docker daemon
+     * (the declaration guards' own facts), so no form is offered that only its save would refuse.
      */
     private static @NonNull ChildList<Row> contentsTab() {
         List<String> sections = new ArrayList<>(List.of(HohenheimSlugs.INSTANCE_TEMPLATE_VARIABLES,
@@ -106,11 +110,27 @@ public final class InstanceTemplateParts {
         sections.add(HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES);
         ChildList<Row> tab = ChildList.<Row>sections(HohenheimSlugs.Tab.CONTENTS,
                 HohenheimMicrocopy.INSTANCE_TEMPLATE.of("contents"), sections.toArray(String[]::new))
-            .icon(Icon.of("list-check"));
+            .icon(Icon.of("list-check"))
+            .sectionWhen(HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES, (template, access) -> {
+                InstanceKindHandler kind = kindOf(template);
+                return kind != null && kind.supportsVolumes();
+            });
+        if (InstanceAttachmentParts.databasesServed()) {
+            tab.sectionWhen(HohenheimSlugs.INSTANCE_TEMPLATE_DATABASES, (template, access) -> {
+                InstanceKindHandler kind = kindOf(template);
+                return kind != null && kind.supportedRuntimes().contains(ServerModel.RUNTIME_DOCKER);
+            });
+        }
         for (String section : sections) {
             tab.hide(section, TemplateChildParts.OWNER_COLUMN);
         }
         return tab;
+    }
+
+    /** @return the handler of the template's kind, null for a template naming none or an unknown one */
+    private static @Nullable InstanceKindHandler kindOf(@NonNull Row template) {
+        Object kind = template.get(InstanceTemplateModel.KIND);
+        return kind == null ? null : InstanceKinds.getHandler(String.valueOf(kind));
     }
 
     /** The tenant's catalog: approved templates only (operators see every one), to pick from and nothing more. */

@@ -111,7 +111,8 @@ public class InstanceBackupModel extends Model {
 
     /** sha256 of the encrypted archive as re-read FROM THE TARGET after commit. */
     public static final StringField SHA256 = SCHEMA.addField(
-        StringField.builder().name("sha256").filterable(false).build());
+        StringField.builder().name("sha256").filterable(false)
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("sha256")).build());
 
     public static final LongField SIZE_BYTES = SCHEMA.addField(
         LongField.builder("size_bytes").filterable(false)

@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.test;
 
-import be.elevenways.hohenheim.HohenheimParams;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.instance.InstanceAttachmentOperations;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -80,15 +80,15 @@ class InstanceAttachmentSurfacesBrowserTest extends HohenheimTestBase {
             .placedOperations(PlacedOperationMoves.NONE.synthesized(DATABASES, SynthesizedRowActions.DELETE,
                 InstanceAttachmentOperations.DELETE_DATABASE_LINK.id()));
 
-        // 1. The admin entry for the operator, record-less, on its record and with the instance prefill; a tenant is
-        //    refused the admin panel.
+        // 1. The admin entry for the operator, record-less, on its record and opened under its instance (the Attached
+        //    databases tab's create); a tenant is refused the admin panel.
         stored.check(capture(SurfaceCase.of(ADMIN, DATABASES, "operator", operator)));
         stored.check(capture(SurfaceCase.of(ADMIN, DATABASES, "tenant-snapshots", outsider)
             .refusedFor(ZenitRefusalReason.FORBIDDEN)));
         stored.check(capture(SurfaceCase.of(ADMIN, DATABASES, "operator", operator).onRecord(linkId, "link")));
         stored.check(capture(SurfaceCase.of(ADMIN, DATABASES, "operator", operator)
-            .named(ADMIN + "." + DATABASES + ".operator.prefill")
-            .withParameter(HohenheimParams.INSTANCE_ID_PREFILL.getName(), instanceId)));
+            .named(ADMIN + "." + DATABASES + ".operator.parent")
+            .withParameter(CmsEndpoints.PARENT_PARAM.getName(), instanceId)));
 
         // 2. The /manage twin for the tenant holding both sides of the attachment.
         stored.check(capture(SurfaceCase.of(MANAGE, DATABASES, "tenant-databases", tenantDatabases)));
@@ -103,7 +103,7 @@ class InstanceAttachmentSurfacesBrowserTest extends HohenheimTestBase {
     private static PanelSurfaces capture(SurfaceCase fixture) {
         return PanelSurfaces.capture(fixture
             .key(HohenheimSlugs.INSTANCES, "instance", instanceId)
-            .key(HohenheimParams.INSTANCE_ID_PREFILL.getName(), "instance", instanceId)
+            .key(CmsEndpoints.PARENT_PARAM.getName(), "instance", instanceId)
             .key("databases", "database", databaseId)
             .key(DATABASES, "link", linkId));
     }

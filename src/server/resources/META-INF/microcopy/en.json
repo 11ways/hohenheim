@@ -977,6 +977,10 @@
     {
       "text": "Attach database",
       "scope": "site_databases"
+    },
+    {
+      "text": "Attach",
+      "scope": "instance_database"
     }
   ],
   "auto_deploy_disabled": {
@@ -1332,7 +1336,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Names the injected variable family: DB gives DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME and DB_URL. The site's first attachment also provides DATABASE_URL.",
+      "text": "Names the injected variable family: DB gives DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME and DB_URL. The app's first attached database also provides DATABASE_URL.",
       "scope": "help"
     }
   ],
@@ -5742,6 +5746,10 @@
     {
       "text": "State",
       "scope": "app_list"
+    },
+    {
+      "text": "Status",
+      "scope": "database_tab"
     }
   ],
   "add_file": [
@@ -9578,10 +9586,16 @@
     "text": "Install media is for a machine created empty: choose Install media (empty VM) as its image.",
     "scope": "violations"
   },
-  "detach": {
-    "text": "Detach",
-    "scope": "instance_device"
-  },
+  "detach": [
+    {
+      "text": "Detach",
+      "scope": "instance_device"
+    },
+    {
+      "text": "Detach",
+      "scope": "instance_database"
+    }
+  ],
   "detach_confirm": {
     "text": "Detaching this device deletes its backing volume at the daemon. The data on it is gone and cannot be restored from here.",
     "scope": "instance_device"
@@ -10948,10 +10962,16 @@
     "text": "Limit",
     "scope": "instance_overview"
   },
-  "observed_at": {
-    "text": "Observed",
-    "scope": "instance_overview"
-  },
+  "observed_at": [
+    {
+      "text": "Observed",
+      "scope": "instance_overview"
+    },
+    {
+      "text": "Measured",
+      "scope": "hohenheim_field"
+    }
+  ],
   "not_measured": [
     {
       "text": "Not measured",
@@ -12346,11 +12366,11 @@
     }
   ],
   "never_measured": {
-    "text": "not measured yet",
+    "text": "Not measured yet",
     "scope": "instance_volume"
   },
   "no_quota": {
-    "text": "no limit",
+    "text": "No limit",
     "scope": "instance_volume"
   },
   "destroy_confirm_named": {
@@ -13328,7 +13348,7 @@
     "scope": "template_contents"
   },
   "no_volumes_description": {
-    "text": "This template declares no volumes; an instance created from it keeps nothing when its container is replaced.",
+    "text": "This template declares no volumes yet; add one for each directory an instance must keep when its container is replaced.",
     "scope": "template_contents"
   },
   "template_volume_name_taken": {
@@ -15312,10 +15332,16 @@
     "text": "Resources",
     "scope": "app_overview"
   },
-  "details": {
-    "text": "Details",
-    "scope": "app_overview"
-  },
+  "details": [
+    {
+      "text": "Details",
+      "scope": "app_overview"
+    },
+    {
+      "text": "Details",
+      "scope": "instance_backup"
+    }
+  ],
   "recent": [
     {
       "text": "Recent",
@@ -15495,10 +15521,16 @@
     { "text": "Check the host", "scope": "app_health" },
     { "text": "{$actor} checked {$subject}", "scope": "hohenheim", "target": "happened" }
   ],
-  "on_host": {
-    "text": "on {$host}",
-    "scope": "app_overview"
-  },
+  "on_host": [
+    {
+      "text": "on {$host}",
+      "scope": "app_overview"
+    },
+    {
+      "text": "On the host",
+      "scope": "instance_volume"
+    }
+  ],
   "console_modes": {
     "text": "Console modes",
     "scope": "instance"
@@ -16628,7 +16660,7 @@
   "how_apps_connect": {"text": "How apps connect", "scope": "database_overview"},
   "how_apps_connect_value": {"text": "Attached apps get these as environment variables; nobody pastes them.", "scope": "database_overview"},
   "used_by_none": {"text": "No app", "scope": "database_overview"},
-  "used_by_none_detail": {"text": "Attach it on an app's Databases tab.", "scope": "database_overview"},
+  "used_by_none_detail": {"text": "Attach it from the app's page: More, then Attached databases.", "scope": "database_overview"},
   "backup_temporary": {"text": "Not backed up", "scope": "database_overview"},
   "backup_temporary_detail": {"text": "Temporary data, gone when it stops", "scope": "database_overview"},
   "backup_never": {"text": "Never", "scope": "database_overview"},
@@ -18762,5 +18794,77 @@
   "title_taken": {
     "text": "{$at :datetime}",
     "scope": "instance_backup"
+  },
+  "usage_of": {
+    "text": "{$used :bytes} of {$quota :bytes}",
+    "scope": "instance_volume"
+  },
+  "usage_unlimited": {
+    "text": "{$used :bytes}, no limit",
+    "scope": "instance_volume"
+  },
+  "volume_gauge": {
+    "text": "Volume {$name}",
+    "scope": "instance_volume"
+  },
+  "sha256": {
+    "text": "Checksum (SHA-256)",
+    "scope": "hohenheim_field"
+  },
+  "attach_title": {
+    "text": "Attach a database to {$instance}",
+    "scope": "instance_database"
+  },
+  "attached_toast": {
+    "text": "{$database} is attached to {$instance}",
+    "scope": "instance_database"
+  },
+  "detach_confirm_any": {
+    "text": "Detach this database? The workload can no longer reach it as soon as you confirm. The database itself and its data are kept.",
+    "scope": "instance_database"
+  },
+  "detached_toast": {
+    "text": "{$database} is detached from {$instance}",
+    "scope": "instance_database"
+  },
+  "detached_toast_any": {
+    "text": "The database is detached",
+    "scope": "instance_database"
+  },
+  "none_attachable": {
+    "text": "Every database you may attach here is attached already.",
+    "scope": "instance_database"
+  },
+  "picker_facts": {
+    "text": "{$engine}, {$status}",
+    "scope": "instance_database"
+  },
+  "data_disks_none": {
+    "text": "No data disks",
+    "scope": "instance_backup"
+  },
+  "host_volumes_none": {
+    "text": "No host volumes",
+    "scope": "instance_backup"
+  },
+  "databases_heading": {
+    "text": "Attached databases",
+    "scope": "instance_backup"
+  },
+  "databases_lead": {
+    "text": "This app's data in its databases is backed up with each database, not with the app.",
+    "scope": "instance_backup"
+  },
+  "last_backup": {
+    "text": "Last backup",
+    "scope": "instance_backup"
+  },
+  "failure_none": {
+    "text": "No error",
+    "scope": "instance_artifacts"
+  },
+  "restore_needs_running": {
+    "text": "A dump can only be restored into a running database. Status now: {$state}.",
+    "scope": "database_tab"
   }
 }

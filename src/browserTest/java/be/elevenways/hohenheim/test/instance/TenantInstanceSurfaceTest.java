@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.instance.VolumeOperations;
 import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceLogModel;
@@ -834,12 +835,11 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
     }
 
     /**
-     * The Volumes tab is shared by both panels, but only /admin declares the volume resource: a tenant holding the
-     * instance's config capability read every volume as a link into /manage/instance-volumes, plus an Add button
-     * into the same missing resource, and both answered "page not found".
+     * The Volumes tab is the volume list of the panel it renders in: /admin's offers the add and the typed-confirm
+     * delete, the /manage twin lists the same volume read-only, its link opening the twin's own read-only page.
      */
     @Test
-    void theVolumesTabDrawsNoLinkIntoAResourceThePanelLacks() throws Exception {
+    void theVolumesTabListsThePanelsOwnVolumeResource() throws Exception {
         int workspaceId = workspace(PREFIX + "volumes");
         Integer volumeId = InstanceVolumes.declare(workspaceId, "data", "/srv/" + PREFIX + "data", null, false)
             .get(InstanceVolumeModel.ID);
@@ -852,27 +852,29 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
             RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, workspaceId,
                 HohenheimCapabilities.CONFIG, true);
 
-            // 1. POSITIVE ANCHOR: the operator's tab links the volume into its resource and offers the add, so the
-            //    absences below are about the panel, not a tab that renders no links at all.
+            // 1. POSITIVE ANCHOR: the operator's tab links the volume into /admin's volume resource and offers the
+            //    add under this instance, so the absences below are about the panel, not a tab that renders no links.
             assertThat(adminGet("/admin" + tab).body())
                 .as("step 1: the operator's volume links into /admin's volume resource, with an add")
                 .contains("/admin" + volumes + "/" + volumeId)
-                .contains("add-volume-link");
+                .contains("/admin" + volumes + "/new?parent=" + workspaceId);
 
-            // 2. The tenant's tab renders and lists the same volume.
+            // 2. The tenant's tab renders and lists the same volume, linked into the /manage twin.
             HttpResponse<String> tenant = tenantGet("/manage" + tab);
             assertThat(tenant.statusCode()).as("step 2: the config delegate opens the Volumes tab").isEqualTo(200);
-            assertThat(tenant.body()).as("step 2: and reads the declared volume").contains("/srv/" + PREFIX + "data");
+            assertThat(tenant.body()).as("step 2: and reads the declared volume").contains("/srv/" + PREFIX + "data")
+                .contains("/manage" + volumes + "/" + volumeId);
 
-            // 3. The /manage panel declares no volume resource, so the route the old link named is dead...
-            assertThat(tenantGet("/manage" + volumes + "/" + volumeId).statusCode())
-                .as("step 3: /manage has no volume resource to open").isEqualTo(404);
-
-            // 4. ...and the tab draws neither a link into it nor an Add button leading there.
+            // 3. The twin's page opens for the tenant on its overview, read-only: it offers neither an add nor the
+            //    delete with data.
+            HttpResponse<String> page = tenantGet("/manage" + volumes + "/" + volumeId + "/page/overview");
+            assertThat(page.statusCode()).as("step 3: /manage opens its own volume page").isEqualTo(200);
+            assertThat(page.body()).as("step 3: and it reads the volume").contains("/srv/" + PREFIX + "data");
             assertThat(tenant.body())
-                .as("step 4: no link into the missing /manage volume resource")
-                .doesNotContain("/manage" + volumes)
-                .doesNotContain("add-volume-link");
+                .as("step 3: no add on the read-only twin")
+                .doesNotContain("/manage" + volumes + "/new")
+                .as("step 3: and no delete with data")
+                .doesNotContain(VolumeOperations.DESTROY.id().getPath());
         } finally {
             Models.get(InstanceVolumeModel.class).find().where(InstanceVolumeModel.INSTANCE_ID.eq(workspaceId))
                 .delete();

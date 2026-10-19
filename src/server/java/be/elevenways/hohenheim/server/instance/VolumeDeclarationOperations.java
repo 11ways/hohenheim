@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim.server.instance;
 
-import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.instance.VolumeOperations;
@@ -38,7 +37,7 @@ public final class VolumeDeclarationOperations {
             int owner = requireOwner(input.instance_id());
             HohenheimAccess.requireOperationCapability(owner, HohenheimCapabilities.CONFIG);
             Row volume = InstanceVolumes.declare(owner, Objects.requireNonNull(input.name()),
-                Objects.requireNonNull(input.container_path()), quota(input.quota_mb()),
+                Objects.requireNonNull(input.container_path()), VolumeOperations.quotaBytes(input.quota_mb()),
                 Boolean.TRUE.equals(input.exclusive()));
             History.event(Models.get(InstanceModel.class), owner, Change.fact(HohenheimActivityAction.VOLUME_DECLARED,
                 Map.of(HohenheimActivityAction.VOLUME_KEY, input.name())));
@@ -64,7 +63,8 @@ public final class VolumeDeclarationOperations {
                         HohenheimMicrocopy.VIOLATIONS.of("volume_rehome_unsupported"));
                 }
                 InstanceVolumes.declare(owner, name, Objects.requireNonNull(input.container_path()),
-                    quota(input.quota_mb()), Boolean.TRUE.equals(input.exclusive()), call.expectedVersion());
+                    VolumeOperations.quotaBytes(input.quota_mb()), Boolean.TRUE.equals(input.exclusive()),
+                    call.expectedVersion());
                 History.event(Models.get(InstanceModel.class), owner, Change.fact(
                     HohenheimActivityAction.VOLUME_REDECLARED, Map.of(HohenheimActivityAction.VOLUME_KEY, name)));
                 return null;
@@ -80,9 +80,9 @@ public final class VolumeDeclarationOperations {
     public static void init() {}
 
     public static @NonNull Declaration declaration(@NonNull Row row) {
-        Long bytes = row.get(InstanceVolumeModel.QUOTA_BYTES);
         return new Declaration(row.get(InstanceVolumeModel.INSTANCE_ID), row.get(InstanceVolumeModel.NAME),
-            row.get(InstanceVolumeModel.CONTAINER_PATH), bytes == null ? null : (int) (bytes / ByteUnit.MEGABYTE.factor()),
+            row.get(InstanceVolumeModel.CONTAINER_PATH),
+            VolumeOperations.quotaMegabytes(row.get(InstanceVolumeModel.QUOTA_BYTES)),
             row.get(InstanceVolumeModel.EXCLUSIVE));
     }
 
@@ -111,12 +111,5 @@ public final class VolumeDeclarationOperations {
             throw Violations.ofField("instance_id", owner, HohenheimMicrocopy.VIOLATIONS.of("volume_kind_unsupported"));
         }
         return owner;
-    }
-
-    private static @Nullable Long quota(@Nullable Integer mb) {
-        if (mb == null) return null;
-        if (mb <= 0) throw Violations.ofField(VolumeOperations.QUOTA_MB.getName(), mb,
-                HohenheimMicrocopy.VIOLATIONS.of("volume_quota_invalid"));
-        return ByteUnit.MEGABYTE.bytes(mb);
     }
 }

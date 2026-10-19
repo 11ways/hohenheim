@@ -100,7 +100,12 @@ public final class InstanceDevicesPage implements RecordTab.Rendered<Row> {
      */
     @Override
     public boolean visibleFor(@NonNull Row record, @NonNull AccessContext access) {
-        InstanceKindHandler handler = InstanceKinds.handlerOf(record);
+        return attachesDevices(record);
+    }
+
+    /** @return whether the instance's kind attaches disks and NICs, which its backups then carry as data disks */
+    static boolean attachesDevices(@NonNull Row instance) {
+        InstanceKindHandler handler = InstanceKinds.handlerOf(instance);
         return handler != null && handler.supportsDevices();
     }
 

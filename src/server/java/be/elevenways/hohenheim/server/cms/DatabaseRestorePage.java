@@ -27,8 +27,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Restore tab on a managed database: connection details plus the dump-upload
- * form posting to the host-declared restore endpoint.
+ * Restore tab on a managed database: connection details plus the dump-upload form posting to the host-declared
+ * restore endpoint, offered only while the database serves (DatabaseVerdict): a failed or stopped one has no engine
+ * to load a dump into, and the tab says so instead of offering an upload that can only fail.
  */
 public final class DatabaseRestorePage implements RecordTab.Rendered<Row> {
 
@@ -41,10 +42,17 @@ public final class DatabaseRestorePage implements RecordTab.Rendered<Row> {
     public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row record) {
         Conduit conduit = request.conduit();
         String name = record.get(DatabaseModel.NAME);
-        Map<String, Object> vars = new HashMap<>(DatabaseConnectionCard.facts(record, conduit));
+        Map<String, Object> vars = new HashMap<>(DatabaseConnectionCard.facts(record,
+            !CmsSupport.isDelegatedPanel(conduit)));
         vars.put("title", CmsSupport.pageTitle(conduit, HohenheimMicrocopy.DATABASE_RESTORE, name));
-        vars.put("restoreUrl", HohenheimEndpoints.DATABASES_RESTORE
-            .with(HohenheimEndpoints.DATABASE_NAME, name).toUrl());
+        DatabaseVerdict verdict = DatabaseVerdict.ofDatabase(record);
+        if (verdict.serves()) {
+            vars.put("restoreUrl", HohenheimEndpoints.DATABASES_RESTORE
+                .with(HohenheimEndpoints.DATABASE_NAME, name).toUrl());
+        } else {
+            vars.put("restoreRefusal", HohenheimMicrocopy.DATABASE_TAB.of("restore_needs_running")
+                .withArg("state", verdict.state().label()));
+        }
         vars.put("recordId", record.get(DatabaseModel.ID));
         vars.put("usedBy", usedBy(record.get(DatabaseModel.ID)));
         vars.put("head", recordHead(conduit));

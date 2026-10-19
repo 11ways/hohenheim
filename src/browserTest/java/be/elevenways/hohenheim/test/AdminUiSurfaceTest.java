@@ -242,35 +242,65 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
 
     /**
      * Volumes declare through the InstanceVolumes funnel (host path derived, quota in
-     * MB stored as bytes), and the guards refuse by name: FALSIFICATION for the
-     * home-volume protection and the kind gate.
+     * MB stored as bytes) under the instance their create names, and the guards refuse by name:
+     * FALSIFICATION for the frozen owner, the home-volume protection and the kind gate. The Volumes
+     * tab is the volume list itself: the use against the limit as a bar, sizes in words, the row's
+     * own edit and delete, and the create under this instance.
      */
     @Test
     void volumesDeclareThroughTheFunnelAndTheGuardsHold() throws Exception {
-        // Declare via the CMS form: quota entered in MB, stored in bytes.
-        HttpResponse<String> create = httpPostForm("/admin/instance-volumes/new",
-            "instance_id=" + workspaceId + "&name=data&container_path=%2Fdata&quota_mb=100&"
+        // 1. Declare via the CMS form opened under the workspace: quota entered in MB, stored in bytes. The owner is
+        //    the create's parent, so a posted instance_id (here the docker instance) is never written.
+        HttpResponse<String> create = httpPostForm("/admin/instance-volumes/new?parent=" + workspaceId,
+            "instance_id=" + dockerId + "&name=data&container_path=%2Fdata&quota_mb=100&"
                 + PanelResourceCalls.createEnvelope(),
             sessionToken, csrfToken);
         assertThat(create.statusCode()).isIn(302, 303);
+        assertThat(create.headers().firstValue("location").orElse(""))
+            .as("step 1: a declared volume lands on its instance's Volumes tab")
+            .contains("/admin/instances/" + workspaceId + "/page/volumes");
         Row declared = Models.get(InstanceVolumeModel.class).find()
             .where(InstanceVolumeModel.INSTANCE_ID.eq(workspaceId))
             .where(InstanceVolumeModel.NAME.eq("data")).first();
-        assertThat(declared).isNotNull();
+        assertThat(declared).as("step 1: THE ASSERTION -- written under the parent, never the posted owner")
+            .isNotNull();
         assertThat((Object) declared.get(InstanceVolumeModel.QUOTA_BYTES))
             .isEqualTo(100L * 1024 * 1024);
         assertThat(String.valueOf((Object) declared.get(InstanceVolumeModel.HOST_PATH)))
             .as("the host path is derived and stored as evidence")
             .contains("/volumes/" + workspaceId + "/data");
+        Integer volumeId = declared.get(InstanceVolumeModel.ID);
+        declared.set(InstanceVolumeModel.USED_BYTES, 25L * 1024 * 1024);
+        Models.get(InstanceVolumeModel.class).save(declared);
 
-        // The Volumes tab renders the declaration and offers the add affordance.
+        // 2. The Volumes tab is the volume list narrowed to the workspace: the use against the limit as a bar and in
+        //    sizes, the host directory under the mount, the row's own delete, and the create under this instance.
         String tab = adminGet("/admin/instances/" + workspaceId + "/page/volumes").body();
-        assertThat(tab).contains("/data").contains("add-volume-link")
-            .as("the add opens the volume create form preset to this instance")
-            .contains("/admin/instance-volumes/new?instance_id=" + workspaceId)
+        assertThat(tab).contains("/data")
+            .as("step 2: the use is the usage bar with its sizes in words")
+            .contains("hh-usage").contains("pl-usage-bar").contains("25 MB of 100 MB")
+            .as("step 2: the host directory stands under the container path")
+            .contains("/volumes/" + workspaceId + "/data")
+            .as("step 2: the row offers its typed-confirm delete through the one invoke route")
+            .contains(VolumeOperations.DESTROY.id().getPath())
+            .as("step 2: the add opens the volume create form under this instance")
+            .contains("/admin/instance-volumes/new?parent=" + workspaceId)
             .as("the tab's lead sentence stands in the shared record heading")
             .contains("data-cms-tab-lead")
-            .contains("Each volume is a directory on the host");
+            .contains("Each volume is a directory on the host")
+            .as("step 2: no raw byte count as visible text")
+            .doesNotContain(">104857600<");
+
+        // 3. The volume's own form names its instance read-only: no editable owner to re-point the volume with.
+        String form = adminGet(CmsRoutes.detail("admin", HohenheimSlugs.INSTANCE_VOLUMES, volumeId).toUrl()).body();
+        assertThat(form).as("step 3: the owner is named").contains("ui-surface-workspace")
+            .as("step 3: and never an editable picker or stepper").doesNotContain("name=\"instance_id\"")
+            .doesNotContain("<zf-relation-field");
+
+        // 4. The nav-hidden list says sizes, names the instance and words what was never measured.
+        String list = adminGet("/admin/instance-volumes").body();
+        assertThat(list).as("step 4: sizes in words").contains("100 MB").doesNotContain(">104857600<")
+            .as("step 4: the owner by name").contains("ui-surface-workspace");
 
         // FALSIFICATION 1: the workspace home volume refuses its own destruction.
         InstanceVolumes.declare(workspaceId, "home", "/home/site", null, false);
@@ -286,8 +316,8 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
             .findById(home.get(InstanceVolumeModel.ID)))
             .as("the home volume survives the refusal").isNotNull();
 
-        // FALSIFICATION 2: a kind that mounts no volumes cannot be declared onto.
-        HttpResponse<String> wrongKind = httpPostForm("/admin/instance-volumes/new",
+        // FALSIFICATION 2: a kind that mounts no volumes cannot be declared onto, and its record draws no Volumes tab.
+        HttpResponse<String> wrongKind = httpPostForm("/admin/instance-volumes/new?parent=" + dockerId,
             "instance_id=" + dockerId + "&name=data&container_path=%2Fdata&"
                 + PanelResourceCalls.createEnvelope(),
             sessionToken, csrfToken);

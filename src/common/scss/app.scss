@@ -110,8 +110,8 @@
         gap: var(--pl-space-xs);
     }
 
-    // A host's usage bars take a usable width in their column; the flex column would otherwise shrink them to nothing.
-    .hh-host-usage {
+    // A usage cell's bar takes a usable width in its column; the flex column would otherwise shrink it to nothing.
+    .hh-usage {
         min-width: 9rem;
 
         pl-usage-bar {
@@ -140,9 +140,12 @@
     .hh-state-line-detail {
         color: var(--pl-color-text-muted);
         font-size: var(--pl-font-size-sm);
-        // A renewal error or an expiry wraps inside its column instead of widening the table past the viewport.
+        // A renewal error or an expiry wraps inside its column instead of widening the table past the viewport, and a
+        // long one (a failed provisioning's whole error) stops at three lines: a list cell is a scan surface, the
+        // record's own page carries the whole text.
         white-space: normal;
         overflow-wrap: anywhere;
+        @include m.line-clamp(3);
     }
 
     // Dashboard onboarding checklist
@@ -299,6 +302,20 @@
 
         &:focus-visible {
             @include m.focus-ring(2px);
+        }
+
+        // On a phone the row WRAPS: the nowrap action beside the text squeezed the text column down to a word per
+        // line, so the action drops under the text, aligned with it, and may wrap itself. Desktop keeps one row.
+        @include bp.until(sm) {
+            flex-wrap: wrap;
+            align-items: flex-start;
+
+            .hh-attention-action {
+                order: 1;
+                flex-basis: 100%;
+                margin-inline-start: calc(2rem + var(--pl-space-md));
+                white-space: normal;
+            }
         }
     }
 

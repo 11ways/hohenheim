@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
+import be.elevenways.hohenheim.model.InstanceVolumeModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
@@ -37,6 +38,10 @@ import be.elevenways.zenit.common.security.Permission;
 import be.elevenways.zenit.common.security.PermissionComputation;
 import be.elevenways.zenit.common.security.Permissions;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.i18n.MessageResolvers;
+import be.elevenways.zenit.cms.common.panel.Labels;
+import be.elevenways.zenit.common.orm.datasource.Row;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.ArrayList;
@@ -139,6 +144,7 @@ public final class ManagePanel extends Panel {
         HohenheimPanel.addIf(peers, InstanceScheduleParts.manage(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, InstanceScheduleStepParts.manage(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, InstanceAttachmentParts.devicesManage(), Role.INSTANCES);
+        HohenheimPanel.addIf(peers, VolumeParts.manage(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, InstanceVariableParts.manage(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, InstanceSnapshotParts.manage(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, InstanceBackupParts.manage(), Role.INSTANCES);
@@ -382,9 +388,18 @@ public final class ManagePanel extends Panel {
         // rendered for, starting with the site-database attachment picker. override, not
         // register: the manage panel deliberately serves a WIDER audience than the
         // databases panel's own permission, scoped to what each principal was granted.
+        // Each offered database names its engine and stored state, and one whose setup failed wears the warning
+        // glyph, so an attach picker never offers a failed database as if it worked (stored facts: no per-row read).
+        // The id is projected so a picker's rules (the attach form's "not attached yet") can narrow on it.
         RecordSourceRegistry.INSTANCE.override(RecordSource.of(DatabaseModel.class)
+            .project(DatabaseModel.ID, DatabaseModel.NAME)
             .search(DatabaseModel.NAME)
             .scopedBy(TenantScopes.DATABASES)
+            .subtitle((row, chain) -> databaseFacts(row).resolve(chain == null ? LocaleChain.empty() : chain,
+                MessageResolvers.getDefault()))
+            .icon(row -> DatabaseModel.STATUS_ACTIVE.equals(row.get(DatabaseModel.STATUS))
+                || DatabaseModel.STATUS_PROVISIONING.equals(row.get(DatabaseModel.STATUS))
+                ? "database" : "triangle-exclamation")
             .build());
 
         // Instance devices: same two-derived-defaults hazard again, and the widest one
@@ -392,6 +407,12 @@ public final class ManagePanel extends Panel {
         RecordSourceRegistry.INSTANCE.override(RecordSource.of(InstanceDeviceModel.class)
             .search(InstanceDeviceModel.NAME)
             .scopedBy(TenantScopes.INSTANCE_DEVICES)
+            .build());
+
+        // Instance volumes: the same hazard; the widest default would list every tenant's host directories.
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(InstanceVolumeModel.class)
+            .search(InstanceVolumeModel.NAME)
+            .scopedBy(TenantScopes.INSTANCE_VOLUMES)
             .build());
 
         // Preview deployments: the same two-derived-defaults hazard (the admin
@@ -440,5 +461,16 @@ public final class ManagePanel extends Panel {
             builder.creatable(create, HohenheimSources.ADMIN_ACCESS);
         }
         return builder;
+    }
+
+    /** @return a database's engine and stored state as a picker row's second line ("PostgreSQL, setup failed") */
+    private static @NonNull Microcopy databaseFacts(@NonNull Row database) {
+        Object engine = database.get(DatabaseModel.ENGINE);
+        Object status = database.get(DatabaseModel.STATUS);
+        return HohenheimMicrocopy.INSTANCE_DATABASE.of("picker_facts")
+            .withArg("engine", engine == null ? Microcopy.literal("") : CmsSupport.enumValueLabel(DatabaseModel.ENGINE,
+                engine))
+            .withArg("status", status == null ? Microcopy.literal("")
+                : Labels.inSentence(CmsSupport.enumValueLabel(DatabaseModel.STATUS, status)));
     }
 }

@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.StateLineCell;
-import be.elevenways.hohenheim.host.HostUsageCell;
+import be.elevenways.hohenheim.UsageCell;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.host.HostFactView;
@@ -106,11 +106,11 @@ class HostsPageJourneyTest extends HohenheimTestBase {
                 .anySatisfy(found -> assertThat(say(found.title())).isEqualTo(PREFIX + "waiting cannot run apps yet"));
 
             // 4. Memory reads the capacity ledger: a host without a reading has no bar, only the words.
-            HostUsageCell measured = ServerParts.memoryCellOf(server(admitted));
+            UsageCell measured = ServerParts.memoryCellOf(server(admitted));
             assertThat(measured.measured()).as("step 4: the fixture's 16 GiB reading is a budget").isTrue();
             assertThat(say(measured.text())).as("step 4: booked against budget, in words").contains(" of ")
                 .endsWith(" booked");
-            HostUsageCell blind = ServerParts.memoryCellOf(server(waiting));
+            UsageCell blind = ServerParts.memoryCellOf(server(waiting));
             assertThat(blind.measured()).as("step 4: no memory fact, no bar").isFalse();
             assertThat(say(blind.text())).as("step 4: and says so").isEqualTo("Not measured yet");
 
@@ -121,12 +121,12 @@ class HostsPageJourneyTest extends HohenheimTestBase {
             Row measuredDisk = server(admitted);
             HostDisk.record(measuredDisk, new DiskSpace(100 * gib, 100 * gib - used), Now.instant());
             Models.get(ServerModel.class).save(measuredDisk);
-            HostUsageCell disk = ServerParts.diskCellOf(server(admitted));
+            UsageCell disk = ServerParts.diskCellOf(server(admitted));
             assertThat(disk.measured()).as("step 4b: a fresh reading draws a bar").isTrue();
             assertThat(disk.percent()).as("step 4b: 90.6 of 100 GiB used, rounded down").isEqualTo(90);
             assertThat(say(disk.text())).as("step 4b: in words")
                 .isEqualTo(size(used) + " of " + size(100 * gib) + " used");
-            HostUsageCell noDisk = ServerParts.diskCellOf(server(waiting));
+            UsageCell noDisk = ServerParts.diskCellOf(server(waiting));
             assertThat(noDisk.measured()).as("step 4b: never measured, no bar").isFalse();
             assertThat(say(noDisk.text())).as("step 4b: and says so").isEqualTo("Not measured yet");
             String hostPage = adminGet("/admin/" + HohenheimSlugs.SERVERS + "/" + admitted + "/page/overview").body();
@@ -161,7 +161,7 @@ class HostsPageJourneyTest extends HohenheimTestBase {
                 .as("step 5: never a check's code").doesNotContain("failed: nftables")
                 .as("step 5: what each host runs").contains("1 app, 0 databases").contains("Nothing yet")
                 .as("step 5: the attention band above the list").contains(PREFIX + "waiting cannot run apps yet")
-                .as("step 5: the memory and disk bars").contains("hh-host-usage").contains("Disk");
+                .as("step 5: the memory and disk bars").contains("hh-usage").contains("Disk");
 
             // 6. A host the last probe could not reach says why in words, and when it last answered; the host page
             //    names its checks and their verdicts in words too.

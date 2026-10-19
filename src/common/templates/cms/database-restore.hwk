@@ -1,13 +1,16 @@
-{#- Restore tab on a managed database: connection info plus the dump-upload
-    form posting to the host-declared restore endpoint. -#}
+{#- Restore tab on a managed database: its connection card, then the dump upload posting to the host-declared restore
+    endpoint, offered only while the database serves; otherwise the card says why there is nothing to restore into. -#}
 {% declare title: String %}
 {% declare name: String %}
-{% declare engine: String %}
-{% declare status: String %}
+{% declare engine: EnumBadgeState = null %}
+{% declare status: EnumBadgeState %}
+{% declare runsOn: Microcopy = null %}
 {% declare dbUser: String %}
 {% declare dbPassword: String %}
 {% declare dbName: String %}
-{% declare restoreUrl: String %}
+{% declare restoreUrl: String = "" %}
+{#- Why no restore is offered now, null while one is. -#}
+{% declare restoreRefusal: Microcopy = null %}
 {% declare usedBy: List = null %}
 {% declare head: RecordHeadState = null %}
 {% extend "zenitcms:shell" var:title=title %}
@@ -16,25 +19,29 @@
 <section class="cms-resource-form-page">
     {% if head != null %}{% render "zenitcms:record-head" var:head=head %}{% /if %}
 
-    {% render "hohenheim:cms/database-connection" var:engine=engine var:status=status var:dbName=dbName var:dbUser=dbUser
-        var:dbPassword=dbPassword var:usedBy=usedBy %}
+    {% render "hohenheim:cms/database-connection" var:engine=engine var:status=status var:runsOn=runsOn var:dbName=dbName
+        var:dbUser=dbUser var:dbPassword=dbPassword var:usedBy=usedBy %}
 
-    <pl-card>
+    <pl-card data-hh-database-restore>
         <pl-card-header>
             <pl-card-title>{{ t("restore_dump", scope: "database_tab") }}</pl-card-title>
             <pl-card-description>{{ t("restore_description", scope: "database_tab") }}</pl-card-description>
         </pl-card-header>
         <pl-card-content>
+            {% if restoreRefusal != null %}
+            <pl-alert variant="warning" data-hh-restore-refused><pl-alert-description>{{ restoreRefusal }}</pl-alert-description></pl-alert>
+            {% else %}
             <form method="POST" action={% restoreUrl %} enctype="multipart/form-data">
                 {% csrf() %}
                 <pl-field>
-                    <pl-label target="dump">{{ t("dump_file", scope: "database_tab") }}</pl-label>
-                    <input id="dump" type="file" name="dump" required>
+                    <pl-label>{{ t("dump_file", scope: "database_tab") }}</pl-label>
+                    <pl-file-upload name="dump"></pl-file-upload>
                 </pl-field>
                 <div class="cms-form-actions">
                     <pl-button variant={% "destructive" %} type={% "submit" %}>{{ t("restore", scope: "database_tab") }}</pl-button>
                 </div>
             </form>
+            {% /if %}
         </pl-card-content>
     </pl-card>
 </section>

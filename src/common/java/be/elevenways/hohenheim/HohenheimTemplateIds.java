@@ -26,7 +26,6 @@ public final class HohenheimTemplateIds {
     public static final Identifier DNS_ZONE_REMOTE_RECORDS = Identifier.of("hohenheim", "cms/dns-zone-remote-records");
     public static final Identifier INBOX = Identifier.of("hohenheim", "cms/inbox");
     public static final Identifier INSTANCE_CONSOLE = Identifier.of("hohenheim", "cms/instance-console");
-    public static final Identifier INSTANCE_DATABASES = Identifier.of("hohenheim", "cms/instance-databases");
     public static final Identifier INSTANCE_DEPLOYMENTS = Identifier.of("hohenheim", "cms/instance-deployments");
     public static final Identifier INSTANCE_DEVICES = Identifier.of("hohenheim", "cms/instance-devices");
     public static final Identifier INSTANCE_EXEC = Identifier.of("hohenheim", "cms/instance-exec");
@@ -36,10 +35,10 @@ public final class HohenheimTemplateIds {
     public static final Identifier PUT_ONLINE = Identifier.of("hohenheim", "cms/put-online");
     public static final Identifier INSTANCE_MIGRATE = Identifier.of("hohenheim", "cms/instance-migrate");
     public static final Identifier INSTANCE_PROVISIONING = Identifier.of("hohenheim", "cms/instance-provisioning");
+    public static final Identifier INSTANCE_BACKUPS = Identifier.of("hohenheim", "cms/instance-backups");
     public static final Identifier INSTANCE_SCHEDULE_STEPS = Identifier.of("hohenheim", "cms/instance-schedule-steps");
     public static final Identifier INSTANCE_SHELL = Identifier.of("hohenheim", "cms/instance-shell");
     public static final Identifier INSTANCE_STATS = Identifier.of("hohenheim", "cms/instance-stats");
-    public static final Identifier INSTANCE_VOLUMES = Identifier.of("hohenheim", "cms/instance-volumes");
     public static final Identifier SERVER_MEDIA = Identifier.of("hohenheim", "cms/server-media");
     public static final Identifier SITE_DEV_SESSIONS = Identifier.of("hohenheim", "cms/site-dev-sessions");
     public static final Identifier SPAMSERVICE_OVERVIEW = Identifier.of("hohenheim", "cms/spamservice-overview");
@@ -72,7 +71,7 @@ public final class HohenheimTemplateIds {
     // List-cell partials; a column names one through its renderer.
     public static final Identifier CELL_STATE_LINE = Identifier.of("hohenheim", "cms/cell/state-line");
     public static final Identifier CELL_HOST_STATUS = Identifier.of("hohenheim", "cms/cell/host-status");
-    public static final Identifier CELL_HOST_USAGE = Identifier.of("hohenheim", "cms/cell/host-usage");
+    public static final Identifier CELL_USAGE = Identifier.of("hohenheim", "cms/cell/usage");
     public static final Identifier CELL_MANAGED_BY = Identifier.of("hohenheim", "cms/cell/managed-by");
     public static final Identifier CELL_INSTALL_STATE = Identifier.of("hohenheim", "cms/cell/install-state");
     public static final Identifier CELL_SITE_HOSTNAMES = Identifier.of("hohenheim", "cms/cell/site-hostnames");

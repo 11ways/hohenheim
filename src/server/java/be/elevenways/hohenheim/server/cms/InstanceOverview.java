@@ -58,6 +58,8 @@ import be.elevenways.zenit.widget.common.builtin.AlertWidget;
 import be.elevenways.zenit.widget.common.builtin.CardWidget;
 import be.elevenways.zenit.widget.common.data.NoticeData;
 import be.elevenways.zenit.widget.common.data.UsageData;
+import be.elevenways.hohenheim.model.InstanceVolumeModel;
+import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.zenit.widget.common.data.WidgetBadge;
 import be.elevenways.zenit.widget.common.data.WidgetFact;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -165,6 +167,14 @@ public final class InstanceOverview {
         gauges.add(AppOverview.gauge(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("disk"),
             diskUsage(runtime, ServerModel.canonicalServerId(runtime.get(InstanceModel.SERVER_ID)), locales,
                 resolver)));
+        // Each declared volume with a size limit, measured against it ("uploads: 3 GB of 10 GB"), one read.
+        for (Row volume : InstanceVolumes.declaredFor(instanceId)) {
+            UsageData usage = VolumeParts.usageData(volume);
+            if (usage != null) {
+                gauges.add(AppOverview.gauge(HohenheimMicrocopy.INSTANCE_VOLUME.of("volume_gauge")
+                    .withArg("name", String.valueOf((Object) volume.get(InstanceVolumeModel.NAME))), usage));
+            }
+        }
         main.add(AppOverview.resources(gauges));
 
         List<WidgetInstance> side = new ArrayList<>();

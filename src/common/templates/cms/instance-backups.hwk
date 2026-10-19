@@ -1,0 +1,44 @@
+{#- Backups tab on an instance: the framework's child list sections (its backups, snapshots and their schedules), then,
+    after the backups, the databases attached to it with their last backup, each leading to its database. -#}
+{% declare title: String %}
+{% declare head: RecordHeadState %}
+{% declare sections: List<ChildListSectionState> %}
+{% declare panelSlug: String = "" %}
+{#- The section the databases' line follows. -#}
+{% declare databasesAfter: String = "" %}
+{% declare databases: List<AttachedDatabaseBackup> %}
+{% extend "zenitcms:shell" var:title=title %}
+
+{% block "main" %}
+<section class="cms-child-list-page">
+    {% render "zenitcms:record-head" var:head=head %}
+
+    {% each sections as section key section.resourceSlug %}
+    {% render "zenitcms:child-list-section" var:section=section var:panelSlug=panelSlug %}
+    {% if section.resourceSlug == databasesAfter and databases %}
+    <section class="cms-child-list-section" data-hh-attached-database-backups>
+        <pl-page-header class="cms-child-list-section-header">
+            <h2>{{ t("databases_heading", scope: "instance_backup") }}</h2>
+            <pl-page-header-lead>{{ t("databases_lead", scope: "instance_backup") }}</pl-page-header-lead>
+        </pl-page-header>
+        <pl-scroll-area class="cms-table-scroll">
+        <pl-table class="cms-resource-list-table">
+            <pl-table-header><pl-table-row>
+                <pl-table-head>{{ t("database", scope: "hohenheim_field") }}</pl-table-head>
+                <pl-table-head>{{ t("last_backup", scope: "instance_backup") }}</pl-table-head>
+            </pl-table-row></pl-table-header>
+            <pl-table-body>
+                {% each databases as database key database.name %}
+                <pl-table-row data-hh-attached-database={% database.name %}>
+                    <pl-table-cell>{% if database.url != null %}<a href={% database.url %}>{{ database.name }}</a>{% else %}{{ database.name }}{% /if %}</pl-table-cell>
+                    <pl-table-cell>{% render "hohenheim:cms/cell/state-line" var:value=database.lastBackup %}</pl-table-cell>
+                </pl-table-row>
+                {% /each %}
+            </pl-table-body>
+        </pl-table>
+        </pl-scroll-area>
+    </section>
+    {% /if %}
+    {% /each %}
+</section>
+{% /block %}

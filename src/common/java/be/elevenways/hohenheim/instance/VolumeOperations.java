@@ -18,6 +18,9 @@ import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.common.edit.RelationPick;
+import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
@@ -31,7 +34,12 @@ public final class VolumeOperations {
     public static final IntegerField QUOTA_MB = IntegerField.builder().name("quota_mb")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("quota_mb")).help(HohenheimMicrocopy.HELP.of("volume_quota_mb"))
         .suffix("MB").build();
-    public static final FormSpec FORM = FormSpec.builder().add(InstanceVolumeModel.INSTANCE_ID)
+    /**
+     * The volume's owner is its fixed parent (VolumeParts): named on every view, written from the create's parent,
+     * never posted.
+     */
+    public static final FormSpec FORM = FormSpec.builder()
+        .add(RelationPick.of(InstanceVolumeModel.INSTANCE_ID, InstanceModel.MODEL_ID).build())
         .add(InstanceVolumeModel.NAME).add(InstanceVolumeModel.CONTAINER_PATH)
         .add(QUOTA_MB).add(InstanceVolumeModel.EXCLUSIVE).build();
 
@@ -66,4 +74,26 @@ public final class VolumeOperations {
         .command(COMMAND.execution(CommandExecution.OUTSIDE_TRANSACTION)).register();
 
     private VolumeOperations() {}
+
+    /**
+     * THE size limit an operator enters in {@link #QUOTA_MB}, as the bytes a volume (or a template's volume) stores.
+     *
+     * @return null for no limit
+     * @throws Violations naming {@link #QUOTA_MB} for a limit that is not positive
+     */
+    public static @Nullable Long quotaBytes(@Nullable Integer megabytes) {
+        if (megabytes == null) {
+            return null;
+        }
+        if (megabytes <= 0) {
+            throw Violations.ofField(QUOTA_MB.getName(), megabytes,
+                HohenheimMicrocopy.VIOLATIONS.of("volume_quota_invalid"));
+        }
+        return ByteUnit.MEGABYTE.bytes(megabytes);
+    }
+
+    /** @return the stored size limit as the {@link #QUOTA_MB} value its form shows, null for no limit */
+    public static @Nullable Integer quotaMegabytes(@Nullable Long bytes) {
+        return bytes == null ? null : (int) (bytes / ByteUnit.MEGABYTE.factor());
+    }
 }

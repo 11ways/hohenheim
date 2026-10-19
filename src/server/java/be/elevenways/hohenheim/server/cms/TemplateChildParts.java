@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceTemplateDatabaseModel;
+import be.elevenways.hohenheim.instance.VolumeOperations;
 import be.elevenways.hohenheim.model.InstanceTemplateFileModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
@@ -32,6 +33,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The template's authored children: shared parent/read/write parts, each declaration's own form and list.
@@ -106,37 +108,61 @@ public final class TemplateChildParts {
                 .emptyDescription(HohenheimMicrocopy.TEMPLATE_CONTENTS.of("no_files_description")).build()).build();
     }
 
+    /**
+     * A template's volumes: the size limit is entered in megabytes, the volume's own form field ({@link
+     * VolumeOperations#QUOTA_MB}), and stored in bytes through the volume's one conversion; the list says it as a
+     * size.
+     */
     public static @NonNull PanelResource<Row> volumes() {
         FormSpec spec = FormSpec.builder()
             .add(RelationPick.of(InstanceTemplateVolumeModel.TEMPLATE_ID, InstanceTemplateModel.MODEL_ID).build())
             .add(InstanceTemplateVolumeModel.NAME).add(InstanceTemplateVolumeModel.CONTAINER_PATH)
-            .add(InstanceTemplateVolumeModel.QUOTA_BYTES).add(InstanceTemplateVolumeModel.EXCLUSIVE).build();
+            .add(VolumeOperations.QUOTA_MB).add(InstanceTemplateVolumeModel.EXCLUSIVE).build();
         TableSpec<Row> table = TableSpec.<Row>builder()
             .column(ColumnSpec.fromField(InstanceTemplateVolumeModel.NAME).copyable().build())
             .column(ColumnSpec.fromField(InstanceTemplateVolumeModel.CONTAINER_PATH).build())
-            .column(ColumnSpec.fromField(InstanceTemplateVolumeModel.QUOTA_BYTES).build())
+            .column(ColumnSpec.fromField(InstanceTemplateVolumeModel.QUOTA_BYTES).byteSize()
+                .absent(HohenheimMicrocopy.INSTANCE_VOLUME.of("no_quota")).build())
             .column(ColumnSpec.fromField(InstanceTemplateVolumeModel.EXCLUSIVE).build())
             .column(ColumnSpec.fromField(InstanceTemplateVolumeModel.TEMPLATE_ID)
                 .relation(RelationPick.of(InstanceTemplateVolumeModel.TEMPLATE_ID, InstanceTemplateModel.MODEL_ID)
                         .build()).build())
             .build();
+        String quotaMb = VolumeOperations.QUOTA_MB.getName();
         return entry(InstanceTemplateVolumeModel.MODEL_ID, HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES,
             HohenheimMicrocopy.TEMPLATE_VOLUME, 20,
-            Icon.of("database"),
+            Icon.of("folder-open"),
                 InstanceTemplateVolumeModel.TEMPLATE_ID)
+            .reads(ResourceReads.rows().mapValues(Set.of(quotaMb), (row, values) -> {
+                Map<String, Object> mapped = new LinkedHashMap<>(values);
+                mapped.put(quotaMb, VolumeOperations.quotaMegabytes(row.get(InstanceTemplateVolumeModel.QUOTA_BYTES)));
+                return mapped;
+            }))
+            .writes(ResourceMutations.rows().create().update().delete()
+                // The limit is stored in bytes: a submitted MB value (absent: left alone) is converted before the
+                // template's declaration guards judge the row.
+                .beforeSave(save -> {
+                    if (save.values().containsKey(quotaMb)) {
+                        save.row().set(InstanceTemplateVolumeModel.QUOTA_BYTES,
+                            VolumeOperations.quotaBytes((Integer) save.values().get(quotaMb)));
+                    }
+                })
+                .build())
             .form(ResourceForm.<Row>of(spec).build())
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).search(InstanceTemplateVolumeModel.NAME)
                 .emptyDescription(HohenheimMicrocopy.TEMPLATE_CONTENTS.of("no_volumes_description")).build()).build();
     }
 
+    /** The template's databases: the env prefix names one, its engine under it, so a phone keeps both in view. */
     public static @NonNull PanelResource<Row> databases() {
         FormSpec spec = FormSpec.builder()
             .add(RelationPick.of(InstanceTemplateDatabaseModel.TEMPLATE_ID, InstanceTemplateModel.MODEL_ID).build())
             .add(InstanceTemplateDatabaseModel.ENGINE).add(InstanceTemplateDatabaseModel.ENV_PREFIX)
             .add(InstanceTemplateDatabaseModel.IMAGE).build();
         TableSpec<Row> table = TableSpec.<Row>builder()
-            .column(ColumnSpec.fromField(InstanceTemplateDatabaseModel.ENV_PREFIX).copyable().build())
-            .column(ColumnSpec.fromField(InstanceTemplateDatabaseModel.ENGINE).build())
+            .column(ColumnSpec.fromField(InstanceTemplateDatabaseModel.ENV_PREFIX).copyable()
+                .subtext(InstanceTemplateDatabaseModel.ENGINE.getName()).build())
+            .column(ColumnSpec.fromField(InstanceTemplateDatabaseModel.ENGINE).hidden().build())
             .column(ColumnSpec.fromField(InstanceTemplateDatabaseModel.IMAGE).build())
             .column(ColumnSpec.fromField(InstanceTemplateDatabaseModel.TEMPLATE_ID)
                 .relation(RelationPick.of(InstanceTemplateDatabaseModel.TEMPLATE_ID, InstanceTemplateModel.MODEL_ID)

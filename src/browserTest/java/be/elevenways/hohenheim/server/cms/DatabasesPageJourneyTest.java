@@ -390,7 +390,8 @@ class DatabasesPageJourneyTest extends HohenheimTestBase {
                 .as("step 4b: and pastes no path into the sentence").doesNotContain("/admin/");
             String appTab = adminGet("/admin/" + HohenheimSlugs.INSTANCES + "/" + shopApp.get(InstanceModel.ID)
                 + "/page/databases").body();
-            assertThat(appTab).as("step 4: the app's Databases tab reads the same words").contains("Not running</a>");
+            assertThat(appTab).as("step 4: the app's Databases tab reads the same state cell")
+                .contains("data-state=\"" + DatabaseVerdict.State.NOT_RUNNING.token() + "\"");
 
             // 5. The engine runs again: the item, the apps' items and the not-running words all clear.
             engineStatus(engineInstance, InstanceModel.STATUS_RUNNING);

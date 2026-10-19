@@ -1,6 +1,10 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.orm.GeneratedRows;
+import be.elevenways.hohenheim.test.database.EngineHandles;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.database.DatabaseService;
@@ -45,7 +49,10 @@ class DatabaseAdminTest extends HohenheimTestBase {
         assertThat(content).contains("ephemeral");
     }
 
-    /** An existing database is a read-only detail with a delete form and a restore tab. */
+    /**
+     * An existing database is a read-only detail with a delete form and a restore tab: its connection card, and the
+     * dump upload (plumage's file control) while it serves; a database that does not serve says why instead.
+     */
     @Test
     void existingDatabaseDetailAndRestoreTab() {
         // Insert a record directly (no real container) so the render test stays fast.
@@ -59,19 +66,41 @@ class DatabaseAdminTest extends HohenheimTestBase {
         row.set(DatabaseModel.DB_PASSWORD, "detailpass");
         row.set(DatabaseModel.DB_NAME, "detaildb");
         row.set(DatabaseModel.EPHEMERAL, false);
+        row.set(DatabaseModel.STATUS, DatabaseModel.STATUS_FAILED);
         model.save(row);
         Integer id = row.get(DatabaseModel.ID);
         try {
+            // 1. A database whose setup failed: the card names the engine by its label and the state as a badge, the
+            //    password behind its reveal, and no upload is offered into a database that does not run.
             navigateToApp("/admin/databases/" + id + "/page/restore");
             waitForHydration();
-
             String body = page.locator("body").textContent();
-            assertThat(body).contains("Connection");
-            assertThat(body).contains("detailuser");
-            assertThat(body).contains("detaildb");
+            assertThat(body).contains("Connection").contains("detailuser").contains("detaildb")
+                .contains("PostgreSQL");
+            assertThat(page.locator("[data-hh-database-password] pl-input[type='secret']").count())
+                .as("step 1: the password is masked behind its reveal").isEqualTo(1);
+            assertThat(page.locator("[data-hh-restore-refused]").count())
+                .as("step 1: the restore says why it is not offered").isEqualTo(1);
+            assertThat(page.locator("form[action='/databases/" + name + "/restore']").count())
+                .as("step 1: and offers no upload").isZero();
+
+            // 2. Once it serves, the upload is offered through plumage's file control.
+            row.set(DatabaseModel.STATUS, DatabaseModel.STATUS_ACTIVE);
+            model.save(row);
+            EngineHandles.plant(id, name, "postgres", InstanceModel.STATUS_RUNNING);
+            navigateToApp("/admin/databases/" + id + "/page/restore");
+            waitForHydration();
             PlaywrightAssertions.assertThat(page.locator(
-                "form[action='/databases/" + name + "/restore'] input[type='file']")).hasCount(1);
+                "form[action='/databases/" + name + "/restore'] pl-file-upload input[type='file']")).hasCount(1);
         } finally {
+            Model instances = Models.get(InstanceModel.class);
+            GeneratedRows.sweeping("test", () -> {
+                for (Row engine : instances.find().withTrashed()
+                        .where(InstanceModel.GENERATED_FOR_MODEL.eq(DatabaseModel.MODEL_ID.toString()))
+                        .where(InstanceModel.GENERATED_FOR_ID.eq(id)).all()) {
+                    HardDeletes.byId(instances, engine.get(InstanceModel.ID));
+                }
+            });
             model.find().where(DatabaseModel.NAME.eq(name)).delete();
         }
 

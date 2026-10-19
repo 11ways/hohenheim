@@ -61,6 +61,7 @@ public class InstanceVolumeModel extends Model {
         LongField.builder().name("quota_bytes")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("quota_bytes"))
             .help(HohenheimMicrocopy.HELP.of("quota_bytes"))
+            .absent(HohenheimMicrocopy.INSTANCE_VOLUME.of("no_quota"))
             .build());
 
     /** A volume no two releases may hold at once: its instance stops before the next starts. */
@@ -76,10 +77,12 @@ public class InstanceVolumeModel extends Model {
             .build());
 
     public static final LongField USED_BYTES = SCHEMA.addField(
-        LongField.builder().name("used_bytes").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("used_bytes")).build());
+        LongField.builder().name("used_bytes").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("used_bytes"))
+            .absent(HohenheimMicrocopy.INSTANCE_VOLUME.of("never_measured")).build());
 
     public static final DateTimeField OBSERVED_AT = SCHEMA.addField(
-        DateTimeField.builder().name("observed_at").build());
+        DateTimeField.builder().name("observed_at").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("observed_at"))
+            .absent(HohenheimMicrocopy.INSTANCE_VOLUME.of("never_measured")).build());
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(
         DateTimeField.builder().name("created_at").build());

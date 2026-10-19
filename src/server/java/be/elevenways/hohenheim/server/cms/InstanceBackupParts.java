@@ -9,6 +9,20 @@ import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.common.data.DataItem;
+import be.elevenways.zenit.common.data.RecordSource;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.i18n.MessageResolver;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.server.panel.PartsReads;
+import be.elevenways.zenit.common.edit.FieldLabels;
+import be.elevenways.zenit.common.orm.field.Field;
+import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.routing.RouteTarget;
+import be.elevenways.zenit.widget.common.WidgetInstance;
+import be.elevenways.zenit.widget.common.data.UsageData;
+import be.elevenways.zenit.widget.common.data.WidgetBadge;
 import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
@@ -60,8 +74,9 @@ import java.util.Objects;
  */
 public final class InstanceBackupParts {
 
-    /** The virtual column naming the data disks a backup carries, and the copy key of its label. */
-    private static final String DATA_DISKS_COLUMN = "data_disks";
+    /** The virtual columns naming the data disks and the host volumes a backup carries; also their copy keys. */
+    public static final String DATA_DISKS_COLUMN = "data_disks";
+    public static final String HOST_VOLUMES_COLUMN = "host_volumes";
 
     private InstanceBackupParts() {
     }
@@ -92,9 +107,97 @@ public final class InstanceBackupParts {
             .build();
     }
 
-    /** A backup's front door: its fields, then a card of what it carries beside the instance itself. */
+    /**
+     * A backup's front door, which is also its read-only view (no Details tab beside it): its archive key as the page's
+     * field, then what it is (status, the instance, size, where it went, its checksum) and what it carries.
+     */
     private static @NonNull RecordOverview<Row> overview() {
-        return RecordOverview.<Row>fields().widgets(InstanceBackupParts::contents);
+        return RecordOverview.<Row>fields().widgets(InstanceBackupParts::widgets);
+    }
+
+    private static @NonNull WidgetTree widgets(@NonNull Row backup, @NonNull AccessContext access) {
+        List<WidgetInstance> cards = new ArrayList<>();
+        cards.add(CardWidget.ofFacts(HohenheimMicrocopy.INSTANCE_BACKUP.of("details"), details(backup, access)));
+        WidgetInstance contents = contents(backup, access.conduit());
+        if (contents != null) {
+            cards.add(contents);
+        }
+        return new WidgetTree(cards);
+    }
+
+    /**
+     * Status, the instance (its page, for a reader who may open it), size, the target it went to, the checksum read
+     * back from that target, when it was taken and, while it failed, why; the archive key is the page's own field.
+     */
+    private static @NonNull List<WidgetFact> details(@NonNull Row backup, @NonNull AccessContext access) {
+        Conduit conduit = access.conduit();
+        LocaleChain locales = conduit.getLocales();
+        MessageResolver resolver = conduit.getMessageResolver();
+        Panel panel = PanelRegistry.getBySlug(CmsSupport.panelSlug(conduit));
+        List<WidgetFact> facts = new ArrayList<>();
+        Object status = backup.get(InstanceBackupModel.STATUS);
+        if (status != null) {
+            facts.add(WidgetFact.badge(label(InstanceBackupModel.STATUS, conduit),
+                WidgetBadge.of(InstanceBackupModel.STATUS, status, locales, resolver)));
+        }
+        WidgetFact instance = reference(label(InstanceBackupModel.INSTANCE_ID, conduit),
+            InstanceBackupModel.INSTANCE_ID,
+            InstanceModel.MODEL_ID, backup.get(InstanceBackupModel.INSTANCE_ID), panel, access);
+        if (instance != null) {
+            facts.add(instance);
+        }
+        Long size = backup.get(InstanceBackupModel.SIZE_BYTES);
+        if (size != null) {
+            facts.add(WidgetFact.of(label(InstanceBackupModel.SIZE_BYTES, conduit),
+                UsageData.sizeOf(size).resolve(locales, resolver)));
+        }
+        WidgetFact target = reference(label(InstanceBackupModel.TARGET_ID, conduit), InstanceBackupModel.TARGET_ID,
+            BackupTargetModel.MODEL_ID, backup.get(InstanceBackupModel.TARGET_ID), panel, access);
+        if (target != null) {
+            facts.add(target);
+        }
+        String checksum = backup.get(InstanceBackupModel.SHA256);
+        if (checksum != null && !checksum.isBlank()) {
+            facts.add(WidgetFact.of(label(InstanceBackupModel.SHA256, conduit), checksum));
+        }
+        Instant taken = backup.get(InstanceBackupModel.CREATED_AT);
+        if (taken != null) {
+            facts.add(WidgetFact.instant(label(InstanceBackupModel.CREATED_AT, conduit), taken.toString()));
+        }
+        String failure = WithheldFailure.of(conduit).shown(backup.get(InstanceBackupModel.ERROR));
+        if (!failure.isEmpty()) {
+            facts.add(WidgetFact.of(HohenheimMicrocopy.INSTANCE_ARTIFACTS.of("failure").resolve(locales, resolver),
+                failure));
+        }
+        return facts;
+    }
+
+    /**
+     * A fact naming the record a stored reference holds, read as the record pickers read one (both archived lanes,
+     * a trashed record marked deleted) and linked to its page for a reader the panel lets open it.
+     *
+     * @return null for no reference, or a record this reader may not read, which is never named
+     */
+    private static @Nullable WidgetFact reference(@NonNull String label, @NonNull Field<?, ?> field,
+                                                  @NonNull Identifier modelId, @Nullable Integer id,
+                                                  @Nullable Panel panel, @NonNull AccessContext access) {
+        if (id == null) {
+            return null;
+        }
+        RecordSource<?> source = RelationPick.of(field, modelId).build().requireSource();
+        LocaleChain locales = access.conduit().getLocales();
+        Row row = source.resolveReferencedRow(id, locales, access);
+        if (row == null) {
+            return null;
+        }
+        DataItem item = source.referenceItem(row, locales, access);
+        String title = item.title() != null ? item.title() : "#" + id;
+        RouteTarget open = panel == null ? null : PartsReads.openRoute(panel, modelId, id, access);
+        return open != null ? WidgetFact.link(label, title, open.toUrl()) : WidgetFact.of(label, title);
+    }
+
+    private static @NonNull String label(@NonNull Field<?, ?> field, @NonNull Conduit conduit) {
+        return FieldLabels.labelFor(field).asString(conduit);
     }
 
     /**
@@ -102,24 +205,22 @@ public final class InstanceBackupParts {
      * itself. A card of its own, so it sits in the overview's column the way the fields card does, never as a bare
      * fact list under it.
      */
-    private static @Nullable WidgetTree contents(@NonNull Row backup, @NonNull AccessContext access) {
-        Conduit conduit = access.conduit();
+    private static @Nullable WidgetInstance contents(@NonNull Row backup, @NonNull Conduit conduit) {
         List<WidgetFact> facts = new ArrayList<>();
         String disks = dataDisksText(backup);
         if (disks != null) {
             facts.add(WidgetFact.of(HohenheimMicrocopy.INSTANCE_BACKUP.of(DATA_DISKS_COLUMN)
                 .resolve(conduit.getLocales(), conduit.getMessageResolver()), disks));
         }
-        List<String> hostVolumes = InstanceBackupModel.hostVolumesOf(backup);
-        if (!hostVolumes.isEmpty()) {
-            facts.add(WidgetFact.of(HohenheimMicrocopy.INSTANCE_BACKUP.of("host_volumes")
-                .resolve(conduit.getLocales(), conduit.getMessageResolver()), String.join(", ", hostVolumes)));
+        String hostVolumes = hostVolumesText(backup);
+        if (hostVolumes != null) {
+            facts.add(WidgetFact.of(HohenheimMicrocopy.INSTANCE_BACKUP.of(HOST_VOLUMES_COLUMN)
+                .resolve(conduit.getLocales(), conduit.getMessageResolver()), hostVolumes));
         }
         if (facts.isEmpty()) {
             return null;
         }
-        return new WidgetTree(List.of(CardWidget.ofFacts(HohenheimMicrocopy.INSTANCE_BACKUP.of("backup_contents"),
-            facts)));
+        return CardWidget.ofFacts(HohenheimMicrocopy.INSTANCE_BACKUP.of("backup_contents"), facts);
     }
 
     /**
@@ -132,29 +233,48 @@ public final class InstanceBackupParts {
         return disks.isEmpty() ? null : String.join(", ", disks);
     }
 
+    /**
+     * The host volumes a backup carries as one line, the row's column and the page's fact alike.
+     *
+     * @return the volume names joined, null for none
+     */
+    static @Nullable String hostVolumesText(@NonNull Row backup) {
+        List<String> volumes = InstanceBackupModel.hostVolumesOf(backup);
+        return volumes.isEmpty() ? null : String.join(", ", volumes);
+    }
+
     /** A backup belongs to its instance: listed in the instance's Backups tab, its record page leads back there. */
     private static @NonNull ResourceParent<Row> instanceParent() {
         return ResourceParent.of(HohenheimSlugs.INSTANCES, InstanceBackupModel.INSTANCE_ID)
             .tab(HohenheimSlugs.Tab.BACKUPS);
     }
 
-    /** The parts both twins share: identity, list, title and the delete that removes the artifact too. */
+    /**
+     * The parts both twins share: identity, list, title and the delete that removes the artifact too.
+     *
+     * AIDEV-NOTE: the list leads with when the backup was taken and how it stands, the columns a phone keeps beside
+     * the sticky actions; the target and the raw amounts wait behind the picker. Whether its data disks or its host
+     * volumes apply is the instance kind's fact, which the Backups tab reads (InstanceBackupsPage).
+     */
     private static PanelResource.@NonNull Builder<Row> base(@NonNull Identifier id,
                                                             @NonNull ResourceParent<Row> parent) {
         RelationPick instance = RelationPick.of(InstanceBackupModel.INSTANCE_ID, InstanceModel.MODEL_ID).build();
         TableSpec<Row> table = TableSpec.<Row>builder()
+            .column(ColumnSpec.fromField(InstanceBackupModel.CREATED_AT).build())
+            .column(ColumnSpec.fromField(InstanceBackupModel.STATUS).filterable().subtext("size_bytes").build())
+            .column(ColumnSpec.virtual(DATA_DISKS_COLUMN, HohenheimMicrocopy.INSTANCE_BACKUP.of(DATA_DISKS_COLUMN))
+                .absent(HohenheimMicrocopy.INSTANCE_BACKUP.of("data_disks_none")).build())
+            .column(ColumnSpec.virtual(HOST_VOLUMES_COLUMN,
+                    HohenheimMicrocopy.INSTANCE_BACKUP.of(HOST_VOLUMES_COLUMN))
+                .absent(HohenheimMicrocopy.INSTANCE_BACKUP.of("host_volumes_none")).build())
             .column(ColumnSpec.fromField(InstanceBackupModel.INSTANCE_ID).relation(instance).build())
             .column(ColumnSpec.fromField(InstanceBackupModel.TARGET_ID)
                 .relation(RelationPick.of(InstanceBackupModel.TARGET_ID, BackupTargetModel.MODEL_ID).build())
-                .build())
-            .column(ColumnSpec.fromField(InstanceBackupModel.STATUS).filterable().subtext("size_bytes").build())
-            .column(ColumnSpec.virtual(DATA_DISKS_COLUMN, HohenheimMicrocopy.INSTANCE_BACKUP.of(DATA_DISKS_COLUMN))
-                .build())
+                .hidden().build())
             .column(ColumnSpec.fromField(InstanceBackupModel.SIZE_BYTES).byteSize().hidden().build())
             // AIDEV-NOTE: the remote key is what a restore is driven by on the target itself. It stays out of the
             // default layout (it is long and noise on a healthy list) but the picker can bring it back, chip and all.
             .column(ColumnSpec.fromField(InstanceBackupModel.REMOTE_KEY).hidden().copyable().build())
-            .column(ColumnSpec.fromField(InstanceBackupModel.CREATED_AT).build())
             .build();
         return PanelResource.builder(id, HohenheimSlugs.INSTANCE_BACKUPS, InstanceBackupOperations.BACKUP)
             .label(HohenheimMicrocopy.INSTANCE_BACKUP.of("plural"))
@@ -166,12 +286,15 @@ public final class InstanceBackupParts {
             .parent(parent)
             .reads(ResourceReads.rows().title(InstanceBackupParts::title))
             // A backup is immutable evidence: no create (born from the instance action or the nightly task) and no
-            // update; readers view, actions act. Its archive key is a field of the page, never its title.
-            .form(ResourceForm.<Row>of(FormSpec.builder().add(instance).add(InstanceBackupModel.REMOTE_KEY).build())
+            // update; readers view, actions act. Its archive key is the page's one field, never its title; the instance
+            // is named, linked, on the overview's details card.
+            .form(ResourceForm.<Row>of(FormSpec.builder().add(InstanceBackupModel.REMOTE_KEY).build())
                 .landingTab(RecordOverview.SLUG).build())
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL)
                 .computed(Objects.requireNonNull(table.column(DATA_DISKS_COLUMN)),
                     (backup, request) -> dataDisksText(backup))
+                .computed(Objects.requireNonNull(table.column(HOST_VOLUMES_COLUMN)),
+                    (backup, request) -> hostVolumesText(backup))
                 .build())
             .writes(ResourceMutations.rows().delete(InstanceBackupOperations.DELETE_BACKUP).build());
     }
@@ -220,6 +343,9 @@ public final class InstanceBackupParts {
                 })
             .label(verb)
             .icon(Icon.of("clone"))
+            // A rare verb in a list read by when and how each backup went: in the row's menu, so a phone keeps the
+            // created and status columns beside a narrow actions column; the record's band still draws it inline.
+            .inlineInRow(false)
             .confirmation(ConfirmationSpec.verb(verb, HohenheimMicrocopy.INSTANCE_BACKUP.of("restore_new_confirm"),
                 ActionStyle.DEFAULT))
             .build();

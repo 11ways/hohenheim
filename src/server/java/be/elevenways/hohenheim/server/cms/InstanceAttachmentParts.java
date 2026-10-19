@@ -24,6 +24,20 @@ import be.elevenways.hohenheim.server.instance.InstanceDevices;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
+import be.elevenways.protoblast.common.typed.CoreTypes;
+import be.elevenways.protoblast.common.typed.rule.Condition;
+import be.elevenways.protoblast.common.typed.rule.Operand;
+import be.elevenways.zenit.cms.common.action.ActionPlacement;
+import be.elevenways.zenit.cms.common.action.CmsActionResult;
+import be.elevenways.zenit.cms.common.action.PanelAction;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.render.CmsTemplateIds;
+import be.elevenways.zenit.cms.common.render.table.EnumBadgeState;
+import be.elevenways.zenit.cms.common.resource.CellMapper;
+import be.elevenways.zenit.cms.common.resource.ChildList;
+import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
+import be.elevenways.zenit.common.edit.EditContext;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
@@ -63,11 +77,14 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Predicate;
 
 /**
@@ -340,6 +357,10 @@ public final class InstanceAttachmentParts {
 
     // -- database attachments ----------------------------------------------------------------------------------------
 
+    /** The virtual columns drawing the attached database's engine and what it does. */
+    private static final String ENGINE_COLUMN = "engine";
+    private static final String STATE_COLUMN = "database_state";
+
     /** @return the operator's instance-database attachments */
     public static @NonNull PanelResource<Row> databasesAdmin() {
         return databases(HohenheimIds.id("instance_database"))
@@ -355,19 +376,52 @@ public final class InstanceAttachmentParts {
             .build();
     }
 
+    /**
+     * The Attached databases tab of an instance on a Docker daemon (injection rides the link network, which an Incus
+     * container or VM has none of): the attachment list of the hosting panel narrowed to it, where an operator
+     * attaches and detaches.
+     */
+    public static @NonNull ChildList<Row> databasesTab() {
+        return ChildList.<Row>of(HohenheimSlugs.INSTANCE_DATABASES)
+            .icon(Icon.of("database"))
+            .secondary()
+            .lead(HohenheimMicrocopy.INSTANCE_DATABASE.of("lead"))
+            .visibleWhen((instance, access) -> injectsDatabases(instance))
+            .hide(HohenheimSlugs.INSTANCE_DATABASES, InstanceDatabaseModel.INSTANCE_ID.getName());
+    }
+
+    /** @return whether the instance runs on a Docker daemon, the one runtime a database is injected into */
+    static boolean injectsDatabases(@NonNull Row instance) {
+        InstanceKindHandler handler = InstanceKinds.handlerOf(instance);
+        return handler != null && handler.supportedRuntimes().contains(ServerModel.RUNTIME_DOCKER);
+    }
+
+    /**
+     * An attachment is its two sides: the instance is its fixed parent (attached from that instance's tab, never
+     * re-pointed), the database is chosen once and frozen after. The picker offers only databases not attached yet,
+     * each with its engine and state; the save keeps its own refusal of a duplicate.
+     */
     private static PanelResource.@NonNull Builder<Row> databases(@NonNull Identifier id) {
         FormSpec form = FormSpec.builder()
+            .createTitle(HohenheimMicrocopy.INSTANCE_DATABASE.of("add"))
             .add(RelationPick.of(InstanceDatabaseModel.INSTANCE_ID, InstanceModel.MODEL_ID).build())
-            .add(RelationPick.of(InstanceDatabaseModel.DATABASE_ID, DatabaseModel.MODEL_ID).build())
+            .add(RelationPick.of(InstanceDatabaseModel.DATABASE_ID, DatabaseModel.MODEL_ID)
+                .rulesFromContext(InstanceAttachmentParts::attachableDatabases)
+                .emptyReason(context -> HohenheimMicrocopy.INSTANCE_DATABASE.of("none_attachable"))
+                .build())
             .add(InstanceDatabaseModel.ENV_PREFIX)
             .build();
         TableSpec<Row> table = TableSpec.<Row>builder()
-            .column(ColumnSpec.fromField(InstanceDatabaseModel.INSTANCE_ID)
-                .relation(RelationPick.of(InstanceDatabaseModel.INSTANCE_ID, InstanceModel.MODEL_ID).build()).build())
             .column(ColumnSpec.fromField(InstanceDatabaseModel.DATABASE_ID)
                 .relation(RelationPick.of(InstanceDatabaseModel.DATABASE_ID, DatabaseModel.MODEL_ID).build()).build())
+            .column(ColumnSpec.fromField(InstanceDatabaseModel.INSTANCE_ID)
+                .relation(RelationPick.of(InstanceDatabaseModel.INSTANCE_ID, InstanceModel.MODEL_ID).build()).build())
+            .column(ColumnSpec.virtual(ENGINE_COLUMN, HohenheimMicrocopy.HOHENHEIM_FIELD.of("engine"))
+                .renderer(CmsTemplateIds.CELL_ENUM_BADGE).build())
             .column(ColumnSpec.fromField(InstanceDatabaseModel.ENV_PREFIX).copyable().build())
-            .column(ColumnSpec.fromField(InstanceDatabaseModel.CREATED_AT).build())
+            .column(ColumnSpec.virtual(STATE_COLUMN, HohenheimMicrocopy.INSTANCE_DATABASE.of("status"))
+                .renderer(HohenheimTemplateIds.CELL_STATE_LINE).build())
+            .column(ColumnSpec.fromField(InstanceDatabaseModel.CREATED_AT).hidden().build())
             .build();
         return PanelResource.builder(id, HohenheimSlugs.INSTANCE_DATABASES, InstanceAttachmentOperations.DATABASE_LINK)
             .label(HohenheimMicrocopy.INSTANCE_DATABASE.of("plural"))
@@ -377,24 +431,30 @@ public final class InstanceAttachmentParts {
             .navOrder(21)
             .showInNav(false)
             .parent(ResourceParent.of(HohenheimSlugs.INSTANCES, InstanceDatabaseModel.INSTANCE_ID)
-            .tab(HohenheimSlugs.Tab.DATABASES))
-            .reads(ResourceReads.rows().title(InstanceAttachmentParts::linkTitle))
+                .tab(HohenheimSlugs.Tab.DATABASES).fixed())
+            // The engine and the state of every listed attachment's database, read for the whole page at once.
+            .reads(ResourceReads.rows().title(InstanceAttachmentParts::linkTitle)
+                .pageBatch((links, access) -> databaseCells(links)))
             .form(ResourceForm.<Row>of(form)
-                .createDefaults((access, panel) -> {
-                    Map<String, Object> values = new LinkedHashMap<>();
-                    Integer instanceId = CmsSupport.prefill(access.conduit(), HohenheimParams.INSTANCE_ID_PREFILL);
-                    if (instanceId != null) {
-                        values.put(InstanceDatabaseModel.INSTANCE_ID.getName(), instanceId);
-                    }
-                    values.put(InstanceDatabaseModel.ENV_PREFIX.getName(), InstanceDatabaseModel.DEFAULT_PREFIX);
-                    return Map.copyOf(values);
-                })
+                .bindings(List.of(ResourceFieldBinding.frozenAfterCreate(
+                    InstanceDatabaseModel.DATABASE_ID.getName())))
+                .createDefaults((access, panel) -> Map.of(InstanceDatabaseModel.ENV_PREFIX.getName(),
+                    InstanceDatabaseModel.DEFAULT_PREFIX))
+                .createTitle(InstanceAttachmentParts::attachTitle)
+                .createLabel(HohenheimMicrocopy.INSTANCE_DATABASE.of("attach"))
+                .createdToast(link -> attachedToast(link))
+                // An attachment is seen where it lives: its instance's Attached databases tab.
+                .createdRecordUrl((link, request) -> CmsRoutes.subpage(request.panelSlug(), HohenheimSlugs.INSTANCES,
+                    link.get(InstanceDatabaseModel.INSTANCE_ID), HohenheimSlugs.Tab.DATABASES))
                 // AIDEV-NOTE: the env prefix only, the one thing about an attachment that is text rather than a pick.
                 // It bites at the NEXT DEPLOY: injection reads the prefix when the workload starts.
                 .inlineEditable(InstanceDatabaseModel.ENV_PREFIX)
                 .build())
-            // The env prefix names the injected variable family; nothing else here is text.
+            // The env prefix names the injected variable family; nothing else here is text. A row opens the database
+            // it attaches; the attachment's own form is its Edit.
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).search(InstanceDatabaseModel.ENV_PREFIX)
+                .rowLink((link, request) -> CmsRoutes.open(request.panelSlug(), HohenheimSlugs.DATABASES,
+                    link.get(InstanceDatabaseModel.DATABASE_ID)))
                 .build())
             .writes(ResourceMutations.rows()
                 .create()
@@ -402,6 +462,8 @@ public final class InstanceAttachmentParts {
                 .delete(InstanceAttachmentOperations.DELETE_DATABASE_LINK)
                 .beforeSave(InstanceAttachmentParts::requireLinkReachable)
                 .build())
+            // Removing an attachment is a detach, named so on the row, through the attachment's own delete operation.
+            .replaceDeleteAction(ActionPlacement.ROW, detach())
             // The delete dialog names BOTH sides and the consequence.
             .deleteConfirmation(DeleteConfirmation.<Row>defaults().forRow((link, request) -> linkDeleteBody(link)))
             // Edit rides TenantWrites.requireInstanceLinkAuthority's two-sided rule (instance config plus database
@@ -411,32 +473,130 @@ public final class InstanceAttachmentParts {
                 .build());
     }
 
-    /**
-     * "{database} on {instance}": the two sides ARE the record; the schema's display field is the env prefix, which
-     * titled every attachment "DB".
-     */
-    private static @Nullable Microcopy linkTitle(@NonNull Row link) {
+    /** The Detach row action: the attachment's delete operation, confirmed with both sides named. */
+    private static @NonNull PanelAction<Row> detach() {
+        ConfirmationSpec detach = ConfirmationSpec.verb(HohenheimMicrocopy.INSTANCE_DATABASE.of("detach"),
+            HohenheimMicrocopy.INSTANCE_DATABASE.of("detach_confirm_any"), ActionStyle.DESTRUCTIVE);
+        return PanelAction.<Row, Integer>places(InstanceAttachmentOperations.DELETE_DATABASE_LINK, ActionPlacement.ROW,
+                (context, result) -> CmsActionResult.refreshWithToast(detachedToast(context.subjects().getFirst())))
+            .label(HohenheimMicrocopy.INSTANCE_DATABASE.of("detach"))
+            .icon(Icon.of("link-slash"))
+            .style(ActionStyle.DESTRUCTIVE)
+            .inlineInRow(false)
+            .confirmation(detach)
+            .dynamicConfirmation(link -> detach.withBody(detachBody(link)))
+            .build();
+    }
+
+    /** The databases the attach picker offers: every one not attached to the instance yet; on a record, its own. */
+    private static @NonNull Condition attachableDatabases(@NonNull EditContext context) {
+        if (context.record() instanceof Row link && link.get(InstanceDatabaseModel.DATABASE_ID) != null) {
+            return Condition.test(DatabaseModel.ID.getName(), CoreTypes.EQUALS,
+                Operand.of(link.get(InstanceDatabaseModel.DATABASE_ID)));
+        }
+        Conduit conduit = context.conduit();
+        Integer instanceId = conduit == null ? null : CmsSupport.scopedParentId(conduit,
+            CmsEndpoints.PARENT_PARAM.getName(), HohenheimSlugs.INSTANCES);
+        if (instanceId == null) {
+            return Condition.EVERYTHING;
+        }
+        List<Object> attached = new ArrayList<>();
+        for (Row link : Models.get(InstanceDatabaseModel.class).findByInstanceId(instanceId)) {
+            attached.add(link.get(InstanceDatabaseModel.DATABASE_ID));
+        }
+        return attached.isEmpty() ? Condition.EVERYTHING
+            : Condition.test(DatabaseModel.ID.getName(), CoreTypes.NOT_IN, Operand.of(attached));
+    }
+
+    /** "Attach a database to shop-web": the create page names the app it attaches to, the parent it is opened under. */
+    private static @Nullable Microcopy attachTitle(@NonNull PanelRequest request) {
+        Integer instanceId = CmsSupport.scopedParentId(request.conduit(), CmsEndpoints.PARENT_PARAM.getName(),
+            HohenheimSlugs.INSTANCES);
+        String instance = instanceId == null ? null : DeleteImpact.instanceNameOf(instanceId);
+        return instance == null ? null
+            : HohenheimMicrocopy.INSTANCE_DATABASE.of("attach_title").withArg("instance", instance);
+    }
+
+    /** "shop-db is attached to shop-web", null when either side is gone (the generated toast stands). */
+    private static @Nullable Microcopy attachedToast(@NonNull Row link) {
+        return twoSides(link, "attached_toast");
+    }
+
+    /** "shop-db is detached from shop-web", or the side-less sentence when either side is gone. */
+    private static @NonNull Microcopy detachedToast(@NonNull Row link) {
+        Microcopy named = twoSides(link, "detached_toast");
+        return named != null ? named : HohenheimMicrocopy.INSTANCE_DATABASE.of("detached_toast_any");
+    }
+
+    /** The detach dialog's body: both sides and the consequence, or the side-less sentence. */
+    private static @NonNull Microcopy detachBody(@NonNull Row link) {
+        Microcopy sentence = detachSentence(link);
+        return sentence != null ? sentence : HohenheimMicrocopy.INSTANCE_DATABASE.of("detach_confirm_any");
+    }
+
+    /** @return the attachment's sentence {@code key} naming its database and instance, null when either is gone */
+    private static @Nullable Microcopy twoSides(@NonNull Row link, @NonNull String key) {
         String database = DeleteImpact.databaseNameOf(link.get(InstanceDatabaseModel.DATABASE_ID));
         String instance = DeleteImpact.instanceNameOf(link.get(InstanceDatabaseModel.INSTANCE_ID));
         if (database == null || instance == null) {
             return null;
         }
-        return HohenheimMicrocopy.INSTANCE_DATABASE.of("record_title")
-            .withArg("database", database)
-            .withArg("instance", instance);
+        return HohenheimMicrocopy.INSTANCE_DATABASE.of(key).withArg("database", database).withArg("instance", instance);
+    }
+
+    /**
+     * The engine badge and the state line of each listed attachment's database, its rows loaded in one read.
+     *
+     * AIDEV-NOTE: the state is the database's own verdict (DatabaseVerdict), which asks the engine instance serving
+     * an active database per record; batching that read belongs to DatabaseVerdict, not to this page.
+     */
+    private static @NonNull CellMapper<Row> databaseCells(@NonNull List<Row> links) {
+        Set<Integer> ids = new HashSet<>();
+        for (Row link : links) {
+            Integer databaseId = link.get(InstanceDatabaseModel.DATABASE_ID);
+            if (databaseId != null) {
+                ids.add(databaseId);
+            }
+        }
+        Map<Integer, Row> databases = new HashMap<>();
+        if (!ids.isEmpty()) {
+            for (Row database : Models.get(DatabaseModel.class).find().where(DatabaseModel.ID.in(ids)).all()) {
+                databases.put(database.get(DatabaseModel.ID), database);
+            }
+        }
+        return (link, column) -> {
+            Row database = databases.get((Integer) link.get(InstanceDatabaseModel.DATABASE_ID));
+            if (database == null) {
+                return null;
+            }
+            return switch (column.name()) {
+                case ENGINE_COLUMN -> EnumBadgeState.ofNullable(DatabaseModel.ENGINE,
+                    database.get(DatabaseModel.ENGINE));
+                case STATE_COLUMN -> DatabaseVerdict.ofDatabase(database).cell();
+                default -> null;
+            };
+        };
+    }
+
+    /**
+     * "{database} on {instance}": the two sides ARE the record; the schema's display field is the env prefix, which
+     * titled every attachment "DB".
+     */
+    private static @Nullable Microcopy linkTitle(@NonNull Row link) {
+        return twoSides(link, "record_title");
     }
 
     /** Reachability is revoked at the daemon on confirm, the injected variable family at the next deploy. */
     private static @NonNull ConfirmationSpec linkDeleteBody(@NonNull Row link) {
-        String database = DeleteImpact.databaseNameOf(link.get(InstanceDatabaseModel.DATABASE_ID));
-        String instance = DeleteImpact.instanceNameOf(link.get(InstanceDatabaseModel.INSTANCE_ID));
-        if (database == null || instance == null) {
-            return DeleteConfirmation.<Row>defaults().fallback();
-        }
-        return DeleteConfirmation.body(HohenheimMicrocopy.INSTANCE_DATABASE.of("delete_confirm")
-            .withArg("database", database)
-            .withArg("instance", instance)
-            .withArg("prefix", DatabaseEnvInjection.normalizedPrefix(link.get(InstanceDatabaseModel.ENV_PREFIX))));
+        Microcopy sentence = detachSentence(link);
+        return sentence == null ? DeleteConfirmation.<Row>defaults().fallback() : DeleteConfirmation.body(sentence);
+    }
+
+    /** @return the detach's consequence naming both sides and the variable family, null when either side is gone */
+    private static @Nullable Microcopy detachSentence(@NonNull Row link) {
+        Microcopy named = twoSides(link, "delete_confirm");
+        return named == null ? null
+            : named.withArg("prefix", DatabaseEnvInjection.normalizedPrefix(link.get(InstanceDatabaseModel.ENV_PREFIX)));
     }
 
     /**

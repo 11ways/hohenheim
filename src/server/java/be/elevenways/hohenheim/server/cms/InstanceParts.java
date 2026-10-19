@@ -124,9 +124,6 @@ import java.util.function.Supplier;
  */
 public final class InstanceParts {
 
-    /** The artifact sections' stored-failure column, drawn only in the Backups tab. */
-    private static final String FAILURE_COLUMN = "failure";
-
     /** The instance form's open section holding where its backups go. */
     private static final String BACKUPS_SECTION = "backups";
 
@@ -745,72 +742,18 @@ public final class InstanceParts {
         tabs.add(new InstanceStatsPage());
         // The sections read THIS panel's entries: the /manage backup twin places no restore-to-new, which is how it
         // stays operator-only there too.
-        tabs.add(backupsTab(operator));
+        tabs.add(new InstanceBackupsPage(operator));
         tabs.add(new InstanceProvisioningPage());
-        tabs.add(new InstanceVolumesTab());
-        tabs.add(new InstanceDatabasesPage());
+        tabs.add(VolumeParts.tab());
+        // The attachments resolve in the hosting panel, which declares them only where this boot serves databases.
+        if (InstanceAttachmentParts.databasesServed()) {
+            tabs.add(InstanceAttachmentParts.databasesTab());
+        }
         if (operator) {
             // The page hides AND 404s itself for a delegate, and the /manage entry never lists it.
             tabs.add(new InstanceMigratePage());
         }
         return List.copyOf(tabs);
-    }
-
-    /**
-     * The Backups tab: the framework's child list with a section per artifact resource of the hosting panel (its
-     * /manage twin there) narrowed to this instance -- backups, snapshots and the schedules that make them -- each
-     * row relaying its own entry's placed operations, so restore keeps its confirmation and operator-only refusal.
-     *
-     * AIDEV-NOTE: built per panel (a child list resolves in the panel it is declared on). An artifact's stored
-     * failure text is the daemon's own wording, shown through {@link WithheldFailure}: an operator reads it, a
-     * delegate reads that it failed.
-     *
-     * @param operator whether the tab is the operator's, which names the backup target in use and links to its choice
-     */
-    private static @NonNull ChildList<Row> backupsTab(boolean operator) {
-        ChildList<Row> tab = ChildList.<Row>sections(HohenheimSlugs.Tab.BACKUPS,
-                HohenheimMicrocopy.INSTANCE.of("backups"),
-                HohenheimSlugs.INSTANCE_BACKUPS, HohenheimSlugs.INSTANCE_SNAPSHOTS, HohenheimSlugs.INSTANCE_SCHEDULES)
-            .icon(Icon.of("box-archive"))
-            .hide(HohenheimSlugs.INSTANCE_BACKUPS, InstanceBackupModel.INSTANCE_ID.getName())
-            .hide(HohenheimSlugs.INSTANCE_SNAPSHOTS, InstanceSnapshotModel.INSTANCE_ID.getName())
-            .hide(HohenheimSlugs.INSTANCE_SCHEDULES, RecordScheduleModel.RECORD_ID.getName())
-            // An empty section offers its making action instead of a dead end ("No backups yet" with Back up now).
-            .parentActions(HohenheimSlugs.INSTANCE_BACKUPS, InstanceOperations.BACKUP.id())
-            .parentActions(HohenheimSlugs.INSTANCE_SNAPSHOTS, InstanceOperations.SNAPSHOT.id())
-            .column(HohenheimSlugs.INSTANCE_BACKUPS, SubjectType.record(InstanceBackupModel.MODEL_ID), failureColumn(),
-                (backup, request) -> WithheldFailure.of(request.conduit()).shown(backup.get(InstanceBackupModel.ERROR)))
-            .column(HohenheimSlugs.INSTANCE_SNAPSHOTS, SubjectType.record(InstanceSnapshotModel.MODEL_ID),
-            failureColumn(),
-                (snapshot, request) -> WithheldFailure.of(request.conduit())
-                    .shown(snapshot.get(InstanceSnapshotModel.ERROR)));
-        return operator ? tab.headerLink(HohenheimSlugs.INSTANCE_BACKUPS, backupTargetLink()) : tab;
-    }
-
-    /**
-     * The backups section's header link: the target this instance's backups go to, or the offer to choose one, both
-     * leading to the Configuration where its Backups section holds the choice.
-     */
-    private static @NonNull PanelAction<Row> backupTargetLink() {
-        return PanelAction.<Row>link(HohenheimIds.id("instance_backup_target"), ActionPlacement.HEADER)
-            .label(HohenheimMicrocopy.INSTANCE.of("backup_target_choose"))
-            .dynamicLabel(instance -> {
-                Integer targetId = instance.get(InstanceModel.BACKUP_TARGET_ID);
-                Row target = targetId == null ? null : Models.get(BackupTargetModel.class).findById(targetId);
-                return target == null ? HohenheimMicrocopy.INSTANCE.of("backup_target_choose")
-                    : HohenheimMicrocopy.INSTANCE.of("backups_go_to")
-                        .withArg("target", String.valueOf((Object) target.get(BackupTargetModel.NAME)));
-            })
-            .icon(Icon.of("box-archive"))
-            .route((instance, request) -> CmsRoutes.detail(request.panelSlug(), HohenheimSlugs.INSTANCES,
-                instance.get(InstanceModel.ID)))
-            .build();
-    }
-
-    /** The column an artifact's stored failure reads in, blank while it has none. */
-    private static @NonNull ColumnSpec failureColumn() {
-        return ColumnSpec.virtual(FAILURE_COLUMN, HohenheimMicrocopy.INSTANCE_ARTIFACTS.of("failure"))
-            .build();
     }
 
     /**
