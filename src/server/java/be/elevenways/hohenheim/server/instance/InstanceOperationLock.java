@@ -6,6 +6,8 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.server.host.HostLeases;
+import be.elevenways.zenit.common.orm.datasource.Datasource;
+import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.lease.ClaimedRows;
 import be.elevenways.zenit.common.orm.lease.LeaseKeys;
@@ -94,6 +96,9 @@ public final class InstanceOperationLock {
     /** The threads waiting for a record's claim, for {@link #isQueued}. */
     private final Map<Integer, Set<Thread>> waiting = new ConcurrentHashMap<>();
 
+    /** The outcome each hold staged and has not written yet ({@link #stageOutcome}). */
+    private final Map<ClaimedRows<Integer>.Held, Runnable> staged = new ConcurrentHashMap<>();
+
     private InstanceOperationLock(@NonNull HostLeases controller) {
         this.rows = ClaimedRows.of(Models.get(InstanceModel.class), InstanceModel.ID, InstanceModel.CLAIM_FENCE,
                 KEYS)
@@ -174,8 +179,14 @@ public final class InstanceOperationLock {
      *
      * AIDEV-NOTE: a terminal status written INSIDE the claim was visible before the claim's release, and a client that
      * polled a release until it read succeeded and then rolled back met instance_operation_in_progress from that very
-     * release (ApiWireSitesTest on a slow host). Between the release and the publication the record reads idle with
-     * the operation still in flight, which every reader treats as busy-or-recoverable; the other order is a lie.
+     * release (ApiWireSitesTest on a slow host). The publication rides the claim's lease release (zenit
+     * Lease.afterRelease): a claimant in this process waits it out, so nothing here takes the record between the
+     * release and the outcome; a claimant of a rival controller can, which the record's fence answers.
+     *
+     * AIDEV-NOTE: a hold that borrowed an operation command's lease publishes at its own close, inside the command
+     * (ClaimedRows), so a zero-wait claimant can still meet the command's lease until the runner releases it after
+     * the receipt. Closing that needs InstanceOperationHandlers' PowerResult to stop re-reading the record's status
+     * inside the command (statusOf), since there the outcome would not be published yet.
      */
     public void afterRelease(int instanceId, @NonNull Runnable publish) {
         ClaimedRows<Integer>.Held hold = this.rows.heldHere(instanceId);
@@ -187,6 +198,54 @@ public final class InstanceOperationLock {
     }
 
     /**
+     * {@link #afterRelease(int, Runnable)} for an operation row that names what it is for: published after the claim
+     * of that instance record, at once when the row is for anything else.
+     *
+     * @param forModel the row's owner model id in its stored spelling
+     */
+    public void afterRelease(@Nullable String forModel, @Nullable Integer forId, @NonNull Runnable publish) {
+        if (forId == null || !InstanceModel.MODEL_ID.toString().equals(forModel)) {
+            publish.run();
+            return;
+        }
+        this.afterRelease(forId, publish);
+    }
+
+    /**
+     * Stages the record's outcome write for when this thread's operation let go of it ({@link #afterRelease}), on the
+     * datasource it was staged on. An outcome staged earlier on the same hold is written first, so the writes keep
+     * their order and each runs once.
+     *
+     * AIDEV-NOTE: the work that stays inside the claim must still read the record as its own writes left it, so a
+     * staged outcome is written early ({@link #settle}) by every next write through InstanceOperationGuard and by a
+     * nested operation re-entering the hold; only the last outcome of the operation waits for the release.
+     *
+     * @throws IllegalStateException when this thread holds no claim on the record
+     */
+    void stageOutcome(int instanceId, @NonNull Runnable write) {
+        ClaimedRows<Integer>.Held hold = this.requireHeld(instanceId);
+        this.settle(hold);
+        Datasource datasource = Db.currentOrDefault();
+        this.staged.put(hold, () -> Db.run(datasource, write::run));
+        hold.afterRelease(() -> this.settle(hold));
+    }
+
+    /** Writes the outcome this thread's operation staged on the record now, when there is one. */
+    void settle(int instanceId) {
+        ClaimedRows<Integer>.Held hold = this.rows.heldHere(instanceId);
+        if (hold != null) {
+            this.settle(hold);
+        }
+    }
+
+    private void settle(ClaimedRows<Integer>.@NonNull Held hold) {
+        Runnable write = this.staged.remove(hold);
+        if (write != null) {
+            write.run();
+        }
+    }
+
+    /**
      * Narrows a write to the record this thread's operation still owns: zero rows means the claim was lost (a rival
      * took the record over), and the caller records nothing.
      *
@@ -194,12 +253,17 @@ public final class InstanceOperationLock {
      *         operation is a wiring defect, never a write without a fence
      */
     @NonNull QueryBuilder<Row> owned(int instanceId) {
+        return this.rows.owned(this.requireHeld(instanceId).rowClaim());
+    }
+
+    /** @throws IllegalStateException when this thread holds no claim on the record */
+    private ClaimedRows<Integer>.@NonNull Held requireHeld(int instanceId) {
         ClaimedRows<Integer>.Held hold = this.rows.heldHere(instanceId);
         if (hold == null) {
             throw new IllegalStateException("Instance " + instanceId + " is written outside an operation holding it;"
                 + " every outcome write runs inside InstanceOperationLock.exclusive or runIfIdle");
         }
-        return this.rows.owned(hold.rowClaim());
+        return hold;
     }
 
     /** Whether {@code thread} is waiting for the record's claim (a test seam for the ordering proofs). */
@@ -225,7 +289,12 @@ public final class InstanceOperationLock {
         };
         Set<Thread> threads = this.waiting.computeIfAbsent(instanceId, ignored -> ConcurrentHashMap.newKeySet());
         Thread current = Thread.currentThread();
-        if (wait > 0 && this.rows.heldHere(instanceId) == null) {
+        ClaimedRows<Integer>.Held own = this.rows.heldHere(instanceId);
+        if (own != null) {
+            // A nested operation reads the record as the enclosing one's writes left it.
+            this.settle(own);
+        }
+        if (wait > 0 && own == null) {
             threads.add(current);
         }
         try {

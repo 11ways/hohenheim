@@ -137,10 +137,8 @@ public final class ArtifactDeploys {
                 }
                 operation.set(ArtifactOperationModel.INSTANCE_ID, release.instanceId());
                 operation.set(ArtifactOperationModel.IMAGE_ID, String.valueOf(settings.get(InstanceKindFields.IMAGE)));
-                Db.currentOrDefault().withTransaction(transaction -> {
-                    saveSource(applicationId, digest);
-                    finish(operation, ArtifactOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), null);
-                });
+                Db.currentOrDefault().withTransaction(transaction -> saveSource(applicationId, digest));
+                finish(operation, ArtifactOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), null);
                 completed = true;
                 History.event(Models.get(InstanceModel.class), applicationId,
                     Change.fact(HohenheimActivityAction.DEPLOYED, Map.of(HohenheimActivityAction.TRIGGER_KEY,
@@ -162,11 +160,29 @@ public final class ArtifactDeploys {
         finish(operation, ArtifactOperationModel.LIFECYCLE.stored(OperationStatus.FAILED), "artifact_upload_failed");
     }
 
+    /**
+     * Stamp the operation's terminal status once its application's claim is let go
+     * ({@link InstanceOperationLock#afterRelease}), at once when nothing holds it: a client that polls the operation
+     * until it ended and acts on the application at once is never refused by this deploy.
+     *
+     * AIDEV-NOTE: the success stamp used to commit in one transaction with the promoted source pointer. A controller
+     * killed between the two now leaves the pointer promoted and the row in flight, which the boot settle stamps
+     * interrupted; the pointer names the release that is serving, so it stays true.
+     */
     private static void finish(Row operation, String status, @Nullable String error) {
-        operation.set(ArtifactOperationModel.STATUS, status);
-        operation.set(ArtifactOperationModel.ERROR, error);
-        operation.set(ArtifactOperationModel.FINISHED_AT, Now.instant());
-        Models.get(ArtifactOperationModel.class).save(operation);
+        Instant finished = Now.instant();
+        Integer applicationId = operation.get(ArtifactOperationModel.APPLICATION_ID);
+        Runnable stamp = () -> {
+            operation.set(ArtifactOperationModel.STATUS, status);
+            operation.set(ArtifactOperationModel.ERROR, error);
+            operation.set(ArtifactOperationModel.FINISHED_AT, finished);
+            Models.get(ArtifactOperationModel.class).save(operation);
+        };
+        if (applicationId == null) {
+            stamp.run();
+            return;
+        }
+        InstanceOperationLock.production().afterRelease(applicationId, stamp);
     }
 
     /** No path from a request/record is trusted: ownership is derived from app + digest. */

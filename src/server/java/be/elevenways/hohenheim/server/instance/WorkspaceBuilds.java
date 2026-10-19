@@ -394,17 +394,20 @@ public final class WorkspaceBuilds {
         return row.get(BuildOperationModel.ID);
     }
 
-    /** Stamp the terminal status, the log and the timings; a NARROW write, never a save. */
-    private static void finish(int operationId, @NonNull String status,
-                               @Nullable String commitSha, @Nullable String failureReason,
-                               @NonNull BuildLog log, long startedAt) {
+    /**
+     * Stamp the terminal status, the log and the timings once the workspace's claim is let go
+     * ({@link InstanceOperationLock#afterRelease}), timed when the deploy ended; a NARROW write, never a save.
+     */
+    private void finish(int operationId, @NonNull String status,
+                        @Nullable String commitSha, @Nullable String failureReason,
+                        @NonNull BuildLog log, long startedAt) {
         BuildOperationModel model = Models.get(BuildOperationModel.class);
         Row row = model.findById(operationId);
         if (row == null) {
             return;
         }
         Instant finished = Now.instant();
-        RecordStamp.on(model, row)
+        RecordStamp ending = RecordStamp.on(model, row)
             .set(BuildOperationModel.STATUS, status)
             .set(BuildOperationModel.SOURCE_REF, commitSha != null
                 ? commitSha : row.get(BuildOperationModel.SOURCE_REF))
@@ -412,10 +415,13 @@ public final class WorkspaceBuilds {
             .set(BuildOperationModel.LOG, log.text())
             .set(BuildOperationModel.FINISHED_AT, finished)
             .set(BuildOperationModel.DURATION_MS,
-                (int) (finished.toEpochMilli() - startedAt))
-            .write();
-        model.pruneHistory(InstanceModel.MODEL_ID.toString(),
-            row.get(BuildOperationModel.FOR_ID), SandboxedBuilds.historyPerOwner());
+                (int) (finished.toEpochMilli() - startedAt));
+        this.instances.operations().afterRelease(row.get(BuildOperationModel.FOR_MODEL),
+            row.get(BuildOperationModel.FOR_ID), () -> {
+                ending.write();
+                model.pruneHistory(InstanceModel.MODEL_ID.toString(),
+                    row.get(BuildOperationModel.FOR_ID), SandboxedBuilds.historyPerOwner());
+            });
     }
 
     private static void requireWorkspace(@NonNull Resolved resolved) {

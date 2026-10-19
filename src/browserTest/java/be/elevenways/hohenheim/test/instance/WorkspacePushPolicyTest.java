@@ -4,9 +4,13 @@ import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
+import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.WorkspaceBuilds;
+import be.elevenways.protoblast.testsupport.thread.Racers;
+import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -19,6 +23,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -177,6 +182,58 @@ class WorkspacePushPolicyTest {
 
             daemon.setUnreachable(false);
         });
+    }
+
+    /**
+     * A deploy's record reads finished only once the deploy let go of the workspace: a client that waits for its
+     * outcome and stops the workspace at once is never refused by the deploy it just read about.
+     */
+    @Test
+    void aDeployReadsFinishedOnlyOnceItLetGoOfTheWorkspace() throws Exception {
+        InstanceService service = new InstanceService();
+        InstanceOperationLock claims = InstanceOperationLock.of(HostLeases.production());
+        int[] id = new int[1];
+        Db.run(datasource, () -> {
+            id[0] = workspace("push-settling");
+
+            // 1. A deploy run under a claim its caller still holds, as a crash restart or a backup runs it: while the
+            //    claim is held, its record reads in flight.
+            claims.exclusive(id[0], InstanceOperationLock.Contention.QUEUE, () -> {
+                new WorkspaceBuilds(service).deploy(id[0], null, null, DeployTrigger.MANUAL);
+                assertThat((String) lastOperation(id[0]).get(BuildOperationModel.STATUS))
+                    .as("step 1: a deploy whose claim is still held has not finished")
+                    .isEqualTo(BuildOperationModel.LIFECYCLE.stored(OperationStatus.RUNNING));
+            });
+
+            // 2. The claim let go: the record reads succeeded, and nothing holds the workspace.
+            assertThat((String) lastOperation(id[0]).get(BuildOperationModel.STATUS))
+                .as("step 2: succeeded once the claim let go")
+                .isEqualTo(BuildOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED));
+            assertThat(claims.runIfIdle(id[0], () -> { })).as("step 2: and the workspace is idle").isTrue();
+        });
+
+        // 3. A second deploy runs on its own thread. A client waits for its record to read succeeded and stops the
+        //    workspace at once: the stop, which refuses a busy record, is admitted.
+        int[] before = new int[1];
+        Db.run(datasource, () -> before[0] = lastOperation(id[0]).get(BuildOperationModel.ID));
+        try (Racers racers = Racers.named("a deploy and the client acting on its outcome")) {
+            Racers.Running<WorkspaceBuilds.Outcome> deploying = racers.start("the second deploy", () ->
+                Db.supply(datasource, () -> new WorkspaceBuilds(service).deploy(id[0], null, null,
+                    DeployTrigger.MANUAL)));
+            Db.run(datasource, () -> {
+                Poll.until("step 3: the second deploy reads succeeded", Duration.ofSeconds(30), () -> {
+                    Row latest = lastOperation(id[0]);
+                    return latest.get(BuildOperationModel.ID) != before[0]
+                        && BuildOperationModel.LIFECYCLE.is(latest.get(BuildOperationModel.STATUS),
+                            OperationStatus.SUCCEEDED);
+                });
+                service.stop(id[0]);
+                assertThat((String) Models.get(InstanceModel.class).findById(id[0]).get(InstanceModel.STATUS))
+                    .as("step 3: the stop right after succeeded ran").isEqualTo(InstanceModel.STATUS_STOPPED);
+            });
+            assertThat(deploying.await(Duration.ofSeconds(30)).value())
+                .as("step 3: the deploy itself succeeded").isNotNull();
+        }
     }
 
     /**

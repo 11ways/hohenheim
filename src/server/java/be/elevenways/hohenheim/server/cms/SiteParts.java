@@ -127,8 +127,8 @@ public final class SiteParts {
      * (its /manage twin there), under the site. A TLS passthrough site terminates nothing here, so it has no paths to
      * protect and no tab.
      */
-    public static final ChildList<Row> PROTECTED_PATHS = ChildList.<Row>of(HohenheimSlugs.PROTECTED_PATHS)
-        .label(HohenheimMicrocopy.APP_OVERVIEW.of("protection"))
+    public static final ChildList<Row> PROTECTED_PATHS = ChildList.<Row>sections(HohenheimSlugs.PROTECTED_PATHS,
+            HohenheimMicrocopy.APP_OVERVIEW.of("protection"), HohenheimSlugs.PROTECTED_PATHS)
         .visibleWhen((site, access) -> servesHttp(site));
 
     private SiteParts() {

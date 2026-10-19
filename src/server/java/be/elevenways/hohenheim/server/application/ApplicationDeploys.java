@@ -181,7 +181,8 @@ public final class ApplicationDeploys {
      * pair, because the decision is taken before any daemon work: there is no in-flight
      * window for a dying controller to leave behind. The status is REFUSED and never
      * FAILED -- nothing broke, something was decided -- and the reason is the sentence a
-     * person reads on the Deploys tab, not a violation key.
+     * person reads on the Deploys tab, not a violation key. Saved once the application's claim is let go, like every
+     * terminal record of an operation (InstanceOperationLock.afterRelease).
      */
     private static void recordRefusal(int applicationId, @NonNull Map<String, Object> settings,
                                       @Nullable String ref, @NonNull String message) {
@@ -201,6 +202,6 @@ public final class ApplicationDeploys {
         row.set(BuildOperationModel.STARTED_AT, now);
         row.set(BuildOperationModel.FINISHED_AT, now);
         row.set(BuildOperationModel.DURATION_MS, 0);
-        model.save(row);
+        InstanceOperationLock.production().afterRelease(applicationId, () -> model.save(row));
     }
 }

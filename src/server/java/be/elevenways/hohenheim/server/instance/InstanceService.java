@@ -521,6 +521,10 @@ public final class InstanceService {
         }
         this.beforeOutcomeWrite.run();
         stampGuarded(resolved, InstanceModel.STATUS_STOPPED);
+        // AIDEV-NOTE: written NOW, inside the claim, unlike every other outcome: the soft delete below hides the record
+        // from the fenced write, and the delete (hooks, quota, grants) and its cleanup are the destroy's own work under
+        // the claim. The stamp is bookkeeping before the delete, not the outcome a client acts on.
+        this.operations.settle(instanceId);
         // End of life: pre-allocated reservations die WITH the instance -- unlike stop,
         // which keeps them (the stable number is what DNS points at across restarts).
         PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, instanceId);

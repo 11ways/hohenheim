@@ -106,7 +106,8 @@ public final class VolumeParts {
      * to it; for any other kind a declared row would ride no deploy, so the tab is absent.
      */
     public static @NonNull ChildList<Row> tab() {
-        return ChildList.<Row>of(HohenheimSlugs.INSTANCE_VOLUMES)
+        return ChildList.<Row>sections(HohenheimSlugs.Tab.VOLUMES, HohenheimMicrocopy.INSTANCE_VOLUME.of("plural"),
+                HohenheimSlugs.INSTANCE_VOLUMES)
             .icon(Icon.of("folder-open"))
             .secondary()
             .lead(HohenheimMicrocopy.INSTANCE_VOLUME.of("lead"))

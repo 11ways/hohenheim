@@ -435,12 +435,17 @@ public final class InstanceBackups {
             // was created before the archive/encrypt/upload/verify phase, which is a
             // network transfer measured in minutes; a whole-row save rewrites every
             // column back to its creation-time value and reports the backup complete.
-            RecordStamp.on(Models.get(InstanceBackupModel.class), backup)
+            // Written once the instance's claim is let go: a client restoring the backup it saw complete is never
+            // refused by this capture.
+            RecordStamp complete = RecordStamp.on(Models.get(InstanceBackupModel.class), backup)
                 .set(InstanceBackupModel.STATUS, InstanceBackupModel.STATUS_COMPLETE)
                 .set(InstanceBackupModel.SHA256, storedSha)
                 .set(InstanceBackupModel.SIZE_BYTES, size)
-                .set(InstanceBackupModel.SUMMARY, manifest.toSummary())
-                .write();
+                .set(InstanceBackupModel.SUMMARY, manifest.toSummary());
+            this.instances.operations().afterRelease(instanceId, () -> {
+                complete.write();
+                pruneForRetention(instanceId, targetId, target);
+            });
         } catch (IOException | RuntimeException error) {
             // Cleanup must leave NOTHING a later restore would accept: remove the
             // artifact (and its staging debris) and leave the row FAILED.
@@ -457,10 +462,10 @@ public final class InstanceBackups {
                 Blast.log("BACKUP: could not remove partial artifact", key, ":",
                     HohenheimViolations.reasonOf(cleanupFailed));
             }
-            RecordStamp.on(Models.get(InstanceBackupModel.class), backup)
+            RecordStamp failed = RecordStamp.on(Models.get(InstanceBackupModel.class), backup)
                 .set(InstanceBackupModel.STATUS, InstanceBackupModel.STATUS_FAILED)
-                .set(InstanceBackupModel.ERROR, HohenheimViolations.reasonOf(error))
-                .write();
+                .set(InstanceBackupModel.ERROR, HohenheimViolations.reasonOf(error));
+            this.instances.operations().afterRelease(instanceId, failed::write);
             if (error instanceof Violations refused) {
                 throw refused;
             }
@@ -468,7 +473,7 @@ public final class InstanceBackups {
         } finally {
             FileTrees.deleteQuietly(staging);
         }
-        pruneForRetention(instanceId, targetId, target);
+        // The retention sweep follows the completed row above, once the claim is let go.
         Blast.log("BACKUP: instance", instanceId, "exported to", key);
         return backup.get(InstanceBackupModel.ID);
     }
@@ -1526,15 +1531,16 @@ public final class InstanceBackups {
     }
 
 
-    private static void failedRow(int instanceId, @Nullable Integer targetId,
-                                  @Nullable String key, @NonNull String error) {
+    /** A FAILED row for an attempt that stored nothing, written once the instance's claim is let go. */
+    private void failedRow(int instanceId, @Nullable Integer targetId,
+                           @Nullable String key, @NonNull String error) {
         Row backup = Models.get(InstanceBackupModel.class).createEmptyRow();
         backup.set(InstanceBackupModel.INSTANCE_ID, instanceId);
         backup.set(InstanceBackupModel.TARGET_ID, targetId);
         backup.set(InstanceBackupModel.STATUS, InstanceBackupModel.STATUS_FAILED);
         backup.set(InstanceBackupModel.REMOTE_KEY, key);
         backup.set(InstanceBackupModel.ERROR, error);
-        Models.get(InstanceBackupModel.class).save(backup);
+        this.instances.operations().afterRelease(instanceId, () -> Models.get(InstanceBackupModel.class).save(backup));
     }
 
     private static @NonNull EncryptionKeyring keyring() {

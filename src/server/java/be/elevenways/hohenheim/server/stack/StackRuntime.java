@@ -128,14 +128,15 @@ public class StackRuntime {
             if (snapshot == null) {
                 String failure = "No successful deployment to roll back to";
                 Blast.log("STACK: no successful deployment to roll back to for stack", stackId);
+                // Nothing was touched, so "failed" would lie about possibly-healthy
+                // containers: release the deploying claim and recompute from live state, THEN settle the row (see
+                // runDeploy on the order).
+                setStatus(stackId, StackModel.STATUS_INACTIVE);
+                refreshStatus(stackId);
                 scoped(() -> {
                     StackDeploymentRecords.finished(recordId, false, failure, "FAILED: " + failure + '\n', null);
                     return null;
                 });
-                // Nothing was touched, so "failed" would lie about possibly-healthy
-                // containers: release the deploying claim and recompute from live state.
-                setStatus(stackId, StackModel.STATUS_INACTIVE);
-                refreshStatus(stackId);
                 return;
             }
             runDeploy(stackId, REASON_ROLLBACK, snapshot, recordId);
@@ -246,11 +247,11 @@ public class StackRuntime {
             Integer stackId = stack.get(StackModel.ID);
             Blast.log("STACK: deploy of stack", stackId,
                 "was interrupted by a restart; recomputing status from live containers");
-            // The row the interrupted deploy left "running" settles as FAILED with the
-            // one reason a restart can give, so the Deployments tab explains the status
-            // the sweep is about to stamp instead of showing nothing.
-            scoped(() -> StackDeploymentRecords.failRunning(stackId, INTERRUPTED_BY_RESTART));
+            // The row the interrupted deploy left "running" settles as FAILED with the one reason a restart can give,
+            // so the Deployments tab explains the stack's failed status; the stack lets go of deploying first, as
+            // every deployment row settles (runDeploy).
             setStatus(stackId, StackModel.STATUS_FAILED);
+            scoped(() -> StackDeploymentRecords.failRunning(stackId, INTERRUPTED_BY_RESTART));
             refreshStatus(stackId);
         }
     }
@@ -584,11 +585,14 @@ public class StackRuntime {
             runDeployOnWorker(spec, line -> log.append(line).append('\n'));
 
             String specSnapshot = Zenit.DRY.stringify(spec.toMap());
+            // AIDEV-NOTE: the stack lets go of its deploying status BEFORE the deployment row reads finished: a client
+            // that waits for the row's outcome and acts on the stack at once (a stop applies only to an active stack)
+            // is never turned away by the deploy it just read about. The same order on every settle below.
+            setStatus(stackId, StackModel.STATUS_ACTIVE);
             scoped(() -> {
                 StackDeploymentRecords.finished(recordId, true, null, log.toString(), specSnapshot);
                 return null;
             });
-            setStatus(stackId, StackModel.STATUS_ACTIVE);
             // The SETTLED operation, never the queued intent: a deploy that failed is
             // answered by its failed status and its deployment record, not by an
             // activity row claiming it happened (the instance tier's rule).
@@ -600,11 +604,11 @@ public class StackRuntime {
             // vanish into the executor's unread future and leave the status stuck.
             String failure = HohenheimViolations.reasonOf(e);
             log.append("FAILED: ").append(failure).append('\n');
+            setStatus(stackId, StackModel.STATUS_FAILED);
             scoped(() -> {
                 StackDeploymentRecords.finished(recordId, false, failure, log.toString(), null);
                 return null;
             });
-            setStatus(stackId, StackModel.STATUS_FAILED);
             Blast.log("STACK: deploy failed for stack", stackId, "-", failure);
             if (e instanceof Error error) {
                 throw error;
@@ -922,12 +926,12 @@ public class StackRuntime {
                 String failure = HohenheimViolations.reasonOf(e);
                 Blast.log("STACK: queued work failed for stack", stackId, "-", failure);
                 if (recordId != null) {
+                    setStatus(stackId, StackModel.STATUS_FAILED);
                     scoped(() -> {
                         StackDeploymentRecords.finished(recordId, false, failure,
                             "FAILED: " + failure + '\n', null);
                         return null;
                     });
-                    setStatus(stackId, StackModel.STATUS_FAILED);
                 }
             } finally {
                 CURRENT_STACK.remove();

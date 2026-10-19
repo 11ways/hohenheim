@@ -163,6 +163,53 @@ class InstanceConsoleGenerationTest {
     }
 
     /**
+     * A readiness flip is the record's outcome: it reads running only once the watch that flipped it let go of the
+     * record's claim, so a client that waits for running and starts an operation at once is never refused by the
+     * watch it just read about (the step 2 refusal of {@link #aStopSettlesItsOwnConsoleExitSoADeployRightAfterItRuns}
+     * on a slow host).
+     */
+    @Test
+    void aReadinessFlipReadsRunningOnlyOnceTheWatchLetGoOfTheRecord() {
+        Db.run(datasource, () -> {
+            int instanceId = instanceRecord("readiness-release", template("readiness-release", "ready", null));
+            InstanceOperationLock claims = InstanceOperationLock.of(HostLeases.production());
+            new InstanceService().deploy(instanceId);
+            assertThat(status(instanceId)).as("step 1: the deploy waits for its line")
+                .isEqualTo(InstanceModel.STATUS_STARTING);
+
+            // 2. The line arrives. The watch logs its flip while it still holds the record's claim; what the record
+            //    reads at that moment is what a client polling it could act on.
+            List<String> readAtFlip = new CopyOnWriteArrayList<>();
+            BlastLog.LogSink previous = BlastLog.getLogSink();
+            try {
+                BlastLog.setLogSink(args -> {
+                    String line = Arrays.toString(args);
+                    if (line.contains("CONSOLE: instance, " + instanceId + ", ->, running")) {
+                        readAtFlip.add(String.valueOf(status(instanceId)));
+                    }
+                    if (previous != null) {
+                        previous.log(args);
+                    }
+                });
+                FakeNativeDaemons.CONSOLE_STREAMS.get(FakeNativeDaemons.handleOf(instanceId)).push("ready\n");
+
+                // 3. A client waits for running and stops the workload at once: the record is free.
+                Poll.until("step 3: the readiness line flips the record to running", Duration.ofSeconds(10),
+                    () -> InstanceModel.STATUS_RUNNING.equals(status(instanceId)));
+                boolean[] admitted = {false};
+                claims.exclusive(instanceId, InstanceOperationLock.Contention.REFUSE, () -> {
+                    admitted[0] = true;
+                });
+                assertThat(admitted[0]).as("step 3: the operation right after running is admitted").isTrue();
+            } finally {
+                BlastLog.setLogSink(previous);
+            }
+            assertThat(readAtFlip).as("step 2: while the watch held the record it did not read running yet")
+                .containsExactly(InstanceModel.STATUS_STARTING);
+        });
+    }
+
+    /**
      * The console registries are keyed by the controller-scoped workload name: another controller's record of the
      * same id (another database, as every test class sharing a JVM has) never reads this one's console. Runs last:
      * the second fresh datasource closes this class's own.

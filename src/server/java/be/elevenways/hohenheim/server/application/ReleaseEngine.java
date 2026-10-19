@@ -1135,14 +1135,8 @@ public final class ReleaseEngine {
     private static void finish(@NonNull RecordStamp stamp, @NonNull String status,
                                @Nullable String failureReason, @NonNull String line) {
         Instant finished = Now.instant();
-        Integer applicationId = stamp.row().get(ReleaseOperationModel.FOR_ID);
-        Runnable outcome = () -> settle(stamp, status, failureReason, line, finished);
-        if (applicationId == null
-                || !InstanceModel.MODEL_ID.toString().equals(stamp.row().get(ReleaseOperationModel.FOR_MODEL))) {
-            outcome.run();
-            return;
-        }
-        InstanceOperationLock.production().afterRelease(applicationId, outcome);
+        InstanceOperationLock.production().afterRelease(stamp.row().get(ReleaseOperationModel.FOR_MODEL),
+            stamp.row().get(ReleaseOperationModel.FOR_ID), () -> settle(stamp, status, failureReason, line, finished));
     }
 
     /**

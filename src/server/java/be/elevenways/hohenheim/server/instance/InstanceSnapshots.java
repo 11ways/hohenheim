@@ -123,13 +123,13 @@ public final class InstanceSnapshots {
                     RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot[0])
                         .set(InstanceSnapshotModel.DIRECTORY, directory[0].toString())
                         .write();
-                    captureInto(snapshot[0], directory[0], support, resolved, volumes);
+                    captureInto(snapshot[0], directory[0], support, resolved, volumes, this.instances.operations());
                 });
         } catch (IOException error) {
             throw HohenheimViolations.instanceRefusal("instance_snapshot_failed", resolved.row(), error);
         }
         Blast.log("SNAPSHOT: captured instance", instanceId, "into", directory[0].toString());
-        pruneForRetention(instanceId);
+        this.instances.operations().afterRelease(instanceId, () -> pruneForRetention(instanceId));
         return snapshot[0].get(InstanceSnapshotModel.ID);
     }
 
@@ -144,13 +144,15 @@ public final class InstanceSnapshots {
     }
 
     /**
-     * The cold capture itself: tar every volume into {@code directory} and complete the row;
-     * any failure removes the payload and records the error on the row before it propagates.
+     * The cold capture itself: tar every volume into {@code directory} and complete the row once the instance's
+     * claim is let go (a client restoring the snapshot it saw complete is never refused by this capture); any failure
+     * removes the payload and records the error on the row before it propagates.
      */
     private static void captureInto(@NonNull Row snapshot, @NonNull Path directory,
                                     @NonNull VolumeSnapshotSupport support,
                                     @NonNull Resolved resolved,
-                                    @NonNull Map<String, String> volumes) throws IOException {
+                                    @NonNull Map<String, String> volumes,
+                                    @NonNull InstanceOperationLock operations) throws IOException {
         try {
             Files.createDirectories(directory);
             var captured = support.captureVolumes(resolved.spec(), volumes, directory,
@@ -170,11 +172,13 @@ public final class InstanceSnapshots {
             // was created before the capture, which takes minutes, and the note is
             // operator-editable through InstanceSnapshotResource for that whole window --
             // a whole-row save rewinds the edit while reporting the capture complete.
-            RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot)
-                .set(InstanceSnapshotModel.STATUS, InstanceSnapshotModel.STATUS_COMPLETE)
-                .set(InstanceSnapshotModel.VOLUMES, inventory)
-                .set(InstanceSnapshotModel.TOTAL_BYTES, total)
-                .write();
+            long capturedTotal = total;
+            operations.afterRelease(resolved.row().get(InstanceModel.ID), () ->
+                RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot)
+                    .set(InstanceSnapshotModel.STATUS, InstanceSnapshotModel.STATUS_COMPLETE)
+                    .set(InstanceSnapshotModel.VOLUMES, inventory)
+                    .set(InstanceSnapshotModel.TOTAL_BYTES, capturedTotal)
+                    .write());
         } catch (IOException | RuntimeException error) {
             FileTrees.deleteQuietly(directory);
             RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot)
@@ -217,10 +221,11 @@ public final class InstanceSnapshots {
                         .write();
                     try {
                         support.createSnapshot(resolved.spec(), nativeName[0]);
-                        RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot[0])
-                            .set(InstanceSnapshotModel.STATUS,
-                                InstanceSnapshotModel.STATUS_COMPLETE)
-                            .write();
+                        this.instances.operations().afterRelease(instanceId, () ->
+                            RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot[0])
+                                .set(InstanceSnapshotModel.STATUS,
+                                    InstanceSnapshotModel.STATUS_COMPLETE)
+                                .write());
                     } catch (IOException | RuntimeException error) {
                         RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot[0])
                             .set(InstanceSnapshotModel.ERROR, HohenheimViolations.reasonOf(error))
@@ -232,7 +237,7 @@ public final class InstanceSnapshots {
             throw HohenheimViolations.instanceRefusal("instance_snapshot_failed", resolved.row(), error);
         }
         Blast.log("SNAPSHOT: captured native snapshot", nativeName[0], "of instance", instanceId);
-        pruneForRetention(instanceId);
+        this.instances.operations().afterRelease(instanceId, () -> pruneForRetention(instanceId));
         return snapshot[0].get(InstanceSnapshotModel.ID);
     }
 

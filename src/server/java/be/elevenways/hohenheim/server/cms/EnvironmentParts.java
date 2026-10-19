@@ -106,16 +106,18 @@ public final class EnvironmentParts {
     /**
      * The Environments tab of a project's page: this entry narrowed to the project, whose column it hides.
      *
-     * AIDEV-NOTE: one instance per panel (a ChildList resolves its slug once); only the admin offers environments.
+     * AIDEV-NOTE: the tab declares its slug (checked against the child's parent tab when a panel builds), so it reads
+     * the same off any entry, panel-built or not; only the admin offers environments.
      */
-    static final ChildList<Row> PROJECT_ENVIRONMENTS = ChildList.<Row>of(HohenheimSlugs.ENVIRONMENTS)
+    static final ChildList<Row> PROJECT_ENVIRONMENTS = ChildList.<Row>sections(HohenheimSlugs.Tab.ENVIRONMENTS,
+            HohenheimMicrocopy.ENVIRONMENT.of("plural"), HohenheimSlugs.ENVIRONMENTS)
         .icon(Icon.of("layer-group"))
         .lead(HohenheimMicrocopy.PROJECT.of("environments_lead"))
         .hide(HohenheimSlugs.ENVIRONMENTS, EnvironmentModel.PROJECT_ID.getName());
 
     /** The Variables tab an environment's page opens on: the variable entry narrowed to it. */
-    private static final ChildList<Row> VARIABLES = ChildList.<Row>of(HohenheimSlugs.ENVIRONMENT_VARIABLES)
-        .label(HohenheimMicrocopy.ENVIRONMENT.of("variables"))
+    private static final ChildList<Row> VARIABLES = ChildList.<Row>sections(HohenheimSlugs.Tab.VARIABLES,
+            HohenheimMicrocopy.ENVIRONMENT.of("variables"), HohenheimSlugs.ENVIRONMENT_VARIABLES)
         .icon(Icon.of("sliders"))
         .lead(HohenheimMicrocopy.ENVIRONMENT.of("variables_lead"))
         .hide(HohenheimSlugs.ENVIRONMENT_VARIABLES, InstanceVariableModel.ENVIRONMENT_ID.getName());

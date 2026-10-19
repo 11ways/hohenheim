@@ -7,9 +7,20 @@ import be.elevenways.hohenheim.model.InstanceTemplateVolumeModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceTemplateDatabaseModel;
+import be.elevenways.hohenheim.model.InstanceTemplateFileModel;
+import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.server.page.QuickAddState;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
+import be.elevenways.zenit.common.conduit.ConduitAttributes;
+import be.elevenways.zenit.common.data.RecordSourceEndpoints;
+import be.elevenways.zenit.common.result.ActionResult;
+import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.forms.common.choose.InlineCreateEndpoints;
+import be.elevenways.zenit.forms.common.choose.InlineCreateResult;
+import be.elevenways.zenit.test.support.EndpointConduit;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceTemplates;
@@ -49,6 +60,8 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
     private static final String PREFIX = "tpl-vol-ui-";
     private static final String VOLUMES = HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES;
     private static final String DATABASES = HohenheimSlugs.INSTANCE_TEMPLATE_DATABASES;
+    private static final String VARIABLES = HohenheimSlugs.INSTANCE_TEMPLATE_VARIABLES;
+    private static final String FILES = HohenheimSlugs.INSTANCE_TEMPLATE_FILES;
 
     @AfterAll
     static void cleanUp() {
@@ -66,6 +79,10 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
                 .where(InstanceTemplateVolumeModel.TEMPLATE_ID.eq(templateId)).delete();
             Models.get(InstanceTemplateDatabaseModel.class).find()
                 .where(InstanceTemplateDatabaseModel.TEMPLATE_ID.eq(templateId)).delete();
+            Models.get(InstanceTemplateVariableModel.class).find()
+                .where(InstanceTemplateVariableModel.TEMPLATE_ID.eq(templateId)).delete();
+            Models.get(InstanceTemplateFileModel.class).find()
+                .where(InstanceTemplateFileModel.TEMPLATE_ID.eq(templateId)).delete();
             templates.delete(templateId);
         }
     }
@@ -195,16 +212,17 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
     }
 
     /**
-     * A template's volume and database declarations belong to the template they were declared on, as an instance
-     * volume belongs to its instance: both forms name the template and offer nothing to change it, a create is written
-     * under the template its form was opened from, and neither a create nor an edit posting another template moves
-     * the declaration.
+     * Every declaration of a template (volume, database, variable, config file) belongs to the template it was declared
+     * on, as an instance volume belongs to its instance: each form names the template and offers nothing to change
+     * it, a create is written under the template its form was opened from, neither a create nor an edit posting
+     * another template moves the declaration, and the variables' quick add on a list filtered to one template adds
+     * under that template.
      */
     @Test
-    void theTemplateIsTheFixedParentOfItsVolumesAndDatabasesJourney() throws Exception {
+    void theTemplateIsTheFixedParentOfEveryDeclarationJourney() throws Exception {
         int owner = template(PREFIX + "owner", ApplicationKind.ID.toString());
         int other = template(PREFIX + "elsewhere", ApplicationKind.ID.toString());
-        List<String> slugs = List.of(VOLUMES, DATABASES);
+        List<String> slugs = List.of(VOLUMES, DATABASES, VARIABLES, FILES);
 
         // 1. The Contents tab opens each declaration's create under this template.
         String contents = adminGet("/admin/instance-templates/" + owner + "/page/contents").body();
@@ -228,6 +246,14 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
             "template_id=" + other + "&engine=" + DatabaseModel.ENGINE_POSTGRES + "&env_prefix=APPDB&"
                 + PanelResourceCalls.createEnvelope(), sessionToken, csrfToken).statusCode())
             .as("step 3: the database create is accepted").isIn(302, 303);
+        assertThat(httpPostForm("/admin/" + VARIABLES + "/new?parent=" + owner,
+            "template_id=" + other + "&key=GREETING&label=Greeting&type=hohenheim%3Astring&"
+                + PanelResourceCalls.createEnvelope(), sessionToken, csrfToken).statusCode())
+            .as("step 3: the variable create is accepted").isIn(302, 303);
+        assertThat(httpPostForm("/admin/" + FILES + "/new?parent=" + owner,
+            "template_id=" + other + "&container_path=%2Fetc%2Fapp.conf&content=greeting&mode=0644&"
+                + PanelResourceCalls.createEnvelope(), sessionToken, csrfToken).statusCode())
+            .as("step 3: the file create is accepted").isIn(302, 303);
         List<Row> volumes = Models.get(InstanceTemplateVolumeModel.class).findByTemplateId(owner);
         List<Row> databases = Models.get(InstanceTemplateDatabaseModel.class).findByTemplateId(owner);
         assertThat(volumes).as("step 3: THE ASSERTION -- the volume is the owner's, never the posted template's")
@@ -237,14 +263,28 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
             .as("step 3: nothing landed under the posted template").isEmpty();
         assertThat(Models.get(InstanceTemplateDatabaseModel.class).findByTemplateId(other))
             .as("step 3: nothing landed under the posted template").isEmpty();
+        List<Row> variables = Models.get(InstanceTemplateVariableModel.class).findByTemplateId(owner);
+        List<Row> files = Models.get(InstanceTemplateFileModel.class).findByTemplateId(owner);
+        assertThat(variables).as("step 3: THE ASSERTION -- so is the variable").hasSize(1);
+        assertThat(files).as("step 3: THE ASSERTION -- and the config file").hasSize(1);
+        assertThat(Models.get(InstanceTemplateVariableModel.class).findByTemplateId(other))
+            .as("step 3: no variable landed under the posted template").isEmpty();
+        assertThat(Models.get(InstanceTemplateFileModel.class).findByTemplateId(other))
+            .as("step 3: no file landed under the posted template").isEmpty();
         int volumeId = volumes.get(0).get(InstanceTemplateVolumeModel.ID);
         int databaseId = databases.get(0).get(InstanceTemplateDatabaseModel.ID);
+        int variableId = variables.get(0).get(InstanceTemplateVariableModel.ID);
+        int fileId = files.get(0).get(InstanceTemplateFileModel.ID);
 
         // 4. Each edit form names the template read-only too.
         assertNamesTheOwnerReadOnly(adminGet(CmsRoutes.detail("admin", VOLUMES, volumeId).toUrl()).body(),
             "step 4: the volume edit form");
         assertNamesTheOwnerReadOnly(adminGet(CmsRoutes.detail("admin", DATABASES, databaseId).toUrl()).body(),
             "step 4: the database edit form");
+        assertNamesTheOwnerReadOnly(adminGet(CmsRoutes.detail("admin", VARIABLES, variableId).toUrl()).body(),
+            "step 4: the variable edit form");
+        assertNamesTheOwnerReadOnly(adminGet(CmsRoutes.detail("admin", FILES, fileId).toUrl()).body(),
+            "step 4: the file edit form");
 
         // 5. An edit posting the other template writes its other fields and keeps the template.
         assertThat(httpPostForm("/admin/" + VOLUMES + "/" + volumeId,
@@ -266,6 +306,62 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
             .as("step 5: the database edit was written").isEqualTo("MOVED");
         assertThat((Integer) database.get(InstanceTemplateDatabaseModel.TEMPLATE_ID))
             .as("step 5: THE ASSERTION -- the posted template never re-points the database").isEqualTo(owner);
+        assertThat(httpPostForm("/admin/" + VARIABLES + "/" + variableId,
+            "template_id=" + other + "&key=GREETING&label=Moved&type=hohenheim%3Astring&"
+                + PanelResourceCalls.editEnvelope(HohenheimSlugs.ADMIN, VARIABLES, variableId,
+                    TenantConduits.operator()),
+            sessionToken, csrfToken).statusCode()).as("step 5: the variable edit is accepted").isIn(302, 303);
+        assertThat(httpPostForm("/admin/" + FILES + "/" + fileId,
+            "template_id=" + other + "&container_path=%2Fetc%2Fmoved.conf&content=greeting&mode=0644&"
+                + PanelResourceCalls.editEnvelope(HohenheimSlugs.ADMIN, FILES, fileId, TenantConduits.operator()),
+            sessionToken, csrfToken).statusCode()).as("step 5: the file edit is accepted").isIn(302, 303);
+        Row variable = Models.get(InstanceTemplateVariableModel.class).findById(variableId);
+        assertThat((String) variable.get(InstanceTemplateVariableModel.LABEL))
+            .as("step 5: the variable edit was written").isEqualTo("Moved");
+        assertThat((Integer) variable.get(InstanceTemplateVariableModel.TEMPLATE_ID))
+            .as("step 5: THE ASSERTION -- the posted template never re-points the variable").isEqualTo(owner);
+        Row file = Models.get(InstanceTemplateFileModel.class).findById(fileId);
+        assertThat((String) file.get(InstanceTemplateFileModel.CONTAINER_PATH))
+            .as("step 5: the file edit was written").isEqualTo("/etc/moved.conf");
+        assertThat((Integer) file.get(InstanceTemplateFileModel.TEMPLATE_ID))
+            .as("step 5: THE ASSERTION -- the posted template never re-points the file").isEqualTo(owner);
+
+        // 6. The variables' quick add on the list filtered to the owner presets it, and carries it as the create's
+        //    parent: an add posting the other template lands under the owner.
+        Panel admin = PanelRegistry.getBySlug(HohenheimSlugs.ADMIN);
+        @SuppressWarnings("unchecked")
+        PanelResource<Row> variableEntry = (PanelResource<Row>) registeredResource(VARIABLES);
+        EndpointConduit list = operatorConduit().setParameter(CmsEndpoints.RESOURCE_PARAM, VARIABLES);
+        list.setQueryParam(InstanceTemplateVariableModel.TEMPLATE_ID.getName(), String.valueOf(owner));
+        Map<String, Object> bar = new LinkedHashMap<>();
+        QuickAddState.putVars(bar, admin, variableEntry, AccessContext.of(list),
+            "/admin/" + VARIABLES + "?template_id=" + owner, "/admin/" + VARIABLES + "/new");
+        assertThat(bar.get("quickAddEnabled")).as("step 6: the filtered list offers its quick add").isEqualTo(true);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> context = (Map<String, Object>) bar.get("quickAddContext");
+        assertThat(context.get(CmsEndpoints.PARENT_PARAM.getName()))
+            .as("step 6: the bar carries the preset template as the create's parent").isEqualTo(String.valueOf(owner));
+        EndpointConduit add = operatorConduit()
+            .setParameter(RecordSourceEndpoints.SOURCE_PARAM, variableEntry.sourceIdIn(admin))
+            .setBody(new LinkedHashMap<>(Map.of("key", "QUICK", "label", "Quick", "type", "hohenheim:string",
+                "required", false, "template_id", other)));
+        context.forEach((name, value) -> add.setQueryParam(name, String.valueOf(value)));
+        @SuppressWarnings("unchecked")
+        ActionResult<InlineCreateResult> added =
+            (ActionResult<InlineCreateResult>) InlineCreateEndpoints.CREATE_SUBMIT.handle(add);
+        assertThat(added).as("step 6: the quick add answers").isNotNull();
+        assertThat(added.get().succeeded()).as("step 6: the quick add succeeds: %s", added.get().violations())
+            .isTrue();
+        assertThat(Models.get(InstanceTemplateVariableModel.class).findByTemplateId(owner))
+            .as("step 6: THE ASSERTION -- the quick-added variable is the owner's")
+            .extracting(row -> (String) row.get(InstanceTemplateVariableModel.KEY)).contains("QUICK");
+        assertThat(Models.get(InstanceTemplateVariableModel.class).findByTemplateId(other))
+            .as("step 6: nothing landed under the posted template").isEmpty();
+    }
+
+    /** A request of the installation operator, as the admin list and its quick add see one. */
+    private static EndpointConduit operatorConduit() {
+        return new EndpointConduit().withAttribute(ConduitAttributes.PRINCIPAL, TenantConduits.operator().principal());
     }
 
     // -- fixtures ---------------------------------------------------------------

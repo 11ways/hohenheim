@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.orm.RecordStamp;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.protoblast.common.Blast;
@@ -163,6 +164,11 @@ public final class SandboxedBuilds {
         return row.get(BuildOperationModel.ID);
     }
 
+    /**
+     * Stamp the build's ending once the claim of the record it builds for is let go
+     * ({@link InstanceOperationLock#afterRelease}), timed when the build ended: a caller that waits for the build's
+     * ending and acts on the record at once is never refused by the deploy that ran it.
+     */
     private @NonNull Result finish(int buildId, @NonNull BuildRequest request,
                                    @NonNull String status, @Nullable String imageId,
                                    int exitCode, @Nullable String reason, @NonNull BuildLog log,
@@ -174,7 +180,7 @@ public final class SandboxedBuilds {
             // A NARROW write: the row is fully loaded, so a save would rewrite the
             // quotas, the request identity and the detection this build already
             // recorded -- columns this outcome has no business restating.
-            RecordStamp.on(model, row)
+            RecordStamp ending = RecordStamp.on(model, row)
                 .set(BuildOperationModel.STATUS, status)
                 .set(BuildOperationModel.IMAGE_ID, imageId)
                 .set(BuildOperationModel.EXIT_CODE, exitCode)
@@ -184,9 +190,11 @@ public final class SandboxedBuilds {
                 .set(BuildOperationModel.ARTIFACT_BYTES, artifactBytes)
                 .set(BuildOperationModel.FINISHED_AT, finished)
                 .set(BuildOperationModel.DURATION_MS,
-                    (int) (finished.toEpochMilli() - startedAt))
-                .write();
-            prune(model, request);
+                    (int) (finished.toEpochMilli() - startedAt));
+            InstanceOperationLock.production().afterRelease(request.forModel().toString(), request.forId(), () -> {
+                ending.write();
+                prune(model, request);
+            });
         }
         boolean succeeded = BuildOperationModel.LIFECYCLE.is(status, OperationStatus.SUCCEEDED);
         if (!succeeded) {

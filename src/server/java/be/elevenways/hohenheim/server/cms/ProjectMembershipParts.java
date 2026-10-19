@@ -75,7 +75,8 @@ public final class ProjectMembershipParts {
     };
 
     /** The Members tab of a project's admin page, pointing at the People page where someone is given its role. */
-    static final ChildList<Row> ADMIN_MEMBERS = ChildList.<Row>of(HohenheimSlugs.PROJECT_MEMBERS)
+    static final ChildList<Row> ADMIN_MEMBERS = ChildList.<Row>sections(HohenheimSlugs.Tab.MEMBERS,
+            HohenheimMicrocopy.PROJECT.of("members"), HohenheimSlugs.PROJECT_MEMBERS)
         .icon(Icon.of("users"))
         .lead(HohenheimMicrocopy.PROJECT.of("members_lead"))
         .hide(HohenheimSlugs.PROJECT_MEMBERS, PROJECT.getName())
@@ -86,8 +87,9 @@ public final class ProjectMembershipParts {
                 .route((project, request) -> CmsRoutes.list(request.panelSlug(), AuthAdminParts.USERS_SLUG))
                 .build());
 
-    /** The Members tab of a project's /manage page; a ChildList resolves once per panel, so each panel has its own. */
-    static final ChildList<Row> MANAGE_MEMBERS = ChildList.<Row>of(HohenheimSlugs.PROJECT_MEMBERS)
+    /** The Members tab of a project's /manage page: no header link to the People page a tenant cannot reach. */
+    static final ChildList<Row> MANAGE_MEMBERS = ChildList.<Row>sections(HohenheimSlugs.Tab.MEMBERS,
+            HohenheimMicrocopy.PROJECT.of("members"), HohenheimSlugs.PROJECT_MEMBERS)
         .icon(Icon.of("users"))
         .hide(HohenheimSlugs.PROJECT_MEMBERS, PROJECT.getName());
 

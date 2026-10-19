@@ -284,7 +284,8 @@ public final class InstanceConsoles {
 
     /**
      * One fenced conditional stamp: only writes when the session's generation is still current and the row still
-     * holds {@code expected}, both asked under the record's claim.
+     * holds {@code expected}, both asked under the record's claim. The status is written once that claim is let go
+     * (InstanceOperationGuard's outcomes), so a client that sees running and starts an operation at once is admitted.
      *
      * @param cause  what made {@code status} an error, recorded beside it; null for any other status
      * @param detail the cause's detail as its fact declares it (the exit code), or null

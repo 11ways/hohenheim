@@ -51,6 +51,10 @@ public final class TemplateChildParts {
     public static final String OWNER_COLUMN = InstanceTemplateVariableModel.TEMPLATE_ID.getName();
     private TemplateChildParts() {}
 
+    /**
+     * A template's variables. The template is the variable's fixed parent, as it is a volume's: the quick add on a list
+     * filtered to one template presets it, and the bar carries it as the create's parent (zenit-cms QuickAddState).
+     */
     public static @NonNull PanelResource<Row> variables() {
         FormSpec spec = FormSpec.builder()
             .add(RelationPick.of(InstanceTemplateVariableModel.TEMPLATE_ID, InstanceTemplateModel.MODEL_ID).build())
@@ -72,7 +76,7 @@ public final class TemplateChildParts {
         return entry(InstanceTemplateVariableModel.MODEL_ID, HohenheimSlugs.INSTANCE_TEMPLATE_VARIABLES,
             HohenheimMicrocopy.TEMPLATE_VARIABLE, 17,
             Icon.of("sliders"),
-                contents(InstanceTemplateVariableModel.TEMPLATE_ID))
+                contents(InstanceTemplateVariableModel.TEMPLATE_ID).fixed())
             .form(ResourceForm.<Row>of(spec).quickCreate(QuickCreateSpec.of(InstanceTemplateVariableModel.KEY.getName(),
                     InstanceTemplateVariableModel.LABEL.getName(), InstanceTemplateVariableModel.TYPE.getName(),
                     InstanceTemplateVariableModel.REQUIRED.getName())
@@ -86,6 +90,7 @@ public final class TemplateChildParts {
                 .emptyDescription(HohenheimMicrocopy.TEMPLATE_CONTENTS.of("no_variables_description")).build()).build();
     }
 
+    /** A template's config files, with the template as their fixed parent like every declaration's. */
     public static @NonNull PanelResource<Row> files() {
         FormSpec spec = FormSpec.builder()
             .add(RelationPick.of(InstanceTemplateFileModel.TEMPLATE_ID, InstanceTemplateModel.MODEL_ID).build())
@@ -101,7 +106,7 @@ public final class TemplateChildParts {
         return entry(InstanceTemplateFileModel.MODEL_ID, HohenheimSlugs.INSTANCE_TEMPLATE_FILES,
             HohenheimMicrocopy.TEMPLATE_FILE, 18,
             Icon.of("file-code"),
-                contents(InstanceTemplateFileModel.TEMPLATE_ID))
+                contents(InstanceTemplateFileModel.TEMPLATE_ID).fixed())
             .form(ResourceForm.<Row>of(spec)
                 .inlineEditable(InstanceTemplateFileModel.CONTAINER_PATH, InstanceTemplateFileModel.MODE).build())
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).search(InstanceTemplateFileModel.CONTAINER_PATH)

@@ -666,10 +666,15 @@ public final class InstanceMigrations {
         return true;
     }
 
-    /** The catch-path settle: never masks the original failure with its own. */
+    /**
+     * The catch-path settle: never masks the original failure with its own. Its outcome is written at once (not at
+     * the claim's release), since the caller reads it to decide the redeploy.
+     */
     private boolean settleQuietly(int instanceId) {
         try {
-            return settle(instanceId);
+            boolean settled = settle(instanceId);
+            this.instances.operations().settle(instanceId);
+            return settled;
         } catch (RuntimeException settleFailed) {
             Blast.log("MIGRATE: could not settle", instanceId, "after a failed step:",
                 settleFailed.getMessage());

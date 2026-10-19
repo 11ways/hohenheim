@@ -124,8 +124,8 @@ public final class DnsZoneParts {
      * its authority lives on its own primary.
      */
     private static @NonNull ChildList<Row> secondariesTab() {
-        return ChildList.<Row>of(HohenheimSlugs.DNS_ZONE_PEERS)
-            .label(HohenheimMicrocopy.DNS_ZONE.of("secondaries"))
+        return ChildList.<Row>sections(HohenheimSlugs.Tab.SECONDARIES, HohenheimMicrocopy.DNS_ZONE.of("secondaries"),
+                HohenheimSlugs.DNS_ZONE_PEERS)
             .icon(Icon.of("handshake"))
             .hide(HohenheimSlugs.DNS_ZONE_PEERS, DnsZonePeerModel.ZONE_ID.getName())
             .headerLink(HohenheimSlugs.DNS_ZONE_PEERS,

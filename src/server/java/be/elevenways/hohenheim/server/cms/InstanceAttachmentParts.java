@@ -382,7 +382,8 @@ public final class InstanceAttachmentParts {
      * attaches and detaches.
      */
     public static @NonNull ChildList<Row> databasesTab() {
-        return ChildList.<Row>of(HohenheimSlugs.INSTANCE_DATABASES)
+        return ChildList.<Row>sections(HohenheimSlugs.Tab.DATABASES, HohenheimMicrocopy.INSTANCE_DATABASE.of("plural"),
+                HohenheimSlugs.INSTANCE_DATABASES)
             .icon(Icon.of("database"))
             .secondary()
             .lead(HohenheimMicrocopy.INSTANCE_DATABASE.of("lead"))

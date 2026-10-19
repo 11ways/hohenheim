@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.InstanceStatus;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
@@ -34,6 +35,11 @@ import java.util.Set;
  * (the Pterodactyl {@code restoring_backup} lesson); destroy deliberately does NOT --
  * cleanup must always be possible (the HostAdmission doctrine), and destroying a
  * mid-restore instance is the operator's explicit abandon-ship.
+ *
+ * AIDEV-NOTE: an OUTCOME (a status the record leaves operable, an install that ended) is proven against the fence
+ * at once but written only once the operation let go of the record (InstanceOperationLock.stageOutcome): a client
+ * that sees it and starts the next operation at once must never meet instance_operation_in_progress from the one it
+ * read about. Every other write here first writes a staged outcome, so the record's writes keep their order.
  */
 final class InstanceOperationGuard {
 
@@ -106,11 +112,10 @@ final class InstanceOperationGuard {
     static void stampInstall(@NonNull HostLeases leases, int instanceId, int serverId,
                              @NonNull String installState, @Nullable String installError,
                              @NonNull Object instanceName) {
-        int matched = fenced(leases, instanceId, serverId)
-            .assign(InstanceModel.INSTALL_STATE, installState)
-            .assign(InstanceModel.INSTALL_ERROR, installError)
-            .updateAll();
-        requireMatched(matched, serverId, instanceName);
+        land(leases, instanceId, serverId, instanceName, !InstanceModel.INSTALL_INSTALLING.equals(installState),
+            fenced(leases, instanceId, serverId)
+                .assign(InstanceModel.INSTALL_STATE, installState)
+                .assign(InstanceModel.INSTALL_ERROR, installError), () -> { });
     }
 
     /**
@@ -130,10 +135,8 @@ final class InstanceOperationGuard {
      */
     static void stampRole(@NonNull HostLeases leases, int instanceId, int serverId,
                           @NonNull String role, @NonNull Object instanceName) {
-        int matched = fenced(leases, instanceId, serverId)
-            .assign(InstanceModel.RUNTIME_ROLE, role)
-            .updateAll();
-        requireMatched(matched, serverId, instanceName);
+        land(leases, instanceId, serverId, instanceName, false,
+            fenced(leases, instanceId, serverId).assign(InstanceModel.RUNTIME_ROLE, role), () -> { });
     }
 
     /**
@@ -145,10 +148,8 @@ final class InstanceOperationGuard {
     static void stampFingerprint(@NonNull HostLeases leases, int instanceId, int serverId,
                                  @NonNull String fingerprint,
                                  @NonNull Object instanceName) {
-        int matched = fenced(leases, instanceId, serverId)
-            .assign(InstanceModel.IMAGE_FINGERPRINT, fingerprint)
-            .updateAll();
-        requireMatched(matched, serverId, instanceName);
+        land(leases, instanceId, serverId, instanceName, false,
+            fenced(leases, instanceId, serverId).assign(InstanceModel.IMAGE_FINGERPRINT, fingerprint), () -> { });
     }
 
     /**
@@ -199,7 +200,6 @@ final class InstanceOperationGuard {
                            @NonNull HohenheimActivityAction cause, @Nullable String detail) {
         requireCause(InstanceModel.STATUS_ERROR, cause);
         write(leases, instanceId, serverId, InstanceModel.STATUS_ERROR, instanceName, cause, detail, false);
-        recordCause(instanceId, cause, detail);
     }
 
     /**
@@ -216,6 +216,9 @@ final class InstanceOperationGuard {
     static boolean stampRestartRefused(@NonNull HostLeases leases, int instanceId, int serverId,
                                        @NonNull Object instanceName, @NonNull Set<String> from,
                                        @NonNull RuntimeException refused) {
+        // The outcome this operation staged is what the record says now: a restart that got as far as its own
+        // outcome keeps it.
+        InstanceOperationLock.of(leases).settle(instanceId);
         Row row = Models.get(InstanceModel.class).findById(instanceId);
         if (row == null || !from.contains(row.get(InstanceModel.STATUS))) {
             return false;
@@ -262,7 +265,12 @@ final class InstanceOperationGuard {
         if (started) {
             statement = statement.assign(InstanceModel.STARTED_AT, now);
         }
-        requireMatched(InstanceModel.withStoppage(statement, cause, detail).updateAll(), serverId, instanceName);
+        land(leases, instanceId, serverId, instanceName, isOutcome(status),
+            InstanceModel.withStoppage(statement, cause, detail), () -> {
+                if (cause != null) {
+                    recordCause(instanceId, cause, detail);
+                }
+            });
     }
 
     /**
@@ -296,10 +304,12 @@ final class InstanceOperationGuard {
         if (changed) {
             statement = statement.assign(InstanceModel.UPDATED_AT, Now.instant());
         }
-        requireMatched(InstanceModel.withStoppage(statement, cause, null).updateAll(), serverId, instanceName);
-        if (cause != null) {
-            recordCause(instanceId, cause, null);
-        }
+        land(leases, instanceId, serverId, instanceName, isOutcome(status),
+            InstanceModel.withStoppage(statement, cause, null), () -> {
+                if (cause != null) {
+                    recordCause(instanceId, cause, null);
+                }
+            });
     }
 
     /**
@@ -315,12 +325,10 @@ final class InstanceOperationGuard {
     static void stampMigrating(@NonNull HostLeases leases, int instanceId, int serverId,
                                int targetServerId, long reservedMb,
                                @NonNull Object instanceName) {
-        int matched = fenced(leases, instanceId, serverId)
+        land(leases, instanceId, serverId, instanceName, false, fenced(leases, instanceId, serverId)
             .assign(InstanceModel.STATUS, InstanceModel.STATUS_MIGRATING)
             .assign(InstanceModel.MIGRATE_TARGET_ID, targetServerId)
-            .assign(InstanceModel.MIGRATE_RESERVED_MB, (int) reservedMb)
-            .updateAll();
-        requireMatched(matched, serverId, instanceName);
+            .assign(InstanceModel.MIGRATE_RESERVED_MB, (int) reservedMb), () -> { });
     }
 
     /**
@@ -352,13 +360,15 @@ final class InstanceOperationGuard {
             .assign(InstanceModel.STATUS, status)
             .assign(InstanceModel.MIGRATE_TARGET_ID, (Object) null)
             .assign(InstanceModel.MIGRATE_RESERVED_MB, (Object) null);
-        requireMatched(InstanceModel.withStoppage(statement, cause, null).updateAll(), serverId, instanceName);
-        if (reservedTargetServerId != null) {
-            InstanceCapacity.release(reservedTargetServerId, booked);
-        }
-        if (cause != null) {
-            recordCause(instanceId, cause, null);
-        }
+        land(leases, instanceId, serverId, instanceName, isOutcome(status),
+            InstanceModel.withStoppage(statement, cause, null), () -> {
+                if (reservedTargetServerId != null) {
+                    InstanceCapacity.release(reservedTargetServerId, booked);
+                }
+                if (cause != null) {
+                    recordCause(instanceId, cause, null);
+                }
+            });
     }
 
     /**
@@ -394,15 +404,44 @@ final class InstanceOperationGuard {
         Row stored = Models.get(InstanceModel.class).findById(instanceId);
         long booked = InstanceCapacity.sourceBookedOf(stored);
         long reserved = InstanceCapacity.windowReservedOf(stored);
-        int matched = fenced(leases, instanceId, sourceServerId)
-            .assign(InstanceModel.SERVER_ID, targetServerId)
-            .assign(InstanceModel.MIGRATE_TARGET_ID, (Object) null)
-            .assign(InstanceModel.MIGRATE_RESERVED_MB, (Object) null)
-            .assign(InstanceModel.CAPACITY_MB, (int) reserved)
-            .assign(InstanceModel.STATUS, status)
-            .updateAll();
-        requireMatched(matched, sourceServerId, instanceName);
-        InstanceCapacity.release(sourceServerId, booked);
+        land(leases, instanceId, sourceServerId, instanceName, isOutcome(status),
+            fenced(leases, instanceId, sourceServerId)
+                .assign(InstanceModel.SERVER_ID, targetServerId)
+                .assign(InstanceModel.MIGRATE_TARGET_ID, (Object) null)
+                .assign(InstanceModel.MIGRATE_RESERVED_MB, (Object) null)
+                .assign(InstanceModel.CAPACITY_MB, (int) reserved)
+                .assign(InstanceModel.STATUS, status),
+            () -> InstanceCapacity.release(sourceServerId, booked));
+    }
+
+    /** Whether a status is an operation's outcome: the record leaves it operable, so a client may act on it at once. */
+    private static boolean isOutcome(@NonNull String status) {
+        InstanceStatus member = InstanceStatus.forToken(status);
+        return member != null && member.operable();
+    }
+
+    /**
+     * THE landing of every guarded write. An outcome is proven against the fence now (the work after it relies on
+     * that proof, as it did on the write) and written, with {@code after}, once the operation let go of the record;
+     * any other write first writes a staged outcome, then lands with {@code after} now.
+     *
+     * @throws Violations {@code instance_fenced_out}, now for the proof or the write, or at the release for a staged
+     *         outcome whose fence a rival controller took meanwhile
+     */
+    private static void land(@NonNull HostLeases leases, int instanceId, int serverId, @NonNull Object instanceName,
+                             boolean outcome, @NonNull QueryBuilder<Row> statement, @NonNull Runnable after) {
+        InstanceOperationLock lock = InstanceOperationLock.of(leases);
+        if (!outcome) {
+            lock.settle(instanceId);
+            requireMatched(statement.updateAll(), serverId, instanceName);
+            after.run();
+            return;
+        }
+        requireMatched((int) fenced(leases, instanceId, serverId).count(), serverId, instanceName);
+        lock.stageOutcome(instanceId, () -> {
+            requireMatched(statement.updateAll(), serverId, instanceName);
+            after.run();
+        });
     }
 
     /**

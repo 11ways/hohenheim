@@ -153,7 +153,7 @@ public final class InstallMediaFetches {
         try {
             HandlerSupport.inBackground(() -> {
                 try {
-                    run(fetchId, serverId, name, transfer);
+                    run(fetchId, serverId, name, transfer, held);
                 } finally {
                     held.release();
                 }
@@ -219,21 +219,28 @@ public final class InstallMediaFetches {
         return InstallMediaFetchState.of(row.get(InstallMediaFetchModel.STATE));
     }
 
-    /** The job body: every accepted fetch reaches a stored ending, whatever the transfer throws. */
-    static void run(int fetchId, int serverId, @NonNull String name, @NonNull Transfer transfer) {
+    /**
+     * The job body: every accepted fetch reaches a stored ending, whatever the transfer throws. The ending is written
+     * once the job let go of the name's lease ({@link Lease#afterRelease}), so a client that sees it and fetches the
+     * name again at once is never refused by the fetch it just read about.
+     */
+    static void run(int fetchId, int serverId, @NonNull String name, @NonNull Transfer transfer,
+                    @NonNull Lease held) {
         StoredProgress progress = new StoredProgress(fetchId);
         try {
             write(fetchId, InstallMediaFetchState.DOWNLOADING, null, null, false);
             transfer.run(progress);
-            write(fetchId, InstallMediaFetchState.READY, 1.0, null, true);
-            History.event(Models.get(ServerModel.class), serverId, Change.fact(HohenheimActivityAction.MEDIA_FETCHED,
-                Map.of(HohenheimActivityAction.NAME_KEY, name)));
+            held.afterRelease(() -> {
+                write(fetchId, InstallMediaFetchState.READY, 1.0, null, true);
+                History.event(Models.get(ServerModel.class), serverId,
+                    Change.fact(HohenheimActivityAction.MEDIA_FETCHED, Map.of(HohenheimActivityAction.NAME_KEY, name)));
+            });
         } catch (IOException | RuntimeException failure) {
             String reason = failure.getMessage() != null && !failure.getMessage().isBlank()
                 ? failure.getMessage() : failure.getClass().getSimpleName();
             Blast.log("MEDIA: fetching", name, "onto host", serverId, "failed -", reason);
-            write(fetchId, InstallMediaFetchState.FAILED, null,
-                reason.length() > MAX_REASON ? reason.substring(0, MAX_REASON) : reason, true);
+            String stored = reason.length() > MAX_REASON ? reason.substring(0, MAX_REASON) : reason;
+            held.afterRelease(() -> write(fetchId, InstallMediaFetchState.FAILED, null, stored, true));
         }
     }
 
@@ -305,21 +312,36 @@ public final class InstallMediaFetches {
      */
     private static void write(int fetchId, @NonNull InstallMediaFetchState state,
                               @Nullable Double progress, @Nullable String error, boolean finished) {
+        write(fetchId, state, progress, error, finished, null);
+    }
+
+    /**
+     * {@link #write} narrowed to rows still in {@code fromStates}, null for any row.
+     *
+     * @return whether a row was written
+     */
+    private static boolean write(int fetchId, @NonNull InstallMediaFetchState state,
+                                 @Nullable Double progress, @Nullable String error, boolean finished,
+                                 @Nullable List<String> fromStates) {
         try {
             QueryBuilder<Row> update = Models.get(InstallMediaFetchModel.class).find()
                 .where(InstallMediaFetchModel.ID.eq(fetchId))
                 .assign(InstallMediaFetchModel.STATE, state.token())
                 .assign(InstallMediaFetchModel.PROGRESS, progress)
                 .assign(InstallMediaFetchModel.ERROR, error);
+            if (fromStates != null) {
+                update = update.where(InstallMediaFetchModel.STATE.in(fromStates));
+            }
             if (finished) {
                 update.assign(InstallMediaFetchModel.FINISHED_AT, Now.instant());
             }
-            update.updateAll();
+            return update.updateAll() > 0;
         } catch (RuntimeException unwritten) {
             // A progress write that fails must not abort the transfer it reports on; the ending
             // write is retried by nothing, which the on-read settle then covers.
             Blast.log("MEDIA: could not store fetch", fetchId, "as", state.token(), "-",
                 unwritten.getMessage());
+            return false;
         }
     }
 
@@ -330,7 +352,8 @@ public final class InstallMediaFetches {
         for (Row row : query.all()) {
             if (stateOf(row).active() && orphaned(row, deadline)) {
                 int fetchId = row.get(InstallMediaFetchModel.ID);
-                write(fetchId, InstallMediaFetchState.INTERRUPTED, null, null, true);
+                // Only while it is still in flight: a job that ended between the read and the probe keeps its ending.
+                write(fetchId, InstallMediaFetchState.INTERRUPTED, null, null, true, activeTokens());
                 row = Models.get(InstallMediaFetchModel.class).findById(fetchId);
                 if (row == null) {
                     continue;
