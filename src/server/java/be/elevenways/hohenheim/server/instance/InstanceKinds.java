@@ -21,6 +21,7 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashSet;
@@ -298,6 +299,36 @@ public final class InstanceKinds {
             }
         }
         return kinds;
+    }
+
+    /**
+     * {@link #kindsWhere} read at the list's first use instead of now, for a declaration a class initializer builds
+     * (a static form's sibling rule): the registry fills from the class index, which a class initializer must not
+     * wait on.
+     */
+    public static @NonNull List<String> kindsWhereOnFirstRead(@NonNull Predicate<InstanceKindHandler> predicate) {
+        return new AbstractList<>() {
+            private volatile List<String> kinds;
+
+            private List<String> kinds() {
+                List<String> read = this.kinds;
+                if (read == null) {
+                    read = List.copyOf(kindsWhere(predicate));
+                    this.kinds = read;
+                }
+                return read;
+            }
+
+            @Override
+            public String get(int index) {
+                return kinds().get(index);
+            }
+
+            @Override
+            public int size() {
+                return kinds().size();
+            }
+        };
     }
 
     /**

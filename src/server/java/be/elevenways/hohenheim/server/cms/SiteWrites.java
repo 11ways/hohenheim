@@ -99,7 +99,7 @@ public final class SiteWrites {
             .rulesFromSiblings(new HohenheimPickRules.UpstreamInstanceRules(
                 SiteModel.UPSTREAM_KIND.getName(),
                 InstanceUpstreamKind.ID.toString(),
-                InstanceKinds.kindsWhere(InstanceKindHandler::supportsSiteUpstream)),
+                InstanceKinds.kindsWhereOnFirstRead(InstanceKindHandler::supportsSiteUpstream)),
                 "upstream_kind")
             .build())
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteModel.SETTINGS))
