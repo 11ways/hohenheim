@@ -112,6 +112,13 @@ public class DnsZoneModel extends Model {
             .help(HohenheimMicrocopy.HELP.of("transfer_message")).build());
     public static final DateTimeField LAST_CHECKED_AT = SCHEMA.addField(
         DateTimeField.builder().name("last_checked_at").build());
+    /**
+     * When the primary last confirmed this secondary's replica current, by a full transfer or a serial-unchanged probe.
+     *
+     * AIDEV-NOTE: the name is historical: it is the last CONFIRMATION, not the last transfer, because the SOA
+     * expire clock (RFC 1035) restarts on every successful refresh. The column is renamed to last_confirmed_at in
+     * the squash baseline; no migration renames it before then (migration freeze).
+     */
     public static final DateTimeField LAST_TRANSFER_AT = SCHEMA.addField(
         DateTimeField.builder().name("last_transfer_at")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("last_transfer_at"))

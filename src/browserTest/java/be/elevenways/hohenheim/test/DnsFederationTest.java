@@ -49,6 +49,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -184,27 +185,9 @@ class DnsFederationTest {
 
     @Test
     void secondaryZoneIsReplicatedAndServed() throws Exception {
-        // A second nameserver ("the office") serving office.example from a detached store,
-        // authorizing our key. This instance secondaries that zone.
-        Name officeOrigin = Name.fromString("office.example.");
-        List<Record> officeRecords = new ArrayList<>();
-        officeRecords.add(new SOARecord(officeOrigin, DClass.IN, 3600,
-            Name.fromString("ns1.office.example."), Name.fromString("hostmaster.office.example."),
-            7, 7200, 3600, 1209600, 300));
-        officeRecords.add(new NSRecord(officeOrigin, DClass.IN, 3600, Name.fromString("ns1.office.example.")));
-        officeRecords.add(new ARecord(Name.fromString("www.office.example."), DClass.IN, 3600,
-            InetAddress.getByName("198.51.100.20")));
-
-        DnsZoneStore officeStore = DnsZoneStore.createDetached();
-        DnsZoneSnapshot officeSnapshot = DnsZoneStore.snapshotFromTransfer(9001, "office.example", officeRecords);
-        officeStore.injectPrimarySnapshot(officeSnapshot);
-
-        TSIG officeKey = new TSIG(TSIG.HMAC_SHA256, KEY_NAME + ".", KEY_SECRET);
-        Name expectedKeyName = Name.fromString(KEY_NAME + ".");
-        AxfrResponder officeAxfr = new AxfrResponder(officeStore,
-            (zoneId, requested) -> requested.equals(expectedKeyName) ? officeKey : null);
-        DnsServer officeServer = new DnsServer(new DnsResponder(officeStore), officeAxfr);
-        officeServer.start("127.0.0.1", 0);
+        // A second nameserver ("the office") serving office.example, authorizing our key.
+        // This instance secondaries that zone.
+        DnsServer officeServer = startTransferSource("office.example", 7);
         int officePort = officeServer.getUdpPort();
 
         try {
@@ -313,6 +296,90 @@ class DnsFederationTest {
         }
         finally {
             DnsZoneStore.INSTANCE.removeSecondarySnapshot("persist.example");
+        }
+    }
+
+    /**
+     * A restart serves a replica the primary confirmed current within the expire window, however old its last transfer.
+     *
+     * AIDEV-NOTE: the live defect (robbedoes): zones whose content had not changed since September were confirmed
+     * current every refresh, yet dropped at boot when the primary was unreachable, because the expire clock read
+     * only the last FULL transfer. RFC 1035: a refresh that finds the serial current restarts the expire timer.
+     */
+    @Test
+    void aReplicaConfirmedCurrentIsServedAfterARestartPastItsLastTransfer() throws Exception {
+        String origin = "confirmed-restart.example";
+        DnsServer source = startTransferSource(origin, 4);
+        int peerId = transferPeer("confirmed-restart-office", "127.0.0.1", source.getUdpPort(), KEY_NAME, KEY_SECRET);
+        int zoneId = createZone(origin, DnsZoneModel.ROLE_SECONDARY, peerId);
+        Duration previous = Now.offset();
+        try {
+            // 1. Day 0: the full transfer.
+            SecondaryZoneService beforeRestart = new SecondaryZoneService(DnsZoneStore.INSTANCE);
+            assertThat(beforeRestart.transfer(zoneId, true)).as("step 1: transferred").isTrue();
+
+            // 2. Day 13: the refresh probe finds the serial unchanged, so nothing is pulled.
+            Now.setOffset(previous.plus(Duration.ofDays(13)));
+            assertThat(beforeRestart.transfer(zoneId, false)).as("step 2: confirmed current").isTrue();
+
+            // 3. Day 20, 20 days past the transfer but 7 past the confirmation: the primary is gone, the process restarts.
+            source.stop();
+            DnsZoneStore.INSTANCE.removeSecondarySnapshot(origin);
+            Now.setOffset(previous.plus(Duration.ofDays(20)));
+            new SecondaryZoneService(DnsZoneStore.INSTANCE).restorePersistedReplicas();
+
+            assertThat(DnsZoneStore.INSTANCE.getZone(origin)).as("step 3: the replica is served again").isNotNull();
+            Message response = queryUdp(primaryPort, "www." + origin, Type.A);
+            assertThat(response.getSection(Section.ANSWER)).as("step 3: and answered")
+                .anyMatch(r -> r instanceof ARecord a && a.getAddress().getHostAddress().equals("198.51.100.20"));
+            Row zone = Models.get(DnsZoneModel.class).findById(zoneId);
+            assertThat(zone.get(DnsZoneModel.TRANSFER_STATUS)).isNotEqualTo(DnsZoneModel.TRANSFER_EXPIRED);
+        }
+        finally {
+            Now.setOffset(previous);
+            source.stop();
+            DnsZoneStore.INSTANCE.removeSecondarySnapshot(origin);
+        }
+    }
+
+    /** A running secondary counts the expire window from the last confirmation, not from the last transfer. */
+    @Test
+    void aRefreshFailureAfterAConfirmationErrorsAndExpiresOnlyAfterTheWindowFromTheConfirmation() throws Exception {
+        String origin = "confirmed-running.example";
+        DnsServer source = startTransferSource(origin, 4);
+        int peerId = transferPeer("confirmed-running-office", "127.0.0.1", source.getUdpPort(), KEY_NAME, KEY_SECRET);
+        int zoneId = createZone(origin, DnsZoneModel.ROLE_SECONDARY, peerId);
+        SecondaryZoneService service = new SecondaryZoneService(DnsZoneStore.INSTANCE);
+        Duration previous = Now.offset();
+        try {
+            // 1. Day 0: the full transfer; day 13: the refresh probe confirms the serial current.
+            assertThat(service.transfer(zoneId, true)).as("step 1: transferred").isTrue();
+            Now.setOffset(previous.plus(Duration.ofDays(13)));
+            assertThat(service.transfer(zoneId, false)).as("step 1: confirmed current").isTrue();
+
+            // 2. Day 20 (past the 14-day expire from the transfer, not from the confirmation): the primary is gone.
+            source.stop();
+            Now.setOffset(previous.plus(Duration.ofDays(20)));
+            assertThat(service.transfer(zoneId, false)).as("step 2: the refresh fails").isFalse();
+            Row zone = Models.get(DnsZoneModel.class).findById(zoneId);
+            assertThat(zone.get(DnsZoneModel.TRANSFER_STATUS)).as("step 2: errored, not expired")
+                .isEqualTo(DnsZoneModel.TRANSFER_ERROR);
+            Message response = queryUdp(primaryPort, "www." + origin, Type.A);
+            assertThat(response.getSection(Section.ANSWER)).as("step 2: still answered")
+                .anyMatch(r -> r instanceof ARecord a && a.getAddress().getHostAddress().equals("198.51.100.20"));
+
+            // 3. Day 28, past the expire window counted from the confirmation: the replica stops being served.
+            Now.setOffset(previous.plus(Duration.ofDays(28)));
+            assertThat(service.transfer(zoneId, false)).as("step 3: the refresh fails again").isFalse();
+            zone = Models.get(DnsZoneModel.class).findById(zoneId);
+            assertThat(zone.get(DnsZoneModel.TRANSFER_STATUS)).as("step 3: expired")
+                .isEqualTo(DnsZoneModel.TRANSFER_EXPIRED);
+            assertThat(DnsZoneStore.INSTANCE.getZone(origin)).as("step 3: no longer served").isNull();
+        }
+        finally {
+            Now.setOffset(previous);
+            source.stop();
+            DnsZoneStore.INSTANCE.removeSecondarySnapshot(origin);
         }
     }
 
@@ -590,6 +657,19 @@ class DnsFederationTest {
             }
             return fields;
         }
+    }
+
+    /** A second nameserver serving {@link #replicaRecords} for {@code origin} and authorizing AXFR with our key. */
+    private static DnsServer startTransferSource(String origin, long serial) throws Exception {
+        DnsZoneStore sourceStore = DnsZoneStore.createDetached();
+        sourceStore.injectPrimarySnapshot(
+            DnsZoneStore.snapshotFromTransfer(9001, origin, replicaRecords(origin, serial)));
+        TSIG key = new TSIG(TSIG.HMAC_SHA256, KEY_NAME + ".", KEY_SECRET);
+        Name expectedKeyName = Name.fromString(KEY_NAME + ".");
+        DnsServer server = new DnsServer(new DnsResponder(sourceStore),
+            new AxfrResponder(sourceStore, (zoneId, requested) -> requested.equals(expectedKeyName) ? key : null));
+        server.start("127.0.0.1", 0);
+        return server;
     }
 
     /** SOA + NS + www A record set for a synthetic replicated zone. */

@@ -11470,11 +11470,11 @@
   ],
   "last_transfer_at": [
     {
-      "text": "Last transfer",
+      "text": "Last confirmed",
       "scope": "hohenheim_field"
     },
     {
-      "text": "When records were last pulled successfully from the primary peer.",
+      "text": "When the primary peer last confirmed this replica current, by a transfer or a serial check. The SOA expire window counts from this moment.",
       "scope": "help"
     }
   ],

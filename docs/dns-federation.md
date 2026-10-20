@@ -18,7 +18,10 @@ This gives two things at once:
 
 - `dns_zones.role` = `primary` | `secondary`. A secondary zone carries
   `primary_peer_id` and transfer bookkeeping (`transfer_status`,
-  `transfer_message`, `last_checked_at`, `last_transfer_at`).
+  `transfer_message`, `last_checked_at`, `last_transfer_at`). `last_transfer_at`
+  is historically named: it is the last time the primary CONFIRMED the replica
+  current (a full transfer or a serial-unchanged SOA probe), shown as "Last
+  confirmed"; the squash baseline renames it `last_confirmed_at`.
 - `dns_peers`: a federation peer -- a DNS transfer channel (`transfer_host`,
   `transfer_port`, `tsig_key_name`, `tsig_algorithm`, `tsig_secret`) and,
   reserved for the future edit-forwarding layer, an HTTPS admin `base_url` +
@@ -44,8 +47,11 @@ TSIG key, an unsigned or wrongly-signed NOTIFY is ignored (RFC 1996 posture),
 and concurrent notifies for the same zone coalesce into one queued pull, so
 spoofed NOTIFY floods cannot make the secondary hammer its primary. RFC 1982
 serial arithmetic; refresh/retry from the SOA; past the SOA expire window
-(measured from the last SUCCESSFUL transfer, surviving restarts via the
-persisted timestamp) the replica stops being served but keeps retrying.
+(measured from the last CONFIRMATION -- a successful transfer or a refresh whose
+SOA probe found the serial current, RFC 1035 -- surviving restarts via the
+persisted `last_transfer_at`) the replica stops being served but keeps retrying.
+A zone whose content has not changed for longer than the expire window is
+therefore never expired while its primary keeps answering the refresh probe.
 Transferred zones are compiled straight into serving snapshots
 (`DnsZoneStore.snapshotFromTransfer` + `putSecondarySnapshot`) -- they never
 touch the local record table, so a secondary is inherently read-only here.

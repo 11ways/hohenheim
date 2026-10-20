@@ -11470,11 +11470,11 @@
   ],
   "last_transfer_at": [
     {
-      "text": "Laatste overdracht",
+      "text": "Laatst bevestigd",
       "scope": "hohenheim_field"
     },
     {
-      "text": "Wanneer de records voor het laatst met succes van de primaire peer zijn opgehaald.",
+      "text": "Wanneer de primaire peer deze replica voor het laatst als actueel bevestigde, via een overdracht of een serialcontrole. De SOA-vervaltermijn telt vanaf dit moment.",
       "scope": "help"
     }
   ],

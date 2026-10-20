@@ -64,6 +64,7 @@ public final class SecondaryZoneService {
     /** Per-zone timing kept out of the DB (recomputed at boot from the SOA). */
     private static final class ZoneState {
         volatile long nextAttemptEpochMs;
+        /** When the primary last confirmed the replica current: a full transfer or a serial-unchanged probe. */
         volatile long lastSuccessEpochMs;
     }
 
@@ -83,19 +84,19 @@ public final class SecondaryZoneService {
     /**
      * Rebuilds serving snapshots from the replica text persisted at the last
      * successful transfer, so a restart while the primary is unreachable keeps
-     * answering until the SOA expire window closes.
+     * answering until the SOA expire window, counted from the last confirmation, closes.
      */
     public void restorePersistedReplicas() {
         for (Row zone : Models.get(DnsZoneModel.class).findSecondaries()) {
             int zoneId = zone.get(DnsZoneModel.ID);
             String text = zone.get(DnsZoneModel.REPLICA_RECORDS);
-            Instant lastTransfer = zone.get(DnsZoneModel.LAST_TRANSFER_AT);
-            if (text == null || text.isBlank() || lastTransfer == null) {
+            Instant lastConfirmed = zone.get(DnsZoneModel.LAST_TRANSFER_AT);
+            if (text == null || text.isBlank() || lastConfirmed == null) {
                 continue;
             }
             String originString = zone.get(DnsZoneModel.ORIGIN);
             ZoneState zs = state.computeIfAbsent(zoneId, k -> new ZoneState());
-            zs.lastSuccessEpochMs = lastTransfer.toEpochMilli();
+            zs.lastSuccessEpochMs = lastConfirmed.toEpochMilli();
 
             int expire = Objects.requireNonNullElse(zone.get(DnsZoneModel.SOA_EXPIRE), 1209600);
             if (Now.millis() - zs.lastSuccessEpochMs > expire * 1000L) {
@@ -295,9 +296,18 @@ public final class SecondaryZoneService {
                     // The stop interrupted the probe, whose answer it swallows: no stamp, and no transfer starts.
                     return false;
                 }
-                stampChecked(zone);
-                if (remoteSerial != null && serialNotNewer(remoteSerial, localSerial)
-                        && DnsZoneModel.TRANSFER_OK.equals(zone.get(DnsZoneModel.TRANSFER_STATUS))) {
+                boolean current = remoteSerial != null && serialNotNewer(remoteSerial, localSerial)
+                    && DnsZoneModel.TRANSFER_OK.equals(zone.get(DnsZoneModel.TRANSFER_STATUS));
+                Instant checkedAt = Now.instant();
+                zone.set(DnsZoneModel.LAST_CHECKED_AT, checkedAt);
+                if (current) {
+                    // RFC 1035 4.3.5: a refresh that finds the serial current restarts the expire timer, so
+                    // a zone whose content never changes is not expired while its primary keeps confirming it.
+                    zone.set(DnsZoneModel.LAST_TRANSFER_AT, checkedAt);
+                    zs.lastSuccessEpochMs = checkedAt.toEpochMilli();
+                }
+                Models.get(DnsZoneModel.class).save(zone);
+                if (current) {
                     scheduleRefresh(zone, zs);
                     return true; // already current
                 }
@@ -339,9 +349,9 @@ public final class SecondaryZoneService {
     private void expireOrRetry(@NonNull Row zone, @NonNull ZoneState zs, @Nullable String message) {
         int expire = Objects.requireNonNullElse(zone.get(DnsZoneModel.SOA_EXPIRE), 1209600);
 
-        // The expire clock runs from the last SUCCESSFUL transfer, surviving
-        // restarts via the persisted timestamp. A zone that never transferred
-        // has nothing stale to stop serving, so it just retries as an error.
+        // The expire clock runs from the last time the primary CONFIRMED the replica (a transfer or a
+        // serial-unchanged probe), surviving restarts via the persisted timestamp. A zone that never
+        // transferred has nothing stale to stop serving, so it just retries as an error.
         long lastSuccess = zs.lastSuccessEpochMs;
         if (lastSuccess == 0) {
             Instant persisted = zone.get(DnsZoneModel.LAST_TRANSFER_AT);
@@ -377,11 +387,6 @@ public final class SecondaryZoneService {
     private static void scheduleRefresh(@NonNull Row zone, @NonNull ZoneState zs) {
         int refresh = Objects.requireNonNullElse(zone.get(DnsZoneModel.SOA_REFRESH), 7200);
         zs.nextAttemptEpochMs = Now.millis() + refresh * 1000L;
-    }
-
-    private static void stampChecked(@NonNull Row zone) {
-        zone.set(DnsZoneModel.LAST_CHECKED_AT, Now.instant());
-        Models.get(DnsZoneModel.class).save(zone);
     }
 
     private static void applySoa(@NonNull Row zone, @NonNull SOARecord soa) {
