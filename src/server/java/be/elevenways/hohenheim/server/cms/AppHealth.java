@@ -5,11 +5,13 @@ import be.elevenways.hohenheim.CertCoverage;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceStatus;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
+import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -48,6 +50,7 @@ import be.elevenways.zenit.common.security.AccessContext;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -57,6 +60,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -476,7 +480,7 @@ final class AppHealth {
         AttentionSubject root = status == InstanceStatus.ERROR ? WorkloadErrors.rootOf(runtime) : null;
         RecordHealth health = switch (status) {
             case RUNNING -> changesNotLiveOr(instance, runningVerdict(facts.sitesByInstance.get(
-                instance.get(InstanceModel.ID)), facts.sites, delegated, viewer));
+                instance.get(InstanceModel.ID)), facts.sites, facts.deployedAt(instance), delegated, viewer));
             // What stopped it, as its recorded cause says (the dashboard item's detail too), the failure's own message
             // as the band's technical line; a tenant reads the sentence without the daemon's own message.
             case ERROR -> {
@@ -612,10 +616,13 @@ final class AppHealth {
      * A running workload is only as healthy as what its visitors get: the first serving site (switched on, with an
      * address) whose own verdict is not OK speaks for it, broken before attention. Its words and its fixes carry over,
      * the fixes still the site's own row actions ({@link RecordHealth#on}), offered on the workload's page wherever
-     * this node registers the sites entry at all.
+     * this node registers the sites entry at all. A healthy one says, under where it is live, when it was last deployed.
+     *
+     * @param deployedAt when its newest successful deploy finished, null when it was never deployed through Hohenheim
      */
     private static @NonNull RecordHealth runningVerdict(@Nullable List<Row> sites, @NonNull SiteFacts facts,
-                                                        boolean delegated, @Nullable AccessContext viewer) {
+                                                        @Nullable Instant deployedAt, boolean delegated,
+                                                        @Nullable AccessContext viewer) {
         RecordHealth attention = null;
         if (sites != null) {
             for (Row site : sites) {
@@ -632,7 +639,12 @@ final class AppHealth {
                 }
             }
         }
-        return attention != null ? attention : RecordHealth.ok(liveHeadline(sites, facts));
+        if (attention != null) {
+            return attention;
+        }
+        RecordHealth live = RecordHealth.ok(liveHeadline(sites, facts));
+        return deployedAt == null ? live
+            : live.detail(HohenheimMicrocopy.APP_HEALTH.of("last_deploy").withArg("at", deployedAt));
     }
 
     /**
@@ -1068,11 +1080,13 @@ final class AppHealth {
     }
 
     /**
-     * Everything a page of instance verdicts reads: the sites serving each, those sites' own facts, and the row whose
-     * status speaks for each one's runtime.
+     * Everything a page of instance verdicts reads: the sites serving each, those sites' own facts, the row whose
+     * status speaks for each one's runtime, and when each was last deployed (read once, and only when a healthy
+     * verdict asks).
      */
     private record InstanceFacts(@NonNull Map<Integer, List<Row>> sitesByInstance, @NonNull SiteFacts sites,
-                                 @NonNull Map<Integer, Row> runtimes) {
+                                 @NonNull Map<Integer, Row> runtimes,
+                                 @NonNull Supplier<Map<Integer, Instant>> deploys) {
 
         static @NonNull InstanceFacts of(@NonNull List<Row> instances) {
             return of(instances, null);
@@ -1085,13 +1099,48 @@ final class AppHealth {
             for (List<Row> sites : sitesByInstance.values()) {
                 serving.addAll(sites);
             }
+            AtomicReference<Map<Integer, Instant>> deploys = new AtomicReference<>();
             return new InstanceFacts(sitesByInstance, SiteFacts.of(serving, access),
-                ApplicationReleases.runtimeRows(instances));
+                ApplicationReleases.runtimeRows(instances),
+                () -> deploys.updateAndGet(read -> read != null ? read : lastDeploys(instances)));
         }
 
         /** @return the row whose status speaks for this instance's runtime, the instance itself when none other */
         @NonNull Row runtimeOf(@NonNull Row instance) {
             return this.runtimes.getOrDefault((Integer) instance.get(InstanceModel.ID), instance);
+        }
+
+        /** @return when this instance's newest successful deploy finished, null when none did */
+        @Nullable Instant deployedAt(@NonNull Row instance) {
+            return this.deploys.get().get((Integer) instance.get(InstanceModel.ID));
+        }
+
+        /**
+         * When each instance was last deployed: its newest succeeded release (an application) or build (a workspace,
+         * a git-sourced app), whichever finished last. A workload nothing ever built or released is absent.
+         */
+        private static @NonNull Map<Integer, Instant> lastDeploys(@NonNull List<Row> instances) {
+            List<Integer> ids = new ArrayList<>();
+            for (Row instance : instances) {
+                Integer id = instance.get(InstanceModel.ID);
+                if (id != null) {
+                    ids.add(id);
+                }
+            }
+            String owner = InstanceModel.MODEL_ID.toString();
+            Map<Integer, Instant> deployed = new HashMap<>();
+            Models.get(BuildOperationModel.class).latestSuccessAmong(owner, ids).forEach((id, build) ->
+                laterOf(deployed, id, build.get(BuildOperationModel.FINISHED_AT)));
+            Models.get(ReleaseOperationModel.class).latestSuccessAmong(owner, ids).forEach((id, release) ->
+                laterOf(deployed, id, release.get(ReleaseOperationModel.FINISHED_AT)));
+            return deployed;
+        }
+
+        /** Keeps {@code at} as the record's moment when it is later than the one kept; a null moment keeps nothing. */
+        private static void laterOf(@NonNull Map<Integer, Instant> kept, @NonNull Integer id, @Nullable Instant at) {
+            if (at != null) {
+                kept.merge(id, at, (before, after) -> after.isAfter(before) ? after : before);
+            }
         }
     }
 

@@ -350,6 +350,14 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
         assertThat(deploying)
             .as("step 6: a running deploy re-renders the tab live").contains("data-hh-deploys-live")
             .as("step 6: watching the deploys feed").contains("instance_deploys_live");
+
+        // 7. A build is named after its app and its number, never its commit: that title is what every activity line
+        //    about it says ("Jelle started appdeploys-app #12"), and a hash overflowed the dashboard's recent list.
+        BuildOperationModel builds = Models.get(BuildOperationModel.class);
+        Integer liveBuild = buildIds.get(0);
+        assertThat(builds.getDisplayTitle(builds.findById(liveBuild), null))
+            .as("step 7: the build reads as its app and number").isEqualTo(PREFIX + "app #" + liveBuild)
+            .as("step 7: never its commit").doesNotContain(LIVE_SHA);
     }
 
     /** The history row carrying a release mark, up to the next row. */

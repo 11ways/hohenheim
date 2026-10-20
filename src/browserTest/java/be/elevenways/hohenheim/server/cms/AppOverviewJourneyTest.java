@@ -51,6 +51,7 @@ import org.junit.jupiter.api.Test;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -326,10 +327,33 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
                 .isFalse();
             assertThat((Boolean) unforced.get(SiteDomainModel.FORCE_SSL_AUTO))
                 .as("step 6: and the certificate latch stays disarmed").isFalse();
-            assertThat(adminGet("/admin/instances/" + instance.get(InstanceModel.ID) + "/page/overview").body())
-                .as("step 6: the workload is live at its address over HTTP again")
+            String liveAgain = adminGet("/admin/instances/" + instance.get(InstanceModel.ID) + "/page/overview").body();
+            assertThat(liveAgain).as("step 6: the workload is live at its address over HTTP again")
                 .contains("data-cms-record-health=\"ok\"")
-                .contains("Live at http://served.app-journey.test");
+                .contains("Live at http://served.app-journey.test")
+                .as("step 6: nothing ever deployed it, so the band names no deploy").doesNotContain("Last deployed");
+
+            // 7. Once a deploy succeeded, the band's second line says when it finished, in the reader's words
+            //    (board App-Overview: "Live at ..." over the last deploy).
+            var builds = Models.get(BuildOperationModel.class);
+            Row deploy = builds.createEmptyRow();
+            deploy.set(BuildOperationModel.FOR_MODEL, InstanceModel.MODEL_ID.toString());
+            deploy.set(BuildOperationModel.FOR_ID, instance.get(InstanceModel.ID));
+            deploy.set(BuildOperationModel.BUILDER_KIND, BuildOperationModel.KIND_WORKSPACE);
+            deploy.set(BuildOperationModel.STATUS, BuildOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED));
+            deploy.set(BuildOperationModel.FINISHED_AT, Instant.parse("2026-09-01T10:00:00Z"));
+            builds.save(deploy);
+            try {
+                String deployed = adminGet("/admin/instances/" + instance.get(InstanceModel.ID) + "/page/overview")
+                    .body();
+                String band = deployed.substring(deployed.indexOf("data-cms-record-health"),
+                    deployed.indexOf("</pl-alert>", deployed.indexOf("data-cms-record-health")));
+                assertThat(band).as("step 7: the live band stays OK").contains("Live at http://served.app-journey.test")
+                    .as("step 7: and its second line names the last deploy").contains("<pl-alert-description")
+                    .contains("Last deployed ").contains("2026");
+            } finally {
+                builds.delete(deploy.get(BuildOperationModel.ID));
+            }
         } finally {
             localBefore.restore();
             HardDeletes.row(Models.get(SiteModel.class), site);

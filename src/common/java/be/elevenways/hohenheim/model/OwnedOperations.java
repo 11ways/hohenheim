@@ -1,12 +1,18 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.query.GroupedRows;
 import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import org.checkerframework.checker.nullness.qual.NonNull;
+
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * The history query every operation model keyed by its owning record ({@code for_model}, {@code for_id}) answers
@@ -28,5 +34,30 @@ final class OwnedOperations {
             .where(forModelField.eq(forModel))
             .where(forIdField.eq(forId))
             .orderBy(idField, SortOrder.DESC);
+    }
+
+    /**
+     * The newest operation in {@code status} of each of several owning records of one model, in one grouped read.
+     *
+     * @return owning record id to that operation; a record with none is absent
+     */
+    static @NonNull Map<Integer, Row> newestAmong(@NonNull Model model, @NonNull StringField forModelField,
+                                                  @NonNull IntegerField forIdField, @NonNull IntegerField idField,
+                                                  @NonNull EnumField statusField, @NonNull String status,
+                                                  @NonNull String forModel, @NonNull Collection<Integer> forIds) {
+        Map<Integer, Row> newest = new HashMap<>();
+        if (forIds.isEmpty()) {
+            return newest;
+        }
+        for (GroupedRows.Group<Integer, Row> group : model.find()
+                .where(forModelField.eq(forModel))
+                .where(statusField.eq(status))
+                .orderBy(idField, SortOrder.DESC)
+                .firstPerGroup(forIdField, 1, forIds).groups()) {
+            if (group.key() != null && !group.rows().isEmpty()) {
+                newest.put(group.key(), group.rows().get(0));
+            }
+        }
+        return newest;
     }
 }

@@ -16,7 +16,9 @@ import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.zenit.common.ui.BadgeVariant;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -145,6 +147,12 @@ public class ReleaseOperationModel extends Model {
     /** The newest SUCCEEDED operation of one owning record, or null. */
     public Row latestSuccess(String forModel, int forId) {
         return this.history(forModel, forId).where(STATUS.eq(LIFECYCLE.stored(OperationStatus.SUCCEEDED))).first();
+    }
+
+    /** {@link #latestSuccess} of several owning records of one model at once, in one grouped read. */
+    public Map<Integer, Row> latestSuccessAmong(String forModel, Collection<Integer> forIds) {
+        return OwnedOperations.newestAmong(this, FOR_MODEL, FOR_ID, ID, STATUS,
+            LIFECYCLE.stored(OperationStatus.SUCCEEDED), forModel, forIds);
     }
 
     /** Every operation of one owning record still claiming to be in flight. */

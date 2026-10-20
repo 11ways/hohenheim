@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
@@ -17,12 +18,17 @@ import be.elevenways.zenit.common.orm.field.LongField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.TextField;
 import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.zenit.common.ui.BadgeVariant;
 import be.elevenways.zenit.common.ui.ColorHue;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 import static be.elevenways.hohenheim.RawValues.trimmed;
 
@@ -213,6 +219,12 @@ public class BuildOperationModel extends Model {
         return this.history(forModel, forId).where(STATUS.eq(LIFECYCLE.stored(OperationStatus.SUCCEEDED))).first();
     }
 
+    /** {@link #latestSuccess} of several owning records of one model at once, in one grouped read. */
+    public Map<Integer, Row> latestSuccessAmong(String forModel, Collection<Integer> forIds) {
+        return OwnedOperations.newestAmong(this, FOR_MODEL, FOR_ID, ID, STATUS,
+            LIFECYCLE.stored(OperationStatus.SUCCEEDED), forModel, forIds);
+    }
+
     /** Whether a build of one owning record is still running. */
     public boolean building(String forModel, int forId) {
         return this.history(forModel, forId).where(STATUS.eq(LIFECYCLE.stored(OperationStatus.RUNNING)))
@@ -220,9 +232,36 @@ public class BuildOperationModel extends Model {
     }
 
     static {
-        // What the build PRODUCED names it best; a build that never got that far is
-        // still traceable by the commit it started from.
+        // What a build is searched by: what it PRODUCED, else the commit it started from. Its title is composed
+        // (resolveDisplayTitle), because these are hashes too long to name a build in a sentence.
         SCHEMA.setDisplayFields(TAG, IMAGE_ID, SOURCE_REF);
+    }
+
+    /** Between the owner's title and the build's number in the build's title. */
+    private static final String NUMBER_SEPARATOR = " #";
+
+    /**
+     * A build is named after the record it built for and its number ("shop #28").
+     *
+     * AIDEV-NOTE: the commit, image and tag stay the build's own columns. As its title they turned every activity
+     * line about a build into "Jelle started e590c03e1417f0ad..." (a hash that overflowed the dashboard's recent
+     * list). The owner is read by key, as every title surface of an operator-only build may; a build whose owner is
+     * gone (or a retained title of a deleted build, which carries the display fields only) keeps the display fields.
+     *
+     * @return null when neither an owner nor a display field names it, so the pk fallback applies
+     */
+    @Override
+    public @Nullable String resolveDisplayTitle(@NonNull Row row, @Nullable LocaleChain chain) {
+        Identifier ownerModel = Identifier.tryParse(row.get(FOR_MODEL));
+        Integer ownerId = row.get(FOR_ID);
+        Model owners = ownerModel == null || ownerId == null ? null : Models.get(ownerModel);
+        Row owner = owners == null ? null : owners.findById(ownerId);
+        String ownerTitle = owner == null ? null : owners.resolveDisplayTitle(owner, chain);
+        if (ownerTitle == null || ownerTitle.isBlank()) {
+            return super.resolveDisplayTitle(row, chain);
+        }
+        Integer id = row.get(ID);
+        return id == null ? ownerTitle : ownerTitle + NUMBER_SEPARATOR + id;
     }
 
     @Override
