@@ -610,8 +610,11 @@ class PaasApiTest extends HohenheimTestBase {
         assertThat(attack.statusCode())
             .as("step 3: membership plus a scope token cannot author environment values")
             .isEqualTo(404);
-        assertThat(attack.body()).as("step 3: and no environment is confirmed to exist")
-            .doesNotContain(String.valueOf(environmentId));
+        // AIDEV-NOTE: compared with a missing environment's refusal, never by a substring: a single-digit id is a
+        // substring of the 404 status itself.
+        assertThat(attack.body()).as("step 3: no environment is confirmed to exist: a missing one's refusal")
+            .isEqualTo(keyPost(keyPaasA, "/api/v1/environments/" + Integer.MAX_VALUE + "/variables",
+                "key=" + OVERRIDE_KEY + "&value=" + ATTACKER_VALUE).body());
 
         // 4. The refusal is REAL, not a status code: the instance's resolved deploy
         //    environment still carries its own value. An environment row wins over the
