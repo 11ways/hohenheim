@@ -106,6 +106,45 @@ class PublicListenerRebindTest {
     }
 
     @Test
+    @Timeout(30)
+    void anInterruptedCloserFindsAFreeCallLeftAndKeepsItsInterrupt() throws Exception {
+        // An accept loop closing itself after a terminal failure is interrupted by its own runner's shutdownNow().
+        BlockingSocketCall call = new BlockingSocketCall();
+        Thread.currentThread().interrupt();
+        try {
+            assertThat(call.awaitLeft()).as("step 1: a free call reads as left, interrupted or not").isTrue();
+        } finally {
+            assertThat(Thread.interrupted()).as("step 1: the interrupt flag is kept").isTrue();
+        }
+
+        CountDownLatch inside = new CountDownLatch(1);
+        CountDownLatch leave = new CountDownLatch(1);
+        Thread caller = closers.startThread(() -> {
+            try {
+                call.during(() -> {
+                    inside.countDown();
+                    awaitUninterruptibly(leave);
+                    return null;
+                });
+            } catch (IOException impossible) {
+                throw new IllegalStateException(impossible);
+            }
+        });
+        try {
+            inside.await();
+            Thread.currentThread().interrupt();
+            try {
+                assertThat(call.awaitLeft()).as("step 2: an interrupted wait on a held call is unconfirmed").isFalse();
+            } finally {
+                assertThat(Thread.interrupted()).as("step 2: the interrupt flag is kept").isTrue();
+            }
+        } finally {
+            leave.countDown();
+            caller.join();
+        }
+    }
+
+    @Test
     @Timeout(60)
     void aClosedTcpListenerFreesItsPortBeforeCloseReturns() {
         int port = 0;
