@@ -72,12 +72,14 @@ class AdminRenderBudgetTest extends HohenheimTestBase {
         // shipped 23,986,504 bytes here until 2026-08-12 -- six times orcono/QQ/thoth -- because
         // its teavm block never got the obfuscated/BALANCED settings every sibling app has.
         // Measured client cost was 311-1166ms per navigation against 35-229ms of server render,
-        // so the browser suite spent most of its life parsing JavaScript. 8MB is generous
-        // headroom over the 4.3MB the settings buy; if this trips, check those two flags before
-        // raising it.
+        // so the browser suite spent most of its life parsing JavaScript. The bound catches a lost
+        // setting (about three times the size), not growth: teavm-bundle.budget is the size budget.
+        // 2026-10-20: 8MB -> 9MB at 8,459,761 bytes, the settings checked (an obfuscated bundle),
+        // the growth framework-wide (QQ's teavm-bundle.budget attributes it). If this trips, check those two
+        // flags before raising it.
         assertThat(bundleBytes)
             .as("the admin client bundle must stay optimized (teavm obfuscated + BALANCED)")
-            .isLessThan(8L * 1024 * 1024);
+            .isLessThan(9L * 1024 * 1024);
     }
 
     // AIDEV-NOTE: ONE client for the whole measurement, deliberately not the base's

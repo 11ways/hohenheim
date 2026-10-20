@@ -148,6 +148,18 @@
         @include m.line-clamp(3);
     }
 
+    // In a list row a state cell is ONE line like every list cell (zenit-cms's .cms-cell-clamp): the badge, then its
+    // explaining words after it, which the cell's own one-line clamp ends in an ellipsis. The record's page keeps the
+    // stacked form with the whole text.
+    .cms-resource-list-table .hh-state-line,
+    .cms-resource-list-table .hh-state-line-detail {
+        display: inline;
+    }
+
+    .cms-resource-list-table .hh-state-line-detail {
+        margin-inline-start: var(--pl-space-xs);
+    }
+
     // Dashboard onboarding checklist
     .hh-onboarding-lead {
         margin: 0 0 var(--pl-space-md);

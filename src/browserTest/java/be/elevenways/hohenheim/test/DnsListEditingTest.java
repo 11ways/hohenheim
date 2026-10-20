@@ -390,11 +390,11 @@ class DnsListEditingTest extends HohenheimTestBase {
             .isEqualTo(tab);
 
         // 3. The same journey IN THE BROWSER, at the 1024px window a live check used: the
-        //    card sits under the compact floor, so the delete is the compact lane's
-        //    PORTALLED copy; the operator arrives by SOFT navigation carrying the
-        //    quick-add's sticky pick, the way someone who just quick-added a record does;
-        //    and the table they then LOOK AT no longer carries the row. A soft POST never
-        //    moves the URL, so the table itself is the completion signal, never the URL.
+        //    delete is the row menu's item (a DNS row ends in its menu); the operator arrives
+        //    by SOFT navigation carrying the quick-add's sticky pick, the way someone who just
+        //    quick-added a record does; and the table they then LOOK AT no longer carries the
+        //    row. A soft POST never moves the URL, so the table itself is the completion
+        //    signal, never the URL.
         int second = createRecord(zoneId, "gone-too", DnsRecordModel.TYPE_A, "192.0.2.52");
         String row = "pl-table-row[data-row-key='" + second + "']";
         // The narrow window is this step's own; restore it so no later test in the class
@@ -410,14 +410,14 @@ class DnsListEditingTest extends HohenheimTestBase {
             click("#to-records-tab");
             page.waitForCondition(() -> page.url().contains("qa.type=A"));
             page.waitForSelector(row);
-            page.locator(row + " .cms-row-action-compact pl-dropdown-menu-trigger")
+            page.locator(row + " .cms-row-action-more pl-dropdown-menu-trigger")
                 .first().evaluate("el => el.click()");
             String popup = "he-bottom .pl-dropdown-menu-content__popup:visible ";
-            String deleteItem = popup + "button.cms-menu-action[data-cms-lane='compact']"
+            String deleteItem = popup + "button.cms-menu-action"
                 + "[formaction^='/admin/dns-records/invoke/hohenheim.delete_dns_record?ids=" + second + "']";
             page.waitForSelector(deleteItem);
             click(deleteItem);
-            assertIsVisible(".pl-alertdialog-modal[data-open]", "the compact delete opens the confirmation");
+            assertIsVisible(".pl-alertdialog-modal[data-open]", "the menu's delete opens the confirmation");
             click("[data-cms-confirm-ok]");
             page.waitForCondition(() -> Models.get(DnsRecordModel.class).findById(second) == null);
             page.waitForCondition(() -> page.locator(row).count() == 0);
@@ -438,65 +438,54 @@ class DnsListEditingTest extends HohenheimTestBase {
     }
 
     /**
-     * The tab joins the framework's COMPACT row-action register: below the 48rem floor the
-     * split lane and the ordinary menu leave the layout and one compact menu carries the
-     * whole action set -- still submitting through this page's own carrier form.
-     *
-     * AIDEV-NOTE: the register is a {@code @container} query off {@code .cms-list-card}'s
-     * inline size, so a bespoke page participates by SITTING IN THAT CARD and nothing else;
-     * the row markup is already the shared partial. Driven in the browser because the
-     * served HTML is identical either way -- only the resolved CSS differs.
+     * A record's row ends in its ONE menu at every width (board Apps-List): the synthesized Edit heads it and the
+     * overflow's dyndns mint follows, still submitting through this page's own carrier form, and no lane of labelled
+     * buttons is drawn beside it to fold away on a narrow card.
      */
     @Test
-    void narrowRecordsTabCollapsesItsRowActionsIntoTheCompactMenu() {
+    void aRecordRowEndsInItsOneMenuAtEveryWidth() {
         int zoneId = createZone("compact-tab.example");
         int recordId = createRecord(zoneId, "home", DnsRecordModel.TYPE_A, "192.0.2.80");
         String tab = "/admin/dns-zones/" + zoneId + "/page/records";
         String row = "pl-table-row[data-row-key='" + recordId + "'] ";
 
-        // 1. A narrow window leaves the card under its floor: the lane's Edit and the
-        //    ordinary menu trigger are out of the layout, the compact trigger is in.
+        // 1. A narrow window: the row draws no inline Edit, only its menu trigger.
         page.setViewportSize(760, 844);
         navigateToApp(tab);
         waitForHydration();
-        assertIsNotVisible(row + ".cms-row-action-lane pl-button[data-action-id='zenit:edit']",
-            "step 1: the lane's Edit is out of a narrow layout");
-        assertIsNotVisible(row + ".cms-row-action-more pl-button", "step 1: so is the ordinary menu trigger");
-        assertIsVisible(row + ".cms-row-action-compact pl-button", "step 1: the compact trigger is in");
+        assertCount(row + ".cms-row-action-lane pl-button[data-action-id='zenit:edit']", 0,
+            "step 1: Edit is never an inline button");
+        assertIsVisible(row + ".cms-row-action-more pl-button", "step 1: the row ends in its menu");
 
-        // 2. That one menu carries BOTH halves: the lane's Edit as a menu link and the
-        //    overflow's dyndns mint as a submitter associated with THIS page's form.
+        // 2. That menu carries BOTH: the Edit link and the overflow's dyndns mint as a submitter associated with THIS
+        //    page's form.
         String popup = "he-bottom .pl-dropdown-menu-content__popup:visible ";
-        String compactEdit = popup + "a.cms-menu-action[data-cms-lane='compact']"
-            + "[data-action-id='zenit:edit']";
-        String compactMint = popup + "button.cms-menu-action[data-cms-lane='compact']"
+        String menuEdit = popup + "a.cms-menu-action[data-action-id='zenit:edit']";
+        String menuMint = popup + "button.cms-menu-action"
             + "[formaction^='/admin/dns-records/invoke/hohenheim.dyndns_token?ids=" + recordId + "']";
-        page.locator(row + ".cms-row-action-compact pl-dropdown-menu-trigger")
+        page.locator(row + ".cms-row-action-more pl-dropdown-menu-trigger")
             .first().evaluate("el => el.click()");
-        page.waitForSelector(compactEdit);
-        assertIsVisible(compactMint, "step 2: the compact menu carries the overflow's dyndns mint");
-        assertThat(getAttribute(compactMint, "form"))
-            .as("step 2: the compact copy submits through the tab's own carrier form")
+        page.waitForSelector(menuEdit);
+        assertIsVisible(menuMint, "step 2: the menu carries the overflow's dyndns mint");
+        assertThat(getAttribute(menuMint, "form"))
+            .as("step 2: the menu item submits through the tab's own carrier form")
             .isEqualTo("dns-records-list-form");
 
-        // 3. And it INVOKES: a register that only looked right would leave the operator
-        //    with the sole reachable copy of every action dead. The mint answers by refreshing
-        //    the tab, and the next step loads that tab itself: it waits for the refresh first.
+        // 3. And it INVOKES. The mint answers by refreshing the tab, and the next step loads that tab itself: it waits
+        //    for the refresh first.
         assertThat(DynamicDnsService.credentialFor(recordId))
             .as("step 3: the record is not dynamic yet").isNull();
-        waitForNavigationRendered(() -> click(compactMint));
+        waitForNavigationRendered(() -> click(menuMint));
         assertThat(DynamicDnsService.credentialFor(recordId))
-            .as("step 3: the compact copy minted the credential").isNotNull();
+            .as("step 3: the menu item minted the credential").isNotNull();
 
-        // 4. FALSIFICATION: on a wide window the very same page shows the lane again and
-        //    the compact trigger is gone -- so step 1 measured the register, not a
-        //    permanently hidden lane.
+        // 4. A wide window draws the very same shape: the row ends in its menu there too.
         page.setViewportSize(1400, 900);
         navigateToApp(tab);
         waitForHydration();
-        assertIsVisible(row + ".cms-row-action-lane pl-button[data-action-id='zenit:edit']",
-            "step 4: a wide window shows the lane's Edit again");
-        assertIsNotVisible(row + ".cms-row-action-compact pl-button", "step 4: and drops the compact trigger");
+        assertCount(row + ".cms-row-action-lane pl-button[data-action-id='zenit:edit']", 0,
+            "step 4: no inline Edit on a wide window either");
+        assertIsVisible(row + ".cms-row-action-more pl-button", "step 4: the row ends in its menu");
     }
 
     /**
@@ -526,28 +515,23 @@ class DnsListEditingTest extends HohenheimTestBase {
         assertCount(scroller, 1, "step 1: the scroll area is the component");
         assertCount("div.cms-table-scroll", 0, "step 1: no bare div claims the class");
 
-        // 2. It really is a scrollport: the table is wider than the box that holds it, and
-        //    the box scrolls rather than clips.
+        // 2. The table FITS its card at a narrow width: every cell keeps to one line and ends in an ellipsis, so the
+        //    scroll area has nothing to scroll and no column is pinned over another.
         assertThat((Boolean) page.locator(viewport)
-                .evaluate("el => el.scrollWidth > el.clientWidth + 1"))
-            .as("step 2: the table overflows the scrollport it now has").isTrue();
+                .evaluate("el => el.scrollWidth <= el.clientWidth + 1"))
+            .as("step 2: the table fits the scrollport").isTrue();
+        assertCount(scroller + "[data-overflow-inline-end]", 0, "step 2: nothing passes under the trailing edge");
+        assertCount(".cms-resource-list-table [data-sticky]", 0, "step 2: no column is pinned");
 
-        // 3. So the component publishes the overflow-end marker -- the half of plumage's
-        //    pinned-column rule that lives on the scroll area. The other half is the cell's
-        //    own opt-in, and the shadow only renders when BOTH hold.
-        waitForAttribute(scroller, "data-overflow-inline-end", "");
-        assertThat(getAttribute("pl-table-row[data-row-key='" + recordId + "']"
-                + " pl-table-cell.cms-resource-list-row-actions", "data-sticky"))
-            .as("step 3: and the actions column opts into being pinned").isEqualTo("end");
-
-        // 4. FALSIFICATION: the marker is live state, not a stamp. Scrolling to the trailing
-        //    edge retires it and raises its leading-edge twin -- an always-on attribute (or a
-        //    box that never scrolled) would keep step 3 green while showing the shadow over
-        //    nothing.
-        page.locator(viewport).evaluate("el => el.scrollLeft = el.scrollWidth");
-        waitForAttribute(scroller, "data-overflow-inline-start", "");
-        page.waitForCondition(() ->
-            page.locator(scroller).getAttribute("data-overflow-inline-end") == null);
+        // 3. The long value is one line with its whole text on its hover, and the row's actions are on screen.
+        String valueClamp = "pl-table-row[data-row-key='" + recordId + "'] .cms-cell-clamp[title*='v=spf1']";
+        assertCount(valueClamp, 1, "step 3: the whole value rides the hover");
+        assertThat(page.locator(valueClamp).evaluate("el => getComputedStyle(el).webkitLineClamp"))
+            .as("step 3: the value keeps to one line").isEqualTo("1");
+        assertThat((Boolean) page.locator("pl-table-row[data-row-key='" + recordId + "']"
+                + " pl-table-cell.cms-resource-list-row-actions")
+                .evaluate("el => el.getBoundingClientRect().right <= window.innerWidth"))
+            .as("step 3: the row's actions are on screen").isTrue();
     }
 
     /**

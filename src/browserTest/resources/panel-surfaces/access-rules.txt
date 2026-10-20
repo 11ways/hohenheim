@@ -20,8 +20,8 @@ column rule at=0 shown=true hidden=false sortable=false filterable=false copyabl
 column type at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
 column access_list_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 column enabled at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row hohenheim:access_rule_move_up at=1 verb=invoke band=inline style=DEFAULT disabled=already_first confirm= target=/{panel}/{entry}/{record}/action/access_rule_move_up
+row hohenheim:access_rule_move_up at=0 verb=invoke band=inline style=DEFAULT disabled=already_first confirm= target=/{panel}/{entry}/{record}/action/access_rule_move_up
+row zenit:edit at=1 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
 row hohenheim:access_rule_move_down at=2 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/access_rule_move_down
 row hohenheim:access_rule_toggle at=3 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/access_rule_toggle
 row hohenheim:access_rule_delete at=4 verb=invoke band=destructive style=DEFAULT disabled= confirm=style:DESTRUCTIVE,title:delete_confirm%252Cscope%3Daccess_rule,body:destructive_body%252Cscope%3Dcms%25252Ctarget%3Dconfirmation,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/access_rule_delete
@@ -48,8 +48,8 @@ column rule at=0 shown=true hidden=false sortable=false filterable=false copyabl
 column type at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
 column access_list_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 column enabled at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row hohenheim:access_rule_move_up at=1 verb=invoke band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/access_rule_move_up
+row hohenheim:access_rule_move_up at=0 verb=invoke band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/access_rule_move_up
+row zenit:edit at=1 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
 row hohenheim:access_rule_move_down at=2 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/access_rule_move_down
 row hohenheim:access_rule_toggle at=3 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/access_rule_toggle
 row hohenheim:access_rule_delete at=4 verb=invoke band=destructive style=DEFAULT disabled= confirm=style:DESTRUCTIVE,title:delete_confirm%252Cscope%3Daccess_rule,body:destructive_body%252Cscope%3Dcms%25252Ctarget%3Dconfirmation,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/access_rule_delete
@@ -76,8 +76,8 @@ column rule at=0 shown=true hidden=false sortable=false filterable=false copyabl
 column type at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
 column access_list_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 column enabled at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row hohenheim:access_rule_move_up at=1 verb=invoke band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/access_rule_move_up
+row hohenheim:access_rule_move_up at=0 verb=invoke band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/access_rule_move_up
+row zenit:edit at=1 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
 row hohenheim:access_rule_move_down at=2 verb=invoke band=overflow style=DEFAULT disabled=already_last confirm= target=/{panel}/{entry}/{record}/action/access_rule_move_down
 row hohenheim:access_rule_toggle at=3 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/access_rule_toggle
 row hohenheim:access_rule_delete at=4 verb=invoke band=destructive style=DEFAULT disabled= confirm=style:DESTRUCTIVE,title:delete_confirm%252Cscope%3Daccess_rule,body:destructive_body%252Cscope%3Dcms%25252Ctarget%3Dconfirmation,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/access_rule_delete
@@ -104,8 +104,8 @@ column rule at=0 shown=true hidden=false sortable=false filterable=false copyabl
 column type at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
 column access_list_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 column enabled at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row hohenheim:access_rule_move_up at=1 verb=invoke band=inline style=DEFAULT disabled=already_first confirm= target=/{panel}/{entry}/{record}/action/access_rule_move_up
+row hohenheim:access_rule_move_up at=0 verb=invoke band=inline style=DEFAULT disabled=already_first confirm= target=/{panel}/{entry}/{record}/action/access_rule_move_up
+row zenit:edit at=1 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
 row hohenheim:access_rule_move_down at=2 verb=invoke band=overflow style=DEFAULT disabled=already_last confirm= target=/{panel}/{entry}/{record}/action/access_rule_move_down
 row hohenheim:access_rule_toggle at=3 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/access_rule_toggle
 row hohenheim:access_rule_delete at=4 verb=invoke band=destructive style=DEFAULT disabled= confirm=style:DESTRUCTIVE,title:delete_confirm%252Cscope%3Daccess_rule,body:destructive_body%252Cscope%3Dcms%25252Ctarget%3Dconfirmation,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/access_rule_delete
@@ -132,8 +132,8 @@ column rule at=0 shown=true hidden=false sortable=false filterable=false copyabl
 column type at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
 column access_list_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 column enabled at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row hohenheim:access_rule_move_up at=1 verb=invoke band=inline style=DEFAULT disabled=already_first confirm= target=/{panel}/{entry}/{record}/action/access_rule_move_up
+row hohenheim:access_rule_move_up at=0 verb=invoke band=inline style=DEFAULT disabled=already_first confirm= target=/{panel}/{entry}/{record}/action/access_rule_move_up
+row zenit:edit at=1 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
 row hohenheim:access_rule_move_down at=2 verb=invoke band=overflow style=DEFAULT disabled=already_last confirm= target=/{panel}/{entry}/{record}/action/access_rule_move_down
 row hohenheim:access_rule_toggle at=3 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/access_rule_toggle
 row hohenheim:access_rule_delete at=4 verb=invoke band=destructive style=DEFAULT disabled= confirm=style:DESTRUCTIVE,title:delete_confirm%252Cscope%3Daccess_rule,body:destructive_body%252Cscope%3Dcms%25252Ctarget%3Dconfirmation,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/access_rule_delete
@@ -180,8 +180,8 @@ column rule at=0 shown=true hidden=false sortable=false filterable=false copyabl
 column type at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
 column access_list_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 column enabled at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row hohenheim:access_rule_move_up at=1 verb=invoke band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/access_rule_move_up
+row hohenheim:access_rule_move_up at=0 verb=invoke band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/access_rule_move_up
+row zenit:edit at=1 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
 row hohenheim:access_rule_move_down at=2 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/access_rule_move_down
 row hohenheim:access_rule_toggle at=3 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/access_rule_toggle
 row hohenheim:access_rule_delete at=4 verb=invoke band=destructive style=DEFAULT disabled= confirm=style:DESTRUCTIVE,title:delete_confirm%252Cscope%3Daccess_rule,body:destructive_body%252Cscope%3Dcms%25252Ctarget%3Dconfirmation,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/access_rule_delete
@@ -207,8 +207,8 @@ column rule at=0 shown=true hidden=false sortable=false filterable=false copyabl
 column type at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
 column access_list_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 column enabled at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row hohenheim:access_rule_move_up at=1 verb=invoke band=inline style=DEFAULT disabled=already_first confirm= target=/{panel}/{entry}/{record}/action/access_rule_move_up
+row hohenheim:access_rule_move_up at=0 verb=invoke band=inline style=DEFAULT disabled=already_first confirm= target=/{panel}/{entry}/{record}/action/access_rule_move_up
+row zenit:edit at=1 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
 row hohenheim:access_rule_move_down at=2 verb=invoke band=overflow style=DEFAULT disabled=already_last confirm= target=/{panel}/{entry}/{record}/action/access_rule_move_down
 row hohenheim:access_rule_toggle at=3 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/access_rule_toggle
 row hohenheim:access_rule_delete at=4 verb=invoke band=destructive style=DEFAULT disabled= confirm=style:DESTRUCTIVE,title:delete_confirm%252Cscope%3Daccess_rule,body:destructive_body%252Cscope%3Dcms%25252Ctarget%3Dconfirmation,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/access_rule_delete

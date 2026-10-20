@@ -153,18 +153,17 @@ class DnsAdminTest extends HohenheimTestBase {
         navigateToApp("/admin/dns-zones/" + zoneId + "/page/records");
         waitForHydration();
         // The tab renders the record RESOURCE's own row surface, so the record is reachable
-        // twice by design: the title cell links to it, and so does the synthesized Edit row
-        // action beside it (the shape every generated list has). The compact row menu
-        // carries a COPY of that action for narrow cards (marked data-cms-lane="compact",
-        // revealed by a @container rule while the split lane is hidden); it is a register
-        // switch, not a third way to reach the record. Every link carries this tab as its
-        // return target (a write's fallback is the GLOBAL record list), hence the prefix match.
+        // twice by design: the title cell links to it, and so does the synthesized Edit at the
+        // head of the row menu (the shape every generated list has). A row with no lane button
+        // draws no compact menu: its one menu already fits a narrow card. Every link carries
+        // this tab as its return target (a write's fallback is the GLOBAL record list), hence
+        // the prefix match.
         assertThat(page.locator("a[href^='/admin/dns-records/" + recordId
             + "?']:not([data-cms-lane])").count())
-            .as("the title link plus the synthesized edit action").isEqualTo(2);
+            .as("the title link plus the synthesized edit in the menu").isEqualTo(2);
         assertThat(page.locator("a[href^='/admin/dns-records/" + recordId
             + "?'][data-cms-lane='compact']").count())
-            .as("and the compact register carries its one copy").isEqualTo(1);
+            .as("and no compact copy: the row has no lane to stand in for").isEqualTo(0);
         assertThat(page.locator("cms-inline-cell").count())
             .as("and its editable cells are offered in place").isGreaterThan(0);
         assertThat(page.locator("#add-record-link").count()).isEqualTo(1);

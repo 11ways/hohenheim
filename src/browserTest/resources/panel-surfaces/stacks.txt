@@ -90,8 +90,8 @@ filter name at=0 kind=TEXT facet=false param=filter.name
 filter status at=1 kind=SELECT facet=true param=filter.status
 filter enabled at=2 kind=BOOLEAN facet=false param=filter.enabled
 header hohenheim:reclaim_images at=0 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:DEFAULT,title:reclaim_images%252Cscope%3Dstack,body:reclaim_images_confirm%252Cscope%3Dstack,confirm:reclaim_images%252Cscope%3Dstack,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/action/reclaim_images
-row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row hohenheim:deploy_stack at=1 verb=invoke band=inline style=DEFAULT disabled= confirm=style:DEFAULT,title:deploy%252Cscope%3Dstack,body:deploy_confirm%252Cscope%3Dstack,confirm:deploy%252Cscope%3Dstack,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/deploy_stack
+row hohenheim:deploy_stack at=0 verb=invoke band=inline style=DEFAULT disabled= confirm=style:DEFAULT,title:deploy%252Cscope%3Dstack,body:deploy_confirm%252Cscope%3Dstack,confirm:deploy%252Cscope%3Dstack,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/deploy_stack
+row zenit:edit at=1 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
 row hohenheim:stop_stack at=2 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:DEFAULT,title:stop%252Cscope%3Dstack,body:stop_confirm%252Cscope%3Dstack,confirm:stop%252Cscope%3Dstack,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/stop_stack
 row hohenheim:rollback_stack at=3 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:DEFAULT,title:rollback%252Cscope%3Dstack,body:rollback_confirm%252Cscope%3Dstack,confirm:rollback%252Cscope%3Dstack,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/rollback_stack
 row hohenheim:refresh_stack at=4 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/refresh_stack
@@ -132,8 +132,8 @@ filter name at=0 kind=TEXT facet=false param=filter.name
 filter status at=1 kind=SELECT facet=true param=filter.status
 filter enabled at=2 kind=BOOLEAN facet=false param=filter.enabled
 header hohenheim:reclaim_images at=0 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:DEFAULT,title:reclaim_images%252Cscope%3Dstack,body:reclaim_images_confirm%252Cscope%3Dstack,confirm:reclaim_images%252Cscope%3Dstack,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/action/reclaim_images
-row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row hohenheim:deploy_stack at=1 verb=invoke band=inline style=DEFAULT disabled= confirm=style:DEFAULT,title:deploy%252Cscope%3Dstack,body:deploy_confirm%252Cscope%3Dstack,confirm:deploy%252Cscope%3Dstack,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/deploy_stack
+row hohenheim:deploy_stack at=0 verb=invoke band=inline style=DEFAULT disabled= confirm=style:DEFAULT,title:deploy%252Cscope%3Dstack,body:deploy_confirm%252Cscope%3Dstack,confirm:deploy%252Cscope%3Dstack,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/deploy_stack
+row zenit:edit at=1 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
 row hohenheim:refresh_stack at=2 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/refresh_stack
 row hohenheim:purge_stack_volumes at=3 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:purge_volumes%252Cscope%3Dstack,body:purge_volumes_confirm%252Cscope%3Dstack,confirm:purge_volumes_ok%252Cscope%3Dstack,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:%3Dbatch7-surf-inactive,input:false target=/{panel}/{entry}/{record}/action/purge_stack_volumes
 row zenit:delete at=4 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dstack,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
@@ -166,7 +166,7 @@ column name at=0 shown=true hidden=false sortable=false filterable=false copyabl
 column image at=1 shown=true hidden=false sortable=false filterable=false copyable=true subtext= relation=false
 column enabled at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column stack_id at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
-row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row zenit:edit at=0 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
 row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 tab history at=0 landing=false view=false
 control CREATE%20stack_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.stack,rules:,siblings:,resolver:,clearable:true,creatable:false
@@ -216,7 +216,7 @@ chrome - views=false advanced=false search=true columns=false rail=false selecti
 column container_path at=0 shown=true hidden=false sortable=false filterable=false copyable=true subtext=mode relation=false
 column mode at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
 column stack_service_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
-row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row zenit:edit at=0 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
 row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 tab history at=0 landing=false view=false
 control CREATE%20stack_service_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.stack_service,rules:,siblings:,resolver:,clearable:true,creatable:true

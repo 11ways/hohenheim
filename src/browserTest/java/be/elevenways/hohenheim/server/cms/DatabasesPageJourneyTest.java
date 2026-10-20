@@ -391,10 +391,11 @@ class DatabasesPageJourneyTest extends HohenheimTestBase {
                 .contains("Database " + PREFIX + "shared-shop is not running").contains("2 apps use it")
                 .doesNotContain(PREFIX + "shared-shop-app cannot use its database");
 
-            // 4. One verdict: the list's state cell, the Engines card, the app's Databases tab and Back up now all read
-            //    what the engine does, never the stored "active" the attention item contradicted.
-            assertThat(list).as("step 4: the list's state cell reads not running")
-                .contains("data-state=\"" + DatabaseVerdict.State.NOT_RUNNING.token() + "\"")
+            // 4. One verdict: the list's health glyph, the Engines card, the app's Databases tab and Back up now all
+            //    read what the engine does, never the stored "active" the attention item contradicted.
+            assertThat(list).as("step 4: the list's health glyph reads not running")
+                .contains("data-cms-health=\"" + DatabaseVerdict.State.NOT_RUNNING.tone().token() + "\" title=\""
+                    + say(DatabaseVerdict.State.NOT_RUNNING.label()) + "\"")
                 .as("step 4: the Engines card says the same").contains("1 database, not running");
             String cannotBackUp = "No backup can be made now. Its engine is not running.";
             assertThat(say(DatabaseParts.backUpUnavailable(shared)))
@@ -420,7 +421,8 @@ class DatabasesPageJourneyTest extends HohenheimTestBase {
             assertThat(AttentionCollector.databases()).as("step 5: no app is held back")
                 .noneSatisfy(item -> assertThat(item.causedBy()).isEqualTo(AttentionSubject.database(sharedId)));
             assertThat(adminGet("/admin/" + HohenheimSlugs.DATABASES).body()).as("step 5: the list reads running")
-                .contains("data-state=\"" + DatabaseVerdict.State.RUNNING.token() + "\"");
+                .contains("data-cms-health=\"" + DatabaseVerdict.State.RUNNING.tone().token() + "\" title=\""
+                    + say(DatabaseVerdict.State.RUNNING.label()) + "\"");
             assertThat(DatabaseParts.backUpUnavailable(shared)).as("step 5: Back up now is live again").isNull();
             assertThat(say(DatabaseParts.neverBackedUpDetail(shared))).as("step 5: Last backup offers it again")
                 .isEqualTo("Back up now, or wait for the nightly backup");

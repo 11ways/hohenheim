@@ -76,8 +76,8 @@ column created_at at=3 shown=true hidden=false sortable=false filterable=false c
 filter name at=0 kind=TEXT facet=false param=filter.name
 filter format at=1 kind=SELECT facet=true param=filter.format
 header hohenheim:route_notification_events at=0 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:DEFAULT,title:route_events%252Cscope%3Dnotification_channel,body:routes_help%252Cscope%3Dnotification_channel,confirm:routes_save%252Cscope%3Dnotification_channel,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:true target=/{panel}/{entry}/invoke/hohenheim.route_notification_events
-row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row hohenheim:test_channel at=1 verb=invoke band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/test_channel
+row hohenheim:test_channel at=0 verb=invoke band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/test_channel
+row zenit:edit at=1 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
 row zenit:delete at=2 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dnotification_channel,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 inline name
 tab history at=0 landing=false view=false
@@ -100,8 +100,8 @@ chrome - views=false advanced=false search=true columns=false rail=false selecti
 column name at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext= relation=false
 column kind at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
 column created_at at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row hohenheim:test_backup_target at=1 verb=invoke band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/test_backup_target
+row hohenheim:test_backup_target at=0 verb=invoke band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/test_backup_target
+row zenit:edit at=1 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
 row zenit:delete at=2 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 tab history at=0 landing=false view=false
 control CREATE%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=

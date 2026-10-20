@@ -48,6 +48,8 @@ import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.CellMapper;
+import be.elevenways.zenit.cms.common.resource.RecordHealth;
+import be.elevenways.zenit.cms.common.resource.ResourceHealth;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.cms.server.render.action.RowOffer;
@@ -596,26 +598,24 @@ class GroupedReadsQueryCountJourneyTest extends HohenheimTestBase {
             Models.get(InstanceModel.class).save(runningApp);
             local.restore();
 
-            // 3. The databases list's state cells over one running dedicated database, then three running and one
+            // 3. The databases list's health cells over one running dedicated database, then three running and one
             //    stopped: the serving instances, then the records' hosts and those instances' hosts together, are
-            //    read once for the page, and each cell says what its engine does.
+            //    read once for the page, and each glyph says what its engine does.
             List<Row> page = new ArrayList<>();
             for (int i = 0; i < 3; i++) {
                 page.add(dedicated(cleanup, "cell" + i));
             }
             page.add(dedicated(cleanup, "cell3", InstanceModel.STATUS_STOPPED));
             Map<String, Integer> cellReads = Map.of("instances", 1, "servers", 1);
-            Cells oneCell = cells(HohenheimSlugs.DATABASES, "state", page.subList(0, 1), "instances", "servers");
+            String running = DatabaseVerdict.State.RUNNING.tone().token();
+            String notRunning = DatabaseVerdict.State.NOT_RUNNING.tone().token();
+            Cells oneCell = healthTones(HohenheimSlugs.DATABASES, page.subList(0, 1), "instances", "servers");
             assertThat(oneCell.statements()).as("step 3: one database row").isEqualTo(cellReads);
-            assertThat(oneCell.cells()).as("step 3: its engine runs")
-                .extracting(cell -> ((StateLineCell) cell).state())
-                .containsExactly(DatabaseVerdict.State.RUNNING.token());
-            Cells fourCells = cells(HohenheimSlugs.DATABASES, "state", page, "instances", "servers");
+            assertThat(oneCell.cells()).as("step 3: its engine runs").containsExactly(running);
+            Cells fourCells = healthTones(HohenheimSlugs.DATABASES, page, "instances", "servers");
             assertThat(fourCells.statements()).as("step 3: four database rows, the same reads").isEqualTo(cellReads);
             assertThat(fourCells.cells()).as("step 3: the stopped engine's row says so")
-                .extracting(cell -> ((StateLineCell) cell).state())
-                .containsExactly(DatabaseVerdict.State.RUNNING.token(), DatabaseVerdict.State.RUNNING.token(),
-                    DatabaseVerdict.State.RUNNING.token(), DatabaseVerdict.State.NOT_RUNNING.token());
+                .containsExactly(running, running, running, notRunning);
 
             // 3b. A record whose host no longer resolves (its engine token unknown) has no owner, and neither has a
             //     shared record naming no engine; judged alone or in a page: no engine, though an instance the first
@@ -895,6 +895,23 @@ class GroupedReadsQueryCountJourneyTest extends HohenheimTestBase {
             CellMapper<Row> cells = Objects.requireNonNull(entry.reads().readPage(rows, operator), "a page batch");
             for (Row row : rows) {
                 answered.add(Objects.requireNonNull(cells.cell(row, spec), "the page answers every row's " + column));
+            }
+        }
+        return new Cells(answered, tableCounts(probe.preparedStatements(), tables));
+    }
+
+    /** Reads one list's page of health verdicts as the list page does (one read), counting each table's reads. */
+    private static Cells healthTones(String slug, List<Row> rows, String... tables) {
+        AccessContext operator = TenantConduits.operator();
+        ResourceHealth<Row> health = Objects.requireNonNull(PanelEntryViews.of(HohenheimSlugs.ADMIN, slug).health(),
+            "the list declares its health");
+        DatasourceProbe probe = DatasourceProbe.on((SqlDatasource) Datasources.getDefault());
+        List<Object> answered = new ArrayList<>();
+        try (DatasourceProbe.Armed ignored = probe.recordStatements()) {
+            probe.reset();
+            Function<Row, RecordHealth> verdicts = health.read(rows, operator);
+            for (Row row : rows) {
+                answered.add(verdicts.apply(row).tone().token());
             }
         }
         return new Cells(answered, tableCounts(probe.preparedStatements(), tables));

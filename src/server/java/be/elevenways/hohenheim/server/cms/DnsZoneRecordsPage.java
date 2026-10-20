@@ -252,7 +252,7 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
         vars.put("origin", origin);
         vars.put("available", true);
         vars.put("table", table);
-        vars.put("hasRowActions", table.rows().stream().anyMatch(TableState.RowState::hasAnyActions));
+        vars.put("hasRowActions", table.hasRowActionCells());
         vars.put("panelSlug", PANEL);
         vars.put("resourceSlug", resource.slug());
         vars.put("listUrl", listUrl);

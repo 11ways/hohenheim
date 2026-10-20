@@ -84,12 +84,12 @@
         <pl-table-header>
             <pl-table-row>
                 {% each table.columns as column %}
+                {% if column.drawsOwnColumn %}
                 <pl-table-head data-column={% column.name %} data-alignment={% column.alignment %}>{{ column.label }}</pl-table-head>
+                {% /if %}
                 {% /each %}
                 {% if hasRowActions %}
-                {#- data-sticky="end" is plumage's pinned-column contract, matched by the
-                    row partial's own action cell. -#}
-                <pl-table-head class="cms-chrome-head" data-sticky="end">{{ t("actions", scope: "cms") }}</pl-table-head>
+                {% render "zenitcms:pages/resource-list-action-head" %}
                 {% /if %}
             </pl-table-row>
         </pl-table-header>

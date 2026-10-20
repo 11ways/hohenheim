@@ -13,6 +13,7 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.i18n.wording.Wording;
 import be.elevenways.zenit.cms.common.CmsMicrocopy;
 import be.elevenways.zenit.cms.common.resource.RecordOverview;
+import be.elevenways.zenit.cms.common.resource.ResourceHealth;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.ui.BadgeVariant;
 import be.elevenways.hohenheim.HohenheimEndpoints;
@@ -353,9 +354,11 @@ public final class DatabaseParts {
      */
     public static @NonNull PanelResource<Row> admin() {
         TableSpec<Row> table = TableSpec.<Row>builder()
-            // The name with where it runs under it, the engine, what uses it and its last backup.
+            // The state as a glyph before the name with its problem under it, else the name with where it runs under
+            // it; the engine, what uses it and its last backup.
             // The name inside the engine, the host, the placement and its engine move behind the picker and the
             // filters; the overview and the Restore tab carry them.
+            .column(ResourceHealth.columnWithHiddenHeader())
             .column(ColumnSpec.fromField(DatabaseModel.NAME).filterable().subtext(RUNS_ON_COLUMN).build())
             .column(ColumnSpec.virtual(RUNS_ON_COLUMN, HohenheimMicrocopy.DATABASE_LIST.of("runs_on_column")).hidden()
                 .build())
@@ -364,7 +367,6 @@ public final class DatabaseParts {
                 .renderer(CmsTemplateIds.CELL_RECORD_LINKS).build())
             .column(ColumnSpec.virtual(LAST_BACKUP_COLUMN, HohenheimMicrocopy.DATABASE_LIST.of("last_backup_column"))
                 .renderer(HohenheimTemplateIds.CELL_STATE_LINE).build())
-            .column(stateColumn())
             .column(ColumnSpec.fromField(DatabaseModel.DB_NAME).filterable().copyable().hidden().build())
             .column(ColumnSpec.fromField(DatabaseModel.SERVER_ID)
                 .relation(RelationPick.of(DatabaseModel.SERVER_ID, ServerModel.MODEL_ID).build()).hidden().build())
@@ -388,6 +390,11 @@ public final class DatabaseParts {
                 .label(FieldLabels.labelFor(DatabaseModel.STATUS)).build())
             .build();
         return entry(HohenheimIds.id("database"))
+            // The database's state, read for a page at once: the list's glyph and the overview's first band.
+            .health(ResourceHealth.batch((databases, access) -> {
+                Function<Row, DatabaseVerdict> verdicts = DatabaseVerdict.ofDatabases(databases);
+                return database -> verdicts.apply(database).health();
+            }))
             // One of the admin sidebar's eight rows; the /manage twin keeps its group.
             .navGroup(NavGroup.DEFAULT)
             .navOrder(30)
@@ -402,8 +409,6 @@ public final class DatabaseParts {
                     (database, request) -> usedByCell(database, request))
                 .computed(Objects.requireNonNull(table.column(LAST_BACKUP_COLUMN)),
                     (database, request) -> lastBackupCell(database, request))
-                .computed(Objects.requireNonNull(table.column(STATE_COLUMN)),
-                    (database, request) -> DatabaseVerdict.ofDatabase(database).cell())
                 .rowLinkToTab(RecordOverview.SLUG)
                 // The selected database's Overview beside the list (the board's 2fr / 1fr): its connection, users
                 // and backups, under the Overview tab's own gate.

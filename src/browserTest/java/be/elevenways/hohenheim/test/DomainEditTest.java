@@ -135,15 +135,15 @@ class DomainEditTest extends HohenheimTestBase {
         assertThat(page.locator("body").textContent()).as("the tab lists the hostname")
             .contains(f.hostname());
         // The hostname's row is the domain child list's own: its edit opens the form and its remove detaches it,
-        // each bound back to this tab.
+        // each bound back to this tab. Both sit in the row's menu, whose content the client portals out of the
+        // section: read them off the served page.
         var section = page.locator("[data-cms-child-list='domains']");
         assertThat(section.count()).as("the tab embeds the domains section").isEqualTo(1);
-        var edit = section.locator("[data-action-id='zenit:edit'][href^='/admin/domains/" + domainId + "?']");
-        assertThat(edit.count()).as("the row carries an edit link to the domain's form").isGreaterThanOrEqualTo(1);
-        assertThat(edit.first().getAttribute("href"))
-            .as("the edit link carries the tab as its return target").contains("_return=");
-        // The remove sits in the row's menu, whose content the client portals out of the section: read it off the
-        // served page.
+        String html = adminGet("/admin/sites/" + siteId + "/page/domains").body();
+        Matcher edit = Pattern.compile("href=\"(/admin/domains/" + domainId + "\\?[^\"]*)\"[^>]*"
+            + "data-action-id=\"zenit:edit\"").matcher(html);
+        assertThat(edit.find()).as("the row's menu carries an edit link to the domain's form").isTrue();
+        assertThat(edit.group(1)).as("the edit link carries the tab as its return target").contains("_return=");
         assertThat(removeTarget(siteId, domainId))
             .as("and a remove that is a real submit to the delete route, never a bare link")
             .contains("/admin/domains/" + domainId + "/delete");

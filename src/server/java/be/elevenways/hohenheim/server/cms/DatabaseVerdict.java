@@ -13,6 +13,8 @@ import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.database.EngineHost;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.render.table.EnumBadgeState;
+import be.elevenways.zenit.cms.common.resource.HealthTone;
+import be.elevenways.zenit.cms.common.resource.RecordHealth;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.ui.BadgeVariant;
@@ -140,6 +142,17 @@ record DatabaseVerdict(@NonNull State state, @Nullable Microcopy reason) {
         @Nullable AttentionSeverity severity() {
             return this.severity;
         }
+
+        /** @return the health tone this state reads as on the database's health surfaces */
+        @NonNull HealthTone tone() {
+            return switch (this) {
+                case RUNNING -> HealthTone.OK;
+                // Pending (being set up) or untold (the host did not answer): nothing to act on yet.
+                case PROVISIONING, UNREACHABLE -> HealthTone.UNKNOWN;
+                case NOT_RUNNING -> HealthTone.ATTENTION;
+                case SETUP_FAILED, REMOVE_FAILED, STOPPED_AFTER_ERROR, OUT_OF_MEMORY -> HealthTone.BROKEN;
+            };
+        }
     }
 
     /** @return this database record's verdict: its lifecycle, then the engine instance serving it */
@@ -229,6 +242,11 @@ record DatabaseVerdict(@NonNull State state, @Nullable Microcopy reason) {
     /** @return the verdict as a list cell: the state's badge, and why under it */
     @NonNull StateLineCell cell() {
         return StateLineCell.of(this.state, this.reason);
+    }
+
+    /** @return the verdict as the database's health: its state in words, and why */
+    @NonNull RecordHealth health() {
+        return new RecordHealth(this.state.tone(), this.state.label(), this.reason, List.of(), null);
     }
 
     /** @return the verdict as an enum-style badge (the host page's workload rows) */

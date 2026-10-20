@@ -240,7 +240,7 @@ class AppsListJourneyTest extends HohenheimTestBase {
                 .as("step 9: never as None").doesNotContain(">None<");
             assertThat(adminGet("/admin/apps?_search=" + PREFIX + "stack-site").body())
                 .as("step 9: the served website's row names the host")
-                .containsPattern("data-column=\"host\"[^>]*><div class=\"cms-cell-clamp\">\\s*" + host + "\\s*<");
+                .containsPattern("data-column=\"host\"[^>]*>\\s*<div class=\"cms-cell-clamp\"[^>]*>\\s*" + host + "\\s*<");
 
             // 10. A catch-all website (only a pattern) serves its visitors, and its verdict says what it catches: a
             //     pattern is never presented as an address to visit ("Live at *.catch...").
