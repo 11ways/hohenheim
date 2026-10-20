@@ -191,6 +191,25 @@ kuifje and every server after it follow this list:
 
 The first host installed this way is kuifje, the DNS primary.
 
+## Deploying a new jar: `tools/deploy-host.sh <target> <jar>`
+
+Every later jar swap is one invocation of `tools/deploy-host.sh` (its `--help`
+lists the steps and gates; `tools/deploy-host.test.sh` is its regression net).
+Two of its steps are sized from the host itself:
+
+- Step 5 rehearses the migrations against a byte copy with the JVM options the
+  service unit declares: `JAVA_TOOL_OPTIONS` is read from
+  `systemctl show <service> -p Environment`, the way the java path is read from
+  `ExecStart`, and printed. Without it the rehearsal ran on the JVM default heap
+  (a quarter of RAM) and could pass on a heap the migrating boot never gets; a
+  unit that declares none is warned about.
+- Step 7's health budget: the service migrates at BOOT, so unless
+  `--health-timeout` names one, the budget is `2 x <rehearsal seconds> + 120`
+  from the rehearsal's measured wall time (600 s when the host reported none),
+  printed with that reasoning. Measured: kuifje ~170 s rehearsal + 18 s boot,
+  robbedoes ~186 s + 47 s, both past the old fixed 120 s. `--rollback` keeps
+  120 s: the older jar migrates nothing.
+
 ### Naming
 
 Servers are named after Franco-Belgian comic heroes, in Dutch: `kuifje` (the
@@ -352,7 +371,8 @@ firewall role.
     User=hohenheim
     Group=hohenheim
     WorkingDirectory=/opt/hohenheim
-    ExecStart=/usr/bin/java -Xmx768m -XX:MaxMetaspaceSize=256m -jar /opt/hohenheim/hohenheim-server.jar
+    Environment="JAVA_TOOL_OPTIONS=-Xms128m -Xmx768m -XX:MaxMetaspaceSize=256m -XX:+UseSerialGC"
+    ExecStart=/usr/bin/java -jar /opt/hohenheim/hohenheim-server.jar
     SuccessExitStatus=143
     Restart=on-failure
     RestartSec=5
@@ -360,7 +380,9 @@ firewall role.
     [Install]
     WantedBy=multi-user.target
 
-Sizing: on a 3.9 GB host the JVM peaked at ~820 MB with three workloads (two
+The JVM options live in `JAVA_TOOL_OPTIONS`, not on the `ExecStart` line:
+`deploy-host.sh` reads them from there to give its migration rehearsal the same
+heap. Sizing: on a 3.9 GB host the JVM peaked at ~820 MB with three workloads (two
 containers + one 512 MB VM); -Xmx768m is a comfortable ceiling. The first boot
 runs every migration and prints `roles_captured` naming the enabled roles --
 verify that line before anything else.

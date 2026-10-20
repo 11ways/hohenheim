@@ -36,7 +36,12 @@ SERVICE_USER="hohenheim"
 PREFIX=""
 DB_PATH=""
 HEALTH_URL="http://127.0.0.1:3000/api/health"
+# The health budget. Unless --health-timeout names one, it is derived after step 5
+# from the rehearsal's own wall time: the service migrates at BOOT, so the probe must
+# outlast a boot that runs the same migrations the rehearsal just timed.
 HEALTH_TIMEOUT="120"
+HEALTH_TIMEOUT_MIN="120"
+HEALTH_TIMEOUT_EXPLICIT="no"
 PREFLIGHT_DIR=""
 REHEARSE_DIR=""
 # Where every lane's preflight backup lives; retention prunes only this pattern.
@@ -93,9 +98,11 @@ Options:
   --db <path>            sqlite control plane (default <prefix>/hohenheim.db)
   --health-url <url>     probed after every restart
                          (default http://127.0.0.1:3000/api/health)
-  --health-timeout <s>   give up after this many seconds (default 120, polled
-                         every 2s); on give-up the lane STOPS and prints the
-                         rollback commands -- it never rolls back by itself
+  --health-timeout <s>   give up after this many seconds (polled every 2s); on
+                         give-up the lane STOPS and prints the rollback commands
+                         -- it never rolls back by itself. Default: derived from
+                         the rehearsal's wall time, 2 x rehearsal + 120 (600
+                         when unmeasured; 120 for --rollback, which migrates nothing)
   --preflight <dir>      preflight directory on the host
                          (default /root/hohenheim-preflight-<stamp>)
   --java <path>          local java used for the stamp check (default java)
@@ -121,7 +128,7 @@ while [ $# -gt 0 ]; do
         --prefix) PREFIX="${2:-}"; shift 2 ;;
         --db) DB_PATH="${2:-}"; shift 2 ;;
         --health-url) HEALTH_URL="${2:-}"; shift 2 ;;
-        --health-timeout) HEALTH_TIMEOUT="${2:-}"; shift 2 ;;
+        --health-timeout) HEALTH_TIMEOUT="${2:-}"; HEALTH_TIMEOUT_EXPLICIT="yes"; shift 2 ;;
         --preflight) PREFLIGHT_DIR="${2:-}"; shift 2 ;;
         --java) JAVA_BIN="${2:-}"; shift 2 ;;
         --rollback) MODE="rollback"; shift ;;
@@ -387,7 +394,11 @@ PY
 printf 'Hohenheim deploy lane%s\n' "$([ "$DRY_RUN" = yes ] && printf ' (dry run)' || true)"
 info "target=$TARGET ssh=$SSH_TARGET service=$SERVICE"
 info "jar=$REMOTE_JAR prefix=$PREFIX db=$DB_PATH user=$SERVICE_USER"
-info "preflight=$PREFLIGHT_DIR health=$HEALTH_URL (up to ${HEALTH_TIMEOUT}s)"
+if [ "$HEALTH_TIMEOUT_EXPLICIT" = "yes" ]; then
+    info "preflight=$PREFLIGHT_DIR health=$HEALTH_URL (up to ${HEALTH_TIMEOUT}s, --health-timeout)"
+else
+    info "preflight=$PREFLIGHT_DIR health=$HEALTH_URL (budget derived from the step 5 rehearsal)"
+fi
 [ -n "$SUDO" ] && info "privilege: $SUDO (the ssh user is not root)" || info "privilege: none needed (root over ssh)"
 
 probe_health() {
@@ -585,6 +596,12 @@ step "5. Rehearse the migrations against a byte copy (never the live file)"
 # still-running jar, and a later rollback would boot that jar without them. So the
 # settings root is a copy under the rehearsal dir; the working directory stays the
 # prefix so the shipped defaults resolve as they do for the service.
+#
+# The rehearsal JVM gets the service unit's JAVA_TOOL_OPTIONS (heap, metaspace, GC,
+# tmpdir), read the way ExecStart's java path is: without them it ran on the JVM
+# default heap, a quarter of RAM, so a rehearsal could pass on a heap the migrating
+# boot never gets. systemctl show quotes an assignment holding spaces, which xargs
+# unquotes. Its wall time is measured too: it sets the health budget below.
 REHEARSAL="$(remote "set -e
 $SUDO install -d -o '$SERVICE_USER' -g '$SERVICE_USER' -m 0755 '$REHEARSE_DIR'
 $SUDO install -o '$SERVICE_USER' -g '$SERVICE_USER' -m 0644 '$STAGED_JAR' '$REHEARSE_DIR/new.jar'
@@ -595,16 +612,42 @@ $SUDO chown -R '$SERVICE_USER:$SERVICE_USER' '$REHEARSE_DIR/settings'
 JAVA=\$($SUDO systemctl show '$SERVICE' -p ExecStart --value 2>/dev/null | sed -n 's/.*path=\\([^ ;]*\\).*/\\1/p')
 [ -x \"\$JAVA\" ] || JAVA=\$(command -v java)
 echo \"@@java \$JAVA\"
+JVM_OPTS=\$($SUDO systemctl show '$SERVICE' -p Environment --value 2>/dev/null | xargs -n1 printf '%s\\n' | sed -n 's/^JAVA_TOOL_OPTIONS=//p' | tail -n 1)
+echo \"@@jvm \$JVM_OPTS\"
 set +e
-cd '$PREFIX' && $RUN_AS \"\$JAVA\" -Dzenit.settings.root='$REHEARSE_DIR' -jar '$REHEARSE_DIR/new.jar' --rehearse-migrations '$REHEARSE_DIR/rehearse.db' 2>&1
-echo \"@@rehearse \$?\"")" || fail "the rehearsal could not run on the host"
+started=\$(date +%s)
+cd '$PREFIX' && $RUN_AS env JAVA_TOOL_OPTIONS=\"\$JVM_OPTS\" \"\$JAVA\" -Dzenit.settings.root='$REHEARSE_DIR' -jar '$REHEARSE_DIR/new.jar' --rehearse-migrations '$REHEARSE_DIR/rehearse.db' 2>&1
+rc=\$?
+echo \"@@seconds \$((\$(date +%s) - started))\"
+echo \"@@rehearse \$rc\"")" || fail "the rehearsal could not run on the host"
 
 if [ "$DRY_RUN" = "no" ]; then
     printf '%s\n' "$REHEARSAL" | /usr/bin/grep -v '^@@' | sed 's/^/   /'
+    JVM_OPTS="$(printf '%s\n' "$REHEARSAL" | sed -n 's/^@@jvm //p' | tail -1)"
+    if [ -n "$JVM_OPTS" ]; then
+        info "rehearsal JVM options (the $SERVICE unit's JAVA_TOOL_OPTIONS): $JVM_OPTS"
+    else
+        warn "the $SERVICE unit declares no JAVA_TOOL_OPTIONS; the rehearsal ran on the JVM default heap"
+    fi
     REHEARSE_EXIT="$(printf '%s\n' "$REHEARSAL" | sed -n 's/^@@rehearse //p' | tail -1)"
     [ "$REHEARSE_EXIT" = "0" ] \
         || fail "--rehearse-migrations exited $REHEARSE_EXIT against the copy; the live database was not touched and nothing was swapped"
-    info "rehearsal green"
+    REHEARSE_SECONDS="$(printf '%s\n' "$REHEARSAL" | sed -n 's/^@@seconds //p' | tail -1)"
+    info "rehearsal green in ${REHEARSE_SECONDS:-?}s"
+    if [ "$HEALTH_TIMEOUT_EXPLICIT" = "yes" ]; then
+        info "health budget ${HEALTH_TIMEOUT}s, as --health-timeout named"
+    else
+        case "$REHEARSE_SECONDS" in
+            ''|*[!0-9]*)
+                HEALTH_TIMEOUT=600
+                warn "the rehearsal's wall time was not reported; health budget ${HEALTH_TIMEOUT}s" ;;
+            *)
+                # The boot runs the migrations the rehearsal timed, and then boots: twice that plus
+                # the base budget covers a host slower under the live service's own load.
+                HEALTH_TIMEOUT=$((2 * REHEARSE_SECONDS + HEALTH_TIMEOUT_MIN))
+                info "health budget ${HEALTH_TIMEOUT}s = 2 x ${REHEARSE_SECONDS}s rehearsal + ${HEALTH_TIMEOUT_MIN}s (the boot migrates; no --health-timeout given)" ;;
+        esac
+    fi
 fi
 
 # --- 6. the swap ------------------------------------------------------------

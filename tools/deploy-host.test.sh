@@ -117,7 +117,9 @@ case "$script" in
     *"--rehearse-migrations"*)
         log "rehearse"
         printf '@@java /usr/bin/java\n'
+        printf '@@jvm %s\n' "${FAKE_JVM_OPTS--Xms128m -Xmx768m -XX:+UseSerialGC}"
         printf 'Rehearsal complete: 1 applied against /opt/hohenheim-rehearse-x/rehearse.db; the live database was not touched.\n'
+        printf '@@seconds %s\n' "${FAKE_REHEARSE_SECONDS:-170}"
         printf '@@rehearse %s\n' "${FAKE_REHEARSE_EXIT:-0}"
         ;;
     *"@@stat"*)
@@ -259,6 +261,26 @@ expect "the rehearsal copies the settings directory" "$SCRIPTS" \
     "cp -a '/opt/hohenheim/settings' '/opt/hohenheim-rehearse-"
 expect "the rehearsal boots on that copy, never the live settings" "$SCRIPTS" \
     "-Dzenit.settings.root='/opt/hohenheim-rehearse-"
+expect "the rehearsal reads the service unit's environment" "$SCRIPTS" \
+    "systemctl show 'hohenheim' -p Environment --value"
+expect "and runs the JVM with the unit's JAVA_TOOL_OPTIONS" "$SCRIPTS" \
+    "env JAVA_TOOL_OPTIONS=\"\$JVM_OPTS\" \"\$JAVA\""
+expect "the rehearsal's JVM options are printed" "$OUT" \
+    "rehearsal JVM options (the hohenheim unit's JAVA_TOOL_OPTIONS): -Xms128m -Xmx768m -XX:+UseSerialGC"
+expect "the rehearsal is timed on the host" "$SCRIPTS" "echo \"@@seconds"
+expect "the health budget derives from the rehearsal's wall time and says why" "$OUT" \
+    "health budget 460s = 2 x 170s rehearsal + 120s (the boot migrates; no --health-timeout given)"
+expect "the probe uses that derived budget" "$(cat "$HEALTH_SCRIPT")" "+ 460))"
+expect "step 7 names the derived budget" "$OUT" "7. Health probe (up to 460s"
+
+# The JVM options must survive the unquoting the host applies to systemctl's output.
+UNIT_ENV='"JAVA_TOOL_OPTIONS=-Xms128m -Xmx768m -Djava.io.tmpdir=/opt/hohenheim/tmp" TZ=Europe/Brussels'
+PARSED="$(printf '%s\n' "$UNIT_ENV" | xargs -n1 printf '%s\n' | sed -n 's/^JAVA_TOOL_OPTIONS=//p' | tail -n 1)"
+if [ "$PARSED" = "-Xms128m -Xmx768m -Djava.io.tmpdir=/opt/hohenheim/tmp" ]; then
+    ok "a quoted JAVA_TOOL_OPTIONS assignment is read whole"
+else
+    no "a quoted JAVA_TOOL_OPTIONS assignment is read whole (got '$PARSED')"
+fi
 
 LOG="$(cat "$SSH_LOG")"
 ORDER="$(/usr/bin/grep -v '^scp ' "$SSH_LOG" | tr '\n' ' ')"
@@ -275,6 +297,14 @@ expect "step 2 names the repos the pending deploy replaces" "$STEP2" \
     "the host lacks pushed commits of upstream repos (the deploy is pending): zenit"
 expect "step 2 never reads the OLD jar's pushed-ahead as pushed after this build" "$OUT" \
     "pushed after this build" no
+
+# An explicit --health-timeout wins over the derived budget; a quick rehearsal still gets the base 120s.
+OUT="$(run_lane testbox "$JAR" --health-timeout 900)" || no "the lane with an explicit budget exits 0"
+expect "an explicit --health-timeout wins" "$OUT" "health budget 900s, as --health-timeout named"
+expect "and the probe uses it" "$(cat "$HEALTH_SCRIPT")" "+ 900))"
+OUT="$(FAKE_REHEARSE_SECONDS=0 FAKE_JVM_OPTS= run_lane testbox "$JAR")" || no "the lane with a quick rehearsal exits 0"
+expect "a quick rehearsal keeps the base budget" "$OUT" "health budget 120s = 2 x 0s rehearsal + 120s"
+expect "a unit without JAVA_TOOL_OPTIONS is warned about" "$OUT" "declares no JAVA_TOOL_OPTIONS"
 
 # --- 2. refusal: a dirty stamp ----------------------------------------------
 
