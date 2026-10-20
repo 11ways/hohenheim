@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.server.source.WebhookOutcome;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -351,13 +352,15 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
             .as("step 6: a running deploy re-renders the tab live").contains("data-hh-deploys-live")
             .as("step 6: watching the deploys feed").contains("instance_deploys_live");
 
-        // 7. A build is named after its app and its number, never its commit: that title is what every activity line
-        //    about it says ("Jelle started appdeploys-app #12"), and a hash overflowed the dashboard's recent list.
+        // 7. A build is named as a deploy of its app, never by its commit nor its installation-wide id: that title is
+        //    what every activity line about it says (mockup: "Staging API deploy started by a push"), and a hash
+        //    overflowed the dashboard's recent list. Named so only for a reader who may read the app.
         BuildOperationModel builds = Models.get(BuildOperationModel.class);
         Integer liveBuild = buildIds.get(0);
-        assertThat(builds.getDisplayTitle(builds.findById(liveBuild), null))
-            .as("step 7: the build reads as its app and number").isEqualTo(PREFIX + "app #" + liveBuild)
-            .as("step 7: never its commit").doesNotContain(LIVE_SHA);
+        String title = builds.resolveDisplayTitle(builds.findById(liveBuild), null, TenantConduits.operator());
+        assertThat(title).as("step 7: the build reads as a deploy of its app").isEqualTo(PREFIX + "app deploy")
+            .as("step 7: never its commit").doesNotContain(LIVE_SHA)
+            .as("step 7: nor its id").doesNotContain("#");
     }
 
     /** The history row carrying a release mark, up to the next row. */

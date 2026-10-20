@@ -27,6 +27,8 @@ import java.net.http.HttpResponse;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -123,6 +125,10 @@ class ProjectPagesJourneyTest extends HohenheimTestBase {
             .contains(PREFIX + "webshop", PREFIX + "production");
         assertThat(variablesTrail).as("step 4: the environment's crumb never repeats its project")
             .doesNotContain(PREFIX + "webshop" + EnvironmentModel.PROJECT_SEPARATOR);
+        Matcher documentTitle = Pattern.compile("<title>([^<]*)</title>").matcher(variables);
+        assertThat(documentTitle.find()).as("step 4: the page declares its document title").isTrue();
+        assertThat(documentTitle.group(1)).as("step 4: the environment's own page names it with its project")
+            .contains(PREFIX + "webshop" + EnvironmentModel.PROJECT_SEPARATOR + PREFIX + "production");
 
         // 5. A new variable starts as a plain one, so its value field is there before anything is picked.
         PanelResource<Row> variableEntry = (PanelResource<Row>) Objects.requireNonNull(

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.model.FirstPerOwner;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -10,7 +11,6 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.GroupedRows;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
@@ -18,7 +18,6 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -174,19 +173,9 @@ public final class OwnedInstances {
      */
     public static @NonNull Map<Integer, Row> soleOwnedAmong(@NonNull Identifier model,
                                                            @NonNull Collection<Integer> recordIds) {
-        Map<Integer, Row> owned = new HashMap<>();
-        if (recordIds.isEmpty()) {
-            return owned;
-        }
-        for (GroupedRows.Group<Integer, Row> group : Models.get(InstanceModel.class).find()
-                .where(InstanceModel.GENERATED_FOR_MODEL.eq(model.toString()))
-                .orderBy(InstanceModel.ID, SortOrder.DESC)
-                .firstPerGroup(InstanceModel.GENERATED_FOR_ID, 1, recordIds).groups()) {
-            if (group.key() != null && !group.rows().isEmpty()) {
-                owned.put(group.key(), group.rows().get(0));
-            }
-        }
-        return owned;
+        return FirstPerOwner.of(Models.get(InstanceModel.class).find()
+            .where(InstanceModel.GENERATED_FOR_MODEL.eq(model.toString()))
+            .orderBy(InstanceModel.ID, SortOrder.DESC), InstanceModel.GENERATED_FOR_ID, recordIds);
     }
 
     /**

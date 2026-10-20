@@ -1,9 +1,11 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.zenit.common.data.RecordSource;
+import be.elevenways.zenit.common.data.RecordSourceRegistry;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import be.elevenways.hohenheim.HohenheimIds;
@@ -17,6 +19,12 @@ import be.elevenways.zenit.common.orm.field.TextField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
+
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * An environment inside one project (production, staging, ...): a GROUPING of
@@ -69,28 +77,33 @@ public class EnvironmentModel extends Model {
      * An environment is named with its project ("Webshop / production"): two projects' "production" are told apart in
      * every list, picker and history line outside their own project page.
      *
-     * AIDEV-NOTE: the one place an environment's title is decided; {@link #resolveTitleBeneathParent} keeps the bare
-     * name for the crumb under the project's own crumb. The title reads the project row by key, as every title surface
-     * of an admin-only environment may.
+     * AIDEV-NOTE: the one place an environment's title is decided. The projects of a page of environments are titled
+     * in one read through the project source, as the reader may read them (referencedTitles); one the reader may not
+     * read, and every title asked without a reader (a background lane), is the bare name, as is the crumb under the
+     * project's own crumb (resolveTitleBeneathParent).
      *
-     * @return null when the environment has no name, so the pk fallback applies
+     * @return per row, null when the environment has no name, so the pk fallback applies
      */
     @Override
-    public @Nullable String resolveDisplayTitle(@NonNull Row row, @Nullable LocaleChain chain) {
-        String name = super.resolveDisplayTitle(row, chain);
-        Integer projectId = row.get(PROJECT_ID);
-        if (name == null || projectId == null) {
-            return name;
+    public @NonNull List<@Nullable String> resolveDisplayTitles(@NonNull List<Row> rows, @Nullable LocaleChain chain,
+                                                                @Nullable AccessContext reader) {
+        Set<Integer> projectIds = new LinkedHashSet<>();
+        for (Row row : rows) {
+            Integer projectId = row.get(PROJECT_ID);
+            if (projectId != null) {
+                projectIds.add(projectId);
+            }
         }
-        ProjectModel projects = Models.get(ProjectModel.class);
-        Row project = projects.find().where(ProjectModel.ID.eq(projectId)).first();
-        String projectTitle = project != null ? projects.resolveDisplayTitle(project, chain) : null;
-        return projectTitle != null ? projectTitle + PROJECT_SEPARATOR + name : name;
-    }
-
-    @Override
-    public @Nullable String resolveTitleBeneathParent(@NonNull Row row, @Nullable LocaleChain chain) {
-        return super.resolveDisplayTitle(row, chain);
+        RecordSource<?> projects = RecordSourceRegistry.INSTANCE.byId(ProjectModel.MODEL_ID);
+        Map<String, String> named = reader == null || projectIds.isEmpty() || projects == null
+            || !projects.authorizes(reader) ? Map.of() : projects.referencedTitles(projectIds, chain, reader);
+        List<@Nullable String> titles = new ArrayList<>(rows.size());
+        for (Row row : rows) {
+            String name = super.resolveDisplayTitle(row, chain);
+            String project = named.get(String.valueOf((Object) row.get(PROJECT_ID)));
+            titles.add(name == null || project == null ? name : project + PROJECT_SEPARATOR + name);
+        }
+        return titles;
     }
 
     @Override public Identifier getModelId() { return MODEL_ID; }

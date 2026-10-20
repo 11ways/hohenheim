@@ -1,17 +1,16 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.DateTimeField;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Model;
-import be.elevenways.zenit.common.orm.query.GroupedRows;
 import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -37,27 +36,25 @@ final class OwnedOperations {
     }
 
     /**
-     * The newest operation in {@code status} of each of several owning records of one model, in one grouped read.
+     * The operation in {@code status} that finished last, of each of several owning records of one model, in one
+     * grouped read.
+     *
+     * AIDEV-NOTE: ordered by when it finished, never by id: an operation can finish after a newer one started. One
+     * without a finish time cannot say when it finished, so it is left out instead of sorting where its backend puts a
+     * NULL (first, descending, on PostgreSQL), which hid an older one that did finish.
      *
      * @return owning record id to that operation; a record with none is absent
      */
-    static @NonNull Map<Integer, Row> newestAmong(@NonNull Model model, @NonNull StringField forModelField,
-                                                  @NonNull IntegerField forIdField, @NonNull IntegerField idField,
-                                                  @NonNull EnumField statusField, @NonNull String status,
-                                                  @NonNull String forModel, @NonNull Collection<Integer> forIds) {
-        Map<Integer, Row> newest = new HashMap<>();
-        if (forIds.isEmpty()) {
-            return newest;
-        }
-        for (GroupedRows.Group<Integer, Row> group : model.find()
-                .where(forModelField.eq(forModel))
-                .where(statusField.eq(status))
-                .orderBy(idField, SortOrder.DESC)
-                .firstPerGroup(forIdField, 1, forIds).groups()) {
-            if (group.key() != null && !group.rows().isEmpty()) {
-                newest.put(group.key(), group.rows().get(0));
-            }
-        }
-        return newest;
+    static @NonNull Map<Integer, Row> lastFinishedAmong(@NonNull Model model, @NonNull StringField forModelField,
+                                                        @NonNull IntegerField forIdField,
+                                                        @NonNull DateTimeField finishedField,
+                                                        @NonNull EnumField statusField, @NonNull String status,
+                                                        @NonNull String forModel,
+                                                        @NonNull Collection<Integer> forIds) {
+        return FirstPerOwner.of(model.find()
+            .where(forModelField.eq(forModel))
+            .where(statusField.eq(status))
+            .where(finishedField.isNotNull())
+            .orderBy(finishedField, SortOrder.DESC), forIdField, forIds);
     }
 }

@@ -480,7 +480,7 @@ final class AppHealth {
         AttentionSubject root = status == InstanceStatus.ERROR ? WorkloadErrors.rootOf(runtime) : null;
         RecordHealth health = switch (status) {
             case RUNNING -> changesNotLiveOr(instance, runningVerdict(facts.sitesByInstance.get(
-                instance.get(InstanceModel.ID)), facts.sites, facts.deployedAt(instance), delegated, viewer));
+                instance.get(InstanceModel.ID)), facts.sites, () -> facts.deployedAt(instance), delegated, viewer));
             // What stopped it, as its recorded cause says (the dashboard item's detail too), the failure's own message
             // as the band's technical line; a tenant reads the sentence without the daemon's own message.
             case ERROR -> {
@@ -618,11 +618,12 @@ final class AppHealth {
      * the fixes still the site's own row actions ({@link RecordHealth#on}), offered on the workload's page wherever
      * this node registers the sites entry at all. A healthy one says, under where it is live, when it was last deployed.
      *
-     * @param deployedAt when its newest successful deploy finished, null when it was never deployed through Hohenheim
+     * @param deployedAt when its last successful deploy finished, null when it was never deployed through Hohenheim;
+     *                   asked only of a healthy one, so a page with none reads no deploy
      */
     private static @NonNull RecordHealth runningVerdict(@Nullable List<Row> sites, @NonNull SiteFacts facts,
-                                                        @Nullable Instant deployedAt, boolean delegated,
-                                                        @Nullable AccessContext viewer) {
+                                                        @NonNull Supplier<@Nullable Instant> deployedAt,
+                                                        boolean delegated, @Nullable AccessContext viewer) {
         RecordHealth attention = null;
         if (sites != null) {
             for (Row site : sites) {
@@ -643,8 +644,8 @@ final class AppHealth {
             return attention;
         }
         RecordHealth live = RecordHealth.ok(liveHeadline(sites, facts));
-        return deployedAt == null ? live
-            : live.since(HohenheimMicrocopy.APP_HEALTH.of("last_deploy"), deployedAt);
+        Instant deployed = deployedAt.get();
+        return deployed == null ? live : live.since(HohenheimMicrocopy.APP_HEALTH.of("last_deploy"), deployed);
     }
 
     /**
@@ -1110,14 +1111,14 @@ final class AppHealth {
             return this.runtimes.getOrDefault((Integer) instance.get(InstanceModel.ID), instance);
         }
 
-        /** @return when this instance's newest successful deploy finished, null when none did */
+        /** @return when this instance's last successful deploy finished, null when none did */
         @Nullable Instant deployedAt(@NonNull Row instance) {
             return this.deploys.get().get((Integer) instance.get(InstanceModel.ID));
         }
 
         /**
-         * When each instance was last deployed: its newest succeeded release (an application) or build (a workspace,
-         * a git-sourced app), whichever finished last. A workload nothing ever built or released is absent.
+         * When each instance was last deployed: its last-finished succeeded release (an application) or build (a
+         * workspace, a git-sourced app), whichever finished later. A workload nothing ever built or released is absent.
          */
         private static @NonNull Map<Integer, Instant> lastDeploys(@NonNull List<Row> instances) {
             List<Integer> ids = new ArrayList<>();
@@ -1129,9 +1130,9 @@ final class AppHealth {
             }
             String owner = InstanceModel.MODEL_ID.toString();
             Map<Integer, Instant> deployed = new HashMap<>();
-            Models.get(BuildOperationModel.class).latestSuccessAmong(owner, ids).forEach((id, build) ->
+            Models.get(BuildOperationModel.class).lastSucceededAmong(owner, ids).forEach((id, build) ->
                 laterOf(deployed, id, build.get(BuildOperationModel.FINISHED_AT)));
-            Models.get(ReleaseOperationModel.class).latestSuccessAmong(owner, ids).forEach((id, release) ->
+            Models.get(ReleaseOperationModel.class).lastSucceededAmong(owner, ids).forEach((id, release) ->
                 laterOf(deployed, id, release.get(ReleaseOperationModel.FINISHED_AT)));
             return deployed;
         }

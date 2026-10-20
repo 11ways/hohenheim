@@ -15482,6 +15482,10 @@
     "text": "Laatste deploy",
     "scope": "app_health"
   },
+  "deploy_title": {
+    "text": "Deploy van {$app}",
+    "scope": "build_operation"
+  },
   "install_failed_detail": {
     "text": "Installeer opnieuw zodra de oorzaak opgelost is.",
     "scope": "app_health"
