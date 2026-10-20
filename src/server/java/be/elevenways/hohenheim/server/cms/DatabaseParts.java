@@ -405,6 +405,9 @@ public final class DatabaseParts {
                 .computed(Objects.requireNonNull(table.column(STATE_COLUMN)),
                     (database, request) -> DatabaseVerdict.ofDatabase(database).cell())
                 .rowLinkToTab(RecordOverview.SLUG)
+                // The selected database's Overview beside the list (the board's 2fr / 1fr): its connection, users
+                // and backups, under the Overview tab's own gate.
+                .previewBeside(RecordOverview.SLUG)
                 // The shared engines the listed records live on, under the list.
                 .widgetsBelow(DatabaseParts::enginesCard)
                 .build())

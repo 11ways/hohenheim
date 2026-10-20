@@ -8,6 +8,8 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.database.DatabaseBackups;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
+import be.elevenways.hohenheim.server.database.DatabaseInstances;
+import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -33,12 +35,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * A managed database's front door (the right-hand column of the Databases page): how it is reached, which apps use it
- * and the dumps it has on disk. Everything here is a stored fact; nothing dials the engine per render.
+ * A managed database's front door (the right-hand column of the Databases page, and the Databases list's selected
+ * record beside it): how it is reached, which apps use it and the dumps it has on disk. Everything here is a stored
+ * fact; nothing dials the engine per render.
  *
- * AIDEV-NOTE: the password is deliberately not on this tab. The Restore tab's connection card shows it to the operator
- * and the tenant's Credentials tab to a holder of the credentials capability; a fact list has no reveal control, so
- * repeating it here would print the secret on every visit to the front door.
+ * AIDEV-NOTE: the password is a secret fact (plumage's masked reveal with its copy button), added only for a reader
+ * the Restore tab's own gate admits ({@link DatabaseConnectionCard#passwordReadableBy}); anyone else sees the card
+ * without it. It ships in the page masked, exactly as the Restore tab's connection card ships it.
  *
  * @author Jelle De Loecker
  * @since  0.9.0
@@ -64,7 +67,8 @@ final class DatabaseOverview {
 
         List<WidgetInstance> main = new ArrayList<>();
         main.add(CardWidget.ofFacts(HohenheimMicrocopy.DATABASE_TAB.of("connection"),
-            connectionFacts(database, panelSlug, locales, resolver)));
+            HohenheimMicrocopy.DATABASE_OVERVIEW.of("how_apps_connect_value"),
+            connectionFacts(database, access, panelSlug, locales, resolver)));
         main.add(CardWidget.ofFacts(HohenheimMicrocopy.DATABASE_TAB.of("used_by"),
             usedByFacts(id, panelSlug, locales, resolver)));
 
@@ -77,9 +81,9 @@ final class DatabaseOverview {
         return AppOverview.compose(List.of(), main, side);
     }
 
-    /** Engine, where it runs, and the names an app connects with. */
-    private static @NonNull List<WidgetFact> connectionFacts(@NonNull Row database, @NonNull String panelSlug,
-                                                             @NonNull LocaleChain locales,
+    /** Engine, where it runs, the address and names an app connects with, and the password for a reader it admits. */
+    private static @NonNull List<WidgetFact> connectionFacts(@NonNull Row database, @NonNull AccessContext access,
+                                                             @NonNull String panelSlug, @NonNull LocaleChain locales,
                                                              @Nullable MessageResolver resolver) {
         List<WidgetFact> facts = new ArrayList<>();
         Object engine = database.get(DatabaseModel.ENGINE);
@@ -93,12 +97,20 @@ final class DatabaseOverview {
             ? WidgetFact.link(text("runs_on", locales, resolver), runsOn,
                 CmsRoutes.detail(panelSlug, HohenheimSlugs.DATABASE_ENGINES, engineId).toUrl())
             : WidgetFact.of(text("runs_on", locales, resolver), runsOn));
+        // The name an attached app dials over its link network, at the engine's own port; nothing while none serves.
+        Integer id = database.get(DatabaseModel.ID);
+        String handle = id == null ? null : DatabaseInstances.handleOf(id);
+        ManagedDatabase.Engine kind = ManagedDatabase.Engine.forToken(database.get(DatabaseModel.ENGINE));
+        facts.add(WidgetFact.of(text("connect_with", locales, resolver),
+            handle == null || kind == null ? null : handle + ":" + kind.port()));
         facts.add(WidgetFact.of(HohenheimMicrocopy.DATABASE_TAB.of("database")
             .resolve(locales, resolver), database.get(DatabaseModel.DB_NAME)));
         facts.add(WidgetFact.of(HohenheimMicrocopy.DATABASE_TAB.of("user")
             .resolve(locales, resolver), database.get(DatabaseModel.DB_USER)));
-        facts.add(WidgetFact.of(text("how_apps_connect", locales, resolver),
-            text("how_apps_connect_value", locales, resolver)));
+        if (DatabaseConnectionCard.passwordReadableBy(database, access)) {
+            facts.add(WidgetFact.secret(HohenheimMicrocopy.DATABASE_TAB.of("password").resolve(locales, resolver),
+                database.get(DatabaseModel.DB_PASSWORD)));
+        }
         return facts;
     }
 

@@ -136,8 +136,11 @@ class DatabasesPageJourneyTest extends HohenheimTestBase {
                 .get(DatabaseModel.ID)
                 + "/page/overview");
             assertThat(overview.statusCode()).as("step 3: the database's overview renders").isEqualTo(200);
-            assertThat(overview.body()).as("step 3: the connection names, never the password")
-                .contains("shopdb", "shopuser").doesNotContain("shop-secret-password")
+            assertThat(overview.body()).as("step 3: the connection names, and the operator's password masked")
+                .contains("shopdb", "shopuser").containsPattern(Pattern.compile(
+                    "<pl-input[^>]*data-widget-fact-secret[^>]*>", Pattern.DOTALL))
+                .as("step 3: the apps' environment line under the card's title")
+                .contains("Apps that use it get these as environment variables; nobody has to paste them.")
                 .as("step 3: the app using it links to its page").contains(PREFIX + "app")
                 .as("step 3: every dump with its size").contains("18 MB", "4 KB", "2 KB")
                 .as("step 3: and how many are kept").contains("dumps, on this machine");
@@ -212,6 +215,24 @@ class DatabasesPageJourneyTest extends HohenheimTestBase {
                 .as("step 8: opening the engine")
                 .contains("/admin/" + HohenheimSlugs.DATABASE_ENGINES + "/" + engine.get(DatabaseEngineModel.ID)
                 + "/open");
+
+            // 9. The list shows the selected database's Overview beside it: nothing while none is selected, each row's
+            //    select naming it, and the selected one's connection (password masked), users and backups.
+            String plain = adminGet("/admin/" + HohenheimSlugs.DATABASES).body();
+            assertThat(plain).as("step 9: no column beside an unselected list").doesNotContain("data-cms-record-beside")
+                .as("step 9: a row's select names it").contains("_preview=" + shop.get(DatabaseModel.ID));
+            String selected = adminGet("/admin/" + HohenheimSlugs.DATABASES + "?_preview="
+                + shop.get(DatabaseModel.ID)).body();
+            int beside = selected.indexOf("data-cms-record-beside=");
+            assertThat(beside).as("step 9: the selected database stands beside the list").isPositive();
+            assertThat(selected.substring(beside)).as("step 9: its Overview's connection facts")
+                .contains("shopdb", "shopuser", "Connect with")
+                .as("step 9: the password masked behind the reveal")
+                .containsPattern(Pattern.compile("<pl-input[^>]*data-widget-fact-secret", Pattern.DOTALL))
+                .as("step 9: who uses it").contains(PREFIX + "app")
+                .as("step 9: its record actions, Back up now among them").contains("Back up now");
+            assertThat(selected).as("step 9: the row reads selected").containsPattern(Pattern.compile(
+                "data-row-key=\"" + shop.get(DatabaseModel.ID) + "\"[^>]*data-cms-selected"));
         } finally {
             for (int i = cleanup.size() - 1; i >= 0; i--) {
                 cleanup.get(i).run();

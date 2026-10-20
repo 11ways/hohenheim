@@ -500,6 +500,11 @@
         }
     }
 
+    // An overview drawn beside its list (ResourceList.previewBeside) is a third of the page: its columns stack.
+    .cms-list-beside .hh-app-overview {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
     // The Console tab's mode switch (console-modes.hwk): the segmented band and the active mode's one line beside it,
     // wrapping under it on a narrow screen.
     .hh-console-modes {
