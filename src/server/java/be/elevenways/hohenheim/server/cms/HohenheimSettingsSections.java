@@ -27,23 +27,27 @@ import java.util.function.Function;
  * (templates, images, git, engines, channels, backup targets, tasks) are the Settings cluster's tabs, never
  * settings here.
  *
+ * AIDEV-NOTE: the page opens on the FIRST group of the first section, and a section of several groups draws them in
+ * the order zenit registered them (SettingsPage.frameworkSection), which is class-initialisation order, not the order
+ * named here. So the first section is ONE group, the proxy's (what this server answers for names it does not serve
+ * and which proxies stand in front of it, the boards' "General"), and the page opens on it on every boot. The
+ * mockups' order follows (boards Settings, Settings-Proxy, Settings-Notifications); the sections they do not draw come
+ * after Blocking, the installation's own plumbing last.
+ *
  * @author Jelle De Loecker
  * @since  0.1.0
  */
 public enum HohenheimSettingsSections {
 
-    GENERAL("general", HohenheimMicrocopy.SETTINGS_SECTION.of("section_general"),
-        HohenheimSettings.Roles.GROUP, HohenheimSettings.Storage.GROUP, HohenheimSettings.Logging.GROUP,
-        HohenheimSettings.Process.GROUP),
-    // The installation's name and look, and who runs it: zenit's brand group, offered here rather than behind
-    // "Framework (advanced)" because the people an installation serves read it.
-    BRAND(label -> SettingsPage.frameworkGroup("brand", label, Brands.BRAND), "brand",
-        HohenheimMicrocopy.SETTINGS_SECTION.of("section_brand")),
+    GENERAL("general", HohenheimMicrocopy.SETTINGS_SECTION.of("section_general"), HohenheimSettings.Proxy.GROUP),
     HTTPS("https", HohenheimMicrocopy.SETTINGS_SECTION.of("section_https"), HohenheimSettings.Ssl.GROUP),
     BACKUPS("backups", HohenheimMicrocopy.SETTINGS_SECTION.of("section_backups"),
         HohenheimSettings.Database.GROUP, HohenheimSettings.Backup.GROUP),
     NOTIFICATIONS(label -> SettingsPage.frameworkGroup(NotificationSettingsLabels.MOUNT_KEY, label, NotificationSettings.ROOT),
         "notifications", HohenheimMicrocopy.SETTINGS_SECTION.of("section_notifications")),
+    DNS("dns", HohenheimMicrocopy.SETTINGS_SECTION.of("section_dns"), HohenheimSettings.Dns.GROUP),
+    BLOCKING("blocking", HohenheimMicrocopy.SETTINGS_SECTION.of("section_blocking"),
+        HohenheimSettings.Security.GROUP),
     APPS("apps", HohenheimMicrocopy.SETTINGS_SECTION.of("section_apps"),
         HohenheimSettings.Instances.GROUP, HohenheimSettings.Builds.GROUP, HohenheimSettings.Releases.GROUP,
         HohenheimSettings.Previews.GROUP, HohenheimSettings.Files.GROUP, HohenheimSettings.Sftp.GROUP,
@@ -51,14 +55,19 @@ public enum HohenheimSettingsSections {
         HohenheimSettings.Quota.GROUP),
     HOSTS("hosts", HohenheimMicrocopy.SETTINGS_SECTION.of("section_hosts"),
         HohenheimSettings.Hosts.GROUP, HohenheimSettings.Capacity.GROUP, HohenheimSettings.Incus.GROUP),
-    DNS("dns", HohenheimMicrocopy.SETTINGS_SECTION.of("section_dns"), HohenheimSettings.Dns.GROUP),
-    BLOCKING("blocking", HohenheimMicrocopy.SETTINGS_SECTION.of("section_blocking"),
-        HohenheimSettings.Security.GROUP),
+    // How people sign in: the protected paths' sessions and the Proteus SSO login.
+    SIGNIN("signin", HohenheimMicrocopy.SETTINGS_SECTION.of("section_signin"),
+        HohenheimSettings.ProxyAuth.GROUP, HohenheimSettings.AuthProteus.GROUP),
     ABUSE(label -> new SettingsPage.Mount("spamservice", label, new SpamserviceSettingsBackend()), "abuse",
         HohenheimMicrocopy.SETTINGS_SECTION.of("section_abuse")),
-    PROXY("proxy", HohenheimMicrocopy.SETTINGS_SECTION.of("section_proxy"),
-        HohenheimSettings.Proxy.GROUP, HohenheimSettings.ProxyAuth.GROUP,
-        HohenheimSettings.AuthProteus.GROUP);
+    // The installation's name and look, and who runs it: zenit's brand group, offered here rather than behind
+    // "Framework (advanced)" because the people an installation serves read it.
+    BRAND(label -> SettingsPage.frameworkGroup("brand", label, Brands.BRAND), "brand",
+        HohenheimMicrocopy.SETTINGS_SECTION.of("section_brand")),
+    // The installation's own plumbing: its roles, where it keeps files, what it logs, how it confines host processes.
+    INSTALLATION("installation", HohenheimMicrocopy.SETTINGS_SECTION.of("section_installation"),
+        HohenheimSettings.Roles.GROUP, HohenheimSettings.Storage.GROUP, HohenheimSettings.Logging.GROUP,
+        HohenheimSettings.Process.GROUP);
 
     private final String key;
     private final Microcopy label;
@@ -96,16 +105,17 @@ public enum HohenheimSettingsSections {
     public @NonNull Icon icon() {
         return Icon.of(switch (this) {
             case GENERAL -> "sliders";
-            case BRAND -> "palette";
             case HTTPS -> "lock";
             case BACKUPS -> "box-archive";
             case NOTIFICATIONS -> "bell";
-            case APPS -> "cubes";
-            case HOSTS -> "server";
             case DNS -> "sitemap";
             case BLOCKING -> "shield-halved";
+            case APPS -> "cubes";
+            case HOSTS -> "server";
+            case SIGNIN -> "id-badge";
             case ABUSE -> "robot";
-            case PROXY -> "route";
+            case BRAND -> "palette";
+            case INSTALLATION -> "hard-drive";
         });
     }
 
@@ -114,7 +124,7 @@ public enum HohenheimSettingsSections {
         return switch (this) {
             case BACKUPS -> List.of(HohenheimSlugs.BACKUP_TARGETS);
             case NOTIFICATIONS -> List.of(HohenheimSlugs.NOTIFICATIONS);
-            case GENERAL, BRAND, HTTPS, APPS, HOSTS, DNS, BLOCKING, ABUSE, PROXY -> List.of();
+            case GENERAL, HTTPS, DNS, BLOCKING, APPS, HOSTS, SIGNIN, ABUSE, BRAND, INSTALLATION -> List.of();
         };
     }
 
@@ -122,7 +132,7 @@ public enum HohenheimSettingsSections {
     public boolean clusterMembersFollow() {
         return switch (this) {
             case NOTIFICATIONS -> true;
-            case GENERAL, BRAND, HTTPS, BACKUPS, APPS, HOSTS, DNS, BLOCKING, ABUSE, PROXY -> false;
+            case GENERAL, HTTPS, BACKUPS, DNS, BLOCKING, APPS, HOSTS, SIGNIN, ABUSE, BRAND, INSTALLATION -> false;
         };
     }
 

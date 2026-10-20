@@ -15478,6 +15478,10 @@
     "text": "Live at {$address}",
     "scope": "app_health"
   },
+  "last_deploy": {
+    "text": "Last deployed {$at :datetime}.",
+    "scope": "app_health"
+  },
   "install_failed_detail": {
     "text": "Install it again once the cause is fixed.",
     "scope": "app_health"
@@ -16124,8 +16128,12 @@
     "text": "Abuse protection",
     "scope": "settings_section"
   },
-  "section_proxy": {
-    "text": "Proxy",
+  "section_signin": {
+    "text": "Sign-in",
+    "scope": "settings_section"
+  },
+  "section_installation": {
+    "text": "Installation",
     "scope": "settings_section"
   },
   "happened": [

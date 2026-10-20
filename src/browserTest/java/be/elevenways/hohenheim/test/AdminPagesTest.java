@@ -89,15 +89,16 @@ class AdminPagesTest extends HohenheimTestBase {
         // group's rows, so every group this journey touches is named in ?section=
         // (the JS-free expansion lane; the save's PRG redirect re-expands the same set).
         // This assertion set went red unnoticed when that landed -- nobody re-ran it.
-        navigateToApp("/admin/settings?section=setting-proxy-proxy,setting-blocking,"
-            + "setting-https,setting-general-storage,setting-proxy-auth_proteus,"
+        navigateToApp("/admin/settings?section=setting-general,setting-blocking,"
+            + "setting-https,setting-installation-storage,setting-signin-auth_proteus,"
             + "setting-framework-network,setting-framework-compression");
         waitForHydration();
 
         String content = page.content();
         // Every hohenheim group renders, under the operator section that holds it: a section of one group is headed
         // by the section's own name, a section of several groups lists each group under it.
-        assertThat(content).contains("Proxy");
+        assertThat(content).contains("General");
+        assertThat(content).contains("Sign-in");
         assertThat(content).contains("Logging");
         assertThat(content).contains("Blocking and firewall");
         assertThat(content).contains("HTTPS and certificates");
@@ -107,10 +108,10 @@ class AdminPagesTest extends HohenheimTestBase {
         // masked "secret" register, never the password control (which would opt the whole
         // settings form into the browser's password manager).
         assertThat(page.locator(
-            "[data-path='proxy.auth_proteus.access_key'] pl-input[type='secret']").count())
+            "[data-path='signin.auth_proteus.access_key'] pl-input[type='secret']").count())
             .as("a stored secret renders the masked register").isEqualTo(1);
         assertThat(page.locator(
-            "[data-path='proxy.auth_proteus.access_key'] input[type='password']").count())
+            "[data-path='signin.auth_proteus.access_key'] input[type='password']").count())
             .as("and never the credential control").isEqualTo(0);
         // A numeric setting edits through plumage's typed number control; its unit rides
         // the control's suffix slot rather than an input-group addon.
@@ -118,7 +119,7 @@ class AdminPagesTest extends HohenheimTestBase {
             "[data-path='https.dns_propagation_seconds'] pl-number-input [slot='suffix']").innerText().trim())
             .isEqualTo("s");
         // The data directory is host power: its row shows the value and says the host changes it, never an input.
-        String dataPath = "[data-cms-setting]:has([data-path='general.storage.data_path'])";
+        String dataPath = "[data-cms-setting]:has([data-path='installation.storage.data_path'])";
         assertThat(page.locator(dataPath + "[data-host-only][data-read-only]").count())
             .as("the data directory is host-only").isEqualTo(1);
         assertThat(page.locator(dataPath + " zf-path-input").count()).as("with no path input").isZero();
@@ -135,10 +136,10 @@ class AdminPagesTest extends HohenheimTestBase {
                 .isEqualTo("B");
         }
         assertThat(page.locator(
-            ".cms-setting:has([data-path='proxy.auth_proteus.enabled']) .cms-setting-note-restart").count())
+            ".cms-setting:has([data-path='signin.auth_proteus.enabled']) .cms-setting-note-restart").count())
             .isEqualTo(1);
         assertThat(page.locator(
-            ".cms-setting:has([data-path='proxy.auth_proteus.authenticator']) .cms-setting-note-restart").count())
+            ".cms-setting:has([data-path='signin.auth_proteus.authenticator']) .cms-setting-note-restart").count())
             .isEqualTo(1);
 
         // AIDEV-NOTE: a non-secret string-list setting edits as CHIPS (pl-select's tags mode)
@@ -182,11 +183,11 @@ class AdminPagesTest extends HohenheimTestBase {
         } finally {
             page.setExtraHTTPHeaders(Map.of());
         }
-        navigateToApp("/admin/settings?section=setting-proxy-proxy,setting-blocking,"
-            + "setting-https,setting-general-storage,setting-proxy-auth_proteus,"
+        navigateToApp("/admin/settings?section=setting-general,setting-blocking,"
+            + "setting-https,setting-installation-storage,setting-signin-auth_proteus,"
             + "setting-framework-network,setting-framework-compression");
         waitForHydration();
-        var prologue = page.locator("[data-path='proxy.proxy.connection_prologue_timeout_seconds'] input");
+        var prologue = page.locator("[data-path='general.connection_prologue_timeout_seconds'] input");
         prologue.fill("9");
         var threshold = page.locator("[data-path='blocking.domain_miss_threshold'] input");
         threshold.fill("7");
@@ -275,7 +276,7 @@ class AdminPagesTest extends HohenheimTestBase {
 
         // A crafted POST of a host-only key changes nothing: the page never collects a key it renders read-only.
         Integer port = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.HTTP_PORT);
-        adminPostForm("/admin/settings", "proxy.proxy.http_port=65001&proxy.proxy.http_port__base=" + port);
+        adminPostForm("/admin/settings", "general.http_port=65001&general.http_port__base=" + port);
         assertThat(Files.exists(settingsDry) ? Files.readString(settingsDry) : "").doesNotContain("65001");
         assertThat(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.HTTP_PORT)).isEqualTo(port);
 

@@ -26,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class SettingsSystemGateTest extends HohenheimTestBase {
 
-    private static final String PROXY_AUTH_SECTION = "/admin/settings?section=setting-proxy-auth_proteus";
+    private static final String PROXY_AUTH_SECTION = "/admin/settings?section=setting-signin-auth_proteus";
 
     private static TestSession delegatedAdmin;
 
@@ -60,19 +60,19 @@ class SettingsSystemGateTest extends HohenheimTestBase {
             .contains("data-cms-setting-host-only");
         assertThat(read.body()).as("step 2: and the realm client says the viewer may not change it")
             .contains("data-cms-setting-not-permitted");
-        assertThat(hasInput(read.body(), "proxy.auth_proteus.endpoint")).as("step 2: no endpoint input").isFalse();
-        assertThat(hasInput(read.body(), "proxy.auth_proteus.realm_client")).as("step 2: no realm client input")
+        assertThat(hasInput(read.body(), "signin.auth_proteus.endpoint")).as("step 2: no endpoint input").isFalse();
+        assertThat(hasInput(read.body(), "signin.auth_proteus.realm_client")).as("step 2: no realm client input")
             .isFalse();
-        assertThat(hasInput(adminGet("/admin/settings?section=setting-proxy-proxy").body(), "proxy.proxy.force_https"))
+        assertThat(hasInput(adminGet("/admin/settings?section=setting-general").body(), "general.force_https"))
             .as("step 2: an ordinary setting keeps its input").isTrue();
-        assertThat(hasInput(httpGet("/admin/settings?section=setting-proxy-proxy", delegatedAdmin.token()).body(),
-            "proxy.proxy.force_https")).as("step 2: for the delegated admin too").isTrue();
+        assertThat(hasInput(httpGet("/admin/settings?section=setting-general", delegatedAdmin.token()).body(),
+            "general.force_https")).as("step 2: for the delegated admin too").isTrue();
 
         // 3. A crafted write of both keys changes neither.
         String endpointBefore = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.AuthProteus.ENDPOINT);
         String realmBefore = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.AuthProteus.REALM_CLIENT);
-        httpPostForm("/admin/settings", "proxy.auth_proteus.endpoint=http%3A%2F%2F127.0.0.1%3A8080%2F"
-            + "&proxy.auth_proteus.realm_client=elsewhere", delegatedAdmin.token(), delegatedAdmin.csrf());
+        httpPostForm("/admin/settings", "signin.auth_proteus.endpoint=http%3A%2F%2F127.0.0.1%3A8080%2F"
+            + "&signin.auth_proteus.realm_client=elsewhere", delegatedAdmin.token(), delegatedAdmin.csrf());
         assertThat((Object) Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.AuthProteus.ENDPOINT))
             .as("step 3: the endpoint is unchanged").isEqualTo(endpointBefore);
         assertThat((Object) Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.AuthProteus.REALM_CLIENT))
@@ -81,11 +81,11 @@ class SettingsSystemGateTest extends HohenheimTestBase {
         // 4. The operator, who holds "*", gets the realm client's input, but the endpoint stays host-only for them too.
         HttpResponse<String> operator = adminGet(PROXY_AUTH_SECTION);
         assertThat(operator.statusCode()).as("step 4: the operator opens the settings").isEqualTo(200);
-        assertThat(hasInput(operator.body(), "proxy.auth_proteus.realm_client")).as("step 4: the realm client input")
+        assertThat(hasInput(operator.body(), "signin.auth_proteus.realm_client")).as("step 4: the realm client input")
             .isTrue();
-        assertThat(hasInput(operator.body(), "proxy.auth_proteus.endpoint")).as("step 4: still no endpoint input")
+        assertThat(hasInput(operator.body(), "signin.auth_proteus.endpoint")).as("step 4: still no endpoint input")
             .isFalse();
-        adminPostForm("/admin/settings", "proxy.auth_proteus.endpoint=http%3A%2F%2F127.0.0.1%3A8080%2F");
+        adminPostForm("/admin/settings", "signin.auth_proteus.endpoint=http%3A%2F%2F127.0.0.1%3A8080%2F");
         assertThat((Object) Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.AuthProteus.ENDPOINT))
             .as("step 4: the operator's crafted write changes nothing either").isEqualTo(endpointBefore);
 
