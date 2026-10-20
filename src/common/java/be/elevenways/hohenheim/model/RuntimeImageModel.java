@@ -7,6 +7,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.ui.BadgeVariant;
 
@@ -33,6 +34,9 @@ import java.util.List;
 public class RuntimeImageModel extends Model {
 
     public static final Identifier MODEL_ID = HohenheimIds.id("runtime_image");
+    /** The runtime image model's reference: its class and MODEL_ID, resolved at first use. */
+    public static final ModelRef<RuntimeImageModel> REF = ModelRef.of(RuntimeImageModel.class, MODEL_ID);
+
     public static final Schema SCHEMA = new Schema();
 
     /** {@link #UID_MODE}: the workload runs as the instance's mapped host uid. */

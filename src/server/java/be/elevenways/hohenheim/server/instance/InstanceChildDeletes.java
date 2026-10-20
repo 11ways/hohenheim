@@ -26,15 +26,15 @@ public final class InstanceChildDeletes {
 
     /** Removes one config file of an instance; a generated one is refused by the model's attribution guard. */
     public static final Operation<Row, Void, Integer> FILE =
-        RowDeleteOperations.delete(InstanceFileModel.class, SubjectArity.ONE, OPERATOR);
+        RowDeleteOperations.delete(InstanceFileModel.REF, SubjectArity.ONE, OPERATOR);
 
     /** Removes one quota override. */
     public static final Operation<Row, Void, Integer> QUOTA =
-        RowDeleteOperations.delete(InstanceQuotaModel.class, SubjectArity.ONE, OPERATOR);
+        RowDeleteOperations.delete(InstanceQuotaModel.REF, SubjectArity.ONE, OPERATOR);
 
     /** Removes one schedule run, which is cleanup: a run is evidence and never edited. */
     public static final Operation<Row, Void, Integer> SCHEDULE_RUN =
-        RowDeleteOperations.delete(RecordScheduleRunModel.class, SubjectArity.ONE, OPERATOR);
+        RowDeleteOperations.delete(RecordScheduleRunModel.REF, SubjectArity.ONE, OPERATOR);
 
     private InstanceChildDeletes() {
     }

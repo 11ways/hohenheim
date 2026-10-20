@@ -44,7 +44,7 @@ final class DnsOperationHandlers {
         OperationHandlers.attach(DnsOperations.NEGOTIATE_KEY).authorize(admin())
             .applies(DnsPeerModel::isHohenheim).handle(call -> DnsPeerParts.negotiate(call.subject()));
         OperationHandlers.attach(DnsOperations.REMOTE_EDIT).authorize(admin())
-            .source(RecordSource.of(DnsZoneModel.class)
+            .source(RecordSource.of(DnsZoneModel.REF)
                 .project(DnsZoneModel.ID, DnsZoneModel.ORIGIN, DnsZoneModel.ROLE, DnsZoneModel.PRIMARY_PEER_ID)
                 .permission(HohenheimPanel.ACCESS).build())
             .applies(row -> DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(row)))

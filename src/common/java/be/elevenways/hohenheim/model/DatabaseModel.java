@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
@@ -32,6 +33,9 @@ import java.util.Map;
 public class DatabaseModel extends Model {
 
     public static final Identifier MODEL_ID = HohenheimIds.id("database");
+    /** The database model's reference: its class and MODEL_ID, resolved at first use. */
+    public static final ModelRef<DatabaseModel> REF = ModelRef.of(DatabaseModel.class, MODEL_ID);
+
     public static final Schema SCHEMA = new Schema();
 
     /** {@link #STATUS} value while the container is being provisioned. */

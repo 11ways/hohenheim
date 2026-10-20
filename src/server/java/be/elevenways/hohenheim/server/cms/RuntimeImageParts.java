@@ -47,7 +47,7 @@ public final class RuntimeImageParts {
             Operation.declare(HohenheimIds.id("delete_runtime_image"))
         .happened(OperationSentences.of("delete_runtime_image"))
         .label(CmsMicrocopy.of("delete"))
-        .one(SubjectType.record(RuntimeImageModel.MODEL_ID))
+        .one(SubjectType.record(RuntimeImageModel.REF))
         .gate(OperationGate.permission(HohenheimPanel.ACCESS))
         .result(Integer.class).facts(OperationFact.DESTRUCTIVE).command(CmsCommands.TRANSACTIONAL).register();
 
@@ -64,7 +64,7 @@ public final class RuntimeImageParts {
 
     public static @NonNull PanelResource<Row> admin() {
         return PanelResource.builder(HohenheimIds.id("runtime_image"), HohenheimSlugs.RUNTIME_IMAGES,
-                SubjectType.record(RuntimeImageModel.MODEL_ID))
+                SubjectType.record(RuntimeImageModel.REF))
             .label(HohenheimMicrocopy.RUNTIME_IMAGE.of("plural"))
             .recordLabel(HohenheimMicrocopy.RUNTIME_IMAGE.of("singular"))
             .description(CmsSupport.navHint(HohenheimMicrocopy.RUNTIME_IMAGE))

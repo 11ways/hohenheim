@@ -125,7 +125,7 @@ public final class DomainParts {
         .of(SiteDomainModel.HOSTNAME.getName(), SiteDomainModel.FORCE_SSL.getName())
         .presets(SiteDomainModel.SITE_ID.getName());
 
-    private static final SubjectType<Row> SUBJECT = SubjectType.record(SiteDomainModel.MODEL_ID);
+    private static final SubjectType<Row> SUBJECT = SubjectType.record(SiteDomainModel.REF);
 
     /** The create verb in the Domains page's words: the list's button and the form's heading ("Add address"). */
     private static final Microcopy CREATE_TITLE = HohenheimMicrocopy.SITE_DOMAIN.of("create_title");

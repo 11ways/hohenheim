@@ -101,7 +101,7 @@ public final class InstanceQuotaParts {
             .column(ColumnSpec.fromField(InstanceQuotaModel.MAX_DATABASES).build())
             .build();
         return PanelResource.builder(HohenheimIds.id("instance_quota"), HohenheimSlugs.INSTANCE_QUOTAS,
-                SubjectType.record(InstanceQuotaModel.MODEL_ID))
+                SubjectType.record(InstanceQuotaModel.REF))
             .label(HohenheimMicrocopy.INSTANCE_QUOTA.of("plural"))
             .recordLabel(HohenheimMicrocopy.INSTANCE_QUOTA.of("singular"))
             // Demoted out of the sidebar, so this sentence reaches a reader through the panel index and the

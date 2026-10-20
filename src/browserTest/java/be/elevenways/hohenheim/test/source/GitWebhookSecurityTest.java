@@ -435,7 +435,7 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
             .as("the decision is recorded on the claim").isEqualTo("ignored_invalid_ref");
         assertThat(Models.get(PreviewDeploymentModel.class).find()
                 .where(PreviewDeploymentModel.APPLICATION_ID.eq(appCId))
-                .where(PreviewDeploymentModel.REF.eq("--upload-pack=touch x"))
+                .where(PreviewDeploymentModel.GIT_REF.eq("--upload-pack=touch x"))
                 .all())
             .as("no preview row was ever claimed for that ref").isEmpty();
     }
@@ -455,7 +455,7 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
         var model = Models.get(PreviewDeploymentModel.class);
         Row preview = model.createEmptyRow();
         preview.set(PreviewDeploymentModel.APPLICATION_ID, applicationId);
-        preview.set(PreviewDeploymentModel.REF, ref);
+        preview.set(PreviewDeploymentModel.GIT_REF, ref);
         preview.set(PreviewDeploymentModel.HOSTNAME,
             "hook-c--feature-login.preview.test");
         preview.set(PreviewDeploymentModel.STATUS, PreviewDeploymentModel.STATUS_RUNNING);

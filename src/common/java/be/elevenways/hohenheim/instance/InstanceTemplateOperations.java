@@ -44,7 +44,7 @@ public final class InstanceTemplateOperations {
     private static final OperationCommand COMMAND = OperationCommand.perSubject();
 
     /** The subject: one template of the catalog. */
-    public static final SubjectType<Row> TEMPLATE = SubjectType.record(InstanceTemplateModel.MODEL_ID);
+    public static final SubjectType<Row> TEMPLATE = SubjectType.record(InstanceTemplateModel.REF);
 
     public static final StringField NAME = StringField.builder("name").required()
         .label(HohenheimMicrocopy.INSTANCE_FROM_TEMPLATE.of("instance_name")).build();

@@ -8,6 +8,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 
@@ -20,6 +21,9 @@ import java.util.List;
 public class SiteAuthProviderModel extends Model {
 
     public static final Identifier MODEL_ID = HohenheimIds.id("site_auth_provider");
+    /** The site auth provider model's reference: its class and MODEL_ID, resolved at first use. */
+    public static final ModelRef<SiteAuthProviderModel> REF = ModelRef.of(SiteAuthProviderModel.class, MODEL_ID);
+
     public static final Schema SCHEMA = new Schema();
 
     /** PermissionSuggestionSources key: the assigned Proteus realm's vocabulary (registered server-side). */

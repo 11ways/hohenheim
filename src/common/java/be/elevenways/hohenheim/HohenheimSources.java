@@ -111,19 +111,19 @@ public final class HohenheimSources implements ZenitModule {
         // domain ones, when the CertificateModel `view` capability shipped. This registration
         // is what the BROWSER registry keeps -- deliberately the narrower, admin-gated view;
         // registry membership is a server-authoritative question.
-        RecordSourceRegistry.INSTANCE.register(RecordSource.of(CertificateModel.class)
+        RecordSourceRegistry.INSTANCE.register(RecordSource.of(CertificateModel.REF)
             .search(CertificateModel.NICE_NAME)
             .baseCriteria(HohenheimSources::notTheAcmeAccountRow)
             .permission(ADMIN_ACCESS)
             .build());
 
-        RecordSourceRegistry.INSTANCE.register(RecordSource.of(AccessListModel.class)
+        RecordSourceRegistry.INSTANCE.register(RecordSource.of(AccessListModel.REF)
             .search(AccessListModel.NAME)
             .permission(ADMIN_ACCESS)
             .build());
 
         // Feeds the site-database attachment picker.
-        RecordSourceRegistry.INSTANCE.register(RecordSource.of(DatabaseModel.class)
+        RecordSourceRegistry.INSTANCE.register(RecordSource.of(DatabaseModel.REF)
             .search(DatabaseModel.NAME)
             .permission(ADMIN_ACCESS)
             .build());
@@ -141,12 +141,12 @@ public final class HohenheimSources implements ZenitModule {
         // derived default lacks; they are declared server-side in AdminSources, where the
         // edit link and inline create can be spelled beside those facets.
 
-        RecordSourceRegistry.INSTANCE.register(RecordSource.of(SystemUserModel.class)
+        RecordSourceRegistry.INSTANCE.register(RecordSource.of(SystemUserModel.REF)
             .search(SystemUserModel.NAME)
             .permission(ADMIN_ACCESS)
             .build());
 
-        RecordSourceRegistry.INSTANCE.register(RecordSource.of(SystemUserModel.class)
+        RecordSourceRegistry.INSTANCE.register(RecordSource.of(SystemUserModel.REF)
             .id(SPAMSERVICE_SYSTEM_USERS)
             .search(SystemUserModel.NAME)
             .baseCriteria(() -> new CompositeCriteria(CompositeOperator.AND,

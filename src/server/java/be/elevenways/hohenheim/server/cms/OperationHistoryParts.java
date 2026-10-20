@@ -161,7 +161,7 @@ public final class OperationHistoryParts {
         for (FormEntry entry : form.entries()) {
             readOnly.add(ResourceFieldBinding.of(entry.name(), FieldAccess.alwaysReadonly()));
         }
-        return PanelResource.builder(HohenheimIds.id(scope.scope()), slug, SubjectType.record(model.getModelId()))
+        return PanelResource.builder(HohenheimIds.id(scope.scope()), slug, SubjectType.record(model.ref()))
             .label(scope.of("plural"))
             .recordLabel(scope.of("singular"))
             // Demoted out of the sidebar, so this sentence reaches a reader through the panel index and the

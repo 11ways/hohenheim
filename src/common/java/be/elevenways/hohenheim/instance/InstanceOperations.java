@@ -53,7 +53,7 @@ public final class InstanceOperations {
         .execution(CommandExecution.OUTSIDE_TRANSACTION_RETRY_SAFE);
 
     /** The subject of every instance operation: one instance record. */
-    public static final SubjectType<Row> INSTANCE = SubjectType.record(InstanceModel.MODEL_ID);
+    public static final SubjectType<Row> INSTANCE = SubjectType.record(InstanceModel.REF);
 
     public static final Operation<Row, Void, PowerResult> START = Operation.declare(HohenheimIds.id("start_instance"))
         .happened(OperationSentences.of("start_instance"))

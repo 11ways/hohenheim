@@ -27,7 +27,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 public final class GitProviderOperations {
 
     /** The subject of every git provider operation: one provider record. */
-    public static final SubjectType<Row> PROVIDER = SubjectType.record(GitProviderModel.MODEL_ID);
+    public static final SubjectType<Row> PROVIDER = SubjectType.record(GitProviderModel.REF);
 
     /** Lists the provider's repositories through the real client. */
     public static final Operation<Row, Void, ConnectionTest> TEST_CONNECTION =

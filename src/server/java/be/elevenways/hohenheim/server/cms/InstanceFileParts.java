@@ -60,7 +60,7 @@ public final class InstanceFileParts {
             .column(ColumnSpec.fromField(InstanceFileModel.INSTANCE_ID).relation(instance).build())
             .build();
         return PanelResource.builder(HohenheimIds.id("instance_file"), HohenheimSlugs.INSTANCE_FILES,
-                SubjectType.record(InstanceFileModel.MODEL_ID))
+                SubjectType.record(InstanceFileModel.REF))
             .label(HohenheimMicrocopy.INSTANCE_FILE.of("plural"))
             .recordLabel(HohenheimMicrocopy.INSTANCE_FILE.of("singular"))
             .icon(Icon.of("file-code"))

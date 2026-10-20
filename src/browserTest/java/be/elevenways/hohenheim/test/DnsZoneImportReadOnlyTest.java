@@ -113,14 +113,14 @@ class DnsZoneImportReadOnlyTest extends HohenheimTestBase {
             // Only the parent's identity and archive state matter here, not the admin's forms and tabs.
             PanelResource<Row> owner = PanelResource.builder(
                     Identifier.of("hohenheim_test", "zone_owners"), HohenheimSlugs.SITES,
-                    SubjectType.record(SiteModel.MODEL_ID))
+                    SubjectType.record(SiteModel.REF))
                 .label(Microcopy.literal("Sites")).reads(ResourceReads.rows())
                 .list(ResourceList.rows(TableSpec.<Row>builder().columnFromField(SiteModel.NAME)
                     .filter(ResourceList.archivedFilter(false)).build()).archivedLane().build())
                 .build();
             this.peers = List.of(owner, PanelResource.builder(
                     Identifier.of("hohenheim_test", "site_owned_zones"), HohenheimSlugs.DNS_ZONES,
-                    SubjectType.record(DnsZoneModel.MODEL_ID))
+                    SubjectType.record(DnsZoneModel.REF))
                 .label(Microcopy.literal("Zones")).reads(ResourceReads.rows())
                 .list(ResourceList.rows(TableSpec.<Row>builder().columnFromField(DnsZoneModel.ORIGIN).build()).build())
                 .parent(ResourceParent.<Row>of(HohenheimSlugs.SITES,

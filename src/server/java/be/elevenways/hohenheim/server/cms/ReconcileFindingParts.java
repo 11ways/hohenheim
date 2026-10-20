@@ -55,7 +55,7 @@ public final class ReconcileFindingParts {
     public static final Operation<Row, Void, Void> REMOVE = Operation.declare(HohenheimIds.id("remove_orphan"))
         .happened(OperationSentences.of("remove_orphan"))
         .label(HohenheimMicrocopy.RECONCILE_FINDING.of("remove_orphan"))
-        .one(SubjectType.record(ReconcileFindingModel.MODEL_ID)).gate(OperationGate.permission(HohenheimPanel.ACCESS))
+        .one(SubjectType.record(ReconcileFindingModel.REF)).gate(OperationGate.permission(HohenheimPanel.ACCESS))
         .facts(OperationFact.DESTRUCTIVE, OperationFact.REACHES_OUTSIDE).command(CmsCommands.EXTERNAL).register();
     static {
         OperationHandlers.attach(REMOVE).applies(row -> ReconcileFindingModel.BUCKET_ORPHANED
@@ -66,7 +66,7 @@ public final class ReconcileFindingParts {
     private ReconcileFindingParts() {}
     public static @NonNull PanelResource<Row> admin() {
         return PanelResource.builder(HohenheimIds.id("reconcile_finding"), HohenheimSlugs.RECONCILE_FINDINGS,
-                SubjectType.record(ReconcileFindingModel.MODEL_ID))
+                SubjectType.record(ReconcileFindingModel.REF))
             .label(LABEL).recordLabel(HohenheimMicrocopy.RECONCILE_FINDING.of("singular"))
             .description(CmsSupport.navHint(HohenheimMicrocopy.RECONCILE_FINDING)).navGroup(NavGroup.SYSTEM)
             .navOrder(25).showInNav(false).icon(Icon.of("magnifying-glass"))

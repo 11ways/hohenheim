@@ -11,6 +11,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
@@ -44,6 +45,9 @@ import java.util.List;
 public class InstanceTemplateModel extends Model {
 
     public static final Identifier MODEL_ID = HohenheimIds.id("instance_template");
+    /** The instance template model's reference: its class and MODEL_ID, resolved at first use. */
+    public static final ModelRef<InstanceTemplateModel> REF = ModelRef.of(InstanceTemplateModel.class, MODEL_ID);
+
     public static final Schema SCHEMA = new Schema();
 
     /** {@link #REINSTALL_POLICY}: a reinstall keeps the instance's volumes and their data. */

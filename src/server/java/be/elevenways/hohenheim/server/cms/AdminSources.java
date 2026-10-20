@@ -67,7 +67,7 @@ public final class AdminSources {
         // bans-created chart (sortable doubles as the bucketable whitelist for created_at). BanParts is a
         // panel resource, so this is the model's own source; no inline create (no pick offers
         // a ban: the manual ban is the entry's quick-add bar).
-        RecordSourceRegistry.INSTANCE.register(admin(RecordSource.of(BanModel.class)
+        RecordSourceRegistry.INSTANCE.register(admin(RecordSource.of(BanModel.REF)
             .project(BanModel.IP, BanModel.SOURCE, BanModel.ACTIVE,
                 BanModel.EXPIRES_AT, BanModel.CREATED_AT)
             .vocabularyFrom(BanParts::filterVocabulary)
@@ -77,19 +77,19 @@ public final class AdminSources {
         // source is panel-qualified, so the model's own source is this one, creatable through the admin entry's
         // own create form exactly as the derived default was. Absent with the instance role.
         if (panel.entryBySlug(HohenheimSlugs.BACKUP_TARGETS) instanceof PanelResource<?> targets) {
-            RecordSourceRegistry.INSTANCE.register(complete(RecordSource.of(BackupTargetModel.class)
+            RecordSourceRegistry.INSTANCE.register(complete(RecordSource.of(BackupTargetModel.REF)
                 .search(BackupTargetModel.NAME), BackupTargetModel.class, panel, targets));
         }
 
         // Hosts, for the record pickers and list relations that name a host. The instance form's host pick is a
         // kind-judged select over every host (InstanceParts.hostPick), not this source.
-        RecordSourceRegistry.INSTANCE.register(complete(RecordSource.of(ServerModel.class)
+        RecordSourceRegistry.INSTANCE.register(complete(RecordSource.of(ServerModel.REF)
             .project(ServerModel.NAME, ServerModel.RUNTIME, ServerModel.VOLUME_BACKEND)
             .search(ServerModel.NAME), ServerModel.class, panel, panel.entryBySlug(HohenheimSlugs.SERVERS)));
 
         // Runtime images ("yolks"), for the instance form's dependent image pick: enabled
         // and incus_image are the resolver's rule vocabulary (HohenheimPickRules.RuntimeImageRules).
-        RecordSourceRegistry.INSTANCE.register(complete(RecordSource.of(RuntimeImageModel.class)
+        RecordSourceRegistry.INSTANCE.register(complete(RecordSource.of(RuntimeImageModel.REF)
             .project(RuntimeImageModel.NAME, RuntimeImageModel.DESCRIPTION,
                 RuntimeImageModel.ENABLED, RuntimeImageModel.INCUS_IMAGE)
             .search(RuntimeImageModel.NAME)

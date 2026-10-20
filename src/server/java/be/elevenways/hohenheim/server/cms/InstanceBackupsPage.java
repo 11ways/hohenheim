@@ -94,9 +94,9 @@ public final class InstanceBackupsPage implements RecordTab.Rendered<Row> {
             // An empty section offers its making action instead of a dead end ("No backups yet" with Back up now).
             .parentActions(HohenheimSlugs.INSTANCE_BACKUPS, InstanceOperations.BACKUP.id())
             .parentActions(HohenheimSlugs.INSTANCE_SNAPSHOTS, InstanceOperations.SNAPSHOT.id())
-            .column(HohenheimSlugs.INSTANCE_BACKUPS, SubjectType.record(InstanceBackupModel.MODEL_ID), failureColumn(),
+            .column(HohenheimSlugs.INSTANCE_BACKUPS, SubjectType.record(InstanceBackupModel.REF), failureColumn(),
                 (backup, request) -> WithheldFailure.of(request.conduit()).shown(backup.get(InstanceBackupModel.ERROR)))
-            .column(HohenheimSlugs.INSTANCE_SNAPSHOTS, SubjectType.record(InstanceSnapshotModel.MODEL_ID),
+            .column(HohenheimSlugs.INSTANCE_SNAPSHOTS, SubjectType.record(InstanceSnapshotModel.REF),
                 failureColumn(), (snapshot, request) -> WithheldFailure.of(request.conduit())
                     .shown(snapshot.get(InstanceSnapshotModel.ERROR)));
         this.sections = operator ? tab.headerLink(HohenheimSlugs.INSTANCE_BACKUPS, backupTargetLink()) : tab;

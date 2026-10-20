@@ -134,7 +134,7 @@ final class ServerLifecycleActions {
             Function<Row, Microcopy> handler, Predicate<Row> applies) {
         Operation<Row, Void, Microcopy> operation = Operation.declare(HohenheimIds.id(id))
             .happened(OperationSentences.of(id)).label(label)
-            .one(SubjectType.record(ServerModel.MODEL_ID)).gate(OperationGate.permission(HohenheimPanel.ACCESS))
+            .one(SubjectType.record(ServerModel.REF)).gate(OperationGate.permission(HohenheimPanel.ACCESS))
             .command(CmsCommands.EXTERNAL)
             .result(Microcopy.class).register();
         OperationHandlers.attach(operation).applies(applies::test).handle(call -> handler.apply(call.subject()));

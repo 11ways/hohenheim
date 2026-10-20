@@ -235,13 +235,13 @@ public final class SiteWrites {
      * hook runs and the quota re-books the slot (refused by name over the cap), exactly as the legacy trash did.
      */
     public static final Operation<Row, Void, Integer> RESTORE =
-        ArchiveOperations.restore(SiteModel.class, SubjectArity.ONE, OperationGate.permission(HohenheimPanel.ACCESS));
+        ArchiveOperations.restore(SiteModel.REF, SubjectArity.ONE, OperationGate.permission(HohenheimPanel.ACCESS));
     public static final Operation<Row, Void, Integer> RESTORE_MANY =
-        ArchiveOperations.restore(SiteModel.class, SubjectArity.MANY, OperationGate.permission(HohenheimPanel.ACCESS));
+        ArchiveOperations.restore(SiteModel.REF, SubjectArity.MANY, OperationGate.permission(HohenheimPanel.ACCESS));
     public static final Operation<Row, Void, Integer> PURGE =
-        ArchiveOperations.purge(SiteModel.class, SubjectArity.ONE, OperationGate.permission(HohenheimPanel.ACCESS));
+        ArchiveOperations.purge(SiteModel.REF, SubjectArity.ONE, OperationGate.permission(HohenheimPanel.ACCESS));
     public static final Operation<Row, Void, Integer> PURGE_MANY =
-        ArchiveOperations.purge(SiteModel.class, SubjectArity.MANY, OperationGate.permission(HohenheimPanel.ACCESS));
+        ArchiveOperations.purge(SiteModel.REF, SubjectArity.MANY, OperationGate.permission(HohenheimPanel.ACCESS));
 
     private SiteWrites() {
     }

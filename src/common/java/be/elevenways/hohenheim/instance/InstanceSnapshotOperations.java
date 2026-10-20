@@ -23,7 +23,7 @@ import be.elevenways.zenit.common.ui.Icon;
 public final class InstanceSnapshotOperations {
     private static final OperationCommand COMMAND = OperationCommand.perSubject()
         .execution(CommandExecution.OUTSIDE_TRANSACTION);
-    public static final SubjectType<Row> SNAPSHOT = SubjectType.record(InstanceSnapshotModel.MODEL_ID);
+    public static final SubjectType<Row> SNAPSHOT = SubjectType.record(InstanceSnapshotModel.REF);
     public static final Operation<Row, Void, Void> RESTORE = Operation.declare(HohenheimIds.id("restore_snapshot"))
         .happened(OperationSentences.of("restore_snapshot"))
         .label(HohenheimMicrocopy.INSTANCE_SNAPSHOT.of("restore"))

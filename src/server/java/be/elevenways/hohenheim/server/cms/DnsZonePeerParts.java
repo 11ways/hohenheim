@@ -107,7 +107,7 @@ public final class DnsZonePeerParts {
                 .label(HohenheimMicrocopy.DNS_SECONDARIES.of("last_notify")).build())
             .build();
         return PanelResource.builder(HohenheimIds.id("dns_zone_peer"), HohenheimSlugs.DNS_ZONE_PEERS,
-                SubjectType.record(DnsZonePeerModel.MODEL_ID))
+                SubjectType.record(DnsZonePeerModel.REF))
             .label(HohenheimMicrocopy.DNS_ZONE_PEER.of("plural"))
             .recordLabel(HohenheimMicrocopy.DNS_ZONE_PEER.of("singular"))
             .icon(Icon.of("handshake"))

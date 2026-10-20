@@ -629,7 +629,7 @@ class PreviewMechanicsTest extends HohenheimTestBase {
         var model = Models.get(PreviewDeploymentModel.class);
         Row preview = model.createEmptyRow();
         preview.set(PreviewDeploymentModel.APPLICATION_ID, applicationId);
-        preview.set(PreviewDeploymentModel.REF, ref);
+        preview.set(PreviewDeploymentModel.GIT_REF, ref);
         preview.set(PreviewDeploymentModel.HOSTNAME, hostname);
         preview.set(PreviewDeploymentModel.STATUS, PreviewDeploymentModel.STATUS_RUNNING);
         preview.set(PreviewDeploymentModel.EXPIRES_AT,

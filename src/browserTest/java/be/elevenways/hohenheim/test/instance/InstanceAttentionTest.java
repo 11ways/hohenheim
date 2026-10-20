@@ -334,7 +334,7 @@ class InstanceAttentionTest {
 
                     Row preview = Models.get(PreviewDeploymentModel.class).createEmptyRow();
                     preview.set(PreviewDeploymentModel.APPLICATION_ID, application);
-                    preview.set(PreviewDeploymentModel.REF, "feature/held-" + made);
+                    preview.set(PreviewDeploymentModel.GIT_REF, "feature/held-" + made);
                     preview.set(PreviewDeploymentModel.STATUS, PreviewDeploymentModel.STATUS_RUNNING);
                     Models.get(PreviewDeploymentModel.class).save(preview);
                     int previewInstance = instance("attn-held-preview-" + made, InstanceModel.STATUS_DESTROYING);

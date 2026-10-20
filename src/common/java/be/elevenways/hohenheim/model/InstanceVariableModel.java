@@ -10,6 +10,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -34,6 +35,9 @@ import java.util.List;
 public class InstanceVariableModel extends Model {
 
     public static final Identifier MODEL_ID = HohenheimIds.id("instance_variable");
+    /** The instance variable model's reference: its class and MODEL_ID, resolved at first use. */
+    public static final ModelRef<InstanceVariableModel> REF = ModelRef.of(InstanceVariableModel.class, MODEL_ID);
+
     public static final Schema SCHEMA = new Schema();
 
     /** {@link #KIND}: the value is visible data ({@code plain_value}). */

@@ -77,7 +77,7 @@ public final class InstanceTemplateHandlers {
 
     /** The templates a caller may create from: every operation over one selected template reads through it. */
     private static final RecordSource<InstanceTemplateModel> SELECTABLE_TEMPLATES =
-            RecordSource.of(InstanceTemplateModel.class)
+            RecordSource.of(InstanceTemplateModel.REF)
         .id(HohenheimIds.id("selectable_template"))
         .project(InstanceTemplateModel.NAME, InstanceTemplateModel.KIND)
         .scopedBy(TenantScopes.INSTANCE_TEMPLATES).build();

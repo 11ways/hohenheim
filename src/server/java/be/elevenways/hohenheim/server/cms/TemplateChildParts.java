@@ -28,6 +28,7 @@ import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.IntegerField;
+import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -73,7 +74,7 @@ public final class TemplateChildParts {
                 .relation(RelationPick.of(InstanceTemplateVariableModel.TEMPLATE_ID, InstanceTemplateModel.MODEL_ID)
                         .build()).build())
             .build();
-        return entry(InstanceTemplateVariableModel.MODEL_ID, HohenheimSlugs.INSTANCE_TEMPLATE_VARIABLES,
+        return entry(InstanceTemplateVariableModel.REF, HohenheimSlugs.INSTANCE_TEMPLATE_VARIABLES,
             HohenheimMicrocopy.TEMPLATE_VARIABLE, 17,
             Icon.of("sliders"),
                 contents(InstanceTemplateVariableModel.TEMPLATE_ID).fixed())
@@ -103,7 +104,7 @@ public final class TemplateChildParts {
                 .relation(RelationPick.of(InstanceTemplateFileModel.TEMPLATE_ID, InstanceTemplateModel.MODEL_ID)
                         .build()).build())
             .build();
-        return entry(InstanceTemplateFileModel.MODEL_ID, HohenheimSlugs.INSTANCE_TEMPLATE_FILES,
+        return entry(InstanceTemplateFileModel.REF, HohenheimSlugs.INSTANCE_TEMPLATE_FILES,
             HohenheimMicrocopy.TEMPLATE_FILE, 18,
             Icon.of("file-code"),
                 contents(InstanceTemplateFileModel.TEMPLATE_ID).fixed())
@@ -135,7 +136,7 @@ public final class TemplateChildParts {
                         .build()).build())
             .build();
         String quotaMb = VolumeOperations.QUOTA_MB.getName();
-        return entry(InstanceTemplateVolumeModel.MODEL_ID, HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES,
+        return entry(InstanceTemplateVolumeModel.REF, HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES,
             HohenheimMicrocopy.TEMPLATE_VOLUME, 20,
             Icon.of("folder-open"),
                 contents(InstanceTemplateVolumeModel.TEMPLATE_ID).fixed())
@@ -177,7 +178,7 @@ public final class TemplateChildParts {
                 .relation(RelationPick.of(InstanceTemplateDatabaseModel.TEMPLATE_ID, InstanceTemplateModel.MODEL_ID)
                         .build()).build())
             .build();
-        return entry(InstanceTemplateDatabaseModel.MODEL_ID, HohenheimSlugs.INSTANCE_TEMPLATE_DATABASES,
+        return entry(InstanceTemplateDatabaseModel.REF, HohenheimSlugs.INSTANCE_TEMPLATE_DATABASES,
             HohenheimMicrocopy.TEMPLATE_DATABASE, 19,
             Icon.of("database"),
                 contents(InstanceTemplateDatabaseModel.TEMPLATE_ID).fixed())
@@ -195,11 +196,11 @@ public final class TemplateChildParts {
         return ResourceParent.of(HohenheimSlugs.INSTANCE_TEMPLATES, owner).tab(HohenheimSlugs.Tab.CONTENTS);
     }
 
-    private static PanelResource.@NonNull Builder<Row> entry(Identifier model, String slug, HohenheimMicrocopy scope,
+    private static PanelResource.@NonNull Builder<Row> entry(ModelRef<?> model, String slug, HohenheimMicrocopy scope,
         int order,
             Icon icon, ResourceParent<Row> parent) {
         TemplateDeclarationGuards.init();
-        return PanelResource.builder(model, slug, SubjectType.record(model))
+        return PanelResource.builder(model.id(), slug, SubjectType.record(model))
             .label(scope.of("plural"))
             .recordLabel(scope.of("singular"))
             .navGroup(HohenheimPanel.DEPLOY_GROUP).navOrder(order).icon(icon).showInNav(false)

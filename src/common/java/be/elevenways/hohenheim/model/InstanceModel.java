@@ -18,6 +18,7 @@ import be.elevenways.zenit.common.orm.behaviour.SoftDeleteBehaviour;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
@@ -52,6 +53,9 @@ import java.util.Objects;
 public class InstanceModel extends Model {
 
     public static final Identifier MODEL_ID = HohenheimIds.id("instance");
+    /** The instance model's reference: its class and MODEL_ID, resolved at first use. */
+    public static final ModelRef<InstanceModel> REF = ModelRef.of(InstanceModel.class, MODEL_ID);
+
     public static final Schema SCHEMA = new Schema();
 
     /** {@link #STATUS}: record exists, nothing was ever deployed. */

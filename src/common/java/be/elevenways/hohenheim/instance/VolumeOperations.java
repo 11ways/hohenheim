@@ -51,7 +51,7 @@ public final class VolumeOperations {
         values -> new Declaration(values.get(InstanceVolumeModel.INSTANCE_ID), values.get(InstanceVolumeModel.NAME),
             values.get(InstanceVolumeModel.CONTAINER_PATH), values.get(QUOTA_MB),
             values.get(InstanceVolumeModel.EXCLUSIVE)));
-    private static final SubjectType<Row> SUBJECT = SubjectType.record(InstanceVolumeModel.MODEL_ID);
+    private static final SubjectType<Row> SUBJECT = SubjectType.record(InstanceVolumeModel.REF);
     public static final Operation<Void, Declaration, Integer> CREATE =
             Operation.declare(HohenheimIds.id("declare_volume"))
         .happened(OperationSentences.of("declare_volume"))

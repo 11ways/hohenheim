@@ -271,7 +271,7 @@ public final class StackParts {
             .column(ColumnSpec.fromField(StackFileModel.STACK_SERVICE_ID).relation(service).build())
             .build();
         return PanelResource.builder(HohenheimIds.id("stack_file"), HohenheimSlugs.STACK_FILES,
-                SubjectType.record(StackFileModel.MODEL_ID))
+                SubjectType.record(StackFileModel.REF))
             .label(HohenheimMicrocopy.STACK_FILE.of("plural"))
             .recordLabel(HohenheimMicrocopy.STACK_FILE.of("singular"))
             .icon(Icon.of("file-code"))

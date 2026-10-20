@@ -26,9 +26,9 @@ import java.util.Objects;
 
 /** DNS domain actions share identities and authorizers across their panel placements. */
 public final class DnsOperations {
-    public static final SubjectType<Row> ZONE = SubjectType.record(DnsZoneModel.MODEL_ID);
-    public static final SubjectType<Row> RECORD = SubjectType.record(DnsRecordModel.MODEL_ID);
-    public static final SubjectType<Row> PEER = SubjectType.record(DnsPeerModel.MODEL_ID);
+    public static final SubjectType<Row> ZONE = SubjectType.record(DnsZoneModel.REF);
+    public static final SubjectType<Row> RECORD = SubjectType.record(DnsRecordModel.REF);
+    public static final SubjectType<Row> PEER = SubjectType.record(DnsPeerModel.REF);
 
     public static final Operation<Row, Void, Integer> DELETE_ZONE =
             Operation.declare(HohenheimIds.id("delete_dns_zone"))

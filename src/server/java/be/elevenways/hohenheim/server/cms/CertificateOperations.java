@@ -59,10 +59,10 @@ import static be.elevenways.hohenheim.RawValues.trimmed;
 public final class CertificateOperations {
 
     /** A domain row: "Get a certificate" for its hostname. */
-    public static final SubjectType<Row> DOMAIN = SubjectType.record(SiteDomainModel.MODEL_ID);
+    public static final SubjectType<Row> DOMAIN = SubjectType.record(SiteDomainModel.REF);
 
     /** A stored certificate: re-ordered, or its manual DNS-01 order continued. */
-    public static final SubjectType<Row> CERTIFICATE = SubjectType.record(CertificateModel.MODEL_ID);
+    public static final SubjectType<Row> CERTIFICATE = SubjectType.record(CertificateModel.REF);
 
     private static final StringField DOMAIN_NAME = StringField.builder("domain").placeholder("example.com").build();
 

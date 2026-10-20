@@ -31,10 +31,10 @@ public final class InstanceScheduleOperations {
     private static final OperationCommand COMMAND = OperationCommand.perSubject();
 
     /** One record schedule. */
-    public static final SubjectType<Row> SCHEDULE = SubjectType.record(RecordScheduleModel.MODEL_ID);
+    public static final SubjectType<Row> SCHEDULE = SubjectType.record(RecordScheduleModel.REF);
 
     /** One chain step of a record schedule. */
-    public static final SubjectType<Row> STEP = SubjectType.record(RecordScheduleStepModel.MODEL_ID);
+    public static final SubjectType<Row> STEP = SubjectType.record(RecordScheduleStepModel.REF);
 
     /** Fires the chain now; offered on an enabled schedule. The result is the run's status. */
     public static final Operation<Row, Void, String> RUN_SCHEDULE =

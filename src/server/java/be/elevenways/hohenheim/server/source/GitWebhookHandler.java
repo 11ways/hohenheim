@@ -448,7 +448,7 @@ public class GitWebhookHandler {
     private static boolean hasLivePreview(int applicationId, @NonNull String ref) {
         return Models.get(PreviewDeploymentModel.class).find()
             .where(PreviewDeploymentModel.APPLICATION_ID.eq(applicationId))
-            .where(PreviewDeploymentModel.REF.eq(ref))
+            .where(PreviewDeploymentModel.GIT_REF.eq(ref))
             .first() != null;
     }
 

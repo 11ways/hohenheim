@@ -7,6 +7,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 
@@ -19,6 +20,9 @@ import java.util.List;
 public class DnsZonePeerModel extends Model {
 
     public static final Identifier MODEL_ID = HohenheimIds.id("dns_zone_peer");
+    /** The dns zone peer model's reference: its class and MODEL_ID, resolved at first use. */
+    public static final ModelRef<DnsZonePeerModel> REF = ModelRef.of(DnsZonePeerModel.class, MODEL_ID);
+
     public static final Schema SCHEMA = new Schema();
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());

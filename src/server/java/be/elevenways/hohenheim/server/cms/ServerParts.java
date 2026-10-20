@@ -100,7 +100,7 @@ public final class ServerParts {
     public static final Operation<Row, Void, Integer> DELETE = Operation.declare(HohenheimIds.id("delete_server"))
         .happened(OperationSentences.of("delete_server"))
         .label(CmsMicrocopy.of("delete"))
-        .one(SubjectType.record(ServerModel.MODEL_ID)).gate(OperationGate.permission(HohenheimPanel.ACCESS))
+        .one(SubjectType.record(ServerModel.REF)).gate(OperationGate.permission(HohenheimPanel.ACCESS))
         .result(Integer.class).facts(OperationFact.DESTRUCTIVE).command(CmsCommands.TRANSACTIONAL).register();
     static {
         OperationHandlers.attach(DELETE)
@@ -139,7 +139,7 @@ public final class ServerParts {
             FieldAccess.customRecordAware((access, record) -> local(record)
                 ? FieldAccess.Decision.HIDDEN : FieldAccess.Decision.EDITABLE)));
         return PanelResource.builder(HohenheimIds.id("server"), HohenheimSlugs.SERVERS, SubjectType
-            .record(ServerModel.MODEL_ID))
+            .record(ServerModel.REF))
             .label(HohenheimMicrocopy.SERVER.of("plural")).recordLabel(HohenheimMicrocopy.SERVER.of("singular"))
             .description(HohenheimMicrocopy.SERVER.of("nav_hint"))
             .navGroup(NavGroup.DEFAULT).navOrder(40).icon(HOST_ICON)

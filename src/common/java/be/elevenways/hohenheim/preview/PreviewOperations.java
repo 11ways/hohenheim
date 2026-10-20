@@ -30,7 +30,7 @@ import be.elevenways.zenit.common.ui.Icon;
 public final class PreviewOperations {
 
     /** The subject of every preview operation: one preview deployment record. */
-    public static final SubjectType<Row> PREVIEW = SubjectType.record(PreviewDeploymentModel.MODEL_ID);
+    public static final SubjectType<Row> PREVIEW = SubjectType.record(PreviewDeploymentModel.REF);
 
     /** The full verified reclaim at the deadline; a destroy the daemon cannot confirm throws, so the step retries. */
     public static final Operation<Row, Void, String> EXPIRE = Operation.declare(HohenheimIds.id("expire_preview"))

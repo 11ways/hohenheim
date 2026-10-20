@@ -9,6 +9,7 @@ import be.elevenways.zenit.common.edit.InputType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import be.elevenways.zenit.common.ui.ColorHue;
@@ -23,6 +24,9 @@ import java.util.List;
 public class DnsZoneModel extends Model {
 
     public static final Identifier MODEL_ID = HohenheimIds.id("dns_zone");
+    /** The dns zone model's reference: its class and MODEL_ID, resolved at first use. */
+    public static final ModelRef<DnsZoneModel> REF = ModelRef.of(DnsZoneModel.class, MODEL_ID);
+
     public static final Schema SCHEMA = new Schema();
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());

@@ -66,7 +66,7 @@ public final class EnvironmentParts {
     public static final RowScope VARIABLE_ROWS =
         RowScope.within(() -> InstanceVariableModel.ENVIRONMENT_ID.isNotNull());
 
-    private static final SubjectType<Row> SUBJECT = SubjectType.record(EnvironmentModel.MODEL_ID);
+    private static final SubjectType<Row> SUBJECT = SubjectType.record(EnvironmentModel.REF);
 
     private static final OperationGate OPERATOR = OperationGate.permission(HohenheimSources.ADMIN_ACCESS);
 
@@ -75,14 +75,14 @@ public final class EnvironmentParts {
 
     /** Deletes an environment nothing groups under; offered dead, naming the holders, while something does. */
     public static final Operation<Row, Void, Integer> DELETE =
-        RowDeleteOperations.declare(EnvironmentModel.class, SubjectArity.ONE, OPERATOR)
+        RowDeleteOperations.declare(EnvironmentModel.REF, SubjectArity.ONE, OPERATOR)
             .id(HohenheimIds.id("delete_environment"))
             .availability(Availability.batch((environments, access) -> DeleteImpact.environmentsInUse(environments)))
             .register();
 
     /** Removes one environment-owned variable; anything running keeps its value until its next deploy. */
     public static final Operation<Row, Void, Integer> DELETE_VARIABLE =
-        RowDeleteOperations.delete(InstanceVariableModel.class, SubjectArity.ONE, OPERATOR);
+        RowDeleteOperations.delete(InstanceVariableModel.REF, SubjectArity.ONE, OPERATOR);
 
     /** The environment list's quick-add entries; the project rides along as a preset. */
     private static final QuickCreateSpec ENVIRONMENT_QUICK_CREATE = QuickCreateSpec
@@ -201,7 +201,7 @@ public final class EnvironmentParts {
             .column(ColumnSpec.fromField(InstanceVariableModel.ENVIRONMENT_ID).relation(environment).build())
             .build();
         return PanelResource.builder(HohenheimIds.id("environment_variable"), HohenheimSlugs.ENVIRONMENT_VARIABLES,
-                SubjectType.record(InstanceVariableModel.MODEL_ID))
+                SubjectType.record(InstanceVariableModel.REF))
             .label(HohenheimMicrocopy.ENVIRONMENT_VARIABLE.of("plural"))
             .recordLabel(HohenheimMicrocopy.ENVIRONMENT_VARIABLE.of("singular"))
             .description(CmsSupport.navHint(HohenheimMicrocopy.ENVIRONMENT_VARIABLE))

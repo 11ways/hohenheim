@@ -33,7 +33,7 @@ public final class InstanceBackupOperations {
         .execution(CommandExecution.OUTSIDE_TRANSACTION);
 
     /** The subject of every backup operation: one backup row. */
-    public static final SubjectType<Row> BACKUP = SubjectType.record(InstanceBackupModel.MODEL_ID);
+    public static final SubjectType<Row> BACKUP = SubjectType.record(InstanceBackupModel.REF);
 
     /**
      * Restores the backup as a NEW instance on the host the operator picks, or the one placement picks when none is;

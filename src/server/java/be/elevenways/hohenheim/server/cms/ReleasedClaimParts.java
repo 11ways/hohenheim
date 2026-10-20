@@ -65,7 +65,7 @@ public final class ReleasedClaimParts {
     static final String FORMER_SITE_COLUMN = "former_site";
     static final String FORMER_OWNER_COLUMN = "former_owner";
 
-    private static final SubjectType<Row> SUBJECT = SubjectType.record(ReleasedRouteClaimModel.MODEL_ID);
+    private static final SubjectType<Row> SUBJECT = SubjectType.record(ReleasedRouteClaimModel.REF);
 
     /** Removes a quarantine before its window ends, freeing the hostname for any owner. */
     public static final Operation<Row, Void, Void> LIFT = Operation.declare(HohenheimIds.id("lift_quarantine"))

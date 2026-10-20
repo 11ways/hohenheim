@@ -76,11 +76,11 @@ public final class AccessRuleParts {
     /** The virtual column holding the rule's localized one-line summary. */
     static final String RULE_COLUMN = "rule";
 
-    private static final SubjectType<Row> SUBJECT = SubjectType.record(AccessRuleModel.MODEL_ID);
+    private static final SubjectType<Row> SUBJECT = SubjectType.record(AccessRuleModel.REF);
 
     /** Moves a rule one place up or down among its own siblings; offered dead at either end of its group. */
     public static final TreeOrderOperations ORDER = TreeOrderOperations.declare(HohenheimIds.id("access_rule"),
-        AccessRuleModel.class, OperationGate.open(), (rule, input, access) -> writeRefusal(rule, access));
+        AccessRuleModel.REF, OperationGate.open(), (rule, input, access) -> writeRefusal(rule, access));
 
     /** Switches a rule on or off; switching one on runs the model's completeness hook. */
     public static final Operation<Row, Void, Void> TOGGLE = Operation.declare(HohenheimIds.id("access_rule_toggle"))

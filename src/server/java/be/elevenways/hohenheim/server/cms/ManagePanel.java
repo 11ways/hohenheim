@@ -244,7 +244,7 @@ public final class ManagePanel extends Panel {
         // both the admin site entry and its delegated twin (SiteParts); this server-side
         // declaration replaces it deliberately, because its scope reads zenit-auth grants
         // unavailable to the common/browser registration lane.
-        RecordSourceRegistry.INSTANCE.override(RecordSource.of(SiteModel.class)
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(SiteModel.REF)
             .search(SiteModel.NAME, SiteModel.SLUG)
             .scopedBy(TenantScopes.SITES)
             .build());
@@ -265,7 +265,7 @@ public final class ManagePanel extends Panel {
         // AIDEV-NOTE: the model's REFERENCE policy is the MANAGED scope, while the /manage Addresses list reads the
         // wider read scope (TenantScopes.DOMAINS): a tenant who may view an app reads its addresses there, and a
         // picker never offers one the tenant could not attach -- the access-list two-scope shape.
-        RecordSourceRegistry.INSTANCE.override(RecordSource.of(SiteDomainModel.class)
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(SiteDomainModel.REF)
             .search(SiteDomainModel.HOSTNAME)
             .scopedBy(TenantScopes.MANAGED_DOMAINS)
             .referencePolicy()
@@ -283,14 +283,14 @@ public final class ManagePanel extends Panel {
         // "No results found" on an installation that had none yet.
         Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN),
             "the admin panel is registered before its sources");
-        RecordSourceRegistry.INSTANCE.override(adminCreatable(RecordSource.of(AccessListModel.class)
+        RecordSourceRegistry.INSTANCE.override(adminCreatable(RecordSource.of(AccessListModel.REF)
             .search(AccessListModel.NAME)
             .scopedBy(TenantScopes.USABLE_ACCESS_LISTS)
             .referencePolicy(), admin, HohenheimSlugs.ACCESS_LISTS)
             .build());
 
         // Protected paths: child rows scoped by their parent SITE, like domains.
-        RecordSourceRegistry.INSTANCE.override(RecordSource.of(ProtectedPathModel.class)
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(ProtectedPathModel.REF)
             .search(ProtectedPathModel.PATH)
             .scopedBy(TenantScopes.PROTECTED_PATHS)
             .build());
@@ -298,7 +298,7 @@ public final class ManagePanel extends Panel {
         // Access rules: child rows scoped by their parent LIST, like protected paths by their site. zenit-cms would
         // derive the model's source from the admin entry (AccessRuleParts), admin-gated; the API's tenant writes and
         // the pickers read through the parent list's manage scope instead, so this explicit source replaces it.
-        RecordSourceRegistry.INSTANCE.override(RecordSource.of(AccessRuleModel.class)
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(AccessRuleModel.REF)
             .search(AccessRuleModel.SEARCH_TEXT)
             .scopedBy(TenantScopes.ACCESS_RULES)
             .build());
@@ -320,7 +320,7 @@ public final class ManagePanel extends Panel {
         // has to be declared here or the bar simply never appears. It used to be a
         // hand-written copy of that provider; nothing about the reduction or the
         // persistence path was ever hohenheim-specific.
-        var dnsRecords = RecordSource.of(DnsRecordModel.class)
+        var dnsRecords = RecordSource.of(DnsRecordModel.REF)
             .search(DnsRecordModel.NAME, DnsRecordModel.VALUE)
             .scopedBy(TenantScopes.DNS_RECORDS);
         RecordSourceRegistry.INSTANCE.override(adminCreatable(dnsRecords, admin, HohenheimSlugs.DNS_RECORDS).build());
@@ -329,7 +329,7 @@ public final class ManagePanel extends Panel {
         // browser registry keeps, legitimately -- the scope below reads zenit-auth record
         // grants that common code cannot see). The base criteria is the SAME method the
         // common registration uses, never a second copy of the ACME-account exclusion.
-        RecordSourceRegistry.INSTANCE.override(RecordSource.of(CertificateModel.class)
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(CertificateModel.REF)
             .search(CertificateModel.NICE_NAME)
             .scopedBy(TenantScopes.CERTIFICATES)
             .build());
@@ -346,7 +346,7 @@ public final class ManagePanel extends Panel {
         // owning record, and a picker offering it was a tenant read the list refused. Its scope
         // is INSTANCE_READERS, never the live-only INSTANCES: the archived lane keeps trashed rows
         // out of every pick and search, while a stored reference still names its trashed instance.
-        RecordSourceRegistry.INSTANCE.override(RecordSource.of(InstanceModel.class)
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(InstanceModel.REF)
             .project(InstanceModel.NAME, InstanceModel.KIND)
             .search(InstanceModel.NAME)
             .scopedBy(TenantScopes.INSTANCE_READERS)
@@ -357,7 +357,7 @@ public final class ManagePanel extends Panel {
         // the same shadowing hazard as instances above. The scope is THE catalog policy:
         // operators browse everything, everyone else only APPROVED templates. The
         // instance form's dependent template pick narrows on the projected kind.
-        RecordSourceRegistry.INSTANCE.override(RecordSource.of(InstanceTemplateModel.class)
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(InstanceTemplateModel.REF)
             .project(InstanceTemplateModel.NAME, InstanceTemplateModel.KIND)
             .search(InstanceTemplateModel.NAME)
             .scopedBy(TenantScopes.INSTANCE_TEMPLATES)
@@ -366,7 +366,7 @@ public final class ManagePanel extends Panel {
         // Record schedules: this declaration carries the SAME scope the delegated resource
         // enforces, so a picker and the resource can never disagree -- a deliberate
         // narrowing of the default derived from RecordScheduleModel.NAME.
-        RecordSourceRegistry.INSTANCE.override(RecordSource.of(RecordScheduleModel.class)
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(RecordScheduleModel.REF)
             .search(RecordScheduleModel.NAME)
             .scopedBy(TenantScopes.INSTANCE_SCHEDULES)
             .build());
@@ -375,7 +375,7 @@ public final class ManagePanel extends Panel {
         // exposes the model beside the admin ProjectResource -- and the widest of the two
         // would name every tenant's projects to whoever a picker rendered for. The scope
         // is THE visibility policy, so a picker and the resource can never disagree.
-        RecordSourceRegistry.INSTANCE.override(RecordSource.of(ProjectModel.class)
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(ProjectModel.REF)
             .search(ProjectModel.NAME)
             .scopedBy(TenantScopes.PROJECTS)
             .build());
@@ -391,7 +391,7 @@ public final class ManagePanel extends Panel {
         // Each offered database names its engine and stored state, and one whose setup failed wears the warning
         // glyph, so an attach picker never offers a failed database as if it worked (stored facts: no per-row read).
         // The id is projected so a picker's rules (the attach form's "not attached yet") can narrow on it.
-        RecordSourceRegistry.INSTANCE.override(RecordSource.of(DatabaseModel.class)
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(DatabaseModel.REF)
             .project(DatabaseModel.ID, DatabaseModel.NAME)
             .search(DatabaseModel.NAME)
             .scopedBy(TenantScopes.DATABASES)
@@ -404,13 +404,13 @@ public final class ManagePanel extends Panel {
 
         // Instance devices: same two-derived-defaults hazard again, and the widest one
         // would list every tenant's disk names and sizes to whoever a picker rendered for.
-        RecordSourceRegistry.INSTANCE.override(RecordSource.of(InstanceDeviceModel.class)
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(InstanceDeviceModel.REF)
             .search(InstanceDeviceModel.NAME)
             .scopedBy(TenantScopes.INSTANCE_DEVICES)
             .build());
 
         // Instance volumes: the same hazard; the widest default would list every tenant's host directories.
-        RecordSourceRegistry.INSTANCE.override(RecordSource.of(InstanceVolumeModel.class)
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(InstanceVolumeModel.REF)
             .search(InstanceVolumeModel.NAME)
             .scopedBy(TenantScopes.INSTANCE_VOLUMES)
             .build());
@@ -419,8 +419,8 @@ public final class ManagePanel extends Panel {
         // PreviewDeploymentResource and the delegated ManagePreviewDeploymentResource
         // both derive), and the widest one would name every tenant's branch names and
         // preview hostnames to whoever a picker rendered for.
-        RecordSourceRegistry.INSTANCE.override(RecordSource.of(PreviewDeploymentModel.class)
-            .search(PreviewDeploymentModel.HOSTNAME, PreviewDeploymentModel.REF)
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(PreviewDeploymentModel.REF)
+            .search(PreviewDeploymentModel.HOSTNAME, PreviewDeploymentModel.GIT_REF)
             .scopedBy(TenantScopes.PREVIEWS)
             .build());
 
@@ -432,7 +432,7 @@ public final class ManagePanel extends Panel {
         // principal manages), so the site form's provider picker and this source can
         // never disagree. It is the model's REFERENCE policy, as access lists' is: the
         // /manage list keeps its owned scope (TenantScopes.MANAGED_GIT_PROVIDERS).
-        RecordSourceRegistry.INSTANCE.override(RecordSource.of(GitProviderModel.class)
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(GitProviderModel.REF)
             .search(GitProviderModel.NAME)
             .scopedBy(TenantScopes.USABLE_GIT_PROVIDERS)
             .referencePolicy()
@@ -441,7 +441,7 @@ public final class ManagePanel extends Panel {
         // Instance-database attachments: the row names both a workload and a credential
         // store, so this source must carry the parent instance's visibility scope instead
         // of the admin gate zenit-cms derives.
-        RecordSourceRegistry.INSTANCE.override(RecordSource.of(InstanceDatabaseModel.class)
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(InstanceDatabaseModel.REF)
             .title()
             .scopedBy(TenantScopes.INSTANCE_DATABASES)
             .build());

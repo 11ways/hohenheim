@@ -413,7 +413,7 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
             Map<String, Object> row = new HashMap<>();
             Object status = preview.get(PreviewDeploymentModel.STATUS);
             WidgetBadge.Colors colors = WidgetBadge.colorsOf(PreviewDeploymentModel.STATUS, status);
-            row.put("ref", Objects.toString(preview.get(PreviewDeploymentModel.REF), ""));
+            row.put("ref", Objects.toString(preview.get(PreviewDeploymentModel.GIT_REF), ""));
             Integer pr = preview.get(PreviewDeploymentModel.PR_NUMBER);
             row.put("pullRequest", pr == null ? "" : String.valueOf(pr));
             String hostname = Objects.toString(preview.get(PreviewDeploymentModel.HOSTNAME), "");

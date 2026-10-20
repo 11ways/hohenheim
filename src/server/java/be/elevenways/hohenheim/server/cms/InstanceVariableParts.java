@@ -54,7 +54,7 @@ public final class InstanceVariableParts {
     private static PanelResource.@NonNull Builder<Row> entry(@NonNull Identifier id) {
         TableSpec<Row> table = tableSpec();
         return PanelResource.builder(Objects.requireNonNull(id, "id cannot be null"), HohenheimSlugs.INSTANCE_VARIABLES,
-                SubjectType.record(InstanceVariableModel.MODEL_ID))
+                SubjectType.record(InstanceVariableModel.REF))
             .label(HohenheimMicrocopy.INSTANCE_VARIABLE.of("plural"))
             .recordLabel(HohenheimMicrocopy.INSTANCE_VARIABLE.of("singular"))
             .icon(Icon.of("sliders"))

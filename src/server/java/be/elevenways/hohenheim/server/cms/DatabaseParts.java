@@ -116,8 +116,8 @@ import static be.elevenways.hohenheim.RawValues.trimmed;
  */
 public final class DatabaseParts {
 
-    private static final SubjectType<Row> DATABASE = SubjectType.record(DatabaseModel.MODEL_ID);
-    private static final SubjectType<Row> ENGINE = SubjectType.record(DatabaseEngineModel.MODEL_ID);
+    private static final SubjectType<Row> DATABASE = SubjectType.record(DatabaseModel.REF);
+    private static final SubjectType<Row> ENGINE = SubjectType.record(DatabaseEngineModel.REF);
 
     /** The list's virtual columns: where a database runs, what uses it, and its newest stored dump. */
     private static final String RUNS_ON_COLUMN = "runs_on";

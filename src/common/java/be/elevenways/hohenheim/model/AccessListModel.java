@@ -8,6 +8,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.validation.Violations;
@@ -23,6 +24,9 @@ import be.elevenways.zenit.common.validation.Violations;
 public class AccessListModel extends Model {
 
     public static final Identifier MODEL_ID = HohenheimIds.id("access_list");
+    /** The access list model's reference: its class and MODEL_ID, resolved at first use. */
+    public static final ModelRef<AccessListModel> REF = ModelRef.of(AccessListModel.class, MODEL_ID);
+
     public static final Schema SCHEMA = new Schema();
 
     /** {@link #SATISFY} value: any matching rule grants access. */

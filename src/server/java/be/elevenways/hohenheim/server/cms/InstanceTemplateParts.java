@@ -162,7 +162,7 @@ public final class InstanceTemplateParts {
     /** The parts both entries share: identity, label, icon, nav group and the plain row reads. */
     private static PanelResource.@NonNull Builder<Row> base(@NonNull Identifier id) {
         return PanelResource.builder(id, HohenheimSlugs.INSTANCE_TEMPLATES,
-                SubjectType.record(InstanceTemplateModel.MODEL_ID))
+                SubjectType.record(InstanceTemplateModel.REF))
             .label(HohenheimMicrocopy.INSTANCE_TEMPLATE.of("plural"))
             .recordLabel(HohenheimMicrocopy.INSTANCE_TEMPLATE.of("singular"))
             .icon(Icon.of(StarterTemplate.TEMPLATE_ICON))

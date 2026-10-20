@@ -184,7 +184,7 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
     private static void preview(String ref, Integer pullRequest, String status) {
         Row row = Models.get(PreviewDeploymentModel.class).createEmptyRow();
         row.set(PreviewDeploymentModel.APPLICATION_ID, applicationId);
-        row.set(PreviewDeploymentModel.REF, ref);
+        row.set(PreviewDeploymentModel.GIT_REF, ref);
         row.set(PreviewDeploymentModel.PR_NUMBER, pullRequest);
         row.set(PreviewDeploymentModel.HOSTNAME, ref.replace('/', '-') + ".preview.test");
         row.set(PreviewDeploymentModel.STATUS, status);

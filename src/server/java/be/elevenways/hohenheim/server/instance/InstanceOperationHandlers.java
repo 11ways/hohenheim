@@ -88,7 +88,7 @@ public final class InstanceOperationHandlers {
     /** The operator verbs (placement, install lifecycle, capture, destroy with data) answer to an operator alone. */
     private static final String OPERATOR_VERB = "an operator verb";
 
-    private static final RecordSource<InstanceModel> SUBJECTS = RecordSource.of(InstanceModel.class)
+    private static final RecordSource<InstanceModel> SUBJECTS = RecordSource.of(InstanceModel.REF)
         .id(HohenheimIds.id("instance_operation_subjects")).project(InstanceModel.ID).openToAllLoggedIn()
         .systemAccess(identity -> RecordSchedules.isScheduleWork(identity)
             ? InstanceModel.GENERATED_BY.isNull() : null).build();

@@ -13,6 +13,7 @@ import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.TextField;
 import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -31,6 +32,9 @@ import java.util.List;
 public class PreviewDeploymentModel extends Model {
 
     public static final Identifier MODEL_ID = HohenheimIds.id("preview_deployment");
+    /** The preview deployment model's reference: its class and MODEL_ID, resolved at first use. */
+    public static final ModelRef<PreviewDeploymentModel> REF = ModelRef.of(PreviewDeploymentModel.class, MODEL_ID);
+
     public static final Schema SCHEMA = new Schema();
 
     public static final String STATUS_DEPLOYING = "deploying";
@@ -46,7 +50,7 @@ public class PreviewDeploymentModel extends Model {
         .build());
 
     /** The git ref (branch) this preview builds; user data, never localized. */
-    public static final StringField REF = SCHEMA.addField(StringField.builder().name("ref")
+    public static final StringField GIT_REF = SCHEMA.addField(StringField.builder().name("ref")
         .required()
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("preview_ref"))
         .build());

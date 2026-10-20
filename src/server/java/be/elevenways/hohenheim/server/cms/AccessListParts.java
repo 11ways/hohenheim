@@ -47,7 +47,7 @@ import java.util.function.UnaryOperator;
  */
 public final class AccessListParts {
 
-    private static final SubjectType<Row> SUBJECT = SubjectType.record(AccessListModel.MODEL_ID);
+    private static final SubjectType<Row> SUBJECT = SubjectType.record(AccessListModel.REF);
 
     /** The list's "lets in" column: its rules in a few words. */
     private static final String LETS_IN_COLUMN = "lets_in";

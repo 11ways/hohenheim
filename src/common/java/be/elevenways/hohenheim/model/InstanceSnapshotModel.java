@@ -9,6 +9,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.ui.ColorHue;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -24,6 +25,9 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 public class InstanceSnapshotModel extends Model {
 
     public static final Identifier MODEL_ID = HohenheimIds.id("instance_snapshot");
+    /** The instance snapshot model's reference: its class and MODEL_ID, resolved at first use. */
+    public static final ModelRef<InstanceSnapshotModel> REF = ModelRef.of(InstanceSnapshotModel.class, MODEL_ID);
+
     public static final Schema SCHEMA = new Schema();
 
     /** The {@link #STATUS} vocabulary; each member states whether a snapshot in it can be restored. */

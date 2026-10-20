@@ -28,8 +28,8 @@ public final class InstanceAttachmentOperations {
     private static final OperationCommand COMMAND = OperationCommand.perSubject()
         .execution(CommandExecution.OUTSIDE_TRANSACTION);
 
-    public static final SubjectType<Row> DEVICE = SubjectType.record(InstanceDeviceModel.MODEL_ID);
-    public static final SubjectType<Row> DATABASE_LINK = SubjectType.record(InstanceDatabaseModel.MODEL_ID);
+    public static final SubjectType<Row> DEVICE = SubjectType.record(InstanceDeviceModel.REF);
+    public static final SubjectType<Row> DATABASE_LINK = SubjectType.record(InstanceDatabaseModel.REF);
 
     /** Detaches the device; the daemon deletes its backing volume, verified, before the row goes. */
     public static final Operation<Row, Void, Integer> DETACH_DEVICE =

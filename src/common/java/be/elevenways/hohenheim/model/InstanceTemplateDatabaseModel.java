@@ -12,6 +12,7 @@ import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -35,6 +36,10 @@ import java.util.List;
 public class InstanceTemplateDatabaseModel extends Model {
 
     public static final Identifier MODEL_ID = HohenheimIds.id("instance_template_database");
+    /** The instance template database model's reference: its class and MODEL_ID, resolved at first use. */
+    public static final ModelRef<InstanceTemplateDatabaseModel> REF =
+        ModelRef.of(InstanceTemplateDatabaseModel.class, MODEL_ID);
+
     public static final Schema SCHEMA = new Schema();
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());

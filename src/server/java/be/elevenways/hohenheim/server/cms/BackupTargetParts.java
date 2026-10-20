@@ -54,7 +54,7 @@ public final class BackupTargetParts {
     /** Read by the autoload index, which loads the class and so runs the DRY registration below at boot. */
     public static final Object LOADED = new Object();
 
-    private static final SubjectType<Row> SUBJECT = SubjectType.record(BackupTargetModel.MODEL_ID);
+    private static final SubjectType<Row> SUBJECT = SubjectType.record(BackupTargetModel.REF);
 
     /** Runs the target's health check against its real destination. */
     public static final Operation<Row, Void, TestOutcome> TEST =

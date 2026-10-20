@@ -51,10 +51,10 @@ public final class StackOperations {
     private static final OperationGate OPERATOR = OperationGate.permission(HohenheimPanel.ACCESS);
 
     /** One stack record. */
-    public static final SubjectType<Row> STACK = SubjectType.record(StackModel.MODEL_ID);
+    public static final SubjectType<Row> STACK = SubjectType.record(StackModel.REF);
 
     /** One stack service record. */
-    public static final SubjectType<Row> SERVICE = SubjectType.record(StackServiceModel.MODEL_ID);
+    public static final SubjectType<Row> SERVICE = SubjectType.record(StackServiceModel.REF);
 
     /** Queues a deploy of the stack's desired state. */
     public static final Operation<Row, Void, Void> DEPLOY = Operation.declare(HohenheimIds.id("deploy_stack"))

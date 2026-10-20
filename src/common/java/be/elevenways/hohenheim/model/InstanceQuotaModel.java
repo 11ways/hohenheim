@@ -13,6 +13,7 @@ import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.validation.Violations;
 
@@ -43,6 +44,9 @@ import be.elevenways.zenit.common.validation.Violations;
 public class InstanceQuotaModel extends Model {
 
     public static final Identifier MODEL_ID = HohenheimIds.id("instance_quota");
+    /** The instance quota model's reference: its class and MODEL_ID, resolved at first use. */
+    public static final ModelRef<InstanceQuotaModel> REF = ModelRef.of(InstanceQuotaModel.class, MODEL_ID);
+
     public static final Schema SCHEMA = new Schema();
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());

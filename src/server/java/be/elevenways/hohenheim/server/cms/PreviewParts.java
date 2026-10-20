@@ -77,7 +77,7 @@ public final class PreviewParts {
         List<ResourceFieldBinding> bindings = new ArrayList<>();
         for (var field : form.entries()) {
             boolean input = PreviewDeploymentModel.APPLICATION_ID.getName().equals(field.name())
-                || PreviewDeploymentModel.REF.getName().equals(field.name());
+                || PreviewDeploymentModel.GIT_REF.getName().equals(field.name());
             bindings.add(ResourceFieldBinding.of(field.name(), input
                 ? FieldAccess.customRecordAware((access, record) -> record == null
                     ? FieldAccess.Decision.EDITABLE : FieldAccess.Decision.READONLY)
@@ -93,7 +93,7 @@ public final class PreviewParts {
             .form(ResourceForm.<Row>of(form).bindings(bindings)
                 .createDefaults((access, panel) -> PreviewParts.createDefaults(access)).withoutQuickCreate().build())
             .list(ResourceList.rows(tableSpec()).chrome(ListChrome.MINIMAL)
-                .search(PreviewDeploymentModel.HOSTNAME, PreviewDeploymentModel.REF,
+                .search(PreviewDeploymentModel.HOSTNAME, PreviewDeploymentModel.GIT_REF,
                         PreviewDeploymentModel.HEAD_SHA).build())
             .reads(ResourceReads.rows())
             .writes(ResourceMutations.rows().create(call -> queue(call.values(), call.access(),
@@ -123,7 +123,7 @@ public final class PreviewParts {
     static @NonNull FormSpec formSpec() {
         return FormSpec.builder()
             .add(RelationPick.of(PreviewDeploymentModel.APPLICATION_ID, InstanceModel.MODEL_ID).build())
-            .add(PreviewDeploymentModel.REF).add(PreviewDeploymentModel.PR_NUMBER).add(PreviewDeploymentModel.HEAD_SHA)
+            .add(PreviewDeploymentModel.GIT_REF).add(PreviewDeploymentModel.PR_NUMBER).add(PreviewDeploymentModel.HEAD_SHA)
             .add(PreviewDeploymentModel.HOSTNAME).add(PreviewDeploymentModel.STATUS)
             .add(PreviewDeploymentModel.EXPIRES_AT).add(PreviewDeploymentModel.INSTANCE_ID)
             .add(PreviewDeploymentModel.LAST_ERROR).build();
@@ -133,7 +133,7 @@ public final class PreviewParts {
         return TableSpec.<Row>builder()
             .column(ColumnSpec.fromField(PreviewDeploymentModel.HOSTNAME).filterable().subtext("ref")
                     .copyable().build())
-            .column(ColumnSpec.fromField(PreviewDeploymentModel.REF).filterable().hidden().build())
+            .column(ColumnSpec.fromField(PreviewDeploymentModel.GIT_REF).filterable().hidden().build())
             .column(ColumnSpec.fromField(PreviewDeploymentModel.STATUS).filterable().build())
             .column(ColumnSpec.fromField(PreviewDeploymentModel.EXPIRES_AT).sortable().build())
             .column(ColumnSpec.fromField(PreviewDeploymentModel.CREATED_AT).sortable().build()).build();
@@ -148,8 +148,8 @@ public final class PreviewParts {
             throw Violations.ofField(PreviewDeploymentModel.APPLICATION_ID.getName(), chosen,
                 HohenheimMicrocopy.VIOLATIONS.of("preview_application_required"));
         }
-        String ref = values.get(PreviewDeploymentModel.REF.getName()) instanceof String text ? text.trim() : "";
-        if (ref.isEmpty()) throw Violations.ofField(PreviewDeploymentModel.REF.getName(), ref,
+        String ref = values.get(PreviewDeploymentModel.GIT_REF.getName()) instanceof String text ? text.trim() : "";
+        if (ref.isEmpty()) throw Violations.ofField(PreviewDeploymentModel.GIT_REF.getName(), ref,
             HohenheimMicrocopy.VIOLATIONS.of("preview_ref_required"));
         try {
             Row preview = PreviewDeployments.queue(owner.intValue(), ref, null, null, DeployTrigger.MANUAL);

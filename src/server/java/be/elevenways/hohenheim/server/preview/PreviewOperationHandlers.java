@@ -30,7 +30,7 @@ public final class PreviewOperationHandlers {
     /** The reason the reclaim records for a person's click, as the admin row action recorded it. */
     static final String OPERATOR = "operator";
 
-    private static final RecordSource<PreviewDeploymentModel> SUBJECTS = RecordSource.of(PreviewDeploymentModel.class)
+    private static final RecordSource<PreviewDeploymentModel> SUBJECTS = RecordSource.of(PreviewDeploymentModel.REF)
         .id(HohenheimIds.id("preview_expiry_subjects")).project(PreviewDeploymentModel.ID).openToAllLoggedIn()
         .systemAccess(identity -> RecordSchedules.isScheduleWork(identity)
             ? PreviewDeploymentModel.ID.isNotNull() : null).build();

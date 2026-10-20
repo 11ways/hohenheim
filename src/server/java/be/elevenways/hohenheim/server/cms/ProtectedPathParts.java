@@ -48,7 +48,7 @@ public final class ProtectedPathParts {
     /** The virtual column saying whether the path is really guarded. */
     static final String PROTECTION_COLUMN = "protection";
 
-    private static final SubjectType<Row> SUBJECT = SubjectType.record(ProtectedPathModel.MODEL_ID);
+    private static final SubjectType<Row> SUBJECT = SubjectType.record(ProtectedPathModel.REF);
 
     private ProtectedPathParts() {
     }

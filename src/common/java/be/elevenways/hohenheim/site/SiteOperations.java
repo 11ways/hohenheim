@@ -35,7 +35,7 @@ public final class SiteOperations {
     private static final OperationCommand COMMAND = OperationCommand.perSubject();
 
     /** The subject of every site operation: one site record. */
-    public static final SubjectType<Row> SITE = SubjectType.record(SiteModel.MODEL_ID);
+    public static final SubjectType<Row> SITE = SubjectType.record(SiteModel.REF);
 
     /** Puts a disabled site's hostnames into the route table; the enable route invariant may refuse it. */
     public static final Operation<Row, Void, Void> ENABLE = Operation.declare(HohenheimIds.id("enable_site"))

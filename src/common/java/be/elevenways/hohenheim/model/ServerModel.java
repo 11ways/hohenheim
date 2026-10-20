@@ -16,6 +16,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
 import be.elevenways.zenit.common.orm.datasource.context.SaveToDatasource;
 import be.elevenways.zenit.common.orm.field.*;
+import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.security.PrincipalField;
 import be.elevenways.zenit.common.security.PrincipalKinds;
 import be.elevenways.zenit.common.security.PrincipalRef;
@@ -51,6 +52,9 @@ import static be.elevenways.hohenheim.RawValues.trimmed;
 public class ServerModel extends Model {
 
     public static final Identifier MODEL_ID = HohenheimIds.id("server");
+    /** The server model's reference: its class and MODEL_ID, resolved at first use. */
+    public static final ModelRef<ServerModel> REF = ModelRef.of(ServerModel.class, MODEL_ID);
+
     public static final Schema SCHEMA = new Schema();
 
     /** {@link #MODE} token of {@link HostMode#LOCAL}: the implicit local Docker daemon. */

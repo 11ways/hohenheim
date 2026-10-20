@@ -7,6 +7,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 
@@ -21,6 +22,9 @@ import java.util.List;
 public class StackFileModel extends Model {
 
     public static final Identifier MODEL_ID = HohenheimIds.id("stack_file");
+    /** The stack file model's reference: its class and MODEL_ID, resolved at first use. */
+    public static final ModelRef<StackFileModel> REF = ModelRef.of(StackFileModel.class, MODEL_ID);
+
     public static final Schema SCHEMA = new Schema();
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());

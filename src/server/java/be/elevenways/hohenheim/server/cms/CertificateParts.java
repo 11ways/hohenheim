@@ -90,7 +90,7 @@ public final class CertificateParts {
     public static final RowScope ROWS = RowScope.within(HohenheimSources::notTheAcmeAccountRow);
 
     /** Canonical O2 delete: the same model removal and hooks as the generated legacy verb. */
-    public static final Operation<Row, Void, Integer> DELETE = RowDeleteOperations.delete(CertificateModel.class,
+    public static final Operation<Row, Void, Integer> DELETE = RowDeleteOperations.delete(CertificateModel.REF,
         SubjectArity.ONE, OperationGate.permission(HohenheimSources.ADMIN_ACCESS));
 
     /** The certificate list's state column. */
@@ -404,7 +404,7 @@ public final class CertificateParts {
 
     /** The identity and nav placement both twins share. */
     private static PanelResource.@NonNull Builder<Row> entry(@NonNull Identifier id) {
-        return PanelResource.builder(id, HohenheimSlugs.CERTIFICATES, SubjectType.record(CertificateModel.MODEL_ID))
+        return PanelResource.builder(id, HohenheimSlugs.CERTIFICATES, SubjectType.record(CertificateModel.REF))
             .label(HohenheimMicrocopy.CERTIFICATE.of("plural"))
             .recordLabel(HohenheimMicrocopy.CERTIFICATE.of("singular"))
             .description(HohenheimMicrocopy.CERTIFICATE.of("nav_hint"))

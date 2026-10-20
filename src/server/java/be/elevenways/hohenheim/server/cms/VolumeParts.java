@@ -126,7 +126,7 @@ public final class VolumeParts {
     private static PanelResource.@NonNull Builder<Row> base(@NonNull Identifier id) {
         TableSpec<Row> table = tableSpec();
         return PanelResource.builder(id, HohenheimSlugs.INSTANCE_VOLUMES,
-                SubjectType.record(InstanceVolumeModel.MODEL_ID))
+                SubjectType.record(InstanceVolumeModel.REF))
             .label(HohenheimMicrocopy.INSTANCE_VOLUME.of("plural"))
             .recordLabel(HohenheimMicrocopy.INSTANCE_VOLUME.of("singular"))
             .description(CmsSupport.navHint(HohenheimMicrocopy.INSTANCE_VOLUME))

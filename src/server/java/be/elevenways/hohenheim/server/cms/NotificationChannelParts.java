@@ -82,7 +82,7 @@ public final class NotificationChannelParts {
     /** The virtual column holding the subscribed events, and the name's subtext. */
     static final String EVENTS_COLUMN = "events";
 
-    private static final SubjectType<Row> SUBJECT = SubjectType.record(NotificationChannelModel.MODEL_ID);
+    private static final SubjectType<Row> SUBJECT = SubjectType.record(NotificationChannelModel.REF);
 
     /** Sends a test message through one channel; the outcome says whether it was delivered or only handed off. */
     public static final Operation<Row, Void, NotifyOutcome> TEST = Operation.declare(HohenheimIds.id("test_channel"))

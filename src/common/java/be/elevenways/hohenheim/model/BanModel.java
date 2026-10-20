@@ -14,6 +14,7 @@ import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.orm.query.rules.VariableDefinition;
@@ -30,6 +31,9 @@ import java.time.Instant;
 public class BanModel extends Model {
 
     public static final Identifier MODEL_ID = HohenheimIds.id("ban");
+    /** The ban model's reference: its class and MODEL_ID, resolved at first use. */
+    public static final ModelRef<BanModel> REF = ModelRef.of(BanModel.class, MODEL_ID);
+
     public static final Schema SCHEMA = new Schema();
 
     public static final String SOURCE_AUTO = "auto";

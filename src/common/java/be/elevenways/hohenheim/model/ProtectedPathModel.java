@@ -10,6 +10,7 @@ import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -28,6 +29,9 @@ import java.util.List;
 public class ProtectedPathModel extends Model {
 
     public static final Identifier MODEL_ID = HohenheimIds.id("protected_path");
+    /** The protected path model's reference: its class and MODEL_ID, resolved at first use. */
+    public static final ModelRef<ProtectedPathModel> REF = ModelRef.of(ProtectedPathModel.class, MODEL_ID);
+
     public static final Schema SCHEMA = new Schema();
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());

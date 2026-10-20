@@ -14,6 +14,7 @@ import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.TextField;
 import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
 
 /**
@@ -31,6 +32,9 @@ import be.elevenways.zenit.common.orm.model.Schema;
 public class DatabaseEngineModel extends Model {
 
     public static final Identifier MODEL_ID = HohenheimIds.id("database_engine");
+    /** The database engine model's reference: its class and MODEL_ID, resolved at first use. */
+    public static final ModelRef<DatabaseEngineModel> REF = ModelRef.of(DatabaseEngineModel.class, MODEL_ID);
+
     public static final Schema SCHEMA = new Schema();
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());

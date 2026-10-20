@@ -193,7 +193,7 @@ public final class PreviewDeployments {
         Row keyed = model.findById(previewId);
         if (keyed == null) return null;
         int applicationId = keyed.get(PreviewDeploymentModel.APPLICATION_ID);
-        String ref = keyed.get(PreviewDeploymentModel.REF);
+        String ref = keyed.get(PreviewDeploymentModel.GIT_REF);
         synchronized (lockFor(applicationId, ref)) {
             // AIDEV-NOTE: queue already charged and armed this exact claim. Reclaiming by ref here resurrected it.
             Row preview = model.findById(previewId);
@@ -229,7 +229,7 @@ public final class PreviewDeployments {
         PreviewDeploymentModel model = Models.get(PreviewDeploymentModel.class);
         Row preview = model.find()
             .where(PreviewDeploymentModel.APPLICATION_ID.eq(applicationId))
-            .where(PreviewDeploymentModel.REF.eq(ref))
+            .where(PreviewDeploymentModel.GIT_REF.eq(ref))
             .first();
         // AIDEV-NOTE: an existing preview keeps the hostname it was minted with, whatever slug fold minted it: a
         // redeploy recomputing it would move a live preview's hostname, its generated domain row and its DNS rows
@@ -241,7 +241,7 @@ public final class PreviewDeployments {
             // over-cap creates atomically -- no separate count-then-create window.
             preview = model.createEmptyRow();
             preview.set(PreviewDeploymentModel.APPLICATION_ID, applicationId);
-            preview.set(PreviewDeploymentModel.REF, ref);
+            preview.set(PreviewDeploymentModel.GIT_REF, ref);
         }
         Instant expiresAt = expiry();
         preview.set(PreviewDeploymentModel.PR_NUMBER, prNumber);
@@ -359,7 +359,7 @@ public final class PreviewDeployments {
         try {
             Row preview = Models.get(PreviewDeploymentModel.class).find()
                 .where(PreviewDeploymentModel.APPLICATION_ID.eq(applicationId))
-                .where(PreviewDeploymentModel.REF.eq(ref))
+                .where(PreviewDeploymentModel.GIT_REF.eq(ref))
                 .first();
             if (preview != null) {
                 destroy(preview.get(PreviewDeploymentModel.ID), reason);
@@ -394,7 +394,7 @@ public final class PreviewDeployments {
             return;
         }
         int applicationId = RawValues.intOr(keyed.get(PreviewDeploymentModel.APPLICATION_ID), -1);
-        synchronized (lockFor(applicationId, trimmed(keyed.get(PreviewDeploymentModel.REF)))) {
+        synchronized (lockFor(applicationId, trimmed(keyed.get(PreviewDeploymentModel.GIT_REF)))) {
             // AIDEV-NOTE: the row the teardown acts on is read UNDER the lock. It used to be
             // the one read above, before the lock: a PR closed while its first build ran
             // waited here holding a row with no instance_id, then -- once the build had

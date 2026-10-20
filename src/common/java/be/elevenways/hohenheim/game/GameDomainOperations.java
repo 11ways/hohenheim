@@ -32,7 +32,7 @@ public final class GameDomainOperations {
     private static final OperationCommand COMMAND = OperationCommand.perSubject();
 
     /** The subject of the record operations: one mapping. */
-    public static final SubjectType<Row> MAPPING = SubjectType.record(GameDomainModel.MODEL_ID);
+    public static final SubjectType<Row> MAPPING = SubjectType.record(GameDomainModel.REF);
 
     /** The mapping form, which is every write's input. */
     public static final FormSpec FORM = FormSpec.builder()

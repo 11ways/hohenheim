@@ -56,11 +56,11 @@ import java.util.Objects;
  */
 public final class AuthProviderParts {
 
-    private static final SubjectType<Row> SUBJECT = SubjectType.record(SiteAuthProviderModel.MODEL_ID);
+    private static final SubjectType<Row> SUBJECT = SubjectType.record(SiteAuthProviderModel.REF);
 
     /** Deletes a provider no site and no access rule names; offered dead while one does. */
     public static final Operation<Row, Void, Integer> DELETE =
-        RowDeleteOperations.declare(SiteAuthProviderModel.class, SubjectArity.ONE,
+        RowDeleteOperations.declare(SiteAuthProviderModel.REF, SubjectArity.ONE,
                 OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
             .id(HohenheimIds.id("delete_auth_provider"))
             .availability(Availability.batch((providers, access) -> DeleteImpact.authProvidersInUse(providers)))

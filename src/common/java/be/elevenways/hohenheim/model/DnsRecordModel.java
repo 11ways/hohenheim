@@ -8,6 +8,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import be.elevenways.zenit.common.ui.ColorHue;
@@ -34,6 +35,9 @@ import java.util.Map;
 public class DnsRecordModel extends Model {
 
     public static final Identifier MODEL_ID = HohenheimIds.id("dns_record");
+    /** The dns record model's reference: its class and MODEL_ID, resolved at first use. */
+    public static final ModelRef<DnsRecordModel> REF = ModelRef.of(DnsRecordModel.class, MODEL_ID);
+
     public static final Schema SCHEMA = new Schema();
 
     public static final String TYPE_A = "A";

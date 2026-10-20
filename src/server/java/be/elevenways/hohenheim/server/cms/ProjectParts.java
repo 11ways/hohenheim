@@ -54,7 +54,7 @@ import java.util.UUID;
  * @since 0.1.0
  */
 public final class ProjectParts {
-    private static final SubjectType<Row> SUBJECT = SubjectType.record(ProjectModel.MODEL_ID);
+    private static final SubjectType<Row> SUBJECT = SubjectType.record(ProjectModel.REF);
 
     /** The list's computed count columns. */
     private static final String MEMBERS_COLUMN = "members";

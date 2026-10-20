@@ -8,6 +8,7 @@ import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.hohenheim.net.Hostnames;
 import be.elevenways.zenit.common.ui.ColorHue;
@@ -25,6 +26,9 @@ import java.util.List;
 public class DnsPeerModel extends Model {
 
     public static final Identifier MODEL_ID = HohenheimIds.id("dns_peer");
+    /** The dns peer model's reference: its class and MODEL_ID, resolved at first use. */
+    public static final ModelRef<DnsPeerModel> REF = ModelRef.of(DnsPeerModel.class, MODEL_ID);
+
     public static final Schema SCHEMA = new Schema();
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());

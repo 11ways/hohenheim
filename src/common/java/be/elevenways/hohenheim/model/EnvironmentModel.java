@@ -17,6 +17,7 @@ import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.TextField;
 import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 
@@ -39,6 +40,9 @@ public class EnvironmentModel extends Model {
     public static final String PROJECT_SEPARATOR = " / ";
 
     public static final Identifier MODEL_ID = HohenheimIds.id("environment");
+    /** The environment model's reference: its class and MODEL_ID, resolved at first use. */
+    public static final ModelRef<EnvironmentModel> REF = ModelRef.of(EnvironmentModel.class, MODEL_ID);
+
     public static final Schema SCHEMA = new Schema();
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());

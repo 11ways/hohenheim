@@ -54,7 +54,7 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
      *         invoke route, as the tab's Restore button posts it
      */
     private static String restoreUrl(String panel, int siteId, int revision) {
-        return CmsRoutes.invoke(panel, "sites", HistoryOperations.restore(SubjectType.record(SiteModel.MODEL_ID)).id())
+        return CmsRoutes.invoke(panel, "sites", HistoryOperations.restore(SubjectType.record(SiteModel.REF)).id())
             .toUrl() + "?" + CmsEndpoints.SUBJECT_PARAM.getName() + "=" + siteId + "&" + CmsEndpoints.TAB_PARAM.getName()
             + "=" + ResourceHistory.TAB_SLUG + "&" + CmsEndpoints.ITEM_PARAM.getName() + "=" + revision;
     }

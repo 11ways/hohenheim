@@ -152,7 +152,7 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
                 .hasMessageContaining("preview_quota_reached");
             assertThat(Models.get(PreviewDeploymentModel.class).find()
                     .where(PreviewDeploymentModel.APPLICATION_ID.eq(applicationId))
-                    .where(PreviewDeploymentModel.REF.eq("manual-a"))
+                    .where(PreviewDeploymentModel.GIT_REF.eq("manual-a"))
                     .where(PreviewDeploymentModel.DELETED_AT.isNull()).first())
                 .as("step 2: and the FIRST preview was not evicted to make room")
                 .isNotNull();
@@ -196,7 +196,7 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
         AccessContext manager = contextOf(managerId, "Manager");
         Map<String, Object> coerced = new LinkedHashMap<>();
         coerced.put(PreviewDeploymentModel.APPLICATION_ID.getName(), applicationId);
-        coerced.put(PreviewDeploymentModel.REF.getName(), "gate-ref");
+        coerced.put(PreviewDeploymentModel.GIT_REF.getName(), "gate-ref");
 
         // 1. COUNTERFACTUAL: the admin's domain writer, bypassing its operator permission, accepts the SAME stranger
         //    and submission. The delegated writer must add the application gate before reaching that domain write.
@@ -269,7 +269,7 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
         UUID operatorId = ApiSupport.user("preview-delete@test");
         Map<String, Object> coerced = new LinkedHashMap<>();
         coerced.put(PreviewDeploymentModel.APPLICATION_ID.getName(), applicationId);
-        coerced.put(PreviewDeploymentModel.REF.getName(), "delete-ref");
+        coerced.put(PreviewDeploymentModel.GIT_REF.getName(), "delete-ref");
         int previewId = PreviewDeployments.queue(applicationId, "delete-ref", null, null,
             DeployTrigger.MANUAL).get(PreviewDeploymentModel.ID);
 

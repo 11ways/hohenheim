@@ -67,7 +67,7 @@ public final class InstanceScheduleRunParts {
             .column(ColumnSpec.fromField(RecordScheduleRunModel.ENDED_AT).hidden().build())
             .build();
         return PanelResource.builder(HohenheimIds.id("instance_schedule_run"), HohenheimSlugs.INSTANCE_SCHEDULE_RUNS,
-                SubjectType.record(RecordScheduleRunModel.MODEL_ID))
+                SubjectType.record(RecordScheduleRunModel.REF))
             .label(HohenheimMicrocopy.INSTANCE_SCHEDULE.of("runs"))
             .recordLabel(HohenheimMicrocopy.INSTANCE_SCHEDULE.of("run"))
             .icon(Icon.of("clock-rotate-left"))

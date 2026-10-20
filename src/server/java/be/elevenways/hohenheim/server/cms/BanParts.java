@@ -92,7 +92,7 @@ public final class BanParts {
     /** The form-only duration entry's name; it backs no column. */
     private static final String DURATION_NAME = "duration";
 
-    private static final SubjectType<Row> SUBJECT = SubjectType.record(BanModel.MODEL_ID);
+    private static final SubjectType<Row> SUBJECT = SubjectType.record(BanModel.REF);
 
     /** Duration choices for a manual ban; "permanent" maps to a null TTL. */
     private static final EnumField DURATION = EnumField.builder(DURATION_NAME)

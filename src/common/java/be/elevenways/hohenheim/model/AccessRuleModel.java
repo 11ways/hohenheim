@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.model;
 
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimViolations;
@@ -42,6 +43,9 @@ import java.util.Map;
 public class AccessRuleModel extends Model {
 
     public static final Identifier MODEL_ID = HohenheimIds.id("access_rule");
+    /** The access rule model's reference: its class and MODEL_ID, resolved at first use. */
+    public static final ModelRef<AccessRuleModel> REF = ModelRef.of(AccessRuleModel.class, MODEL_ID);
+
     public static final Schema SCHEMA = new Schema();
 
     /** A nested group of rules, combined by its own satisfy mode. */
