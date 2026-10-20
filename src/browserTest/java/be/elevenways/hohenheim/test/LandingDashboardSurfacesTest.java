@@ -65,8 +65,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * extending the legacy DashboardPanelPeer; a failing
  * comparison is a changed landing surface, never a file to refresh. A missing resource writes the live set to
  * {@code build/panel-surfaces/} and fails, so recording is a deliberate copy. Per case it holds the status, the
- * redirect, the title, the dashboard nav links and the widget surface, with markup ids, digits, UUIDs and CSRF values
- * masked and every tag's attributes in name order (HTML attribute order means nothing): the data under the widgets
+ * redirect, the title, the dashboard nav links and the widget surface, with markup ids, digits, UUIDs, CSRF values
+ * and relative times' hover titles masked and every tag's attributes in name order (HTML attribute order means
+ * nothing): the data under the widgets
  * is not this conversion's subject. The declared differences are the surface address (a legacy peer answered to its
  * slug address, a PanelDashboard only to its id token, no slug alias), the /manage landing's surface, which
  * was redrawn on purpose ({@link #redrawn}), plumage's mark on a directional glyph ({@link #markDirectional}) and a
@@ -237,7 +238,7 @@ class LandingDashboardSurfacesTest extends HohenheimTestBase {
             stored = stored.replace("surface=\"cms:" + panelSlug + "/dashboard\"",
                 "surface=\"" + normalize(dashboardToken(panelSlug)) + "\"");
         }
-        assertThat(redrawn(cases(wordedMoments(current))))
+        assertThat(redrawn(cases(current)))
             .as("step 3: every audience's landing dashboards are the stored ones")
             .containsExactlyElementsOf(redrawn(cases(wordedMoments(sortAttributes(markDirectional(stored))))));
     }
@@ -245,7 +246,8 @@ class LandingDashboardSurfacesTest extends HohenheimTestBase {
     /**
      * The declared difference the wording redesign made after the capture: a relative time's hover title words its
      * moment for the reader ("17 October 2026 3:05 pm (Europe/Brussels)"), whose month name and clock half move with
-     * the day the suite runs, so the title's text is not compared on either side; that it is there still is.
+     * the day the suite runs, so the title's text is masked like a digit when captured, and on the stored side for a
+     * set recorded before; that it is there still is compared.
      */
     private static @NonNull String wordedMoments(@NonNull String surfaces) {
         return TIME_TITLE.matcher(surfaces).replaceAll("$1<moment>$2");
@@ -319,6 +321,7 @@ class LandingDashboardSurfacesTest extends HohenheimTestBase {
         String text = COMMENT.matcher(html).replaceAll("");
         text = CSRF.matcher(text).replaceAll("$1#\"");
         text = UUID.matcher(text).replaceAll("<uuid>");
+        text = wordedMoments(text);
         text = MARKUP_ID.matcher(text).replaceAll("$1-#");
         text = DIGITS.matcher(text).replaceAll("#");
         return sortAttributes(SPACE.matcher(text).replaceAll(" ").trim());
