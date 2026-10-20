@@ -22,5 +22,5 @@
 # 2026-10-15: templates link only where a reached class or the serving JVM reads their id constant (pl-thread and
 # pl-audio left; cell renderers are Identifier constants): master raw 8184761 -> 7928080, gzip 1956546 -> 1961657
 # against the earlier baseline (upstream growth since).
-cms.js.raw=8702972 measured=8288544
-cms.js.gzip=2162767 measured=2059778
+cms.js.raw=8746324 measured=8329832
+cms.js.gzip=2179260 measured=2075485
