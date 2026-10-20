@@ -109,7 +109,7 @@ public final class HandlerSupport {
                                                                @NonNull InputStream body, long size) {
         return (ActionResult<Object>) (ActionResult<?>) new ServeStreamResult(body, size)
             .contentType(contentType)
-            .cacheControl("no-store")
+            .noStore()
             .contentDisposition(attachmentDisposition(filename));
     }
 
