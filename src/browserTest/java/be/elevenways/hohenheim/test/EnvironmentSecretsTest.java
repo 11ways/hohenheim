@@ -6,8 +6,10 @@ import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.history.ChangeModel;
 import be.elevenways.zenit.common.orm.history.ChangeOp;
 import be.elevenways.zenit.common.orm.history.History;
+import be.elevenways.zenit.common.orm.history.HistoryDetailPlace;
 import be.elevenways.zenit.common.orm.history.HistoryEntry;
 import be.elevenways.zenit.common.orm.history.HistoryText;
+import be.elevenways.zenit.common.orm.narration.FieldValueText;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -214,7 +216,8 @@ class EnvironmentSecretsTest extends HohenheimTestBase {
             .as("3. and never a value").doesNotContain(GREETING_V1).doesNotContain(GREETING_V2);
         AccessContext reader = TestAccessContexts.allAllowed();
         HistoryEntry update = History.ofRecord(instances, appId, reader, null, 1).entries().get(0);
-        assertThat(HistoryText.detail(update, reader))
+        assertThat(HistoryText.detail(update, reader, null, FieldValueText.standard(),
+                HistoryDetailPlace.ENTRY_PAGE))
             .as("3. the history detail line names the changed key").contains("SITE_GREETING")
             .as("3. as withheld").contains("withheld")
             .as("3. and never a value").doesNotContain(GREETING_V1).doesNotContain(GREETING_V2);

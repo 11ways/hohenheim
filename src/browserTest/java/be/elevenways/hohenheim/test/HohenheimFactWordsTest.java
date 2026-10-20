@@ -15,8 +15,10 @@ import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.history.ChangeOp;
 import be.elevenways.zenit.common.orm.history.History;
+import be.elevenways.zenit.common.orm.history.HistoryDetailPlace;
 import be.elevenways.zenit.common.orm.history.HistoryText;
 import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.narration.FieldValueText;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
@@ -242,7 +244,8 @@ class HohenheimFactWordsTest {
 
     private static @NonNull String detail(@NonNull Model model, int id, @NonNull LocaleChain locales) {
         AccessContext reader = TestAccessContexts.allAllowedReading(locales, ShippedCatalogs.shared());
-        return HistoryText.detail(History.ofRecord(model, id, reader, null, 1).entries().get(0), reader);
+        return HistoryText.detail(History.ofRecord(model, id, reader, null, 1).entries().get(0), reader, null,
+            FieldValueText.standard(), HistoryDetailPlace.ENTRY_PAGE);
     }
 
     private static int instance() {
