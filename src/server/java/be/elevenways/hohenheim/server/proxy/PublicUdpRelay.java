@@ -50,6 +50,8 @@ final class PublicUdpRelay implements AutoCloseable {
     private volatile @Nullable DatagramChannel channel;
     private volatile boolean running;
     private volatile @Nullable JobRunner threads;
+    /* Wraps receive(): close() waits until the receive loop left it, since the port is free only then. */
+    private final BlockingSocketCall receiveCall = new BlockingSocketCall();
 
     PublicUdpRelay(String bindAddress, int port, Router router) {
         this.bindAddress = bindAddress;
@@ -82,7 +84,7 @@ final class PublicUdpRelay implements AutoCloseable {
             buffer.clear();
             SocketAddress from;
             try {
-                from = public_.receive(buffer);
+                from = this.receiveCall.during(() -> public_.receive(buffer));
             } catch (ClosedChannelException closed) {
                 return;
             } catch (IOException failure) {
@@ -176,6 +178,7 @@ final class PublicUdpRelay implements AutoCloseable {
         return this.sessions.size();
     }
 
+    /** Closes the port, every session and their threads; the port is free once this returns, or it logs why not. */
     @Override
     public synchronized void close() {
         this.running = false;
@@ -187,6 +190,10 @@ final class PublicUdpRelay implements AutoCloseable {
         this.threads = null;
         if (runner != null) {
             runner.shutdownNow();
+        }
+        if (!this.receiveCall.awaitLeft()) {
+            Blast.log("Stream UDP relay: port", this.port, "is closed but not confirmed free - the receive call did",
+                "not leave within", BlockingSocketCall.LEFT_WAIT, "or the wait was interrupted");
         }
     }
 }

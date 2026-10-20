@@ -86,6 +86,8 @@ public final class PublicTcpListener implements AutoCloseable {
     private volatile ServerSocket listener;
     /* The accept loop, every connection and its relay: started detached in start(), stopped by close(). */
     private volatile @Nullable JobRunner threads;
+    /* Wraps accept(): close() waits until the accept loop left it, since the port is free only then. */
+    private final BlockingSocketCall acceptCall = new BlockingSocketCall();
 
     public PublicTcpListener(String bindAddress, int port, int prologueTimeoutMillis,
                              ConnectionRouter router, Supplier<List<String>> trustedProxySources,
@@ -173,7 +175,7 @@ public final class PublicTcpListener implements AutoCloseable {
             ServerSocket current = listener;
             if (current == null) return;
             try {
-                client = current.accept();
+                client = acceptCall.during(current::accept);
                 consecutiveAcceptFailures = 0;
             } catch (IOException e) {
                 if (!running) return;
@@ -387,6 +389,7 @@ public final class PublicTcpListener implements AutoCloseable {
         return result;
     }
 
+    /** Closes the port, every connection and their threads; the port is free once this returns, or it logs why not. */
     @Override
     public synchronized void close() {
         if (!running && listener == null) return;
@@ -400,5 +403,9 @@ public final class PublicTcpListener implements AutoCloseable {
         JobRunner runner = threads;
         threads = null;
         if (runner != null) runner.shutdownNow();
+        if (!acceptCall.awaitLeft()) {
+            Blast.log("Public TCP listener: port", port, "is closed but not confirmed free - the accept call did not",
+                "leave within", BlockingSocketCall.LEFT_WAIT, "or the wait was interrupted");
+        }
     }
 }
