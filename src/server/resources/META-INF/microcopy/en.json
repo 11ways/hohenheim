@@ -15479,7 +15479,7 @@
     "scope": "app_health"
   },
   "last_deploy": {
-    "text": "Last deployed {$at :datetime}.",
+    "text": "Last deployed",
     "scope": "app_health"
   },
   "install_failed_detail": {

@@ -352,8 +352,8 @@ class AdminPagesTest extends HohenheimTestBase {
         assertThat(page.locator(".widget-records dl.widget-record").count()).isZero();
 
         var firstEntry = page.locator("a.widget-record-entry[href^='/admin/activity/']").first();
-        // Verb icon leads the row, a relative timestamp trails it.
-        assertThat(firstEntry.locator(".widget-record-icon pl-icon").count()).isEqualTo(1);
+        // Verb icon leads the row in plumage's tinted circle, a relative timestamp trails it.
+        assertThat(firstEntry.locator("pl-icon-mark pl-icon").count()).isEqualTo(1);
         assertThat(firstEntry.locator("pl-relative-time.widget-record-time").count()).isEqualTo(1);
         assertThat(firstEntry.locator("pl-relative-time.widget-record-time").innerText().trim())
             .isNotEmpty();

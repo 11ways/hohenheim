@@ -2,6 +2,7 @@ package be.elevenways.hohenheim;
 
 import be.elevenways.hawkeye.common.annotation.HawkeyeGlobal;
 import be.elevenways.zenit.cms.common.resource.HealthTone;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -46,6 +47,15 @@ public enum AttentionSeverity {
     /** @return the rendered {@code data-severity} value the stylesheet matches */
     public @NonNull String key() {
         return this.key;
+    }
+
+    /** @return the tone the item's tinted icon mark wears (pl-icon-mark) */
+    public @NonNull BadgeVariant badge() {
+        return switch (this) {
+            case ERROR -> BadgeVariant.DESTRUCTIVE;
+            case WARNING -> BadgeVariant.WARNING;
+            case INFO -> BadgeVariant.INFO;
+        };
     }
 
     /**

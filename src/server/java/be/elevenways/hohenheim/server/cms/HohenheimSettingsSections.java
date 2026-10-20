@@ -20,19 +20,18 @@ import java.util.function.Function;
  * The operator sections of Hohenheim's settings page, in the order an operator reads them; zenit's own settings follow
  * behind "Framework (advanced)".
  *
- * AIDEV-NOTE: every group of {@link HohenheimSettings#HOHENHEIM} belongs to exactly ONE section here
- * ({@code AdminSettingsMountsTest} pins it): the page's framework mount leaves the whole Hohenheim group out once
- * any section offers part of it, so a group no section names would vanish from the page. A section keeps every
- * setting's stored path (the section key only prefixes the page's input names and anchors). The resource sections
- * (templates, images, git, engines, channels, backup targets, tasks) are the Settings cluster's tabs, never
- * settings here.
+ * AIDEV-NOTE: every group of {@link HohenheimSettings#HOHENHEIM} belongs to exactly ONE section here: the page's
+ * framework mount leaves the whole Hohenheim group out once any section offers part of it, so zenit-cms refuses the
+ * page at boot when a group is named by no section (SettingsPage) and {@code AdminSettingsMountsTest} pins it. A
+ * section keeps every setting's stored path (the section key only prefixes the page's input names and anchors). The
+ * resource sections (templates, images, git, engines, channels, backup targets, tasks) are the Settings cluster's
+ * tabs, never settings here.
  *
- * AIDEV-NOTE: the page opens on the FIRST group of the first section, and a section of several groups draws them in
- * the order zenit registered them (SettingsPage.frameworkSection), which is class-initialisation order, not the order
- * named here. So the first section is ONE group, the proxy's (what this server answers for names it does not serve
- * and which proxies stand in front of it, the boards' "General"), and the page opens on it on every boot. The
- * mockups' order follows (boards Settings, Settings-Proxy, Settings-Notifications); the sections they do not draw come
- * after Blocking, the installation's own plumbing last.
+ * AIDEV-NOTE: a section of several groups draws them in the order named here (SettingsPage.frameworkSection), and
+ * the page opens on the first group of the first section: General, the proxy's group (what this server answers for
+ * names it does not serve and which proxies stand in front of it, the boards' "General"). The mockups' order follows
+ * (boards Settings, Settings-Proxy, Settings-Notifications); the sections they do not draw come after Blocking, the
+ * installation's own plumbing last. The section list draws one row per section (HohenheimPanel, SECTION_ROWS).
  *
  * @author Jelle De Loecker
  * @since  0.1.0

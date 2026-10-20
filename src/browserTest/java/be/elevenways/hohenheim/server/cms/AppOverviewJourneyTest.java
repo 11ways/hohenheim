@@ -349,8 +349,10 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
                 String band = deployed.substring(deployed.indexOf("data-cms-record-health"),
                     deployed.indexOf("</pl-alert>", deployed.indexOf("data-cms-record-health")));
                 assertThat(band).as("step 7: the live band stays OK").contains("Live at http://served.app-journey.test")
-                    .as("step 7: and its second line names the last deploy").contains("<pl-alert-description")
-                    .contains("Last deployed ").contains("2026");
+                    .as("step 7: and its second line names the last deploy").contains("data-cms-record-health-since")
+                    .contains("Last deployed</pb-microcopy> <pl-relative-time")
+                    .as("step 7: relatively, as the board's \"2 hours ago\", the instant riding along for the title")
+                    .contains("datetime=\"2026-09-01T10:00:00Z\"").contains(" ago<");
             } finally {
                 builds.delete(deploy.get(BuildOperationModel.ID));
             }

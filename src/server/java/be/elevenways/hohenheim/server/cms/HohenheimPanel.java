@@ -11,6 +11,7 @@ import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelCluster;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
+import be.elevenways.zenit.cms.common.render.settings.SettingsNavShape;
 import be.elevenways.zenit.cms.server.page.BuildInfoPage;
 import be.elevenways.zenit.cms.server.page.SettingsPage;
 import be.elevenways.zenit.cms.server.task.TaskAdmin;
@@ -301,6 +302,7 @@ public final class HohenheimPanel extends Panel {
             }
         }
         return page.frameworkAdvanced()
+            .navShape(SettingsNavShape.SECTION_ROWS)
             // The operator-trusted keys carry their own authority (host-only, or hohenheim.admin.system for the
             // auth_proteus login, the proxy trust lists, the build images and the spam service), so the page is an
             // ordinary admin peer.

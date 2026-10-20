@@ -99,11 +99,22 @@ class AdminSettingsMountsTest extends HohenheimTestBase {
         assertThat(page.locator(frameworkRows + ":not([hidden])").count())
             .as("step 3: no framework group is listed while folded").isZero();
 
-        // 4. Opening the disclosure lists the framework's groups.
+        // 3b. The list draws one row per section, never a row per group, and the column draws a section's groups in
+        //     the order the section names them (Installation: storage before logging, unlike their source order).
+        assertThat(page.locator(NAV + " a.cms-settings-nav-item[data-depth='1']:not([hidden])").count())
+            .as("step 3b: no group row of its own").isZero();
+        String column = String.valueOf(page.locator("[data-cms-settings-section]").evaluateAll(
+            "sections => sections.map(section => section.id).join(',')"));
+        assertThat(column.indexOf("setting-installation-storage")).as("step 3b: the declared order")
+            .isNotNegative().isLessThan(column.indexOf("setting-installation-logging"));
+
+        // 4. Opening the disclosure lists the framework as one section row.
         page.click(toggle);
         waitForAttribute(toggle, "aria-expanded", "true");
         assertThat(page.locator(frameworkRows + ":not([hidden])").count())
-            .as("step 4: the framework's groups are listed once opened").isPositive();
+            .as("step 4: still no row per framework group").isZero();
+        assertThat(page.locator(NAV + " a[data-cms-settings-nav='setting-framework']:not([hidden])").count())
+            .as("step 4: the framework's one section row is listed once opened").isEqualTo(1);
 
         // 5. A deep link reaches a group of each kind of section, a framework group included while folded.
         String backups = HohenheimSettingsSections.BACKUPS.anchorOf(HohenheimSettings.Database.GROUP);

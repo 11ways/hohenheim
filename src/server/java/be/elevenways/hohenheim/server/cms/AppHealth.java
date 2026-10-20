@@ -644,7 +644,7 @@ final class AppHealth {
         }
         RecordHealth live = RecordHealth.ok(liveHeadline(sites, facts));
         return deployedAt == null ? live
-            : live.detail(HohenheimMicrocopy.APP_HEALTH.of("last_deploy").withArg("at", deployedAt));
+            : live.since(HohenheimMicrocopy.APP_HEALTH.of("last_deploy"), deployedAt);
     }
 
     /**

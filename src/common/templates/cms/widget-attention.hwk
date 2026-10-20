@@ -10,9 +10,7 @@
 {% declare data: List<AttentionItem> %}
 
 {% snippet attentionContent(item: AttentionItem) %}
-<span class="hh-attention-icon">
-    <pl-icon name={% item.icon %} size="sm"></pl-icon>
-</span>
+<pl-icon-mark icon={% item.icon %} variant={% item.severity.badge %}></pl-icon-mark>
 <span class="hh-attention-body">
     <span class="hh-attention-title">{{ item.title }}</span>
     {% if item.detail != null %}
