@@ -3,12 +3,10 @@ package be.elevenways.hohenheim.test.instance;
 import java.lang.reflect.InvocationHandler;
 import be.elevenways.zenit.test.support.LeaseObservations;
 import be.elevenways.zenit.test.support.TestAccessContexts;
-import be.elevenways.hohenheim.test.LegacyStepPayloads;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimRefusalReason;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.instance.InstanceOperations.PowerResult;
-import be.elevenways.hohenheim.migration.M011_ReviewHardening;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -49,10 +47,6 @@ import be.elevenways.hohenheim.test.RecordedChanges;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
-import be.elevenways.zenit.common.orm.field.IntegerField;
-import be.elevenways.zenit.common.orm.field.SchemaField;
-import be.elevenways.zenit.common.orm.field.StringField;
-import be.elevenways.zenit.common.orm.migration.FrozenModel;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -79,7 +73,6 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Proxy;
 import java.time.Duration;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -255,46 +248,7 @@ class InstancePowerOperationsTest {
                 .as("instances declare their existing view capability for concealment")
                 .isEqualTo(HohenheimCapabilities.VIEW);
 
-            // 1. The slice one migration rewrites stored power steps by their stored operation (start, stop,
-            //    restart, and a blank one as the old default restart), names the backup and snapshot operations,
-            //    and moves the snapshot's payload into the stored input.
-            int legacySchedule = schedule(instanceId, "legacy chain", null);
-            int start = legacyStep(legacySchedule, 1, "hohenheim:power", Map.of("operation", "start"));
-            int stop = legacyStep(legacySchedule, 2, "hohenheim:power", Map.of("operation", "stop"));
-            int restart = legacyStep(legacySchedule, 3, "hohenheim:power", Map.of("operation", "restart"));
-            int blank = legacyStep(legacySchedule, 4, "hohenheim:power", Map.of("operation", ""));
-            int snapshot = legacyStep(legacySchedule, 5, "hohenheim:snapshot", Map.of("note", "before nightly"));
-            int backup = legacyStep(legacySchedule, 6, "hohenheim:backup", Map.of());
-            M011_ReviewHardening.renameInstanceScheduleSteps(datasource);
-            assertThat(storedAction(start)).as("step 1: a stored start is the start operation")
-                .isEqualTo(InstanceOperations.START.id().toString());
-            assertThat(storedAction(stop)).as("step 1: a stored stop is the stop operation")
-                .isEqualTo(InstanceOperations.STOP.id().toString());
-            assertThat(storedAction(restart)).as("step 1: a stored restart is the restart operation")
-                .isEqualTo(InstanceOperations.RESTART.id().toString());
-            assertThat(storedAction(blank)).as("step 1: a blank operation is the old default, restart")
-                .isEqualTo(InstanceOperations.RESTART.id().toString());
-            assertThat(storedAction(backup)).as("step 1: a backup step is the backup operation")
-                .isEqualTo(InstanceOperations.BACKUP.id().toString());
-            assertThat(storedAction(snapshot)).as("step 1: a snapshot step is the snapshot operation")
-                .isEqualTo(InstanceOperations.SNAPSHOT.id().toString());
-            Row snapshotStep = Models.get(RecordScheduleStepModel.class).find().noCache()
-                .where(RecordScheduleStepModel.ID.eq(snapshot)).first();
-            assertThat(snapshotStep.get(RecordScheduleStepModel.INPUT)).as("step 1: its note moved into the input")
-                .isEqualTo(Map.of("note", "before nightly"));
-            assertThat(LegacyStepPayloads.of(snapshot)).as("step 1: and the payload is cleared")
-                .isNull();
-
-            // 2. A stored power operation no operation replaces fails the migration, naming the step.
-            int unknown = legacyStep(legacySchedule, 7, "hohenheim:power", Map.of("operation", "reboot"));
-            assertThatThrownBy(() -> M011_ReviewHardening.renameInstanceScheduleSteps(datasource))
-                .as("step 2: an unknown stored operation fails the migration")
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("Schedule step " + unknown)
-                .hasMessageContaining("reboot");
-            LEGACY_STEPS.find().where(STEP_ID.eq(unknown)).delete();
-
-            // 3. A scheduled restart runs through the operation, as the schedule's run_as principal, under the
+            // 1. A scheduled restart runs through the operation, as the schedule's run_as principal, under the
             //    schedule trigger, and the service records its two halves.
             new InstanceService().deploy(instanceId);
             int stoppedBefore = activity(instanceId, HohenheimActivityAction.STOPPED);
@@ -303,23 +257,23 @@ class InstancePowerOperationsTest {
             step(restartSchedule, InstanceOperations.RESTART, null, StepFailurePolicy.ABORT);
             Row restartRun = new RecordSchedules(datasource).runNow(restartSchedule);
             Row restartStep = stepRuns(restartRun).get(0);
-            assertThat(restartStep.get(RecordScheduleStepRunModel.STATUS)).as("step 3: the scheduled restart ran")
+            assertThat(restartStep.get(RecordScheduleStepRunModel.STATUS)).as("step 1: the scheduled restart ran")
                 .isEqualTo(StepStatus.OK.storageKey());
             assertThat(restartStep.get(RecordScheduleStepRunModel.OUTCOME))
-                .as("step 3: under the schedule trigger, the instance running again")
+                .as("step 1: under the schedule trigger, the instance running again")
                 .isEqualTo(InstanceModel.STATUS_RUNNING + " (" + DeployTrigger.SCHEDULE.word() + ")");
             assertThat(DeployTrigger.SCHEDULE.startsStoppedWorkload())
-                .as("step 3: with exactly the system trigger's start policy")
+                .as("step 1: with exactly the system trigger's start policy")
                 .isEqualTo(DeployTrigger.SYSTEM.startsStoppedWorkload());
             assertThat(activity(instanceId, HohenheimActivityAction.STOPPED) - stoppedBefore)
-                .as("step 3: the service recorded the stop half once").isEqualTo(1);
+                .as("step 1: the service recorded the stop half once").isEqualTo(1);
             assertThat(activity(instanceId, HohenheimActivityAction.DEPLOYED) - deployedBefore)
-                .as("step 3: and the deploy half once").isEqualTo(1);
+                .as("step 1: and the deploy half once").isEqualTo(1);
 
-            // 4. A restart asked over the API records the API trigger, and a surface that names no trigger is
+            // 2. A restart asked over the API records the API trigger, and a surface that names no trigger is
             //    refused outright, never guessed.
             PowerResult apiRestart = api(InstanceOperations.RESTART, tenant, instanceId).value();
-            assertThat(apiRestart).as("step 4: the API restart answers the instance running under the API trigger")
+            assertThat(apiRestart).as("step 2: the API restart answers the instance running under the API trigger")
                 .isEqualTo(new PowerResult(InstanceModel.STATUS_RUNNING, DeployTrigger.API.word(), false));
             PlacementSurface elsewhere = new PlacementSurface() {
                 @Override public Identifier id() { return Identifier.of("test", "elsewhere"); }
@@ -328,29 +282,29 @@ class InstancePowerOperationsTest {
                 @Override public boolean acceptsRecordHandles() { return false; }
             };
             assertThatThrownBy(() -> InstanceOperationHandlers.triggerOf(elsewhere))
-                .as("step 4: an undeclared surface has no trigger").isInstanceOf(IllegalStateException.class);
+                .as("step 2: an undeclared surface has no trigger").isInstanceOf(IllegalStateException.class);
             assertThat(InstanceOperationHandlers.triggerOf(CmsPlacementSurface.ADMIN_ACTION))
-                .as("step 4: an admin panel click deploys under the manual trigger").isEqualTo(DeployTrigger.MANUAL);
+                .as("step 2: an admin panel click deploys under the manual trigger").isEqualTo(DeployTrigger.MANUAL);
 
-            // 5. The restart holds ONE lock across both halves: a start asked while its deploy half runs is refused
+            // 3. The restart holds ONE lock across both halves: a start asked while its deploy half runs is refused
             //    by the in-progress refusal.
             AtomicReference<Throwable> rival = new AtomicReference<>();
             FakeNativeDaemons.DURING_START.set(() -> {
                 assertThat(this.rivals.runAsync(() -> Db.run(datasource,
                         () -> rival.set(catchThrowable(() -> api(InstanceOperations.START, tenant, instanceId))))))
-                    .as("step 5: a different power verb reaches its refusal immediately")
+                    .as("step 3: a different power verb reaches its refusal immediately")
                     .succeedsWithin(Duration.ofSeconds(5));
             });
             api(InstanceOperations.RESTART, tenant, instanceId);
-            assertThat(rival.get()).as("step 5: the rival start is refused while the restart holds the record")
+            assertThat(rival.get()).as("step 3: the rival start is refused while the restart holds the record")
                 .isInstanceOfSatisfying(Violations.class, violations -> assertThat(violations.all())
                     .anySatisfy(violation -> assertThat(violation.message().key())
                         .isEqualTo("instance_operation_in_progress")));
             int[] refusedStatus = {0};
             String refusedBody = Json.stringify(ApiConduits.refusal(answering(refusedStatus),
                 (Violations) rival.get()).get());
-            assertThat(refusedStatus[0]).as("step 5: the frozen /api/v1 adapter still answers 422").isEqualTo(422);
-            assertThat(refusedBody).as("step 5: start during restart keeps the byte-identical /api/v1 refusal body")
+            assertThat(refusedStatus[0]).as("step 3: the frozen /api/v1 adapter still answers 422").isEqualTo(422);
+            assertThat(refusedBody).as("step 3: start during restart keeps the byte-identical /api/v1 refusal body")
                 .isEqualTo(
                 "{\"status\":422,\"code\":\"instance_operation_in_progress\",\"message\":\"Another operation on "
                     + "instance ops-target is still running; try again when it has "
@@ -359,26 +313,26 @@ class InstancePowerOperationsTest {
                     + "still "
                     + "running; try again when it has finished\"}]}");
 
-            // 6. Stop is idempotent on every surface: the API stops a running instance, a second stop answers
+            // 4. Stop is idempotent on every surface: the API stops a running instance, a second stop answers
             //    "already stopped" without touching it, and a scheduled stop of a stopped instance succeeds.
             PowerResult stopped = api(InstanceOperations.STOP, tenant, instanceId).value();
-            assertThat(stopped).as("step 6: the API stop stopped it")
+            assertThat(stopped).as("step 4: the API stop stopped it")
                 .isEqualTo(new PowerResult(InstanceModel.STATUS_STOPPED, null, false));
             int stopsAfterFirst = activity(instanceId, HohenheimActivityAction.STOPPED);
             assertThat(api(InstanceOperations.STOP, tenant, instanceId).value())
-                .as("step 6: a second stop answers already stopped")
+                .as("step 4: a second stop answers already stopped")
                 .isEqualTo(new PowerResult(InstanceModel.STATUS_STOPPED, null, true));
             int stopSchedule = schedule(instanceId, "scheduled stop", tenantId);
             step(stopSchedule, InstanceOperations.STOP, null, StepFailurePolicy.ABORT);
             Row stopStep = stepRuns(new RecordSchedules(datasource).runNow(stopSchedule)).get(0);
             assertThat(stopStep.get(RecordScheduleStepRunModel.STATUS))
-                .as("step 6: a scheduled stop of a stopped instance succeeds").isEqualTo(StepStatus.OK.storageKey());
-            assertThat(stopStep.get(RecordScheduleStepRunModel.OUTCOME)).as("step 6: as already stopped")
+                .as("step 4: a scheduled stop of a stopped instance succeeds").isEqualTo(StepStatus.OK.storageKey());
+            assertThat(stopStep.get(RecordScheduleStepRunModel.OUTCOME)).as("step 4: as already stopped")
                 .isEqualTo("already " + InstanceModel.STATUS_STOPPED);
             assertThat(activity(instanceId, HohenheimActivityAction.STOPPED))
-                .as("step 6: neither no-op stop recorded a stop").isEqualTo(stopsAfterFirst);
+                .as("step 4: neither no-op stop recorded a stop").isEqualTo(stopsAfterFirst);
 
-            // 7. Backup and snapshot: the service writes exactly one activity row each, whichever surface asked;
+            // 5. Backup and snapshot: the service writes exactly one activity row each, whichever surface asked;
             //    a scheduled snapshot carries its stored note.
             new InstanceService().deploy(instanceId);
             Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(instanceId))
@@ -386,24 +340,24 @@ class InstancePowerOperationsTest {
                 .updateAll();
             int backupsBefore = activity(instanceId, HohenheimActivityAction.BACKUP);
             Integer backupId = api(InstanceOperations.BACKUP, tenant, instanceId).value();
-            assertThat(backupId).as("step 7: the API backup answers the backup's id").isNotNull();
+            assertThat(backupId).as("step 5: the API backup answers the backup's id").isNotNull();
             assertThat(activity(instanceId, HohenheimActivityAction.BACKUP) - backupsBefore)
-                .as("step 7: one backup row, written by the service").isEqualTo(1);
+                .as("step 5: one backup row, written by the service").isEqualTo(1);
             int snapshotsBefore = activity(instanceId, HohenheimActivityAction.SNAPSHOT);
             int snapshotSchedule = schedule(instanceId, "scheduled snapshot", tenantId);
             step(snapshotSchedule, InstanceOperations.SNAPSHOT, Map.of("note", "nightly"), StepFailurePolicy.ABORT);
             Row snapshotRun = stepRuns(new RecordSchedules(datasource).runNow(snapshotSchedule)).get(0);
-            assertThat(snapshotRun.get(RecordScheduleStepRunModel.STATUS)).as("step 7: the scheduled snapshot ran")
+            assertThat(snapshotRun.get(RecordScheduleStepRunModel.STATUS)).as("step 5: the scheduled snapshot ran")
                 .isEqualTo(StepStatus.OK.storageKey());
             Row taken = Models.get(InstanceSnapshotModel.class).find().noCache()
                 .where(InstanceSnapshotModel.INSTANCE_ID.eq(instanceId))
                 .orderBy(InstanceSnapshotModel.ID, SortOrder.DESC).first();
-            assertThat(taken.get(InstanceSnapshotModel.NOTE)).as("step 7: with the stored note")
+            assertThat(taken.get(InstanceSnapshotModel.NOTE)).as("step 5: with the stored note")
                 .isEqualTo("nightly");
             assertThat(activity(instanceId, HohenheimActivityAction.SNAPSHOT) - snapshotsBefore)
-                .as("step 7: one snapshot row, written by the service").isEqualTo(1);
+                .as("step 5: one snapshot row, written by the service").isEqualTo(1);
 
-            // 8. A database that is not ready refuses a start with a retriable reason: the API answers it in
+            // 6. A database that is not ready refuses a start with a retriable reason: the API answers it in
             //    today's 422 envelope, byte-identical to the service's own refusal, and a scheduled start under RETRY
             //    is due again rather than refused for good.
             int waiting = BackupLaneFixture.instanceRecord("ops-waiting", fixture.hostId);
@@ -411,9 +365,9 @@ class InstancePowerOperationsTest {
                 HohenheimCapabilities.POWER, true);
             linkWaitingDatabase(waiting);
             Microcopy notReady = InstanceDatabaseLinks.notReadyReason(waiting);
-            assertThat(notReady).as("step 8: the fixture database is not ready").isNotNull();
+            assertThat(notReady).as("step 6: the fixture database is not ready").isNotNull();
             Throwable refused = catchThrowable(() -> api(InstanceOperations.START, tenant, waiting));
-            assertThat(refused).as("step 8: the start is refused by the retriable reason")
+            assertThat(refused).as("step 6: the start is refused by the retriable reason")
                 .isInstanceOfSatisfying(DomainRefusal.class, refusal -> {
                     assertThat(refusal.is(HohenheimRefusalReason.DATABASE_NOT_READY)).isTrue();
                     assertThat(refusal.reason().retriable()).isTrue();
@@ -422,17 +376,17 @@ class InstancePowerOperationsTest {
             int[] serviceStatus = {0};
             ActionResult<Object> adapted = ApiConduits.refusal(answering(adapterStatus), (DomainRefusal) refused);
             ActionResult<Object> service = ApiConduits.refusal(answering(serviceStatus), Violations.ofForm(notReady));
-            assertThat(adapterStatus[0]).as("step 8: the API answers 422, as before").isEqualTo(422)
+            assertThat(adapterStatus[0]).as("step 6: the API answers 422, as before").isEqualTo(422)
                 .isEqualTo(serviceStatus[0]);
-            assertThat(adapted.get()).as("step 8: with the very body the service's refusal wrote")
+            assertThat(adapted.get()).as("step 6: with the very body the service's refusal wrote")
                 .isEqualTo(service.get());
             assertThat(String.valueOf(((Map<?, ?>) adapted.get()).get("code")))
-                .as("step 8: code database_not_ready").isEqualTo("database_not_ready");
+                .as("step 6: code database_not_ready").isEqualTo("database_not_ready");
             int waitingSchedule = schedule(waiting, "waiting start", tenantId);
             step(waitingSchedule, InstanceOperations.START, null, StepFailurePolicy.RETRY);
             Row waitingStep = stepRuns(new RecordSchedules(datasource).runNow(waitingSchedule)).get(0);
             assertThat(waitingStep.get(RecordScheduleStepRunModel.STATUS))
-                .as("step 8: a scheduled start under RETRY is due again").isEqualTo(StepStatus.DUE.storageKey());
+                .as("step 6: a scheduled start under RETRY is due again").isEqualTo(StepStatus.DUE.storageKey());
         });
     }
 
@@ -469,32 +423,6 @@ class InstancePowerOperationsTest {
         step.set(RecordScheduleStepModel.FAILURE_POLICY, policy.storageKey());
         step.set(RecordScheduleStepModel.RETRY_LIMIT, 3);
         steps.save(step);
-    }
-
-    /** The step table's columns as the code of tag before-module-fit wrote them. */
-    private static final IntegerField STEP_ID = IntegerField.builder().name("id").build();
-    private static final IntegerField STEP_SCHEDULE = IntegerField.builder().name("schedule_id").build();
-    private static final IntegerField STEP_ORDER = IntegerField.builder().name("step_order").build();
-    private static final StringField STEP_ACTION = StringField.builder().name("action").build();
-    private static final SchemaField STEP_PAYLOAD = SchemaField.builder("payload").build();
-    private static final StringField STEP_POLICY = StringField.builder().name("failure_policy").build();
-    private static final FrozenModel LEGACY_STEPS = new FrozenModel("zenit_record_schedule_steps", STEP_ID,
-        STEP_SCHEDULE, STEP_ORDER, STEP_ACTION, STEP_PAYLOAD, STEP_POLICY);
-
-    /** A step as the code of tag before-module-fit stored it: a legacy action id and its payload, written raw. */
-    private static int legacyStep(int scheduleId, int position, String action, Map<String, Object> payload) {
-        Row step = LEGACY_STEPS.createEmptyRow();
-        step.set(STEP_SCHEDULE, scheduleId);
-        step.set(STEP_ORDER, position);
-        step.set(STEP_ACTION, action);
-        step.set(STEP_PAYLOAD, new LinkedHashMap<>(payload));
-        step.set(STEP_POLICY, StepFailurePolicy.ABORT.storageKey());
-        LEGACY_STEPS.save(step);
-        return step.get(STEP_ID);
-    }
-
-    private static String storedAction(int stepId) {
-        return LEGACY_STEPS.find().where(STEP_ID.eq(stepId)).first().get(STEP_ACTION);
     }
 
     private static List<Row> stepRuns(Row run) {

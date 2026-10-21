@@ -1,20 +1,9 @@
-# Structural checksums of every migration an install that must keep booting has APPLIED: production
-# (kuifje, robbedoes) and, from M011 on, the deploy-lane installs starfleet and daystrom.
+# Structural checksums of every migration an install that must keep booting has APPLIED or ADOPTED: production
+# (kuifje, robbedoes) and the deploy-lane installs starfleet and daystrom.
 # One line per migration: <class simple name><TAB><digest>.
 # The mark is MigrationIntegrityTest.DEPLOYED_THROUGH; a migration at or below it must
 # appear here and must still hash to its pinned digest. A deploy that applied migrations
 # raises the mark and pastes the deployed jar's --migration-checksums lines. Never regenerate a pin.
-# M011's to M014's digests are the ones starfleet and daystrom record in zenit_migrations (013/014 read live 2026-10-14).
-InitialMigration	0c97fcc11994ef46f73afa244b7de0aef0d67e1913c21d818743599f4726d9b5
-M002_ManagedDatabaseFailureReason	8e96b9a4490a9732f92f7c5a36786b9640c07363a40dfaa4d37d984a44b6c56e
-M003_TemplateConsoleKindDropped	2fcebda0363c2180cdc13ee6f0a0fd57bd9ee06dbe08344a23123d19fbf4dc20
-M004_DnsFederationHealth	868bec922ee0d1065c2dcd1d83c81806aa4ff3b5696abb953618b100296d6c7f
-M006_TemplateDatabases	026dc910973048ebb1a688ff12329f397ec486ba439779e111e3e4e51b50aa95
-M007_DnsNotifySerial	55b17ed621ef5921f49049453fe8c607716978bc40c5498a74f90d3164b48a0d
-M008_BanScope	bd341af0b6e9e356169012281295811f1a5b48d630184286e9c3761913912fd0
-M009_SharedDatabaseEngines	8048ec79ad38af00ea3ea64721e1a441a873c0861c59f3e0c05bb37b404324f0
-M010_ArtifactOperations	a8618ac358a91f5a1345fef681b5d8b6af5f436ea6d1e0d777c94e1bd2949305
-M011_ReviewHardening	69057f3cbfb510cb97a42ac3a0c981877cab1863463aca3f1d2196c45a5261b7
-M012_UncheckedVolumeStorage	ee801d1c08a21110133d8f8a56271c88f1cddb6b8553fc68a8b5628e1a30d5f2
-M013_InstanceGameAddress	e20ef14ef5529ddac1f4ac3ffc783c555f39407d8335cd60d4503a52d3a968b7
-M014_StackPublishedPorts	bc276f5be59e2d74779ee75e98c54a318d8dedfb2a8b91b2ff66a45e7b7704c9
+# The 001..019 chain was squashed into M001_HohenheimBaseline on 2026-10-21 (docs/migration-squash-2026-10-21); its pins
+# left with its classes. The baseline is pinned from the start: every live install adopts it, recording this digest.
+M001_HohenheimBaseline	4ec5e67d1883e35bfb4da8b17d9f272f783d8c1b07918513f86a3ca3ae980d1d

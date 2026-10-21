@@ -1,0 +1,1743 @@
+TABLE access_lists
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN name type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN satisfy type=VARCHAR(10) notnull=0 default='any' pk=0
+  COLUMN shared type=INTEGER notnull=0 default=false pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+TABLE access_rules
+  COLUMN access_list_id type=INTEGER notnull=1 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN data type=TEXT notnull=0 default=null pk=0
+  COLUMN enabled type=INTEGER notnull=1 default=true pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN parent_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN search_text type=VARCHAR(512) notnull=0 default=null pk=0
+  COLUMN sort type=INTEGER notnull=0 default=null pk=0
+  COLUMN type type=VARCHAR(32) notnull=1 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  FK access_list_id -> access_lists(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  FK parent_id -> access_rules(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  INDEX access_rules_access_list_id_index unique=0 origin=c partial=0 columns=[access_list_id]
+  INDEX access_rules_parent_id_index unique=0 origin=c partial=0 columns=[parent_id]
+  INDEX access_rules_tree_index unique=0 origin=c partial=0 columns=[access_list_id, parent_id, sort]
+TABLE artifact_operations
+  COLUMN application_id type=INTEGER notnull=1 default=null pk=0
+  COLUMN artifact_sha256 type=VARCHAR(64) notnull=1 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN error type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN finished_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN image_id type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN instance_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN site_id type=INTEGER notnull=1 default=null pk=0
+  COLUMN status type=VARCHAR(32) notnull=1 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  FK application_id -> instances(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  FK site_id -> sites(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  INDEX artifact_operations_source unique=0 origin=c partial=0 columns=[application_id, status, finished_at]
+TABLE artifact_sources
+  COLUMN application_id type=INTEGER notnull=1 default=null pk=1
+  COLUMN artifact_sha256 type=VARCHAR(64) notnull=1 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  FK application_id -> instances(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+TABLE auth_api_keys
+  COLUMN created_at type=TIMESTAMP notnull=0 default=strftime('%Y-%m-%dT%H:%M:%f', 'now') || '000Z' pk=0
+  COLUMN enabled type=INTEGER notnull=0 default=null pk=0
+  COLUMN expires_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN hash type=TEXT notnull=0 default=null pk=0
+  COLUMN id type=TEXT notnull=1 default=null pk=1
+  COLUMN label type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN last_used_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN prefix type=VARCHAR(16) notnull=0 default=null pk=0
+  COLUMN scopes type=TEXT notnull=0 default=null pk=0
+  COLUMN user_id type=TEXT notnull=0 default=null pk=0
+  FK user_id -> auth_users(id) on_update=NO ACTION on_delete=CASCADE match=NONE
+  INDEX <auto> unique=1 origin=pk partial=0 columns=[id]
+  INDEX auth_api_keys_prefix_unique unique=1 origin=c partial=0 columns=[prefix]
+  INDEX auth_api_keys_user_id_index unique=0 origin=c partial=0 columns=[user_id]
+TABLE auth_bootstrap_state
+  COLUMN created_at type=TIMESTAMP notnull=0 default=strftime('%Y-%m-%dT%H:%M:%f', 'now') || '000Z' pk=0
+  COLUMN id type=TEXT notnull=1 default=null pk=1
+  INDEX <auto> unique=1 origin=pk partial=0 columns=[id]
+TABLE auth_email_verifications
+  COLUMN consumed_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=strftime('%Y-%m-%dT%H:%M:%f', 'now') || '000Z' pk=0
+  COLUMN email type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN expires_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN id type=TEXT notnull=1 default=null pk=1
+  COLUMN purpose type=VARCHAR(32) notnull=0 default='email_verification' pk=0
+  COLUMN selector type=VARCHAR(32) notnull=0 default=null pk=0
+  COLUMN token_hash type=TEXT notnull=0 default=null pk=0
+  COLUMN user_id type=TEXT notnull=0 default=null pk=0
+  FK user_id -> auth_users(id) on_update=NO ACTION on_delete=CASCADE match=NONE
+  INDEX <auto> unique=1 origin=pk partial=0 columns=[id]
+  INDEX auth_email_verifications_selector_unique unique=1 origin=c partial=0 columns=[selector]
+  INDEX auth_email_verifications_user_id_index unique=0 origin=c partial=0 columns=[user_id]
+TABLE auth_external_identities
+  COLUMN claims type=TEXT notnull=0 default=null pk=0
+  COLUMN display_name type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN email type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN id type=TEXT notnull=1 default=null pk=1
+  COLUMN linked_at type=TIMESTAMP notnull=0 default=strftime('%Y-%m-%dT%H:%M:%f', 'now') || '000Z' pk=0
+  COLUMN provider_slug type=VARCHAR(64) notnull=0 default=null pk=0
+  COLUMN subject type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=strftime('%Y-%m-%dT%H:%M:%f', 'now') || '000Z' pk=0
+  COLUMN user_id type=TEXT notnull=0 default=null pk=0
+  FK user_id -> auth_users(id) on_update=NO ACTION on_delete=CASCADE match=NONE
+  INDEX <auto> unique=1 origin=pk partial=0 columns=[id]
+  INDEX auth_external_identities_provider_slug_subject_unique unique=1 origin=c partial=0 columns=[provider_slug, subject]
+  INDEX auth_external_identities_user_id_index unique=0 origin=c partial=0 columns=[user_id]
+TABLE auth_grants
+  COLUMN created_at type=TIMESTAMP notnull=0 default=strftime('%Y-%m-%dT%H:%M:%f', 'now') || '000Z' pk=0
+  COLUMN id type=TEXT notnull=1 default=null pk=1
+  COLUMN owner type=VARCHAR(16) notnull=0 default='operator' pk=0
+  COLUMN permission type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN subject_id type=TEXT notnull=0 default=null pk=0
+  COLUMN subject_type type=VARCHAR(16) notnull=0 default=null pk=0
+  COLUMN value type=INTEGER notnull=0 default=true pk=0
+  INDEX <auto> unique=1 origin=pk partial=0 columns=[id]
+  INDEX auth_grants_permission_index unique=0 origin=c partial=0 columns=[permission]
+  INDEX auth_grants_subject_type_subject_id_index unique=0 origin=c partial=0 columns=[subject_type, subject_id]
+  INDEX auth_grants_subject_type_subject_id_permission_unique unique=1 origin=c partial=0 columns=[subject_type, subject_id, permission]
+TABLE auth_passwords
+  COLUMN created_at type=TIMESTAMP notnull=0 default=strftime('%Y-%m-%dT%H:%M:%f', 'now') || '000Z' pk=0
+  COLUMN hash type=TEXT notnull=0 default=null pk=0
+  COLUMN kind type=VARCHAR(16) notnull=0 default=null pk=0
+  COLUMN must_rotate type=INTEGER notnull=0 default=false pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=strftime('%Y-%m-%dT%H:%M:%f', 'now') || '000Z' pk=0
+  COLUMN user_id type=TEXT notnull=1 default=null pk=1
+  FK user_id -> auth_users(id) on_update=NO ACTION on_delete=CASCADE match=NONE
+  INDEX <auto> unique=1 origin=pk partial=0 columns=[user_id]
+TABLE auth_permission_groups
+  COLUMN description type=VARCHAR(500) notnull=0 default=null pk=0
+  COLUMN id type=TEXT notnull=1 default=null pk=1
+  COLUMN slug type=VARCHAR(64) notnull=0 default=null pk=0
+  COLUMN title type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN version type=INTEGER notnull=0 default=null pk=0
+  INDEX <auto> unique=1 origin=pk partial=0 columns=[id]
+  INDEX auth_permission_groups_slug_unique unique=1 origin=c partial=0 columns=[slug]
+TABLE auth_record_grants
+  COLUMN capability type=VARCHAR(64) notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=strftime('%Y-%m-%dT%H:%M:%f', 'now') || '000Z' pk=0
+  COLUMN expires_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN granted_by type=VARCHAR(128) notnull=0 default=null pk=0
+  COLUMN granted_by_kind type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN id type=VARCHAR(64) notnull=1 default=null pk=1
+  COLUMN model type=VARCHAR(128) notnull=0 default=null pk=0
+  COLUMN record_id type=VARCHAR(64) notnull=0 default=null pk=0
+  COLUMN subject_id type=TEXT notnull=0 default=null pk=0
+  COLUMN subject_type type=VARCHAR(16) notnull=0 default=null pk=0
+  COLUMN value type=INTEGER notnull=0 default=true pk=0
+  INDEX <auto> unique=1 origin=pk partial=0 columns=[id]
+  INDEX auth_record_grants_check_path_index unique=0 origin=c partial=0 columns=[subject_type, subject_id, model, capability]
+  INDEX auth_record_grants_model_capability_index unique=0 origin=c partial=0 columns=[model, capability]
+  INDEX auth_record_grants_model_record_id_index unique=0 origin=c partial=0 columns=[model, record_id]
+  INDEX auth_record_grants_subject_type_subject_id_index unique=0 origin=c partial=0 columns=[subject_type, subject_id]
+TABLE auth_sessions
+  COLUMN created_at type=TIMESTAMP notnull=0 default=strftime('%Y-%m-%dT%H:%M:%f', 'now') || '000Z' pk=0
+  COLUMN credential type=VARCHAR(64) notnull=0 default=null pk=0
+  COLUMN data type=TEXT notnull=0 default=null pk=0
+  COLUMN expires_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN id type=VARCHAR(64) notnull=1 default=null pk=1
+  COLUMN user_id type=TEXT notnull=0 default=null pk=0
+  FK user_id -> auth_users(id) on_update=NO ACTION on_delete=CASCADE match=NONE
+  INDEX <auto> unique=1 origin=pk partial=0 columns=[id]
+  INDEX auth_sessions_credential unique=0 origin=c partial=0 columns=[credential]
+  INDEX auth_sessions_expires_at_index unique=0 origin=c partial=0 columns=[expires_at]
+  INDEX auth_sessions_user_id_index unique=0 origin=c partial=0 columns=[user_id]
+TABLE auth_share_links
+  COLUMN capability type=VARCHAR(64) notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=strftime('%Y-%m-%dT%H:%M:%f', 'now') || '000Z' pk=0
+  COLUMN created_by type=TEXT notnull=0 default=null pk=0
+  COLUMN expires_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN id type=TEXT notnull=1 default=null pk=1
+  COLUMN id_handle type=VARCHAR(8) notnull=0 default=null pk=0
+  COLUMN model type=VARCHAR(128) notnull=0 default=null pk=0
+  COLUMN record_id type=VARCHAR(64) notnull=0 default=null pk=0
+  COLUMN revoked_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN scope type=VARCHAR(128) notnull=0 default=null pk=0
+  COLUMN token_hash type=VARCHAR(64) notnull=0 default=null pk=0
+  INDEX <auto> unique=1 origin=pk partial=0 columns=[id]
+  INDEX auth_share_links_id_handle_index unique=0 origin=c partial=0 columns=[id_handle]
+  INDEX auth_share_links_model_record_id_index unique=0 origin=c partial=0 columns=[model, record_id]
+  INDEX auth_share_links_token_hash_unique unique=1 origin=c partial=0 columns=[token_hash]
+TABLE auth_ssh_keys
+  COLUMN created_at type=TIMESTAMP notnull=0 default=strftime('%Y-%m-%dT%H:%M:%f', 'now') || '000Z' pk=0
+  COLUMN fingerprint type=VARCHAR(64) notnull=0 default=null pk=0
+  COLUMN id type=TEXT notnull=1 default=null pk=1
+  COLUMN key_type type=VARCHAR(64) notnull=0 default=null pk=0
+  COLUMN label type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN last_used_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN public_key type=TEXT notnull=0 default=null pk=0
+  COLUMN user_id type=TEXT notnull=0 default=null pk=0
+  FK user_id -> auth_users(id) on_update=NO ACTION on_delete=CASCADE match=NONE
+  INDEX <auto> unique=1 origin=pk partial=0 columns=[id]
+  INDEX auth_ssh_keys_fingerprint_unique unique=1 origin=c partial=0 columns=[fingerprint]
+  INDEX auth_ssh_keys_user_id_index unique=0 origin=c partial=0 columns=[user_id]
+TABLE auth_totp
+  COLUMN backup_codes type=TEXT notnull=0 default=null pk=0
+  COLUMN confirmed_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=strftime('%Y-%m-%dT%H:%M:%f', 'now') || '000Z' pk=0
+  COLUMN secret type=TEXT notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN user_id type=TEXT notnull=1 default=null pk=1
+  FK user_id -> auth_users(id) on_update=NO ACTION on_delete=CASCADE match=NONE
+  INDEX <auto> unique=1 origin=pk partial=0 columns=[user_id]
+TABLE auth_users
+  COLUMN created_at type=TIMESTAMP notnull=0 default=strftime('%Y-%m-%dT%H:%M:%f', 'now') || '000Z' pk=0
+  COLUMN display_name type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN email type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN email_verified_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN enabled type=INTEGER notnull=0 default=true pk=0
+  COLUMN failed_login_count type=INTEGER notnull=0 default=0 pk=0
+  COLUMN id type=TEXT notnull=1 default=null pk=1
+  COLUMN last_login_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN locale type=VARCHAR(16) notnull=0 default=null pk=0
+  COLUMN locked_until type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN picture_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=strftime('%Y-%m-%dT%H:%M:%f', 'now') || '000Z' pk=0
+  INDEX <auto> unique=1 origin=pk partial=0 columns=[id]
+  INDEX auth_users_email_unique unique=1 origin=c partial=0 columns=[email]
+TABLE backup_targets
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN kind type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN name type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN settings type=TEXT notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  INDEX backup_targets_name_unique unique=1 origin=c partial=0 columns=[name]
+TABLE bans
+  COLUMN active type=INTEGER notnull=0 default=true pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN event_type type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN expires_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN ip type=VARCHAR(64) notnull=0 default=null pk=0
+  COLUMN lifted_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN lifted_by type=VARCHAR(200) notnull=0 default=null pk=0
+  COLUMN reason type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN scope type=VARCHAR(16) notnull=0 default='web' pk=0
+  COLUMN source type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  INDEX bans_active_index unique=0 origin=c partial=0 columns=[active]
+  INDEX bans_ip_index unique=0 origin=c partial=0 columns=[ip]
+TABLE build_operations
+  COLUMN artifact_bytes type=BIGINT notnull=0 default=null pk=0
+  COLUMN builder_kind type=VARCHAR(50) notnull=0 default='dockerfile' pk=0
+  COLUMN cpu_limit type=REAL notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN detection type=TEXT notnull=0 default=null pk=0
+  COLUMN disk_limit_mb type=INTEGER notnull=0 default=null pk=0
+  COLUMN duration_ms type=INTEGER notnull=0 default=null pk=0
+  COLUMN exit_code type=INTEGER notnull=0 default=null pk=0
+  COLUMN failure_reason type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN finished_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN for_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN for_model type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN image_id type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN log type=TEXT notnull=0 default=null pk=0
+  COLUMN memory_limit_mb type=INTEGER notnull=0 default=null pk=0
+  COLUMN peak_disk_bytes type=BIGINT notnull=0 default=null pk=0
+  COLUMN pids_limit type=INTEGER notnull=0 default=null pk=0
+  COLUMN source_ref type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN started_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN status type=VARCHAR(50) notnull=0 default='running' pk=0
+  COLUMN tag type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN timeout_seconds type=INTEGER notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  INDEX build_operations_for_id_index unique=0 origin=c partial=0 columns=[for_id]
+TABLE certificates
+  COLUMN auto_renew type=INTEGER notnull=0 default=true pk=0
+  COLUMN certificate_pem type=TEXT notnull=0 default=null pk=0
+  COLUMN challenge_type type=VARCHAR(20) notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN dns_publisher type=VARCHAR(80) notnull=0 default=null pk=0
+  COLUMN domain_names_text type=TEXT notnull=0 default=null pk=0
+  COLUMN error_count type=INTEGER notnull=0 default=0 pk=0
+  COLUMN expires_on type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN expiry_notified_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN issued_on type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN letsencrypt_email type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN next_attempt_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN nice_name type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN private_key_pem type=TEXT notnull=0 default=null pk=0
+  COLUMN provider type=VARCHAR(50) notnull=0 default='letsencrypt' pk=0
+  COLUMN renewal_error type=TEXT notnull=0 default=null pk=0
+  COLUMN renewal_failed_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN requested_by_kind type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN requested_by_user_id type=TEXT notnull=0 default=null pk=0
+  COLUMN status type=VARCHAR(20) notnull=0 default='active' pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+TABLE controller_identity
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN singleton type=INTEGER notnull=0 default=1 pk=0
+  COLUMN token type=VARCHAR(32) notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  INDEX controller_identity_singleton_unique unique=1 origin=c partial=0 columns=[singleton]
+  INDEX controller_identity_token_unique unique=1 origin=c partial=0 columns=[token]
+TABLE database_engines
+  COLUMN cpu_limit type=REAL notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN engine type=VARCHAR(32) notnull=1 default=null pk=0
+  COLUMN failure_reason type=TEXT notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN image type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN memory_limit_mb type=INTEGER notnull=0 default=null pk=0
+  COLUMN name type=VARCHAR(64) notnull=1 default=null pk=0
+  COLUMN root_password type=TEXT notnull=1 default=null pk=0
+  COLUMN root_user type=VARCHAR(64) notnull=1 default=null pk=0
+  COLUMN server_id type=INTEGER notnull=1 default=null pk=0
+  COLUMN status type=VARCHAR(32) notnull=1 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  FK server_id -> servers(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  INDEX database_engines_name_unique unique=1 origin=c partial=0 columns=[name]
+TABLE dns_dyndns_credentials
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN record_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN token_digest type=VARCHAR(96) notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  INDEX dns_dyndns_credentials_record_id_unique unique=1 origin=c partial=0 columns=[record_id]
+  INDEX dns_dyndns_credentials_token_digest_index unique=0 origin=c partial=0 columns=[token_digest]
+TABLE dns_peers
+  COLUMN api_key type=VARCHAR(200) notnull=0 default=null pk=0
+  COLUMN base_url type=VARCHAR(500) notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN enabled type=INTEGER notnull=0 default=true pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN name type=VARCHAR(120) notnull=0 default=null pk=0
+  COLUMN peer_type type=VARCHAR(20) notnull=0 default='nameserver' pk=0
+  COLUMN transfer_host type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN transfer_port type=INTEGER notnull=0 default=53 pk=0
+  COLUMN tsig_algorithm type=VARCHAR(40) notnull=0 default='hmac-sha256' pk=0
+  COLUMN tsig_key_name type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN tsig_secret type=VARCHAR(500) notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  INDEX dns_peers_name_unique unique=1 origin=c partial=0 columns=[name]
+TABLE dns_records
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN data type=TEXT notnull=0 default=null pk=0
+  COLUMN enabled type=INTEGER notnull=0 default=true pk=0
+  COLUMN generated_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN generated_by type=VARCHAR(40) notnull=0 default=null pk=0
+  COLUMN generated_for_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN generated_for_model type=VARCHAR(120) notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN managed_by type=VARCHAR(40) notnull=0 default=null pk=0
+  COLUMN name type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN ttl type=INTEGER notnull=0 default=null pk=0
+  COLUMN type type=VARCHAR(10) notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN value type=VARCHAR(4096) notnull=0 default=null pk=0
+  COLUMN zone_id type=INTEGER notnull=1 default=null pk=0
+  FK zone_id -> dns_zones(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  INDEX dns_records_name_index unique=0 origin=c partial=0 columns=[name]
+  INDEX dns_records_zone_id_index unique=0 origin=c partial=0 columns=[zone_id]
+TABLE dns_zone_peers
+  COLUMN behind_since type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN last_axfr_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN last_axfr_serial type=INTEGER notnull=0 default=null pk=0
+  COLUMN last_notify_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN last_notify_outcome type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN last_notify_serial type=INTEGER notnull=0 default=null pk=0
+  COLUMN peer_id type=INTEGER notnull=1 default=null pk=0
+  COLUMN probe_error type=VARCHAR(512) notnull=0 default=null pk=0
+  COLUMN probed_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN served_serial type=INTEGER notnull=0 default=null pk=0
+  COLUMN stale_alerted_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN zone_id type=INTEGER notnull=1 default=null pk=0
+  FK peer_id -> dns_peers(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  FK zone_id -> dns_zones(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  INDEX dns_zone_peers_zone_id_index unique=0 origin=c partial=0 columns=[zone_id]
+TABLE dns_zones
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN default_ttl type=INTEGER notnull=0 default=3600 pk=0
+  COLUMN delegation_checked_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN delegation_detail type=TEXT notnull=0 default=null pk=0
+  COLUMN delegation_status type=VARCHAR(32) notnull=0 default=null pk=0
+  COLUMN dnssec_algorithm type=INTEGER notnull=0 default=13 pk=0
+  COLUMN dnssec_enabled type=INTEGER notnull=0 default=false pk=0
+  COLUMN dnssec_key_tag type=INTEGER notnull=0 default=null pk=0
+  COLUMN dnssec_private_key type=TEXT notnull=0 default=null pk=0
+  COLUMN dnssec_public_key type=TEXT notnull=0 default=null pk=0
+  COLUMN enabled type=INTEGER notnull=0 default=true pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN last_checked_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN last_transfer_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN negative_ttl type=INTEGER notnull=0 default=300 pk=0
+  COLUMN origin type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN primary_peer_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN replica_records type=TEXT notnull=0 default=null pk=0
+  COLUMN role type=VARCHAR(20) notnull=0 default='primary' pk=0
+  COLUMN serial type=INTEGER notnull=0 default=1 pk=0
+  COLUMN soa_contact type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN soa_expire type=INTEGER notnull=0 default=1209600 pk=0
+  COLUMN soa_primary_ns type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN soa_refresh type=INTEGER notnull=0 default=7200 pk=0
+  COLUMN soa_retry type=INTEGER notnull=0 default=3600 pk=0
+  COLUMN transfer_message type=VARCHAR(500) notnull=0 default=null pk=0
+  COLUMN transfer_status type=VARCHAR(20) notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  INDEX dns_zones_origin_unique unique=1 origin=c partial=0 columns=[origin]
+TABLE environments
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN description type=TEXT notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN name type=VARCHAR(191) notnull=0 default=null pk=0
+  COLUMN project_id type=INTEGER notnull=1 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  FK project_id -> projects(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  INDEX environments_project_id_index unique=0 origin=c partial=0 columns=[project_id]
+TABLE game_domains
+  COLUMN backend_instance_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN backend_port type=INTEGER notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN enabled type=INTEGER notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN proxy_instance_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN site_domain_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN version type=INTEGER notnull=0 default=0 pk=0
+  INDEX game_domains_backend_instance_id_index unique=0 origin=c partial=0 columns=[backend_instance_id]
+  INDEX game_domains_domain_proxy unique=1 origin=c partial=0 columns=[site_domain_id, proxy_instance_id]
+TABLE git_providers
+  COLUMN access_token type=TEXT notnull=0 default=null pk=0
+  COLUMN app_private_key_pem type=TEXT notnull=0 default=null pk=0
+  COLUMN base_url type=VARCHAR(500) notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN kind type=VARCHAR(50) notnull=0 default=null pk=0
+  COLUMN name type=VARCHAR(191) notnull=0 default=null pk=0
+  COLUMN settings type=TEXT notnull=0 default=null pk=0
+  COLUMN shared type=INTEGER notnull=0 default=false pk=0
+  COLUMN ssh_private_key type=TEXT notnull=0 default=null pk=0
+  COLUMN target_trusted type=INTEGER notnull=0 default=false pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+TABLE install_media_fetches
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN error type=TEXT notnull=0 default=null pk=0
+  COLUMN finished_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN name type=VARCHAR(64) notnull=1 default=null pk=0
+  COLUMN progress type=REAL notnull=0 default=null pk=0
+  COLUMN server_id type=INTEGER notnull=1 default=null pk=0
+  COLUMN state type=VARCHAR(16) notnull=1 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  FK server_id -> servers(id) on_update=NO ACTION on_delete=CASCADE match=NONE
+  INDEX install_media_fetches_server unique=0 origin=c partial=0 columns=[server_id, created_at]
+TABLE instance_backups
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN error type=TEXT notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN instance_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN remote_key type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN sha256 type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN size_bytes type=BIGINT notnull=0 default=null pk=0
+  COLUMN status type=VARCHAR(50) notnull=0 default='failed' pk=0
+  COLUMN summary type=TEXT notnull=0 default=null pk=0
+  COLUMN target_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  FK instance_id -> instances(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  FK target_id -> backup_targets(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  INDEX instance_backups_instance_id_index unique=0 origin=c partial=0 columns=[instance_id]
+TABLE instance_databases
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN database_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN env_prefix type=VARCHAR(40) notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN instance_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  INDEX instance_databases_database_id_index unique=0 origin=c partial=0 columns=[database_id]
+  INDEX instance_databases_instance_id_index unique=0 origin=c partial=0 columns=[instance_id]
+TABLE instance_devices
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN instance_id type=INTEGER notnull=1 default=null pk=0
+  COLUMN name type=VARCHAR(63) notnull=0 default=null pk=0
+  COLUMN quota_bucket type=VARCHAR(191) notnull=0 default=null pk=0
+  COLUMN size_gb type=INTEGER notnull=0 default=null pk=0
+  COLUMN source_media type=VARCHAR(191) notnull=0 default=null pk=0
+  COLUMN type type=VARCHAR(20) notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  FK instance_id -> instances(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  INDEX instance_devices_instance_id_index unique=0 origin=c partial=0 columns=[instance_id]
+  INDEX instance_devices_name_unique unique=1 origin=c partial=0 columns=[instance_id, name]
+TABLE instance_files
+  COLUMN container_path type=VARCHAR(512) notnull=0 default=null pk=0
+  COLUMN content type=TEXT notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN generated_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN generated_by type=VARCHAR(40) notnull=0 default=null pk=0
+  COLUMN generated_for_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN generated_for_model type=VARCHAR(120) notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN instance_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN mode type=VARCHAR(10) notnull=0 default='0644' pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  FK instance_id -> instances(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  INDEX instance_files_instance_id_index unique=0 origin=c partial=0 columns=[instance_id]
+TABLE instance_logs
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN handle type=VARCHAR(191) notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN instance_id type=INTEGER notnull=1 default=null pk=0
+  COLUMN line_count type=INTEGER notnull=0 default=null pk=0
+  COLUMN log_text type=TEXT notnull=0 default=null pk=0
+  COLUMN saved_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  INDEX instance_logs_instance_created unique=0 origin=c partial=0 columns=[instance_id, created_at]
+TABLE instance_quotas
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN max_databases type=INTEGER notnull=0 default=null pk=0
+  COLUMN max_disk_gb type=INTEGER notnull=0 default=null pk=0
+  COLUMN max_instances type=INTEGER notnull=0 default=null pk=0
+  COLUMN max_memory_mb type=INTEGER notnull=0 default=null pk=0
+  COLUMN max_nics type=INTEGER notnull=0 default=null pk=0
+  COLUMN max_sites type=INTEGER notnull=0 default=null pk=0
+  COLUMN subjects type=TEXT notnull=1 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  INDEX instance_quotas_subjects_unique unique=1 origin=c partial=0 columns=[subjects]
+TABLE instance_snapshots
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN directory type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN error type=TEXT notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN instance_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN native_name type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN note type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN status type=VARCHAR(50) notnull=0 default='failed' pk=0
+  COLUMN total_bytes type=BIGINT notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN volumes type=TEXT notnull=0 default=null pk=0
+  FK instance_id -> instances(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  INDEX instance_snapshots_instance_id_index unique=0 origin=c partial=0 columns=[instance_id]
+TABLE instance_template_databases
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN engine type=VARCHAR(32) notnull=1 default=null pk=0
+  COLUMN env_prefix type=VARCHAR(64) notnull=1 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN image type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN template_id type=INTEGER notnull=1 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  FK template_id -> instance_templates(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  INDEX instance_template_databases_unique unique=1 origin=c partial=0 columns=[template_id, env_prefix]
+TABLE instance_template_files
+  COLUMN container_path type=VARCHAR(512) notnull=0 default=null pk=0
+  COLUMN content type=TEXT notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN mode type=VARCHAR(10) notnull=0 default='0644' pk=0
+  COLUMN template_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  FK template_id -> instance_templates(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  INDEX instance_template_files_template_id_index unique=0 origin=c partial=0 columns=[template_id]
+TABLE instance_template_variables
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN default_value type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN description type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN key type=VARCHAR(191) notnull=0 default=null pk=0
+  COLUMN label type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN required type=INTEGER notnull=0 default=false pk=0
+  COLUMN settings type=TEXT notnull=0 default=null pk=0
+  COLUMN template_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN type type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  FK template_id -> instance_templates(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  INDEX instance_template_variables_template_id_index unique=0 origin=c partial=0 columns=[template_id]
+TABLE instance_template_volumes
+  COLUMN container_path type=VARCHAR(512) notnull=1 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN exclusive type=INTEGER notnull=0 default=false pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN name type=VARCHAR(128) notnull=1 default=null pk=0
+  COLUMN quota_bytes type=BIGINT notnull=0 default=null pk=0
+  COLUMN template_id type=INTEGER notnull=1 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  FK template_id -> instance_templates(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  INDEX instance_template_volumes_unique unique=1 origin=c partial=0 columns=[template_id, name]
+TABLE instance_templates
+  COLUMN approved_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN approved_by_user_id type=TEXT notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN description type=TEXT notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN imported_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN install_image type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN install_script type=TEXT notnull=0 default=null pk=0
+  COLUMN kind type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN name type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN readiness_kind type=VARCHAR(32) notnull=0 default='port' pk=0
+  COLUMN readiness_line type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN readiness_target type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN reinstall_policy type=VARCHAR(50) notnull=0 default='preserve' pk=0
+  COLUMN runtime_image_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN settings type=TEXT notnull=0 default=null pk=0
+  COLUMN source type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN source_checksum type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN start_command type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN stop_command type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN stop_grace_seconds type=INTEGER notnull=0 default=10 pk=0
+  COLUMN stop_kind type=VARCHAR(32) notnull=0 default='signal' pk=0
+  COLUMN update_script type=TEXT notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN version type=INTEGER notnull=0 default=1 pk=0
+TABLE instance_variables
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN environment_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN instance_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN key type=VARCHAR(191) notnull=0 default=null pk=0
+  COLUMN kind type=VARCHAR(50) notnull=0 default='plain' pk=0
+  COLUMN plain_value type=TEXT notnull=0 default=null pk=0
+  COLUMN secret_value type=TEXT notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  FK instance_id -> instances(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  INDEX instance_variables_instance_id_index unique=0 origin=c partial=0 columns=[instance_id]
+TABLE instance_volumes
+  COLUMN container_path type=VARCHAR(512) notnull=1 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN exclusive type=INTEGER notnull=0 default=false pk=0
+  COLUMN host_path type=VARCHAR(1024) notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN instance_id type=INTEGER notnull=1 default=null pk=0
+  COLUMN name type=VARCHAR(128) notnull=1 default=null pk=0
+  COLUMN observed_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN quota_bytes type=BIGINT notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN used_bytes type=BIGINT notnull=0 default=null pk=0
+  COLUMN version type=INTEGER notnull=0 default=0 pk=0
+  FK instance_id -> instances(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  INDEX instance_volumes_unique unique=1 origin=c partial=0 columns=[instance_id, name]
+TABLE instances
+  COLUMN backup_target_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN capacity_mb type=INTEGER notnull=0 default=null pk=0
+  COLUMN claim_fence type=BIGINT notnull=0 default=null pk=0
+  COLUMN crash_policy type=VARCHAR(50) notnull=0 default='restart' pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN deleted_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN disk_limit_bytes type=BIGINT notnull=0 default=null pk=0
+  COLUMN disk_observed_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN disk_used_bytes type=BIGINT notnull=0 default=null pk=0
+  COLUMN environment_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN game_address type=VARCHAR(253) notnull=0 default=null pk=0
+  COLUMN generated_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN generated_by type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN generated_for_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN generated_for_model type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN image_fingerprint type=VARCHAR(191) notnull=0 default=null pk=0
+  COLUMN install_error type=TEXT notnull=0 default=null pk=0
+  COLUMN install_state type=VARCHAR(50) notnull=0 default='none' pk=0
+  COLUMN kind type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN migrate_reserved_mb type=INTEGER notnull=0 default=null pk=0
+  COLUMN migrate_target_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN name type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN quota_bucket type=VARCHAR(191) notnull=0 default=null pk=0
+  COLUMN quota_memory_mb type=INTEGER notnull=0 default=null pk=0
+  COLUMN restart_withheld type=VARCHAR(32) notnull=0 default=null pk=0
+  COLUMN root_disk_bucket type=VARCHAR(191) notnull=0 default=null pk=0
+  COLUMN runtime_image_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN runtime_role type=VARCHAR(20) notnull=0 default='serving' pk=0
+  COLUMN server_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN settings type=TEXT notnull=0 default=null pk=0
+  COLUMN started_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN status type=VARCHAR(50) notnull=0 default='created' pk=0
+  COLUMN status_observed_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN stoppage_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN stoppage_cause type=VARCHAR(64) notnull=0 default=null pk=0
+  COLUMN stoppage_detail type=TEXT notnull=0 default=null pk=0
+  COLUMN target_trusted type=INTEGER notnull=0 default=false pk=0
+  COLUMN template_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN workload_killed_at type=TIMESTAMP notnull=0 default=null pk=0
+  FK backup_target_id -> backup_targets(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  FK runtime_image_id -> runtime_images(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  FK server_id -> servers(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  FK template_id -> instance_templates(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  INDEX idx_instances_generated_for_id unique=0 origin=c partial=0 columns=[generated_for_id]
+  INDEX instances_server_id_index unique=0 origin=c partial=0 columns=[server_id]
+TABLE managed_databases
+  COLUMN cpu_limit type=REAL notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN db_name type=VARCHAR(128) notnull=0 default=null pk=0
+  COLUMN db_password type=VARCHAR(256) notnull=0 default=null pk=0
+  COLUMN db_user type=VARCHAR(128) notnull=0 default=null pk=0
+  COLUMN engine type=VARCHAR(32) notnull=0 default=null pk=0
+  COLUMN engine_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN ephemeral type=INTEGER notnull=0 default=false pk=0
+  COLUMN failure_reason type=TEXT notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN image type=VARCHAR(256) notnull=0 default=null pk=0
+  COLUMN memory_limit_mb type=INTEGER notnull=0 default=null pk=0
+  COLUMN name type=VARCHAR(128) notnull=0 default=null pk=0
+  COLUMN placement type=VARCHAR(16) notnull=0 default=null pk=0
+  COLUMN quota_bucket type=VARCHAR(191) notnull=0 default=null pk=0
+  COLUMN server_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN status type=VARCHAR(20) notnull=0 default='active' pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  FK engine_id -> database_engines(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  FK server_id -> servers(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  INDEX managed_databases_name_unique unique=1 origin=c partial=0 columns=[name]
+TABLE microcopy_translations
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN key type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN legacy_records type=TEXT notnull=0 default=null pk=0
+  COLUMN locale type=VARCHAR(16) notnull=0 default=null pk=0
+  COLUMN lock_case type=INTEGER notnull=0 default=false pk=0
+  COLUMN source type=TEXT notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=strftime('%Y-%m-%dT%H:%M:%f', 'now') || '000Z' pk=0
+  COLUMN weight type=INTEGER notnull=0 default=0 pk=0
+  INDEX microcopy_translations_key_locale_index unique=0 origin=c partial=0 columns=[key, locale]
+TABLE microcopy_translations_filters
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN microcopy_translation_id type=INTEGER notnull=1 default=null pk=0
+  COLUMN name type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN optional type=INTEGER notnull=0 default=null pk=0
+  COLUMN order_key type=BIGINT notnull=1 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN value type=VARCHAR(255) notnull=0 default=null pk=0
+  FK microcopy_translation_id -> microcopy_translations(id) on_update=CASCADE on_delete=CASCADE match=NONE
+  INDEX microcopy_translations_filters_order_index unique=0 origin=c partial=0 columns=[microcopy_translation_id, order_key]
+TABLE notification_channels
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN events type=TEXT notnull=0 default=null pk=0
+  COLUMN format type=VARCHAR(16) notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN kind type=VARCHAR(16) notnull=0 default=null pk=0
+  COLUMN name type=VARCHAR(128) notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN url type=VARCHAR(512) notnull=0 default=null pk=0
+  INDEX notification_channels_name_unique unique=1 origin=c partial=0 columns=[name]
+TABLE notifications_deliveries
+  COLUMN attempt_count type=INTEGER notnull=0 default=0 pk=0
+  COLUMN available_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN channel type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN claim_fence type=BIGINT notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN dedup_key type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN error type=TEXT notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN notification_key type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN origin_project type=INTEGER notnull=0 default=null pk=0
+  COLUMN payload type=TEXT notnull=0 default=null pk=0
+  COLUMN private_route type=TEXT notnull=0 default=null pk=0
+  COLUMN recipient type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN recipient_name type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN reference type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN remote_error type=TEXT notnull=0 default=null pk=0
+  COLUMN remote_status type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN sent_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN status type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN transaction_id type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN transport type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  INDEX comms_deliveries_dedup_key_index unique=0 origin=c partial=0 columns=[dedup_key]
+  INDEX comms_deliveries_notification_key_index unique=0 origin=c partial=0 columns=[notification_key]
+  INDEX comms_deliveries_origin_project_reference_index unique=0 origin=c partial=0 columns=[origin_project, reference]
+  INDEX comms_deliveries_status_available_at_index unique=0 origin=c partial=0 columns=[status, available_at]
+  INDEX comms_deliveries_transaction_id_index unique=0 origin=c partial=0 columns=[transaction_id]
+TABLE notifications_hub_projects
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN enabled type=INTEGER notnull=0 default=true pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN last_seen_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN name type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN slug type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN status_webhook_secret type=TEXT notnull=0 default=null pk=0
+  COLUMN status_webhook_url type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN token_hash type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  INDEX <auto> unique=1 origin=u partial=0 columns=[slug]
+  INDEX comms_hub_projects_token_hash_index unique=0 origin=c partial=0 columns=[token_hash]
+TABLE notifications_inbox_items
+  COLUMN archived_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN body type=TEXT notnull=0 default=null pk=0
+  COLUMN body_source type=TEXT notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN icon type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN importance type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN latest_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN notification_key type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN read_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN recipient type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN repeat_key type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN repeats type=INTEGER notnull=1 default=1 pk=0
+  COLUMN subject_id type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN subject_model type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN subject_title type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN subject_title_source type=TEXT notnull=0 default=null pk=0
+  COLUMN title type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN title_source type=TEXT notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN url type=VARCHAR(255) notnull=0 default=null pk=0
+  INDEX comms_inbox_items_recipient_latest_at unique=0 origin=c partial=0 columns=[recipient, latest_at]
+  INDEX comms_inbox_items_recipient_read_at_index unique=0 origin=c partial=0 columns=[recipient, read_at]
+  INDEX comms_inbox_items_recipient_repeat_key unique=0 origin=c partial=0 columns=[recipient, repeat_key]
+  INDEX comms_inbox_items_recipient_subject unique=0 origin=c partial=0 columns=[recipient, subject_model, subject_id]
+TABLE notifications_watch_queue
+  COLUMN actor_principal_id type=TEXT notnull=0 default=null pk=0
+  COLUMN actor_principal_kind type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN body_source type=TEXT notnull=0 default=null pk=0
+  COLUMN command_id type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN event_model type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN event_record_id type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN instructions type=TEXT notnull=0 default=null pk=0
+  COLUMN kind type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN principal_id type=TEXT notnull=1 default=null pk=0
+  COLUMN principal_kind type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN scope_model type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN scope_record_id type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN title_source type=TEXT notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN url type=VARCHAR(255) notnull=0 default=null pk=0
+  INDEX notifications_watch_queue_principal_scope_index unique=0 origin=c partial=0 columns=[principal_id, scope_model]
+TABLE port_allocations
+  COLUMN allocation_mode type=VARCHAR(20) notnull=0 default=null pk=0
+  COLUMN claim_key type=VARCHAR(128) notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN host_ip type=VARCHAR(64) notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN note type=VARCHAR(256) notnull=0 default=null pk=0
+  COLUMN owner_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN owner_model type=VARCHAR(128) notnull=0 default=null pk=0
+  COLUMN port type=INTEGER notnull=0 default=null pk=0
+  COLUMN protocol type=VARCHAR(8) notnull=0 default=null pk=0
+  COLUMN server_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN status type=VARCHAR(16) notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  FK server_id -> servers(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  INDEX port_allocations_claim_key_unique unique=1 origin=c partial=0 columns=[claim_key]
+TABLE preview_deployments
+  COLUMN application_id type=INTEGER notnull=1 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN deleted_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN expires_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN head_sha type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN hostname type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN instance_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN last_error type=TEXT notnull=0 default=null pk=0
+  COLUMN pr_number type=INTEGER notnull=0 default=null pk=0
+  COLUMN quota_bucket type=VARCHAR(191) notnull=0 default=null pk=0
+  COLUMN ref type=VARCHAR(191) notnull=0 default=null pk=0
+  COLUMN status type=VARCHAR(50) notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  FK application_id -> instances(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  INDEX preview_deployments_application_id_index unique=0 origin=c partial=0 columns=[application_id]
+  INDEX preview_deployments_expires_at_index unique=0 origin=c partial=0 columns=[expires_at]
+TABLE projects
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN description type=TEXT notnull=0 default=null pk=0
+  COLUMN group_id type=TEXT notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN name type=VARCHAR(191) notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+TABLE protected_paths
+  COLUMN access_list_id type=INTEGER notnull=1 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN path type=VARCHAR(500) notnull=1 default=null pk=0
+  COLUMN site_id type=INTEGER notnull=1 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  FK access_list_id -> access_lists(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  FK site_id -> sites(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  INDEX protected_paths_site_id_index unique=0 origin=c partial=0 columns=[site_id]
+  INDEX protected_paths_site_path_unique unique=1 origin=c partial=0 columns=[site_id, path]
+TABLE reconcile_findings
+  COLUMN bucket type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN detail type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN evidence type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN kind type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN owner_id type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN owner_model type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN resource_name type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN server_name type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+TABLE release_operations
+  COLUMN candidate_instance_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN duration_ms type=INTEGER notnull=0 default=null pk=0
+  COLUMN failure_reason type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN finished_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN for_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN for_model type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN image_id type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN kind type=VARCHAR(50) notnull=0 default='release' pk=0
+  COLUMN owner_fingerprint type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN retired_instance_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN spec_fingerprint type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN started_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN status type=VARCHAR(50) notnull=0 default='pending' pk=0
+  COLUMN step_log type=TEXT notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  INDEX release_operations_for_id_index unique=0 origin=c partial=0 columns=[for_id]
+TABLE released_route_claims
+  COLUMN claim_key type=VARCHAR(128) notnull=0 default=null pk=0
+  COLUMN former_site_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN former_subjects type=TEXT notnull=0 default=null pk=0
+  COLUMN hostname type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN match_type type=VARCHAR(16) notnull=0 default=null pk=0
+  COLUMN released_at type=TIMESTAMP notnull=0 default=null pk=0
+  INDEX released_route_claims_claim_key_index unique=0 origin=c partial=0 columns=[claim_key]
+TABLE runtime_images
+  COLUMN build_context type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN builtin type=INTEGER notnull=0 default=false pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN default_build_command type=VARCHAR(512) notnull=0 default=null pk=0
+  COLUMN default_command type=VARCHAR(512) notnull=0 default=null pk=0
+  COLUMN default_port type=INTEGER notnull=0 default=null pk=0
+  COLUMN description type=TEXT notnull=0 default=null pk=0
+  COLUMN docker_image type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN enabled type=INTEGER notnull=0 default=true pk=0
+  COLUMN icon type=VARCHAR(64) notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN incus_image type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN name type=VARCHAR(128) notnull=1 default=null pk=0
+  COLUMN shell type=VARCHAR(128) notnull=0 default='/bin/bash' pk=0
+  COLUMN uid_mode type=VARCHAR(32) notnull=0 default='mapped' pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN workdir type=VARCHAR(255) notnull=0 default=null pk=0
+  INDEX runtime_images_name_unique unique=1 origin=c partial=0 columns=[name]
+TABLE servers
+  COLUMN acknowledged_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN acknowledged_by type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN acknowledged_by_kind type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN acknowledged_by_label type=VARCHAR(200) notnull=0 default=null pk=0
+  COLUMN acknowledged_posture type=VARCHAR(32) notnull=0 default=null pk=0
+  COLUMN acknowledged_warning_version type=INTEGER notnull=0 default=null pk=0
+  COLUMN admission type=VARCHAR(32) notnull=0 default='blocked' pk=0
+  COLUMN capabilities type=TEXT notnull=0 default=null pk=0
+  COLUMN controller_version type=VARCHAR(64) notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN host_key type=TEXT notnull=0 default=null pk=0
+  COLUMN host_key_fingerprint type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN host_key_offered type=TEXT notnull=0 default=null pk=0
+  COLUMN host_key_pinned_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN host_key_verified type=INTEGER notnull=0 default=false pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN identity_private_key type=TEXT notnull=0 default=null pk=0
+  COLUMN identity_public_key type=TEXT notnull=0 default=null pk=0
+  COLUMN incus_client_cert type=TEXT notnull=0 default=null pk=0
+  COLUMN incus_client_key type=TEXT notnull=0 default=null pk=0
+  COLUMN incus_server_cert type=TEXT notnull=0 default=null pk=0
+  COLUMN incus_server_cert_fingerprint type=VARCHAR(191) notnull=0 default=null pk=0
+  COLUMN incus_server_cert_offered type=TEXT notnull=0 default=null pk=0
+  COLUMN incus_server_cert_pinned_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN incus_server_cert_verified type=INTEGER notnull=1 default=false pk=0
+  COLUMN incus_url type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN lan_parent type=VARCHAR(15) notnull=0 default=null pk=0
+  COLUMN last_error type=TEXT notnull=0 default=null pk=0
+  COLUMN last_error_kind type=VARCHAR(32) notnull=0 default=null pk=0
+  COLUMN last_seen_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN mode type=VARCHAR(16) notnull=0 default=null pk=0
+  COLUMN name type=VARCHAR(128) notnull=0 default=null pk=0
+  COLUMN port_claim_fence type=BIGINT notnull=0 default=null pk=0
+  COLUMN posture type=VARCHAR(32) notnull=0 default='trusted_only' pk=0
+  COLUMN preflight_ok type=INTEGER notnull=0 default=false pk=0
+  COLUMN probed_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN public_ipv4 type=VARCHAR(45) notnull=0 default=null pk=0
+  COLUMN public_ipv6 type=VARCHAR(45) notnull=0 default=null pk=0
+  COLUMN quarantine_reason type=TEXT notnull=0 default=null pk=0
+  COLUMN quarantined_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN runtime type=VARCHAR(20) notnull=1 default='docker' pk=0
+  COLUMN ssh_target type=VARCHAR(256) notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN volume_backend type=VARCHAR(32) notnull=0 default='unchecked' pk=0
+  COLUMN volume_backend_detail type=TEXT notnull=0 default=null pk=0
+  COLUMN volume_probed_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN volume_root type=VARCHAR(512) notnull=0 default=null pk=0
+  INDEX servers_name_unique unique=1 origin=c partial=0 columns=[name]
+TABLE sftp_host_keys
+  COLUMN created_at type=TIMESTAMP notnull=0 default=strftime('%Y-%m-%dT%H:%M:%f', 'now') || '000Z' pk=0
+  COLUMN fingerprint type=VARCHAR(64) notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN key_type type=VARCHAR(64) notnull=0 default=null pk=0
+  COLUMN private_key type=TEXT notnull=0 default=null pk=0
+  COLUMN public_key type=TEXT notnull=0 default=null pk=0
+TABLE site_auth_providers
+  COLUMN config type=TEXT notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN name type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN provider_type type=VARCHAR(50) notnull=0 default=null pk=0
+  COLUMN required_permission type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+TABLE site_domains
+  COLUMN certificate_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN custom_headers type=TEXT notnull=0 default=null pk=0
+  COLUMN exclude_from_letsencrypt type=INTEGER notnull=0 default=false pk=0
+  COLUMN force_ssl type=INTEGER notnull=0 default=true pk=0
+  COLUMN force_ssl_auto type=INTEGER notnull=0 default=false pk=0
+  COLUMN generated_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN generated_by type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN generated_for_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN generated_for_model type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN hostname type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN hsts_enabled type=INTEGER notnull=0 default=false pk=0
+  COLUMN hsts_subdomains type=INTEGER notnull=0 default=false pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN listen_on type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN live_route_key type=VARCHAR(1024) notnull=0 default=null pk=0
+  COLUMN match_type type=VARCHAR(20) notnull=0 default='exact' pk=0
+  COLUMN path type=VARCHAR(512) notnull=0 default=null pk=0
+  COLUMN response_headers type=TEXT notnull=0 default=null pk=0
+  COLUMN site_id type=INTEGER notnull=1 default=null pk=0
+  COLUMN strip_path type=INTEGER notnull=0 default=false pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  FK site_id -> sites(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  INDEX idx_site_domains_generated_for_id unique=0 origin=c partial=0 columns=[generated_for_id]
+  INDEX site_domains_hostname_index unique=0 origin=c partial=0 columns=[hostname]
+  INDEX site_domains_live_route_key_unique unique=1 origin=c partial=0 columns=[live_route_key]
+  INDEX site_domains_site_id_index unique=0 origin=c partial=0 columns=[site_id]
+TABLE site_sessions
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN data type=TEXT notnull=0 default=null pk=0
+  COLUMN expires_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN id type=VARCHAR(64) notnull=1 default=null pk=1
+  COLUMN site_id type=INTEGER notnull=0 default=null pk=0
+  INDEX <auto> unique=1 origin=pk partial=0 columns=[id]
+  INDEX site_sessions_expires_at_index unique=0 origin=c partial=0 columns=[expires_at]
+  INDEX site_sessions_site_id_index unique=0 origin=c partial=0 columns=[site_id]
+TABLE sites
+  COLUMN access_list_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN auth_provider_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN deleted_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN description type=TEXT notnull=0 default=null pk=0
+  COLUMN enabled type=INTEGER notnull=0 default=true pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN instance_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN name type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN quota_bucket type=VARCHAR(191) notnull=0 default=null pk=0
+  COLUMN security_report_token type=VARCHAR(96) notnull=0 default=null pk=0
+  COLUMN settings type=TEXT notnull=0 default=null pk=0
+  COLUMN slug type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN status type=VARCHAR(50) notnull=0 default='idle' pk=0
+  COLUMN target_trusted type=INTEGER notnull=0 default=false pk=0
+  COLUMN trusted_upstream type=INTEGER notnull=0 default=false pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN upstream_kind type=VARCHAR(50) notnull=0 default=null pk=0
+  INDEX sites_instance_id_index unique=0 origin=c partial=0 columns=[instance_id]
+  INDEX sites_slug_unique unique=1 origin=c partial=0 columns=[slug]
+  INDEX sites_upstream_kind_index unique=0 origin=c partial=0 columns=[upstream_kind]
+TABLE spamservice_installations
+  COLUMN controller_key type=VARCHAR(256) notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN enabled type=INTEGER notnull=0 default=false pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN max_heap_mb type=INTEGER notnull=0 default=512 pk=0
+  COLUMN port type=INTEGER notnull=0 default=8095 pk=0
+  COLUMN system_user_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  FK system_user_id -> system_users(id) on_update=NO ACTION on_delete=RESTRICT match=NONE
+TABLE stack_deployments
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN duration_ms type=INTEGER notnull=0 default=null pk=0
+  COLUMN error type=TEXT notnull=0 default=null pk=0
+  COLUMN finished_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN log type=TEXT notnull=0 default=null pk=0
+  COLUMN reason type=VARCHAR(50) notnull=0 default=null pk=0
+  COLUMN spec type=TEXT notnull=0 default=null pk=0
+  COLUMN stack_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN started_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN status type=VARCHAR(20) notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  INDEX stack_deployments_stack_id_index unique=0 origin=c partial=0 columns=[stack_id]
+TABLE stack_files
+  COLUMN container_path type=VARCHAR(500) notnull=0 default=null pk=0
+  COLUMN content type=TEXT notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN mode type=VARCHAR(10) notnull=0 default=null pk=0
+  COLUMN stack_service_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  INDEX stack_files_stack_service_id_container_path_unique unique=1 origin=c partial=0 columns=[stack_service_id, container_path]
+  INDEX stack_files_stack_service_id_index unique=0 origin=c partial=0 columns=[stack_service_id]
+TABLE stack_services
+  COLUMN capabilities type=TEXT notnull=0 default=null pk=0
+  COLUMN command type=TEXT notnull=0 default=null pk=0
+  COLUMN cpu_limit type=REAL notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN enabled type=INTEGER notnull=0 default=null pk=0
+  COLUMN environment type=TEXT notnull=0 default=null pk=0
+  COLUMN health_cmd type=VARCHAR(500) notnull=0 default=null pk=0
+  COLUMN health_interval_seconds type=INTEGER notnull=0 default=null pk=0
+  COLUMN health_retries type=INTEGER notnull=0 default=null pk=0
+  COLUMN health_start_period_seconds type=INTEGER notnull=0 default=null pk=0
+  COLUMN health_timeout_seconds type=INTEGER notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN image type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN memory_limit_mb type=INTEGER notnull=0 default=null pk=0
+  COLUMN name type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN restart_policy type=VARCHAR(20) notnull=0 default=null pk=0
+  COLUMN stack_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  INDEX stack_services_stack_id_index unique=0 origin=c partial=0 columns=[stack_id]
+  INDEX stack_services_stack_id_name_unique unique=1 origin=c partial=0 columns=[stack_id, name]
+TABLE stack_services_depends_on
+  COLUMN condition type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN order_key type=BIGINT notnull=1 default=null pk=0
+  COLUMN service type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN stack_service_id type=INTEGER notnull=1 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  FK stack_service_id -> stack_services(id) on_update=NO ACTION on_delete=CASCADE match=NONE
+  INDEX stack_services_depends_on_stack_service_id_order_key_index unique=0 origin=c partial=0 columns=[stack_service_id, order_key]
+TABLE stack_services_mounts
+  COLUMN container_path type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN external_name type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN name type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN order_key type=BIGINT notnull=1 default=null pk=0
+  COLUMN stack_service_id type=INTEGER notnull=1 default=null pk=0
+  COLUMN type type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  FK stack_service_id -> stack_services(id) on_update=NO ACTION on_delete=CASCADE match=NONE
+  INDEX stack_services_mounts_stack_service_id_order_key_index unique=0 origin=c partial=0 columns=[stack_service_id, order_key]
+TABLE stack_services_ports
+  COLUMN container_port type=INTEGER notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN host_ip type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN host_port type=INTEGER notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN order_key type=BIGINT notnull=1 default=null pk=0
+  COLUMN protocol type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN stack_service_id type=INTEGER notnull=1 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  FK stack_service_id -> stack_services(id) on_update=NO ACTION on_delete=CASCADE match=NONE
+  INDEX stack_services_ports_stack_service_id_order_key_index unique=0 origin=c partial=0 columns=[stack_service_id, order_key]
+TABLE stacks
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN description type=TEXT notnull=0 default=null pk=0
+  COLUMN enabled type=INTEGER notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN name type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN registry_password type=TEXT notnull=0 default=null pk=0
+  COLUMN registry_server type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN registry_user type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN server_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN status type=VARCHAR(20) notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  FK server_id -> servers(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  INDEX <auto> unique=1 origin=u partial=0 columns=[name]
+TABLE system_task
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN declared_by type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN description type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN enabled type=INTEGER notnull=1 default=true pk=0
+  COLUMN forced_schedule_checksum type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN frequency type=VARCHAR(255) notnull=1 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN last_boot_fired_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN last_fired_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN next_fire_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN schedule_type type=VARCHAR(255) notnull=1 default=null pk=0
+  COLUMN settings type=TEXT notnull=0 default=null pk=0
+  COLUMN type type=VARCHAR(255) notnull=1 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  INDEX <auto> unique=1 origin=u partial=0 columns=[forced_schedule_checksum]
+  INDEX system_task_enabled_next_fire_at_index unique=0 origin=c partial=0 columns=[enabled, next_fire_at]
+  INDEX system_task_type_index unique=0 origin=c partial=0 columns=[type]
+TABLE system_task_history
+  COLUMN claim_fence type=BIGINT notnull=0 default=null pk=0
+  COLUMN claim_start_instant type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN ended_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN error type=TEXT notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN payload type=TEXT notnull=0 default=null pk=0
+  COLUMN process_id type=BIGINT notnull=0 default=null pk=0
+  COLUMN progress type=REAL notnull=1 default=0.0 pk=0
+  COLUMN progress_done type=BIGINT notnull=0 default=null pk=0
+  COLUMN progress_message type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN progress_total type=BIGINT notnull=0 default=null pk=0
+  COLUMN reports type=TEXT notnull=0 default=null pk=0
+  COLUMN settings type=TEXT notnull=0 default=null pk=0
+  COLUMN started_at type=TIMESTAMP notnull=1 default=null pk=0
+  COLUMN status type=VARCHAR(255) notnull=1 default=null pk=0
+  COLUMN stop_requested_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN system_task_id type=BIGINT notnull=0 default=null pk=0
+  COLUMN task_type type=VARCHAR(255) notnull=1 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  INDEX system_task_history_status_ended_at_index unique=0 origin=c partial=0 columns=[status, ended_at]
+  INDEX system_task_history_system_task_id_index unique=0 origin=c partial=0 columns=[system_task_id]
+  INDEX system_task_history_task_type_started_at_index unique=0 origin=c partial=0 columns=[task_type, started_at]
+TABLE system_users
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN gecos type=VARCHAR(512) notnull=0 default=null pk=0
+  COLUMN gid type=INTEGER notnull=0 default=null pk=0
+  COLUMN home type=VARCHAR(512) notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN last_seen_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN managed type=INTEGER notnull=0 default=false pk=0
+  COLUMN name type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN obsolete type=INTEGER notnull=0 default=false pk=0
+  COLUMN site_id type=INTEGER notnull=0 default=null pk=0
+  COLUMN uid type=INTEGER notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  INDEX system_users_name_unique unique=1 origin=c partial=0 columns=[name]
+  INDEX system_users_obsolete_index unique=0 origin=c partial=0 columns=[obsolete]
+  INDEX system_users_site_id_unique unique=1 origin=c partial=0 columns=[site_id]
+TABLE webhook_deliveries
+  COLUMN action type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN delivery_key type=VARCHAR(191) notnull=0 default=null pk=0
+  COLUMN event type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN instance_id type=INTEGER notnull=1 default=null pk=0
+  COLUMN received_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  FK instance_id -> instances(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  INDEX webhook_deliveries_instance_key_unique unique=1 origin=c partial=0 columns=[instance_id, delivery_key]
+TABLE zenit_action_requests
+  COLUMN action_id type=VARCHAR(36) notnull=1 default=null pk=1
+  COLUMN created_at type=TIMESTAMP notnull=1 default=null pk=0
+  COLUMN ip type=VARCHAR(64) notnull=0 default=null pk=0
+  COLUMN user_agent type=TEXT notnull=0 default=null pk=0
+  FK action_id -> zenit_actions(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  INDEX <auto> unique=1 origin=pk partial=0 columns=[action_id]
+  INDEX zenit_action_requests_created unique=0 origin=c partial=0 columns=[created_at]
+TABLE zenit_actions
+  COLUMN actor type=VARCHAR(36) notnull=0 default=null pk=0
+  COLUMN actor_kind type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN change_count type=INTEGER notnull=1 default=null pk=0
+  COLUMN closed_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN command_type type=VARCHAR(200) notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=1 default=null pk=0
+  COLUMN id type=VARCHAR(36) notnull=1 default=null pk=1
+  COLUMN last_change_id type=BIGINT notnull=0 default=null pk=0
+  COLUMN legacy_label type=TEXT notnull=0 default=null pk=0
+  COLUMN origin type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN segments type=INTEGER notnull=1 default=null pk=0
+  COLUMN series_id type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN series_kind type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN subject_id type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN subject_model type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN system_purpose type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN through type=VARCHAR(36) notnull=0 default=null pk=0
+  COLUMN through_kind type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN undone_action_id type=VARCHAR(36) notnull=0 default=null pk=0
+  INDEX <auto> unique=1 origin=pk partial=0 columns=[id]
+  INDEX zenit_actions_actor unique=0 origin=c partial=0 columns=[actor_kind, actor]
+  INDEX zenit_actions_command_type unique=0 origin=c partial=0 columns=[command_type, created_at]
+  INDEX zenit_actions_last_change unique=0 origin=c partial=0 columns=[last_change_id]
+  INDEX zenit_actions_purpose unique=0 origin=c partial=0 columns=[system_purpose]
+  INDEX zenit_actions_series unique=0 origin=c partial=0 columns=[series_kind, series_id]
+  INDEX zenit_actions_undone unique=0 origin=c partial=0 columns=[undone_action_id]
+TABLE zenit_activity_v1
+  COLUMN action type=VARCHAR(64) notnull=1 default=null pk=0
+  COLUMN actor type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN actor_kind type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN actor_label type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN batch_head type=BIGINT notnull=0 default=null pk=0
+  COLUMN batch_key type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN command_entry type=INTEGER notnull=0 default=null pk=0
+  COLUMN command_id type=VARCHAR(200) notnull=0 default=null pk=0
+  COLUMN command_type type=VARCHAR(200) notnull=0 default=null pk=0
+  COLUMN context_id type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN context_model type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN delta type=TEXT notnull=0 default=null pk=0
+  COLUMN detail type=TEXT notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN ip type=VARCHAR(64) notnull=0 default=null pk=0
+  COLUMN model type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN origin type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN record_id type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN record_title type=VARCHAR(200) notnull=0 default=null pk=0
+  COLUMN revision type=INTEGER notnull=0 default=null pk=0
+  COLUMN session_id type=VARCHAR(36) notnull=0 default=null pk=0
+  COLUMN through type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN through_kind type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN user_agent type=TEXT notnull=0 default=null pk=0
+  COLUMN v3_action_id type=VARCHAR(36) notnull=0 default=null pk=0
+  COLUMN v3_change_id type=BIGINT notnull=0 default=null pk=0
+  COLUMN v3_disposition type=VARCHAR(32) notnull=0 default=null pk=0
+  INDEX zenit_activity_batch_head unique=0 origin=c partial=0 columns=[batch_head]
+  INDEX zenit_activity_command_id unique=0 origin=c partial=0 columns=[command_id]
+  INDEX zenit_activity_context unique=0 origin=c partial=0 columns=[context_model, context_id]
+  INDEX zenit_activity_created_at_index unique=0 origin=c partial=0 columns=[created_at]
+  INDEX zenit_activity_model_record_id_index unique=0 origin=c partial=0 columns=[model, record_id]
+TABLE zenit_change_facts
+  COLUMN body type=TEXT notnull=0 default=null pk=0
+  COLUMN change_id type=BIGINT notnull=1 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN kind type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN schema_version type=INTEGER notnull=1 default=null pk=0
+  FK change_id -> zenit_changes(id) on_update=NO ACTION on_delete=CASCADE match=NONE
+  INDEX zenit_change_facts_change unique=0 origin=c partial=0 columns=[change_id, id]
+  INDEX zenit_change_facts_kind unique=0 origin=c partial=0 columns=[kind, change_id]
+TABLE zenit_changes
+  COLUMN action_id type=VARCHAR(36) notnull=1 default=null pk=0
+  COLUMN changed_fields type=TEXT notnull=0 default=null pk=0
+  COLUMN context_id type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN context_model type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN delta type=TEXT notnull=0 default=null pk=0
+  COLUMN format type=INTEGER notnull=1 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN legacy_title type=VARCHAR(200) notnull=0 default=null pk=0
+  COLUMN model type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN op type=VARCHAR(32) notnull=1 default=null pk=0
+  COLUMN record_id type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN scope type=TEXT notnull=0 default=null pk=0
+  COLUMN segment type=INTEGER notnull=1 default=null pk=0
+  COLUMN version type=VARCHAR(64) notnull=0 default=null pk=0
+  FK action_id -> zenit_actions(id) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  INDEX uq_zenit_changes_segment_record unique=1 origin=c partial=0 columns=[action_id, segment, model, record_id]
+  INDEX zenit_changes_context unique=0 origin=c partial=0 columns=[context_model, context_id]
+  INDEX zenit_changes_record unique=0 origin=c partial=0 columns=[model, record_id, id]
+TABLE zenit_command_receipts
+  COLUMN accepted_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN action_id type=VARCHAR(36) notnull=0 default=null pk=0
+  COLUMN actor type=VARCHAR(191) notnull=0 default=null pk=0
+  COLUMN command_key type=VARCHAR(200) notnull=1 default=null pk=1
+  COLUMN completed_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN lease_fence type=BIGINT notnull=0 default=null pk=0
+  COLUMN lease_key type=VARCHAR(191) notnull=0 default=null pk=0
+  COLUMN lease_owner type=VARCHAR(64) notnull=0 default=null pk=0
+  COLUMN payload_digest type=VARCHAR(64) notnull=0 default=null pk=0
+  COLUMN result type=TEXT notnull=0 default=null pk=0
+  COLUMN status type=VARCHAR(16) notnull=0 default=null pk=0
+  COLUMN type_key type=VARCHAR(191) notnull=0 default=null pk=0
+  INDEX <auto> unique=1 origin=pk partial=0 columns=[command_key]
+  INDEX zenit_command_receipts_action unique=0 origin=c partial=0 columns=[action_id]
+  INDEX zenit_command_receipts_type_key_accepted_at_index unique=0 origin=c partial=0 columns=[type_key, accepted_at]
+TABLE zenit_comments
+  COLUMN anchor type=TEXT notnull=0 default=null pk=0
+  COLUMN assignee type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN assignee_kind type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN author type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN author_kind type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN author_label type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN body type=TEXT notnull=1 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN edited_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN format type=VARCHAR(16) notnull=1 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN model type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN preserves_history type=INTEGER notnull=1 default=false pk=0
+  COLUMN record_id type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN record_key type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN removed_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN removed_by type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN removed_by_kind type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN resolved_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN resolved_by type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN resolved_by_kind type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN thread_id type=BIGINT notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  INDEX idx_zenit_comments_thread unique=0 origin=c partial=0 columns=[thread_id]
+  INDEX zenit_comments_model_record_id_index unique=0 origin=c partial=0 columns=[model, record_id]
+TABLE zenit_content_blob_refs
+  COLUMN created_at type=TIMESTAMP notnull=1 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN owner_id type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN owner_model type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN sha256 type=VARCHAR(64) notnull=1 default=null pk=0
+  FK sha256 -> zenit_content_blobs(sha256) on_update=NO ACTION on_delete=NO ACTION match=NONE
+  INDEX uq_zenit_content_blob_refs_owner unique=1 origin=c partial=0 columns=[sha256, owner_model, owner_id]
+  INDEX zenit_content_blob_refs_owner_model_owner_id_index unique=0 origin=c partial=0 columns=[owner_model, owner_id]
+TABLE zenit_content_blobs
+  COLUMN created_at type=TIMESTAMP notnull=1 default=null pk=0
+  COLUMN sha256 type=VARCHAR(64) notnull=1 default=null pk=1
+  COLUMN size type=BIGINT notnull=1 default=null pk=0
+  COLUMN storage type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN storage_key type=VARCHAR(200) notnull=1 default=null pk=0
+  COLUMN touched_at type=TIMESTAMP notnull=1 default=null pk=0
+  INDEX <auto> unique=1 origin=pk partial=0 columns=[sha256]
+  INDEX zenit_content_blobs_touched_at_index unique=0 origin=c partial=0 columns=[touched_at]
+TABLE zenit_encryption_keyring
+  COLUMN key_id type=VARCHAR(191) notnull=1 default=null pk=0
+  COLUMN recorded_at type=TIMESTAMP notnull=1 default=null pk=0
+  COLUMN scope type=VARCHAR(191) notnull=1 default=null pk=1
+  INDEX <auto> unique=1 origin=pk partial=0 columns=[scope]
+TABLE zenit_encryption_rekeys
+  COLUMN completed_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN cursor type=VARCHAR(191) notnull=0 default=null pk=0
+  COLUMN key_id type=VARCHAR(191) notnull=1 default=null pk=0
+  COLUMN model_id type=VARCHAR(191) notnull=1 default=null pk=0
+  COLUMN rows_rewritten type=BIGINT notnull=1 default=0 pk=0
+  COLUMN rows_scanned type=BIGINT notnull=1 default=0 pk=0
+  COLUMN scope type=VARCHAR(191) notnull=1 default=null pk=1
+  COLUMN updated_at type=TIMESTAMP notnull=1 default=null pk=0
+  INDEX <auto> unique=1 origin=pk partial=0 columns=[scope]
+TABLE zenit_file_sets
+  COLUMN created_at type=TIMESTAMP notnull=1 default=null pk=0
+  COLUMN file_count type=INTEGER notnull=1 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN manifest type=TEXT notnull=1 default=null pk=0
+  COLUMN owner_id type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN owner_model type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN total_size type=BIGINT notnull=1 default=null pk=0
+  INDEX zenit_file_sets_owner unique=0 origin=c partial=0 columns=[owner_model, owner_id]
+TABLE zenit_inverse_commands
+  COLUMN action_id type=VARCHAR(36) notnull=0 default=null pk=0
+  COLUMN command_id type=VARCHAR(200) notnull=1 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN episodes type=INTEGER notnull=1 default=null pk=0
+  COLUMN frontier type=BIGINT notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN is_inverse type=INTEGER notnull=1 default=false pk=0
+  INDEX zenit_inverse_commands_action unique=0 origin=c partial=0 columns=[action_id]
+  INDEX zenit_inverse_commands_command unique=0 origin=c partial=0 columns=[command_id]
+TABLE zenit_inverse_episodes
+  COLUMN action_id type=VARCHAR(36) notnull=0 default=null pk=0
+  COLUMN command_id type=VARCHAR(200) notnull=1 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN items type=INTEGER notnull=1 default=null pk=0
+  COLUMN kind type=VARCHAR(64) notnull=1 default=null pk=0
+  COLUMN model type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN record_id type=VARCHAR(100) notnull=1 default=null pk=0
+  INDEX zenit_inverse_episodes_action unique=0 origin=c partial=0 columns=[action_id]
+  INDEX zenit_inverse_episodes_command unique=0 origin=c partial=0 columns=[command_id]
+  INDEX zenit_inverse_episodes_record unique=0 origin=c partial=0 columns=[model, record_id]
+TABLE zenit_inverse_items
+  COLUMN episode type=BIGINT notnull=1 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN model type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN record_id type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN role type=VARCHAR(16) notnull=1 default=null pk=0
+  INDEX zenit_inverse_items_episode unique=0 origin=c partial=0 columns=[episode]
+TABLE zenit_inverse_records
+  COLUMN action_id type=VARCHAR(36) notnull=0 default=null pk=0
+  COLUMN command_id type=VARCHAR(200) notnull=1 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN model type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN record_id type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN revision type=TEXT notnull=0 default=null pk=0
+  INDEX zenit_inverse_records_action unique=0 origin=c partial=0 columns=[action_id]
+  INDEX zenit_inverse_records_command unique=0 origin=c partial=0 columns=[command_id]
+TABLE zenit_lease_share
+  COLUMN expires_at type=TIMESTAMP notnull=1 default=null pk=0
+  COLUMN lease_key type=VARCHAR(191) notnull=1 default=null pk=0
+  COLUMN owner_token type=VARCHAR(64) notnull=1 default=null pk=1
+  COLUMN renewed_at type=TIMESTAMP notnull=1 default=null pk=0
+  INDEX <auto> unique=1 origin=pk partial=0 columns=[owner_token]
+  INDEX zenit_lease_share_key_expiry unique=0 origin=c partial=0 columns=[lease_key, expires_at]
+TABLE zenit_leases
+  COLUMN acquired_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN expires_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN fence type=BIGINT notnull=0 default=null pk=0
+  COLUMN lease_key type=VARCHAR(191) notnull=1 default=null pk=1
+  COLUMN owner_token type=VARCHAR(64) notnull=0 default=null pk=0
+  COLUMN renewed_at type=TIMESTAMP notnull=0 default=null pk=0
+  INDEX <auto> unique=1 origin=pk partial=0 columns=[lease_key]
+TABLE zenit_media
+  COLUMN content_claim type=INTEGER notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN filename type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN hash type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN height type=INTEGER notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN mime type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN size type=BIGINT notnull=0 default=null pk=0
+  COLUMN storage type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN storage_key type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN title type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN visibility type=VARCHAR(255) notnull=1 default='public' pk=0
+  COLUMN width type=INTEGER notnull=0 default=null pk=0
+  INDEX <auto> unique=1 origin=u partial=0 columns=[storage_key]
+  INDEX zenit_media_content_claim_unique unique=1 origin=c partial=0 columns=[hash, size, visibility, content_claim]
+  INDEX zenit_media_hash_index unique=0 origin=c partial=0 columns=[hash]
+TABLE zenit_media_translations
+  COLUMN alt type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN locale type=VARCHAR(255) notnull=1 default=null pk=0
+  COLUMN media_id type=INTEGER notnull=1 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  FK media_id -> zenit_media(id) on_update=CASCADE on_delete=CASCADE match=NONE
+  INDEX zenit_media_translations_locale_unique unique=1 origin=c partial=0 columns=[media_id, locale]
+TABLE zenit_migrations
+  COLUMN applied_at type=TIMESTAMP notnull=1 default=null pk=0
+  COLUMN checksum type=VARCHAR(64) notnull=0 default=null pk=0
+  COLUMN direction type=VARCHAR(10) notnull=1 default=null pk=0
+  COLUMN execution_time_ms type=BIGINT notnull=1 default=null pk=0
+  COLUMN name type=VARCHAR(255) notnull=1 default=null pk=0
+  COLUMN state type=VARCHAR(32) notnull=0 default=null pk=0
+  COLUMN stream type=VARCHAR(128) notnull=1 default=null pk=1
+  COLUMN version type=VARCHAR(255) notnull=1 default=null pk=2
+  INDEX <auto> unique=1 origin=pk partial=0 columns=[stream, version]
+TABLE zenit_model_generations
+  COLUMN generation type=BIGINT notnull=1 default=0 pk=0
+  COLUMN tracked_model type=VARCHAR(191) notnull=1 default=null pk=1
+  INDEX <auto> unique=1 origin=pk partial=0 columns=[tracked_model]
+TABLE zenit_operation_runs
+  COLUMN caller type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN caller_kind type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN claim_fence type=BIGINT notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN ended_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN error type=TEXT notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN invocation_id type=TEXT notnull=1 default=null pk=0
+  COLUMN journey type=TEXT notnull=0 default=null pk=0
+  COLUMN operation type=VARCHAR(255) notnull=1 default=null pk=0
+  COLUMN outcome type=TEXT notnull=0 default=null pk=0
+  COLUMN progress type=REAL notnull=1 default=0.0 pk=0
+  COLUMN progress_done type=BIGINT notnull=0 default=null pk=0
+  COLUMN progress_message type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN progress_total type=BIGINT notnull=0 default=null pk=0
+  COLUMN skipped_parts type=VARCHAR(500) notnull=0 default=null pk=0
+  COLUMN started_at type=TIMESTAMP notnull=1 default=null pk=0
+  COLUMN status type=VARCHAR(32) notnull=1 default=null pk=0
+  COLUMN step_details type=TEXT notnull=0 default=null pk=0
+  COLUMN subject_key type=VARCHAR(200) notnull=0 default=null pk=0
+  COLUMN subject_type type=VARCHAR(200) notnull=0 default=null pk=0
+  COLUMN title type=TEXT notnull=0 default=null pk=0
+  COLUMN undone_parts type=VARCHAR(500) notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  INDEX <auto> unique=1 origin=u partial=0 columns=[invocation_id]
+  INDEX zenit_operation_runs_status_ended_at_index unique=0 origin=c partial=0 columns=[status, ended_at]
+  INDEX zenit_operation_runs_subject_type_subject_key_index unique=0 origin=c partial=0 columns=[subject_type, subject_key]
+TABLE zenit_principal_rekeys
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN kind type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN new_id type=TEXT notnull=1 default=null pk=0
+  COLUMN old_id type=VARCHAR(20) notnull=1 default=null pk=0
+  INDEX zenit_principal_rekeys_kind_new_id_unique unique=1 origin=c partial=0 columns=[kind, new_id]
+  INDEX zenit_principal_rekeys_kind_old_id_unique unique=1 origin=c partial=0 columns=[kind, old_id]
+TABLE zenit_quotas
+  COLUMN bucket_key type=VARCHAR(191) notnull=1 default=null pk=1
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN used type=BIGINT notnull=0 default=null pk=0
+  INDEX <auto> unique=1 origin=pk partial=0 columns=[bucket_key]
+TABLE zenit_record_drafts
+  COLUMN contributors type=TEXT notnull=0 default=null pk=0
+  COLUMN draft type=TEXT notnull=0 default=null pk=0
+  COLUMN generation type=TEXT notnull=0 default=null pk=0
+  COLUMN id type=TEXT notnull=1 default=null pk=1
+  COLUMN model type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN record_id type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN since type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=1 default=null pk=0
+  COLUMN version type=BIGINT notnull=1 default=null pk=0
+  INDEX <auto> unique=1 origin=pk partial=0 columns=[id]
+  INDEX zenit_record_drafts_model_record_id_unique unique=1 origin=c partial=0 columns=[model, record_id]
+TABLE zenit_record_rekeys
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN model type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN new_id type=TEXT notnull=1 default=null pk=0
+  COLUMN old_id type=VARCHAR(20) notnull=1 default=null pk=0
+  INDEX zenit_record_rekeys_model_new_id_unique unique=1 origin=c partial=0 columns=[model, new_id]
+  INDEX zenit_record_rekeys_model_old_id_unique unique=1 origin=c partial=0 columns=[model, old_id]
+TABLE zenit_record_schedule_runs
+  COLUMN claim_fence type=BIGINT notnull=1 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN ended_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN error type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN fired_by type=VARCHAR(255) notnull=1 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN model type=VARCHAR(191) notnull=1 default=null pk=0
+  COLUMN record_id type=VARCHAR(191) notnull=1 default=null pk=0
+  COLUMN schedule_id type=INTEGER notnull=1 default=null pk=0
+  COLUMN started_at type=TIMESTAMP notnull=1 default=null pk=0
+  COLUMN status type=VARCHAR(255) notnull=1 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  INDEX zenit_record_schedule_runs_schedule_id_index unique=0 origin=c partial=0 columns=[schedule_id]
+  INDEX zenit_record_schedule_runs_status_index unique=0 origin=c partial=0 columns=[status]
+TABLE zenit_record_schedule_step_runs
+  COLUMN attempt type=INTEGER notnull=1 default=1 pk=0
+  COLUMN claim_fence type=BIGINT notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN due_at type=TIMESTAMP notnull=1 default=null pk=0
+  COLUMN ended_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN error type=TEXT notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN input type=TEXT notnull=0 default=null pk=0
+  COLUMN invocation_id type=TEXT notnull=1 default=null pk=0
+  COLUMN operation type=VARCHAR(255) notnull=1 default=null pk=0
+  COLUMN outcome type=TEXT notnull=0 default=null pk=0
+  COLUMN run_id type=INTEGER notnull=1 default=null pk=0
+  COLUMN schedule_id type=INTEGER notnull=1 default=null pk=0
+  COLUMN started_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN status type=VARCHAR(32) notnull=1 default=null pk=0
+  COLUMN step_id type=INTEGER notnull=1 default=null pk=0
+  COLUMN step_order type=INTEGER notnull=1 default=0 pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  INDEX zenit_record_schedule_step_runs_run_id_index unique=0 origin=c partial=0 columns=[run_id]
+  INDEX zenit_record_schedule_step_runs_status_due_at_index unique=0 origin=c partial=0 columns=[status, due_at]
+TABLE zenit_record_schedule_steps
+  COLUMN action type=VARCHAR(255) notnull=1 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN failure_policy type=VARCHAR(255) notnull=1 default='abort' pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN input type=TEXT notnull=0 default=null pk=0
+  COLUMN offset_seconds type=INTEGER notnull=1 default=0 pk=0
+  COLUMN payload type=TEXT notnull=0 default=null pk=0
+  COLUMN retry_limit type=INTEGER notnull=1 default=3 pk=0
+  COLUMN schedule_id type=INTEGER notnull=1 default=null pk=0
+  COLUMN step_order type=INTEGER notnull=1 default=0 pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  INDEX zenit_record_schedule_steps_schedule_id_index unique=0 origin=c partial=0 columns=[schedule_id]
+TABLE zenit_record_schedules
+  COLUMN claim_fence type=BIGINT notnull=0 default=null pk=0
+  COLUMN completed_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN cron type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN disabled_reason type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN enabled type=INTEGER notnull=1 default=true pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN kind type=VARCHAR(16) notnull=1 default='cron' pk=0
+  COLUMN last_fired_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN model type=VARCHAR(191) notnull=1 default=null pk=0
+  COLUMN name type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN next_fire_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN record_id type=VARCHAR(191) notnull=1 default=null pk=0
+  COLUMN run_as type=TEXT notnull=0 default=null pk=0
+  COLUMN run_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN timezone type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  INDEX zenit_record_schedules_enabled_next_fire_at_index unique=0 origin=c partial=0 columns=[enabled, next_fire_at]
+  INDEX zenit_record_schedules_kind_run_at_index unique=0 origin=c partial=0 columns=[kind, run_at]
+  INDEX zenit_record_schedules_model_record_id_index unique=0 origin=c partial=0 columns=[model, record_id]
+TABLE zenit_retention_rules
+  COLUMN history type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN model type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN policy type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN record_id type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN removed_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN removed_by type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN removed_by_kind type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN set_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN set_by type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN set_by_kind type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN term_count type=INTEGER notnull=0 default=null pk=0
+  COLUMN term_days type=INTEGER notnull=0 default=null pk=0
+  COLUMN term_ladder type=VARCHAR(255) notnull=0 default=null pk=0
+  INDEX zenit_retention_rules_target unique=0 origin=c partial=0 columns=[model, record_id]
+TABLE zenit_revision_authors
+  COLUMN author type=VARCHAR(36) notnull=0 default=null pk=0
+  COLUMN author_kind type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN display type=TEXT notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN kind type=VARCHAR(16) notnull=1 default=null pk=0
+  COLUMN ordinal type=INTEGER notnull=1 default=null pk=0
+  COLUMN revision_id type=BIGINT notnull=1 default=null pk=0
+  COLUMN source_id type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN source_system type=VARCHAR(100) notnull=0 default=null pk=0
+  FK revision_id -> zenit_revisions(id) on_update=NO ACTION on_delete=CASCADE match=NONE
+  INDEX uq_zenit_revision_authors_ordinal unique=1 origin=c partial=0 columns=[revision_id, ordinal]
+TABLE zenit_revision_marks
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN created_by type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN created_by_kind type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN mark type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN model type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN record_id type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN removed_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN removed_by type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN removed_by_kind type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN revision type=INTEGER notnull=0 default=null pk=0
+  COLUMN text type=TEXT notnull=0 default=null pk=0
+  INDEX zenit_revision_marks_record unique=0 origin=c partial=0 columns=[model, record_id]
+TABLE zenit_revisions
+  COLUMN action_id type=VARCHAR(36) notnull=0 default=null pk=0
+  COLUMN actor_label type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN authorship type=VARCHAR(16) notnull=1 default='EXECUTOR' pk=0
+  COLUMN command_id type=VARCHAR(200) notnull=0 default=null pk=0
+  COLUMN context type=TEXT notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN created_by type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN created_by_kind type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN format type=INTEGER notnull=1 default=0 pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN lane type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN model type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN note type=TEXT notnull=0 default=null pk=0
+  COLUMN origin type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN record_id type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN remark type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN restored_from type=INTEGER notnull=0 default=null pk=0
+  COLUMN revision type=INTEGER notnull=1 default=null pk=0
+  COLUMN segment type=INTEGER notnull=0 default=null pk=0
+  COLUMN snapshot type=TEXT notnull=1 default=null pk=0
+  COLUMN through type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN through_kind type=VARCHAR(100) notnull=0 default=null pk=0
+  INDEX zenit_revisions_action unique=0 origin=c partial=0 columns=[action_id, segment]
+  INDEX zenit_revisions_created unique=0 origin=c partial=0 columns=[created_at]
+  INDEX zenit_revisions_model_record_id_index unique=0 origin=c partial=0 columns=[model, record_id]
+  INDEX zenit_revisions_model_record_id_revision_unique unique=1 origin=c partial=0 columns=[model, record_id, revision]
+TABLE zenit_saved_view
+  COLUMN color_by type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN column_widths type=TEXT notnull=0 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN created_by type=TEXT notnull=0 default=null pk=0
+  COLUMN created_by_kind type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN date_by type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN deleted_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN deleted_by type=TEXT notnull=0 default=null pk=0
+  COLUMN deleted_by_kind type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN end_by type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN group_by_key type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN id type=TEXT notnull=1 default=null pk=1
+  COLUMN layout type=VARCHAR(64) notnull=1 default=null pk=0
+  COLUMN name type=VARCHAR(255) notnull=0 default=null pk=0
+  COLUMN owner_id type=TEXT notnull=0 default=null pk=0
+  COLUMN sort_position type=INTEGER notnull=1 default=null pk=0
+  COLUMN source_id type=VARCHAR(191) notnull=1 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN version type=INTEGER notnull=1 default=null pk=0
+  COLUMN view_columns type=TEXT notnull=0 default=null pk=0
+  COLUMN view_query type=TEXT notnull=0 default=null pk=0
+  COLUMN view_span type=VARCHAR(255) notnull=0 default=null pk=0
+  INDEX <auto> unique=1 origin=pk partial=0 columns=[id]
+  INDEX zenit_saved_view_source_owner_index unique=0 origin=c partial=0 columns=[source_id, owner_id]
+TABLE zenit_seeds
+  COLUMN applied_at type=TIMESTAMP notnull=1 default=null pk=0
+  COLUMN seed_key type=VARCHAR(191) notnull=1 default=null pk=1
+  INDEX <auto> unique=1 origin=pk partial=0 columns=[seed_key]
+TABLE zenit_sequences
+  COLUMN name type=VARCHAR(191) notnull=1 default=null pk=1
+  COLUMN value type=BIGINT notnull=0 default=null pk=0
+  INDEX <auto> unique=1 origin=pk partial=0 columns=[name]
+TABLE zenit_stored_id_reconciliation
+  COLUMN column_name type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN current_value type=TEXT notnull=1 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN row_count type=BIGINT notnull=1 default=null pk=0
+  COLUMN stored_value type=TEXT notnull=1 default=null pk=0
+  COLUMN table_name type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  INDEX zenit_stored_id_reconciliation_table_name_column_name_index unique=0 origin=c partial=0 columns=[table_name, column_name]
+TABLE zenit_watches
+  COLUMN cadence type=VARCHAR(16) notnull=1 default=null pk=0
+  COLUMN created_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN ended_at type=TIMESTAMP notnull=0 default=null pk=0
+  COLUMN id type=INTEGER notnull=0 default=null pk=1
+  COLUMN instructions type=TEXT notnull=0 default=null pk=0
+  COLUMN model type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN principal_id type=TEXT notnull=1 default=null pk=0
+  COLUMN principal_kind type=VARCHAR(100) notnull=0 default=null pk=0
+  COLUMN record_id type=VARCHAR(100) notnull=1 default=null pk=0
+  COLUMN updated_at type=TIMESTAMP notnull=0 default=null pk=0
+  INDEX zenit_watches_model_record_id_ended_at_index unique=0 origin=c partial=0 columns=[model, record_id, ended_at]
+  INDEX zenit_watches_principal_ended_index unique=0 origin=c partial=0 columns=[principal_id, principal_kind, ended_at]

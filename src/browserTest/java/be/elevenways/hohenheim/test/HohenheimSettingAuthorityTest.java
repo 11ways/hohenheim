@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSources;
-import be.elevenways.hohenheim.migration.M011_ReviewHardening;
+import be.elevenways.zenit.auth.model.FrozenSettingsLeaves;
 import be.elevenways.zenit.common.security.Permission;
 import be.elevenways.zenit.common.setting.SettingGroup;
 import be.elevenways.zenit.test.support.SettingAuthorityTestSupport;
@@ -31,7 +31,9 @@ class HohenheimSettingAuthorityTest extends SettingAuthorityTestSupport {
     protected @NonNull Collection<String> systemGrants() {
         List<String> grants = new ArrayList<>(List.of(HohenheimSources.ADMIN_SYSTEM.value(),
             HohenheimSources.ADMIN_ACCESS.value()));
-        grants.addAll(M011_ReviewHardening.SYSTEM_SETTINGS_GRANTS);
+        grants.addAll(FrozenSettingsLeaves.union(FrozenSettingsLeaves.ZENIT, FrozenSettingsLeaves.AUTH,
+            FrozenSettingsLeaves.CMS, FrozenSettingsLeaves.COMMS, FrozenSettingsLeaves.MEDIA,
+            FrozenSettingsLeaves.MICROCOPY));
         return grants;
     }
 

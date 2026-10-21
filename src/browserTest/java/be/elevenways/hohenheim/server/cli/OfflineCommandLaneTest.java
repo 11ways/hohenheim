@@ -293,17 +293,17 @@ class OfflineCommandLaneTest {
             .hasMessageContaining("LIVE");
 
         // 2. A copy ONE migration behind: the install every upgrade meets, built as that
-        //    install really is (the discovered set through the second-newest version of this
-        //    app's stream). Never by deleting a middle ledger row off the live file: that is a
-        //    history no install can have, and the strict integrity check refuses it as out of
-        //    order the moment a migration is appended after the one it removed.
+        //    install really is (the discovered set with this app's stream cut below its newest
+        //    version; with the stream squashed to one baseline, that is none of it). Never by
+        //    deleting a middle ledger row off the live file: that is a history no install can
+        //    have, and the strict integrity check refuses it as out of order.
         List<Migration> own = InstallsAt.hohenheimMigrations(
             HohenheimDatabase.datasource().getDatasourceIdentifier());
-        assertThat(own).as("step 2: the stream has a migration to be one behind on").hasSizeGreaterThan(1);
+        assertThat(own).as("step 2: the stream has a migration to be one behind on").isNotEmpty();
         Migration newest = own.get(own.size() - 1);
         Path copy = Files.createTempFile("hohenheim-rehearsal", ".db");
         Files.delete(copy);
-        InstallsAt.migrateThrough(copy, own.get(own.size() - 2).getVersion());
+        InstallsAt.migrateBelow(copy, newest.getVersion());
         String newestApplied = "SELECT COUNT(*) FROM zenit_migrations WHERE name = '"
             + newest.getName().replace("'", "''") + "'";
         assertThat(scalar(copy, newestApplied))

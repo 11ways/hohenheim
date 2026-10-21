@@ -184,38 +184,49 @@ test one end-to-end: inline `NotificationDispatcher` + `webhook://default` + a l
 ## Migrations
 
 The INSTALL schema is one migration,
-`src/common/java/be/elevenways/hohenheim/migration/InitialMigration.java`
-(version `001`), which creates the final schema directly. The M003..M092 chain
-was folded into it on 2026-08-13; older comments and docs still cite `M0xx` class
-names as provenance for when something landed, and those citations are history,
-not files you will find.
+`src/common/java/be/elevenways/hohenheim/migration/M001_HohenheimBaseline.java`
+(version `2026_10_21_000001`, name `hohenheim_baseline`: the workspace's squash-baseline
+convention), GENERATED on 2026-10-21 by folding
+the operations of the 001..019 chain (`InitialMigration`, M002..M019) into the
+final schema; the before/after schema dumps diff empty
+(`docs/migration-squash-2026-10-21/`). The chain's data steps vanished: a fresh
+install has no rows for them and every live install applied them. Older comments
+and docs still cite `InitialMigration` and `M0xx` class names as provenance;
+those citations are history, not files you will find.
 
-- Every APPLIED migration is FROZEN (2026-08-29), not just `InitialMigration`.
-  A deployed install's `zenit_migrations` row stores each applied migration's
-  structural checksum, so editing an operation in one makes the next
-  `--run-migrations` rehearsal REFUSE under `database.migration_integrity=fail`.
-  The rule is ONE declared fact plus a committed table:
-  `MigrationIntegrityTest.DEPLOYED_THROUGH` is the highest version a PRODUCTION
-  install (kuifje, robbedoes) has applied, and `src/browserTest/resources/migration-pins.txt`
-  carries one `<class><TAB><digest>` line per migration at or below it. Editing a
-  pinned migration fails the build naming both digests; a migration below the mark
-  with no pin fails it as "deployed but unpinned" and the failure prints the lines
-  to paste. A migration ABOVE the mark is deliberately unpinned -- no production
-  install has applied it, so editing it is still free; the test installs
-  (starfleet, daystrom) that applied it get their ledger re-recorded. A production
-  deploy that applied migrations raises the mark and adds the pins
+- Live installs (kuifje, robbedoes, starfleet, daystrom) recorded 001..019, not
+  the baseline's `2026_10_21_000001`. They ADOPT the baseline without running it through zenit core's baseline
+  mechanism (pending; the baseline's AIDEV-TODO lists the `replaces(...)` versions
+  to declare once it lands). Until then such a database REFUSES to boot under
+  `database.migration_integrity=fail` ("applied migration 001 ... is absent from
+  the discovered migrations"), before anything runs; even under `warn` the
+  baseline's first CREATE TABLE fails and nothing is recorded.
+  `MigrationIntegrityTest.aDatabaseThatAppliedTheSquashedChainRefusesInsteadOfRunningTheBaseline`
+  pins both. Do not deploy this build to a live install before that mechanism.
+- The baseline is IRREVERSIBLE (`irreversible(...)`): a rollback is refused
+  before any down() runs.
+- Every APPLIED migration is FROZEN (2026-08-29). A deployed install's
+  `zenit_migrations` row stores each applied migration's structural checksum, so
+  editing an operation in one makes the next `--run-migrations` rehearsal REFUSE
+  under `database.migration_integrity=fail`. The rule is ONE declared fact plus a
+  committed table: `MigrationIntegrityTest.DEPLOYED_THROUGH` is the highest
+  version every install that must keep booting has applied or adopted (`2026_10_21_000001`: the
+  baseline is pinned from the day it landed, since adoption records its digest),
+  and `src/browserTest/resources/migration-pins.txt` carries one
+  `<class><TAB><digest>` line per migration at or below it. Editing a pinned
+  migration fails the build naming both digests; a migration below the mark with
+  no pin fails it as "deployed but unpinned" and the failure prints the lines to
+  paste. A deploy that applied migrations raises the mark and adds the pins
   (`tools/deploy-host.sh` reminds it); a pin is never regenerated to make a red
   build green. Comments and formatting are outside the digest.
-- A schema change EDITS the newest migration while it sits above the mark, and
-  APPENDS one (same package and stream, the next number) only when every
-  migration is pinned. Use the ORM DSL (`alterTable` + `addColumn`/`dropColumn`),
-  never raw SQL. Existing
-  rows are real now, so a column added to a populated table is nullable or
-  carries a default, and a backfill is a `builder.data(...)` step -- never a
-  hand-written `execute(sql)`.
-- Adding a TABLE means editing BOTH `up()` and `down()` of the migration that
-  creates it. `MigrationIntegrityTest` rolls the install schema back and counts
-  what survived, so a table created and not dropped fails the suite by name.
+- A schema change APPENDS a migration (same package and stream, the next
+  class number `M002_...` onwards, with a LATER dated version such as
+  `2026_10_22_000001`: never `021`, which sorts before the baseline's version)
+  and may edit it only while it sits above the mark. Use
+  the ORM DSL (`alterTable` + `addColumn`/`dropColumn`), never raw SQL. Existing
+  rows are real, so a column added to a populated table is nullable or carries a
+  default, and a backfill is a `builder.data(...)` step -- never a hand-written
+  `execute(sql)`. A reversible appended migration's `down()` undoes its `up()`.
 - Default records are the `Seeder` SPI's job (SEED boot stage), never an
   INSERT in the migration -- `SpamserviceInstallationSeeder`, `RuntimeImageSeeder` and
   `LocalServerSeeder` are the examples.

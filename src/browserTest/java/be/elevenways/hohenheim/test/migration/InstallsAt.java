@@ -34,34 +34,26 @@ public final class InstallsAt {
     }
 
     /**
-     * Migrate a new SQLite file at the path exactly as far as an install that applied Hohenheim's
-     * stream through {@code version}, closing the datasource afterwards.
+     * Migrate a new SQLite file at the path as far as an install that applied Hohenheim's stream
+     * up to, but not including, {@code version}, closing the datasource afterwards.
      *
      * @throws IllegalStateException when that partial migration does not succeed
      */
-    public static void migrateThrough(@NonNull Path file, @NonNull String version) {
+    public static void migrateBelow(@NonNull Path file, @NonNull String version) {
         SqliteDatasource datasource = new SqliteDatasource(TestSqliteFiles.url(file));
         try {
-            new MigrationRunner(datasource, discoveredThrough(datasource.getDatasourceIdentifier(), version))
-                .migrate().requireSuccess();
+            List<Supplier<Migration>> kept = new ArrayList<>();
+            for (Supplier<Migration> supplier : MigrationRunner.discoverMigrations(
+                    datasource.getDatasourceIdentifier())) {
+                Migration migration = supplier.get();
+                if (!isHohenheim(migration) || migration.getVersion().compareTo(version) < 0) {
+                    kept.add(supplier);
+                }
+            }
+            new MigrationRunner(datasource, kept).migrate().requireSuccess();
         } finally {
             datasource.close();
         }
-    }
-
-    /**
-     * @return every discovered migration except the Hohenheim ones whose version is above {@code version}
-     */
-    public static @NonNull List<Supplier<Migration>> discoveredThrough(@NonNull String datasourceIdentifier,
-                                                                      @NonNull String version) {
-        List<Supplier<Migration>> kept = new ArrayList<>();
-        for (Supplier<Migration> supplier : MigrationRunner.discoverMigrations(datasourceIdentifier)) {
-            Migration migration = supplier.get();
-            if (!isHohenheim(migration) || migration.getVersion().compareTo(version) <= 0) {
-                kept.add(supplier);
-            }
-        }
-        return kept;
     }
 
     /**

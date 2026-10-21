@@ -1,8 +1,9 @@
 package be.elevenways.hohenheim.test.migration;
 
 import be.elevenways.hohenheim.migration.HohenheimMigration;
-import be.elevenways.hohenheim.migration.InitialMigration;
+import be.elevenways.hohenheim.migration.M001_HohenheimBaseline;
 import be.elevenways.zenit.common.orm.migration.Migration;
+import be.elevenways.zenit.common.orm.migration.MigrationException;
 import be.elevenways.zenit.common.orm.migration.MigrationResult;
 import be.elevenways.zenit.common.orm.migration.MigrationRunnerResult;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
@@ -32,40 +33,34 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * The install contract of Hohenheim's migration chain: a fresh database migrates,
- * re-migrates and passes strict integrity; the schema it produced really carries the
- * constraints the code relies on; and down() undoes it completely enough that up() can
- * rebuild it.
+ * The install contract of Hohenheim's migration stream: a fresh database migrates, re-migrates and passes strict
+ * integrity; the schema it produced really carries the constraints the code relies on; the baseline refuses a
+ * rollback; and a database still recording the squashed 001..019 chain refuses to boot instead of running it.
  *
- * AIDEV-NOTE: the golden checksum pins are a DEPLOYED HIGH-WATER MARK, not a hand-list
- * (2026-08-29). Editing an APPLIED migration makes the next --run-migrations rehearsal
- * refuse under database.migration_integrity=fail, and "applied" stopped meaning "001" the
- * day starfleet ran M002/M003. So exactly one fact is declared here -- DEPLOYED_THROUGH,
- * the highest version an install that must keep booting has applied -- and the rule
- * derives from it: every discovered migration at or below the mark MUST carry a digest in
- * the committed pin table, and that digest MUST still match. Until 2026-10-13 the mark followed
- * production (kuifje, robbedoes) only and the deploy-lane installs (starfleet, daystrom) had their
- * ledger re-recorded by hand after an edit (2026-09-30, when M011-M017 became one M011). That
- * ended with M011: a re-record never runs the edited steps there, so the mark now covers every
- * install the deploy lane serves, and a change appends a migration. Raising the mark plus pasting
- * the pin lines the failure prints is the ONE edit a deploy that applied migrations owes;
- * a pin is never regenerated to make a red build green. Comments and formatting are outside the digest. The lines to
- * paste are printed by the offline command {@code --migration-checksums} of the deployed jar, so
- * raising the mark never needs a red run of this test to learn a digest.
+ * AIDEV-NOTE: the golden checksum pins are a DEPLOYED HIGH-WATER MARK, not a hand-list (2026-08-29). Editing an
+ * APPLIED migration makes the next --run-migrations rehearsal refuse under database.migration_integrity=fail, so
+ * exactly one fact is declared here -- DEPLOYED_THROUGH -- and the rule derives from it: every discovered migration
+ * at or below the mark MUST carry a digest in the committed pin table, and that digest MUST still match. Raising the
+ * mark plus pasting the pin lines the failure prints is the ONE edit a deploy that applied migrations owes; a pin is
+ * never regenerated to make a red build green. Comments and formatting are outside the digest. The lines to paste
+ * are printed by the offline command {@code --migration-checksums} of the deployed jar.
+ *
+ * AIDEV-NOTE: the 001..019 chain was squashed into M001_HohenheimBaseline on 2026-10-21. The baseline is pinned from
+ * the day it landed although no install has RUN it: every install that must keep booting adopts it through zenit
+ * core's baseline mechanism (pending), which records its checksum, so it is as frozen as the chain it stands in for.
  */
 class MigrationIntegrityTest {
 
-    /**
-     * The highest migration version an install that must keep booting has applied (starfleet and daystrom at 014);
-     * see the class note.
-     */
-    private static final String DEPLOYED_THROUGH = "014";
+    /** The highest version every install that must keep booting has applied or adopted; see the class note. */
+    private static final String DEPLOYED_THROUGH = "2026_10_21_000001";
 
-    /**
-     * The highest migration version shipped by commit 91191333, the build the oldest production install
-     * (kuifje) still runs; every upgrade point from here on is checked.
-     */
-    private static final String OLDEST_PRODUCTION_THROUGH = "009";
+    /** The versions of the chain M001_HohenheimBaseline squashed, which the live installs recorded. */
+    private static final List<String> SQUASHED_VERSIONS = List.of("001", "002", "003", "004", "006", "007", "008",
+        "009", "010", "011", "012", "013", "014", "015", "016", "017", "018", "019");
+
+    /** The non-ledger tables of a database, the schema a refusal must leave untouched. */
+    private static final String SCHEMA_TABLES = "SELECT COUNT(*) AS c FROM sqlite_master WHERE type = 'table'"
+        + " AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'zenit_%'";
 
     /** Classpath resource holding one {@code <class><TAB><digest>} line per pinned migration. */
     private static final String PIN_RESOURCE = "migration-pins.txt";
@@ -110,109 +105,58 @@ class MigrationIntegrityTest {
     }
 
     /**
-     * The upgrade an APPENDED migration exists for: an install that only ever applied
-     * version 001 gains the new column, under the strict integrity posture a deployed
-     * host boots with.
+     * A database that recorded the squashed 001..019 chain (kuifje, robbedoes, starfleet, daystrom) refuses to boot
+     * under the shipped strict posture, before anything runs, instead of running the baseline over its schema; it
+     * boots again once zenit core's baseline mechanism lets it adopt M001_HohenheimBaseline.
      */
     @Test
-    void anInstallThatOnlyAppliedTheInstallMigrationUpgradesUnderStrictIntegrity() throws Exception {
-        SqliteDatasource datasource = emptyDatabase("upgrade");
+    void aDatabaseThatAppliedTheSquashedChainRefusesInsteadOfRunningTheBaseline() throws Exception {
+        SqliteDatasource datasource = emptyDatabase("squashed-chain");
+        String stream = HohenheimMigration.STREAM;
+        String baseline = new M001_HohenheimBaseline().getVersion();
 
-        // 1. The shape starfleet is in: version 001 applied, nothing appended yet.
-        new MigrationRunner(datasource, List.<Supplier<Migration>>of(InitialMigration::new))
-            .migrate().requireSuccess();
-        assertThat(columnsOf(datasource, "SELECT name FROM pragma_table_info('managed_databases')"))
-            .as("step 1: the pre-upgrade install has no failure_reason column")
-            .doesNotContain("failure_reason");
-
-        // 2. Upgrading refuses nothing: the recorded checksum for 001 still matches, so the
-        //    integrity check passes and the appended migration applies.
-        withIntegrityMode("fail", () -> {
-            MigrationRunnerResult upgrade = new MigrationRunner(datasource).migrate();
-            assertThat(upgrade.isSuccess())
-                .as("step 2: the upgrade under integrity=fail failed: %s", failureDetail(upgrade))
-                .isTrue();
-            assertThat(upgrade.getAppliedCount())
-                .as("step 2: the appended migration is applied").isPositive();
-        });
-
-        // 3. And the column the appended migration exists for is really there, nullable.
-        assertThat(columnsOf(datasource, "SELECT name FROM pragma_table_info('managed_databases')"))
-            .as("step 3: failure_reason arrived on the upgraded install")
-            .contains("failure_reason");
-        datasource.rawUpdate("INSERT INTO managed_databases (id, name) VALUES (1, 'db')");
-        assertThat(datasource.rawQuery(
-                "SELECT failure_reason AS name FROM managed_databases WHERE id = 1").get(0).get("name"))
-            .as("step 3: an existing row's failure_reason is null, never a fabricated reason")
-            .isNull();
-        datasource.rawUpdate("UPDATE managed_databases SET failure_reason = 'boom' WHERE id = 1");
-        assertThat(columnsOf(datasource,
-                "SELECT failure_reason AS name FROM managed_databases WHERE id = 1"))
-            .as("step 3: and it stores what a failed provision writes")
-            .containsExactly("boom");
-    }
-
-    /**
-     * The upgrade every deployed install meets: its own stream applied through the version it
-     * shipped, everything appended since pending, migrated under the strict integrity posture.
-     * Checked from the production commit 91191333 (which shipped through 009) and from EVERY
-     * later version but the newest, because a release may ship any prefix of the appended
-     * migrations: an appended migration that sorts or depends wrongly fails here instead of
-     * refusing a real boot as out of order.
-     */
-    @Test
-    void aDeployedInstallUpgradesThroughEveryAppendedMigrationUnderStrictIntegrity() throws Exception {
-        List<String> points = installPoints();
-        assertThat(points)
-            .as("the production install is among the checked ones")
-            .startsWith(OLDEST_PRODUCTION_THROUGH);
-        for (String shipped : points) {
-            // 1. The install as it is: the discovered set with this stream cut at `shipped`.
-            File file = File.createTempFile("hohenheim-migration-deployed-" + shipped, ".db");
-            file.delete();
-            file.deleteOnExit();
-            InstallsAt.migrateThrough(file.toPath(), shipped);
-            SqliteDatasource datasource = new SqliteDatasource(TestSqliteFiles.url(file.toPath()));
-            List<String> appended = new ArrayList<>();
-            List<String> own = new ArrayList<>();
-            for (Migration migration : InstallsAt.hohenheimMigrations(datasource.getDatasourceIdentifier())) {
-                own.add(migration.getName());
-                if (migration.getVersion().compareTo(shipped) > 0) {
-                    appended.add(migration.getName());
-                }
-            }
-            assertThat(columnsOf(datasource, "SELECT name FROM zenit_migrations"))
-                .as("step 1: an install through %s has applied none of the appended migrations", shipped)
-                .doesNotContainAnyElementsOf(appended);
-
-            // 2. Upgrading applies exactly the appended migrations, with no integrity finding.
-            withIntegrityMode("fail", () -> {
-                MigrationRunnerResult upgrade = new MigrationRunner(datasource).migrate();
-                assertThat(upgrade.isSuccess())
-                    .as("step 2: the upgrade from %s under integrity=fail failed: %s",
-                        shipped, failureDetail(upgrade))
-                    .isTrue();
-                assertThat(upgrade.getAppliedCount())
-                    .as("step 2: the upgrade from %s applies exactly what was appended", shipped)
-                    .isEqualTo(appended.size());
-            });
-
-            // 3. And the ledger now carries every migration of this stream.
-            assertThat(columnsOf(datasource, "SELECT name FROM zenit_migrations"))
-                .as("step 3: the install from %s now records every migration of the stream", shipped)
-                .containsAll(own);
-            datasource.close();
+        // 1. The database a live install holds: the whole schema, its ledger naming 001..019 instead of the baseline.
+        new MigrationRunner(datasource).migrate().requireSuccess();
+        for (String version : SQUASHED_VERSIONS) {
+            datasource.rawUpdate("INSERT INTO zenit_migrations (stream, version, name, applied_at, direction,"
+                + " execution_time_ms, state, checksum) SELECT stream, '" + version + "', 'squashed " + version
+                + "', applied_at, direction, execution_time_ms, state, checksum FROM zenit_migrations"
+                + " WHERE stream = '" + stream + "' AND version = '" + baseline + "'");
         }
+        datasource.rawUpdate("DELETE FROM zenit_migrations WHERE stream = '" + stream + "' AND version = '"
+            + baseline + "'");
+        long tables = scalar(datasource, SCHEMA_TABLES);
+        String baselineRecorded = "SELECT COUNT(*) AS c FROM zenit_migrations WHERE stream = '" + stream
+            + "' AND version = '" + baseline + "'";
+
+        // 2. The strict boot refuses, naming every recorded version no discovered migration claims any more.
+        withIntegrityMode("fail", () -> assertThatThrownBy(() -> new MigrationRunner(datasource).migrate())
+            .as("step 2: a database with 001..019 applied is refused under integrity=fail")
+            .isInstanceOf(MigrationException.class)
+            .hasMessageContaining("applied migration 001 (squashed 001) is absent from the discovered migrations")
+            .hasMessageContaining("applied migration 019 (squashed 019) is absent from the discovered migrations"));
+
+        // 3. Nothing ran: the baseline is not recorded and the schema holds exactly the tables it held.
+        assertThat(scalar(datasource, baselineRecorded)).as("step 3: the baseline did not run").isZero();
+        assertThat(scalar(datasource, SCHEMA_TABLES)).as("step 3: the schema is untouched").isEqualTo(tables);
+
+        // 4. Even a downgraded posture never records the baseline over that schema: its first CREATE TABLE fails.
+        withIntegrityMode("warn", () -> assertThat(new MigrationRunner(datasource).migrate().isSuccess())
+            .as("step 4: under integrity=warn the baseline fails on the existing schema").isFalse());
+        assertThat(scalar(datasource, baselineRecorded)).as("step 4: and is not recorded").isZero();
+        datasource.close();
     }
 
     /**
      * This stream runs in version order inside zenit's one cross-stream dependency order, which
      * is what the strict out-of-order check judges an upgraded install against.
      *
-     * AIDEV-NOTE: this pins the CAUSE the intermediate-install upgrades above observe. The
-     * runner breaks ties by version text, and "0xx" sorts before every zenit timestamp, while
-     * 011 waits behind zenit-auth's M007; zenit's implicit same-stream chain keeps every later
-     * version behind it.
+     * AIDEV-NOTE: the runner breaks ties by version text, then stream. The baseline's dated version
+     * "2026_10_21_000001" sorts after the recorded "001".."019" and among the other streams' dated
+     * versions (after every one dated earlier; a same-version baseline of another stream is ordered
+     * by stream name); it depends on no other stream's table. zenit's implicit same-stream chain keeps
+     * every later version behind its predecessor, so an appended migration must take a LATER dated
+     * version: a "021" would sort before the baseline.
      */
     @Test
     void thisStreamRunsInVersionOrderInsideTheDependencyOrder() throws Exception {
@@ -337,37 +281,25 @@ class MigrationIntegrityTest {
     }
 
     /**
-     * down() must drop everything up() created: an incomplete down leaves a table behind
-     * that the next up() then fails to create, which is the only way to find out.
+     * The baseline is irreversible: a rollback is refused before any down() runs and the schema stays whole.
      */
     @Test
-    void theSchemaRollsBackCompletelyAndRebuilds() throws Exception {
-        SqliteDatasource datasource = emptyDatabase("roundtrip");
-        List<Supplier<Migration>> only = List.of(InitialMigration::new);
+    void theBaselineRefusesARollbackAndKeepsTheSchema() throws Exception {
+        SqliteDatasource datasource = emptyDatabase("rollback");
+        List<Supplier<Migration>> only = List.of(M001_HohenheimBaseline::new);
 
         // 1. Build the whole schema on its own; it depends on nothing outside itself.
-        MigrationRunner runner = new MigrationRunner(datasource, only);
-        assertThat(runner.migrate().isSuccess()).as("step 1: the schema builds").isTrue();
-        long created = scalar(datasource,
-            "SELECT COUNT(*) AS c FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
-            + " AND name NOT LIKE 'zenit_%'");
+        assertThat(new MigrationRunner(datasource, only).migrate().isSuccess()).as("step 1: the schema builds")
+            .isTrue();
+        long created = scalar(datasource, SCHEMA_TABLES);
         assertThat(created).as("step 1: the schema is not empty").isGreaterThan(50L);
 
-        // 2. Rolling back leaves nothing of it behind.
-        assertThat(new MigrationRunner(datasource, only).rollback().isSuccess())
-            .as("step 2: the schema rolls back").isTrue();
-        assertThat(scalar(datasource,
-            "SELECT COUNT(*) AS c FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
-            + " AND name NOT LIKE 'zenit_%'"))
-            .as("step 2: down() dropped every table up() created").isZero();
-
-        // 3. And it rebuilds identically, which a partial down() could not survive.
-        assertThat(new MigrationRunner(datasource, only).migrate().isSuccess())
-            .as("step 3: the schema rebuilds").isTrue();
-        assertThat(scalar(datasource,
-            "SELECT COUNT(*) AS c FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
-            + " AND name NOT LIKE 'zenit_%'"))
-            .as("step 3: the rebuilt schema has the same tables").isEqualTo(created);
+        // 2. Rolling back is refused up front, and every table survives it.
+        assertThatThrownBy(() -> new MigrationRunner(datasource, only).rollback())
+            .as("step 2: the irreversible baseline refuses its rollback")
+            .isInstanceOf(MigrationException.class);
+        assertThat(scalar(datasource, SCHEMA_TABLES)).as("step 2: no table was dropped").isEqualTo(created);
+        datasource.close();
     }
 
     @Test
@@ -415,8 +347,8 @@ class MigrationIntegrityTest {
             .isNotEmpty()
             .allSatisfy(entry -> assertThat(entry).endsWith(" stream=" + HohenheimMigration.STREAM));
         assertThat(found)
-            .as("step 1: and the install migration is one of them")
-            .contains("InitialMigration stream=" + HohenheimMigration.STREAM);
+            .as("step 1: and the stream is exactly ONE migration, the squashed baseline")
+            .containsExactly("M001_HohenheimBaseline stream=" + HohenheimMigration.STREAM);
 
         // 2. The deployed high-water mark. Every migration at or below DEPLOYED_THROUGH is
         //    APPLIED somewhere, so its structural checksum is recorded in that install's
@@ -462,26 +394,6 @@ class MigrationIntegrityTest {
                     + " no database and no test run needed):"
                     + System.lineSeparator() + String.join(System.lineSeparator(), pasteLines))
             .isEmpty();
-    }
-
-    // -- helpers --------------------------------------------------------------
-
-    /**
-     * @return the production version followed by every later version of this stream except the
-     *         newest: each is a state a release shipping a prefix of the appended migrations leaves
-     */
-    private static List<String> installPoints() throws Exception {
-        SqliteDatasource probe = emptyDatabase("points");
-        List<Migration> own = InstallsAt.hohenheimMigrations(probe.getDatasourceIdentifier());
-        probe.close();
-        List<String> points = new ArrayList<>();
-        points.add(OLDEST_PRODUCTION_THROUGH);
-        for (Migration migration : own.subList(0, own.size() - 1)) {
-            if (migration.getVersion().compareTo(OLDEST_PRODUCTION_THROUGH) > 0) {
-                points.add(migration.getVersion());
-            }
-        }
-        return points;
     }
 
     /**

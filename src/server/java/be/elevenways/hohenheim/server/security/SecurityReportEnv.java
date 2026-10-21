@@ -38,7 +38,7 @@ import java.util.function.Supplier;
  * boot hook {@link #reconcilePersistedReporters} (SpamserviceManager) can only ever iterate
  * zero rows. Do not read the class as live plumbing: either a new spawner calls forSite, or
  * the lane is removed WHOLE -- this class, its test, SpamserviceManager's ReporterReconciler
- * seam, SiteModel.SECURITY_REPORT_TOKEN and its InitialMigration column, which is a schema
+ * seam, SiteModel.SECURITY_REPORT_TOKEN and its M001_HohenheimBaseline column, which is a schema
  * change on deployed installations and therefore a decision, not a cleanup.
  */
 public final class SecurityReportEnv {

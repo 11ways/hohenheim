@@ -188,7 +188,7 @@ public class SiteDomainModel extends Model {
      *
      * AIDEV-NOTE: a NEW row starts OFF and armed through {@link #FORCE_SSL_AUTO}: forcing HTTPS on a name no
      * certificate covers yet sent every visitor to an error page behind a green badge. The column default in
-     * InitialMigration stays true (frozen), so a raw insert keeps the old meaning; the ORM default is what new rows
+     * M001_HohenheimBaseline stays true (frozen), so a raw insert keeps the old meaning; the ORM default is what new rows
      * get.
      */
     public static final BooleanField FORCE_SSL = SCHEMA.addField(BooleanField.builder("force_ssl")

@@ -169,7 +169,7 @@ public final class ControlPlaneBackups {
      *         product that has no backups
      */
     // AIDEV-NOTE: resolution is BY NAME and is deterministic only because
-    // backup_targets.name carries the backup_targets_name_unique index (InitialMigration).
+    // backup_targets.name carries the backup_targets_name_unique index (M001_HohenheimBaseline).
     // The chain never constrained it, so two targets could legitimately share a name and
     // this .first() picked whichever the store happened to return -- silently uploading the
     // control-plane archive (master keys in the clear) to an arbitrary one of them, while

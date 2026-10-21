@@ -50,7 +50,7 @@ public class HohenheimDatabase {
 
     /**
      * Opens the datasource and migrates it; migrations are auto-discovered from the classpath
-     * (hohenheim's single InitialMigration plus zenit-auth auth_* and zenit system_task*),
+     * (hohenheim's single M001_HohenheimBaseline plus zenit-auth auth_* and zenit system_task*),
      * never hand-listed. Stored ids are reconciled in the same step (the framework's shared upgrade step), so a row
      * stored under a renamed id reads under today's spelling to every query.
      */

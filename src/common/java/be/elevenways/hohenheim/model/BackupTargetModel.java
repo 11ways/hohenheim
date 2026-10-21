@@ -109,7 +109,7 @@ public class BackupTargetModel extends Model {
      *
      * AIDEV-NOTE: the control-plane comparison is by NAME because the setting stores a
      * name, and that is only deterministic because {@code backup_targets.name} carries the
-     * {@code backup_targets_name_unique} index (InitialMigration). Before it, two targets
+     * {@code backup_targets_name_unique} index (M001_HohenheimBaseline). Before it, two targets
      * could share a name, {@code ControlPlaneBackups.requireDestination} resolved whichever
      * the store returned first, and this refusal protected an arbitrary one of them. Do not
      * drop that index without moving the setting to an id.
