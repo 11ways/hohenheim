@@ -6,6 +6,7 @@ import java.util.Objects;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.protoblast.common.http.DefaultPorts;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.i18n.MicrocopyKey;
 import be.elevenways.zenit.common.setting.SettingDefinition;
 import be.elevenways.zenit.common.setting.SettingGroup;
 import be.elevenways.zenit.common.setting.SettingsRule;
@@ -200,6 +201,9 @@ public class HohenheimSettings {
             .description("Site an unknown hostname is served, when the answer is One of your sites")
             .build();
 
+        private static final MicrocopyKey UNKNOWN_HOSTS_TARGET_WORDS = HohenheimMicrocopy.VIOLATIONS.copy()
+            .declareKey(Proxy.class, "setting_unknown_hosts_target");
+
         /** The chosen answer has its target: an address to forward to, a URL to redirect to or a site to serve. */
         public static final SettingsRule UNKNOWN_HOSTS_TARGET =
             SettingsRule.named("hohenheim_proxy_unknown_hosts_target")
@@ -212,7 +216,7 @@ public class HohenheimSettings {
                         : "proxy.unknown_hosts is " + answer.storageKey() + " but proxy." + target.getName()
                             + " is empty";
                 })
-                .says(HohenheimMicrocopy.VIOLATIONS.of("setting_unknown_hosts_target"))
+                .says(UNKNOWN_HOSTS_TARGET_WORDS.copy())
                 .addTo(Zenit.SETTINGS_VALUES);
 
         /** A blank value (unset), or an absolute http(s) URL with a host and no credentials. */
@@ -623,6 +627,9 @@ public class HohenheimSettings {
             .coercer(Stacks::coerceWholeNumber)
             .build();
 
+        private static final MicrocopyKey RECLAIM_MIN_AGE_WORDS = HohenheimMicrocopy.VIOLATIONS.copy()
+            .declareKey(Stacks.class, "setting_reclaim_min_age");
+
         /**
          * AIDEV-NOTE: the "at least 1" refusal lives HERE and not in the coercer, which used
          * to throw: a coercer only converts (zenit's settings contract), and a throw from it
@@ -638,7 +645,7 @@ public class HohenheimSettings {
                     return hours == null || hours >= 1 ? null
                         : "stacks.reclaim_min_age_hours is " + hours + "; it must be at least 1";
                 })
-                .says(HohenheimMicrocopy.VIOLATIONS.of("setting_reclaim_min_age"))
+                .says(RECLAIM_MIN_AGE_WORDS.copy())
                 .addTo(Zenit.SETTINGS_VALUES);
 
         /** A whole number from a number or a numeric string; anything else is not one. */
@@ -1237,6 +1244,9 @@ public class HohenheimSettings {
         /** The highest TCP/UDP port number. */
         public static final int MAX_PORT = 65535;
 
+        private static final MicrocopyKey PUBLIC_PORT_WINDOW_WORDS = HohenheimMicrocopy.VIOLATIONS.copy()
+            .declareKey(Instances.class, "setting_public_port_window");
+
         /**
          * The pre-allocation window must be a real, unprivileged port range.
          *
@@ -1260,8 +1270,7 @@ public class HohenheimSettings {
                     }
                     return null;
                 })
-                .says(HohenheimMicrocopy.VIOLATIONS.of("setting_public_port_window")
-                    .withArg("max", MAX_PORT))
+                .says(PUBLIC_PORT_WINDOW_WORDS.copy().withArg("max", MAX_PORT))
                 .addTo(Zenit.SETTINGS_VALUES);
     }
 
@@ -1311,6 +1320,9 @@ public class HohenheimSettings {
                 + "nixpacks build")
             .build();
 
+        private static final MicrocopyKey NIXPACKS_RELEASE_WORDS = HohenheimMicrocopy.VIOLATIONS.copy()
+            .declareKey(Builds.class, "setting_nixpacks_release_version");
+
         // The version selects the cached executable's directory and forms the release URL.
         public static final SettingsRule NIXPACKS_RELEASE_VERSION =
             SettingsRule.named("hohenheim_builds_nixpacks_release_version")
@@ -1320,7 +1332,7 @@ public class HohenheimSettings {
                     return version != null && version.matches("[0-9]+\\.[0-9]+\\.[0-9]+") ? null
                         : "builds.nixpacks_version must be a numeric major.minor.patch release";
                 })
-                .says(HohenheimMicrocopy.VIOLATIONS.of("setting_nixpacks_release_version"))
+                .says(NIXPACKS_RELEASE_WORDS.copy())
                 .addTo(Zenit.SETTINGS_VALUES);
 
         public static final SettingDefinition<String> NIXPACKS_SHA256 = GROUP
