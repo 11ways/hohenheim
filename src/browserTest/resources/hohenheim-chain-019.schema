@@ -1,0 +1,958 @@
+table access_lists
+  column created_at timestamp(2000000000,10) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column name varchar(255,0) null default=null
+  column satisfy varchar(10,0) null default='any'
+  column shared integer(2000000000,0) null default=false
+  column updated_at timestamp(2000000000,10) null default=null
+  primary key [id]
+table access_rules
+  column access_list_id integer(2000000000,0) not null default=null
+  column created_at timestamp(2000000000,10) null default=null
+  column data text(2000000000,0) null default=null
+  column enabled integer(2000000000,0) not null default=true
+  column id integer(2000000000,0) null default=null pk
+  column parent_id integer(2000000000,0) null default=null
+  column search_text varchar(512,0) null default=null
+  column sort integer(2000000000,0) null default=null
+  column type varchar(32,0) not null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  foreign key [access_list_id] -> access_lists[id] on update no action on delete no action
+  foreign key [parent_id] -> access_rules[id] on update no action on delete no action
+  index access_rules_access_list_id_index declared plain [access_list_id]
+  index access_rules_parent_id_index declared plain [parent_id]
+  index access_rules_tree_index declared plain [access_list_id, parent_id, sort]
+  primary key [id]
+table artifact_operations
+  column application_id integer(2000000000,0) not null default=null
+  column artifact_sha256 varchar(64,0) not null default=null
+  column created_at timestamp(2000000000,10) null default=null
+  column error varchar(255,0) null default=null
+  column finished_at timestamp(2000000000,10) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column image_id varchar(255,0) null default=null
+  column instance_id integer(2000000000,0) null default=null
+  column site_id integer(2000000000,0) not null default=null
+  column status varchar(32,0) not null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  foreign key [application_id] -> instances[id] on update no action on delete no action
+  foreign key [site_id] -> sites[id] on update no action on delete no action
+  index artifact_operations_source declared plain [application_id, status, finished_at]
+  primary key [id]
+table artifact_sources
+  column application_id integer(2000000000,0) not null default=null pk
+  column artifact_sha256 varchar(64,0) not null default=null
+  column created_at timestamp(2000000000,10) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  foreign key [application_id] -> instances[id] on update no action on delete no action
+  primary key [application_id]
+table backup_targets
+  column created_at timestamp(2000000000,10) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column kind varchar(100,0) null default=null
+  column name varchar(255,0) null default=null
+  column settings text(2000000000,0) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  index backup_targets_name_unique declared unique [name]
+  primary key [id]
+table bans
+  column active integer(2000000000,0) null default=true
+  column created_at timestamp(2000000000,10) null default=null
+  column event_type varchar(100,0) null default=null
+  column expires_at timestamp(2000000000,10) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column ip varchar(64,0) null default=null
+  column lifted_at timestamp(2000000000,10) null default=null
+  column lifted_by varchar(200,0) null default=null
+  column reason varchar(255,0) null default=null
+  column scope varchar(16,0) null default='web'
+  column source varchar(100,0) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  index bans_active_index declared plain [active]
+  index bans_ip_index declared plain [ip]
+  primary key [id]
+table build_operations
+  column artifact_bytes bigint(2000000000,0) null default=null
+  column builder_kind varchar(50,0) null default='dockerfile'
+  column cpu_limit real(2000000000,10) null default=null
+  column created_at timestamp(2000000000,10) null default=null
+  column detection text(2000000000,0) null default=null
+  column disk_limit_mb integer(2000000000,0) null default=null
+  column duration_ms integer(2000000000,0) null default=null
+  column exit_code integer(2000000000,0) null default=null
+  column failure_reason varchar(255,0) null default=null
+  column finished_at timestamp(2000000000,10) null default=null
+  column for_id integer(2000000000,0) null default=null
+  column for_model varchar(100,0) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column image_id varchar(255,0) null default=null
+  column log text(2000000000,0) null default=null
+  column memory_limit_mb integer(2000000000,0) null default=null
+  column peak_disk_bytes bigint(2000000000,0) null default=null
+  column pids_limit integer(2000000000,0) null default=null
+  column source_ref varchar(255,0) null default=null
+  column started_at timestamp(2000000000,10) null default=null
+  column status varchar(50,0) null default='running'
+  column tag varchar(255,0) null default=null
+  column timeout_seconds integer(2000000000,0) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  index build_operations_for_id_index declared plain [for_id]
+  primary key [id]
+table certificates
+  column auto_renew integer(2000000000,0) null default=true
+  column certificate_pem text(2000000000,0) null default=null
+  column challenge_type varchar(20,0) null default=null
+  column created_at timestamp(2000000000,10) null default=null
+  column dns_publisher varchar(80,0) null default=null
+  column domain_names_text text(2000000000,0) null default=null
+  column error_count integer(2000000000,0) null default=0
+  column expires_on timestamp(2000000000,10) null default=null
+  column expiry_notified_at timestamp(2000000000,10) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column issued_on timestamp(2000000000,10) null default=null
+  column letsencrypt_email varchar(255,0) null default=null
+  column next_attempt_at timestamp(2000000000,10) null default=null
+  column nice_name varchar(255,0) null default=null
+  column private_key_pem text(2000000000,0) null default=null
+  column provider varchar(50,0) null default='letsencrypt'
+  column renewal_error text(2000000000,0) null default=null
+  column renewal_failed_at timestamp(2000000000,10) null default=null
+  column requested_by_kind varchar(100,0) null default=null
+  column requested_by_user_id text(2000000000,0) null default=null
+  column status varchar(20,0) null default='active'
+  column updated_at timestamp(2000000000,10) null default=null
+  primary key [id]
+table controller_identity
+  column created_at timestamp(2000000000,10) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column singleton integer(2000000000,0) null default=1
+  column token varchar(32,0) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  index controller_identity_singleton_unique declared unique [singleton]
+  index controller_identity_token_unique declared unique [token]
+  primary key [id]
+table database_engines
+  column cpu_limit real(2000000000,10) null default=null
+  column created_at timestamp(2000000000,10) null default=null
+  column engine varchar(32,0) not null default=null
+  column failure_reason text(2000000000,0) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column image varchar(255,0) null default=null
+  column memory_limit_mb integer(2000000000,0) null default=null
+  column name varchar(64,0) not null default=null
+  column root_password text(2000000000,0) not null default=null
+  column root_user varchar(64,0) not null default=null
+  column server_id integer(2000000000,0) not null default=null
+  column status varchar(32,0) not null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  foreign key [server_id] -> servers[id] on update no action on delete no action
+  index database_engines_name_unique declared unique [name]
+  primary key [id]
+table dns_dyndns_credentials
+  column created_at timestamp(2000000000,10) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column record_id integer(2000000000,0) null default=null
+  column token_digest varchar(96,0) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  index dns_dyndns_credentials_record_id_unique declared unique [record_id]
+  index dns_dyndns_credentials_token_digest_index declared plain [token_digest]
+  primary key [id]
+table dns_peers
+  column api_key varchar(200,0) null default=null
+  column base_url varchar(500,0) null default=null
+  column created_at timestamp(2000000000,10) null default=null
+  column enabled integer(2000000000,0) null default=true
+  column id integer(2000000000,0) null default=null pk
+  column name varchar(120,0) null default=null
+  column peer_type varchar(20,0) null default='nameserver'
+  column transfer_host varchar(255,0) null default=null
+  column transfer_port integer(2000000000,0) null default=53
+  column tsig_algorithm varchar(40,0) null default='hmac-sha256'
+  column tsig_key_name varchar(255,0) null default=null
+  column tsig_secret varchar(500,0) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  index dns_peers_name_unique declared unique [name]
+  primary key [id]
+table dns_records
+  column created_at timestamp(2000000000,10) null default=null
+  column data text(2000000000,0) null default=null
+  column enabled integer(2000000000,0) null default=true
+  column generated_at timestamp(2000000000,10) null default=null
+  column generated_by varchar(40,0) null default=null
+  column generated_for_id integer(2000000000,0) null default=null
+  column generated_for_model varchar(120,0) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column managed_by varchar(40,0) null default=null
+  column name varchar(255,0) null default=null
+  column ttl integer(2000000000,0) null default=null
+  column type varchar(10,0) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  column value varchar(4096,0) null default=null
+  column zone_id integer(2000000000,0) not null default=null
+  foreign key [zone_id] -> dns_zones[id] on update no action on delete no action
+  index dns_records_name_index declared plain [name]
+  index dns_records_zone_id_index declared plain [zone_id]
+  primary key [id]
+table dns_zone_peers
+  column behind_since timestamp(2000000000,10) null default=null
+  column created_at timestamp(2000000000,10) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column last_axfr_at timestamp(2000000000,10) null default=null
+  column last_axfr_serial integer(2000000000,0) null default=null
+  column last_notify_at timestamp(2000000000,10) null default=null
+  column last_notify_outcome varchar(255,0) null default=null
+  column last_notify_serial integer(2000000000,0) null default=null
+  column peer_id integer(2000000000,0) not null default=null
+  column probe_error varchar(512,0) null default=null
+  column probed_at timestamp(2000000000,10) null default=null
+  column served_serial integer(2000000000,0) null default=null
+  column stale_alerted_at timestamp(2000000000,10) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  column zone_id integer(2000000000,0) not null default=null
+  foreign key [peer_id] -> dns_peers[id] on update no action on delete no action
+  foreign key [zone_id] -> dns_zones[id] on update no action on delete no action
+  index dns_zone_peers_zone_id_index declared plain [zone_id]
+  primary key [id]
+table dns_zones
+  column created_at timestamp(2000000000,10) null default=null
+  column default_ttl integer(2000000000,0) null default=3600
+  column delegation_checked_at timestamp(2000000000,10) null default=null
+  column delegation_detail text(2000000000,0) null default=null
+  column delegation_status varchar(32,0) null default=null
+  column dnssec_algorithm integer(2000000000,0) null default=13
+  column dnssec_enabled integer(2000000000,0) null default=false
+  column dnssec_key_tag integer(2000000000,0) null default=null
+  column dnssec_private_key text(2000000000,0) null default=null
+  column dnssec_public_key text(2000000000,0) null default=null
+  column enabled integer(2000000000,0) null default=true
+  column id integer(2000000000,0) null default=null pk
+  column last_checked_at timestamp(2000000000,10) null default=null
+  column last_transfer_at timestamp(2000000000,10) null default=null
+  column negative_ttl integer(2000000000,0) null default=300
+  column origin varchar(255,0) null default=null
+  column primary_peer_id integer(2000000000,0) null default=null
+  column replica_records text(2000000000,0) null default=null
+  column role varchar(20,0) null default='primary'
+  column serial integer(2000000000,0) null default=1
+  column soa_contact varchar(255,0) null default=null
+  column soa_expire integer(2000000000,0) null default=1209600
+  column soa_primary_ns varchar(255,0) null default=null
+  column soa_refresh integer(2000000000,0) null default=7200
+  column soa_retry integer(2000000000,0) null default=3600
+  column transfer_message varchar(500,0) null default=null
+  column transfer_status varchar(20,0) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  index dns_zones_origin_unique declared unique [origin]
+  primary key [id]
+table environments
+  column created_at timestamp(2000000000,10) null default=null
+  column description text(2000000000,0) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column name varchar(191,0) null default=null
+  column project_id integer(2000000000,0) not null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  foreign key [project_id] -> projects[id] on update no action on delete no action
+  index environments_project_id_index declared plain [project_id]
+  primary key [id]
+table game_domains
+  column backend_instance_id integer(2000000000,0) null default=null
+  column backend_port integer(2000000000,0) null default=null
+  column created_at timestamp(2000000000,10) null default=null
+  column enabled integer(2000000000,0) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column proxy_instance_id integer(2000000000,0) null default=null
+  column site_domain_id integer(2000000000,0) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  column version integer(2000000000,0) null default=0
+  index game_domains_backend_instance_id_index declared plain [backend_instance_id]
+  index game_domains_domain_proxy declared unique [site_domain_id, proxy_instance_id]
+  primary key [id]
+table git_providers
+  column access_token text(2000000000,0) null default=null
+  column app_private_key_pem text(2000000000,0) null default=null
+  column base_url varchar(500,0) null default=null
+  column created_at timestamp(2000000000,10) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column kind varchar(50,0) null default=null
+  column name varchar(191,0) null default=null
+  column settings text(2000000000,0) null default=null
+  column shared integer(2000000000,0) null default=false
+  column ssh_private_key text(2000000000,0) null default=null
+  column target_trusted integer(2000000000,0) null default=false
+  column updated_at timestamp(2000000000,10) null default=null
+  primary key [id]
+table install_media_fetches
+  column created_at timestamp(2000000000,10) null default=null
+  column error text(2000000000,0) null default=null
+  column finished_at timestamp(2000000000,10) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column name varchar(64,0) not null default=null
+  column progress real(2000000000,10) null default=null
+  column server_id integer(2000000000,0) not null default=null
+  column state varchar(16,0) not null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  foreign key [server_id] -> servers[id] on update no action on delete cascade
+  index install_media_fetches_server declared plain [server_id, created_at]
+  primary key [id]
+table instance_backups
+  column created_at timestamp(2000000000,10) null default=null
+  column error text(2000000000,0) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column instance_id integer(2000000000,0) null default=null
+  column remote_key varchar(255,0) null default=null
+  column sha256 varchar(255,0) null default=null
+  column size_bytes bigint(2000000000,0) null default=null
+  column status varchar(50,0) null default='failed'
+  column summary text(2000000000,0) null default=null
+  column target_id integer(2000000000,0) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  foreign key [instance_id] -> instances[id] on update no action on delete no action
+  foreign key [target_id] -> backup_targets[id] on update no action on delete no action
+  index instance_backups_instance_id_index declared plain [instance_id]
+  primary key [id]
+table instance_databases
+  column created_at timestamp(2000000000,10) null default=null
+  column database_id integer(2000000000,0) null default=null
+  column env_prefix varchar(40,0) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column instance_id integer(2000000000,0) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  index instance_databases_database_id_index declared plain [database_id]
+  index instance_databases_instance_id_index declared plain [instance_id]
+  primary key [id]
+table instance_devices
+  column created_at timestamp(2000000000,10) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column instance_id integer(2000000000,0) not null default=null
+  column name varchar(63,0) null default=null
+  column quota_bucket varchar(191,0) null default=null
+  column size_gb integer(2000000000,0) null default=null
+  column source_media varchar(191,0) null default=null
+  column type varchar(20,0) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  foreign key [instance_id] -> instances[id] on update no action on delete no action
+  index instance_devices_instance_id_index declared plain [instance_id]
+  index instance_devices_name_unique declared unique [instance_id, name]
+  primary key [id]
+table instance_files
+  column container_path varchar(512,0) null default=null
+  column content text(2000000000,0) null default=null
+  column created_at timestamp(2000000000,10) null default=null
+  column generated_at timestamp(2000000000,10) null default=null
+  column generated_by varchar(40,0) null default=null
+  column generated_for_id integer(2000000000,0) null default=null
+  column generated_for_model varchar(120,0) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column instance_id integer(2000000000,0) null default=null
+  column mode varchar(10,0) null default='0644'
+  column updated_at timestamp(2000000000,10) null default=null
+  foreign key [instance_id] -> instances[id] on update no action on delete no action
+  index instance_files_instance_id_index declared plain [instance_id]
+  primary key [id]
+table instance_logs
+  column created_at timestamp(2000000000,10) null default=null
+  column handle varchar(191,0) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column instance_id integer(2000000000,0) not null default=null
+  column line_count integer(2000000000,0) null default=null
+  column log_text text(2000000000,0) null default=null
+  column saved_at timestamp(2000000000,10) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  index instance_logs_instance_created declared plain [instance_id, created_at]
+  primary key [id]
+table instance_quotas
+  column created_at timestamp(2000000000,10) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column max_databases integer(2000000000,0) null default=null
+  column max_disk_gb integer(2000000000,0) null default=null
+  column max_instances integer(2000000000,0) null default=null
+  column max_memory_mb integer(2000000000,0) null default=null
+  column max_nics integer(2000000000,0) null default=null
+  column max_sites integer(2000000000,0) null default=null
+  column subjects text(2000000000,0) not null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  index instance_quotas_subjects_unique declared unique [subjects]
+  primary key [id]
+table instance_snapshots
+  column created_at timestamp(2000000000,10) null default=null
+  column directory varchar(255,0) null default=null
+  column error text(2000000000,0) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column instance_id integer(2000000000,0) null default=null
+  column native_name varchar(255,0) null default=null
+  column note varchar(255,0) null default=null
+  column status varchar(50,0) null default='failed'
+  column total_bytes bigint(2000000000,0) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  column volumes text(2000000000,0) null default=null
+  foreign key [instance_id] -> instances[id] on update no action on delete no action
+  index instance_snapshots_instance_id_index declared plain [instance_id]
+  primary key [id]
+table instance_template_databases
+  column created_at timestamp(2000000000,10) null default=null
+  column engine varchar(32,0) not null default=null
+  column env_prefix varchar(64,0) not null default=null
+  column id integer(2000000000,0) null default=null pk
+  column image varchar(255,0) null default=null
+  column template_id integer(2000000000,0) not null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  foreign key [template_id] -> instance_templates[id] on update no action on delete no action
+  index instance_template_databases_unique declared unique [template_id, env_prefix]
+  primary key [id]
+table instance_template_files
+  column container_path varchar(512,0) null default=null
+  column content text(2000000000,0) null default=null
+  column created_at timestamp(2000000000,10) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column mode varchar(10,0) null default='0644'
+  column template_id integer(2000000000,0) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  foreign key [template_id] -> instance_templates[id] on update no action on delete no action
+  index instance_template_files_template_id_index declared plain [template_id]
+  primary key [id]
+table instance_template_variables
+  column created_at timestamp(2000000000,10) null default=null
+  column default_value varchar(255,0) null default=null
+  column description varchar(255,0) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column key varchar(191,0) null default=null
+  column label varchar(255,0) null default=null
+  column required integer(2000000000,0) null default=false
+  column settings text(2000000000,0) null default=null
+  column template_id integer(2000000000,0) null default=null
+  column type varchar(100,0) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  foreign key [template_id] -> instance_templates[id] on update no action on delete no action
+  index instance_template_variables_template_id_index declared plain [template_id]
+  primary key [id]
+table instance_template_volumes
+  column container_path varchar(512,0) not null default=null
+  column created_at timestamp(2000000000,10) null default=null
+  column exclusive integer(2000000000,0) null default=false
+  column id integer(2000000000,0) null default=null pk
+  column name varchar(128,0) not null default=null
+  column quota_bytes bigint(2000000000,0) null default=null
+  column template_id integer(2000000000,0) not null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  foreign key [template_id] -> instance_templates[id] on update no action on delete no action
+  index instance_template_volumes_unique declared unique [template_id, name]
+  primary key [id]
+table instance_templates
+  column approved_at timestamp(2000000000,10) null default=null
+  column approved_by_user_id text(2000000000,0) null default=null
+  column created_at timestamp(2000000000,10) null default=null
+  column description text(2000000000,0) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column imported_at timestamp(2000000000,10) null default=null
+  column install_image varchar(255,0) null default=null
+  column install_script text(2000000000,0) null default=null
+  column kind varchar(100,0) null default=null
+  column name varchar(255,0) null default=null
+  column readiness_kind varchar(32,0) null default='port'
+  column readiness_line varchar(255,0) null default=null
+  column readiness_target varchar(255,0) null default=null
+  column reinstall_policy varchar(50,0) null default='preserve'
+  column runtime_image_id integer(2000000000,0) null default=null
+  column settings text(2000000000,0) null default=null
+  column source varchar(255,0) null default=null
+  column source_checksum varchar(255,0) null default=null
+  column start_command varchar(255,0) null default=null
+  column stop_command varchar(255,0) null default=null
+  column stop_grace_seconds integer(2000000000,0) null default=10
+  column stop_kind varchar(32,0) null default='signal'
+  column update_script text(2000000000,0) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  column version integer(2000000000,0) null default=1
+  primary key [id]
+table instance_variables
+  column created_at timestamp(2000000000,10) null default=null
+  column environment_id integer(2000000000,0) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column instance_id integer(2000000000,0) null default=null
+  column key varchar(191,0) null default=null
+  column kind varchar(50,0) null default='plain'
+  column plain_value text(2000000000,0) null default=null
+  column secret_value text(2000000000,0) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  foreign key [instance_id] -> instances[id] on update no action on delete no action
+  index instance_variables_instance_id_index declared plain [instance_id]
+  primary key [id]
+table instance_volumes
+  column container_path varchar(512,0) not null default=null
+  column created_at timestamp(2000000000,10) null default=null
+  column exclusive integer(2000000000,0) null default=false
+  column host_path varchar(1024,0) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column instance_id integer(2000000000,0) not null default=null
+  column name varchar(128,0) not null default=null
+  column observed_at timestamp(2000000000,10) null default=null
+  column quota_bytes bigint(2000000000,0) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  column used_bytes bigint(2000000000,0) null default=null
+  column version integer(2000000000,0) null default=0
+  foreign key [instance_id] -> instances[id] on update no action on delete no action
+  index instance_volumes_unique declared unique [instance_id, name]
+  primary key [id]
+table instances
+  column backup_target_id integer(2000000000,0) null default=null
+  column capacity_mb integer(2000000000,0) null default=null
+  column claim_fence bigint(2000000000,0) null default=null
+  column crash_policy varchar(50,0) null default='restart'
+  column created_at timestamp(2000000000,10) null default=null
+  column deleted_at timestamp(2000000000,10) null default=null
+  column disk_limit_bytes bigint(2000000000,0) null default=null
+  column disk_observed_at timestamp(2000000000,10) null default=null
+  column disk_used_bytes bigint(2000000000,0) null default=null
+  column environment_id integer(2000000000,0) null default=null
+  column game_address varchar(253,0) null default=null
+  column generated_at timestamp(2000000000,10) null default=null
+  column generated_by varchar(100,0) null default=null
+  column generated_for_id integer(2000000000,0) null default=null
+  column generated_for_model varchar(100,0) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column image_fingerprint varchar(191,0) null default=null
+  column install_error text(2000000000,0) null default=null
+  column install_state varchar(50,0) null default='none'
+  column kind varchar(100,0) null default=null
+  column migrate_reserved_mb integer(2000000000,0) null default=null
+  column migrate_target_id integer(2000000000,0) null default=null
+  column name varchar(255,0) null default=null
+  column quota_bucket varchar(191,0) null default=null
+  column quota_memory_mb integer(2000000000,0) null default=null
+  column restart_withheld varchar(32,0) null default=null
+  column root_disk_bucket varchar(191,0) null default=null
+  column runtime_image_id integer(2000000000,0) null default=null
+  column runtime_role varchar(20,0) null default='serving'
+  column server_id integer(2000000000,0) null default=null
+  column settings text(2000000000,0) null default=null
+  column started_at timestamp(2000000000,10) null default=null
+  column status varchar(50,0) null default='created'
+  column status_observed_at timestamp(2000000000,10) null default=null
+  column stoppage_at timestamp(2000000000,10) null default=null
+  column stoppage_cause varchar(64,0) null default=null
+  column stoppage_detail text(2000000000,0) null default=null
+  column target_trusted integer(2000000000,0) null default=false
+  column template_id integer(2000000000,0) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  column workload_killed_at timestamp(2000000000,10) null default=null
+  foreign key [backup_target_id] -> backup_targets[id] on update no action on delete no action
+  foreign key [runtime_image_id] -> runtime_images[id] on update no action on delete no action
+  foreign key [server_id] -> servers[id] on update no action on delete no action
+  foreign key [template_id] -> instance_templates[id] on update no action on delete no action
+  index idx_instances_generated_for_id declared plain [generated_for_id]
+  index instances_server_id_index declared plain [server_id]
+  primary key [id]
+table managed_databases
+  column cpu_limit real(2000000000,10) null default=null
+  column created_at timestamp(2000000000,10) null default=null
+  column db_name varchar(128,0) null default=null
+  column db_password varchar(256,0) null default=null
+  column db_user varchar(128,0) null default=null
+  column engine varchar(32,0) null default=null
+  column engine_id integer(2000000000,0) null default=null
+  column ephemeral integer(2000000000,0) null default=false
+  column failure_reason text(2000000000,0) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column image varchar(256,0) null default=null
+  column memory_limit_mb integer(2000000000,0) null default=null
+  column name varchar(128,0) null default=null
+  column placement varchar(16,0) null default=null
+  column quota_bucket varchar(191,0) null default=null
+  column server_id integer(2000000000,0) null default=null
+  column status varchar(20,0) null default='active'
+  column updated_at timestamp(2000000000,10) null default=null
+  foreign key [engine_id] -> database_engines[id] on update no action on delete no action
+  foreign key [server_id] -> servers[id] on update no action on delete no action
+  index managed_databases_name_unique declared unique [name]
+  primary key [id]
+table notification_channels
+  column created_at timestamp(2000000000,10) null default=null
+  column events text(2000000000,0) null default=null
+  column format varchar(16,0) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column kind varchar(16,0) null default=null
+  column name varchar(128,0) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  column url varchar(512,0) null default=null
+  index notification_channels_name_unique declared unique [name]
+  primary key [id]
+table port_allocations
+  column allocation_mode varchar(20,0) null default=null
+  column claim_key varchar(128,0) null default=null
+  column created_at timestamp(2000000000,10) null default=null
+  column host_ip varchar(64,0) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column note varchar(256,0) null default=null
+  column owner_id integer(2000000000,0) null default=null
+  column owner_model varchar(128,0) null default=null
+  column port integer(2000000000,0) null default=null
+  column protocol varchar(8,0) null default=null
+  column server_id integer(2000000000,0) null default=null
+  column status varchar(16,0) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  foreign key [server_id] -> servers[id] on update no action on delete no action
+  index port_allocations_claim_key_unique declared unique [claim_key]
+  primary key [id]
+table preview_deployments
+  column application_id integer(2000000000,0) not null default=null
+  column created_at timestamp(2000000000,10) null default=null
+  column deleted_at timestamp(2000000000,10) null default=null
+  column expires_at timestamp(2000000000,10) null default=null
+  column head_sha varchar(100,0) null default=null
+  column hostname varchar(255,0) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column instance_id integer(2000000000,0) null default=null
+  column last_error text(2000000000,0) null default=null
+  column pr_number integer(2000000000,0) null default=null
+  column quota_bucket varchar(191,0) null default=null
+  column ref varchar(191,0) null default=null
+  column status varchar(50,0) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  foreign key [application_id] -> instances[id] on update no action on delete no action
+  index preview_deployments_application_id_index declared plain [application_id]
+  index preview_deployments_expires_at_index declared plain [expires_at]
+  primary key [id]
+table projects
+  column created_at timestamp(2000000000,10) null default=null
+  column description text(2000000000,0) null default=null
+  column group_id text(2000000000,0) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column name varchar(191,0) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  primary key [id]
+table protected_paths
+  column access_list_id integer(2000000000,0) not null default=null
+  column created_at timestamp(2000000000,10) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column path varchar(500,0) not null default=null
+  column site_id integer(2000000000,0) not null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  foreign key [access_list_id] -> access_lists[id] on update no action on delete no action
+  foreign key [site_id] -> sites[id] on update no action on delete no action
+  index protected_paths_site_id_index declared plain [site_id]
+  index protected_paths_site_path_unique declared unique [site_id, path]
+  primary key [id]
+table reconcile_findings
+  column bucket varchar(255,0) null default=null
+  column created_at timestamp(2000000000,10) null default=null
+  column detail varchar(255,0) null default=null
+  column evidence varchar(255,0) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column kind varchar(255,0) null default=null
+  column owner_id varchar(255,0) null default=null
+  column owner_model varchar(255,0) null default=null
+  column resource_name varchar(255,0) null default=null
+  column server_name varchar(255,0) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  primary key [id]
+table release_operations
+  column candidate_instance_id integer(2000000000,0) null default=null
+  column created_at timestamp(2000000000,10) null default=null
+  column duration_ms integer(2000000000,0) null default=null
+  column failure_reason varchar(255,0) null default=null
+  column finished_at timestamp(2000000000,10) null default=null
+  column for_id integer(2000000000,0) null default=null
+  column for_model varchar(100,0) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column image_id varchar(255,0) null default=null
+  column kind varchar(50,0) null default='release'
+  column owner_fingerprint varchar(255,0) null default=null
+  column retired_instance_id integer(2000000000,0) null default=null
+  column spec_fingerprint varchar(255,0) null default=null
+  column started_at timestamp(2000000000,10) null default=null
+  column status varchar(50,0) null default='pending'
+  column step_log text(2000000000,0) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  index release_operations_for_id_index declared plain [for_id]
+  primary key [id]
+table released_route_claims
+  column claim_key varchar(128,0) null default=null
+  column former_site_id integer(2000000000,0) null default=null
+  column former_subjects text(2000000000,0) null default=null
+  column hostname varchar(255,0) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column match_type varchar(16,0) null default=null
+  column released_at timestamp(2000000000,10) null default=null
+  index released_route_claims_claim_key_index declared plain [claim_key]
+  primary key [id]
+table runtime_images
+  column build_context varchar(255,0) null default=null
+  column builtin integer(2000000000,0) null default=false
+  column created_at timestamp(2000000000,10) null default=null
+  column default_build_command varchar(512,0) null default=null
+  column default_command varchar(512,0) null default=null
+  column default_port integer(2000000000,0) null default=null
+  column description text(2000000000,0) null default=null
+  column docker_image varchar(255,0) null default=null
+  column enabled integer(2000000000,0) null default=true
+  column icon varchar(64,0) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column incus_image varchar(255,0) null default=null
+  column name varchar(128,0) not null default=null
+  column shell varchar(128,0) null default='/bin/bash'
+  column uid_mode varchar(32,0) null default='mapped'
+  column updated_at timestamp(2000000000,10) null default=null
+  column workdir varchar(255,0) null default=null
+  index runtime_images_name_unique declared unique [name]
+  primary key [id]
+table servers
+  column acknowledged_at timestamp(2000000000,10) null default=null
+  column acknowledged_by varchar(100,0) null default=null
+  column acknowledged_by_kind varchar(100,0) null default=null
+  column acknowledged_by_label varchar(200,0) null default=null
+  column acknowledged_posture varchar(32,0) null default=null
+  column acknowledged_warning_version integer(2000000000,0) null default=null
+  column admission varchar(32,0) null default='blocked'
+  column capabilities text(2000000000,0) null default=null
+  column controller_version varchar(64,0) null default=null
+  column created_at timestamp(2000000000,10) null default=null
+  column host_key text(2000000000,0) null default=null
+  column host_key_fingerprint varchar(255,0) null default=null
+  column host_key_offered text(2000000000,0) null default=null
+  column host_key_pinned_at timestamp(2000000000,10) null default=null
+  column host_key_verified integer(2000000000,0) null default=false
+  column id integer(2000000000,0) null default=null pk
+  column identity_private_key text(2000000000,0) null default=null
+  column identity_public_key text(2000000000,0) null default=null
+  column incus_client_cert text(2000000000,0) null default=null
+  column incus_client_key text(2000000000,0) null default=null
+  column incus_server_cert text(2000000000,0) null default=null
+  column incus_server_cert_fingerprint varchar(191,0) null default=null
+  column incus_server_cert_offered text(2000000000,0) null default=null
+  column incus_server_cert_pinned_at timestamp(2000000000,10) null default=null
+  column incus_server_cert_verified integer(2000000000,0) not null default=false
+  column incus_url varchar(255,0) null default=null
+  column lan_parent varchar(15,0) null default=null
+  column last_error text(2000000000,0) null default=null
+  column last_error_kind varchar(32,0) null default=null
+  column last_seen_at timestamp(2000000000,10) null default=null
+  column mode varchar(16,0) null default=null
+  column name varchar(128,0) null default=null
+  column port_claim_fence bigint(2000000000,0) null default=null
+  column posture varchar(32,0) null default='trusted_only'
+  column preflight_ok integer(2000000000,0) null default=false
+  column probed_at timestamp(2000000000,10) null default=null
+  column public_ipv4 varchar(45,0) null default=null
+  column public_ipv6 varchar(45,0) null default=null
+  column quarantine_reason text(2000000000,0) null default=null
+  column quarantined_at timestamp(2000000000,10) null default=null
+  column runtime varchar(20,0) not null default='docker'
+  column ssh_target varchar(256,0) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  column volume_backend varchar(32,0) null default='unchecked'
+  column volume_backend_detail text(2000000000,0) null default=null
+  column volume_probed_at timestamp(2000000000,10) null default=null
+  column volume_root varchar(512,0) null default=null
+  index servers_name_unique declared unique [name]
+  primary key [id]
+table site_auth_providers
+  column config text(2000000000,0) null default=null
+  column created_at timestamp(2000000000,10) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column name varchar(255,0) null default=null
+  column provider_type varchar(50,0) null default=null
+  column required_permission varchar(255,0) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  primary key [id]
+table site_domains
+  column certificate_id integer(2000000000,0) null default=null
+  column created_at timestamp(2000000000,10) null default=null
+  column custom_headers text(2000000000,0) null default=null
+  column exclude_from_letsencrypt integer(2000000000,0) null default=false
+  column force_ssl integer(2000000000,0) null default=true
+  column force_ssl_auto integer(2000000000,0) null default=false
+  column generated_at timestamp(2000000000,10) null default=null
+  column generated_by varchar(100,0) null default=null
+  column generated_for_id integer(2000000000,0) null default=null
+  column generated_for_model varchar(100,0) null default=null
+  column hostname varchar(255,0) null default=null
+  column hsts_enabled integer(2000000000,0) null default=false
+  column hsts_subdomains integer(2000000000,0) null default=false
+  column id integer(2000000000,0) null default=null pk
+  column listen_on varchar(255,0) null default=null
+  column live_route_key varchar(1024,0) null default=null
+  column match_type varchar(20,0) null default='exact'
+  column path varchar(512,0) null default=null
+  column response_headers text(2000000000,0) null default=null
+  column site_id integer(2000000000,0) not null default=null
+  column strip_path integer(2000000000,0) null default=false
+  column updated_at timestamp(2000000000,10) null default=null
+  foreign key [site_id] -> sites[id] on update no action on delete no action
+  index idx_site_domains_generated_for_id declared plain [generated_for_id]
+  index site_domains_hostname_index declared plain [hostname]
+  index site_domains_live_route_key_unique declared unique [live_route_key]
+  index site_domains_site_id_index declared plain [site_id]
+  primary key [id]
+table site_sessions
+  column created_at timestamp(2000000000,10) null default=null
+  column data text(2000000000,0) null default=null
+  column expires_at timestamp(2000000000,10) null default=null
+  column id varchar(64,0) not null default=null pk
+  column site_id integer(2000000000,0) null default=null
+  index <generated> primary-key unique [id]
+  index site_sessions_expires_at_index declared plain [expires_at]
+  index site_sessions_site_id_index declared plain [site_id]
+  primary key [id]
+table sites
+  column access_list_id integer(2000000000,0) null default=null
+  column auth_provider_id integer(2000000000,0) null default=null
+  column created_at timestamp(2000000000,10) null default=null
+  column deleted_at timestamp(2000000000,10) null default=null
+  column description text(2000000000,0) null default=null
+  column enabled integer(2000000000,0) null default=true
+  column id integer(2000000000,0) null default=null pk
+  column instance_id integer(2000000000,0) null default=null
+  column name varchar(255,0) null default=null
+  column quota_bucket varchar(191,0) null default=null
+  column security_report_token varchar(96,0) null default=null
+  column settings text(2000000000,0) null default=null
+  column slug varchar(255,0) null default=null
+  column status varchar(50,0) null default='idle'
+  column target_trusted integer(2000000000,0) null default=false
+  column trusted_upstream integer(2000000000,0) null default=false
+  column updated_at timestamp(2000000000,10) null default=null
+  column upstream_kind varchar(50,0) null default=null
+  index sites_instance_id_index declared plain [instance_id]
+  index sites_slug_unique declared unique [slug]
+  index sites_upstream_kind_index declared plain [upstream_kind]
+  primary key [id]
+table spamservice_installations
+  column controller_key varchar(256,0) null default=null
+  column created_at timestamp(2000000000,10) null default=null
+  column enabled integer(2000000000,0) null default=false
+  column id integer(2000000000,0) null default=null pk
+  column max_heap_mb integer(2000000000,0) null default=512
+  column port integer(2000000000,0) null default=8095
+  column system_user_id integer(2000000000,0) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  foreign key [system_user_id] -> system_users[id] on update no action on delete restrict
+  primary key [id]
+table stack_deployments
+  column created_at timestamp(2000000000,10) null default=null
+  column duration_ms integer(2000000000,0) null default=null
+  column error text(2000000000,0) null default=null
+  column finished_at timestamp(2000000000,10) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column log text(2000000000,0) null default=null
+  column reason varchar(50,0) null default=null
+  column spec text(2000000000,0) null default=null
+  column stack_id integer(2000000000,0) null default=null
+  column started_at timestamp(2000000000,10) null default=null
+  column status varchar(20,0) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  index stack_deployments_stack_id_index declared plain [stack_id]
+  primary key [id]
+table stack_files
+  column container_path varchar(500,0) null default=null
+  column content text(2000000000,0) null default=null
+  column created_at timestamp(2000000000,10) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column mode varchar(10,0) null default=null
+  column stack_service_id integer(2000000000,0) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  index stack_files_stack_service_id_container_path_unique declared unique [stack_service_id, container_path]
+  index stack_files_stack_service_id_index declared plain [stack_service_id]
+  primary key [id]
+table stack_services
+  column capabilities text(2000000000,0) null default=null
+  column command text(2000000000,0) null default=null
+  column cpu_limit real(2000000000,10) null default=null
+  column created_at timestamp(2000000000,10) null default=null
+  column enabled integer(2000000000,0) null default=null
+  column environment text(2000000000,0) null default=null
+  column health_cmd varchar(500,0) null default=null
+  column health_interval_seconds integer(2000000000,0) null default=null
+  column health_retries integer(2000000000,0) null default=null
+  column health_start_period_seconds integer(2000000000,0) null default=null
+  column health_timeout_seconds integer(2000000000,0) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column image varchar(255,0) null default=null
+  column memory_limit_mb integer(2000000000,0) null default=null
+  column name varchar(100,0) null default=null
+  column restart_policy varchar(20,0) null default=null
+  column stack_id integer(2000000000,0) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  index stack_services_stack_id_index declared plain [stack_id]
+  index stack_services_stack_id_name_unique declared unique [stack_id, name]
+  primary key [id]
+table stack_services_depends_on
+  column condition varchar(255,0) null default=null
+  column created_at timestamp(2000000000,10) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column order_key bigint(2000000000,0) not null default=null
+  column service varchar(255,0) null default=null
+  column stack_service_id integer(2000000000,0) not null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  foreign key [stack_service_id] -> stack_services[id] on update no action on delete cascade
+  index stack_services_depends_on_stack_service_id_order_key_index declared plain [stack_service_id, order_key]
+  primary key [id]
+table stack_services_mounts
+  column container_path varchar(255,0) null default=null
+  column created_at timestamp(2000000000,10) null default=null
+  column external_name varchar(255,0) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column name varchar(255,0) null default=null
+  column order_key bigint(2000000000,0) not null default=null
+  column stack_service_id integer(2000000000,0) not null default=null
+  column type varchar(255,0) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  foreign key [stack_service_id] -> stack_services[id] on update no action on delete cascade
+  index stack_services_mounts_stack_service_id_order_key_index declared plain [stack_service_id, order_key]
+  primary key [id]
+table stack_services_ports
+  column container_port integer(2000000000,0) null default=null
+  column created_at timestamp(2000000000,10) null default=null
+  column host_ip varchar(255,0) null default=null
+  column host_port integer(2000000000,0) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column order_key bigint(2000000000,0) not null default=null
+  column protocol varchar(255,0) null default=null
+  column stack_service_id integer(2000000000,0) not null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  foreign key [stack_service_id] -> stack_services[id] on update no action on delete cascade
+  index stack_services_ports_stack_service_id_order_key_index declared plain [stack_service_id, order_key]
+  primary key [id]
+table stacks
+  column created_at timestamp(2000000000,10) null default=null
+  column description text(2000000000,0) null default=null
+  column enabled integer(2000000000,0) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column name varchar(100,0) null default=null
+  column registry_password text(2000000000,0) null default=null
+  column registry_server varchar(255,0) null default=null
+  column registry_user varchar(255,0) null default=null
+  column server_id integer(2000000000,0) null default=null
+  column status varchar(20,0) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  foreign key [server_id] -> servers[id] on update no action on delete no action
+  index <generated> unique-constraint unique [name]
+  primary key [id]
+table system_users
+  column created_at timestamp(2000000000,10) null default=null
+  column gecos varchar(512,0) null default=null
+  column gid integer(2000000000,0) null default=null
+  column home varchar(512,0) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column last_seen_at timestamp(2000000000,10) null default=null
+  column managed integer(2000000000,0) null default=false
+  column name varchar(255,0) null default=null
+  column obsolete integer(2000000000,0) null default=false
+  column site_id integer(2000000000,0) null default=null
+  column uid integer(2000000000,0) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  index system_users_name_unique declared unique [name]
+  index system_users_obsolete_index declared plain [obsolete]
+  index system_users_site_id_unique declared unique [site_id]
+  primary key [id]
+table webhook_deliveries
+  column action varchar(100,0) null default=null
+  column created_at timestamp(2000000000,10) null default=null
+  column delivery_key varchar(191,0) null default=null
+  column event varchar(100,0) null default=null
+  column id integer(2000000000,0) null default=null pk
+  column instance_id integer(2000000000,0) not null default=null
+  column received_at timestamp(2000000000,10) null default=null
+  column updated_at timestamp(2000000000,10) null default=null
+  foreign key [instance_id] -> instances[id] on update no action on delete no action
+  index webhook_deliveries_instance_key_unique declared unique [instance_id, delivery_key]
+  primary key [id]

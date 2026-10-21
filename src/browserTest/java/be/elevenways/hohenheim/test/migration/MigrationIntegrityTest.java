@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.migration.HohenheimMigration;
 import be.elevenways.hohenheim.migration.M001_HohenheimBaseline;
 import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationException;
+import be.elevenways.zenit.common.orm.migration.MigrationKey;
 import be.elevenways.zenit.common.orm.migration.MigrationResult;
 import be.elevenways.zenit.common.orm.migration.MigrationRunnerResult;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
@@ -11,6 +12,7 @@ import be.elevenways.zenit.server.orm.migration.MigrationChecksum;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import be.elevenways.zenit.server.setting.DryFileSource;
 import be.elevenways.zenit.server.setting.ServerSettings;
+import be.elevenways.zenit.test.support.SchemaSnapshot;
 import be.elevenways.zenit.test.support.TestSqliteFiles;
 import org.junit.jupiter.api.Test;
 
@@ -35,7 +37,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * The install contract of Hohenheim's migration stream: a fresh database migrates, re-migrates and passes strict
  * integrity; the schema it produced really carries the constraints the code relies on; the baseline refuses a
- * rollback; and a database still recording the squashed 001..019 chain refuses to boot instead of running it.
+ * rollback; and a database still recording the squashed 001..019 chain adopts the baseline instead of running it,
+ * or is refused when it holds only part of that chain.
  *
  * AIDEV-NOTE: the golden checksum pins are a DEPLOYED HIGH-WATER MARK, not a hand-list (2026-08-29). Editing an
  * APPLIED migration makes the next --run-migrations rehearsal refuse under database.migration_integrity=fail, so
@@ -47,7 +50,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  *
  * AIDEV-NOTE: the 001..019 chain was squashed into M001_HohenheimBaseline on 2026-10-21. The baseline is pinned from
  * the day it landed although no install has RUN it: every install that must keep booting adopts it through zenit
- * core's baseline mechanism (pending), which records its checksum, so it is as frozen as the chain it stands in for.
+ * core's baseline mechanism (Migration.replaces), which records its checksum, so it is as frozen as the chain it
+ * stands in for.
  */
 class MigrationIntegrityTest {
 
@@ -105,46 +109,75 @@ class MigrationIntegrityTest {
     }
 
     /**
-     * A database that recorded the squashed 001..019 chain (kuifje, robbedoes, starfleet, daystrom) refuses to boot
-     * under the shipped strict posture, before anything runs, instead of running the baseline over its schema; it
-     * boots again once zenit core's baseline mechanism lets it adopt M001_HohenheimBaseline.
+     * A database that recorded the squashed 001..019 chain (kuifje, robbedoes, starfleet, daystrom) ADOPTS
+     * M001_HohenheimBaseline under the shipped strict posture without running it, and one holding only part of that
+     * chain is refused with nothing written.
      */
     @Test
-    void aDatabaseThatAppliedTheSquashedChainRefusesInsteadOfRunningTheBaseline() throws Exception {
-        SqliteDatasource datasource = emptyDatabase("squashed-chain");
+    void aDatabaseThatAppliedTheSquashedChainAdoptsTheBaselineAndAPartOfItRefuses() throws Exception {
         String stream = HohenheimMigration.STREAM;
-        String baseline = new M001_HohenheimBaseline().getVersion();
+        M001_HohenheimBaseline baseline = new M001_HohenheimBaseline();
+        String version = baseline.getVersion();
+        String adoption = version + " (hohenheim_baseline), replacing " + SQUASHED_VERSIONS.size() + " versions "
+            + SQUASHED_VERSIONS;
 
-        // 1. The database a live install holds: the whole schema, its ledger naming 001..019 instead of the baseline.
-        new MigrationRunner(datasource).migrate().requireSuccess();
-        for (String version : SQUASHED_VERSIONS) {
-            datasource.rawUpdate("INSERT INTO zenit_migrations (stream, version, name, applied_at, direction,"
-                + " execution_time_ms, state, checksum) SELECT stream, '" + version + "', 'squashed " + version
-                + "', applied_at, direction, execution_time_ms, state, checksum FROM zenit_migrations"
-                + " WHERE stream = '" + stream + "' AND version = '" + baseline + "'");
-        }
-        datasource.rawUpdate("DELETE FROM zenit_migrations WHERE stream = '" + stream + "' AND version = '"
-            + baseline + "'");
-        long tables = scalar(datasource, SCHEMA_TABLES);
-        String baselineRecorded = "SELECT COUNT(*) AS c FROM zenit_migrations WHERE stream = '" + stream
-            + "' AND version = '" + baseline + "'";
+        // 1. The declared replaced versions are exactly the chain the live installs recorded.
+        assertThat(baseline.getReplacedVersions()).as("step 1: the complete old chain")
+            .containsExactlyInAnyOrderElementsOf(SQUASHED_VERSIONS);
 
-        // 2. The strict boot refuses, naming every recorded version no discovered migration claims any more.
-        withIntegrityMode("fail", () -> assertThatThrownBy(() -> new MigrationRunner(datasource).migrate())
-            .as("step 2: a database with 001..019 applied is refused under integrity=fail")
-            .isInstanceOf(MigrationException.class)
-            .hasMessageContaining("applied migration 001 (squashed 001) is absent from the discovered migrations")
-            .hasMessageContaining("applied migration 019 (squashed 019) is absent from the discovered migrations"));
+        // 2. The database a live install holds: the whole schema, its ledger naming 001..019 instead of the baseline.
+        SqliteDatasource datasource = squashedChainDatabase("squashed-chain");
+        SchemaSnapshot schema = SchemaSnapshot.of(datasource);
+        List<String> otherStreams = otherStreamsHistory(datasource);
 
-        // 3. Nothing ran: the baseline is not recorded and the schema holds exactly the tables it held.
-        assertThat(scalar(datasource, baselineRecorded)).as("step 3: the baseline did not run").isZero();
-        assertThat(scalar(datasource, SCHEMA_TABLES)).as("step 3: the schema is untouched").isEqualTo(tables);
+        // 3. A strict rehearsal says it would adopt and writes nothing.
+        withIntegrityMode("fail", () -> {
+            MigrationRunner rehearsal = new MigrationRunner(datasource);
+            rehearsal.setDryRun(true);
+            rehearsal.migrate().requireSuccess();
+            assertThat(rehearsal.getBaselineReport()).as("step 3: the rehearsal line")
+                .containsExactly("baseline " + stream + ": would adopt " + adoption);
+        });
+        assertThat(history(datasource)).as("step 3: the rehearsal wrote nothing")
+            .containsExactlyElementsOf(SQUASHED_VERSIONS.stream().map(old -> old + " APPLIED").toList());
 
-        // 4. Even a downgraded posture never records the baseline over that schema: its first CREATE TABLE fails.
-        withIntegrityMode("warn", () -> assertThat(new MigrationRunner(datasource).migrate().isSuccess())
-            .as("step 4: under integrity=warn the baseline fails on the existing schema").isFalse());
-        assertThat(scalar(datasource, baselineRecorded)).as("step 4: and is not recorded").isZero();
+        // 4. THE ASSERTION -- the strict migrate adopts: the baseline row with its checksum replaces the old rows,
+        //    nothing runs, and the schema and every other stream's ledger stay exactly as they were.
+        withIntegrityMode("fail", () -> {
+            MigrationRunner adopting = new MigrationRunner(datasource);
+            assertThat(adopting.migrate().requireSuccess().getAppliedCount()).as("step 4: nothing executed")
+                .isZero();
+            assertThat(adopting.getBaselineReport()).as("step 4: the adoption line")
+                .containsExactly("baseline " + stream + ": adopt " + adoption);
+        });
+        assertThat(history(datasource)).as("step 4: only the baseline is recorded").containsExactly(version + " APPLIED");
+        assertThat(datasource.getMigrationRecord(MigrationKey.of(stream, version)).getChecksum())
+            .as("step 4: the baseline's checksum").isEqualTo(MigrationChecksum.compute(baseline));
+        assertThat(otherStreamsHistory(datasource)).as("step 4: other streams untouched").isEqualTo(otherStreams);
+        SchemaSnapshot.assertSame(schema, SchemaSnapshot.of(datasource), "step 4: adoption changes no schema");
+
+        // 5. Settled: a further strict migrate applies and reports nothing.
+        withIntegrityMode("fail", () -> {
+            MigrationRunner again = new MigrationRunner(datasource);
+            assertThat(again.migrate().requireSuccess().getAppliedCount()).as("step 5: nothing to do").isZero();
+            assertThat(again.getBaselineReport()).as("step 5: no line once settled").isEmpty();
+        });
         datasource.close();
+
+        // 6. A database that stopped half-way (012 missing) is refused naming it, and nothing is written anywhere.
+        SqliteDatasource partial = squashedChainDatabase("half-chain");
+        partial.rawUpdate("DELETE FROM zenit_migrations WHERE stream = '" + stream + "' AND version = '012'");
+        SchemaSnapshot halfWay = SchemaSnapshot.of(partial);
+        List<String> halfHistory = history(partial);
+        List<String> halfOthers = otherStreamsHistory(partial);
+        withIntegrityMode("fail", () -> assertThatThrownBy(() -> new MigrationRunner(partial).migrate())
+            .as("step 6: the incomplete chain refuses")
+            .isInstanceOf(MigrationException.class)
+            .hasMessageContaining("missing [012]"));
+        assertThat(history(partial)).as("step 6: this stream's ledger untouched").isEqualTo(halfHistory);
+        assertThat(otherStreamsHistory(partial)).as("step 6: other streams untouched").isEqualTo(halfOthers);
+        SchemaSnapshot.assertSame(halfWay, SchemaSnapshot.of(partial), "step 6: schema untouched");
+        partial.close();
     }
 
     /**
@@ -431,6 +464,38 @@ class MigrationIntegrityTest {
             throw new UncheckedIOException(exception);
         }
         return pins;
+    }
+
+    /** @return a migrated database whose ledger records the squashed 001..019 chain instead of the baseline */
+    private static SqliteDatasource squashedChainDatabase(String label) throws Exception {
+        SqliteDatasource datasource = emptyDatabase(label);
+        String stream = HohenheimMigration.STREAM;
+        String baseline = new M001_HohenheimBaseline().getVersion();
+        new MigrationRunner(datasource).migrate().requireSuccess();
+        for (String version : SQUASHED_VERSIONS) {
+            datasource.rawUpdate("INSERT INTO zenit_migrations (stream, version, name, applied_at, direction,"
+                + " execution_time_ms, state, checksum) SELECT stream, '" + version + "', 'squashed " + version
+                + "', applied_at, direction, execution_time_ms, state, checksum FROM zenit_migrations"
+                + " WHERE stream = '" + stream + "' AND version = '" + baseline + "'");
+        }
+        datasource.rawUpdate("DELETE FROM zenit_migrations WHERE stream = '" + stream + "' AND version = '"
+            + baseline + "'");
+        return datasource;
+    }
+
+    /** @return this stream's ledger as sorted {@code <version> <state>} lines */
+    private static List<String> history(SqliteDatasource datasource) {
+        return datasource.getMigrationHistory().stream()
+            .filter(row -> HohenheimMigration.STREAM.equals(row.getStream()))
+            .map(row -> row.getVersion() + " " + row.getState()).sorted().toList();
+    }
+
+    /** @return every other stream's ledger rows, whole, sorted */
+    private static List<String> otherStreamsHistory(SqliteDatasource datasource) {
+        return datasource.rawQuery("SELECT quote(stream) || ' ' || quote(version) || ' ' || quote(name) || ' '"
+            + " || quote(applied_at) || ' ' || quote(direction) || ' ' || quote(execution_time_ms) || ' '"
+            + " || quote(state) || ' ' || quote(checksum) AS c FROM zenit_migrations WHERE stream <> '"
+            + HohenheimMigration.STREAM + "' ORDER BY c").stream().map(row -> String.valueOf(row.get("c"))).toList();
     }
 
     /** {@link #emptyDatabase} with SQLite foreign-key enforcement switched on per connection. */

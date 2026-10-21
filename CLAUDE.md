@@ -195,14 +195,16 @@ and docs still cite `InitialMigration` and `M0xx` class names as provenance;
 those citations are history, not files you will find.
 
 - Live installs (kuifje, robbedoes, starfleet, daystrom) recorded 001..019, not
-  the baseline's `2026_10_21_000001`. They ADOPT the baseline without running it through zenit core's baseline
-  mechanism (pending; the baseline's AIDEV-TODO lists the `replaces(...)` versions
-  to declare once it lands). Until then such a database REFUSES to boot under
-  `database.migration_integrity=fail` ("applied migration 001 ... is absent from
-  the discovered migrations"), before anything runs; even under `warn` the
-  baseline's first CREATE TABLE fails and nothing is recorded.
-  `MigrationIntegrityTest.aDatabaseThatAppliedTheSquashedChainRefusesInsteadOfRunningTheBaseline`
-  pins both. Do not deploy this build to a live install before that mechanism.
+  the baseline's `2026_10_21_000001`. They ADOPT the baseline without running it
+  through zenit core's baseline mechanism: the baseline declares
+  `replaces("001", ..., "019")` (the COMPLETE old chain, no 005), so the next
+  `--run-migrations` records it with its checksum and deletes the old rows in one
+  transaction (`--dry-run` prints `baseline be.elevenways.hohenheim: would adopt ...`).
+  A database holding only part of that chain is REFUSED with nothing written,
+  naming the missing versions. `MigrationIntegrityTest.aDatabaseThatAppliedTheSquashedChainAdoptsTheBaselineAndAPartOfItRefuses`
+  pins both; `HohenheimBaselineSnapshotTest` pins baseline schema == chain schema
+  against the chain's `SchemaSnapshot` rendering (`src/browserTest/resources/hohenheim-chain-019.schema`,
+  history: never regenerated).
 - The baseline is IRREVERSIBLE (`irreversible(...)`): a rollback is refused
   before any down() runs.
 - Every APPLIED migration is FROZEN (2026-08-29). A deployed install's

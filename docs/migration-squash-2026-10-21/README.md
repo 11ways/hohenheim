@@ -67,16 +67,11 @@ daystrom) already applied 001..019, so already ran them.
 
 ## Existing installs
 
-Installs that recorded 001..019 must ADOPT the baseline without running it,
-through zenit core's baseline mechanism (pending; the baseline's AIDEV-TODO
-lists the `replaces(...)` versions). Until it lands, such a database is
-REFUSED at boot under the shipped `database.migration_integrity=fail`: the
-integrity check runs before any migration and reports every recorded 001..019
-row as "absent from the discovered migrations". Even under `warn` the baseline's
-first `CREATE TABLE` fails on the existing schema and nothing is recorded.
-`MigrationIntegrityTest.aDatabaseThatAppliedTheSquashedChainRefusesInsteadOfRunningTheBaseline`
-pins both. This build must not be deployed to a live install before that
-mechanism lands.
+Installs that recorded 001..019 ADOPT the baseline without running it, through
+zenit core's baseline mechanism: the baseline declares `replaces(...)` with the
+complete old chain, so the next migrate records the baseline and deletes the old
+rows in one transaction; a database holding only part of the chain is refused
+with nothing written. `MigrationIntegrityTest` pins adoption and refusal.
 
 ## Backends
 
@@ -85,5 +80,11 @@ SQLite only. The other dialects are not applicable: Hohenheim boots SQLite only
 
 ## Standing proof
 
-These two dumps are a one-time proof. The standing schema proof moves to zenit
-core's shared schema-snapshot helper (testSupport) when Wave A lands.
+These two dumps are a one-time proof. The standing schema proof is
+`HohenheimBaselineSnapshotTest`: zenit core's `SchemaSnapshot` (testSupport)
+reads the baseline's schema and asserts it equal to the old chain's schema as
+`SchemaSnapshot` rendered it from a fresh database the old chain migrated
+(hohenheim 718bedc3), pinned in `src/browserTest/resources/hohenheim-chain-019.schema`
+and kept to the baseline's 59 tables. That rendering carries every fact of these
+dumps except the foreign-key `match` clause (`NONE` everywhere here); it adds
+each column's JDBC size and decimal digits.
