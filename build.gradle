@@ -187,6 +187,7 @@ dependencies {
     browserTestImplementation libs.protoblast.source.guard
     // OutboundFixture: routes a tenant upstream's public-looking name to a loopback stub.
     browserTestImplementation libs.zenit.test.support
+    browserTestImplementation libs.zenit.microcopy.test.support
     browserTestImplementation libs.zenit.browser.test.support
     browserTestImplementation libs.zenit.auth.test.support
     // The screen journey: a scripted SPICE server behind a VM's screen, read through recording sockets.

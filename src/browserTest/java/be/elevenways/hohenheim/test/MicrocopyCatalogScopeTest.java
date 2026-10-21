@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
-import be.elevenways.zenit.microcopy.server.MicrocopyCatalogScope;
+import be.elevenways.zenit.microcopy.test.support.MicrocopyCatalogScope;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
