@@ -256,7 +256,7 @@ class InstanceAttentionTest {
     void aNightlyTaskFailureIsNotBuriedByChattierTasksAndBackupFreshnessIsObserved() {
         Db.run(datasource, () -> {
             // The lite boot never starts the task service, so its datasource-scoped
-            // model is registered here (the table exists: M001_CreateSystemTaskTables
+            // model is registered here (the table exists: core's M001_ZenitBaseline
             // is auto-discovered by the migration runner).
             TaskRuntime.registerModels(datasource);
             String nightly = BackupControlPlane.ID.toString();
