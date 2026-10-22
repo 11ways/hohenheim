@@ -325,7 +325,9 @@ public final class BanParts {
             bindings.add(ResourceFieldBinding.of(stored,
                 FieldAccess.customRecordAware((ctx, record) -> record == null
                     ? FieldAccess.Decision.HIDDEN : FieldAccess.Decision.READONLY)
-                    .acrossRecords(ctx -> FieldAccess.Decision.READONLY)));
+                    .acrossRecords(ctx -> FieldAccess.Decision.READONLY)
+                    // Hidden only on the create form: every stored ban reads it.
+                    .readableWhere(ctx -> null)));
         }
         return bindings;
     }

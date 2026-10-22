@@ -29,7 +29,6 @@ import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.data.RowScope;
-import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -126,9 +125,7 @@ public final class InstanceScheduleParts {
             .form(ResourceForm.<Row>of(form)
                 // The target instance is chosen once: an existing schedule never moves to another instance (every
                 // grant, step capability and run row was checked against this one).
-                .bindings(List.of(ResourceFieldBinding.of(RecordScheduleModel.RECORD_ID.getName(),
-                    FieldAccess.customRecordAware((ctx, record) -> record == null
-                        ? FieldAccess.Decision.EDITABLE : FieldAccess.Decision.READONLY))))
+                .bindings(List.of(ResourceFieldBinding.frozenAfterCreate(RecordScheduleModel.RECORD_ID.getName())))
                 .createDefaults((access, panel) -> createDefaults(form, access.conduit()))
                 // AIDEV-NOTE: deliberately NO inline cell: ENABLED makes the row DUE for a sweeper polling every
                 // minute, so one click would fire a real chain against a live instance within 60s, and every write

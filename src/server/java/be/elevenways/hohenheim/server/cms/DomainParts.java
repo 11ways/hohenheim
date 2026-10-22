@@ -520,7 +520,9 @@ public final class DomainParts {
                                                               @NonNull String panelSlug) {
         return ResourceFieldBinding.of(field.getName(), FieldAccess.customRecordAware((access, record) ->
                 fixes(field, access, record, panelSlug) ? FieldAccess.Decision.READONLY : FieldAccess.Decision.EDITABLE)
-            .acrossRecords(access -> FieldAccess.Decision.EDITABLE));
+            .acrossRecords(access -> FieldAccess.Decision.EDITABLE)
+            // Read-only or editable, never hidden: every stored domain reads it.
+            .readableWhere(access -> null));
     }
 
     /** A switch's form entry, whose help says why wherever the domain's site fixes it, in place of the field's own. */

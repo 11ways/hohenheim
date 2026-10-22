@@ -9,6 +9,8 @@ import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.query.criteria.BlankTextCriteria;
+import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -67,7 +69,9 @@ public final class ProvisionedRecords {
                 String reason = record instanceof Row row ? row.get(failureReason) : null;
                 return reason != null && !reason.isBlank()
                     ? FieldAccess.Decision.READONLY : FieldAccess.Decision.HIDDEN;
-            }).acrossRecords(ctx -> FieldAccess.Decision.READONLY));
+            }).acrossRecords(ctx -> FieldAccess.Decision.READONLY)
+            .readableWhere(ctx -> Criteria.and(failureReason.isNotNull(),
+                Criteria.not(BlankTextCriteria.of(failureReason)))));
     }
 
     /** The ceilings this write asks for, off the merged record: a ceiling it does not carry keeps its stored one. */

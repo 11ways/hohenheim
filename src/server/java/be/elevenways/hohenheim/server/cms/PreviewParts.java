@@ -78,10 +78,8 @@ public final class PreviewParts {
         for (var field : form.entries()) {
             boolean input = PreviewDeploymentModel.APPLICATION_ID.getName().equals(field.name())
                 || PreviewDeploymentModel.GIT_REF.getName().equals(field.name());
-            bindings.add(ResourceFieldBinding.of(field.name(), input
-                ? FieldAccess.customRecordAware((access, record) -> record == null
-                    ? FieldAccess.Decision.EDITABLE : FieldAccess.Decision.READONLY)
-                : FieldAccess.alwaysReadonly()));
+            bindings.add(input ? ResourceFieldBinding.frozenAfterCreate(field.name())
+                : ResourceFieldBinding.of(field.name(), FieldAccess.alwaysReadonly()));
         }
         return PanelResource.builder(id, HohenheimSlugs.PREVIEWS, PreviewOperations.PREVIEW)
             .label(HohenheimMicrocopy.PREVIEW_DEPLOYMENT.of("plural"))

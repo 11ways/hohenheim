@@ -55,6 +55,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.routing.RouteScope;
 import be.elevenways.zenit.common.orm.narration.StandardFieldValueText;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -388,13 +389,17 @@ public final class DnsZoneParts {
             record instanceof Row zone && DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))
                 ? FieldAccess.Decision.READONLY
                 : FieldAccess.Decision.HIDDEN)
-            .acrossRecords(ctx -> FieldAccess.Decision.READONLY);
+            .acrossRecords(ctx -> FieldAccess.Decision.READONLY)
+            .readableWhere(ctx -> DnsZoneModel.ROLE.eq(DnsZoneModel.ROLE_SECONDARY));
         // The mirror image: a secondary's delegation is judged where it is owned.
         FieldAccess primaryOnly = FieldAccess.customRecordAware((ctx, record) ->
             record instanceof Row zone && !DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))
                 ? FieldAccess.Decision.READONLY
                 : FieldAccess.Decision.HIDDEN)
-            .acrossRecords(ctx -> FieldAccess.Decision.READONLY);
+            .acrossRecords(ctx -> FieldAccess.Decision.READONLY)
+            // roleOf reads a missing role as primary.
+            .readableWhere(ctx -> Criteria.or(DnsZoneModel.ROLE.isNull(),
+                DnsZoneModel.ROLE.notIn(DnsZoneModel.ROLE_SECONDARY)));
         return List.of(
             ResourceFieldBinding.of(DnsZoneModel.TRANSFER_STATUS.getName(), secondaryOnly),
             ResourceFieldBinding.of(DnsZoneModel.LAST_TRANSFER_AT.getName(), secondaryOnly),

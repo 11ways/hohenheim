@@ -23,7 +23,6 @@ import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.conduit.Conduit;
-import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
@@ -124,9 +123,8 @@ public final class InstanceScheduleStepParts {
             .form(ResourceForm.<Row>of(form)
                 // A step belongs to the schedule it was created in: the form renders it read-only on an existing
                 // step and authorize() refuses a write that still tries to move it.
-                .bindings(List.of(ResourceFieldBinding.of(RecordScheduleStepModel.SCHEDULE_ID.getName(),
-                    FieldAccess.customRecordAware((ctx, record) -> record == null
-                        ? FieldAccess.Decision.EDITABLE : FieldAccess.Decision.READONLY))))
+                .bindings(List.of(ResourceFieldBinding.frozenAfterCreate(
+                    RecordScheduleStepModel.SCHEDULE_ID.getName())))
                 .build())
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL)
                 .emptyDescription(HohenheimMicrocopy.SCHEDULE_STEP.of("empty_description"))

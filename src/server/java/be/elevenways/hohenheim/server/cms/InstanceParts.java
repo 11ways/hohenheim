@@ -302,7 +302,9 @@ public final class InstanceParts {
     private static @NonNull FieldAccess kindAccess() {
         return FieldAccess.customRecordAware((access, record) -> record instanceof Row row
                 && row.get(InstanceModel.ID) != null && InstanceKinds.kindChangesOf(row).size() < 2
-            ? FieldAccess.Decision.READONLY : FieldAccess.Decision.EDITABLE);
+            ? FieldAccess.Decision.READONLY : FieldAccess.Decision.EDITABLE)
+            // Read-only or editable, never hidden: every stored instance reads it.
+            .readableWhere(access -> null);
     }
 
     /**

@@ -134,7 +134,9 @@ public final class ServerParts {
         List<ResourceFieldBinding> bindings = new ArrayList<>();
         for (String identity : LOCAL_IMMUTABLE) bindings.add(ResourceFieldBinding.of(identity,
             FieldAccess.customRecordAware((access, record) -> local(record)
-                ? FieldAccess.Decision.READONLY : FieldAccess.Decision.EDITABLE)));
+                ? FieldAccess.Decision.READONLY : FieldAccess.Decision.EDITABLE)
+                // Never hidden: every stored server reads its identity.
+                .readableWhere(ctx -> null)));
         bindings.add(ResourceFieldBinding.of(INCUS_TRUST_TOKEN.getName(),
             FieldAccess.customRecordAware((access, record) -> local(record)
                 ? FieldAccess.Decision.HIDDEN : FieldAccess.Decision.EDITABLE)));

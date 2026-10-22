@@ -61,6 +61,7 @@ import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.BadgeColor;
@@ -68,6 +69,7 @@ import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -157,7 +159,8 @@ public final class SiteParts {
                 .bindings(List.of(ResourceFieldBinding.of(SiteModel.AUTH_PROVIDER_ID.getName(),
                     FieldAccess.customRecordAware((access, record) -> record instanceof Row site
                         && !reachOf(site).gatedBySignIn() ? FieldAccess.Decision.HIDDEN
-                        : FieldAccess.Decision.EDITABLE))))
+                        : FieldAccess.Decision.EDITABLE)
+                        .readableWhere(access -> signInGated()))))
                 // The create stages both without a form entry; a revision restore must still own them.
                 .restorableOutsideForm(Set.of(SiteModel.SLUG.getName(), SiteModel.STATUS.getName()))
                 .createDefaults((access, panel) -> SiteParts.createDefaults(access))
@@ -568,6 +571,24 @@ public final class SiteParts {
     static @NonNull PutOnlineReach reachOf(@Nullable Row site) {
         UpstreamKindInfo info = kindOf(site);
         return info == null ? PutOnlineReach.WEBSITE : info.putOnlineReach();
+    }
+
+    /**
+     * The sites whose reach a sign-in can gate ({@link #reachOf} as criteria): those of a missing, unknown or gated
+     * kind, so every site but those of a registered kind whose reach no sign-in gates.
+     *
+     * @return null when every registered kind is gated by sign-in
+     */
+    private static @Nullable Criteria signInGated() {
+        List<String> ungated = new ArrayList<>();
+        for (UpstreamKindInfo info : UpstreamKinds.registry()) {
+            Identifier id = UpstreamKinds.registry().idOf(info);
+            if (id != null && !info.putOnlineReach().gatedBySignIn()) {
+                ungated.add(id.toString());
+            }
+        }
+        return ungated.isEmpty() ? null : Criteria.or(SiteModel.UPSTREAM_KIND.isNull(),
+            SiteModel.UPSTREAM_KIND.notIn(ungated));
     }
 
     /** @return a site's kind, null for a kind this build does not know */

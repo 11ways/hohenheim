@@ -72,6 +72,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -541,7 +542,9 @@ public final class DatabaseParts {
         return ResourceFieldBinding.of(field.getName(),
             FieldAccess.customRecordAware((ctx, record) ->
                 record instanceof Row row && DatabaseModel.isShared(row)
-                    ? FieldAccess.Decision.HIDDEN : FieldAccess.Decision.EDITABLE));
+                    ? FieldAccess.Decision.HIDDEN : FieldAccess.Decision.EDITABLE)
+                .readableWhere(ctx -> Criteria.or(DatabaseModel.PLACEMENT.isNull(),
+                    DatabaseModel.PLACEMENT.notIn(DatabaseModel.PLACEMENT_SHARED))));
     }
 
     /**
