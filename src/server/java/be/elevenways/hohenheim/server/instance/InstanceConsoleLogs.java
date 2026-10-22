@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.model.InstanceLogModel;
 import be.elevenways.hohenheim.server.HandlerSupport;
-import be.elevenways.hohenheim.server.orm.RecordStamp;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
@@ -66,11 +65,10 @@ final class InstanceConsoleLogs {
                     } else {
                         // Every later flush touches the episode's TEXT only: the row is
                         // fully loaded, so a save would restate instance_id and handle.
-                        RecordStamp.on(model, row)
-                            .set(InstanceLogModel.LOG_TEXT, text)
-                            .set(InstanceLogModel.LINE_COUNT, countLines(text))
-                            .set(InstanceLogModel.SAVED_AT, Now.instant())
-                            .write();
+                        row.set(InstanceLogModel.LOG_TEXT, text);
+                        row.set(InstanceLogModel.LINE_COUNT, countLines(text));
+                        row.set(InstanceLogModel.SAVED_AT, Now.instant());
+                        model.saveWritten(row);
                     }
                     this.rowId = row.get(InstanceLogModel.ID);
                 };

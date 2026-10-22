@@ -11,7 +11,6 @@ import be.elevenways.hohenheim.server.build.BuildQuota;
 import be.elevenways.hohenheim.server.build.SandboxedBuilds;
 import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
-import be.elevenways.hohenheim.server.orm.RecordStamp;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.ExecSupport;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
@@ -27,6 +26,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.history.History;
+import be.elevenways.zenit.common.orm.datasource.RecordNotFoundException;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -408,18 +408,20 @@ public final class WorkspaceBuilds {
             return;
         }
         Instant finished = Now.instant();
-        RecordStamp ending = RecordStamp.on(model, row)
-            .set(BuildOperationModel.STATUS, status)
-            .set(BuildOperationModel.SOURCE_REF, commitSha != null
-                ? commitSha : row.get(BuildOperationModel.SOURCE_REF))
-            .set(BuildOperationModel.FAILURE_REASON, failureReason)
-            .set(BuildOperationModel.LOG, log.text())
-            .set(BuildOperationModel.FINISHED_AT, finished)
-            .set(BuildOperationModel.DURATION_MS,
-                (int) (finished.toEpochMilli() - startedAt));
+        row.set(BuildOperationModel.SOURCE_REF,
+            commitSha != null ? commitSha : row.get(BuildOperationModel.SOURCE_REF));
+        row.set(BuildOperationModel.STATUS, status);
+        row.set(BuildOperationModel.FAILURE_REASON, failureReason);
+        row.set(BuildOperationModel.LOG, log.text());
+        row.set(BuildOperationModel.FINISHED_AT, finished);
+        row.set(BuildOperationModel.DURATION_MS, (int) (finished.toEpochMilli() - startedAt));
         this.instances.operations().afterRelease(row.get(BuildOperationModel.FOR_MODEL),
             row.get(BuildOperationModel.FOR_ID), () -> {
-                ending.write();
+                try {
+                    model.saveWritten(row);
+                } catch (RecordNotFoundException gone) {
+                    // Pruned meanwhile, as before: nothing to stamp.
+                }
                 model.pruneHistory(InstanceModel.MODEL_ID.toString(),
                     row.get(BuildOperationModel.FOR_ID), SandboxedBuilds.historyPerOwner());
             });

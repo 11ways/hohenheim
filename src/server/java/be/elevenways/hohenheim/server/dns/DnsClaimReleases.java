@@ -7,13 +7,13 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
-import be.elevenways.hohenheim.server.orm.RecordStamp;
 import be.elevenways.hohenheim.server.proxy.HostnamePatterns;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.history.History;
+import be.elevenways.zenit.common.orm.datasource.RecordNotFoundException;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
@@ -184,9 +184,12 @@ public final class DnsClaimReleases {
                     || isStillCovered(fqdn, survivors)) {
                 continue;
             }
-            RecordStamp.on(model, record)
-                .set(DnsRecordModel.ENABLED, false)
-                .write();
+            record.set(DnsRecordModel.ENABLED, false);
+            try {
+                model.saveWritten(record);
+            } catch (RecordNotFoundException gone) {
+                // Deleted meanwhile, as before: the claim's credential and grants are still revoked below.
+            }
             // The credential dies WITH the claim: a released name's token must answer
             // badauth immediately. The release is a mandated consequence of a domain
             // delete that already passed its own gate, so the delete runs authorized

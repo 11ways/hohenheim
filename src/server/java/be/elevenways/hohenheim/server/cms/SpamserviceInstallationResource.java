@@ -18,6 +18,7 @@ import be.elevenways.zenit.cms.common.resource.RowSingleton;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.edit.RelationPick;
+import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -55,8 +56,8 @@ public final class SpamserviceInstallationResource extends RowSingleton {
     }
 
     @Override
-    public void persist(@NonNull Map<String, Object> coerced, @NonNull AccessContext context) {
-        super.persist(coerced, context);
+    public void persist(@NonNull Row loaded, @NonNull Map<String, Object> coerced, @NonNull AccessContext context) {
+        super.persist(loaded, coerced, context);
         SpamserviceManager.get().reconcile();
     }
 

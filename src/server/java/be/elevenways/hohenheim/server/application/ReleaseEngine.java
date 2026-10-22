@@ -31,7 +31,6 @@ import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.server.instance.PublishedPortProbe;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
-import be.elevenways.hohenheim.server.orm.RecordStamp;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.Blast;
@@ -44,8 +43,10 @@ import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Db;
+import be.elevenways.zenit.common.orm.datasource.RecordNotFoundException;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.validation.Violations;
@@ -229,7 +230,8 @@ public final class ReleaseEngine {
             Row instance = newInstanceRow(applicationId, applicationName, serverId, desired,
                 InstanceModel.ROLE_CANDIDATE);
             instanceId = instance.get(InstanceModel.ID);
-            transition(stamp(op).set(ReleaseOperationModel.CANDIDATE_INSTANCE_ID, instanceId),
+            op.set(ReleaseOperationModel.CANDIDATE_INSTANCE_ID, instanceId);
+            transition(op,
                 ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.DEPLOYING),
                 "instance " + instanceId + " created");
             InstanceService instances = new InstanceService();
@@ -240,7 +242,8 @@ public final class ReleaseEngine {
                 "promoting healthy initial release");
             new InstanceService().assignRuntimeRole(instanceId, InstanceModel.ROLE_SERVING);
             ApplicationUpstreams.invalidate(applicationId);
-            finish(stamp(op).set(ReleaseOperationModel.IMAGE_ID, trimmed(desired.get(InstanceKindFields.IMAGE))),
+            op.set(ReleaseOperationModel.IMAGE_ID, trimmed(desired.get(InstanceKindFields.IMAGE)));
+            finish(op,
                 ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), null, "deployed");
             return new ApplicationReleases.Release(instanceId, status);
         } catch (RuntimeException e) {
@@ -426,7 +429,8 @@ public final class ReleaseEngine {
         boolean stoppedPrior = false;
         try {
             if (exclusive) {
-                step(stamp(op).set(ReleaseOperationModel.RETIRED_INSTANCE_ID, servingId),
+                op.set(ReleaseOperationModel.RETIRED_INSTANCE_ID, servingId);
+                step(op,
                     "exclusive volume: stopping prior release before snapshot and candidate start");
                 instances.stop(servingId);
                 stoppedPrior = true;
@@ -441,7 +445,8 @@ public final class ReleaseEngine {
             Row candidate = InstanceCapacity.withPendingRelease(serverId, InstanceCapacity.bookedMbOf(serving),
                 () -> newInstanceRow(applicationId, applicationName, serverId, desired, InstanceModel.ROLE_CANDIDATE));
             candidateId = candidate.get(InstanceModel.ID);
-            transition(stamp(op).set(ReleaseOperationModel.CANDIDATE_INSTANCE_ID, candidateId),
+            op.set(ReleaseOperationModel.CANDIDATE_INSTANCE_ID, candidateId);
+            transition(op,
                 ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.DEPLOYING),
                 "candidate instance " + candidateId + " created beside serving instance "
                     + servingId);
@@ -455,9 +460,9 @@ public final class ReleaseEngine {
             // leaves the NEWEST serving row winning ownedServing (and boot recovery
             // completes the flip). Traffic follows atomically via the routing
             // generation swap -- see the class AIDEV-NOTE.
-            transition(stamp(op)
-                    .set(ReleaseOperationModel.RETIRED_INSTANCE_ID, servingId)
-                    .set(ReleaseOperationModel.IMAGE_ID, trimmed(desired.get(InstanceKindFields.IMAGE))),
+            op.set(ReleaseOperationModel.RETIRED_INSTANCE_ID, servingId);
+            op.set(ReleaseOperationModel.IMAGE_ID, trimmed(desired.get(InstanceKindFields.IMAGE)));
+            transition(op,
                 ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SWITCHING), "switching traffic");
             // AIDEV-NOTE: both flips are FENCED SINGLE-COLUMN writes, never Models.save of
             // the Row objects held here. Those objects are stale by construction -- the
@@ -591,7 +596,7 @@ public final class ReleaseEngine {
             // to an EARLIER operation, and the operation running now is about to swap: an earlier one still reading
             // draining once this one let go would be drained again by the next operation, which reclaims every
             // retired release but this earlier one's -- the rollback target this swap just retained.
-            settle(stamp(op), ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), null,
+            settle(op, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), null,
                 "release complete", Now.instant());
         }
     }
@@ -1082,85 +1087,87 @@ public final class ReleaseEngine {
     }
 
     /**
-     * Start a NARROW write against the operation record.
+     * Persist the columns a step set on the operation record, and nothing else ({@code Model.saveWritten}).
      *
      * AIDEV-NOTE: every write to an operation row goes through here, for the reason
-     * {@code InstanceOperationGuard.stampRole} exists on the instance row. An operation
-     * is held open across minutes of daemon work -- a sandbox build, a probe window, a
-     * drain -- and the drain's own row is LOADED (every column present) before that
-     * work starts. {@code Models.save} writes every column present, so a step recording
-     * one log line used to rewrite the kind, the owner, the fingerprints and the
-     * candidate/retired pointers back to their load-time values, and report success. A
-     * step that changes two columns writes two columns; a caller with more to record
-     * stages it on the same stamp.
+     * {@code InstanceOperationGuard.stampRole} exists on the instance row. An operation is held open across minutes of
+     * daemon work and its row is LOADED before that work starts; a whole-row save would rewrite the kind, the owner,
+     * the fingerprints and the candidate/retired pointers back to their load-time values. A record pruned or deleted
+     * under the operation leaves nothing to record onto.
      */
-    private static @NonNull RecordStamp stamp(@NonNull Row op) {
-        return RecordStamp.on(Models.get(ReleaseOperationModel.class), op);
+    private static void persist(@NonNull Row op) {
+        try {
+            Models.get(ReleaseOperationModel.class).saveWritten(op);
+        } catch (RecordNotFoundException gone) {
+            // Nothing left to record the step onto, as before.
+        }
     }
 
     /** Append a timestamped step line and persist it with whatever else is staged. */
     private static void step(@NonNull Row op, @NonNull String line) {
-        step(stamp(op), line);
-    }
-
-    private static void step(@NonNull RecordStamp stamp, @NonNull String line) {
-        staged(stamp, line, Now.instant()).write();
+        persist(staged(op, line, Now.instant()));
     }
 
     /** Stage a timestamped step line onto the log the row carries. */
-    private static @NonNull RecordStamp staged(@NonNull RecordStamp stamp, @NonNull String line, @NonNull Instant at) {
-        String existing = stamp.row().get(ReleaseOperationModel.STEP_LOG);
-        return stamp.set(ReleaseOperationModel.STEP_LOG, (existing == null ? "" : existing) + at + " " + line + "\n");
+    private static @NonNull Row staged(@NonNull Row op, @NonNull String line, @NonNull Instant at) {
+        String existing = op.get(ReleaseOperationModel.STEP_LOG);
+        op.set(ReleaseOperationModel.STEP_LOG, (existing == null ? "" : existing) + at + " " + line + "\n");
+        return op;
     }
 
-    private static void transition(@NonNull Row op, @NonNull String status,
-                                   @NonNull String line) {
-        transition(stamp(op), status, line);
-    }
-
-    private static void transition(@NonNull RecordStamp stamp, @NonNull String status,
-                                   @NonNull String line) {
-        step(stamp.set(ReleaseOperationModel.STATUS, status), line);
-    }
-
-    private static void finish(@NonNull Row op, @NonNull String status,
-                               @Nullable String failureReason, @NonNull String line) {
-        finish(stamp(op), status, failureReason, line);
+    private static void transition(@NonNull Row op, @NonNull String status, @NonNull String line) {
+        op.set(ReleaseOperationModel.STATUS, status);
+        step(op, line);
     }
 
     /**
      * Stamp the operation's own outcome once its application's claim is let go
      * ({@link InstanceOperationLock#afterRelease}), timed when the work ended.
      */
-    private static void finish(@NonNull RecordStamp stamp, @NonNull String status,
+    private static void finish(@NonNull Row op, @NonNull String status,
                                @Nullable String failureReason, @NonNull String line) {
         Instant finished = Now.instant();
-        InstanceOperationLock.production().afterRelease(stamp.row().get(ReleaseOperationModel.FOR_MODEL),
-            stamp.row().get(ReleaseOperationModel.FOR_ID), () -> settle(stamp, status, failureReason, line, finished));
+        InstanceOperationLock.production().afterRelease(op.get(ReleaseOperationModel.FOR_MODEL),
+            op.get(ReleaseOperationModel.FOR_ID), () -> settle(op, status, failureReason, line, finished));
     }
 
     /**
      * Write the terminal stamp while the operation still reads the status this thread left it in; a newer operation
      * that settled it meanwhile ({@link #completePendingDrains}) keeps its own stamp, alert and prune.
+     *
+     * AIDEV-NOTE: a compare-and-set, so ONE statement on the in-flight status assigning every terminal column, plus
+     * the image a successful initial release staged for it; the row mirrors what the statement writes.
      */
-    private static void settle(@NonNull RecordStamp stamp, @NonNull String status, @Nullable String failureReason,
+    private static void settle(@NonNull Row op, @NonNull String status, @Nullable String failureReason,
                                @NonNull String line, @NonNull Instant finished) {
-        String inFlight = stamp.row().get(ReleaseOperationModel.STATUS);
-        stamp.set(ReleaseOperationModel.STATUS, status)
-            .set(ReleaseOperationModel.FAILURE_REASON, failureReason)
-            .set(ReleaseOperationModel.FINISHED_AT, finished);
-        Instant started = stamp.row().get(ReleaseOperationModel.STARTED_AT);
+        String inFlight = op.get(ReleaseOperationModel.STATUS);
+        op.set(ReleaseOperationModel.STATUS, status);
+        op.set(ReleaseOperationModel.FAILURE_REASON, failureReason);
+        op.set(ReleaseOperationModel.FINISHED_AT, finished);
+        staged(op, line, finished);
+        QueryBuilder<Row> settled = Models.get(ReleaseOperationModel.class).find()
+            .where(ReleaseOperationModel.ID.eq(op.get(ReleaseOperationModel.ID)))
+            .and(ReleaseOperationModel.STATUS.eq(inFlight))
+            .assign(ReleaseOperationModel.STATUS, status)
+            .assign(ReleaseOperationModel.FAILURE_REASON, failureReason)
+            .assign(ReleaseOperationModel.FINISHED_AT, finished)
+            .assign(ReleaseOperationModel.STEP_LOG, op.get(ReleaseOperationModel.STEP_LOG));
+        Instant started = op.get(ReleaseOperationModel.STARTED_AT);
         if (started != null) {
-            stamp.set(ReleaseOperationModel.DURATION_MS,
-                (int) (finished.toEpochMilli() - started.toEpochMilli()));
+            int duration = (int) (finished.toEpochMilli() - started.toEpochMilli());
+            op.set(ReleaseOperationModel.DURATION_MS, duration);
+            settled = settled.assign(ReleaseOperationModel.DURATION_MS, duration);
         }
-        if (staged(stamp, line, finished).writeWhile(ReleaseOperationModel.STATUS.eq(inFlight)) == 0) {
+        if (op.isWritten(ReleaseOperationModel.IMAGE_ID)) {
+            settled = settled.assign(ReleaseOperationModel.IMAGE_ID, op.get(ReleaseOperationModel.IMAGE_ID));
+        }
+        if (settled.updateAll() == 0) {
             return;
         }
         if (ReleaseOperationModel.LIFECYCLE.is(status, OperationStatus.FAILED)) {
-            alertFailed(stamp.row(), failureReason);
+            alertFailed(op, failureReason);
         }
-        prune(stamp.row());
+        prune(op);
     }
 
     /**

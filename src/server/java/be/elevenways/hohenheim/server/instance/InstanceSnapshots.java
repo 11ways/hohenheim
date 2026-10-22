@@ -12,7 +12,6 @@ import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.backup.BackupArchive;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
-import be.elevenways.hohenheim.server.orm.RecordStamp;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
@@ -24,6 +23,7 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.history.History;
+import be.elevenways.zenit.common.orm.datasource.RecordNotFoundException;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -120,9 +120,8 @@ public final class InstanceSnapshots {
                     String stamp = UtcStamp.now();
                     directory[0] = snapshotRoot().resolve("instance-" + instanceId)
                         .resolve(stamp + "-" + snapshot[0].get(InstanceSnapshotModel.ID));
-                    RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot[0])
-                        .set(InstanceSnapshotModel.DIRECTORY, directory[0].toString())
-                        .write();
+                    snapshot[0].set(InstanceSnapshotModel.DIRECTORY, directory[0].toString());
+                    Models.get(InstanceSnapshotModel.class).saveWritten(snapshot[0]);
                     captureInto(snapshot[0], directory[0], support, resolved, volumes, this.instances.operations());
                 });
         } catch (IOException error) {
@@ -176,24 +175,33 @@ public final class InstanceSnapshots {
             // operator-editable through InstanceSnapshotResource for that whole window --
             // a whole-row save rewinds the edit while reporting the capture complete.
             long capturedTotal = total;
-            operations.afterRelease(resolved.row().get(InstanceModel.ID), () ->
-                RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot)
-                    .set(InstanceSnapshotModel.STATUS, InstanceSnapshotModel.STATUS_COMPLETE)
-                    .set(InstanceSnapshotModel.VOLUMES, inventory)
-                    .set(InstanceSnapshotModel.TOTAL_BYTES, capturedTotal)
-                    .write());
+            operations.afterRelease(resolved.row().get(InstanceModel.ID), () -> {
+                snapshot.set(InstanceSnapshotModel.STATUS, InstanceSnapshotModel.STATUS_COMPLETE);
+                snapshot.set(InstanceSnapshotModel.VOLUMES, inventory);
+                snapshot.set(InstanceSnapshotModel.TOTAL_BYTES, capturedTotal);
+                publish(snapshot);
+            });
         } catch (IOException | RuntimeException error) {
             FileTrees.deleteQuietly(directory);
-            operations.afterRelease(resolved.row().get(InstanceModel.ID), failed(snapshot, error)::write);
+            failed(snapshot, error);
+            operations.afterRelease(resolved.row().get(InstanceModel.ID), () -> publish(snapshot));
             throw error;
         }
     }
 
-    /** The stamp that settles a capture's row as FAILED with what failed it. */
-    private static @NonNull RecordStamp failed(@NonNull Row snapshot, @NonNull Throwable error) {
-        return RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot)
-            .set(InstanceSnapshotModel.STATUS, InstanceSnapshotModel.STATUS_FAILED)
-            .set(InstanceSnapshotModel.ERROR, HohenheimViolations.reasonOf(error));
+    /** Stage the FAILED settlement of a capture's row, with what failed it. */
+    private static void failed(@NonNull Row snapshot, @NonNull Throwable error) {
+        snapshot.set(InstanceSnapshotModel.STATUS, InstanceSnapshotModel.STATUS_FAILED);
+        snapshot.set(InstanceSnapshotModel.ERROR, HohenheimViolations.reasonOf(error));
+    }
+
+    /** Persist what the capture staged on its row; a row deleted during the capture has nothing left to settle. */
+    private static void publish(@NonNull Row snapshot) {
+        try {
+            Models.get(InstanceSnapshotModel.class).saveWritten(snapshot);
+        } catch (RecordNotFoundException gone) {
+            // Deleted while capturing, as before: nothing to settle.
+        }
     }
 
     /**
@@ -224,18 +232,17 @@ public final class InstanceSnapshots {
                     // with it. That is why the row is saved first.
                     nativeName[0] = "hib-" + UtcStamp.now()
                         + "-" + snapshot[0].get(InstanceSnapshotModel.ID);
-                    RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot[0])
-                        .set(InstanceSnapshotModel.NATIVE_NAME, nativeName[0])
-                        .write();
+                    snapshot[0].set(InstanceSnapshotModel.NATIVE_NAME, nativeName[0]);
+                    Models.get(InstanceSnapshotModel.class).saveWritten(snapshot[0]);
                     try {
                         support.createSnapshot(resolved.spec(), nativeName[0]);
-                        this.instances.operations().afterRelease(instanceId, () ->
-                            RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot[0])
-                                .set(InstanceSnapshotModel.STATUS,
-                                    InstanceSnapshotModel.STATUS_COMPLETE)
-                                .write());
+                        this.instances.operations().afterRelease(instanceId, () -> {
+                            snapshot[0].set(InstanceSnapshotModel.STATUS, InstanceSnapshotModel.STATUS_COMPLETE);
+                            publish(snapshot[0]);
+                        });
                     } catch (IOException | RuntimeException error) {
-                        this.instances.operations().afterRelease(instanceId, failed(snapshot[0], error)::write);
+                        failed(snapshot[0], error);
+                        this.instances.operations().afterRelease(instanceId, () -> publish(snapshot[0]));
                         throw error;
                     }
                 });
@@ -471,10 +478,9 @@ public final class InstanceSnapshots {
                 reclaimNative(row, nativeName);
             }
             if (InstanceSnapshotModel.STATUS_CAPTURING.equals(row.get(InstanceSnapshotModel.STATUS))) {
-                RecordStamp.on(Models.get(InstanceSnapshotModel.class), row)
-                    .set(InstanceSnapshotModel.STATUS, InstanceSnapshotModel.STATUS_FAILED)
-                    .set(InstanceSnapshotModel.ERROR, "Interrupted by a controller restart mid-capture")
-                    .write();
+                row.set(InstanceSnapshotModel.STATUS, InstanceSnapshotModel.STATUS_FAILED);
+                row.set(InstanceSnapshotModel.ERROR, "Interrupted by a controller restart mid-capture");
+                Models.get(InstanceSnapshotModel.class).saveWritten(row);
                 Blast.log("SNAPSHOT: settled interrupted capture row", id, "as failed");
             }
         }

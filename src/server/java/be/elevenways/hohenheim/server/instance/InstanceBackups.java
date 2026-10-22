@@ -39,7 +39,6 @@ import be.elevenways.hohenheim.server.backup.BackupTarget;
 import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
-import be.elevenways.hohenheim.server.orm.RecordStamp;
 import be.elevenways.hohenheim.server.runtime.ImageIdentity;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
@@ -57,6 +56,7 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.history.History;
+import be.elevenways.zenit.common.orm.datasource.RecordNotFoundException;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -404,9 +404,8 @@ public final class InstanceBackups {
         // SURVIVING row still pointed at. Same hazard, same fix, all three lanes.
         String key = ControllerIdentity.token() + "/instance-" + instanceId + "/" + stamp
             + "-" + backup.get(InstanceBackupModel.ID) + ".hib";
-        RecordStamp.on(Models.get(InstanceBackupModel.class), backup)
-            .set(InstanceBackupModel.REMOTE_KEY, key)
-            .write();
+        backup.set(InstanceBackupModel.REMOTE_KEY, key);
+        Models.get(InstanceBackupModel.class).saveWritten(backup);
         try {
             BackupManifest manifest = buildManifest(owner, image, payload, captured, disks, hostVolumes,
                 applicationEntry);
@@ -437,13 +436,12 @@ public final class InstanceBackups {
             // column back to its creation-time value and reports the backup complete.
             // Written once the instance's claim is let go: a client restoring the backup it saw complete is never
             // refused by this capture.
-            RecordStamp complete = RecordStamp.on(Models.get(InstanceBackupModel.class), backup)
-                .set(InstanceBackupModel.STATUS, InstanceBackupModel.STATUS_COMPLETE)
-                .set(InstanceBackupModel.SHA256, storedSha)
-                .set(InstanceBackupModel.SIZE_BYTES, size)
-                .set(InstanceBackupModel.SUMMARY, manifest.toSummary());
+            backup.set(InstanceBackupModel.STATUS, InstanceBackupModel.STATUS_COMPLETE);
+            backup.set(InstanceBackupModel.SHA256, storedSha);
+            backup.set(InstanceBackupModel.SIZE_BYTES, size);
+            backup.set(InstanceBackupModel.SUMMARY, manifest.toSummary());
             this.instances.operations().afterRelease(instanceId, () -> {
-                complete.write();
+                publish(backup);
                 pruneForRetention(instanceId, targetId, target);
             });
         } catch (IOException | RuntimeException error) {
@@ -462,10 +460,9 @@ public final class InstanceBackups {
                 Blast.log("BACKUP: could not remove partial artifact", key, ":",
                     HohenheimViolations.reasonOf(cleanupFailed));
             }
-            RecordStamp failed = RecordStamp.on(Models.get(InstanceBackupModel.class), backup)
-                .set(InstanceBackupModel.STATUS, InstanceBackupModel.STATUS_FAILED)
-                .set(InstanceBackupModel.ERROR, HohenheimViolations.reasonOf(error));
-            this.instances.operations().afterRelease(instanceId, failed::write);
+            backup.set(InstanceBackupModel.STATUS, InstanceBackupModel.STATUS_FAILED);
+            backup.set(InstanceBackupModel.ERROR, HohenheimViolations.reasonOf(error));
+            this.instances.operations().afterRelease(instanceId, () -> publish(backup));
             if (error instanceof Violations refused) {
                 throw refused;
             }
@@ -1061,15 +1058,23 @@ public final class InstanceBackups {
                         HohenheimViolations.reasonOf(unreachable));
                 }
             }
-            RecordStamp.on(Models.get(InstanceBackupModel.class), row)
-                .set(InstanceBackupModel.STATUS, InstanceBackupModel.STATUS_FAILED)
-                .set(InstanceBackupModel.ERROR, error)
-                .write();
+            row.set(InstanceBackupModel.STATUS, InstanceBackupModel.STATUS_FAILED);
+            row.set(InstanceBackupModel.ERROR, error);
+            Models.get(InstanceBackupModel.class).saveWritten(row);
             Blast.log("BACKUP: settled interrupted upload row", id, "as failed");
         }
     }
 
     // -- internals ------------------------------------------------------------
+
+    /** Persist what the upload staged on its row; a row deleted during the upload has nothing left to settle. */
+    private static void publish(@NonNull Row backup) {
+        try {
+            Models.get(InstanceBackupModel.class).saveWritten(backup);
+        } catch (RecordNotFoundException gone) {
+            // Deleted while uploading, as before: nothing to settle.
+        }
+    }
 
     private static Row requireRow(int instanceId) {
         Row row = Models.get(InstanceModel.class).findById(instanceId);

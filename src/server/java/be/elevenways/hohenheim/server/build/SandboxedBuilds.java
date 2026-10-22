@@ -6,11 +6,11 @@ import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
-import be.elevenways.hohenheim.server.orm.RecordStamp;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.orm.datasource.RecordNotFoundException;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -140,7 +140,12 @@ public final class SandboxedBuilds {
         BuildOperationModel model = Models.get(BuildOperationModel.class);
         Row row = model.findById(buildId);
         if (row != null) {
-            RecordStamp.on(model, row).set(BuildOperationModel.DETECTION, detection).write();
+            row.set(BuildOperationModel.DETECTION, detection);
+            try {
+                model.saveWritten(row);
+            } catch (RecordNotFoundException gone) {
+                // Pruned by a newer build of the same owner meanwhile, as before: nothing to stamp.
+            }
         }
     }
 
@@ -180,19 +185,21 @@ public final class SandboxedBuilds {
             // A NARROW write: the row is fully loaded, so a save would rewrite the
             // quotas, the request identity and the detection this build already
             // recorded -- columns this outcome has no business restating.
-            RecordStamp ending = RecordStamp.on(model, row)
-                .set(BuildOperationModel.STATUS, status)
-                .set(BuildOperationModel.IMAGE_ID, imageId)
-                .set(BuildOperationModel.EXIT_CODE, exitCode)
-                .set(BuildOperationModel.FAILURE_REASON, reason)
-                .set(BuildOperationModel.LOG, log.text())
-                .set(BuildOperationModel.PEAK_DISK_BYTES, peakDisk)
-                .set(BuildOperationModel.ARTIFACT_BYTES, artifactBytes)
-                .set(BuildOperationModel.FINISHED_AT, finished)
-                .set(BuildOperationModel.DURATION_MS,
-                    (int) (finished.toEpochMilli() - startedAt));
+            row.set(BuildOperationModel.STATUS, status);
+            row.set(BuildOperationModel.IMAGE_ID, imageId);
+            row.set(BuildOperationModel.EXIT_CODE, exitCode);
+            row.set(BuildOperationModel.FAILURE_REASON, reason);
+            row.set(BuildOperationModel.LOG, log.text());
+            row.set(BuildOperationModel.PEAK_DISK_BYTES, peakDisk);
+            row.set(BuildOperationModel.ARTIFACT_BYTES, artifactBytes);
+            row.set(BuildOperationModel.FINISHED_AT, finished);
+            row.set(BuildOperationModel.DURATION_MS, (int) (finished.toEpochMilli() - startedAt));
             InstanceOperationLock.production().afterRelease(request.forModel().toString(), request.forId(), () -> {
-                ending.write();
+                try {
+                    model.saveWritten(row);
+                } catch (RecordNotFoundException gone) {
+                    // Pruned by a newer build of the same owner meanwhile, as before: nothing to stamp.
+                }
                 prune(model, request);
             });
         }
