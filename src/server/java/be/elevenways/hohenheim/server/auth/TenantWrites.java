@@ -812,7 +812,13 @@ public final class TenantWrites {
         if (!row.has(SiteModel.SETTINGS.getName())) {
             return;
         }
-        Object siteType = row.afterWrite(SiteModel.UPSTREAM_KIND, StoredRows.of(Models.get(SiteModel.class), row));
+        // Judged only when the write moves the settings, never because the row carries them (a narrow save hands
+        // its hooks the whole stored record): an upstream an older release accepted keeps the site editable.
+        Row stored = StoredRows.of(Models.get(SiteModel.class), row);
+        if (!row.isWritten(SiteModel.SETTINGS) && !row.changes(SiteModel.SETTINGS, stored)) {
+            return;
+        }
+        Object siteType = row.afterWrite(SiteModel.UPSTREAM_KIND, stored);
         if (!AddressUpstreamKind.ID.toString().equals(String.valueOf(siteType))) {
             return;
         }

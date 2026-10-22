@@ -426,8 +426,8 @@ public final class SiteOperationHandlers {
      *
      * AIDEV-NOTE: the enable invariant and the tls-passthrough refusals are NOT re-checked here: they run in the
      * SiteModel write pipeline (SiteEnableInvariant, the beforeValidate hook), which the save funnels through, one
-     * enforcement point for every writer. A patch hands this the stored values for every entry it did not submit, so
-     * a one-cell rename writes the settings back exactly as stored.
+     * enforcement point for every writer. Only the columns set here are saved ({@code saveWrittenRefusingGone}), so a
+     * column the edit leaves alone keeps a concurrent writer's value, and a site deleted since its load is refused.
      *
      * @throws DomainRefusal STALE when the site moved past the revision the editor reviewed
      */
@@ -464,7 +464,7 @@ public final class SiteOperationHandlers {
         if (writes(written, SiteModel.ACCESS_LIST_ID)) {
             site.set(SiteModel.ACCESS_LIST_ID, input.access_list_id());
         }
-        Models.get(SiteModel.class).save(site);
+        Models.get(SiteModel.class).saveWrittenRefusingGone(site);
         return null;
     }
 
@@ -486,7 +486,7 @@ public final class SiteOperationHandlers {
         if (writes(written, SiteModel.DESCRIPTION)) {
             site.set(SiteModel.DESCRIPTION, input.description());
         }
-        Models.get(SiteModel.class).save(site);
+        Models.get(SiteModel.class).saveWrittenRefusingGone(site);
         return null;
     }
 

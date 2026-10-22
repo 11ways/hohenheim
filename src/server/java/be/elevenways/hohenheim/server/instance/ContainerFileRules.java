@@ -54,10 +54,15 @@ public final class ContainerFileRules {
 
     /** @throws be.elevenways.zenit.common.validation.Violations anchored on the offending column */
     static void check(@NonNull Row row, @NonNull StringField path, @NonNull StringField mode) {
-        if (row.has(path.getName()) && row.get(path) != null) {
-            row.set(path, checkedPath(path.getName(), row.get(path)));
+        // Only the columns the write sets (Row.isWritten): a narrow save hands its hooks the whole stored record,
+        // and a legacy stored path or mode never locks an unrelated edit.
+        if (row.isWritten(path) && row.get(path) != null) {
+            String checked = checkedPath(path.getName(), row.get(path));
+            if (!checked.equals(row.get(path))) {
+                row.set(path, checked);
+            }
         }
-        checkMode(mode.getName(), row.has(mode.getName()) ? row.get(mode) : null);
+        checkMode(mode.getName(), row.isWritten(mode) ? row.get(mode) : null);
     }
 
     /**

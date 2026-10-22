@@ -44,7 +44,8 @@ class ConvertedEntryAccessTabTest extends HohenheimTestBase {
             // 2. Saving a view share through the tab's PAGE placement grants the tenant the certificate.
             HttpResponse<String> saved = adminPostForm(
                 "/admin/certificates/invoke/zenit.save_record_sharing?ids=" + certificateId,
-                "_tab=access&_confirmed=1&access.0.type=user&access.0.id=" + tenantId
+                accessTabFields(CertificateModel.MODEL_ID, certificateId) + "access.0.type=user&access.0.id="
+                    + tenantId
                     + "&access.0.caps.0.key=" + HohenheimCapabilities.VIEW + "&access.0.caps.0.value=allow");
             assertThat(saved.statusCode()).as("step 2: the share saves").isIn(302, 303);
             assertThat(tenantReaches(tenantId, certificateId))

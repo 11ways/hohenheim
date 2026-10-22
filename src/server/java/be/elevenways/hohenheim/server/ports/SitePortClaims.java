@@ -72,8 +72,10 @@ public final class SitePortClaims {
      */
     private static void refuseCredentials(@NonNull SaveToDatasource context) {
         Row row = context.getRow();
-        if (row == null || !(row.has(SiteModel.UPSTREAM_KIND.getName()) || row.has(SiteModel.AUTH_PROVIDER_ID.getName())
-                || row.has(SiteModel.ACCESS_LIST_ID.getName()))) {
+        // Judged only when the write moves a column the rule relates (Row.isWritten, never Row.has: a narrow save
+        // hands its hooks the whole stored record), so a later access-rule change never locks unrelated site edits.
+        if (row == null || !(row.isWritten(SiteModel.UPSTREAM_KIND) || row.isWritten(SiteModel.AUTH_PROVIDER_ID)
+                || row.isWritten(SiteModel.ACCESS_LIST_ID))) {
             return;
         }
         Row stored = StoredRows.of(Models.get(SiteModel.class), row);

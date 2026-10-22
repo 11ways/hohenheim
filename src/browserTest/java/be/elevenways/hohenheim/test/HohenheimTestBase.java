@@ -12,6 +12,8 @@ import be.elevenways.zenit.auth.AuthSettings;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ZenitAuth;
 import be.elevenways.zenit.cms.common.RecordsCopy;
+import be.elevenways.zenit.auth.server.GrantMatrixSnapshots;
+import be.elevenways.zenit.auth.server.RecordSharing;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.render.action.CmsConfirmation;
 import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
@@ -40,6 +42,7 @@ import java.time.Duration;
 import be.elevenways.zenit.common.session.SessionToken;
 import be.elevenways.zenit.common.flash.FlashNotice;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import be.elevenways.zenit.test.support.FlashHandoff;
 import be.elevenways.hawkeye.common.Hawkeye;
@@ -438,6 +441,15 @@ public abstract class HohenheimTestBase extends ZenitBrowserTestBase {
             .as("the edit was judged on its own merits, not refused as a stale snapshot")
             .doesNotContain(ApiSupport.shippedText(RecordsCopy.COPY.of("conflict")));
         return answer;
+    }
+
+    /**
+     * What the Access tab's Save posts beside its rows: the tab, the confirmation proof and the grid's snapshot of now,
+     * which the sharing save requires from every caller (a missing one is the conflict).
+     */
+    protected static String accessTabFields(Identifier model, Object recordId) {
+        return "_tab=access&_confirmed=1&" + GrantMatrixSnapshots.FIELD + "="
+            + URLEncoder.encode(RecordSharing.snapshot(model, recordId), StandardCharsets.UTF_8) + "&";
     }
 
     /** A DRY POST as the harness admin, CSRF token included. */

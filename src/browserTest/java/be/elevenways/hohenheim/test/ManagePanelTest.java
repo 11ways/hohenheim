@@ -121,9 +121,6 @@ class ManagePanelTest extends HohenheimTestBase {
         return httpGet(path, session);
     }
 
-    /** What the Access tab's Save posts beside its rows: the tab and the confirmation proof. */
-    private static final String SAVE_ACCESS_FIELDS = "_tab=access&_confirmed=1&";
-
     /** The one invoke route the Access tab's form posts to, over site A. */
     private String saveAccessPath() {
         return "/admin/sites/invoke/zenit.save_record_sharing?ids=" + siteAId;
@@ -166,7 +163,7 @@ class ManagePanelTest extends HohenheimTestBase {
         // The GENERIC record-access tab (zenit-auth's contributed tab, saving through its PAGE placement of
         // zenit:save_record_sharing on the one invoke route) is the grant surface.
         HttpResponse<String> add = adminPostForm(saveAccessPath(),
-            SAVE_ACCESS_FIELDS + "access.0.type=user&access.0.id=" + operatorId
+            accessTabFields(SiteModel.MODEL_ID, siteAId) + "access.0.type=user&access.0.id=" + operatorId
                 + "&access.0.caps.0.key=manage&access.0.caps.0.value=allow");
         assertThat(add.statusCode()).isIn(302, 303);
 
@@ -432,7 +429,7 @@ class ManagePanelTest extends HohenheimTestBase {
     void recordAndGlobalGrantsDrivePanelEligibility() throws Exception {
         // The operator holds site A through the Access tab, where the grant journey leaves it.
         assertThat(adminPostForm(saveAccessPath(),
-            SAVE_ACCESS_FIELDS + "access.0.type=user&access.0.id=" + operatorId
+            accessTabFields(SiteModel.MODEL_ID, siteAId) + "access.0.type=user&access.0.id=" + operatorId
                 + "&access.0.caps.0.key=manage&access.0.caps.0.value=allow").statusCode())
             .as("fixture: the Access tab grants site A").isIn(302, 303);
         assertThat(HohenheimAccess.managedSiteIds(new UserPrincipal(operatorId, "Site Operator")))
@@ -440,7 +437,7 @@ class ManagePanelTest extends HohenheimTestBase {
 
         GrantService.createDirectGrant(GrantSubjectType.USER, operatorId, "hohenheim.manage.access", true);
         HttpResponse<String> remove = adminPostForm(saveAccessPath(),
-            SAVE_ACCESS_FIELDS + "access.__removed=" + java.net.URLEncoder.encode(
+            accessTabFields(SiteModel.MODEL_ID, siteAId) + "access.__removed=" + java.net.URLEncoder.encode(
                 new SubjectTag(GrantSubjectType.USER, operatorId).token(), java.nio.charset.StandardCharsets.UTF_8));
         assertThat(remove.statusCode()).isIn(302, 303);
 

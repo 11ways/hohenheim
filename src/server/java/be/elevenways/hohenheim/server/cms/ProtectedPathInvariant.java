@@ -66,7 +66,8 @@ public final class ProtectedPathInvariant {
         AccessRuleModel.SCHEMA.addBeforeRemoveHook(ProtectedPathInvariant::refuseOpeningRuleRemoval);
         AccessListModel.SCHEMA.addBeforeValidateHook(context -> {
             Row list = context.getRow();
-            if (list != null && list.has(AccessListModel.SATISFY.getName()) && list.get(AccessListModel.ID) != null) {
+            // Judged when the write sets satisfy (Row.isWritten): a narrow save hands its hooks the whole record.
+            if (list != null && list.isWritten(AccessListModel.SATISFY) && list.get(AccessListModel.ID) != null) {
                 int id = list.get(AccessListModel.ID);
                 List<Row> rules = rulesOf(id);
                 refuseOpening(id, admitsEveryone(id, null, rules),
@@ -78,7 +79,9 @@ public final class ProtectedPathInvariant {
             if (row == null) {
                 return;
             }
-            if (row.has(ProtectedPathModel.PATH.getName())) {
+            // Canonicalized when the write sets the path (Row.isWritten), so a legacy stored path never locks an
+            // unrelated edit.
+            if (row.isWritten(ProtectedPathModel.PATH)) {
                 Object raw = row.get(ProtectedPathModel.PATH);
                 String canonical = SiteDispatcher.normalizeRoutePath(
                     raw != null ? String.valueOf(raw) : null);

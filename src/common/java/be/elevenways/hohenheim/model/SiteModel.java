@@ -282,9 +282,10 @@ public class SiteModel extends Model {
      */
     private static void refuseInstanceLinkMismatch(@NonNull SaveToDatasource context) {
         Row row = context.getRow();
-        // A shape rule judges only a write that moves its columns: a site an older release
-        // accepted in this shape stays deletable (a soft delete writes deleted_at alone).
-        if (row == null || !(row.has(UPSTREAM_KIND.getName()) || row.has(INSTANCE_ID.getName()))) return;
+        // A shape rule judges only a write that moves its columns (Row.isWritten, never Row.has: a narrow save
+        // hands its hooks the whole stored record): a site an older release accepted in this shape stays editable
+        // and deletable.
+        if (row == null || !(row.isWritten(UPSTREAM_KIND) || row.isWritten(INSTANCE_ID))) return;
         Row stored = StoredRows.of(Models.get(SiteModel.class), row);
         Object kind = row.afterWrite(UPSTREAM_KIND, stored);
         if (kind == null) return;
@@ -338,8 +339,8 @@ public class SiteModel extends Model {
     private static void refuseHttpGatesOnPassthrough(@NonNull SaveToDatasource context) {
         Row row = context.getRow();
         // Judged only when the write moves a column the rule relates, like the rule above.
-        if (row == null || !(row.has(UPSTREAM_KIND.getName()) || row.has(AUTH_PROVIDER_ID.getName())
-                || row.has(ACCESS_LIST_ID.getName()))) return;
+        if (row == null || !(row.isWritten(UPSTREAM_KIND) || row.isWritten(AUTH_PROVIDER_ID)
+                || row.isWritten(ACCESS_LIST_ID))) return;
         Row stored = StoredRows.of(Models.get(SiteModel.class), row);
         Object kind = row.afterWrite(UPSTREAM_KIND, stored);
         if (terminatesTls(kind)) return;

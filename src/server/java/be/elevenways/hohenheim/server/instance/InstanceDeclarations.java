@@ -84,7 +84,7 @@ public final class InstanceDeclarations {
     public static @NonNull Violations judge(@NonNull Row row, @Nullable Row stored) {
         Violations refused = new Violations();
         collect(refused, () -> requireRuntimeImage(row, stored));
-        collect(refused, () -> requireUsableRepository(row));
+        collect(refused, () -> requireUsableRepository(row, stored));
         collect(refused, () -> requirePortsTheModePublishes(
             RawValues.map(row.afterWrite(InstanceModel.SETTINGS, stored))));
         if (stored != null) {
@@ -152,9 +152,12 @@ public final class InstanceDeclarations {
      * URL is perfectly well-formed, and the operator must read the refusal that is about
      * the secret rather than one about the shape.
      */
-    private static void requireUsableRepository(@NonNull Row row) {
+    private static void requireUsableRepository(@NonNull Row row, @Nullable Row stored) {
 
-        if (!row.has(InstanceModel.SETTINGS.getName())) {
+        // Judged when the write moves the settings, never because the row carries them (a narrow save hands its
+        // hooks the whole stored record): the checkout re-asks at use time, so a stored repository never locks an
+        // unrelated edit.
+        if (!row.isWritten(InstanceModel.SETTINGS) && !row.changes(InstanceModel.SETTINGS, stored)) {
             return;
         }
 

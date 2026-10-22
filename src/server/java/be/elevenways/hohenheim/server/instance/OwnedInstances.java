@@ -66,15 +66,18 @@ public final class OwnedInstances {
             READ_ONLY_KEY, "instance_generated_attribution");
         InstanceModel.SCHEMA.addBeforeValidateHook(context -> {
             Row row = context.getRow();
-            if (row == null || GeneratedRows.inSystemScope()) {
+            // Judged on a create, or an update writing the kind or the host (Row.isWritten, never what the row
+            // carries: a narrow save hands its hooks the whole stored record).
+            if (row == null || GeneratedRows.inSystemScope() || !context.isCreate()
+                    && !row.isWritten(InstanceModel.KIND) && !row.isWritten(InstanceModel.SERVER_ID)) {
                 return;
             }
             // The refusal itself lives in InstanceKinds, beside the OFFER derived from the
             // same generatedOnly() declaration -- this hook is the authoritative gate but
             // deliberately not a second copy of the rule.
             InstanceKinds.requireAuthorable(row.get(InstanceModel.KIND));
-            // A soft delete writes neither kind nor host, so a record whose host has since
-            // changed runtime stays deletable.
+            // A soft delete or an unrelated edit writes neither kind nor host, so a record whose host has
+            // since changed runtime stays editable and deletable.
             requireHostRuntime(row);
         });
     }

@@ -110,7 +110,8 @@ class InstanceInviteJourneyTest extends HohenheimTestBase {
             //    longer opens for them at all, its machine page included.
             HttpResponse<String> revoked = adminPostForm(
                 "/admin/instances/invoke/zenit.save_record_sharing?ids=" + vmId,
-                "_tab=access&_confirmed=1&access.__removed=" + new SubjectTag(GrantSubjectType.USER, personId).token());
+                accessTabFields(InstanceModel.MODEL_ID, vmId) + "access.__removed="
+                    + new SubjectTag(GrantSubjectType.USER, personId).token());
             assertThat(revoked.statusCode()).as("step 5: the revocation saves").isIn(302, 303);
             assertThat(reaches(personId, vmId)).as("step 5: the grant is gone").isFalse();
             assertThat(Models.get(UserModel.class).findFirst(UserModel.EMAIL, INVITEE))
@@ -191,7 +192,8 @@ class InstanceInviteJourneyTest extends HohenheimTestBase {
             UUID secondId = accountId(invitee);
             HttpResponse<String> revoked = adminPostForm(
                 "/admin/instances/invoke/zenit.save_record_sharing?ids=" + vmId,
-                "_tab=access&_confirmed=1&access.__removed=" + new SubjectTag(GrantSubjectType.USER, secondId).token());
+                accessTabFields(InstanceModel.MODEL_ID, vmId) + "access.__removed="
+                    + new SubjectTag(GrantSubjectType.USER, secondId).token());
             assertThat(revoked.statusCode()).as("step 4: the revocation saves").isIn(302, 303);
             assertThat(Models.get(UserModel.class).findFirst(UserModel.EMAIL, invitee))
                 .as("step 4: THE ASSERTION -- revoking the last grant removed the unused account").isNull();
