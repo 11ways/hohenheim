@@ -25,9 +25,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
- * A soft delete is a SAVE of the whole row, so a record whose unrelated columns stopped
- * satisfying a shape rule must still be deletable: the rule judges what a write moves, and
- * a pure trash moves nothing but deleted_at.
+ * A record whose unrelated columns stopped satisfying a shape rule stays editable, deletable and restorable: the rule
+ * judges what a write moves, and a trash or restore moves nothing but deleted_at.
  *
  * AIDEV-NOTE: observed in a full test run: PaasApiTest's cleanup
  * could not delete an instance whose environment grouping had drifted (its owner grants
@@ -109,40 +108,45 @@ class StaleRecordTrashTest {
     }
 
     @Test
-    void aSiteInAShapeTheRulesNowRefuseIsStillDeletable() {
+    void aSiteInAShapeTheRulesNowRefuseStaysEditableAndDeletableUntilAWriteMovesItsShape() {
         Db.run(datasource, () -> {
             SiteModel sites = Models.get(SiteModel.class);
             int siteId = staticSite(PREFIX + "legacy");
             try {
                 // 1. The stored shape predates the rule: a static site naming an instance, stored raw the way an
-                //    older release's data sits.
+                //    older release's data sits. An unrelated edit moves neither shape column, so it saves.
                 StaleSiteRows.instanceId(siteId, 424242);
-                Throwable edit = catchThrowable(() -> {
-                    Row row = sites.findById(siteId);
-                    row.set(SiteModel.DESCRIPTION, "an unrelated edit");
-                    sites.save(row);
-                });
-                assertThat(edit)
-                    .as("step 1: the shape rule judges every whole-row save of it")
-                    .isInstanceOf(Violations.class)
-                    .hasMessageContaining("upstream_instance_unexpected");
+                Row edited = sites.findById(siteId);
+                edited.set(SiteModel.DESCRIPTION, "an unrelated edit");
+                sites.save(edited);
+                assertThat((Object) sites.findById(siteId).get(SiteModel.DESCRIPTION))
+                    .as("step 1: the shape rule judges only a write that moves its columns")
+                    .isEqualTo("an unrelated edit");
 
-                // 2. BUG FIXED: the soft delete is such a save, and is no longer refused.
+                // 2. The soft delete writes deleted_at alone and is not refused either.
                 assertThat(sites.delete(siteId)).as("step 2: the site is deleted").isTrue();
                 assertThat(sites.findById(siteId)).as("step 2: and is gone from default reads")
                     .isNull();
 
-                // 3. The exemption is the TRASH alone: a restore brings the record back live
-                //    and is judged as a live record, so the stale shape is named, and the row
-                //    stays trashed.
-                Throwable restore = catchThrowable(() ->
-                    SiteModel.SOFT_DELETE.restore(StoredRows.byId(sites, siteId)));
-                assertThat(restore)
-                    .as("step 3: a restore of the stale shape is refused by name")
+                // 3. The restore is as narrow: the site is live again with its stored shape untouched.
+                SiteModel.SOFT_DELETE.restore(StoredRows.byId(sites, siteId));
+                Row restored = sites.findById(siteId);
+                assertThat(restored).as("step 3: the restored site is live again").isNotNull();
+                assertThat((Object) restored.get(SiteModel.INSTANCE_ID))
+                    .as("step 3: with the shape it was stored in").isEqualTo(424242);
+
+                // 4. A write that moves a shape column is judged against the whole stored shape and refused by name.
+                Throwable relink = catchThrowable(() -> {
+                    Row row = sites.findById(siteId);
+                    row.set(SiteModel.INSTANCE_ID, 424243);
+                    sites.save(row);
+                });
+                assertThat(relink)
+                    .as("step 4: moving the instance link of a static site is refused by name")
                     .isInstanceOf(Violations.class)
                     .hasMessageContaining("upstream_instance_unexpected");
-                assertThat((Object) StoredRows.byId(sites, siteId).get(SiteModel.DELETED_AT))
-                    .as("step 3: and the site stays trashed").isNotNull();
+                assertThat((Object) sites.findById(siteId).get(SiteModel.INSTANCE_ID))
+                    .as("step 4: and the stored link is unchanged").isEqualTo(424242);
             } finally {
                 HardDeletes.byId(sites, siteId);
             }
