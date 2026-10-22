@@ -10,7 +10,7 @@ import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import com.microsoft.playwright.assertions.PlaywrightAssertions;
+import be.elevenways.protoblast.testsupport.browser.BoundedAssertions;
 import org.junit.jupiter.api.*;
 
 import com.sun.net.httpserver.HttpServer;
@@ -119,7 +119,7 @@ class AuthProviderAdminTest extends HohenheimTestBase {
         // The sidebar deliberately does NOT carry this entry any more: auth providers are
         // reached from the Sites list header (AdminNavigationJourneyTest step 6 pins the
         // link, step 4 pins that this page still answers). The page is what matters here.
-        PlaywrightAssertions.assertThat(
+        BoundedAssertions.assertThat(
             page.locator("pl-app-sidebar a[href='/admin/auth-providers']")).hasCount(0);
 
         // Regression: over soft navigation the form renders CLIENT-side; the
@@ -156,20 +156,23 @@ class AuthProviderAdminTest extends HohenheimTestBase {
             .doesNotContain(storedHash)
             .doesNotContain("secret123");
 
-        // A blank password on save KEEPS the stored hash, which still verifies.
+        // A blank password on save KEEPS the stored hash, which still verifies. The same save adds a second user,
+        // so the credentials entry is a changed one and is written: an unchanged entry would not be.
         String path = "/admin/auth-providers/" + row.get(SiteAuthProviderModel.ID);
-        var kept = adminPostForm(path, "name=Staff+Gate&provider_type=hohenheim%3Abasic"
-            + "&config.credentials.0.key=alice&config.credentials.0.value=");
+        var kept = adminPostEdit(path, "name=Staff+Gate&provider_type=hohenheim%3Abasic"
+            + "&config.credentials.0.key=alice&config.credentials.0.value="
+            + "&config.credentials.1.key=bob&config.credentials.1.value=bobpass789");
         assertThat(kept.statusCode()).as("a blank-password save succeeds: " + kept.body())
             .isIn(200, 302, 303);
         Map<String, String> afterKeep = storedCredentials();
+        assertThat(afterKeep).as("the save was written: the added user is stored").containsKey("bob");
         assertThat(afterKeep.get("alice")).as("a blank password keeps the stored hash")
             .isEqualTo(storedHash);
         assertThat(BasicAuthProviderType.verify(basicHeader("alice", "secret123"), afterKeep))
             .as("and the kept password still verifies").isEqualTo("alice");
 
         // A typed password REPLACES it, hashed again.
-        var replaced = adminPostForm(path, "name=Staff+Gate&provider_type=hohenheim%3Abasic"
+        var replaced = adminPostEdit(path, "name=Staff+Gate&provider_type=hohenheim%3Abasic"
             + "&config.credentials.0.key=alice&config.credentials.0.value=newpass456");
         assertThat(replaced.statusCode()).as("a new-password save succeeds: " + replaced.body())
             .isIn(200, 302, 303);

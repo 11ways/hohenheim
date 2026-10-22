@@ -243,8 +243,8 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
             .isNotNull();
 
         // 3. Editing its own row works and keeps the frozen columns untouched.
-        assertThat(tenantPost("/manage/domains/" + bound.get(SiteDomainModel.ID),
-            "site_id=" + ownSiteId + "&hostname=renamed.t.tenantscope.test&force_ssl=true")
+        assertThat(httpPostEdit("/manage/domains/" + bound.get(SiteDomainModel.ID),
+            "site_id=" + ownSiteId + "&hostname=renamed.t.tenantscope.test&force_ssl=true", tenantSession, tenantCsrf)
             .statusCode()).as("a tenant may edit its own binding").isIn(302, 303);
         Row renamed = Models.get(SiteDomainModel.class).findById(bound.get(SiteDomainModel.ID));
         assertThat((String) renamed.get(SiteDomainModel.HOSTNAME)).isEqualTo("renamed.t.tenantscope.test");
@@ -335,8 +335,8 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
             .isNull();
 
         // 3. Neither can it MOVE one of its own rows onto another tenant's site.
-        HttpResponse<String> moved = tenantPost("/manage/domains/" + forged.get(SiteDomainModel.ID),
-            "site_id=" + foreignSiteId + "&hostname=forged.t.tenantscope.test");
+        HttpResponse<String> moved = assertNotStale(httpPostEdit("/manage/domains/" + forged.get(SiteDomainModel.ID),
+            "site_id=" + foreignSiteId + "&hostname=forged.t.tenantscope.test", tenantSession, tenantCsrf));
         assertThat(moved.statusCode()).as("step 3: the move onto a foreign site is refused")
             .isIn(200, 302, 303, 403, 404, 422);
         assertThat(moved.body()).as("step 3: the refusal is not the archived-parent copy")
@@ -830,8 +830,8 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         assertThat(model.findById(foreignRecordId)).as("and it is still there").isNotNull();
 
         // 4. Its own row edits and deletes.
-        assertThat(tenantPost("/manage/dns-records/" + created.get(DnsRecordModel.ID),
-            "name=owned.tenantscope.test&type=A&value=10.0.0.6&ttl=300&enabled=true")
+        assertThat(httpPostEdit("/manage/dns-records/" + created.get(DnsRecordModel.ID),
+            "name=owned.tenantscope.test&type=A&value=10.0.0.6&ttl=300&enabled=true", tenantSession, tenantCsrf)
             .statusCode()).isIn(302, 303);
         assertThat((String) model.findById(created.get(DnsRecordModel.ID))
             .get(DnsRecordModel.VALUE)).isEqualTo("10.0.0.6");

@@ -287,11 +287,11 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
             "step 4: the file edit form");
 
         // 5. An edit posting the other template writes its other fields and keeps the template.
-        assertThat(httpPostForm("/admin/" + VOLUMES + "/" + volumeId,
+        assertThat(httpPostEdit("/admin/" + VOLUMES + "/" + volumeId,
             "template_id=" + other + "&name=data&container_path=%2Fvar%2Flib%2Fmoved&quota_mb=64&"
                 + PanelResourceCalls.editEnvelope(HohenheimSlugs.ADMIN, VOLUMES, volumeId, TenantConduits.operator()),
             sessionToken, csrfToken).statusCode()).as("step 5: the volume edit is accepted").isIn(302, 303);
-        assertThat(httpPostForm("/admin/" + DATABASES + "/" + databaseId,
+        assertThat(httpPostEdit("/admin/" + DATABASES + "/" + databaseId,
             "template_id=" + other + "&engine=" + DatabaseModel.ENGINE_POSTGRES + "&env_prefix=MOVED&"
                 + PanelResourceCalls.editEnvelope(HohenheimSlugs.ADMIN, DATABASES, databaseId,
                     TenantConduits.operator()),
@@ -306,12 +306,12 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
             .as("step 5: the database edit was written").isEqualTo("MOVED");
         assertThat((Integer) database.get(InstanceTemplateDatabaseModel.TEMPLATE_ID))
             .as("step 5: THE ASSERTION -- the posted template never re-points the database").isEqualTo(owner);
-        assertThat(httpPostForm("/admin/" + VARIABLES + "/" + variableId,
+        assertThat(httpPostEdit("/admin/" + VARIABLES + "/" + variableId,
             "template_id=" + other + "&key=GREETING&label=Moved&type=hohenheim%3Astring&"
                 + PanelResourceCalls.editEnvelope(HohenheimSlugs.ADMIN, VARIABLES, variableId,
                     TenantConduits.operator()),
             sessionToken, csrfToken).statusCode()).as("step 5: the variable edit is accepted").isIn(302, 303);
-        assertThat(httpPostForm("/admin/" + FILES + "/" + fileId,
+        assertThat(httpPostEdit("/admin/" + FILES + "/" + fileId,
             "template_id=" + other + "&container_path=%2Fetc%2Fmoved.conf&content=greeting&mode=0644&"
                 + PanelResourceCalls.editEnvelope(HohenheimSlugs.ADMIN, FILES, fileId, TenantConduits.operator()),
             sessionToken, csrfToken).statusCode()).as("step 5: the file edit is accepted").isIn(302, 303);

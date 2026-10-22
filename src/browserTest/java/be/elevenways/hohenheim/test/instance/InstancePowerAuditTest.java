@@ -30,7 +30,6 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.Accountability;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
-import be.elevenways.zenit.common.security.PrincipalRef;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -103,11 +102,6 @@ class InstancePowerAuditTest {
             .toList();
     }
 
-    private static Accountability operator(UUID id) {
-        return new Accountability(id.toString(), PrincipalRef.account(id).storedKind(), "Operator " + id,
-            "10.0.0.1", "junit", Accountability.ORIGIN_WEB);
-    }
-
     /**
      * {@code InstanceService.restart} driven directly: it IS stop-then-deploy, and a
      * deploy that fails after the stop landed leaves the record in the state deploy's own
@@ -125,7 +119,7 @@ class InstancePowerAuditTest {
             // 1. A running workload: the state a restart is asked for from.
             int id = instanceRecord("audit-restart");
             InstanceService service = new InstanceService();
-            Accountability.runAs(operator(RESTART_OPERATOR), () -> service.deploy(id));
+            Accountability.runAs(RecordedChanges.operator(RESTART_OPERATOR), () -> service.deploy(id));
             String handle = FakeNativeDaemons.handleOf(id);
             assertThat(FakeNativeDaemons.daemonOf(hostId).get(handle).running)
                 .as("step 1: the workload runs before the restart").isTrue();
@@ -136,7 +130,7 @@ class InstancePowerAuditTest {
             // 2. ONE verb: restart stops and deploys again, and BOTH halves are recorded
             //    -- the composition is the service's, so the audit trail shows the pair
             //    rather than a single unexplained "restarted" row nobody can reconcile.
-            Accountability.runAs(operator(RESTART_OPERATOR), () -> service.restart(id));
+            Accountability.runAs(RecordedChanges.operator(RESTART_OPERATOR), () -> service.restart(id));
             assertThat(activityFor(id, HohenheimActivityAction.STOPPED))
                 .as("step 2: the restart's stop half is recorded")
                 .hasSize(1);
@@ -161,7 +155,8 @@ class InstancePowerAuditTest {
                 FakeNativeDaemons.daemonOf(hostId).get(handle).ownerId = "999999999";
             });
             Throwable refused = catchThrowable(
-                () -> Accountability.runAs(operator(RESTART_OPERATOR), () -> sabotaged.restart(id)));
+                () -> Accountability.runAs(RecordedChanges.operator(RESTART_OPERATOR),
+                    () -> sabotaged.restart(id)));
             assertThat(refused)
                 .as("step 3: a restart whose deploy fails refuses by name, never silently")
                 .isInstanceOfSatisfying(Violations.class, violations ->
@@ -225,7 +220,7 @@ class InstancePowerAuditTest {
             //    to whoever was acting, naming the daemon handle it settled against.
             int serviceId = instanceRecord("audit-service");
             InstanceService service = new InstanceService();
-            Accountability.runAs(operator(SERVICE_OPERATOR), () -> service.deploy(serviceId));
+            Accountability.runAs(RecordedChanges.operator(SERVICE_OPERATOR), () -> service.deploy(serviceId));
 
             List<RecordedChanges.Recorded> deployed = activityFor(serviceId, HohenheimActivityAction.DEPLOYED);
             assertThat(deployed)
@@ -244,7 +239,7 @@ class InstancePowerAuditTest {
                 .containsEntry(HohenheimActivityAction.HANDLE_KEY, FakeNativeDaemons.handleOf(serviceId));
 
             // 2. Stop is the same contract, not a second policy.
-            Accountability.runAs(operator(SERVICE_OPERATOR), () -> service.stop(serviceId));
+            Accountability.runAs(RecordedChanges.operator(SERVICE_OPERATOR), () -> service.stop(serviceId));
             List<RecordedChanges.Recorded> stopped = activityFor(serviceId, HohenheimActivityAction.STOPPED);
             assertThat(stopped).as("step 2: a settled stop records once").hasSize(1);
             assertThat(stopped.get(0).origin())
@@ -261,7 +256,8 @@ class InstancePowerAuditTest {
             PanelAction<Row> deployAction = PlacedActionClicks.placed(panel, "start_instance");
             PanelAction<Row> stopAction = PlacedActionClicks.placed(panel, "stop_instance");
 
-            Accountability.runAs(operator(PANEL_OPERATOR), () -> PlacedActionClicks.click(deployAction, panelRow));
+            Accountability.runAs(RecordedChanges.operator(PANEL_OPERATOR),
+                () -> PlacedActionClicks.click(deployAction, panelRow));
             List<RecordedChanges.Recorded> panelDeploy = activityFor(panelId, HohenheimActivityAction.DEPLOYED);
             assertThat(panelDeploy)
                 .withFailMessage("step 3: the PANEL deploy row action must be as answerable"
@@ -271,7 +267,8 @@ class InstancePowerAuditTest {
                 .as("step 3: attributed to the operator who clicked, not to the system")
                 .isEqualTo(PANEL_OPERATOR.toString());
 
-            Accountability.runAs(operator(PANEL_OPERATOR), () -> PlacedActionClicks.click(stopAction, panelRow));
+            Accountability.runAs(RecordedChanges.operator(PANEL_OPERATOR),
+                () -> PlacedActionClicks.click(stopAction, panelRow));
             List<RecordedChanges.Recorded> panelStop = activityFor(panelId, HohenheimActivityAction.STOPPED);
             assertThat(panelStop)
                 .withFailMessage("step 3: the PANEL stop row action must record too;"
@@ -281,7 +278,7 @@ class InstancePowerAuditTest {
             // 4. Destroy is irreversible, so it must never read as a generic update: the trash write every destroy
             //    caller (the release engine, preview expiry, database teardown) shares carries core's trashed fact.
             int destroyId = instanceRecord("audit-destroy");
-            Accountability.runAs(operator(SERVICE_OPERATOR), () -> {
+            Accountability.runAs(RecordedChanges.operator(SERVICE_OPERATOR), () -> {
                 service.deploy(destroyId);
                 new InstanceService().destroy(destroyId);
             });
@@ -297,7 +294,7 @@ class InstancePowerAuditTest {
             //    its own: one destroy, one delete row, whoever asked for it.
             int panelDestroyId = instanceRecord("audit-panel-destroy");
             Row toDelete = Models.get(InstanceModel.class).findById(panelDestroyId);
-            Accountability.runAs(operator(PANEL_OPERATOR), () -> {
+            Accountability.runAs(RecordedChanges.operator(PANEL_OPERATOR), () -> {
                 service.deploy(panelDestroyId);
                 OperationWrites.delete(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN), panel, toDelete,
                     TestAccessContexts.allAllowed());

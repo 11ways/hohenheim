@@ -46,23 +46,26 @@ class SecretFieldFormTest extends HohenheimTestBase {
             .as("1. a secret() field must NEVER echo the stored value into the form")
             .doesNotContain(STORED_KEY);
 
-        // 2. A submit that leaves the secret blank KEEPS the stored value.
-        HttpResponse<String> blank = adminPostForm(editPath, peerBody(""));
+        // 2. A submit that leaves the secret blank KEEPS the stored value. It moves the port too, so the submit
+        //    is a written edit: the kept secret is the blank's restore, not a save that wrote nothing.
+        HttpResponse<String> blank = adminPostEdit(editPath, peerBody("", 5353));
         assertThat(blank.statusCode()).as("2. the blank submit must be accepted").isIn(200, 302, 303);
+        assertThat((Integer) Models.get(DnsPeerModel.class).findById(peerId).get(DnsPeerModel.TRANSFER_PORT))
+            .as("2. the blank-secret submit was written").isEqualTo(5353);
         assertThat(keyOf(peerId))
             .as("2. a blank secret submit must keep the stored value, not wipe it")
             .isEqualTo(STORED_KEY);
 
         // 3. A submitted value REPLACES the stored one.
         String replacement = "peer-tsig-secret-replacement-value";
-        HttpResponse<String> replaced = adminPostForm(editPath, peerBody(replacement));
+        HttpResponse<String> replaced = adminPostEdit(editPath, peerBody(replacement, 5353));
         assertThat(replaced.statusCode()).as("3. the replacing submit must be accepted").isIn(200, 302, 303);
         assertThat(keyOf(peerId))
             .as("3. a non-blank secret submit must replace the stored value")
             .isEqualTo(replacement);
 
         // 4. The __clear companion is the one way to EMPTY a secret.
-        HttpResponse<String> cleared = adminPostForm(editPath, peerBody("") + "&tsig_secret__clear=true");
+        HttpResponse<String> cleared = adminPostEdit(editPath, peerBody("", 5353) + "&tsig_secret__clear=true");
         assertThat(cleared.statusCode()).as("4. the clearing submit must be accepted").isIn(200, 302, 303);
         assertThat(keyOf(peerId))
             .as("4. the __clear companion must empty the stored secret")
@@ -103,7 +106,7 @@ class SecretFieldFormTest extends HohenheimTestBase {
             + "&transfer_host=peer.secret-form.example&transfer_port=53"
             + "&tsig_key_name=&tsig_algorithm=hmac-sha256&tsig_secret=&enabled=true"
             + "&base_url=https%3A%2F%2Fpeer.secret-form.example&api_key=peer-admin-api-key";
-        HttpResponse<String> switched = adminPostForm(editPath, promoted);
+        HttpResponse<String> switched = adminPostEdit(editPath, promoted);
         assertThat(switched.statusCode()).as("7. the type switch must be accepted").isIn(200, 302, 303);
 
         Row peer = Models.get(DnsPeerModel.class).findById(peerId);
@@ -122,10 +125,10 @@ class SecretFieldFormTest extends HohenheimTestBase {
         return Models.get(DnsPeerModel.class).findById(peerId).get(DnsPeerModel.TSIG_SECRET);
     }
 
-    /** The full peer form body; only the secret entry varies. */
-    private static String peerBody(String tsigSecret) {
+    /** The full peer form body; only the secret entry and the port vary. */
+    private static String peerBody(String tsigSecret, int port) {
         return "name=secret-form-peer&peer_type=nameserver"
-            + "&transfer_host=peer.secret-form.example&transfer_port=53"
+            + "&transfer_host=peer.secret-form.example&transfer_port=" + port
             + "&tsig_key_name=&tsig_algorithm=hmac-sha256&base_url=&api_key=&enabled=true"
             + "&tsig_secret=" + tsigSecret;
     }

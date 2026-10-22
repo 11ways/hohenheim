@@ -222,8 +222,14 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
             .as("step 6b: no Add address and no delete for an address of a site the tenant does not manage")
             .doesNotContain(CmsRoutes.create(HohenheimSlugs.MANAGE, HohenheimSlugs.DOMAINS).toUrl())
             .doesNotContain(CmsRoutes.delete(HohenheimSlugs.MANAGE, HohenheimSlugs.DOMAINS, this.domainId).toUrl());
-        httpPostForm(CmsRoutes.updateSubmit(HohenheimSlugs.MANAGE, HohenheimSlugs.DOMAINS, this.domainId).toUrl(),
+        // The edit gate refuses before any snapshot is judged (the tenant is offered no editable form to read one off),
+        // so its own 403/404 is asserted: the stale-snapshot conflict would re-render the form at 200.
+        HttpResponse<String> takeover = httpPostForm(
+            CmsRoutes.updateSubmit(HohenheimSlugs.MANAGE, HohenheimSlugs.DOMAINS, this.domainId).toUrl(),
             "hostname=taken-over.example.test", this.tenant, this.tenantCsrf);
+        assertThat(assertNotStale(takeover).statusCode())
+            .as("step 6b: the address edit is refused by the edit gate, not judged as a stale form")
+            .isIn(403, 404);
         assertThat((String) Objects.requireNonNull(Models.get(SiteDomainModel.class).findById(this.domainId))
                 .get(SiteDomainModel.HOSTNAME))
             .as("step 6b: a submitted edit of the address changes nothing")

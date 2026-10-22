@@ -54,7 +54,7 @@ class SecretFieldsTest extends HohenheimTestBase {
         assertThat(page.content()).doesNotContain("xoxb-hook-token");
 
         // Blank url keeps the stored secret; other edits apply.
-        response = adminPostForm("/admin/notifications/" + channelId, "name=Ops+alerts+renamed&format=slack&url=");
+        response = adminPostEdit("/admin/notifications/" + channelId, "name=Ops+alerts+renamed&format=slack&url=");
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
         Row storedChannel = Models.get(NotificationChannelModel.class)
@@ -82,7 +82,7 @@ class SecretFieldsTest extends HohenheimTestBase {
         assertThat(page.content()).doesNotContain(ACCESS_KEY);
 
         // Blank access key keeps the stored one; the endpoint edit applies.
-        response = adminPostForm("/admin/auth-providers/" + providerId,
+        response = adminPostEdit("/admin/auth-providers/" + providerId,
             "name=Realm+gate&provider_type=hohenheim%3Aproteus"
             + "&config.endpoint=https%3A%2F%2Fproteus2.example.com"
             + "&config.realm_client=hohenheim-realm"
@@ -115,7 +115,7 @@ class SecretFieldsTest extends HohenheimTestBase {
         assertThat(rule).isNotNull();
         Integer ruleId = rule.get(AccessRuleModel.ID);
 
-        response = adminPostForm("/admin/access-rules/" + ruleId,
+        response = adminPostEdit("/admin/access-rules/" + ruleId,
             "type=basic_auth&data.username=operator&data.password=" + password + "&enabled=true");
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
@@ -127,9 +127,13 @@ class SecretFieldsTest extends HohenheimTestBase {
         waitForHydration();
         assertThat(page.content()).doesNotContain(password);
 
-        response = adminPostForm("/admin/access-rules/" + ruleId,
-            "type=basic_auth&data.username=operator&data.password=&enabled=true");
+        // The blank-password save renames the user too, so the data entry is changed and written: the kept hash is
+        // the restore at work, not an entry the save left out.
+        response = adminPostEdit("/admin/access-rules/" + ruleId,
+            "type=basic_auth&data.username=operator2&data.password=&enabled=true");
         assertThat(response.statusCode()).isIn(200, 302, 303);
+        assertThat(AccessRuleModel.dataOf(Models.get(AccessRuleModel.class).findById(ruleId)))
+            .as("the blank-password save was written").containsEntry("username", "operator2");
         assertThat(storedPassword(ruleId)).isEqualTo(storedHash);
 
         // Git webhook secret: a secret inside the settings map of the APPLICATION that
@@ -176,7 +180,7 @@ class SecretFieldsTest extends HohenheimTestBase {
         assertThat(content).as("step 2: the plaintext never reaches the page").doesNotContain("secret123");
 
         // 3. Typing a new password replaces it, hashed again.
-        response = adminPostForm("/admin/auth-providers/" + id,
+        response = adminPostEdit("/admin/auth-providers/" + id,
             "name=Team+gate&provider_type=hohenheim%3Abasic"
             + "&config.credentials.0.key=alice&config.credentials.0.value=new-secret");
         assertThat(response.statusCode()).isIn(200, 302, 303);

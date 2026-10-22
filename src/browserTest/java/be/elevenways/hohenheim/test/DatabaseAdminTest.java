@@ -12,7 +12,7 @@ import be.elevenways.hohenheim.server.database.DatabaseWrites;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.validation.Violations;
-import com.microsoft.playwright.assertions.PlaywrightAssertions;
+import be.elevenways.protoblast.testsupport.browser.BoundedAssertions;
 import org.junit.jupiter.api.*;
 
 import java.util.Map;
@@ -37,7 +37,7 @@ class DatabaseAdminTest extends HohenheimTestBase {
         assertThat(body).contains("Databases");
 
         // The shell sidebar carries the databases entry.
-        PlaywrightAssertions.assertThat(
+        BoundedAssertions.assertThat(
             page.locator("pl-app-sidebar a[href='/admin/databases']")).hasCount(1);
 
         navigateToApp("/admin/databases/new");
@@ -90,7 +90,7 @@ class DatabaseAdminTest extends HohenheimTestBase {
             EngineHandles.plant(id, name, "postgres", InstanceModel.STATUS_RUNNING);
             navigateToApp("/admin/databases/" + id + "/page/restore");
             waitForHydration();
-            PlaywrightAssertions.assertThat(page.locator(
+            BoundedAssertions.assertThat(page.locator(
                 "form[action='/databases/" + name + "/restore'] pl-file-upload input[type='file']")).hasCount(1);
         } finally {
             Model instances = Models.get(InstanceModel.class);

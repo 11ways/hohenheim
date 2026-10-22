@@ -156,7 +156,7 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
             .isNull();
 
         // 8. The newly selected carrier can be written in the same POST that changes kind.
-        HttpResponse<String> liveSwitched = httpPostForm("/admin/environment-variables/" + variableId,
+        HttpResponse<String> liveSwitched = httpPostEdit("/admin/environment-variables/" + variableId,
             "environment_id=" + environmentId + "&key=CARRIER_PROBE&kind=plain&plain_value=new-config",
             sessionToken, csrfToken);
         assertThat(liveSwitched.statusCode()).as("step 8: selected carrier writes with its kind").isEqualTo(302);
@@ -166,20 +166,24 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
         assertThat(stored.get(InstanceVariableModel.SECRET_VALUE)).as("step 8: old secret is retired").isNull();
 
         // 9. Unknown kinds refuse before either physical carrier is touched.
-        HttpResponse<String> unknown = httpPostForm("/admin/environment-variables/" + variableId,
+        HttpResponse<String> unknown = httpPostEdit("/admin/environment-variables/" + variableId,
             "environment_id=" + environmentId + "&key=CARRIER_PROBE&kind=unknown&secret_value=smuggled",
             sessionToken, csrfToken);
-        assertThat(unknown.statusCode()).as("step 9: unknown kind is a form refusal").isEqualTo(200);
+        assertThat(assertNotStale(unknown).statusCode()).as("step 9: unknown kind is a form refusal").isEqualTo(200);
+        assertThat(unknown.body()).as("step 9: refused for its kind, not as a stale edit")
+            .containsAnyOf("Choose one of the offered options", "Unknown variable kind");
         stored = Models.get(InstanceVariableModel.class).find().where(InstanceVariableModel.ID.eq(variableId)).first();
         assertThat(stored.get(InstanceVariableModel.PLAIN_VALUE)).as("step 9: refused write keeps old value")
                 .isEqualTo("new-config");
         assertThat(stored.get(InstanceVariableModel.SECRET_VALUE)).as("step 9: no hidden carrier write").isNull();
 
-        HttpResponse<String> blankKind = httpPostForm("/admin/environment-variables/" + variableId,
+        HttpResponse<String> blankKind = httpPostEdit("/admin/environment-variables/" + variableId,
             "environment_id=" + environmentId + "&key=CARRIER_PROBE&kind=&secret_value=smuggled",
             sessionToken, csrfToken);
-        assertThat(blankKind.statusCode()).as("step 9: a blank kind refuses instead of retiring plain data")
-                .isEqualTo(200);
+        assertThat(assertNotStale(blankKind).statusCode())
+            .as("step 9: a blank kind refuses instead of retiring plain data").isEqualTo(200);
+        assertThat(blankKind.body()).as("step 9: refused for its missing kind, not as a stale edit")
+            .containsAnyOf("Choose one of the offered options", "Unknown variable kind", " is required");
         for (String kind : new String[] {null, "", "unknown"}) {
             Row invalid = Models.get(InstanceVariableModel.class).createEmptyRow();
             invalid.set(InstanceVariableModel.ID, variableId);

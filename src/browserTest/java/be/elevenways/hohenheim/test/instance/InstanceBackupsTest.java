@@ -15,6 +15,7 @@ import be.elevenways.hohenheim.model.InstanceVolumeModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
+import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.backup.BackupTarget;
@@ -29,6 +30,7 @@ import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.util.Uuids;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -42,6 +44,9 @@ import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.security.Accountability;
+import be.elevenways.zenit.common.security.ExecutionIdentity;
+import be.elevenways.zenit.test.support.HistoryTestSupport;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -949,6 +954,48 @@ class InstanceBackupsTest {
                     + " untouched -- settling it would destroy a backup in flight")
                 .isEqualTo(InstanceBackupModel.STATUS_UPLOADING);
 
+            service.destroy(instanceId);
+        });
+    }
+
+    /**
+     * The stamps a backup writes outside any request name who did the work: the completion an operator's backup
+     * records once the instance's claim is let go names that operator, and the boot settle of a dead upload names the
+     * system's boot work, never an anonymous writer or an account.
+     */
+    @Test
+    void offRequestBackupStampsNameWhoDidTheWorkJourney() {
+        Db.run(datasource, () -> {
+            assertThat(HistoryTestSupport.recordsOptional())
+                .as("optional history must be recording or this test proves nothing")
+                .isTrue();
+            InstanceService service = new InstanceService();
+            int instanceId = instanceRecord("backup-attribution", hostId);
+            service.deploy(instanceId);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 0);
+
+            // 1. An operator's backup: its completion is written after the claim is let go, still as that operator.
+            UUID operatorId = Uuids.v7();
+            int[] backupId = new int[1];
+            Accountability.runAs(RecordedChanges.operator(operatorId),
+                () -> backupId[0] = new InstanceBackups().backupNow(instanceId, targetId, target));
+            assertThat(RecordedChanges.lastUpdateOf(Models.get(InstanceBackupModel.class), backupId[0],
+                    InstanceBackupModel.STATUS.getName()).actedBy())
+                .as("step 1: the completion stamp names the operator who asked for the backup")
+                .isEqualTo(RecordedChanges.operatorWork(operatorId));
+
+            // 2. A dead upload settled at boot, under the identity ServerMain declares for its boot recovery jobs.
+            Instant beforeThisProcess = Instant.ofEpochMilli(ManagementFactory.getRuntimeMXBean().getStartTime())
+                .minusSeconds(3600);
+            int dead = uploadingRow(instanceId, targetId, ControllerIdentity.token() + "/instance-" + instanceId
+                + "/test-attributed-dead-upload.hib", beforeThisProcess);
+            ExecutionIdentity.runAsSystem(HohenheimSystemPurposes.BOOT, InstanceBackups::recoverInterrupted);
+            assertThat(RecordedChanges.lastUpdateOf(Models.get(InstanceBackupModel.class), dead,
+                    InstanceBackupModel.STATUS.getName()).attribution())
+                .as("step 2: the boot settle is the system's boot work")
+                .isEqualTo(RecordedChanges.systemWork(HohenheimSystemPurposes.BOOT));
+
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 7);
             service.destroy(instanceId);
         });
     }

@@ -19,7 +19,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.zenit.common.orm.model.Models;
 import com.microsoft.playwright.Locator;
-import com.microsoft.playwright.assertions.PlaywrightAssertions;
+import be.elevenways.protoblast.testsupport.browser.BoundedAssertions;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -282,7 +282,7 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
             assertIsVisible(".pl-alertdialog-modal[data-open]", "step 2c: the button asks first");
             // The dialog's words land after it opens: wait for them rather than reading the first frame.
             Locator dialog = this.page.locator(".pl-alertdialog-modal[data-open]");
-            PlaywrightAssertions.assertThat(dialog)
+            BoundedAssertions.assertThat(dialog)
                 .containsText("Go forward to release aaaa1111? The live release stops serving.");
             assertThat(dialog.textContent()).as("step 2c: and the dialog goes forward too")
                 .doesNotContain("Go back to release");

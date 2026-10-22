@@ -231,10 +231,9 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
             custom.set(RuntimeImageModel.ENABLED, true);
             images.save(custom);
         }
-        HttpResponse<String> customUpdate = httpPostForm(
+        HttpResponse<String> customUpdate = adminPostEdit(
             "/admin/runtime-images/" + custom.get(RuntimeImageModel.ID),
-            "name=ui-surface-custom&docker_image=example/custom:2&enabled=true",
-            sessionToken, csrfToken);
+            "name=ui-surface-custom&docker_image=example/custom:2&enabled=true");
         assertThat(customUpdate.statusCode()).isIn(302, 303);
         assertThat(images.findById(custom.get(RuntimeImageModel.ID))
             .get(RuntimeImageModel.DOCKER_IMAGE)).isEqualTo("example/custom:2");

@@ -12,7 +12,7 @@ import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.notifications.server.DeliveryModel;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
-import com.microsoft.playwright.assertions.PlaywrightAssertions;
+import be.elevenways.protoblast.testsupport.browser.BoundedAssertions;
 import com.microsoft.playwright.options.AriaRole;
 import org.junit.jupiter.api.Test;
 
@@ -37,8 +37,8 @@ class NotificationAdminTest extends HohenheimTestBase {
 
         // The channels stand under Settings (their list sits in its Notifications section): no tab strip of their
         // own, and the sidebar's one Settings row is the branch the page belongs to.
-        PlaywrightAssertions.assertThat(page.locator("[data-cms-cluster-tabs]")).hasCount(0);
-        PlaywrightAssertions.assertThat(
+        BoundedAssertions.assertThat(page.locator("[data-cms-cluster-tabs]")).hasCount(0);
+        BoundedAssertions.assertThat(
             page.locator("pl-app-sidebar pl-nav-item[href='/admin/configure'].active-branch")).hasCount(1);
 
         navigateToApp("/admin/notifications/new");
@@ -68,7 +68,7 @@ class NotificationAdminTest extends HohenheimTestBase {
         assertThat((String) row.get(NotificationChannelModel.KIND)).isEqualTo("webhook");
         Integer id = row.get(NotificationChannelModel.ID);
 
-        var update = adminPostForm("/admin/notifications/" + id,
+        var update = adminPostEdit("/admin/notifications/" + id,
             "name=ops-room&format=discord&url=https%3A%2F%2Fhooks.example%2Fnew");
         assertThat(update.statusCode()).isIn(200, 302, 303);
 
@@ -199,10 +199,10 @@ class NotificationAdminTest extends HohenheimTestBase {
         page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("More actions")).first().click();
         page.getByRole(AriaRole.MENUITEM, new Page.GetByRoleOptions().setName("Which events go where")).click();
         Locator sheet = page.getByRole(AriaRole.DIALOG, new Page.GetByRoleOptions().setName("Which events go where"));
-        PlaywrightAssertions.assertThat(sheet).isVisible();
+        BoundedAssertions.assertThat(sheet).isVisible();
         Locator backupToPager = sheet.getByRole(AriaRole.CHECKBOX,
             new Locator.GetByRoleOptions().setName("Backup failed: grid-pager"));
-        PlaywrightAssertions.assertThat(backupToPager).isChecked();
+        BoundedAssertions.assertThat(backupToPager).isChecked();
         assertThat(sheet.getByRole(AriaRole.CHECKBOX).count())
             .as("step 1: one box per event per channel").isEqualTo(NotificationEvents.values().length * 2);
 
@@ -211,7 +211,7 @@ class NotificationAdminTest extends HohenheimTestBase {
         backupToPager.click();
         waitForNavigationRendered(() -> sheet.getByRole(AriaRole.BUTTON,
             new Locator.GetByRoleOptions().setName("Save")).click());
-        PlaywrightAssertions.assertThat(sheet).isHidden();
+        BoundedAssertions.assertThat(sheet).isHidden();
         List<String> pagerEvents = Models.get(NotificationChannelModel.class)
             .findById(pager.get(NotificationChannelModel.ID)).get(NotificationChannelModel.EVENTS);
         assertThat(pagerEvents).as("step 2: the pager keeps every other event")

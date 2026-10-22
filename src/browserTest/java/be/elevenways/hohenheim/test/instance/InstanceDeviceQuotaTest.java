@@ -314,7 +314,7 @@ class InstanceDeviceQuotaTest extends HohenheimTestBase {
 
         // 3. An UPDATE to 0 must survive as 0 -- "this owner gets nothing" is a
         //    different answer from "no override, fall through to the global default".
-        var updated = adminPostForm("/admin/instance-quotas/" + this.quotaRowId,
+        var updated = adminPostEdit("/admin/instance-quotas/" + this.quotaRowId,
             "subjects=" + owner + "&max_instances=3&max_disk_gb=0&max_nics=0");
         assertThat(updated.statusCode())
             .as("step 3: the quota form accepted the update").isIn(200, 302, 303);
@@ -371,7 +371,7 @@ class InstanceDeviceQuotaTest extends HohenheimTestBase {
             .as("step 3: 2 GB more passes the override's 3 GB: the named refusal").isEqualTo("disk_quota_reached");
 
         // 4. Editing the cap through the form keeps the shared owner, and the raised cap is what the next charge meets.
-        var updated = adminPostForm("/admin/instance-quotas/" + this.quotaRowId,
+        var updated = adminPostEdit("/admin/instance-quotas/" + this.quotaRowId,
             owners(first, second) + "&max_disk_gb=4");
         assertThat(updated.statusCode()).as("step 4: the quota form accepted the edit").isIn(200, 302, 303);
         assertThat((String) quotas.findById(this.quotaRowId).get(InstanceQuotaModel.SUBJECTS))

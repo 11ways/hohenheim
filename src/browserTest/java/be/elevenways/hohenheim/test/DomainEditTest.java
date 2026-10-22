@@ -208,7 +208,7 @@ class DomainEditTest extends HohenheimTestBase {
     @Test
     void updateDomainSettingsIncludingHeaderMaps() throws Exception {
         Fixture f = fixture("update", "");
-        var response = adminPostForm("/admin/domains/" + f.domainId(),
+        var response = adminPostEdit("/admin/domains/" + f.domainId(),
             "site_id=" + f.siteId() + "&hostname=" + f.hostname() + "&match_type=wildcard"
             + "&force_ssl=true&hsts_enabled=true"
             + "&path=%2Fapp&strip_path=true&listen_on=127.0.0.1"
@@ -232,9 +232,9 @@ class DomainEditTest extends HohenheimTestBase {
     @Test
     void blankHostnameIsRejected() throws Exception {
         Fixture f = fixture("blank", "");
-        var response = adminPostForm("/admin/domains/" + f.domainId(),
+        var response = adminPostEdit("/admin/domains/" + f.domainId(),
             "site_id=" + f.siteId() + "&hostname=&match_type=exact");
-        assertRefused(response, HOSTNAME_REQUIRED, "a blank hostname");
+        assertRefused(assertNotStale(response), HOSTNAME_REQUIRED, "a blank hostname");
 
         Row domain = Models.get(SiteDomainModel.class).findById(f.domainId());
         assertThat((String) domain.get(SiteDomainModel.HOSTNAME))
@@ -319,7 +319,7 @@ class DomainEditTest extends HohenheimTestBase {
     @Test
     void updatingARowKeepingItsPathIsAllowed() throws Exception {
         Fixture f = fixture("keep", "&path=%2Fapp");
-        var response = adminPostForm("/admin/domains/" + f.domainId(),
+        var response = adminPostEdit("/admin/domains/" + f.domainId(),
             "site_id=" + f.siteId() + "&hostname=" + f.hostname() + "&match_type=wildcard"
             + "&path=%2Fapp&force_ssl=true");
         assertThat(response.statusCode()).as("the self-update is accepted").isIn(200, 302, 303);
@@ -340,10 +340,10 @@ class DomainEditTest extends HohenheimTestBase {
         assertThat(sibling.statusCode()).as("the sibling path row is accepted").isIn(200, 302, 303);
         assertThat(domainsNamed(f.hostname())).as("both rows exist").isEqualTo(2);
 
-        var response = adminPostForm("/admin/domains/" + f.domainId(),
+        var response = adminPostEdit("/admin/domains/" + f.domainId(),
             "site_id=" + f.siteId() + "&hostname=" + f.hostname() + "&match_type=exact"
             + "&path=%2Fmanagement.ProxyService");
-        assertRefused(response, ROUTE_TAKEN, "moving onto the sibling's path");
+        assertRefused(assertNotStale(response), ROUTE_TAKEN, "moving onto the sibling's path");
 
         Row domain = Models.get(SiteDomainModel.class).findById(f.domainId());
         assertThat((String) domain.get(SiteDomainModel.PATH))

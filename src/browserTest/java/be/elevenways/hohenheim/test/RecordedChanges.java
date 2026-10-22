@@ -1,6 +1,10 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.security.Accountability;
+import be.elevenways.zenit.common.security.PrincipalRef;
+import be.elevenways.zenit.common.security.SystemPrincipal;
+import be.elevenways.zenit.common.security.SystemPurpose;
 import be.elevenways.zenit.common.orm.activity.ActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -18,6 +22,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.LinkedHashMap;
+import java.util.UUID;
 
 /**
  * A record's stored history changes as Hohenheim's tests assert them: each change beside its action header and facts,
@@ -60,6 +66,20 @@ public final class RecordedChanges {
             return this.action.get(ActionModel.ORIGIN);
         }
 
+        /** @return who the change's action names: its actor, the actor's kind, the system purpose and the origin */
+        public @NonNull Map<String, String> attribution() {
+            Map<String, String> attribution = new LinkedHashMap<>(actedBy());
+            attribution.put("purpose", String.valueOf((Object) this.action.get(ActionModel.SYSTEM_PURPOSE)));
+            return attribution;
+        }
+
+        /** @return {@link #attribution} without the system purpose: the actor, its kind and the origin */
+        public @NonNull Map<String, String> actedBy() {
+            return Map.of("actor", String.valueOf(actor()),
+                "actor_kind", String.valueOf((Object) this.action.get(ActionModel.ACTOR_KIND)),
+                "origin", String.valueOf(origin()));
+        }
+
         public @NonNull String actionId() {
             return this.change.get(ChangeModel.ACTION_ID);
         }
@@ -67,6 +87,48 @@ public final class RecordedChanges {
         public @NonNull Map<String, Map<String, Object>> delta() {
             return HistoryTestSupport.deltaOf(this.change);
         }
+
+        /** @return whether the change names {@code field} changed, whichever depth its model captures */
+        public boolean changed(@NonNull String field) {
+            List<String> names = HistoryTestSupport.changedFields(this.change);
+            return names != null ? names.contains(field) : delta().containsKey(field);
+        }
+    }
+
+    /** @return an operator account acting from the web, for {@link Accountability#runAs} */
+    public static @NonNull Accountability operator(@NonNull UUID id) {
+        return new Accountability(id.toString(), PrincipalRef.account(id).storedKind(), "Operator " + id,
+            "10.0.0.1", "junit", Accountability.ORIGIN_WEB);
+    }
+
+    /**
+     * @return what {@link Recorded#actedBy} reads for work done under {@link #operator}; no purpose, because a test
+     *         runs inside the harness's system identity ({@code OperatorIdentity}) and an operator overlay keeps it
+     */
+    public static @NonNull Map<String, String> operatorWork(@NonNull UUID id) {
+        return Map.of("actor", id.toString(), "actor_kind", PrincipalRef.account(id).storedKind(),
+            "origin", Accountability.ORIGIN_WEB);
+    }
+
+    /** @return what {@link Recorded#attribution} reads for system work declared under {@code purpose} */
+    public static @NonNull Map<String, String> systemWork(@NonNull SystemPurpose purpose) {
+        PrincipalRef system = SystemPrincipal.INSTANCE.reference();
+        return Map.of("actor", String.valueOf(system.id()), "actor_kind", system.storedKind(),
+            "purpose", purpose.id().toString(), "origin", Accountability.ORIGIN_SYSTEM);
+    }
+
+    /** @return the record's latest UPDATE that changed {@code field}; fails naming what was recorded when none did */
+    public static @NonNull Recorded lastUpdateOf(@NonNull Model model, @NonNull Object recordId,
+                                                @NonNull String field) {
+        List<Recorded> all = of(model, recordId);
+        List<Recorded> updates = all.stream()
+            .filter(recorded -> recorded.op() == ChangeOp.UPDATE && recorded.changed(field)).toList();
+        if (updates.isEmpty()) {
+            throw new AssertionError("no recorded update of " + field + " on " + model.getModelId() + " " + recordId
+                + "; recorded: " + all.stream().map(recorded -> recorded.op() + " "
+                    + HistoryTestSupport.changedFields(recorded.change())).toList());
+        }
+        return updates.get(updates.size() - 1);
     }
 
     /** @return every stored change of the record, oldest first */

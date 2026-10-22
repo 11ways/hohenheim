@@ -210,8 +210,8 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
             .as("step 1: the Devices tab renders").isEqualTo(200);
         assertThat(tab.body())
             .as("step 1: and it offers attach-disk and attach-NIC under this instance")
-            .contains("/admin/instance-devices/new?parent=" + instanceId + "&type=disk")
-            .contains("/admin/instance-devices/new?parent=" + instanceId + "&type=nic")
+            .contains("/admin/instance-devices/new?parent=" + instanceId + "&amp;type=disk")
+            .contains("/admin/instance-devices/new?parent=" + instanceId + "&amp;type=nic")
             .as("step 1: under the lead sentence the shared record heading draws")
             .contains("data-cms-tab-lead")
             .contains("Data disks and extra network interfaces attached to this instance")
@@ -251,7 +251,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
             .as("step 2: and the desired-state row agrees").isEqualTo(2);
 
         // 3. Editing the size RESIZES the volume at the daemon; a posted instance never moves the device.
-        HttpResponse<String> resized = adminPostForm(
+        HttpResponse<String> resized = adminPostEdit(
             "/admin/instance-devices/" + row.get(InstanceDeviceModel.ID),
             "instance_id=" + otherId + "&type=disk&name=" + device + "&size_gb=5");
         assertThat(resized.statusCode())

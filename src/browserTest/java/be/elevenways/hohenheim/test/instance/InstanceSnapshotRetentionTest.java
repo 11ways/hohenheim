@@ -9,6 +9,8 @@ import be.elevenways.hohenheim.server.instance.InstanceSnapshots;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.HostFixtures;
+import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
+import be.elevenways.hohenheim.test.RecordedChanges;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
@@ -18,6 +20,8 @@ import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.common.security.ExecutionIdentity;
+import be.elevenways.zenit.test.support.HistoryTestSupport;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -390,8 +394,8 @@ class InstanceSnapshotRetentionTest {
             int live = snapshotRow(instanceId, InstanceSnapshotModel.STATUS_CAPTURING, liveDir.toString(), null,
                 null);
 
-            // 2. The settle.
-            snapshots.recoverInterrupted();
+            // 2. The settle, under the identity ServerMain declares for its boot recovery jobs.
+            ExecutionIdentity.runAsSystem(HohenheimSystemPurposes.BOOT, snapshots::recoverInterrupted);
 
             assertThat(Map.of(
                     "volumeRow", String.valueOf(Models.get(InstanceSnapshotModel.class)
@@ -425,6 +429,15 @@ class InstanceSnapshotRetentionTest {
                     .get(InstanceSnapshotModel.STATUS))
                 .as("step 2: and it still reads capturing")
                 .isEqualTo(InstanceSnapshotModel.STATUS_CAPTURING);
+
+            // 3. The settle's stamp names the system's boot work, never an anonymous writer or an account.
+            assertThat(HistoryTestSupport.recordsOptional())
+                .as("step 3: optional history must be recording or this step proves nothing")
+                .isTrue();
+            assertThat(RecordedChanges.lastUpdateOf(Models.get(InstanceSnapshotModel.class), deadVolume,
+                    InstanceSnapshotModel.STATUS.getName()).attribution())
+                .as("step 3: the interrupted capture's FAILED stamp is the system's boot work")
+                .isEqualTo(RecordedChanges.systemWork(HohenheimSystemPurposes.BOOT));
 
             service.destroy(instanceId);
         });

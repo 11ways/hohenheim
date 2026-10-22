@@ -202,8 +202,8 @@ class AccessRuleEditorTest extends HohenheimTestBase {
 
         // 2. Garbage in the kind's own field is refused AT SAVE, in the sentence that says
         //    what belongs there -- not accepted now and complained about at the enable gate.
-        HttpResponse<String> nonsenseSave = httpPostForm(saveUrl,
-            "type=ip_allow&data.network=not-an-ip-address", sessionToken, csrfToken);
+        HttpResponse<String> nonsenseSave = assertNotStale(httpPostEdit(saveUrl,
+            "type=ip_allow&data.network=not-an-ip-address", sessionToken, csrfToken));
         assertThat(nonsenseSave.statusCode())
             .as("step 2: a refused save rerenders the form instead of redirecting")
             .isEqualTo(200);
@@ -215,7 +215,7 @@ class AccessRuleEditorTest extends HohenheimTestBase {
 
         // 3. EMPTY while switched off stays allowed: a new rule is a draft by design, and
         //    the add form promises exactly that.
-        HttpResponse<String> draftSave = httpPostForm(saveUrl,
+        HttpResponse<String> draftSave = httpPostEdit(saveUrl,
             "type=ip_allow&data.network=", sessionToken, csrfToken);
         assertThat(draftSave.statusCode())
             .as("step 3: the empty draft saves").isEqualTo(302);
@@ -224,8 +224,8 @@ class AccessRuleEditorTest extends HohenheimTestBase {
 
         // 4. Switching it ON with nothing filled in is refused by the SAME check, with the
         //    same sentence.
-        HttpResponse<String> enableEmpty = httpPostForm(saveUrl,
-            "type=ip_allow&data.network=&enabled=true", sessionToken, csrfToken);
+        HttpResponse<String> enableEmpty = assertNotStale(httpPostEdit(saveUrl,
+            "type=ip_allow&data.network=&enabled=true", sessionToken, csrfToken));
         assertThat(enableEmpty.statusCode())
             .as("step 4: enabling an empty rule is refused").isEqualTo(200);
         assertThat(enableEmpty.body())
@@ -236,7 +236,7 @@ class AccessRuleEditorTest extends HohenheimTestBase {
 
         // 5. Filled in and switched on, it saves -- and the tab SAYS it is on, instead of
         //    saying nothing at all.
-        HttpResponse<String> goodSave = httpPostForm(saveUrl,
+        HttpResponse<String> goodSave = httpPostEdit(saveUrl,
             "type=ip_allow&data.network=10.1.0.0%2F16&enabled=true", sessionToken, csrfToken);
         assertThat(goodSave.statusCode()).as("step 5: a usable rule saves").isEqualTo(302);
         assertThat((Boolean) model.findById(ruleId).get(AccessRuleModel.ENABLED))

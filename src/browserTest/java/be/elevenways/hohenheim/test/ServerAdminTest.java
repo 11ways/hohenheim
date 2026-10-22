@@ -4,7 +4,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import com.microsoft.playwright.assertions.PlaywrightAssertions;
+import be.elevenways.protoblast.testsupport.browser.BoundedAssertions;
 import be.elevenways.protoblast.common.time.Now;
 import org.junit.jupiter.api.*;
 
@@ -52,7 +52,7 @@ class ServerAdminTest extends HohenheimTestBase {
             .isEqualTo(serversBefore);
 
         // 3. The shell sidebar carries the servers entry.
-        PlaywrightAssertions.assertThat(
+        BoundedAssertions.assertThat(
             page.locator("pl-app-sidebar a[href='/admin/servers']")).hasCount(1);
 
         Row local = Models.get(ServerModel.class).find()
@@ -129,7 +129,7 @@ class ServerAdminTest extends HohenheimTestBase {
         assertThat((String) row.get(ServerModel.MODE)).isEqualTo("ssh");
         Integer id = row.get(ServerModel.ID);
 
-        var update = adminPostForm("/admin/servers/" + id, "name=edge-9&ssh_target=ops%40edge9.example");
+        var update = adminPostEdit("/admin/servers/" + id, "name=edge-9&ssh_target=ops%40edge9.example");
         assertThat(update.statusCode()).isIn(200, 302, 303);
 
         Row updated = Models.get(ServerModel.class).findById(id);
@@ -146,7 +146,11 @@ class ServerAdminTest extends HohenheimTestBase {
         assertThat(local).isNotNull();
         Integer localId = local.get(ServerModel.ID);
 
-        adminPostForm("/admin/servers/" + localId, "name=local&ssh_target=evil%40host");
+        var smuggled = assertNotStale(adminPostEdit("/admin/servers/" + localId,
+            "name=local&ssh_target=evil%40host"));
+        assertThat(smuggled.statusCode())
+            .as("the local host's save lands with its read-only ssh_target withheld, not refused as stale")
+            .isIn(302, 303);
         Row after = Models.get(ServerModel.class).findById(localId);
         assertThat((Object) after.get(ServerModel.SSH_TARGET))
             .as("the implicit local host must not accept an SSH target")
@@ -175,7 +179,7 @@ class ServerAdminTest extends HohenheimTestBase {
         Row edge = Models.get(ServerModel.class).find()
             .where(ServerModel.NAME.eq("edge-posture")).first();
         assertThat(edge).as("step 1: the created remote host exists").isNotNull();
-        var edgeUpdate = adminPostForm("/admin/servers/" + edge.get(ServerModel.ID),
+        var edgeUpdate = adminPostEdit("/admin/servers/" + edge.get(ServerModel.ID),
             "name=edge-posture&ssh_target=ops%40edge-posture.example&posture=dedicated");
         assertThat(edgeUpdate.statusCode()).isIn(200, 302, 303);
         assertThat((String) Models.get(ServerModel.class)
@@ -204,7 +208,7 @@ class ServerAdminTest extends HohenheimTestBase {
         local.set(ServerModel.POSTURE, ServerModel.POSTURE_TRUSTED_ONLY);
         Models.get(ServerModel.class).save(local);
 
-        var update = adminPostForm("/admin/servers/" + localId,
+        var update = adminPostEdit("/admin/servers/" + localId,
             "name=local&ssh_target=evil%40intruder.example&posture=shared_container");
         assertThat(update.statusCode()).isIn(200, 302, 303);
 

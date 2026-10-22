@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService.Status;
+import be.elevenways.protoblast.common.util.Uuids;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -14,7 +15,9 @@ import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.Accountability;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.test.support.HistoryTestSupport;
 import org.junit.jupiter.api.Test;
 import org.xbill.DNS.Name;
 import org.xbill.DNS.Type;
@@ -102,13 +105,22 @@ class ReleasedHostnameDnsTest extends HohenheimTestBase {
         Model domains = Models.get(SiteDomainModel.class);
         Row aDomain = domains.find().where(SiteDomainModel.HOSTNAME.eq("a." + origin))
             .where(SiteDomainModel.SITE_ID.eq(siteId)).first();
-        domains.delete(aDomain);
+        // The release runs inside the operator's delete, so the record it disables names that operator.
+        UUID operatorId = Uuids.v7();
+        Accountability.runAs(RecordedChanges.operator(operatorId), () -> domains.delete(aDomain));
 
         assertThat((Boolean) Models.get(DnsRecordModel.class).findById(nameA.get(DnsRecordModel.ID))
             .get(DnsRecordModel.ENABLED)).as("the released name is disabled").isFalse();
         assertThat((Boolean) Models.get(DnsRecordModel.class).findById(shared.get(DnsRecordModel.ID))
             .get(DnsRecordModel.ENABLED))
             .as("a name a surviving live domain row still covers keeps serving").isTrue();
+        assertThat(HistoryTestSupport.recordsOptional())
+            .as("optional history must be recording or the attribution check proves nothing")
+            .isTrue();
+        assertThat(RecordedChanges.lastUpdateOf(Models.get(DnsRecordModel.class), nameA.get(DnsRecordModel.ID),
+                DnsRecordModel.ENABLED.getName()).actedBy())
+            .as("the disabled record's change names the operator whose delete released it")
+            .isEqualTo(RecordedChanges.operatorWork(operatorId));
         assertThat(servedA(origin, "shared"))
             .as("and it is still in the serving snapshot").containsExactly("10.0.0.2");
     }

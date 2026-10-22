@@ -322,11 +322,11 @@ class DnsAdminTest extends HohenheimTestBase {
         //    resolves field access without the record, so the inputs still appear on the
         //    page; the type is enforced when the form comes back.
         int nameserverId = nameserverPeer.get(DnsPeerModel.ID);
-        assertThat(adminPostForm("/admin/dns-peers/" + nameserverId,
+        assertThat(assertNotStale(adminPostEdit("/admin/dns-peers/" + nameserverId,
             "name=peer-nameserver&peer_type=nameserver&transfer_host=ns1.other.example"
             + "&transfer_port=53&tsig_key_name=&tsig_algorithm=&tsig_secret="
-            + "&base_url=https%3A%2F%2Fsmuggled.example&api_key=znit_smuggled&enabled=on")
-            .statusCode()).isIn(200, 302, 303);
+            + "&base_url=https%3A%2F%2Fsmuggled.example&api_key=znit_smuggled&enabled=on"))
+            .statusCode()).as("the save lands with the smuggled credentials stripped").isIn(302, 303);
         Row afterSmuggle = peers.findById(nameserverId);
         assertThat((String) afterSmuggle.get(DnsPeerModel.BASE_URL))
             .describedAs("a nameserver peer never gains edit-forwarding credentials")

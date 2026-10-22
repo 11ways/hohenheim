@@ -11,9 +11,12 @@ import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.AuthSettings;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ZenitAuth;
+import be.elevenways.zenit.cms.common.RecordsCopy;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.render.action.CmsConfirmation;
 import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
+import be.elevenways.zenit.cms.server.page.FormConcurrency;
+import be.elevenways.zenit.cms.test.support.CmsFormSnapshots;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -50,6 +53,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Browser test base for Hohenheim. Authenticates via zenit-auth: seeds an admin user and mints
@@ -387,6 +392,52 @@ public abstract class HohenheimTestBase extends ZenitBrowserTestBase {
     /** A urlencoded POST as the harness admin, CSRF token included. */
     protected HttpResponse<String> adminPostForm(String path, String body) throws Exception {
         return httpPostForm(path, body, sessionToken, csrfToken);
+    }
+
+    /**
+     * An EDIT POST as the harness admin, carrying the live {@code cms__snapshot} its edit form renders at {@code path},
+     * as the browser posts it: an edit without one is refused as stale and saves nothing.
+     */
+    protected HttpResponse<String> adminPostEdit(String path, String body) throws Exception {
+        return adminPostEdit(path, path, body);
+    }
+
+    /** {@link #adminPostEdit(String, String)} for a form rendered at {@code formPath} and posted to {@code path}. */
+    protected HttpResponse<String> adminPostEdit(String formPath, String path, String body) throws Exception {
+        return adminPostForm(path, withSnapshot(body, snapshotAt(formPath, sessionToken)));
+    }
+
+    /** {@link #adminPostEdit(String, String)} as the caller holding {@code session}, its form rendered for that caller. */
+    protected HttpResponse<String> httpPostEdit(String path, String body, String session, String csrf)
+            throws Exception {
+        return httpPostForm(path, withSnapshot(body, snapshotAt(path, session)), session, csrf);
+    }
+
+    /**
+     * The live {@code cms__snapshot} of the one edit form {@code formPath} renders for {@code session}; a guard posting
+     * as a caller the form refuses reads it as the admin, so its refusal is the guard's own, never the stale one.
+     */
+    protected String snapshotAt(String formPath, String session) throws Exception {
+        return CmsFormSnapshots.ofHtml(httpGet(formPath, session).body());
+    }
+
+    /** @return the url-encoded {@code body} with {@code snapshot} appended as {@link FormConcurrency#FIELD} */
+    protected static String withSnapshot(String body, String snapshot) {
+        return (body.isEmpty() ? "" : body + "&") + FormConcurrency.FIELD + "="
+            + URLEncoder.encode(snapshot, StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Asserts an edit answer is NOT the stale-snapshot refusal, so a guard asserting a refused or unchanged write
+     * proves its own reason rather than passing on the conflict every snapshot-less edit gets.
+     *
+     * @return {@code answer}, for the guard's own assertions
+     */
+    protected static HttpResponse<String> assertNotStale(HttpResponse<String> answer) {
+        assertThat(answer.body())
+            .as("the edit was judged on its own merits, not refused as a stale snapshot")
+            .doesNotContain(ApiSupport.shippedText(RecordsCopy.COPY.of("conflict")));
+        return answer;
     }
 
     /** A DRY POST as the harness admin, CSRF token included. */

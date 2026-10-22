@@ -90,7 +90,7 @@ class StackAuditTest {
 
         // 1. The SYNCHRONOUS door (adoption, scripts, tests). It hops onto the stack's
         //    worker exactly like the panel does, so it is the same carry under test.
-        Accountability.runAs(operator(DEPLOY_OPERATOR), () -> deployQuietly(stackId, "manual"));
+        Accountability.runAs(RecordedChanges.operator(DEPLOY_OPERATOR), () -> deployQuietly(stackId, "manual"));
         RecordedChanges.Recorded deployed = onlyActivity(stackId, HohenheimActivityAction.DEPLOYED);
         assertThat(Map.of(
                 "actor", String.valueOf(deployed.actor()),
@@ -103,7 +103,7 @@ class StackAuditTest {
 
         // 2. A rollback is its OWN verb, not a second deploy row: an operator reading the
         //    trail must be able to tell "released forward" from "put back".
-        Accountability.runAs(operator(ROLLBACK_OPERATOR), () -> {
+        Accountability.runAs(RecordedChanges.operator(ROLLBACK_OPERATOR), () -> {
             try {
                 runtime.rollback(stackId);
             } catch (IOException e) {
@@ -119,7 +119,7 @@ class StackAuditTest {
             .hasSize(1);
 
         // 3. Stop is the same contract, not a second policy: one stopped fact on the stack it settled against.
-        Accountability.runAs(operator(ROLLBACK_OPERATOR), () -> {
+        Accountability.runAs(RecordedChanges.operator(ROLLBACK_OPERATOR), () -> {
             try {
                 runtime.stop(stackId);
             } catch (IOException e) {
@@ -141,7 +141,7 @@ class StackAuditTest {
             GrantService.createDirectGrant(GrantSubjectType.USER, id, "*", true);
             return id;
         });
-        Db.run(datasource, () -> Accountability.runAs(operator(clicker),
+        Db.run(datasource, () -> Accountability.runAs(RecordedChanges.operator(clicker),
                 () -> PanelResourceCalls.invoke(
             HohenheimSlugs.ADMIN, HohenheimSlugs.STACKS, StackOperations.DEPLOY.id(), panelId,
             CmsConfirmation.PLAIN_PROOF,
@@ -195,11 +195,6 @@ class StackAuditTest {
         } catch (IOException e) {
             throw new IllegalStateException(e);
         }
-    }
-
-    private static Accountability operator(UUID id) {
-        return new Accountability(id.toString(), PrincipalRef.account(id).storedKind(), "Operator " + id,
-            "10.0.0.1", "junit", Accountability.ORIGIN_WEB);
     }
 
     private static int stackRecord(String name) {
