@@ -74,10 +74,10 @@ class ReconcileFindingTriageTest extends HohenheimTestBase {
                 + " .pl-facet-option-text");
             waitForCondition("window.location.search.indexOf('filter.kind=container') !== -1");
             waitForReactiveIdle();
-            String orphanTile =
-                    "[data-cms-list-widgets] pl-stat-card:has(.label:text-is('Orphaned under these filters'))"
-                + " .value";
-            waitForTextEquals(orphanTile, "1");
+            // The in-page wait takes plain CSS, so the labelled tile is found by its label's text in the predicate.
+            waitForCondition("Array.from(document.querySelectorAll('[data-cms-list-widgets] pl-stat-card'))"
+                + ".some(card => card.querySelector('.label')?.textContent.trim() === 'Orphaned under these filters'"
+                + " && card.querySelector('.value')?.textContent.trim() === '1')");
             assertThat(tile("Orphaned under these filters")).as("step 3: the tile follows the rail tick: one"
                 + " container orphan").isEqualTo("1");
             assertThat(tile("Colliding under these filters")).as("step 3: the collision is a container").isEqualTo("1");
