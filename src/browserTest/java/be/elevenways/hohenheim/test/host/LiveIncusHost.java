@@ -32,6 +32,7 @@ import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
@@ -40,6 +41,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.util.Base64;
+import be.elevenways.protoblast.common.time.Now;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -104,6 +109,25 @@ public final class LiveIncusHost {
      * needs no scope of its own.
      */
     private final List<SharedObjects> mintedSharedObjects = new ArrayList<>();
+
+    /**
+     * The names an enrollment swept before it ran ({@link #sweepOwnLeftovers}), still owed a sweep at exit: cleared
+     * once {@link #releaseControllerSharedObjects} has handed them back, so only a run that never reached its
+     * tearDown leaves them for {@link #releaseAtExit}.
+     */
+    private final List<OwnNames> owedSweeps = new ArrayList<>();
+
+    /** Every fixture that enrolled something in this JVM, for the exit release. */
+    private static final Set<LiveIncusHost> ENROLLED = ConcurrentHashMap.newKeySet();
+
+    /** Wall-clock budget for one remote command of the exit release, which races the JVM's own end. */
+    private static final long EXIT_TIMEOUT_SECONDS = 20;
+
+    static {
+        // AIDEV-NOTE: a raw Thread on purpose: addShutdownHook takes an unstarted Thread, the one exception
+        // protoblast's JobRunner rule names; the JVM, not a runner, starts it at exit.
+        Runtime.getRuntime().addShutdownHook(new Thread(LiveIncusHost::releaseAtExit, "live-incus-exit-release"));
+    }
 
     private LiveIncusHost(String url, String fingerprint, String trustTarget) {
         this.url = url;
@@ -380,6 +404,7 @@ public final class LiveIncusHost {
             outcomes.add(String.join(", ", parts));
         }
         this.mintedSharedObjects.clear();
+        this.owedSweeps.clear();
         return String.join("; ", outcomes);
     }
 
@@ -463,72 +488,130 @@ public final class LiveIncusHost {
         return token.toString();
     }
 
+    /** The names one live class's enrollment owns on one daemon: its controller prefix, shared objects and client. */
+    private record OwnNames(String prefix, String clientName, String isolationAcl, String presenceAcl,
+                            String bridge) {}
+
+    /** @return this database's own names on a daemon enrolled as {@code clientName}; call inside its Db scope */
+    private static OwnNames ownNames(String clientName) {
+        return new OwnNames(ControllerScope.scoped(""), clientName, IncusNetworkPolicy.aclName(),
+            ControllerPresence.aclName(), IncusNetworkPolicy.extraNetwork());
+    }
+
     /**
      * Remove, over the host's own CLI, what an earlier run of THIS live class left on this daemon: every instance
      * and custom volume named with this controller's prefix, its isolation and presence ACLs and its bridge, and a
-     * trust entry or pending trust token named {@code clientName}. A run killed mid-test (the JVM a timeout ended)
-     * never reaches its tearDown, so the next run cleans up before it starts.
+     * trust entry or pending trust token named after its client. A run killed mid-test (the JVM a timeout ended)
+     * never reaches its tearDown; {@link #releaseAtExit} removes the same names as that JVM ends, and this sweep
+     * catches what even that could not.
      *
      * AIDEV-NOTE: names only ever match this class's pinned identity and its own client name, so an operator's
-     * controller (u548fz9h, its alpvm instance) and another class's objects are never candidates. Run inside the
-     * class's Db scope, after {@link #pinLiveIdentity}.
+     * controller (u548fz9h, its alpvm instance) and another class's objects are never candidates.
      *
      * @return what was removed, or "nothing left"
      */
-    private String sweepOwnLeftovers(String clientName) {
-        String prefix = ControllerScope.scoped("");
+    private String sweepOwnLeftovers(OwnNames names, long timeoutSeconds) {
         List<String> removed = new ArrayList<>();
         try {
-            for (String name : csvColumn(ssh(List.of("incus", "list", "--format", "csv", "-c", "n")), 0)) {
-                if (name.startsWith(prefix)) {
-                    ssh(List.of("incus", "delete", "--force", name));
+            for (String name : csvColumn(ssh(List.of("incus", "list", "--format", "csv", "-c", "n"),
+                    timeoutSeconds), 0)) {
+                if (name.startsWith(names.prefix())) {
+                    ssh(List.of("incus", "delete", "--force", name), timeoutSeconds);
                     removed.add("instance " + name);
                 }
             }
-            for (String pool : csvColumn(ssh(List.of("incus", "storage", "list", "--format", "csv", "-c", "n")),
-                    0)) {
+            for (String pool : csvColumn(ssh(List.of("incus", "storage", "list", "--format", "csv", "-c", "n"),
+                    timeoutSeconds), 0)) {
                 for (String line : ssh(List.of("incus", "storage", "volume", "list", pool, "--format", "csv",
-                        "-c", "tn")).split("\n")) {
+                        "-c", "tn"), timeoutSeconds).split("\n")) {
                     String[] cells = line.trim().split(",", 2);
-                    if (cells.length == 2 && "custom".equals(cells[0]) && cells[1].startsWith(prefix)) {
-                        ssh(List.of("incus", "storage", "volume", "delete", pool, cells[1]));
+                    if (cells.length == 2 && "custom".equals(cells[0]) && cells[1].startsWith(names.prefix())) {
+                        ssh(List.of("incus", "storage", "volume", "delete", pool, cells[1]), timeoutSeconds);
                         removed.add("volume " + pool + "/" + cells[1]);
                     }
                 }
             }
-            List<String> acls = csvColumn(ssh(List.of("incus", "network", "acl", "list", "--format", "csv")), 0);
-            for (String acl : List.of(IncusNetworkPolicy.aclName(), ControllerPresence.aclName())) {
+            List<String> acls = csvColumn(ssh(List.of("incus", "network", "acl", "list", "--format", "csv"),
+                timeoutSeconds), 0);
+            for (String acl : List.of(names.isolationAcl(), names.presenceAcl())) {
                 if (acls.contains(acl)) {
-                    ssh(List.of("incus", "network", "acl", "delete", acl));
+                    ssh(List.of("incus", "network", "acl", "delete", acl), timeoutSeconds);
                     removed.add("acl " + acl);
                 }
             }
-            String bridge = IncusNetworkPolicy.extraNetwork();
-            if (csvColumn(ssh(List.of("incus", "network", "list", "--format", "csv", "-c", "n")), 0)
-                    .contains(bridge)) {
-                ssh(List.of("incus", "network", "delete", bridge));
-                removed.add("network " + bridge);
+            if (csvColumn(ssh(List.of("incus", "network", "list", "--format", "csv", "-c", "n"), timeoutSeconds), 0)
+                    .contains(names.bridge())) {
+                ssh(List.of("incus", "network", "delete", names.bridge()), timeoutSeconds);
+                removed.add("network " + names.bridge());
             }
-            for (String line : ssh(List.of("incus", "config", "trust", "list", "--format", "csv", "-c", "nf"))
-                    .split("\n")) {
+            for (String line : ssh(List.of("incus", "config", "trust", "list", "--format", "csv", "-c", "nf"),
+                    timeoutSeconds).split("\n")) {
                 String[] cells = line.trim().split(",", 2);
-                if (cells.length == 2 && clientName.equals(cells[0])) {
-                    ssh(List.of("incus", "config", "trust", "remove", cells[1]));
-                    removed.add("trust " + clientName);
+                if (cells.length == 2 && names.clientName().equals(cells[0])) {
+                    ssh(List.of("incus", "config", "trust", "remove", cells[1]), timeoutSeconds);
+                    removed.add("trust " + names.clientName());
                 }
             }
             for (String token : csvColumn(ssh(List.of("incus", "config", "trust", "list-tokens", "--format", "csv",
-                    "-c", "n")), 0)) {
-                if (clientName.equals(token)) {
-                    ssh(List.of("incus", "config", "trust", "revoke-token", clientName));
-                    removed.add("trust token " + clientName);
+                    "-c", "n"), timeoutSeconds), 0)) {
+                if (names.clientName().equals(token)) {
+                    ssh(List.of("incus", "config", "trust", "revoke-token", names.clientName()), timeoutSeconds);
+                    removed.add("trust token " + names.clientName());
                 }
             }
         } catch (IOException failed) {
-            throw new UncheckedIOException("The pre-run sweep of " + prefix + "* on " + this.trustTarget
+            throw new UncheckedIOException("The sweep of " + names.prefix() + "* on " + this.trustTarget
                 + " failed after removing " + removed, failed);
         }
         return removed.isEmpty() ? "nothing left" : String.join(", ", removed);
+    }
+
+    /**
+     * As this JVM ends, hand back what every fixture still holds: the root keys of EVERY host first (a working
+     * credential is the worst thing to leave, and the kill may come before the rest), then everything named after
+     * the classes that never reached their tearDown. A run the wall ends is torn down by the JVM's own exit, which
+     * runs this before the kill.
+     *
+     * AIDEV-NOTE: a no-op for every class whose tearDown ran ({@link #releaseAuthorizedKeys} and
+     * {@link #releaseControllerSharedObjects} empty the lists it reads). The trust certificates are swept by client
+     * name with the rest, so no Db scope is needed here. Each outcome is also appended to a file beside the live
+     * lane's truncation marker: the task's stdout is gone by the time a kill runs this.
+     */
+    static void releaseAtExit() {
+        for (LiveIncusHost host : ENROLLED) {
+            for (String key : List.copyOf(host.installedKeys)) {
+                exitLog(host.trustTarget + ": key " + commentOf(key) + " -> "
+                    + host.deauthorizeComment(commentOf(key), EXIT_TIMEOUT_SECONDS));
+            }
+            host.installedKeys.clear();
+        }
+        for (LiveIncusHost host : ENROLLED) {
+            for (OwnNames names : List.copyOf(host.owedSweeps)) {
+                String outcome;
+                try {
+                    outcome = host.sweepOwnLeftovers(names, EXIT_TIMEOUT_SECONDS);
+                } catch (UncheckedIOException failed) {
+                    outcome = "NOT finished: " + failed.getMessage();
+                }
+                exitLog(host.trustTarget + ": " + outcome);
+            }
+            host.owedSweeps.clear();
+        }
+    }
+
+    /** Print one exit-release outcome and append it to this JVM's exit-release file. */
+    private static void exitLog(String outcome) {
+        String line = "=== exit release on " + outcome;
+        System.out.println(line);
+        Path file = Path.of(System.getProperty("hohenheim.truncation.dir", "build/live-lane-truncations"),
+            "exit-release-" + ProcessHandle.current().pid() + ".txt");
+        try {
+            Files.createDirectories(file.getParent());
+            Files.writeString(file, line + "\n", StandardCharsets.UTF_8, StandardOpenOption.CREATE,
+                StandardOpenOption.APPEND);
+        } catch (IOException unwritable) {
+            System.out.println("=== exit release log unwritable: " + unwritable.getMessage());
+        }
     }
 
     /** @return one column of csv output, one value per non-blank line */
@@ -553,7 +636,11 @@ public final class LiveIncusHost {
      */
     public String enrollDaemonTrustThroughProduct(String hostName, String clientName) {
         pinLiveIdentity(clientName);
-        System.out.println("=== pre-run sweep on " + hostName + ": " + sweepOwnLeftovers(clientName));
+        OwnNames names = ownNames(clientName);
+        System.out.println("=== pre-run sweep on " + hostName + ": "
+            + sweepOwnLeftovers(names, DEFAULT_TIMEOUT_SECONDS));
+        this.owedSweeps.add(names);
+        ENROLLED.add(this);
         Row host = enrol(hostName);
         IncusTrust.ensureIdentity(host);
         String fingerprint = IncusTrust.fingerprintOf(
@@ -666,16 +753,30 @@ public final class LiveIncusHost {
      * (observed 2026-08-10: IncusVmLiveTest and IncusInstanceRuntimeLiveTest shared
      * "live-incus"; the runtime class's @BeforeAll enroll cut the VM journey off
      * mid-deploy with "Permission denied (publickey)" on the nft kernel-truth lane).
+     *
+     * AIDEV-NOTE: the line carries {@code expiry-time} ({@link #KEY_LIFETIME} ahead, UTC), so a key no cleanup reached
+     * -- a run killed while its exit release was still removing it -- stops opening the host on its own. It is
+     * written base64-encoded because the option's quotes would not survive the nested shell quoting.
      */
     public void authorizeKey(String publicKey) throws IOException {
-        String line = publicKey.trim().replace("'", "");
-        this.installedKeys.add(line);
-        deauthorizeComment(commentOf(line));
+        String key = publicKey.trim().replace("'", "");
+        String line = "expiry-time=\"" + KEY_EXPIRY.format(Now.instant().plus(KEY_LIFETIME)) + "\" " + key;
+        this.installedKeys.add(key);
+        ENROLLED.add(this);
+        deauthorizeComment(commentOf(key));
+        String encoded = Base64.getEncoder().encodeToString((line + "\n").getBytes(StandardCharsets.UTF_8));
         ssh(List.of("sh", "-c", "'mkdir -p ~/.ssh && chmod 700 ~/.ssh &&"
             + " touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys &&"
             + " flock ~/.ssh/authorized_keys.lock sh -c"
-            + " \"echo \\\"" + line + "\\\" >> ~/.ssh/authorized_keys\"'"));
+            + " \"echo " + encoded + " | base64 -d >> ~/.ssh/authorized_keys\"'"));
     }
+
+    /** How long a key this fixture installs keeps opening the host: longer than any run's wall. */
+    private static final Duration KEY_LIFETIME = Duration.ofHours(2);
+
+    /** OpenSSH's {@code expiry-time} spelling, in UTC. */
+    private static final DateTimeFormatter KEY_EXPIRY = DateTimeFormatter.ofPattern("yyyyMMddHHmm'Z'")
+        .withZone(ZoneOffset.UTC);
 
     /**
      * Give back every authorized_keys line this fixture installed, whoever installed it.
@@ -705,6 +806,11 @@ public final class LiveIncusHost {
 
     /** @return "removed", "STILL PRESENT (n copies)", or the failure text */
     public String deauthorizeComment(String comment) {
+        return deauthorizeComment(comment, DEFAULT_TIMEOUT_SECONDS);
+    }
+
+    /** {@link #deauthorizeComment(String)} with every remote command bounded by {@code timeoutSeconds}. */
+    private String deauthorizeComment(String comment, long timeoutSeconds) {
         if (comment.isBlank()) {
             return "no comment to sweep";
         }
@@ -716,9 +822,9 @@ public final class LiveIncusHost {
             ssh(List.of("sh", "-c", "'flock ~/.ssh/authorized_keys.lock sh -c"
                 + " \"grep -v \\\" " + comment + "\\$\\\" ~/.ssh/authorized_keys"
                 + " > ~/.ssh/authorized_keys.tmp; mv ~/.ssh/authorized_keys.tmp"
-                + " ~/.ssh/authorized_keys\"'"));
+                + " ~/.ssh/authorized_keys\"'"), timeoutSeconds);
             String remaining = ssh(List.of("sh", "-c", "'grep -c \" " + comment
-                + "$\" ~/.ssh/authorized_keys || true'")).trim();
+                + "$\" ~/.ssh/authorized_keys || true'"), timeoutSeconds).trim();
             return "0".equals(remaining) ? "removed"
                 : "STILL PRESENT (" + remaining + " copies)";
         } catch (IOException failed) {

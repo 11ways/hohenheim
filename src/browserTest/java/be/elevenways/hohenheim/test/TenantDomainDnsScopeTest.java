@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.zenit.common.edit.submit.SubmittedValueCoercion;
 import java.util.Objects;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DnsDyndnsCredentialModel;
@@ -337,9 +338,13 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         // 3. Neither can it MOVE one of its own rows onto another tenant's site.
         HttpResponse<String> moved = assertNotStale(httpPostEdit("/manage/domains/" + forged.get(SiteDomainModel.ID),
             "site_id=" + foreignSiteId + "&hostname=forged.t.tenantscope.test", tenantSession, tenantCsrf));
-        assertThat(moved.statusCode()).as("step 3: the move onto a foreign site is refused")
-            .isIn(200, 302, 303, 403, 404, 422);
-        assertThat(moved.body()).as("step 3: the refusal is not the archived-parent copy")
+        assertThat(moved.statusCode()).as("step 3: the move onto a foreign site is re-rendered as refused")
+            .isIn(200, 422);
+        // The site chooser offers only managed sites, so the foreign id is refused as an unavailable choice before
+        // any writer runs; TenantWrites' tenant_site_not_managed is the backstop TenantHostnameTierTest proves.
+        assertThat(moved.body()).as("step 3: refused because the foreign site is no choice the tenant has")
+            .contains(ApiSupport.shippedText(SubmittedValueCoercion.UNKNOWN_TARGET_MESSAGE_KEY.copy()
+                .withArg("id", String.valueOf(foreignSiteId))))
             .doesNotContain("in the trash");
         assertThat((Integer) Models.get(SiteDomainModel.class)
             .findById(forged.get(SiteDomainModel.ID)).get(SiteDomainModel.SITE_ID))
