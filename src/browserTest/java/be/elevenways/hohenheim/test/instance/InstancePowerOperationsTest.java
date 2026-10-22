@@ -64,6 +64,7 @@ import be.elevenways.zenit.common.task.record.StepStatus;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.zenit.server.operation.OperationRequest;
+import be.elevenways.zenit.server.task.record.RecordScheduleTestSupport;
 import be.elevenways.zenit.server.task.record.RecordSchedules;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.jupiter.api.AfterAll;
@@ -198,10 +199,10 @@ class InstancePowerOperationsTest {
             for (Operation<Row, ?, ?> operation : List.of(InstanceOperations.START, InstanceOperations.STOP,
                     InstanceOperations.RESTART, InstanceOperations.BACKUP, InstanceOperations.SNAPSHOT,
                     InstanceOperations.CONSOLE_COMMAND, InstanceOperations.APP_UPDATE)) {
-                Row subject = OperationRequest.of(operation, ZenitPlacementSurface.SCHEDULE_STEP)
-                    .asSystem(RecordSchedules.systemIdentity(scheduleId), null)
+                Row subject = RecordScheduleTestSupport.asScheduleStep(() -> OperationRequest.of(operation,
+                        ZenitPlacementSurface.SCHEDULE_STEP).asSystem(ExecutionIdentity.current(), null)
                     .subjectKeys(List.of(String.valueOf(instanceId)))
-                    .loadSubjects().getFirst();
+                    .loadSubjects().getFirst());
                 assertThat(subject.get(InstanceModel.ID)).as("1: system loads the subject of %s", operation.id())
                     .isEqualTo(instanceId);
                 assertThatThrownBy(() -> OperationRequest.of(operation, ZenitPlacementSurface.SCHEDULE_STEP)

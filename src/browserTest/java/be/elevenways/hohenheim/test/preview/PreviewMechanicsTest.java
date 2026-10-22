@@ -45,6 +45,7 @@ import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.task.TaskHold;
 import be.elevenways.zenit.server.task.TaskRuntime;
 import be.elevenways.zenit.server.task.TaskService;
+import be.elevenways.zenit.server.task.record.RecordScheduleTestSupport;
 import be.elevenways.zenit.server.task.record.RecordSchedules;
 import be.elevenways.zenit.server.operation.OperationRequest;
 import be.elevenways.zenit.server.task.record.RunRecordSchedulesTask;
@@ -105,8 +106,9 @@ class PreviewMechanicsTest extends HohenheimHttpTestBase {
         // 1. Expiry's explicit source admits the system identity but not an anonymous caller.
         Row preview = newPreviewRow("system-source-ref", "prev-mech--system-source-ref.preview.test", null);
         String key = String.valueOf(preview.get(PreviewDeploymentModel.ID));
-        Row loaded = OperationRequest.of(PreviewOperations.EXPIRE, ZenitPlacementSurface.SCHEDULE_STEP)
-            .asSystem(RecordSchedules.systemIdentity(1), null).subjectKeys(List.of(key)).loadSubjects().getFirst();
+        Row loaded = RecordScheduleTestSupport.asScheduleStep(() -> OperationRequest.of(PreviewOperations.EXPIRE,
+                ZenitPlacementSurface.SCHEDULE_STEP).asSystem(ExecutionIdentity.current(), null)
+            .subjectKeys(List.of(key)).loadSubjects().getFirst());
         assertThat(loaded.get(PreviewDeploymentModel.ID)).as("1: system loads the expiry subject")
             .isEqualTo(preview.get(PreviewDeploymentModel.ID));
         assertThatThrownBy(() -> OperationRequest.of(PreviewOperations.EXPIRE, ZenitPlacementSurface.SCHEDULE_STEP)
