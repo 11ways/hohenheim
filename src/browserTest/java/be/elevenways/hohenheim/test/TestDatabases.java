@@ -12,78 +12,28 @@ import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.server.orm.backup.SnapshotCapableDatasource;
+import be.elevenways.zenit.orm.SqliteTemplates;
+import be.elevenways.zenit.server.orm.SqliteDatasource;
 import be.elevenways.zenit.server.orm.seed.Seeds;
 import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.server.task.TaskRuntime;
 import be.elevenways.zenit.test.support.TestSqliteFiles;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.File;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 
 /**
- * Hands out freshly-migrated databases to tests without paying for the migrations
- * every time.
+ * Hands out freshly-migrated databases to tests without paying for the migrations every time.
  *
- * AIDEV-NOTE: {@link HohenheimDatabase#init()} always runs the full migration set,
- * which on an empty SQLite file is roughly four seconds -- the dominant cost of the
- * browser suite, since dozens of tests wanted their own clean database. The FIRST
- * database of a JVM pays that price and is then kept as a template; every later
- * request copies the template file, so {@code migrate()} finds its history table
- * already populated and no-ops. Semantics are identical: callers still get a private,
- * fully-migrated, data-free database.
- *
- * The template is captured through {@link SnapshotCapableDatasource#snapshotTo}
- * (VACUUM INTO), never a bare file copy: the datasource runs journal_mode=WAL, so the
- * main file of a live database is just the header page and a {@code Files.copy} of it
- * captures an EMPTY database -- which is exactly how this optimization was silently dead
- * (every fork re-ran the full migration set) from the WAL default until 2026-08-12.
+ * AIDEV-NOTE: {@link HohenheimDatabase#init()} always runs the full migration set, about four seconds on an empty
+ * SQLite file. Every fresh file is first restored from zenit's machine-wide migrated template ({@link SqliteTemplates},
+ * keyed by the migrations and the code that shapes them), so {@code migrate()} finds its history table populated and
+ * no-ops; only the first fork on the machine after a migration change migrates. This replaced a per-invocation
+ * template directory of its own, which made every gradle run and every forked child JVM migrate once more.
  */
 public final class TestDatabases {
 
-    /** The system property naming where forks of one gradle invocation share a migrated template. */
-    public static final String TEMPLATE_DIR_PROPERTY = "hohenheim.testdb.template.dir";
-
-    private static Path template;
-
     private TestDatabases() {
-    }
-
-    /**
-     * Where forks of one gradle invocation share a migrated template, or null outside gradle.
-     *
-     * AIDEV-NOTE: with forkEvery = 1 the in-JVM template never pays off -- every isolated
-     * class is the "first database of a JVM" and re-runs the full migration set (~4s x ~70
-     * booting forks per default-lane run). Each test task wipes its own directory in
-     * doFirst, so a template can never outlive the invocation that migrated it and a
-     * migration change cannot leak in from a previous run.
-     */
-    private static Path sharedTemplateDir() {
-        String dir = System.getProperty(TEMPLATE_DIR_PROPERTY);
-        return dir == null || dir.isBlank() ? null : Path.of(dir);
-    }
-
-    /**
-     * The shared template directory for a JVM this one starts, its template migrated here first when none exists.
-     *
-     * AIDEV-NOTE: a child JVM inherits no system property (Subprocess.ofJavaMain passes the classpath only), so
-     * without this a forked runtime's freshDatabase re-ran the full migration set every time. The child sets
-     * {@link #TEMPLATE_DIR_PROPERTY} from it before its own freshDatabase.
-     *
-     * @return the directory, or null outside gradle
-     */
-    public static synchronized @Nullable String templateDirForChild() throws Exception {
-        Path shared = sharedTemplateDir();
-        if (shared == null) {
-            return null;
-        }
-        if (!Files.isRegularFile(shared.resolve("template.db"))) {
-            freshDatabase();
-        }
-        return shared.toString();
     }
 
     /**
@@ -95,16 +45,7 @@ public final class TestDatabases {
         File db = File.createTempFile("hohenheim-test", ".db");
         db.delete();
         db.deleteOnExit();
-
-        if (template == null) {
-            Path shared = sharedTemplateDir();
-            if (shared != null && Files.isRegularFile(shared.resolve("template.db"))) {
-                template = shared.resolve("template.db");
-            }
-        }
-        if (template != null) {
-            Files.copy(template, db.toPath(), StandardCopyOption.REPLACE_EXISTING);
-        }
+        restoreTemplate(db.toPath());
 
         SqlDatasource outgoing = HohenheimDatabase.datasource();
         releaseHandBoundDefault();
@@ -121,11 +62,17 @@ public final class TestDatabases {
         // the force-SSL availability tests re-enable it explicitly.
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.FORCE_HTTPS, false);
 
-        if (template == null) {
-            captureTemplate(db);
-        }
-
         return db;
+    }
+
+    /** Fills the new database file from the machine's migrated template. */
+    private static void restoreTemplate(Path db) {
+        SqliteDatasource filling = new SqliteDatasource(TestSqliteFiles.url(db));
+        try {
+            SqliteTemplates.restoreIfEmpty(filling);
+        } finally {
+            filling.close();
+        }
     }
 
     /**
@@ -262,55 +209,5 @@ public final class TestDatabases {
         ControllerIdentity.forgetForTest();
         ControllerIdentity.resolve();
         LiveNamespaces.note(ControllerIdentity.token());
-    }
-
-    /**
-     * Keep the first migrated database as the template every later copy starts from.
-     * A failure here is deliberately swallowed: losing the fast path only makes the
-     * suite slow again, never wrong.
-     */
-    private static void captureTemplate(File migrated) {
-        try {
-            Path candidate = Files.createTempFile("hohenheim-template", ".db");
-            if (HohenheimDatabase.datasource() instanceof SnapshotCapableDatasource snapshotable) {
-                snapshotable.snapshotTo(candidate);
-            } else {
-                Files.copy(migrated.toPath(), candidate, StandardCopyOption.REPLACE_EXISTING);
-            }
-            if (Files.size(candidate) <= 4096) {
-                // A header-page-only "template" is the WAL trap again: refuse it so the
-                // fast path can only ever hand out genuinely migrated databases.
-                Files.deleteIfExists(candidate);
-                return;
-            }
-            candidate.toFile().deleteOnExit();
-            template = candidate;
-            publishSharedTemplate(candidate);
-        } catch (Exception ignored) {
-            // No template: every caller keeps running its own migrations, as before.
-        }
-    }
-
-    /**
-     * Offer this JVM's template to sibling forks; losing the publish race is fine.
-     */
-    private static void publishSharedTemplate(Path candidate) {
-        Path shared = sharedTemplateDir();
-        if (shared == null) {
-            return;
-        }
-        try {
-            Files.createDirectories(shared);
-            Path staging = Files.createTempFile(shared, "staging-", ".db");
-            Files.copy(candidate, staging, StandardCopyOption.REPLACE_EXISTING);
-            try {
-                Files.move(staging, shared.resolve("template.db"),
-                    java.nio.file.StandardCopyOption.ATOMIC_MOVE);
-            } catch (Exception raceLost) {
-                Files.deleteIfExists(staging);
-            }
-        } catch (Exception ignored) {
-            // Sibling forks keep migrating for themselves, exactly as before.
-        }
     }
 }

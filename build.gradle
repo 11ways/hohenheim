@@ -354,16 +354,12 @@ def browserLaneDefaults = { Test lane ->
     // Where LiveLaneReport keeps its truncation markers. A leftover file after a run IS
     // the list of tests that were killed with no verdict.
     lane.systemProperty 'hohenheim.truncation.dir', "${buildDir}/live-lane-truncations/${lane.name}"
-    // Forks of this invocation share one freshly-migrated database template
-    // (TestDatabases); wiped up front so a migration change can never leak in.
-    lane.systemProperty 'hohenheim.testdb.template.dir', "${buildDir}/test-db-templates/${lane.name}"
     // Namespace ledgers for the Docker network reaper (test/live/LiveNamespaces). SHARED
     // by every lane and deliberately NOT wiped: its job is to survive the invocation
     // that wrote it, so a killed worker's leaked networks are reaped next run.
     lane.systemProperty 'hohenheim.namespace.dir', "${buildDir}/live-lane-namespaces"
     lane.doFirst {
         delete "${buildDir}/live-lane-truncations/${lane.name}"
-        delete "${buildDir}/test-db-templates/${lane.name}"
     }
     lane.finalizedBy 'reportTruncatedBrowserTests'
 }
