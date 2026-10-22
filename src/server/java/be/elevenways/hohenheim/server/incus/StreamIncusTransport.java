@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.incus;
 import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.hohenheim.server.util.Http11;
 import be.elevenways.hohenheim.server.util.Watchdog;
+import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.util.Closeables;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -57,6 +58,17 @@ abstract class StreamIncusTransport implements IncusTransport {
     /** The {@code Host} header value for requests on this transport. */
     protected abstract @NonNull String hostHeader();
 
+    /**
+     * Arm the deadline that closes {@code channel}, saying so in the log when it fires: a wedged daemon answer then
+     * leaves a line naming the request it ended instead of only the caller's exception.
+     */
+    private Watchdog.@NonNull Deadline deadline(@NonNull Channel channel, @NonNull String request, long timeoutMs) {
+        return Watchdog.schedule(() -> {
+            Blast.log("INCUS: closing", request, "to", describe(), "at its", timeoutMs + "ms", "deadline");
+            Closeables.closeQuietly(channel);
+        }, timeoutMs);
+    }
+
     @Override
     public Http11.@NonNull Raw exchange(@NonNull String method, @NonNull String pathAndQuery,
                                         @Nullable String jsonBody, long timeoutMs)
@@ -78,7 +90,7 @@ abstract class StreamIncusTransport implements IncusTransport {
         byte[] request = Http11.request(method, pathAndQuery, hostHeader(), body,
             body != null ? "application/json" : null, headers);
         Channel channel = open(timeoutMs);
-        Watchdog.Deadline watchdog = Watchdog.schedule(() -> Closeables.closeQuietly(channel), timeoutMs);
+        Watchdog.Deadline watchdog = deadline(channel, method + " " + pathAndQuery, timeoutMs);
         try {
             OutputStream out = channel.out();
             out.write(request);
@@ -117,7 +129,7 @@ abstract class StreamIncusTransport implements IncusTransport {
             length, extraHeaders);
 
         Channel channel = open(timeoutMs);
-        Watchdog.Deadline watchdog = Watchdog.schedule(() -> Closeables.closeQuietly(channel), timeoutMs);
+        Watchdog.Deadline watchdog = deadline(channel, method + " " + pathAndQuery, timeoutMs);
         try {
             OutputStream out = channel.out();
             out.write(head);
@@ -144,7 +156,7 @@ abstract class StreamIncusTransport implements IncusTransport {
             throws IOException {
         byte[] request = Http11.request(method, pathAndQuery, hostHeader(), null, null, null);
         Channel channel = open(timeoutMs);
-        Watchdog.Deadline watchdog = Watchdog.schedule(() -> Closeables.closeQuietly(channel), timeoutMs);
+        Watchdog.Deadline watchdog = deadline(channel, method + " " + pathAndQuery, timeoutMs);
         try {
             OutputStream out = channel.out();
             out.write(request);
@@ -193,8 +205,7 @@ abstract class StreamIncusTransport implements IncusTransport {
         Channel channel = open(connectTimeoutMs);
         // The watchdog covers connect + handshake ONLY: an established stream lives
         // until a side closes it.
-        Watchdog.Deadline watchdog = Watchdog.schedule(() -> Closeables.closeQuietly(channel),
-            connectTimeoutMs);
+        Watchdog.Deadline watchdog = deadline(channel, "websocket " + pathAndQuery, connectTimeoutMs);
         try {
             OutputStream out = channel.out();
             out.write(head);
