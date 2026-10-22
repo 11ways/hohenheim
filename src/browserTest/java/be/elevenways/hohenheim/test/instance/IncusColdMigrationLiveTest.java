@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
 import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceMigrations;
+import be.elevenways.hohenheim.server.instance.RootDisk;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
@@ -57,7 +58,14 @@ class IncusColdMigrationLiveTest {
     private static final String HOST_B = "live-mig-b";
     private static final String VM_IMAGE = "alpine/3.22/cloud";
     private static final String PEER_IMAGE = "alpine/3.22";
-    private static final long AGENT_TIMEOUT_MS = 600_000;
+    /**
+     * The VM's root disk: the image's own minimum. Every export and import of the journey copies the whole disk, and
+     * the daemon's 10 GiB default doubled each (measured on daystrom 2026-10-22: 44 s / 56 s at 10 GiB, 20 s / 22 s at
+     * 4 GiB), which alone pushed the journey past the run's 600 s wall.
+     */
+    private static final int VM_ROOT_DISK_GB = 4;
+    /** A cloud VM's agent answers well inside this; three such waits must fit the run's 600 s wall together. */
+    private static final long AGENT_TIMEOUT_MS = 180_000;
 
     private static LiveIncusHost remoteA;
     private static LiveIncusHost remoteB;
@@ -139,8 +147,7 @@ class IncusColdMigrationLiveTest {
                 assertThat(service.deploy(vmId).running())
                     .as("step 1: the VM deploys and runs on " + HOST_A)
                     .isTrue();
-                Poll.until("VM agent up on " + HOST_A, Duration.ofMillis(AGENT_TIMEOUT_MS), POLL_INTERVAL,
-                    () -> "ready".equals(execQuietly(remoteA, handle, "echo ready")));
+                awaitAgent(remoteA, handle, "VM agent up on " + HOST_A);
 
                 // 2. Distinguishable state: marker v1, a daemon-side snapshot, an
                 //    OFF-HOST backup of that state, then marker v2 -- so the backup
@@ -211,8 +218,7 @@ class IncusColdMigrationLiveTest {
                 }
 
                 // 7. Data intact ON THE DESTINATION, snapshots carried, agent up.
-                Poll.until("migrated VM agent up on " + HOST_B, Duration.ofMillis(AGENT_TIMEOUT_MS), POLL_INTERVAL,
-                    () -> "ready".equals(execQuietly(remoteB, handle, "echo ready")));
+                awaitAgent(remoteB, handle, "migrated VM agent up on " + HOST_B);
                 assertThat(exec(remoteB, handle, "cat /root/marker"))
                     .as("step 7: the data written on the source (v2, post-backup) is"
                         + " intact on the destination")
@@ -307,9 +313,7 @@ class IncusColdMigrationLiveTest {
                     .as("step 10: the restored instance lives on the DIFFERENT host"
                         + " the operator named")
                     .isEqualTo(hostAId);
-                String rh = restoredHandle;
-                Poll.until("restored VM agent up on " + HOST_A, Duration.ofMillis(AGENT_TIMEOUT_MS), POLL_INTERVAL,
-                    () -> "ready".equals(execQuietly(remoteA, rh, "echo ready")));
+                awaitAgent(remoteA, restoredHandle, "restored VM agent up on " + HOST_A);
                 assertThat(exec(remoteA, restoredHandle, "cat /root/marker"))
                     .as("step 10: the restore carries the BACKED-UP state (v1), not"
                         + " the migrated state (v2)")
@@ -393,7 +397,7 @@ class IncusColdMigrationLiveTest {
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, "hohenheim:vm");
         row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(
-            Map.of("image", VM_IMAGE, "memory_limit_mb", 512)));
+            Map.of("image", VM_IMAGE, "memory_limit_mb", 512, RootDisk.SETTING, VM_ROOT_DISK_GB)));
         row.set(InstanceModel.SERVER_ID, hostId);
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);
@@ -495,6 +499,35 @@ class IncusColdMigrationLiveTest {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    /**
+     * Wait for the VM's agent to answer; a VM that never does fails with what the daemon says about it (its state
+     * and its console log), so a wedged boot names its cause instead of eating the run's wall.
+     */
+    private static void awaitAgent(LiveIncusHost remote, String handle, String label) {
+        try {
+            Poll.until(label, Duration.ofMillis(AGENT_TIMEOUT_MS), POLL_INTERVAL,
+                () -> "ready".equals(execQuietly(remote, handle, "echo ready")));
+        } catch (AssertionError | RuntimeException notUp) {
+            throw new AssertionError(label + " never answered.\n--- incus info ---\n"
+                + hostSays(() -> remote.instanceInfoOrError(handle)) + "\n--- console log ---\n"
+                + hostSays(() -> remote.hostCommand("incus", "console", handle, "--show-log")), notUp);
+        }
+    }
+
+    /** One read of the host for a failure message, the read's own failure in its place. */
+    private static String hostSays(HostRead read) {
+        try {
+            return read.run();
+        } catch (IOException unreadable) {
+            return "unreadable: " + unreadable.getMessage();
+        }
+    }
+
+    /** A host read that may fail. */
+    private interface HostRead {
+        String run() throws IOException;
     }
 
     /** Exec that folds refusals to null: the agent-up polls ride this. */
