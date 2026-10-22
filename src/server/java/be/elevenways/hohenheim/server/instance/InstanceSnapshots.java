@@ -23,7 +23,6 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.history.History;
-import be.elevenways.zenit.common.orm.datasource.RecordNotFoundException;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -197,11 +196,7 @@ public final class InstanceSnapshots {
 
     /** Persist what the capture staged on its row; a row deleted during the capture has nothing left to settle. */
     private static void publish(@NonNull Row snapshot) {
-        try {
-            Models.get(InstanceSnapshotModel.class).saveWritten(snapshot);
-        } catch (RecordNotFoundException gone) {
-            // Deleted while capturing, as before: nothing to settle.
-        }
+        Models.get(InstanceSnapshotModel.class).saveWrittenUnlessGone(snapshot);
     }
 
     /**

@@ -10,7 +10,6 @@ import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.orm.datasource.RecordNotFoundException;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -141,11 +140,8 @@ public final class SandboxedBuilds {
         Row row = model.findById(buildId);
         if (row != null) {
             row.set(BuildOperationModel.DETECTION, detection);
-            try {
-                model.saveWritten(row);
-            } catch (RecordNotFoundException gone) {
-                // Pruned by a newer build of the same owner meanwhile, as before: nothing to stamp.
-            }
+            // Pruned by a newer build of the same owner meanwhile: nothing to stamp.
+            model.saveWrittenUnlessGone(row);
         }
     }
 
@@ -195,11 +191,8 @@ public final class SandboxedBuilds {
             row.set(BuildOperationModel.FINISHED_AT, finished);
             row.set(BuildOperationModel.DURATION_MS, (int) (finished.toEpochMilli() - startedAt));
             InstanceOperationLock.production().afterRelease(request.forModel().toString(), request.forId(), () -> {
-                try {
-                    model.saveWritten(row);
-                } catch (RecordNotFoundException gone) {
-                    // Pruned by a newer build of the same owner meanwhile, as before: nothing to stamp.
-                }
+                // Pruned by a newer build of the same owner meanwhile: nothing to stamp.
+                model.saveWrittenUnlessGone(row);
                 prune(model, request);
             });
         }

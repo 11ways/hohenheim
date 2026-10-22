@@ -43,7 +43,6 @@ import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Db;
-import be.elevenways.zenit.common.orm.datasource.RecordNotFoundException;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.QueryBuilder;
@@ -1096,11 +1095,7 @@ public final class ReleaseEngine {
      * under the operation leaves nothing to record onto.
      */
     private static void persist(@NonNull Row op) {
-        try {
-            Models.get(ReleaseOperationModel.class).saveWritten(op);
-        } catch (RecordNotFoundException gone) {
-            // Nothing left to record the step onto, as before.
-        }
+        Models.get(ReleaseOperationModel.class).saveWrittenUnlessGone(op);
     }
 
     /** Append a timestamped step line and persist it with whatever else is staged. */

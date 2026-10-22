@@ -56,7 +56,6 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.history.History;
-import be.elevenways.zenit.common.orm.datasource.RecordNotFoundException;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -1069,11 +1068,7 @@ public final class InstanceBackups {
 
     /** Persist what the upload staged on its row; a row deleted during the upload has nothing left to settle. */
     private static void publish(@NonNull Row backup) {
-        try {
-            Models.get(InstanceBackupModel.class).saveWritten(backup);
-        } catch (RecordNotFoundException gone) {
-            // Deleted while uploading, as before: nothing to settle.
-        }
+        Models.get(InstanceBackupModel.class).saveWrittenUnlessGone(backup);
     }
 
     private static Row requireRow(int instanceId) {

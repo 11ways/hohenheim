@@ -468,8 +468,7 @@ public final class GameDomains {
                     target.set(InstanceFileModel.CONTAINER_PATH, VelocityConfigs.CONFIG_PATH);
                     target.set(InstanceFileModel.MODE, "0644");
                 }
-                if (!content.equals(target.get(InstanceFileModel.CONTENT))) {
-                    target.set(InstanceFileModel.CONTENT, content);
+                if (target.setIfChanged(InstanceFileModel.CONTENT, content)) {
                     GeneratedRows.as(new GeneratedRows.Attribution(SOURCE,
                         InstanceModel.MODEL_ID.toString(), proxyId),
                         () -> files.save(target));

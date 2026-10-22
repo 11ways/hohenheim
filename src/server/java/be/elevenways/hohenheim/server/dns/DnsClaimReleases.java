@@ -13,7 +13,6 @@ import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.history.History;
-import be.elevenways.zenit.common.orm.datasource.RecordNotFoundException;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
@@ -185,11 +184,8 @@ public final class DnsClaimReleases {
                 continue;
             }
             record.set(DnsRecordModel.ENABLED, false);
-            try {
-                model.saveWritten(record);
-            } catch (RecordNotFoundException gone) {
-                // Deleted meanwhile, as before: the claim's credential and grants are still revoked below.
-            }
+            // Deleted meanwhile: the claim's credential and grants are still revoked below.
+            model.saveWrittenUnlessGone(record);
             // The credential dies WITH the claim: a released name's token must answer
             // badauth immediately. The release is a mandated consequence of a domain
             // delete that already passed its own gate, so the delete runs authorized

@@ -57,10 +57,7 @@ public final class ContainerFileRules {
         // Only the columns the write sets (Row.isWritten): a narrow save hands its hooks the whole stored record,
         // and a legacy stored path or mode never locks an unrelated edit.
         if (row.isWritten(path) && row.get(path) != null) {
-            String checked = checkedPath(path.getName(), row.get(path));
-            if (!checked.equals(row.get(path))) {
-                row.set(path, checked);
-            }
+            row.setIfChanged(path, checkedPath(path.getName(), row.get(path)));
         }
         checkMode(mode.getName(), row.isWritten(mode) ? row.get(mode) : null);
     }

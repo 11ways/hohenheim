@@ -26,7 +26,6 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.history.History;
-import be.elevenways.zenit.common.orm.datasource.RecordNotFoundException;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -417,11 +416,8 @@ public final class WorkspaceBuilds {
         row.set(BuildOperationModel.DURATION_MS, (int) (finished.toEpochMilli() - startedAt));
         this.instances.operations().afterRelease(row.get(BuildOperationModel.FOR_MODEL),
             row.get(BuildOperationModel.FOR_ID), () -> {
-                try {
-                    model.saveWritten(row);
-                } catch (RecordNotFoundException gone) {
-                    // Pruned meanwhile, as before: nothing to stamp.
-                }
+                // Pruned meanwhile: nothing to stamp.
+                model.saveWrittenUnlessGone(row);
                 model.pruneHistory(InstanceModel.MODEL_ID.toString(),
                     row.get(BuildOperationModel.FOR_ID), SandboxedBuilds.historyPerOwner());
             });

@@ -328,8 +328,7 @@ public final class InstanceVolumes {
             // The stored host path is EVIDENCE (see InstanceVolumeModel): re-stamp it so a
             // changed data_path shows up as a rewritten row rather than as a mount nobody
             // can find the directory of.
-            if (!hostPath.equals(volume.get(InstanceVolumeModel.HOST_PATH))) {
-                volume.set(InstanceVolumeModel.HOST_PATH, hostPath);
+            if (volume.setIfChanged(InstanceVolumeModel.HOST_PATH, hostPath)) {
                 Models.get(InstanceVolumeModel.class).save(volume);
             }
             if (ownerUid != null) {
