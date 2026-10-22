@@ -40,7 +40,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * offer the rows it may USE (shared ones plus its own), its /manage list only the rows it OWNS, and neither ever names
  * another tenant's private row.
  */
-class TenantReferencePolicyTest extends HohenheimTestBase {
+class TenantReferencePolicyTest extends HohenheimHttpTestBase {
 
     private static UserPrincipal tenant;
     private static TestSession tenantAuth;

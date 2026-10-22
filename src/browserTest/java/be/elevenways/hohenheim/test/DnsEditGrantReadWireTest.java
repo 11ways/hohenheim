@@ -30,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Jelle De Loecker
  * @since 0.10.0
  */
-class DnsEditGrantReadWireTest extends HohenheimTestBase {
+class DnsEditGrantReadWireTest extends HohenheimHttpTestBase {
 
     private static final String SOURCE = "/zn/records/hohenheim.dns_record";
 

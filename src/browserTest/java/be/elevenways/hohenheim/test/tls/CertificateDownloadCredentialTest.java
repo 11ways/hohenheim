@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.test.tls;
 
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ApiKeyService;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -29,7 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * against a build with no distinction at all -- it is the PAIR (same key, same
  * permission, one route refused and one allowed) that pins where the line actually is.
  */
-class CertificateDownloadCredentialTest extends HohenheimTestBase {
+class CertificateDownloadCredentialTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "certdl-";
 

@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.spamservice.client.SpamserviceClient;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
 import be.elevenways.zenit.common.operation.SecretResult;
@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 /** A Spamservice key create is a receipted command whose raw key is its one-time result. */
-class SpamserviceKeyCreateTest extends HohenheimTestBase {
+class SpamserviceKeyCreateTest extends HohenheimHttpTestBase {
 
     private HttpServer server;
 

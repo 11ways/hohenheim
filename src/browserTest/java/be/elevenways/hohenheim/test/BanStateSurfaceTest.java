@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * enforced 24h ban -- the duration is a create-time choice backing no column -- and
  * after a lift nothing on the page said so.
  */
-class BanStateSurfaceTest extends HohenheimTestBase {
+class BanStateSurfaceTest extends HohenheimHttpTestBase {
 
     private static final String IP = "203.0.113.77";
 

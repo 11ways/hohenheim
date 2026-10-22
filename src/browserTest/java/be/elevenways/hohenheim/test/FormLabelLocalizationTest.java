@@ -36,7 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * AIDEV-NOTE: a field a framework model declares (zenit's RecordSchedule*Model on the schedule forms) is judged by
  * that framework, not here: those declare no label and ship no words, a gap that is zenit's to close.
  */
-class FormLabelLocalizationTest extends HohenheimTestBase {
+class FormLabelLocalizationTest extends HohenheimHttpTestBase {
 
     private static final LocaleChain DUTCH = LocaleChain.ofTags("nl");
 

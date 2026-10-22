@@ -7,7 +7,7 @@ import be.elevenways.hohenheim.test.PanelEntryViews;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** Configuration saves through both CMS projections cannot resurrect an operation's runtime state or fence. */
-class InstanceConfigurationSaveTest extends HohenheimTestBase {
+class InstanceConfigurationSaveTest extends HohenheimHttpTestBase {
 
     private static final AtomicReference<Runnable> DURING_WRITE = new AtomicReference<>();
 

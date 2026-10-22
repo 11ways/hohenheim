@@ -48,7 +48,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * about it; a primary replicates OUTWARD, which nothing on the list said; and a record's
  * type-specific rdata is what tells two otherwise identical rows apart.
  */
-class DnsSurfaceHonestyTest extends HohenheimTestBase {
+class DnsSurfaceHonestyTest extends HohenheimHttpTestBase {
 
     @Test
     void aReplicaZoneReportsWhatItActuallyServes() throws Exception {

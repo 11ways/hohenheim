@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.test.database;
 
 import be.elevenways.hohenheim.server.HandlerSupport;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.protoblast.common.http.HttpMethod;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -33,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
  * @author Jelle De Loecker <jelle@elevenways.be>
  * @since 0.1.0
  */
-class StreamedDownloadTest extends HohenheimTestBase {
+class StreamedDownloadTest extends HohenheimHttpTestBase {
 
     private static final String BODY = "-- dump line one\n-- dump line two\n";
 

@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
  * anchors (own parent, delegation, a free name, an operator write) prove the rule refuses
  * only foreign namespaces, and the grandfathered row proves no stored claim is revoked.
  */
-class TenantHostnameClaimTest extends HohenheimTestBase {
+class TenantHostnameClaimTest extends HohenheimHttpTestBase {
 
     private static final String BASE = "claimtest.test";
     private static final String VICTIM = "victim." + BASE;

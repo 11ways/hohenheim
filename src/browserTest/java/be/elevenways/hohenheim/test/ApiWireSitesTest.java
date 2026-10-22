@@ -59,7 +59,7 @@ import static be.elevenways.hohenheim.test.ApiSupport.form;
  * @author Jelle De Loecker
  * @since  0.9.0
  */
-class ApiWireSitesTest extends HohenheimTestBase {
+class ApiWireSitesTest extends HohenheimHttpTestBase {
 
     private static final Instant T0 = Instant.parse("2026-01-02T03:04:05Z");
     private static final Instant T1 = Instant.parse("2026-01-02T03:05:05Z");

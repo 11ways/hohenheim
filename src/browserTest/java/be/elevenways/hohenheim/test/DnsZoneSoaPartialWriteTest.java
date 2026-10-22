@@ -28,7 +28,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @author Jelle De Loecker
  * @since 0.1.0
  */
-class DnsZoneSoaPartialWriteTest extends HohenheimTestBase {
+class DnsZoneSoaPartialWriteTest extends HohenheimHttpTestBase {
 
     private static final String ORIGIN = "soa-partial.example";
 

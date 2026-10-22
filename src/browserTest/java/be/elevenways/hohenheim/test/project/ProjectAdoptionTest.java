@@ -12,7 +12,7 @@ import be.elevenways.hohenheim.server.project.ProjectAdoption;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.cms.SubjectTag;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -42,7 +42,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * AIDEV-NOTE: one journey: the idempotence check is only meaningful AFTER the first heal,
  * and it used to be a second @Order'ed test that could not run alone.
  */
-class ProjectAdoptionTest extends HohenheimTestBase {
+class ProjectAdoptionTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "proj-adopt-";
 

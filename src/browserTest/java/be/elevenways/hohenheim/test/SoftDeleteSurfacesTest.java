@@ -29,7 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Jelle De Loecker
  * @since  0.1.0
  */
-class SoftDeleteSurfacesTest extends HohenheimTestBase {
+class SoftDeleteSurfacesTest extends HohenheimHttpTestBase {
 
     private static final String NAME = "softdel-surface-site";
 

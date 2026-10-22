@@ -9,13 +9,15 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Keeps the three browser lanes honest: every test class lands in exactly one, and
+ * Keeps the four browser lanes honest: every test class lands in exactly one, and
  * {@code @Tag("solo")} -- the only tag that buys a private JVM back -- stays justified.
  *
  * The lanes are {@code browserTest} (shared server + browser, {@code @Tag("shared-server")}
- * inherited from {@code HohenheimTestBase}), {@code browserTestStandalone} (shared JVM, the
- * catch-all by negation) and {@code browserTestSolo} ({@code forkEvery = 1}, holding
- * {@code @Tag("solo")} plus the whole {@code @Tag("slow")} live suite).
+ * inherited from {@code HohenheimTestBase}), {@code browserTestHttp} (the same shared server
+ * and no browser, {@code @Tag("served-http")} from {@code HohenheimHttpTestBase}, kept honest by
+ * HttpLaneGuardTest), {@code browserTestStandalone} (shared JVM, the catch-all by negation) and
+ * {@code browserTestSolo} ({@code forkEvery = 1}, holding {@code @Tag("solo")} plus the whole
+ * {@code @Tag("slow")} live suite).
  *
  * AIDEV-NOTE: this guard exists because the lane split is a NEGATION rule. A class joins
  * the shared-JVM lane by doing nothing at all, which is what makes the design cheap -- and

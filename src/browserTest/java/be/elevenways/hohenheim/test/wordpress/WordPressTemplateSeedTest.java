@@ -17,7 +17,7 @@ import be.elevenways.hohenheim.server.instance.TemplatePortability;
 import be.elevenways.hohenheim.server.wordpress.WordPressPhp;
 import be.elevenways.hohenheim.server.wordpress.WordPressTemplateSeeder;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.InstanceRowCleanup;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.time.Now;
@@ -48,7 +48,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * its template; and creating an instance from the template allocates the database on the
  * instance's host and attaches it under {@code WORDPRESS_DB}.
  */
-class WordPressTemplateSeedTest extends HohenheimTestBase {
+class WordPressTemplateSeedTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "wp-seed-";
 

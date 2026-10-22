@@ -10,7 +10,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.game.VelocityConfigs;
 import be.elevenways.hohenheim.test.ApiSupport;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.common.operation.ZenitPlacementSurface;
@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * The game-domain mapping writes as the admin entry runs them: create, update and delete are operations over the
  * GameDomains funnel, the update reviewed against the mapping's lock version.
  */
-class GameDomainOperationsTest extends HohenheimTestBase {
+class GameDomainOperationsTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "game-ops-";
 

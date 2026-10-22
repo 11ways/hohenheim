@@ -29,7 +29,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * died with the host-user process lane. The surviving socket of that
  * shape is the INSTANCE console, which carries its own tests.
  */
-class SiteAccessControlTest extends HohenheimTestBase {
+class SiteAccessControlTest extends HohenheimHttpTestBase {
 
     private static Integer siteAId;
     private static Integer siteBId;

@@ -20,6 +20,7 @@ import be.elevenways.hohenheim.server.task.ReconcileInstanceStatus;
 import be.elevenways.hohenheim.test.database.EngineHandles;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
@@ -66,7 +67,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Jelle De Loecker
  * @since  0.9.0
  */
-class DatabasesPageJourneyTest extends HohenheimTestBase {
+class DatabasesPageJourneyTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "dbpage-";
     private static final LocaleChain EN = LocaleChain.ofTags("en");

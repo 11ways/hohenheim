@@ -27,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Jelle De Loecker
  * @since  0.9.0
  */
-class ActionConfirmationTitleTest extends HohenheimTestBase {
+class ActionConfirmationTitleTest extends HohenheimHttpTestBase {
 
     /** The generic title, read from its one home rather than spelled here. */
     private static final Microcopy GENERIC_TITLE = ConfirmationSpec.generic(Microcopy.literal("-"), false).title();

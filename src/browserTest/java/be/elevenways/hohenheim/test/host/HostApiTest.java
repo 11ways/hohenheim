@@ -8,7 +8,7 @@ import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ApiKeyService;
@@ -37,7 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * "the API returns whatever the ledger the panel reads says", which a literal cannot
  * distinguish from a second computation that happens to agree today.
  */
-class HostApiTest extends HohenheimTestBase {
+class HostApiTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "hostapi-";
 

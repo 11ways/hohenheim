@@ -7,7 +7,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.host.HostPreflight;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -42,7 +42,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * engine row, which is exactly the point -- the ceiling is a DECLARED number, not a
  * measurement, so it is knowable before anything runs.
  */
-class DatabaseCapacityApiTest extends HohenheimTestBase {
+class DatabaseCapacityApiTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "dbcap-";
 

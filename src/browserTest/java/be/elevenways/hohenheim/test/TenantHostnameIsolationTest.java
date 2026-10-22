@@ -49,7 +49,7 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
  * the MODEL through TenantConduits, because the write pipeline is the gate the /manage
  * forms merely render.
  */
-class TenantHostnameIsolationTest extends HohenheimTestBase {
+class TenantHostnameIsolationTest extends HohenheimHttpTestBase {
 
     /** Every hostname here ends in this, so no other class in the shared fork can cover it. */
     private static final String ZONE = "tenant-iso.test";

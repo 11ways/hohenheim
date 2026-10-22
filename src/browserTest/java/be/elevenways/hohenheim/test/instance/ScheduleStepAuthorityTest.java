@@ -7,7 +7,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -44,7 +44,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * the create affordance was offered to them; and an edit could
  * repoint a step's schedule_id at ANOTHER schedule, which nothing checked for CONFIG.
  */
-class ScheduleStepAuthorityTest extends HohenheimTestBase {
+class ScheduleStepAuthorityTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "stepauth-";
 

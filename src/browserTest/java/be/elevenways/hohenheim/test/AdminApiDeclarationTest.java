@@ -21,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Jelle De Loecker
  * @since 0.1.0
  */
-class AdminApiDeclarationTest extends HohenheimTestBase {
+class AdminApiDeclarationTest extends HohenheimHttpTestBase {
 
     /** Every automation endpoint whose only UI is the operator panel. */
     private static final List<Endpoint<?>> ADMIN_ONLY = List.of(

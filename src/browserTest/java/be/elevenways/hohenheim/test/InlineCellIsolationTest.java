@@ -83,7 +83,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * and a model this file has no fixture for FAILS rather than being skipped, because a
  * silently uncovered resource is exactly what this guard exists to prevent.
  */
-class InlineCellIsolationTest extends HohenheimTestBase {
+class InlineCellIsolationTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "inliso-";
 

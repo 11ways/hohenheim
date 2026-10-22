@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
  * @author Jelle De Loecker
  * @since  0.9.0
  */
-class ContainerFileRulesTest extends HohenheimTestBase {
+class ContainerFileRulesTest extends HohenheimHttpTestBase {
 
     @Test
     void aContainerFileIsAbsoluteNeverClimbsAndCarriesAnOctalMode() {

@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * ZERO rows, and a key that DOES cover the capability keeps them -- so the narrowing,
  * not a blanket key ban, is what decides.
  */
-class CertificateOwnerScopeTest extends HohenheimTestBase {
+class CertificateOwnerScopeTest extends HohenheimHttpTestBase {
 
     private static final String OWN_NAME = "Owner scope own certificate";
     private static final String FOREIGN_NAME = "Owner scope foreign certificate";

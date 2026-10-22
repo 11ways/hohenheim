@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Which row affordances earn a place in the row itself: editing and deleting a record do,
  * a credential chore and a PEM export do not -- they live in the row's overflow menu.
  */
-class RowActionPlacementTest extends HohenheimTestBase {
+class RowActionPlacementTest extends HohenheimHttpTestBase {
 
     @Test
     void chorePlacementIsPerActionAndRealAffordancesStayInline() {

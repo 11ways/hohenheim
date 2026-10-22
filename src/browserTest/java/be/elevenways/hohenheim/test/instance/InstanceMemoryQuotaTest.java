@@ -4,7 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.testsupport.thread.Racers;
 import be.elevenways.protoblast.common.time.Now;
@@ -48,7 +48,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * be read through each other -- which is exactly why the host budget is kept out of range
  * rather than the host kept absent.
  */
-class InstanceMemoryQuotaTest extends HohenheimTestBase {
+class InstanceMemoryQuotaTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "mem-quota-";
 

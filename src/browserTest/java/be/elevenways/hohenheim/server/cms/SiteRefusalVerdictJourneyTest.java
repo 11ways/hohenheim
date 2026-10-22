@@ -8,7 +8,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.StaleSiteRows;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
@@ -43,7 +43,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Jelle De Loecker
  * @since  0.9.0
  */
-class SiteRefusalVerdictJourneyTest extends HohenheimTestBase {
+class SiteRefusalVerdictJourneyTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "site-refusal-";
     private static final LocaleChain EN = LocaleChain.ofTags("en");

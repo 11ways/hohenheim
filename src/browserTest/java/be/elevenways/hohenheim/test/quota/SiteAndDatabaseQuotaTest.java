@@ -6,7 +6,7 @@ import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.SiteWrites;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.protoblast.testsupport.thread.Racers;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -41,7 +41,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * used == limit) are what fail under a lost race either way. Raise the racer count if this
  * ever needs to be more aggressive; never weaken the state assertions to a status code.
  */
-class SiteAndDatabaseQuotaTest extends HohenheimTestBase {
+class SiteAndDatabaseQuotaTest extends HohenheimHttpTestBase {
 
     private static final String SITE_PREFIX = "quota-site-";
     private static final String DB_PREFIX = "quotadb-";

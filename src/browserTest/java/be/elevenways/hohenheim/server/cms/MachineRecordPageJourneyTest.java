@@ -11,7 +11,7 @@ import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.runtime.WorkloadLane;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -41,7 +41,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * addresses, only the tabs the driver has lanes for (Metrics on Incus too), the devices in the strip, the resize notice
  * and shell refusal worded for what runs, and only the kind changes the driver can perform, offered and written.
  */
-class MachineRecordPageJourneyTest extends HohenheimTestBase {
+class MachineRecordPageJourneyTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "machine-page-";
 

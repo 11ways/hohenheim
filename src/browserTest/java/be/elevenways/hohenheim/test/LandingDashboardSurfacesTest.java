@@ -86,7 +86,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Jelle De Loecker
  * @since  0.9.0
  */
-class LandingDashboardSurfacesTest extends HohenheimTestBase {
+class LandingDashboardSurfacesTest extends HohenheimHttpTestBase {
 
     private static final String RESOURCE = "landing-dashboards.txt";
     private static final String CASE_PREFIX = "case ";

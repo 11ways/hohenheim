@@ -42,7 +42,7 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
  * @author Jelle De Loecker <jelle@elevenways.be>
  * @since 0.1.0
  */
-class TrustedUpstreamTest extends HohenheimTestBase {
+class TrustedUpstreamTest extends HohenheimHttpTestBase {
 
     private static final String HOST = "trusted-upstream.example.com";
 

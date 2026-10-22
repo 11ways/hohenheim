@@ -21,7 +21,7 @@ import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.security.NftRunner;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -48,7 +48,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * layer -- a refusal test with nothing that succeeds cannot tell "refuses the wrong
  * thing" from "refuses everything".
  */
-class RootDiskSizeTest extends HohenheimTestBase {
+class RootDiskSizeTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "rootdisk-";
     private static final String DISK_BUCKET = OwnerBudget.DISK_GB.bucketOf("");

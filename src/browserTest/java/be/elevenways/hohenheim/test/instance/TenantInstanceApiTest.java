@@ -13,7 +13,7 @@ import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.CapabilityScopes;
 import be.elevenways.zenit.auth.model.GrantModel;
@@ -49,7 +49,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  *
  * No daemon is needed: the paths exercised refuse before any driver call.
  */
-class TenantInstanceApiTest extends HohenheimTestBase {
+class TenantInstanceApiTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "tenant-api-";
 

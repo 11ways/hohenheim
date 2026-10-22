@@ -11,7 +11,7 @@ import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.test.ApiSupport;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.RecordGrants;
@@ -47,7 +47,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * The refusals here all land BEFORE any daemon call: the placement gate sits between the
  * lease acquisition and the container work, so no Docker socket is needed.
  */
-class TenantAttributedRedeployGateTest extends HohenheimTestBase {
+class TenantAttributedRedeployGateTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "posture-redeploy-";
 

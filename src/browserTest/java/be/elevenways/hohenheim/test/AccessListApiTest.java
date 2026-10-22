@@ -32,7 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * by name, and the doors are exactly the panels' (an operator writes the admin form, a
  * tenant the delegated one and owns what it authored).
  */
-class AccessListApiTest extends HohenheimTestBase {
+class AccessListApiTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "access-list-api-";
     private static final String PLAINTEXT = "hunter2-in-the-clear";

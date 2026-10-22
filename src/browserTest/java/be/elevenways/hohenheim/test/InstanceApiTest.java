@@ -42,7 +42,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * template funnel, and the doors are the panels' (create admin-only, destroy behind the
  * {@code destroy} capability the teardown service itself demands).
  */
-class InstanceApiTest extends HohenheimTestBase {
+class InstanceApiTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "instance-api-";
 

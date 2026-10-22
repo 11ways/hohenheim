@@ -21,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * start route redirects into the provider flow. Uses a fake provider so no external SSO server
  * is needed; the Proteus protocol itself is covered by zenit-auth.
  */
-class SsoLoginTest extends HohenheimTestBase {
+class SsoLoginTest extends HohenheimHttpTestBase {
 
     @BeforeAll
     static void registerProvider() {

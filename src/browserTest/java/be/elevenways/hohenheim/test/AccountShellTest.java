@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * soft-navigate -- into a block that has to exist, or the URL and the title change while
  * the previous page's body stays on screen.
  */
-class AccountShellTest extends HohenheimTestBase {
+class AccountShellTest extends HohenheimHttpTestBase {
 
     /**
      * Hawkeye repopulates he-block contents on a soft navigation, and only those. The

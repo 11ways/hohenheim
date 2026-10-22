@@ -17,7 +17,7 @@ import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.instance.TemplatePortability;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -49,7 +49,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * gate for tenant-originated writes, typed variable validation on the create-from-
  * template path (with the secret encrypted AT REST), and the install-state deploy gate.
  */
-class InstanceTemplatePolicyTest extends HohenheimTestBase {
+class InstanceTemplatePolicyTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "tpl-policy-";
 

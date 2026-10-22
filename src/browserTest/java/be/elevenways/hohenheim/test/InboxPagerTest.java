@@ -21,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Jelle De Loecker
  * @since  0.1.0
  */
-class InboxPagerTest extends HohenheimTestBase {
+class InboxPagerTest extends HohenheimHttpTestBase {
 
     private static final String MARKER = "inbox-pager-test";
 

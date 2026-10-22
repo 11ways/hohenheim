@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.test.ApiSupport;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -30,7 +30,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * name inside a hosted zone the tenant does not answer for, so the form is no oracle for
  * which zones this installation hosts.
  */
-class ManageDnsRecordOneAnswerTest extends HohenheimTestBase {
+class ManageDnsRecordOneAnswerTest extends HohenheimHttpTestBase {
 
     private static final String ORIGIN = "one-answer-zone.test";
 

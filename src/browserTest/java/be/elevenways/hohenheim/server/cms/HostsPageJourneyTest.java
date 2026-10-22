@@ -18,7 +18,7 @@ import be.elevenways.hohenheim.server.incus.EchoIncusDaemon;
 import be.elevenways.hohenheim.server.instance.InstancePlacement;
 import be.elevenways.hohenheim.server.task.ReapIncusControllers;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -51,7 +51,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Jelle De Loecker
  * @since  0.9.0
  */
-class HostsPageJourneyTest extends HohenheimTestBase {
+class HostsPageJourneyTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "hostspage-";
     private static final LocaleChain EN = LocaleChain.ofTags("en");

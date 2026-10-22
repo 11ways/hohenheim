@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * declaring home on the model, the list cell is blank on a primary, and the three
  * read-only fields are hidden there rather than shown empty.
  */
-class DnsZoneTransferSurfaceTest extends HohenheimTestBase {
+class DnsZoneTransferSurfaceTest extends HohenheimHttpTestBase {
 
     @Test
     void transferDiagnosticsAreSecondaryOnlyEverywhereTheyAppear() {

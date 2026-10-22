@@ -10,7 +10,7 @@ import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.cms.SubjectTag;
@@ -45,7 +45,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * GeneratedRows scope, two different answers -- decided by the OWNING RECORD's grants and
  * by nothing else. No daemon is needed: the charge lands on the record write.
  */
-class InstanceQuotaAttributionTest extends HohenheimTestBase {
+class InstanceQuotaAttributionTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "quota-attribution-";
 

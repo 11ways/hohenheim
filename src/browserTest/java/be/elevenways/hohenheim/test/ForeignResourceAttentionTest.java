@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * remove action. The sentence also named a page ("Reconcile findings") that no surface in
  * the product carries.
  */
-class ForeignResourceAttentionTest extends HohenheimTestBase {
+class ForeignResourceAttentionTest extends HohenheimHttpTestBase {
 
     /** Seeded host names, distinct enough that a sibling suite's findings cannot collide. */
     private static final String HOST = "attref-host-a";

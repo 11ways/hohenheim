@@ -10,7 +10,7 @@ import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.OperatorIdentity;
 import be.elevenways.hohenheim.test.TenantConduits;
@@ -49,7 +49,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * cell lane, a reduced spec) uncapped the container AND recreated it, dropping every live
  * connection for a change nobody asked for.
  */
-class DatabaseLimitPartialWriteTest extends HohenheimTestBase {
+class DatabaseLimitPartialWriteTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "dblimitpw-";
 

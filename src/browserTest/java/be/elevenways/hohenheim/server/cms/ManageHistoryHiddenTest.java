@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import org.junit.jupiter.api.Test;
@@ -19,7 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * operator edits) rendered on the delegated surface. The check walks the DECLARED peers, so a
  * new Manage* resource that forgets its subpages() override fails here by name.
  */
-class ManageHistoryHiddenTest extends HohenheimTestBase {
+class ManageHistoryHiddenTest extends HohenheimHttpTestBase {
 
     @Test
     void noDelegatedResourceOffersTheOperatorHistory() {

@@ -22,7 +22,7 @@ import be.elevenways.zenit.common.operation.ZenitPlacementSurface;
 import be.elevenways.zenit.common.orm.field.RegistryMemberField;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -81,7 +81,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Delete affordances to that same delegate, every submit refused by
  * {@code requireManage} -- the InstanceAttachmentParts.devicesAdmin() affordance lesson, unapplied.
  */
-class InstanceScheduleSurfaceTest extends HohenheimTestBase {
+class InstanceScheduleSurfaceTest extends HohenheimHttpTestBase {
     @Test
     void adminAndTenantStepEditorsDeclareTheSamePlacedOperationInput() {
         // 1. Both existing resources retain their registration and authority, sharing the reusable input entry.

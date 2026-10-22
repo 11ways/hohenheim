@@ -33,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Pinned defect (QA 2026-08-29, F11): "still referenced by instances or variables"
  * named nothing the operator could act on.
  */
-class EnvironmentDeleteReasonTest extends HohenheimTestBase {
+class EnvironmentDeleteReasonTest extends HohenheimHttpTestBase {
 
     private static final String KEY = "HOLD_ME_QA";
 

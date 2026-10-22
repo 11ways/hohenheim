@@ -10,7 +10,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.security.BanState;
 import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
 import be.elevenways.hohenheim.server.security.HohenheimSecurity;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Jelle De Loecker
  * @since  0.2.0
  */
-class AccessPagesJourneyTest extends HohenheimTestBase {
+class AccessPagesJourneyTest extends HohenheimHttpTestBase {
 
     @Test
     void anAccessListSaysWhatItLetsInAndWhereItIsUsed() throws Exception {

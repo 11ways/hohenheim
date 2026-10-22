@@ -46,7 +46,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * site on a rename. Nothing in this file declares inline editing; making the overrides
  * correct and widening the feature are two decisions, and only the first is pinned here.
  */
-class PartialWriteContractTest extends HohenheimTestBase {
+class PartialWriteContractTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "partialw-";
 

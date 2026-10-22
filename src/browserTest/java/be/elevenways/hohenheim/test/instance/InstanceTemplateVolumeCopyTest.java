@@ -8,7 +8,7 @@ import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceTemplates;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.protoblast.common.time.Now;
@@ -47,7 +47,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * Hermetic: a create reaches no daemon and no filesystem, so both halves -- the copy
  * and every refusal -- are proven without a host.
  */
-class InstanceTemplateVolumeCopyTest extends HohenheimTestBase {
+class InstanceTemplateVolumeCopyTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "tpl-volume-";
 

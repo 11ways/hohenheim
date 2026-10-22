@@ -7,7 +7,7 @@ import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
@@ -40,7 +40,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  *
  * No daemon is needed: the ledger refuses before any container exists.
  */
-class PortConflictDisclosureTest extends HohenheimTestBase {
+class PortConflictDisclosureTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "portdisclose-";
     private static final String HOLDER_NAME = PREFIX + "secret-holder";

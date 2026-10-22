@@ -27,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * (good / nochg / badauth / nohost / family / secondary), and the public
  * /nic/update route over real HTTP with the token in HTTP Basic auth.
  */
-class DynamicDnsTest extends HohenheimTestBase {
+class DynamicDnsTest extends HohenheimHttpTestBase {
 
     private final DynamicDnsService service = new DynamicDnsService(DnsZoneStore.INSTANCE);
 

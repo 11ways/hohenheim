@@ -7,7 +7,7 @@ import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.InstanceRowCleanup;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.time.Now;
@@ -45,7 +45,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * refused ON THE FORM by the inline reservation, not discovered on a pool thread after
  * the record has already flipped to failed.
  */
-class DatabaseResizeTest extends HohenheimTestBase {
+class DatabaseResizeTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "dbresize-";
 

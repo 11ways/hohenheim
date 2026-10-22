@@ -8,7 +8,7 @@ import be.elevenways.hohenheim.server.source.GitProviders;
 import be.elevenways.hohenheim.server.source.GiteaProviderKind;
 import be.elevenways.hohenheim.server.source.GithubProviderKind;
 import be.elevenways.hohenheim.test.ApiSupport;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.cms.SubjectTag;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -36,7 +36,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * another tenant's forge installation. The tests share a class-wide fixture and are
  * independent of each other: none reads what another wrote.
  */
-class GitProviderOwnershipTest extends HohenheimTestBase {
+class GitProviderOwnershipTest extends HohenheimHttpTestBase {
 
     private static Integer sharedProviderId;
     private static Integer tenantProviderId;

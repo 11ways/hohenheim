@@ -20,7 +20,7 @@ import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.game.VelocityConfigs;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.test.ApiSupport;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.zenit.auth.cms.SubjectTag;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -50,7 +50,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * id to each other through a static field, so running any later one alone failed and one
  * failure cascaded. The two remaining tests only READ the class fixture.
  */
-class GameDomainAuthorityTest extends HohenheimTestBase {
+class GameDomainAuthorityTest extends HohenheimHttpTestBase {
 
     private static final String HOST = "play.gamedomain.test";
     private static final String ZONE = "gamedomain.test";

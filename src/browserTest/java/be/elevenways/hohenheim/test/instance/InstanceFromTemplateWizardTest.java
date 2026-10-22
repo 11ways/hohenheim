@@ -7,7 +7,7 @@ import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.test.ApiSupport;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -32,7 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Jelle De Loecker
  * @since  0.1.0
  */
-class InstanceFromTemplateWizardTest extends HohenheimTestBase {
+class InstanceFromTemplateWizardTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "wizard-";
     private static final String SECRET_DEFAULT = "never-rendered-default";

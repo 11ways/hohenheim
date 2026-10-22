@@ -49,7 +49,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Jelle De Loecker
  * @since  0.9.0
  */
-class EnvironmentApiBaselineBrowserTest extends HohenheimTestBase {
+class EnvironmentApiBaselineBrowserTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "env-api-baseline-";
     private static final String VAR_PREFIX = "ENV_API_BASELINE_";

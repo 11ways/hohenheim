@@ -37,7 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Jelle De Loecker
  * @since  0.1.0
  */
-class SiteTrashJourneyTest extends HohenheimTestBase {
+class SiteTrashJourneyTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "trash-journey-";
     private static final String SITE_FORM =

@@ -7,7 +7,7 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.upstream.kinds.RedirectUpstreamKind;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -46,7 +46,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * is the half that makes the refusal safe: a request that did NOT arrive through a site
  * (the recovery path) is refused nothing.
  */
-class SitePanelLockoutTest extends HohenheimTestBase {
+class SitePanelLockoutTest extends HohenheimHttpTestBase {
 
     /** The hostname the panel is pretended to be reached at. */
     private static final String PANEL_HOST = "panel.lockout.test";

@@ -26,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * Attribution for DNS rows a system authored: derived in the write pipeline, refused when a
  * caller submits it, and carried by the real ACME challenge publisher.
  */
-class GeneratedDnsRecordsTest extends HohenheimTestBase {
+class GeneratedDnsRecordsTest extends HohenheimHttpTestBase {
 
     private static final String ORIGIN = "generated.test";
 

@@ -32,7 +32,7 @@ import java.util.UUID;
  * @author Jelle De Loecker
  * @since  0.9.0
  */
-class ApiWireSharedRefusalsTest extends HohenheimTestBase {
+class ApiWireSharedRefusalsTest extends HohenheimHttpTestBase {
 
     private static final Instant T0 = Instant.parse("2026-01-02T03:04:05Z");
 

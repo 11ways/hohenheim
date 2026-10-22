@@ -7,7 +7,7 @@ import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
 import be.elevenways.zenit.common.edit.FieldOption;
@@ -31,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Jelle De Loecker
  * @since  0.2.0
  */
-class SiteFormApplicabilityJourneyTest extends HohenheimTestBase {
+class SiteFormApplicabilityJourneyTest extends HohenheimHttpTestBase {
 
     @Test
     void theSiteFormShowsTheInstancePickOnlyForTheInstanceKind() {

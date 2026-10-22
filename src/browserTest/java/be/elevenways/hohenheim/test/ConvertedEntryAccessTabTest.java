@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Jelle De Loecker
  * @since  0.9.0
  */
-class ConvertedEntryAccessTabTest extends HohenheimTestBase {
+class ConvertedEntryAccessTabTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "converted-access-";
 

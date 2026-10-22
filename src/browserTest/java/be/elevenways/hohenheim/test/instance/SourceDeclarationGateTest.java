@@ -4,7 +4,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.instance.SourceBuildDetail;
 import be.elevenways.hohenheim.test.ApiSupport;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * option, a build directory outside the checkout and a controller path on a record a tenant
  * owns, and the build detail that used to be stored and ignored is read by one helper.
  */
-class SourceDeclarationGateTest extends HohenheimTestBase {
+class SourceDeclarationGateTest extends HohenheimHttpTestBase {
 
     @Test
     void theBuildDetailIsReadAndBoundedByTheHost() {

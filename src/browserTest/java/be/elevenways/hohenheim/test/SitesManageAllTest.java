@@ -57,7 +57,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * which is the permission's definition. What must NOT flow is authority on models whose own
  * vocabulary this is not, and step 3 is that boundary.
  */
-class SitesManageAllTest extends HohenheimTestBase {
+class SitesManageAllTest extends HohenheimHttpTestBase {
 
     private static final String MANAGE_ALL = "hohenheim.sites.manage_all";
     private static final String MANAGE_ACCESS = "hohenheim.manage.access";

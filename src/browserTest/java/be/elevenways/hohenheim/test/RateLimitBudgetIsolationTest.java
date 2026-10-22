@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @since  0.2.0
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-class RateLimitBudgetIsolationTest extends HohenheimTestBase {
+class RateLimitBudgetIsolationTest extends HohenheimHttpTestBase {
 
     private static Boolean letsEncryptWas;
     /** The refusal a certificate request answers while Let's Encrypt is off, with budget left. */

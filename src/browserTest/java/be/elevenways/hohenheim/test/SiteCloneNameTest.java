@@ -19,7 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Jelle De Loecker
  * @since 0.1.0
  */
-class SiteCloneNameTest extends HohenheimTestBase {
+class SiteCloneNameTest extends HohenheimHttpTestBase {
 
     private static final String DUPLICATE = "This value is already in use by another record.";
 

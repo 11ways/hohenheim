@@ -19,7 +19,7 @@ import be.elevenways.hohenheim.server.tls.CertificateExpiry;
 import be.elevenways.hohenheim.CertCoverage;
 import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
@@ -53,7 +53,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Jelle De Loecker
  * @since  0.2.0
  */
-class AppsListJourneyTest extends HohenheimTestBase {
+class AppsListJourneyTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "apps-journey-";
 

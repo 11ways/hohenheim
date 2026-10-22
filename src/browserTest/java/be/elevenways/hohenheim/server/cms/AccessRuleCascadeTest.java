@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -32,7 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * without its list and is deleted, a hostname is what a site restore brings back and is
  * only hidden.
  */
-class AccessRuleCascadeTest extends HohenheimTestBase {
+class AccessRuleCascadeTest extends HohenheimHttpTestBase {
 
     /**
      * A list, a group inside it, two rules inside the group and one beside it: deleting the

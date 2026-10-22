@@ -8,7 +8,7 @@ import be.elevenways.hohenheim.server.instance.InstanceInstalls;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.time.Now;
@@ -50,7 +50,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * a map that dies with the workload -- the rootfs-stateful (incus) shape, where destroying
  * the workload IS the wipe -- so {@code removeVolumesForRestore} is not exercised here.
  */
-class InstanceReinstallTest extends HohenheimTestBase {
+class InstanceReinstallTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "reinstall-";
     private static final String SCRIPT = "echo install >> /data/runs";

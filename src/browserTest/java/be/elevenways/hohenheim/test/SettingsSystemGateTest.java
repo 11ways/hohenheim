@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Jelle De Loecker
  * @since 0.1.0
  */
-class SettingsSystemGateTest extends HohenheimTestBase {
+class SettingsSystemGateTest extends HohenheimHttpTestBase {
 
     private static final String PROXY_AUTH_SECTION = "/admin/settings?section=setting-signin-auth_proteus";
 

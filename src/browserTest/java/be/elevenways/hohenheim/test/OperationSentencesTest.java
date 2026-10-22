@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Jelle De Loecker
  * @since  0.1.0
  */
-class OperationSentencesTest extends HohenheimTestBase {
+class OperationSentencesTest extends HohenheimHttpTestBase {
 
     @Test
     void everyHohenheimOperationDeclaresASentenceEveryShippedLanguageSpeaks() {

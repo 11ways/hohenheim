@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * instance, whose branch never touches the charts. The Incus host below is the case the
  * finding named; the Docker one proves the fix is not per runtime.
  */
-class InstanceStatsPageTest extends HohenheimTestBase {
+class InstanceStatsPageTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "statspage-";
 

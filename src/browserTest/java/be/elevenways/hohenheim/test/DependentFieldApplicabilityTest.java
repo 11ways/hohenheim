@@ -39,7 +39,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * instance pick is deliberately NOT hidden to avoid that sentence: hiding it was a
  * one-way door, which SiteResource.fieldBindings explains.
  */
-class DependentFieldApplicabilityTest extends HohenheimTestBase {
+class DependentFieldApplicabilityTest extends HohenheimHttpTestBase {
 
     /**
      * Step 1-4: the runtime-image narrowing tells the three states apart -- nothing

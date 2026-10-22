@@ -19,7 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * WHY IT EXISTS: SiteResource carried its own lowercase-and-regex slugify, a second spelling beside
  * protoblast's SlugText; the switch must not move any ASCII slug an existing install already stores.
  */
-class SiteSlugFoldTest extends HohenheimTestBase {
+class SiteSlugFoldTest extends HohenheimHttpTestBase {
 
     private static final String[] NAMES = {"My  Slug Site!!", "Caf\u00e9 D\u00e9j\u00e0 Vu"};
 

@@ -38,7 +38,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * alive against the production permission checker, and the real cap: scope is
  * mintable exactly for a held grant.
  */
-class CapabilityWalkTest extends HohenheimTestBase {
+class CapabilityWalkTest extends HohenheimHttpTestBase {
 
     private static Integer walkSiteId;
     private static UUID walkOperatorId;

@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -27,7 +27,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * @author Jelle De Loecker
  * @since  0.2.0
  */
-class ProtectedPathJourneyTest extends HohenheimTestBase {
+class ProtectedPathJourneyTest extends HohenheimHttpTestBase {
 
     @Test
     void aProtectedPathOnlyPointsAtAListThatGuardsIt() {

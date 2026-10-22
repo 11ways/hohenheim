@@ -9,7 +9,7 @@ import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.test.ApiSupport;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.protoblast.common.util.Uuids;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -38,7 +38,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * inheriting the fact that issuance once succeeded. The tests are independent: the one
  * that revokes the tenant's grant restores it in a finally.
  */
-class CertificateAuthorityTest extends HohenheimTestBase {
+class CertificateAuthorityTest extends HohenheimHttpTestBase {
 
     /** Every hostname here ends in this, so no other class in the shared fork can cover it. */
     private static final String ZONE = "certauth.test";

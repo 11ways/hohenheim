@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * action exists only where dynamic DNS applies (address records), and the same
  * predicate is the invoke-time enforcement (hidden action = 404, never a toast).
  */
-class DnsRecordTypeSurfaceTest extends HohenheimTestBase {
+class DnsRecordTypeSurfaceTest extends HohenheimHttpTestBase {
 
     /** Journey: seed a TXT and an A record, then walk the action surface both ways. */
     @Test

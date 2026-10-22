@@ -34,7 +34,7 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
  * attachable and foreign private lists not. Driven at the MODEL through TenantConduits,
  * because the write pipeline is the gate the /manage forms merely render.
  */
-class TenantAccessListSecurityTest extends HohenheimTestBase {
+class TenantAccessListSecurityTest extends HohenheimHttpTestBase {
 
     private static UserPrincipal alice;
     private static UserPrincipal bob;

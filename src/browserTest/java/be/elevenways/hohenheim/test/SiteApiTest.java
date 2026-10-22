@@ -40,7 +40,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * a removed hostname releases its claim to its owner, and the doors are exactly the
  * panels' (site create/delete admin-only, domain rows for whoever manages the site).
  */
-class SiteApiTest extends HohenheimTestBase {
+class SiteApiTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "site-api-";
     private static final String ZONE = "site-api.test";

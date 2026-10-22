@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** A surface fixture replaces shared rows and sessions while keeping production seed data and HTTP admission. */
-class SurfaceFixtureIsolationTest extends HohenheimTestBase {
+class SurfaceFixtureIsolationTest extends HohenheimHttpTestBase {
 
     @Test
     void aFreshSurfaceWorldDropsForeignChoicesAndReplaysBootSeeds() throws Exception {

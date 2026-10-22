@@ -6,7 +6,7 @@ import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
 import be.elevenways.hohenheim.server.instance.InstanceApi;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.Test;
@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * column's declared values, and every READER fails closed: a kind nobody recognizes is a
  * secret, so it is redacted and its value is never projected.
  */
-class VariableKindVocabularyDriftTest extends HohenheimTestBase {
+class VariableKindVocabularyDriftTest extends HohenheimHttpTestBase {
 
     @Test
     void theEnumIsBoundToTheColumnAndReadersFailClosed() {

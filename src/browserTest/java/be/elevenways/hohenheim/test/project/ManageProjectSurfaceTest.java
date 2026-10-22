@@ -7,7 +7,7 @@ import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.hohenheim.test.ApiSupport;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.util.Uuids;
 import be.elevenways.zenit.auth.CapabilityScopes;
@@ -41,7 +41,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * whole project inventory. That is asserted against the shared POLICY rather than
  * through these pages, for the reason spelled out on the second test.
  */
-class ManageProjectSurfaceTest extends HohenheimTestBase {
+class ManageProjectSurfaceTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "mps-";
 

@@ -17,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * entry existed for the whole coercion vocabulary) and the LE request lane's
  * refusal only lives in a flash the next page renders.
  */
-class FormRefusalVisibilityTest extends HohenheimTestBase {
+class FormRefusalVisibilityTest extends HohenheimHttpTestBase {
 
     @Test
     void refusedSavesExplainThemselvesInWordsNotMachineTokens() throws Exception {

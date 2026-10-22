@@ -45,7 +45,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * that is not there, a secret field named as searchable -- fails HERE rather than at the boot
  * of whatever host registers it next.
  */
-class AdminListPresentationTest extends HohenheimTestBase {
+class AdminListPresentationTest extends HohenheimHttpTestBase {
 
     /**
      * The admin peers that MUST offer a search box. A pin, not a snapshot: this list exists

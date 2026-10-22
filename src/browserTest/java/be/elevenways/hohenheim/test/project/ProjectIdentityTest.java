@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.test.project;
 
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.server.project.Projects;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.protoblast.common.util.Uuids;
 import be.elevenways.zenit.auth.cms.SubjectTag;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * the token keeps its {@code group:<id>} shape and a rename never re-slugs a group. Only a NEW
  * group's slug comes from protoblast's SlugText, which folds letters the old slugifier dropped.
  */
-class ProjectIdentityTest extends HohenheimTestBase {
+class ProjectIdentityTest extends HohenheimHttpTestBase {
 
     @Test
     void aProjectsSlugAndOwnerTokenAreStableIdentities() {

@@ -7,7 +7,7 @@ import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.server.instance.TemplatePortability;
 import be.elevenways.hohenheim.server.instance.variable.IntegerVariableType;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -39,7 +39,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * A document's kind and variable settings are typed on import too: a text number would make the stored row
  * unreadable.
  */
-class InstanceTemplateVolumePortabilityTest extends HohenheimTestBase {
+class InstanceTemplateVolumePortabilityTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "tpl-vol-port-";
 

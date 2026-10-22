@@ -26,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Jelle De Loecker
  * @since  0.10.0
  */
-class HistoryDeclarationsDriftTest extends HohenheimTestBase {
+class HistoryDeclarationsDriftTest extends HohenheimHttpTestBase {
 
     @Test
     void everyModelDeclaresItsHistoryAndEveryReadModelRecords() {

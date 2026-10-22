@@ -33,7 +33,7 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
  * write-pipeline gate at all. Every refusal below is a direct model write, which no form
  * or resource method sees.
  */
-class TenantSiteColumnsTest extends HohenheimTestBase {
+class TenantSiteColumnsTest extends HohenheimHttpTestBase {
 
     private static int ownSite;
     private static int foreignSite;

@@ -17,7 +17,7 @@ import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.IncusWorkloadType;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
@@ -45,7 +45,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * honours the key belongs in the live lane; what needs no iron is the whole contract
  * around it, and that is what this class owns.
  */
-class NetworkBandwidthTest extends HohenheimTestBase {
+class NetworkBandwidthTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "netlimit-";
 

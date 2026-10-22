@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * the create's OWN transaction, so a claimed name is refused by the write pipeline's route
  * invariant and takes the half-made site down with it.
  */
-class SiteCreateHostnameTest extends HohenheimTestBase {
+class SiteCreateHostnameTest extends HohenheimHttpTestBase {
 
     private static final String HOLDER_HOSTNAME = "held.createhostname.test";
 

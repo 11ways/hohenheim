@@ -47,7 +47,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * No daemon is needed: every act exercised refuses or answers before a driver call,
  * except the instance-log tail whose named refusal IS the assertion.
  */
-class PaasApiTest extends HohenheimTestBase {
+class PaasApiTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "paas-api-";
     private static final String VAR_PREFIX = "PAAS_API_";

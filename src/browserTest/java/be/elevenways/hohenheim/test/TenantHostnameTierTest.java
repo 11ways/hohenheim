@@ -42,7 +42,7 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
  * with the control it was supposed to check; that is why the assertions here are about the
  * ROW EXISTING and about {@link HostnameAuthority#canManage}, never about the column.
  */
-class TenantHostnameTierTest extends HohenheimTestBase {
+class TenantHostnameTierTest extends HohenheimHttpTestBase {
 
     /** The name the tenant tries to swallow, and a sibling under it that proves the reach. */
     private static final String VICTIM_APEX = "victim.tiertest.test";

@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * test, never hohenheim's policy: the day the shipped resource grows a real reason, this
  * test already covers the wire it travels on.
  */
-class DnsZoneRecordsDeleteAffordanceTest extends HohenheimTestBase {
+class DnsZoneRecordsDeleteAffordanceTest extends HohenheimHttpTestBase {
 
     /** The record whose delete the fixture resource declares refused. */
     private static final String LOCKED = "locked";

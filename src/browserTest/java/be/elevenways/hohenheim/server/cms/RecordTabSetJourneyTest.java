@@ -7,7 +7,7 @@ import be.elevenways.hohenheim.model.InstanceSnapshotModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.protoblast.testsupport.text.InOrder;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -28,7 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Jelle De Loecker
  * @since  0.2.0
  */
-class RecordTabSetJourneyTest extends HohenheimTestBase {
+class RecordTabSetJourneyTest extends HohenheimHttpTestBase {
 
     @Test
     void anInstanceKeepsItsDailyTabsInViewAndItsConsoleSwitchesModesInOneTab() throws Exception {

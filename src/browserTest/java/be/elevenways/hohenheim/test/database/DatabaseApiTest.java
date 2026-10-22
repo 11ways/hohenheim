@@ -10,7 +10,7 @@ import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.CapabilityScopes;
@@ -49,7 +49,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code dropLogical} observes ABSENT and drops nothing -- exactly as a dedicated record
  * whose engine was never provisioned destroys as "observed absent".
  */
-class DatabaseApiTest extends HohenheimTestBase {
+class DatabaseApiTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "dbapi-";
 

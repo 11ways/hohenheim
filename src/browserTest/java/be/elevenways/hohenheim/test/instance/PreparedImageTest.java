@@ -16,7 +16,7 @@ import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -48,7 +48,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * ({@link FakeIncusTransport} is an in-memory echo of the handful of endpoints the
  * driver touches).
  */
-class PreparedImageTest extends HohenheimTestBase {
+class PreparedImageTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "prep-img-";
 

@@ -40,7 +40,7 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
  * for tenants); the upstream judgement still speaks first with the precise refusal and is
  * the defence that survives a later widening of that allow-list.
  */
-class ProxyUpstreamSsrfTest extends HohenheimTestBase {
+class ProxyUpstreamSsrfTest extends HohenheimHttpTestBase {
 
     /** The cloud-metadata service: link-local, unauthenticated, the canonical SSRF target. */
     private static final String METADATA_IP = "169.254.169.254";

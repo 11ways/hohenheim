@@ -24,7 +24,7 @@ import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.hohenheim.server.preview.PreviewDomains;
 import be.elevenways.hohenheim.server.quota.OwnerQuota;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.security.SystemPurpose;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -70,7 +70,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * attribution cannot be submitted), the atomic per-owner quota, and expiry as a
  * one-shot record schedule the framework sweeper enforces.
  */
-class PreviewMechanicsTest extends HohenheimTestBase {
+class PreviewMechanicsTest extends HohenheimHttpTestBase {
     private static final SystemPurpose OTHER_SYSTEM_WORK = SystemPurpose.declare(
         Identifier.of("hohenheim_test", "other_preview_work"));
 

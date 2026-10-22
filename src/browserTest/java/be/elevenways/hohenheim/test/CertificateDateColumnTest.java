@@ -39,7 +39,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Jelle De Loecker
  * @since  0.1.0
  */
-class CertificateDateColumnTest extends HohenheimTestBase {
+class CertificateDateColumnTest extends HohenheimHttpTestBase {
 
     /** Shared by both rows, so the list can be narrowed to exactly this journey. */
     private static final String MARKER = "ZzDateJourney";

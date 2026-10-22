@@ -33,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * not exist is refused while the spec is resolved from the records, which is the
  * earliest point a deploy can fail.
  */
-class StackDeployFailureRecordTest extends HohenheimTestBase {
+class StackDeployFailureRecordTest extends HohenheimHttpTestBase {
 
     private static final String STACK_NAME = "hhfail-" + Long.toHexString(System.nanoTime());
 

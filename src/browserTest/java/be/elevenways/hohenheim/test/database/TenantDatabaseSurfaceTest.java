@@ -25,7 +25,7 @@ import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.protoblast.testsupport.thread.Racers;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.action.PanelAction;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.InstanceRowCleanup;
 import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -69,7 +69,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * work is scheduled to run after the transaction commits and is irrelevant to the
  * boundary being tested.
  */
-class TenantDatabaseSurfaceTest extends HohenheimTestBase {
+class TenantDatabaseSurfaceTest extends HohenheimHttpTestBase {
 
     private FakeDockerDaemon daemon;
 

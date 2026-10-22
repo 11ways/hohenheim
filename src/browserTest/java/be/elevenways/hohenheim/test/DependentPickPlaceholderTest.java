@@ -11,7 +11,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * The server paint of a sibling-narrowed relation picker speaks the resolved
  * placeholder, never its microcopy key.
  */
-class DependentPickPlaceholderTest extends HohenheimTestBase {
+class DependentPickPlaceholderTest extends HohenheimHttpTestBase {
 
     @Test
     void instanceCreateFormPaintsResolvedPickerPlaceholders() throws Exception {

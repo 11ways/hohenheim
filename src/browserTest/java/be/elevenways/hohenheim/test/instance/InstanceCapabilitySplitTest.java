@@ -9,7 +9,7 @@ import be.elevenways.hohenheim.server.instance.InstanceExec;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -56,7 +56,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * anchor is asserted through the DISTINCT next-gate violation, which is what separates
  * "the capability gate let this through" from "nothing ran".
  */
-class InstanceCapabilitySplitTest extends HohenheimTestBase {
+class InstanceCapabilitySplitTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "capsplit-";
 

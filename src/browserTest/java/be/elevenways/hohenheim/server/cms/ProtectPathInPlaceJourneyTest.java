@@ -9,7 +9,7 @@ import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.site.ProtectPath;
 import be.elevenways.hohenheim.test.ApiSupport;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -37,7 +37,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * @author Jelle De Loecker
  * @since  0.1.0
  */
-class ProtectPathInPlaceJourneyTest extends HohenheimTestBase {
+class ProtectPathInPlaceJourneyTest extends HohenheimHttpTestBase {
 
     @Test
     void aPathIsProtectedInPlaceByPasswordOrNetworkAndNeverOpen() {

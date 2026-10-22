@@ -37,7 +37,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * controller's nameservers for the provider's unless told to keep them and never does so
  * silently, and the declared set is a yardstick the delegation check reads.
  */
-class DnsZoneApiTest extends HohenheimTestBase {
+class DnsZoneApiTest extends HohenheimHttpTestBase {
 
     private static final String ORIGIN = "zone-api-a.test";
     private static final List<String> DECLARED = List.of("ns1.zone-api.test", "ns2.zone-api.test");

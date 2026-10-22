@@ -343,20 +343,48 @@ tasks.named('serverJar') {
 // which. Never raise this past what the plan can hold to "go faster": those forks never start.
 ext.browserTestForks = Math.min(Math.max(Runtime.runtime.availableProcessors() - 4, 1), 6)
 
+// What every browser lane carries, keyed by its own task name so a --continue run of a sibling lane never wipes this
+// one's evidence.
+def browserLaneDefaults = { Test lane ->
+    // The live lane's host policy. Unset means "report every skip, fail on none"; a host
+    // that declares what it can satisfy (e.g. -Dhohenheim.live.require=docker-socket,netns)
+    // turns a skip for those needs into a FAILURE. See test/live/LiveLane.
+    lane.systemProperty 'hohenheim.live.require', System.getProperty('hohenheim.live.require', '')
+    lane.systemProperty 'hohenheim.live.pull', System.getProperty('hohenheim.live.pull', 'true')
+    // Where LiveLaneReport keeps its truncation markers. A leftover file after a run IS
+    // the list of tests that were killed with no verdict.
+    lane.systemProperty 'hohenheim.truncation.dir', "${buildDir}/live-lane-truncations/${lane.name}"
+    // Forks of this invocation share one freshly-migrated database template
+    // (TestDatabases); wiped up front so a migration change can never leak in.
+    lane.systemProperty 'hohenheim.testdb.template.dir', "${buildDir}/test-db-templates/${lane.name}"
+    // Namespace ledgers for the Docker network reaper (test/live/LiveNamespaces). SHARED
+    // by every lane and deliberately NOT wiped: its job is to survive the invocation
+    // that wrote it, so a killed worker's leaked networks are reaped next run.
+    lane.systemProperty 'hohenheim.namespace.dir', "${buildDir}/live-lane-namespaces"
+    lane.doFirst {
+        delete "${buildDir}/live-lane-truncations/${lane.name}"
+        delete "${buildDir}/test-db-templates/${lane.name}"
+    }
+    lane.finalizedBy 'reportTruncatedBrowserTests'
+}
+
 // --- Browser Test Task ---
 // The blastApp lane registers browserTest over the browserTest set; this narrows it to one bucket.
 tasks.named('browserTest') {
-    // AIDEV-NOTE: THREE buckets, times two lanes. This one holds the @Tag("shared-server")
-    // classes (inherited from HohenheimTestBase): they share one booted server and one
-    // browser per JVM across parallel forks. browserTestStandalone holds everything that
-    // needs no served app, ALSO sharing a JVM. browserTestSolo holds the handful that
-    // genuinely cannot share one. See browserTestStandalone for the derivation.
+    // AIDEV-NOTE: FOUR buckets, times two lanes. This one holds the @Tag("shared-server")
+    // classes (inherited from HohenheimTestBase) that drive a browser: they share one booted
+    // server and one browser per JVM across parallel forks. browserTestHttp holds the
+    // shared-server classes that talk HTTP alone (@Tag("served-http"), HohenheimHttpTestBase),
+    // whose forks launch no browser. browserTestStandalone holds everything that needs no
+    // served app, ALSO sharing a JVM. browserTestSolo holds the handful that genuinely cannot
+    // share one. See browserTestStandalone for the derivation.
     // Orthogonally, live-capable classes carry @Tag("slow") (SlowLaneGuardTest enforces
     // it): zenit-dev's init script excludes that tag on ordinary runs, so the default
     // lane is the hermetic suite; `zenit-dev test --all` (or any --class filter) runs
     // the live classes too. The 60m timeouts below are sized to the FULL --all runs.
     useJUnitPlatform {
         includeTags 'shared-server'
+        excludeTags 'served-http'
     }
     filter.failOnNoMatchingTests = false
     maxParallelForks = browserTestForks
@@ -378,27 +406,34 @@ tasks.named('browserTest') {
     // work measured ~6.5m more, so a healthy worst case is ~37m; 60m is 1.6x that.
     timeout = java.time.Duration.ofMinutes(60)
 
-    // The live lane's host policy. Unset means "report every skip, fail on none"; a host
-    // that declares what it can satisfy (e.g. -Dhohenheim.live.require=docker-socket,netns)
-    // turns a skip for those needs into a FAILURE. See test/live/LiveLane.
-    systemProperty 'hohenheim.live.require', System.getProperty('hohenheim.live.require', '')
-    systemProperty 'hohenheim.live.pull', System.getProperty('hohenheim.live.pull', 'true')
-    // Where LiveLaneReport keeps its truncation markers; per task so a --continue run of
-    // the sibling task cannot wipe this task's evidence. A leftover file after a run IS
-    // the list of tests that were killed with no verdict.
-    systemProperty 'hohenheim.truncation.dir',
-        "${buildDir}/live-lane-truncations/browserTest"
-    // Forks of this invocation share one freshly-migrated database template
-    // (TestDatabases); wiped up front so a migration change can never leak in.
-    systemProperty 'hohenheim.testdb.template.dir',
-        "${buildDir}/test-db-templates/browserTest"
-    // Namespace ledgers for the Docker network reaper (test/live/LiveNamespaces). SHARED
-    // by all three lanes and deliberately NOT wiped in doFirst: its job is to survive the
-    // invocation that wrote it, so a killed worker's leaked networks are reaped next run.
-    systemProperty 'hohenheim.namespace.dir', "${buildDir}/live-lane-namespaces"
-    doFirst {
-        delete "${buildDir}/live-lane-truncations/browserTest"
-        delete "${buildDir}/test-db-templates/browserTest"
+    browserLaneDefaults(it)
+}
+
+// The shared-server classes that talk to the served app over HTTP alone (HohenheimHttpTestBase, @ServedWithoutBrowser):
+// the same one booted server per JVM as browserTest, and no browser, so a fork costs a JVM and nothing more.
+task browserTestHttp(type: Test) {
+    description = 'Run shared-server tests that talk HTTP alone, sharing a JVM and launching no browser'
+    group = 'verification'
+    dependsOn 'copyClientJs'
+
+    testClassesDirs = sourceSets.browserTest.output.classesDirs
+    classpath = sourceSets.browserTest.runtimeClasspath
+
+    useJUnitPlatform {
+        includeTags 'served-http'
+    }
+    filter.failOnNoMatchingTests = false
+    maxParallelForks = browserTestForks
+    // See browserTest: 1g; nothing here buffers an image or runs a browser.
+    maxHeapSize = '1g'
+    // See browserTest for the derivation.
+    timeout = java.time.Duration.ofMinutes(60)
+    browserLaneDefaults(it)
+
+    testLogging {
+        showStandardStreams = true
+        exceptionFormat = 'full'
+        events "passed", "skipped", "failed"
     }
 }
 
@@ -447,25 +482,7 @@ task browserTestStandalone(type: Test) {
     timeout = java.time.Duration.ofMinutes(60)
 
     systemProperty 'playwright.headless', System.getProperty('playwright.headless', 'true')
-    // The live lane's host policy. Unset means "report every skip, fail on none"; a host
-    // that declares what it can satisfy (e.g. -Dhohenheim.live.require=docker-socket,netns)
-    // turns a skip for those needs into a FAILURE. See test/live/LiveLane.
-    systemProperty 'hohenheim.live.require', System.getProperty('hohenheim.live.require', '')
-    systemProperty 'hohenheim.live.pull', System.getProperty('hohenheim.live.pull', 'true')
-    // See browserTest: per-task truncation markers, wiped only by the task that owns them.
-    systemProperty 'hohenheim.truncation.dir',
-        "${buildDir}/live-lane-truncations/browserTestStandalone"
-    // See browserTest: one migrated template shared across this invocation's forks.
-    systemProperty 'hohenheim.testdb.template.dir',
-        "${buildDir}/test-db-templates/browserTestStandalone"
-    // Namespace ledgers for the Docker network reaper (test/live/LiveNamespaces). SHARED
-    // by all three lanes and deliberately NOT wiped in doFirst: its job is to survive the
-    // invocation that wrote it, so a killed worker's leaked networks are reaped next run.
-    systemProperty 'hohenheim.namespace.dir', "${buildDir}/live-lane-namespaces"
-    doFirst {
-        delete "${buildDir}/live-lane-truncations/browserTestStandalone"
-        delete "${buildDir}/test-db-templates/browserTestStandalone"
-    }
+    browserLaneDefaults(it)
 
     testLogging {
         showStandardStreams = true
@@ -508,25 +525,7 @@ task browserTestSolo(type: Test) {
     timeout = java.time.Duration.ofMinutes(60)
 
     systemProperty 'playwright.headless', System.getProperty('playwright.headless', 'true')
-    // The live lane's host policy. Unset means "report every skip, fail on none"; a host
-    // that declares what it can satisfy (e.g. -Dhohenheim.live.require=docker-socket,netns)
-    // turns a skip for those needs into a FAILURE. See test/live/LiveLane.
-    systemProperty 'hohenheim.live.require', System.getProperty('hohenheim.live.require', '')
-    systemProperty 'hohenheim.live.pull', System.getProperty('hohenheim.live.pull', 'true')
-    // See browserTest: per-task truncation markers, wiped only by the task that owns them.
-    systemProperty 'hohenheim.truncation.dir',
-        "${buildDir}/live-lane-truncations/browserTestSolo"
-    // See browserTest: one migrated template shared across this invocation's forks.
-    systemProperty 'hohenheim.testdb.template.dir',
-        "${buildDir}/test-db-templates/browserTestSolo"
-    // Namespace ledgers for the Docker network reaper (test/live/LiveNamespaces). SHARED
-    // by all three lanes and deliberately NOT wiped in doFirst: its job is to survive the
-    // invocation that wrote it, so a killed worker's leaked networks are reaped next run.
-    systemProperty 'hohenheim.namespace.dir', "${buildDir}/live-lane-namespaces"
-    doFirst {
-        delete "${buildDir}/live-lane-truncations/browserTestSolo"
-        delete "${buildDir}/test-db-templates/browserTestSolo"
-    }
+    browserLaneDefaults(it)
 
     testLogging {
         showStandardStreams = true
@@ -549,17 +548,15 @@ task reportTruncatedBrowserTests {
     doLast {
         def ran = gradle.taskGraph.allTasks.findAll { it instanceof Test && it.project == project
             && it.state.executed && !it.state.skipped }*.name as Set
-        ['browserTest', 'browserTestStandalone', 'browserTestSolo'].findAll { ran.contains(it) }.each { lane ->
-            def dir = file("${buildDir}/live-lane-truncations/${lane}")
-            if (dir.directory) {
-                dir.eachFile { marker -> System.err.print(marker.text) }
+        ['browserTest', 'browserTestHttp', 'browserTestStandalone', 'browserTestSolo'].findAll { ran.contains(it) }
+            .each { lane ->
+                def dir = file("${buildDir}/live-lane-truncations/${lane}")
+                if (dir.directory) {
+                    dir.eachFile { marker -> System.err.print(marker.text) }
+                }
             }
-        }
     }
 }
-tasks.named('browserTest') { finalizedBy reportTruncatedBrowserTests }
-tasks.named('browserTestStandalone') { finalizedBy reportTruncatedBrowserTests }
-tasks.named('browserTestSolo') { finalizedBy reportTruncatedBrowserTests }
 
 // --- Clean ---
 tasks.named('clean') {

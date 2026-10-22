@@ -8,7 +8,7 @@ import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -37,7 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * stamped with the daemon's and transport's own text (socket paths, host paths) -- rendered
  * verbatim on /manage.
  */
-class DeploymentsTabCensorTest extends HohenheimTestBase {
+class DeploymentsTabCensorTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "deploycensor-";
     private static final String DAEMON_TEXT = "dial unix /var/run/docker.sock: connect: refused";

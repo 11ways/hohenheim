@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 4.0s -> 2.2s between the two. Timing a plain HTTP GET separates the server's own cost out,
  * and THAT is the number a real user waits for too.
  */
-class AdminRenderBudgetTest extends HohenheimTestBase {
+class AdminRenderBudgetTest extends HohenheimHttpTestBase {
 
     /** Pages every operator hits, cheapest first. */
     private static final List<String> PAGES = List.of(

@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.test.ApiWire;
 import be.elevenways.hohenheim.test.ApiWire.Caller;
 import be.elevenways.hohenheim.test.ApiWire.PerRun;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.zenit.auth.CapabilityScopes;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -40,7 +41,7 @@ import static be.elevenways.hohenheim.test.ApiSupport.form;
  * @author Jelle De Loecker
  * @since  0.9.0
  */
-class ApiWireInstancesTest extends HohenheimTestBase {
+class ApiWireInstancesTest extends HohenheimHttpTestBase {
 
     private static final Instant T0 = Instant.parse("2026-01-02T03:04:05Z");
 

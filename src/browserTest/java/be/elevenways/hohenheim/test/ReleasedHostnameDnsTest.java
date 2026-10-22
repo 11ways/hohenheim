@@ -37,7 +37,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * of the certificate tier's orphan sweeper, and the fix for a token that was permanent DNS
  * write authority outliving the claim it was derived from.
  */
-class ReleasedHostnameDnsTest extends HohenheimTestBase {
+class ReleasedHostnameDnsTest extends HohenheimHttpTestBase {
 
     private final DynamicDnsService service = new DynamicDnsService(DnsZoneStore.INSTANCE);
 

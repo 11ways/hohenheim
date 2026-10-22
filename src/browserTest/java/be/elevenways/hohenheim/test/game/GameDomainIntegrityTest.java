@@ -15,7 +15,7 @@ import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.game.VelocityConfigs;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.test.ApiSupport;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
@@ -49,7 +49,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * domain row. The refusal test used to move the mapping the zone test had created, handed
  * over in a static field, so it could not run alone.
  */
-class GameDomainIntegrityTest extends HohenheimTestBase {
+class GameDomainIntegrityTest extends HohenheimHttpTestBase {
 
     private static final String PRIMARY_ORIGIN = "gamezone.test";
     private static final String REPLICA_ORIGIN = "replica.gamezone.test";

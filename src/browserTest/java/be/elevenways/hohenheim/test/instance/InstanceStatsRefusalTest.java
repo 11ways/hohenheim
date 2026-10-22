@@ -6,7 +6,7 @@ import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.instance.InstanceStatsHandler;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -34,7 +34,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * (socket paths, host names, transport errors) reaches operators alone -- the
  * InstanceOverview install_error rule.
  */
-class InstanceStatsRefusalTest extends HohenheimTestBase {
+class InstanceStatsRefusalTest extends HohenheimHttpTestBase {
 
     @Test
     void aDelegatedViewerNeverReadsTheDaemonsFailureText() {

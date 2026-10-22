@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * the dyndns mint row action is the ONE disclosure of a freshly minted token
  * (specimen: a DNS record's credential).
  */
-class SecretFieldFormTest extends HohenheimTestBase {
+class SecretFieldFormTest extends HohenheimHttpTestBase {
 
     // AIDEV-NOTE: the specimen is the TSIG secret rather than the peer api key, which it
     // was until the peer TYPE landed: a hohenheim peer's api key may not be cleared (validate

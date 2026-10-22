@@ -11,7 +11,7 @@ import be.elevenways.hohenheim.server.source.GitRepository;
 import be.elevenways.hohenheim.server.source.GiteaProviderKind;
 import be.elevenways.hohenheim.source.GitRefNames;
 import be.elevenways.hohenheim.test.ApiSupport;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -47,7 +47,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * provider base URL are somebody else's text, so none of them may name the controller's
  * filesystem, pass an option to git, or aim a request at a private address.
  */
-class GitSourceReachTest extends HohenheimTestBase {
+class GitSourceReachTest extends HohenheimHttpTestBase {
 
     /**
      * The clone-URL and ref grammars, judged without running git.
