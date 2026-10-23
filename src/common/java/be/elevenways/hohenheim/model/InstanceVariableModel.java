@@ -16,10 +16,12 @@ import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.common.security.KnownValueRedactor;
 import be.elevenways.zenit.common.validation.ValidationMicrocopy;
 import be.elevenways.zenit.common.validation.validator.Required;
 
 import java.util.List;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * One variable VALUE of one instance OR one environment (exactly one owner, enforced
@@ -144,6 +146,25 @@ public class InstanceVariableModel extends Model {
                     HohenheimMicrocopy.VIOLATIONS.of("variable_one_owner"));
             }
         });
+    }
+
+    /**
+     * Refuses an AUTHORED secret value too short to be masked in logs ({@link KnownValueRedactor#MIN_LENGTH}).
+     *
+     * AIDEV-NOTE: called by the authoring writers only (the environment-variable form, the variable API), never from
+     * this model's hooks: a generated record stores its author's whole environment as secrets (ports, flags), and a
+     * restore brings back what a backup holds, so refusing on every save would break deploys and restores of values
+     * that were legal when written. ConsoleRedaction names those as unredacted instead. A null or empty value is the
+     * required check's to refuse.
+     *
+     * @throws Violations {@code variable_secret_too_short} on {@link #SECRET_VALUE}
+     */
+    public static void requireRedactableSecret(@Nullable String value) {
+        if (value == null || value.isEmpty() || KnownValueRedactor.accepts(value)) {
+            return;
+        }
+        throw Violations.ofField(SECRET_VALUE.getName(), null, HohenheimMicrocopy.VIOLATIONS
+            .of("variable_secret_too_short").withArg("minimum", KnownValueRedactor.MIN_LENGTH));
     }
 
     /** All variables of one instance, stable key order. */

@@ -78,7 +78,7 @@ public final class InstanceVariables {
             if (handler.isSecretValue()) {
                 row.set(InstanceVariableModel.KIND, InstanceVariableModel.KIND_SECRET);
                 row.set(InstanceVariableModel.SECRET_VALUE, value);
-                InstanceConsoles.registerSecret(instanceId, value);
+                InstanceConsoles.registerSecret(instanceId, key, value);
             } else {
                 row.set(InstanceVariableModel.KIND, InstanceVariableModel.KIND_PLAIN);
                 row.set(InstanceVariableModel.PLAIN_VALUE, value);
@@ -94,10 +94,24 @@ public final class InstanceVariables {
      * one key never answers twice. Secret values enter the encrypted carrier only.
      *
      * @throws Violations {@code instance_not_permitted}, {@code variable_key_required},
-     *         {@code variable_kind_unknown}, plus the model's carrier/owner invariants
+     *         {@code variable_kind_unknown}, {@code variable_secret_too_short}, plus the model's carrier/owner invariants
      */
     public void setValue(@Nullable Integer instanceId, @Nullable Integer environmentId,
                          @NonNull String key, @NonNull String kind, @NonNull String value) {
+        this.write(instanceId, environmentId, key, kind, value, true);
+    }
+
+    /**
+     * {@link #setValue} for a value its author already holds (a generated record's environment, a restored backup):
+     * a secret shorter than the redaction minimum is stored, since refusing it would fail the deploy or the restore.
+     */
+    void storeValue(@Nullable Integer instanceId, @Nullable Integer environmentId,
+                    @NonNull String key, @NonNull String kind, @NonNull String value) {
+        this.write(instanceId, environmentId, key, kind, value, false);
+    }
+
+    private void write(@Nullable Integer instanceId, @Nullable Integer environmentId,
+                       @NonNull String key, @NonNull String kind, @NonNull String value, boolean authored) {
         requireVariableAuthority(instanceId);
         if (key.isBlank()) {
             throw Violations.ofField("key", key,
@@ -114,6 +128,9 @@ public final class InstanceVariables {
                     .withArg("kind", kind));
         }
         boolean secret = parsed.isSecret();
+        if (secret && authored) {
+            InstanceVariableModel.requireRedactableSecret(value);
+        }
         InstanceVariableModel model = Models.get(InstanceVariableModel.class);
         for (Row existing : rowsForKey(model, instanceId, environmentId, key)) {
             model.delete(existing.get(InstanceVariableModel.ID));
@@ -127,7 +144,7 @@ public final class InstanceVariables {
             row.set(InstanceVariableModel.SECRET_VALUE, value);
             if (instanceId != null) {
                 // A secret written while a console streams must start being redacted NOW.
-                InstanceConsoles.registerSecret(instanceId, value);
+                InstanceConsoles.registerSecret(instanceId, key, value);
             }
         } else {
             row.set(InstanceVariableModel.PLAIN_VALUE, value);
@@ -168,7 +185,7 @@ public final class InstanceVariables {
             }
         }
         environment.forEach((key, value) ->
-            setValue(instanceId, null, key, VariableKind.SECRET.token(), value));
+            storeValue(instanceId, null, key, VariableKind.SECRET.token(), value));
     }
 
     /**

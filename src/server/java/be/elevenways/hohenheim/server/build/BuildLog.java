@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.server.build;
 
-import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.holder.Subscription;
+import be.elevenways.zenit.common.security.KnownValueRedactor;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.ArrayList;
@@ -24,7 +24,7 @@ import java.util.function.Consumer;
  * AIDEV-NOTE: redaction is VALUE-based and unconditional, and it happens before anything
  * is stored, because a builder we do not control decides what it echoes. A registry
  * credential printed by a base image's entrypoint is the same leak as one printed by us.
- * It is THE streaming redactor ({@link ConsoleRedaction.Redactor}), because a daemon hands
+ * It is THE streaming redactor ({@link KnownValueRedactor}), because a daemon hands
  * output over in chunks that are not line-aligned: a secret split across two appends is held
  * back until it can be judged whole, and the held tail is released by {@link #flush} when the
  * build ends. The cap counts redacted text.
@@ -41,7 +41,7 @@ public final class BuildLog {
     private record Tap(@NonNull Consumer<String> queue, @NonNull Runnable deliver) {}
 
     private final int maxBytes;
-    private final ConsoleRedaction.Redactor redactor = ConsoleRedaction.redactorOf(Set.of());
+    private final KnownValueRedactor redactor = KnownValueRedactor.of(Set.of());
     private final StringBuilder text = new StringBuilder();
     private boolean truncated;
     private final List<Tap> taps = new CopyOnWriteArrayList<>();
@@ -52,12 +52,19 @@ public final class BuildLog {
 
     /**
      * Register a value that must never appear in the captured output.
-     * Values shorter than {@link ConsoleRedaction#MIN_SECRET_LENGTH} characters are IGNORED, loudly in the
-     * sense that {@link #redactedSecretCount()} does not count them: redacting a 3-char
-     * string would replace half the log and hide the failure the log exists to explain.
+     * A value shorter than {@link KnownValueRedactor#MIN_LENGTH} characters is REFUSED: redacting a 3-char string
+     * would replace half the log and hide the failure the log exists to explain. The refusal is logged (never the
+     * value) and {@link #redactedSecretCount()} does not count it.
+     *
+     * @return whether the value is redacted from this log
      */
-    public void redact(@NonNull String secret) {
-        this.redactor.addSecret(secret);
+    public boolean redact(@NonNull String secret) {
+        boolean taken = this.redactor.addSecret(secret);
+        if (!taken) {
+            Blast.log("BUILD: a secret value shorter than", KnownValueRedactor.MIN_LENGTH,
+                "characters is NOT redacted from this build log");
+        }
+        return taken;
     }
 
     /** Register every value of a set as a secret ({@link #redact}). */
@@ -104,7 +111,7 @@ public final class BuildLog {
         deliver(deliveries);
     }
 
-    /** Release the redactor's held tail into the log: the output ended, so a near-miss is ordinary text. */
+    /** Release the redactor's held tail into the log: the output ended, so a held secret prefix is stored masked. */
     public void flush() {
         List<Runnable> deliveries;
         synchronized (this) {

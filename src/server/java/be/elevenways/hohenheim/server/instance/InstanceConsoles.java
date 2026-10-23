@@ -29,6 +29,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.common.security.KnownValueRedactor;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -589,12 +590,15 @@ public final class InstanceConsoles {
      * Declare a value secret on an instance whose console is ALREADY streaming: without
      * this, a variable written while an operator watches would ride the open session in the
      * clear until the next attach. Called from the variable write funnel, never by a caller
-     * that merely happens to hold a secret string.
+     * that merely happens to hold a secret string. It covers only output not yet emitted: an occurrence whose start
+     * already streamed is not recognized (KnownValueRedactor.addSecret). A value too short to redact is named (by its
+     * key) in the log.
      */
-    public static void registerSecret(int instanceId, @Nullable String value) {
+    public static void registerSecret(int instanceId, @NonNull String key, @Nullable String value) {
         InstanceConsoleSession session = peek(instanceId);
-        if (session != null && value != null) {
-            session.addSecret(value);
+        if (session != null && value != null && !session.addSecret(value)) {
+            Blast.log("CONSOLE: secret variable", key, "of instance", instanceId, "is shorter than",
+                KnownValueRedactor.MIN_LENGTH, "characters and is NOT redacted from its console");
         }
     }
 

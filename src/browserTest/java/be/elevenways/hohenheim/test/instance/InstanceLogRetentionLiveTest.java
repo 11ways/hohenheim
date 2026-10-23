@@ -6,7 +6,6 @@ import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.DockerClient;
-import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
 import be.elevenways.hohenheim.server.instance.InstanceConsoles;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
@@ -23,6 +22,7 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
+import be.elevenways.zenit.common.security.KnownValueRedactor;
 import be.elevenways.zenit.common.orm.model.Models;
 import java.time.Duration;
 import org.junit.jupiter.api.AfterAll;
@@ -142,7 +142,7 @@ class InstanceLogRetentionLiveTest {
                     .doesNotContain(SECRET);
                 assertThat(storedText(logs, id))
                     .as("step 3: it holds the redaction marker and the plain output")
-                    .contains(ConsoleRedaction.PLACEHOLDER)
+                    .contains(KnownValueRedactor.PLACEHOLDER)
                     .contains("history-line-abcdef");
 
                 // 4. HISTORY SURVIVES THE RING. Stop the workload: the session (and its

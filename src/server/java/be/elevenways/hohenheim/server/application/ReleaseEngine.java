@@ -24,7 +24,6 @@ import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
-import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.instance.InstanceService;
@@ -1082,9 +1081,10 @@ public final class ReleaseEngine {
 
     // -- operation record plumbing -------------------------------------------
 
-    private static @NonNull Row newOperation(@NonNull String kind, int applicationId,
-                                             @NonNull String ownerFingerprint,
-                                             @NonNull String specFingerprint) {
+    /** Package-private for ReleaseStepLogRedactionTest, which drives a step log through the engine's own writes. */
+    static @NonNull Row newOperation(@NonNull String kind, int applicationId,
+                                     @NonNull String ownerFingerprint,
+                                     @NonNull String specFingerprint) {
         ReleaseOperationModel model = Models.get(ReleaseOperationModel.class);
         Row op = model.createEmptyRow();
         op.set(ReleaseOperationModel.KIND, kind);
@@ -1137,28 +1137,13 @@ public final class ReleaseEngine {
         Models.get(ReleaseOperationModel.class).saveWrittenUnlessGone(op);
     }
 
-    /** Append a timestamped step line, persist it with whatever else is staged, and hand it to live viewers. */
-    private static void step(@NonNull Row op, @NonNull String line) {
-        persist(staged(op, line, Now.instant()));
-        publish(op);
-    }
-
     /**
-     * Stage a timestamped step line onto the log the row carries.
-     *
-     * AIDEV-NOTE: the line is redacted of the application's own secret values (ConsoleRedaction) before it is staged:
-     * a step quotes daemon text, which can echo the environment it was handed, and the step log is stored and streamed.
-     * It FAILS CLOSED: an operation that names no instance owner has no secret set to redact against, so its line is
-     * stored and streamed as the placeholder, never raw.
+     * Append a timestamped step line, persist it with whatever else is staged, and hand it to live viewers.
+     * Package-private for ReleaseStepLogRedactionTest.
      */
-    private static @NonNull Row staged(@NonNull Row op, @NonNull String line, @NonNull Instant at) {
-        String existing = op.get(ReleaseOperationModel.STEP_LOG);
-        Integer applicationId = op.get(ReleaseOperationModel.FOR_ID);
-        boolean owned = applicationId != null
-            && InstanceModel.MODEL_ID.toString().equals(op.get(ReleaseOperationModel.FOR_MODEL));
-        String safe = owned ? ConsoleRedaction.redactWhole(line, applicationId) : ConsoleRedaction.PLACEHOLDER;
-        op.set(ReleaseOperationModel.STEP_LOG, (existing == null ? "" : existing) + at + " " + safe + "\n");
-        return op;
+    static void step(@NonNull Row op, @NonNull String line) {
+        persist(ReleaseStepLog.stage(op, line, Now.instant()));
+        publish(op);
     }
 
     /** Hand the operation's stored step log to the live viewers of its application ({@link DeployProgress}). */
@@ -1189,17 +1174,19 @@ public final class ReleaseEngine {
     /**
      * Write the terminal stamp while the operation still reads the status this thread left it in; a newer operation
      * that settled it meanwhile ({@link #completePendingDrains}) keeps its own stamp, alert and prune.
+     * Package-private for ReleaseStepLogRedactionTest.
      *
      * AIDEV-NOTE: a compare-and-set, so ONE statement on the in-flight status assigning every terminal column, plus
-     * the image a successful initial release staged for it; the row mirrors what the statement writes.
+     * the image a successful initial release staged for it; the row mirrors what the statement writes. The step log's
+     * stream ends BEFORE that statement ({@link ReleaseStepLog#stageFinal}), so it stores the redactor's last output.
      */
-    private static void settle(@NonNull Row op, @NonNull String status, @Nullable String failureReason,
-                               @NonNull String line, @NonNull Instant finished) {
+    static void settle(@NonNull Row op, @NonNull String status, @Nullable String failureReason,
+                       @NonNull String line, @NonNull Instant finished) {
         String inFlight = op.get(ReleaseOperationModel.STATUS);
         op.set(ReleaseOperationModel.STATUS, status);
         op.set(ReleaseOperationModel.FAILURE_REASON, failureReason);
         op.set(ReleaseOperationModel.FINISHED_AT, finished);
-        staged(op, line, finished);
+        ReleaseStepLog.stageFinal(op, line, finished);
         QueryBuilder<Row> settled = Models.get(ReleaseOperationModel.class).find()
             .where(ReleaseOperationModel.ID.eq(op.get(ReleaseOperationModel.ID)))
             .and(ReleaseOperationModel.STATUS.eq(inFlight))

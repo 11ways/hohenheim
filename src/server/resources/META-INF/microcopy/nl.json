@@ -7110,6 +7110,10 @@
     "text": "Onbekend variabelesoort {$kind}",
     "scope": "violations"
   },
+  "variable_secret_too_short": {
+    "text": "Een geheime waarde heeft minstens {$minimum :integer} tekens nodig, anders kan ze niet in logs verborgen worden",
+    "scope": "violations"
+  },
   "variable_not_found": {
     "text": "Er bestaat geen variabele voor deze sleutel",
     "scope": "violations"

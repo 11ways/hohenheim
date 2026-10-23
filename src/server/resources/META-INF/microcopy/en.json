@@ -7110,6 +7110,10 @@
     "text": "Unknown variable kind {$kind}",
     "scope": "violations"
   },
+  "variable_secret_too_short": {
+    "text": "A secret value needs at least {$minimum :integer} characters, or it cannot be hidden in logs",
+    "scope": "violations"
+  },
   "variable_not_found": {
     "text": "No variable exists for this key",
     "scope": "violations"

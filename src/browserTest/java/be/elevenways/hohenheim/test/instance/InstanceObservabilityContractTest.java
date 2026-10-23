@@ -3,7 +3,6 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.model.InstanceLogModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
-import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
 import be.elevenways.hohenheim.server.instance.InstanceConsoles;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceStats;
@@ -16,6 +15,7 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.KnownValueRedactor;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import org.junit.jupiter.api.AfterAll;
@@ -268,7 +268,7 @@ class InstanceObservabilityContractTest {
             assertThat(String.join("", seen))
                 .as("step 1: the declared secret never reaches a viewer")
                 .doesNotContain(secret)
-                .contains(ConsoleRedaction.PLACEHOLDER);
+                .contains(KnownValueRedactor.PLACEHOLDER);
 
             // 2. The STORED row is the redacted ring, not the raw stream: storing raw text
             //    and redacting on read would leave a secret at rest.
@@ -278,7 +278,7 @@ class InstanceObservabilityContractTest {
             assertThat((String) stored.get(InstanceLogModel.LOG_TEXT))
                 .as("step 2: nothing secret is ever written to instance_logs")
                 .doesNotContain(secret)
-                .contains(ConsoleRedaction.PLACEHOLDER);
+                .contains(KnownValueRedactor.PLACEHOLDER);
             assertThat((String) stored.get(InstanceLogModel.HANDLE))
                 .as("step 2: the row names the workload it mirrors").isEqualTo(handle);
 
@@ -302,7 +302,7 @@ class InstanceObservabilityContractTest {
             // 4. A value declared secret WHILE the console streams is redacted from there
             //    on -- without this it would ride the open session in the clear.
             String late = "late-rotated-token-value";
-            InstanceConsoles.registerSecret(instanceId, late);
+            InstanceConsoles.registerSecret(instanceId, "LATE_TOKEN", late);
             stream.push("rotated to " + late + " ok\n");
             Poll.until("step 4: the later line arrived", WAIT,
                 () -> String.join("", seen).contains("rotated to"));
@@ -385,7 +385,7 @@ class InstanceObservabilityContractTest {
             assertThat(InstanceConsoles.tail(readable, 10))
                 .as("step 3: the one-shot read carries its own redaction")
                 .doesNotContain(secret)
-                .contains(ConsoleRedaction.PLACEHOLDER);
+                .contains(KnownValueRedactor.PLACEHOLDER);
         });
     }
 

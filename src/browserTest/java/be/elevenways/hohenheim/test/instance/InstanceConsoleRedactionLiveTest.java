@@ -5,7 +5,6 @@ import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.DockerClient;
-import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
 import be.elevenways.hohenheim.server.instance.InstanceConsoles;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
@@ -18,6 +17,7 @@ import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Db;
+import be.elevenways.zenit.common.security.KnownValueRedactor;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -141,7 +141,7 @@ class InstanceConsoleRedactionLiveTest {
                     .doesNotContain(DEPLOY_SECRET);
                 assertThat(seen(viewer))
                     .as("step 3: it arrived redacted, with its surroundings intact")
-                    .contains("token=" + ConsoleRedaction.PLACEHOLDER + " ready");
+                    .contains("token=" + KnownValueRedactor.PLACEHOLDER + " ready");
 
                 // 4. POSITIVE ANCHOR: ordinary output is not touched at all. A redactor
                 //    that mangles legitimate text is as broken as one that leaks.
@@ -171,7 +171,7 @@ class InstanceConsoleRedactionLiveTest {
                 });
                 assertThat(seen(reconnected))
                     .as("step 6: the replayed ring holds the redacted text")
-                    .contains(ConsoleRedaction.PLACEHOLDER)
+                    .contains(KnownValueRedactor.PLACEHOLDER)
                     .doesNotContain(DEPLOY_SECRET)
                     .doesNotContain(LATE_SECRET);
 

@@ -93,12 +93,13 @@ class BuildCredentialsTest {
             .contains("[redacted]").contains("ghcr.io");
 
         // 2. A short value is NOT redacted, deliberately: redacting "abc" would replace
-        //    half the log and hide the failure the log exists to explain.
+        //    half the log and hide the failure the log exists to explain. The refusal is
+        //    reported, never silent.
         BuildLog shortSecret = new BuildLog(4096);
-        shortSecret.redact("abc");
+        assertThat(shortSecret.redact("abc")).as("step 2: a too-short secret is refused").isFalse();
         assertThat(shortSecret.redactedSecretCount())
-            .as("step 2: a too-short secret is not registered").isZero();
-        shortSecret.redact("abc123");
+            .as("step 2: and not registered").isZero();
+        assertThat(shortSecret.redact("abc123")).as("step 2: six characters is taken").isTrue();
         shortSecret.line("pin abc123 accepted");
         assertThat(shortSecret.text()).as("step 2: six characters is the floor, and it is redacted")
             .isEqualTo("pin [redacted] accepted\n");
@@ -116,7 +117,8 @@ class BuildCredentialsTest {
             .as("step 3: memory stayed bounded").isLessThan(2048);
 
         // 4. A daemon hands output over in chunks that are not line-aligned: a secret split across two appends never
-        //    lands in the stored text nor in what a tap hears, and a held near-miss is released at the flush.
+        //    lands in the stored text nor in what a tap hears, and a held secret prefix is masked at the flush: a
+        //    build cut off mid-secret printed the secret's leading characters.
         BuildLog split = new BuildLog(4096);
         split.redact("hunter2-registry-password");
         StringBuilder heard = new StringBuilder();
@@ -128,8 +130,8 @@ class BuildCredentialsTest {
         assertThat(split.text()).as("step 4: the split secret was stored as the placeholder")
             .isEqualTo("token [redacted] ok\ndone ");
         split.flush();
-        assertThat(split.text()).as("step 4: the near-miss is ordinary text once the output ended")
-            .isEqualTo("token [redacted] ok\ndone hunter2");
+        assertThat(split.text()).as("step 4: the held start of the secret is masked once the output ended")
+            .isEqualTo("token [redacted] ok\ndone [redacted]");
         assertThat(heard.toString()).as("step 4: the tap heard exactly what was stored").isEqualTo(split.text());
     }
 }

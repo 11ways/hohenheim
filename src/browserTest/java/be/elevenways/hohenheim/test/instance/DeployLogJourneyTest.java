@@ -16,7 +16,6 @@ import be.elevenways.hohenheim.server.build.LiveBuildLogs;
 import be.elevenways.hohenheim.server.build.SandboxedBuilds;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
-import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.source.GitSourceSchema;
@@ -31,6 +30,7 @@ import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.channel.ChannelException;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.KnownValueRedactor;
 import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.test.support.FakeChannelLink;
 import org.junit.jupiter.api.Test;
@@ -121,7 +121,7 @@ class DeployLogJourneyTest extends HohenheimTestBase {
                 //    hands output over, streams as the placeholder: no frame carries any part of it whole.
                 log.append("export API_TOKEN=" + SECRET.substring(0, 12));
                 log.append(SECRET.substring(12) + "\n");
-                await(ownerLink, appended(ConsoleRedaction.PLACEHOLDER));
+                await(ownerLink, appended(KnownValueRedactor.PLACEHOLDER));
 
                 // 5. Output past the cap is cut: the viewer hears the truncation marker once and nothing after it.
                 log.append("x".repeat(LOG_CAP * 3));

@@ -2,8 +2,11 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.GitProviderModel;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.ProjectModel;
+import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
+import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
@@ -32,6 +35,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 /**
  * Two admin forms that used to leave the operator guessing: the environment-variable
@@ -312,6 +316,47 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
             .as("step 7: a direct save enforces the same carrier requirement").isInstanceOf(Violations.class);
         assertThat(Models.get(InstanceVariableModel.class).find().count())
             .as("step 7: neither refused create stores a row").isEqualTo(beforeRefusal);
+
+        // 8. A secret too short to be masked in logs is refused by the authoring writers, naming the
+        //    minimum: the form rerenders 422 with the carrier marked, and the variable API refuses with
+        //    the same key. Nothing is stored.
+        HttpResponse<String> shortSecret = httpPostForm("/admin/environment-variables/new",
+            "environment_id=" + environmentId + "&key=SHORT_SECRET&kind=secret&secret_value=abc12",
+            sessionToken, csrfToken);
+        assertThat(shortSecret.statusCode()).as("step 8: a short secret rerenders the form").isEqualTo(422);
+        assertThat(shortSecret.body()).as("step 8: the refusal marks the secret carrier and names the minimum")
+            .containsPattern("<pl-field data-path=\"secret_value\"[^>]*\\sinvalid[\\s>=]")
+            .contains("at least 6 characters");
+        Violations apiRefusal = catchThrowableOfType(() -> new InstanceVariables()
+            .setValue(null, environmentId, "SHORT_API_SECRET", InstanceVariableModel.KIND_SECRET, "abc12"),
+            Violations.class);
+        assertThat((Throwable) apiRefusal).as("step 8: the variable API refuses it too").isNotNull();
+        assertThat(apiRefusal.all().get(0).message().key()).as("step 8: with the same reason")
+            .isEqualTo("variable_secret_too_short");
+        assertThat(Models.get(InstanceVariableModel.class).find().count())
+            .as("step 8: neither refused write stores a row").isEqualTo(beforeRefusal);
+
+        // 9. A generated record's derived copy keeps its author's short value (refusing it would fail the
+        //    deploy), and the console's secret set leaves it out rather than pretending to redact it.
+        Row generated = Models.get(InstanceModel.class).createEmptyRow();
+        generated.set(InstanceModel.NAME, "short-secret-derived");
+        generated.set(InstanceModel.KIND, "hohenheim:docker_container");
+        Models.get(InstanceModel.class).save(generated);
+        int generatedId = generated.get(InstanceModel.ID);
+        try {
+            new InstanceVariables().storeSecretEnvironment(generatedId,
+                Map.of("PORT", "8080", "API_TOKEN", "derived-api-token-value"));
+            assertThat(Models.get(InstanceVariableModel.class).findByInstanceId(generatedId))
+                .as("step 9: both derived values are stored as secrets").hasSize(2);
+            assertThat(ConsoleRedaction.secretsOf(generatedId))
+                .as("step 9: only the redactable one is a console secret")
+                .containsExactly("derived-api-token-value");
+        } finally {
+            for (Row row : Models.get(InstanceVariableModel.class).findByInstanceId(generatedId)) {
+                Models.get(InstanceVariableModel.class).delete(row.get(InstanceVariableModel.ID));
+            }
+            HardDeletes.byId(Models.get(InstanceModel.class), generatedId);
+        }
     }
 
     @Test

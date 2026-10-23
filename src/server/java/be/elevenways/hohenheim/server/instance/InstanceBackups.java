@@ -1429,7 +1429,7 @@ public final class InstanceBackups {
         }
         InstanceVariables variables = new InstanceVariables();
         for (VariableEntry variable : profile.variables()) {
-            variables.setValue(instanceId, null, variable.key(), variable.kind(),
+            variables.storeValue(instanceId, null, variable.key(), variable.kind(),
                 variable.value());
         }
     }

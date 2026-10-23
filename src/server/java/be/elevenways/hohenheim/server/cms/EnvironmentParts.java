@@ -231,7 +231,10 @@ public final class EnvironmentParts {
                     InstanceVariableModel.ENVIRONMENT_ID.getName(), HohenheimSlugs.ENVIRONMENTS))
                 .build())
             .writes(ResourceMutations.rows().create().update().delete(DELETE_VARIABLE)
-                .beforeSave(EnvironmentParts::placeValueInItsCarrier)
+                .beforeSave(save -> {
+                    placeValueInItsCarrier(save);
+                    refuseUnmaskableSecret(save);
+                })
                 .build())
             .deleteConfirmation(DeleteConfirmation.<Row>of(variableDeleteBody(null))
                 .forRow((variable, request) -> variableDeleteBody(variable)))
@@ -247,6 +250,13 @@ public final class EnvironmentParts {
         if (kind == null) return;
         if (kind.isSecret()) save.row().set(InstanceVariableModel.PLAIN_VALUE, null);
         else save.row().set(InstanceVariableModel.SECRET_VALUE, null);
+    }
+
+    /** Refuses a typed secret value too short to be masked in logs, before anything is saved. */
+    static void refuseUnmaskableSecret(@NonNull RowSave save) {
+        if (!VariableKind.of(save.row().get(InstanceVariableModel.KIND)).isSecret()) return;
+        Object typed = save.values().get(InstanceVariableModel.SECRET_VALUE.getName());
+        if (typed != null) InstanceVariableModel.requireRedactableSecret(typed.toString());
     }
 
     /**

@@ -8,6 +8,7 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
+import be.elevenways.zenit.common.security.KnownValueRedactor;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -29,7 +30,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * the hub, which owns the fence.
  *
  * AIDEV-NOTE: REDACTION IS AT INGEST. Every byte the driver produces passes through the
- * session's {@link ConsoleRedaction.Redactor} before it touches the ring, the line matcher,
+ * session's {@link KnownValueRedactor} before it touches the ring, the line matcher,
  * a viewer or the persisted log -- so raw output exists in exactly one place (a local
  * variable in {@link #pump()}) and no copy of a secret survives behind it. Redacting per
  * consumer instead would mean keeping the raw text and trusting every future reader, which
@@ -63,7 +64,7 @@ final class InstanceConsoleSession {
     private final @NonNull Resizer resizer;
     private final @Nullable String stopCommand;
     private final @NonNull ExitListener exitListener;
-    private final ConsoleRedaction.@NonNull Redactor redactor;
+    private final @NonNull KnownValueRedactor redactor;
     private final InstanceConsoleLogs.@Nullable Sink logSink;
 
     private volatile long lastFlushAt;
@@ -93,7 +94,7 @@ final class InstanceConsoleSession {
                            boolean exclusive,
                            @NonNull Resizer resizer,
                            @Nullable String stopCommand,
-                           ConsoleRedaction.@NonNull Redactor redactor,
+                           @NonNull KnownValueRedactor redactor,
                            InstanceConsoleLogs.@Nullable Sink logSink,
                            long generation,
                            @NonNull ExitListener exitListener) {
@@ -121,9 +122,13 @@ final class InstanceConsoleSession {
             HohenheimSystemPurposes.INSTANCE_CONSOLE, this::pump));
     }
 
-    /** Teach the live redactor a value declared secret after this session opened. */
-    void addSecret(@NonNull String secret) {
-        this.redactor.addSecret(secret);
+    /**
+     * Teach the live redactor a value declared secret after this session opened.
+     *
+     * @return false when the value is too short to be redacted (see {@link KnownValueRedactor#addSecret(String)})
+     */
+    boolean addSecret(@NonNull String secret) {
+        return this.redactor.addSecret(secret);
     }
 
     int instanceId() {
@@ -199,8 +204,8 @@ final class InstanceConsoleSession {
             this.deliver(this.redactor.feed(text.decode(chunk)));
         }
         this.deliver(this.redactor.feed(text.finish()));
-        // Whatever the redactor was holding back as a possible secret prefix turned out not
-        // to be one; it is ordinary output and must not be swallowed.
+        // Whatever the redactor was still holding back is released; a held secret prefix (the
+        // stream ended mid-secret) comes out masked, never swallowed and never in the clear.
         this.deliver(this.redactor.flush());
         // The episode is over: write it down once more, unthrottled, so the last output
         // before an exit is in the history rather than only in a ring about to be dropped.
@@ -308,10 +313,10 @@ final class InstanceConsoleSession {
         if (text.isEmpty()) {
             return;
         }
-        // The backlog is a COMPLETE text of its own, so it gets its own one-shot redaction
-        // rather than the streaming buffer -- feeding it through the live redactor would
-        // interleave it with the running stream's held-back tail.
-        String safe = ConsoleRedaction.redactWhole(text, this.redactor);
+        // The backlog is a WHOLE text of its own, so it is redacted as its own stream (a fresh redactor fed all of it,
+        // then flushed), never line by line and never through the live redactor, whose held-back tail belongs to the
+        // running stream. Read on the attaching caller's thread, under its Db scope, like the live redactor at open.
+        String safe = ConsoleRedaction.redactWhole(text, this.instanceId);
         synchronized (this) {
             this.ring.insert(0, safe);
             if (this.ring.length() > RING_CAP) {
