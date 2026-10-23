@@ -4,9 +4,11 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.holder.Subscription;
 import be.elevenways.zenit.common.security.KnownValueRedactor;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
@@ -42,6 +44,8 @@ public final class BuildLog {
 
     private final int maxBytes;
     private final KnownValueRedactor redactor = KnownValueRedactor.of(Set.of());
+    /** The values the redactor took, for a whole text redacted apart from the stream ({@link #redactedWhole}). */
+    private final Set<String> secrets = new LinkedHashSet<>();
     private final StringBuilder text = new StringBuilder();
     private boolean truncated;
     private final List<Tap> taps = new CopyOnWriteArrayList<>();
@@ -63,6 +67,10 @@ public final class BuildLog {
         if (!taken) {
             Blast.log("BUILD: a secret value shorter than", KnownValueRedactor.MIN_LENGTH,
                 "characters is NOT redacted from this build log");
+        } else {
+            synchronized (this) {
+                this.secrets.add(secret);
+            }
         }
         return taken;
     }
@@ -76,6 +84,23 @@ public final class BuildLog {
 
     public int redactedSecretCount() {
         return this.redactor.secretCount();
+    }
+
+    /**
+     * Redact a text that is not output (a build's failure reason) through this log's secrets, as one whole stream of
+     * its own: the log's stream and its held tail are untouched.
+     *
+     * @return null for null
+     */
+    public @Nullable String redactedWhole(@Nullable String text) {
+        if (text == null) {
+            return null;
+        }
+        KnownValueRedactor whole;
+        synchronized (this) {
+            whole = KnownValueRedactor.of(this.secrets);
+        }
+        return whole.feed(text) + whole.flush();
     }
 
     /**

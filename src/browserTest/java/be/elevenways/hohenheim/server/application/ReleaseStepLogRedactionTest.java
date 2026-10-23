@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.application;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.OperationStatus;
@@ -7,7 +9,7 @@ import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.protoblast.common.holder.Subscription;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -15,6 +17,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.KnownValueRedactor;
 import org.junit.jupiter.api.Test;
 
+import java.net.http.HttpResponse;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,15 +25,17 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * A release operation's step log is ONE redacting stream: a multi-line secret quoted across several step lines never
  * reaches the stored log or a live frame, and a secret the operation's output was cut off in is masked when it ends.
+ * Its failure reason is redacted where it is written, and no stream outlives the segment of work that opened it.
  *
  * @author Jelle De Loecker
  * @since 0.10.0
  */
-class ReleaseStepLogRedactionTest extends HohenheimTestBase {
+class ReleaseStepLogRedactionTest extends HohenheimHttpTestBase {
 
     private static final String WHOLE_KEY = "-----BEGIN TEST KEY A-----\nMIIBVgIBADANBgkqhkiG9w0B\n"
         + "AQEFAASCAUAwggE8AgEAAkEA\n-----END TEST KEY A-----";
@@ -38,17 +43,11 @@ class ReleaseStepLogRedactionTest extends HohenheimTestBase {
     private static final String CUT_KEY = "-----BEGIN TEST KEY B-----\nZmlyc3QtbGluZS1vZi1iLWtl\n"
         + "c2Vjb25kLWxpbmUtb2YtYi1r\n-----END TEST KEY B-----";
 
+    private static final String DB_PASSWORD = "pg-pass-7f3a9c2e41b8d605";
+
     @Test
     void aMultiLineSecretAcrossStepLinesAndATruncatedOneAtTheEndNeverLeakJourney() {
-        Row app = Models.get(InstanceModel.class).createEmptyRow();
-        app.set(InstanceModel.NAME, "release-step-redaction");
-        app.set(InstanceModel.KIND, ApplicationKind.ID.toString());
-        app.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "alpine")));
-        app.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);
-        Models.get(InstanceModel.class).save(app);
-        int appId = app.get(InstanceModel.ID);
-        new InstanceVariables().setValue(appId, null, "TLS_KEY", InstanceVariableModel.KIND_SECRET, WHOLE_KEY);
-        new InstanceVariables().setValue(appId, null, "SIGNING_KEY", InstanceVariableModel.KIND_SECRET, CUT_KEY);
+        int appId = application("release-step-redaction");
         List<String> frames = new CopyOnWriteArrayList<>();
         Subscription watching = DeployProgress.watch(appId, frames::add);
         try {
@@ -93,15 +92,101 @@ class ReleaseStepLogRedactionTest extends HohenheimTestBase {
             }
         } finally {
             watching.unsubscribe();
-            for (Row variable : Models.get(InstanceVariableModel.class).findByInstanceId(appId)) {
-                Models.get(InstanceVariableModel.class).delete(variable.get(InstanceVariableModel.ID));
-            }
-            for (Row op : Models.get(ReleaseOperationModel.class)
-                    .findForOwner(InstanceModel.MODEL_ID.toString(), appId, 50)) {
-                Models.get(ReleaseOperationModel.class).delete(op.get(ReleaseOperationModel.ID));
-            }
-            HardDeletes.byId(Models.get(InstanceModel.class), appId);
+            cleanUp(appId);
         }
+    }
+
+    @Test
+    void aFailureQuotingASecretIsStoredRedactedAndNoSegmentOutlivesItsStreamJourney() throws Exception {
+        int appId = application("release-failure-redaction");
+        List<String> frames = new CopyOnWriteArrayList<>();
+        Subscription watching = DeployProgress.watch(appId, frames::add);
+        try {
+            // 1. A segment fails with daemon text that quotes a secret environment value, and the engine's catch
+            //    settles it with that reason: the stored reason names the failure, never the value.
+            Row failed = ReleaseEngine.newOperation(ReleaseOperationModel.KIND_RELEASE, appId, "fp", "fp");
+            int failedId = failed.get(ReleaseOperationModel.ID);
+            assertThatThrownBy(() -> ReleaseEngine.segment(failed, () -> {
+                ReleaseEngine.step(failed, "creating the candidate");
+                assertThat(ReleaseStepLog.isOpen(failedId)).as("step 1: the segment's stream is open").isTrue();
+                try {
+                    throw new IllegalStateException("docker create refused: env DB_PASSWORD=" + DB_PASSWORD
+                        + " rejected by the daemon");
+                } catch (RuntimeException e) {
+                    ReleaseEngine.settle(failed, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.FAILED),
+                        HohenheimViolations.reasonOf(e), "deploy failed", Now.instant());
+                    throw e;
+                }
+            })).isInstanceOf(IllegalStateException.class);
+            Row stored = Models.get(ReleaseOperationModel.class).findById(failedId);
+            assertThat((String) stored.get(ReleaseOperationModel.FAILURE_REASON))
+                .as("step 1: the stored reason still explains the failure").contains("rejected by the daemon")
+                .as("step 1: with the value masked").contains(KnownValueRedactor.PLACEHOLDER)
+                .doesNotContain(DB_PASSWORD);
+            assertThat(ReleaseStepLog.isOpen(failedId)).as("step 1: the settled operation holds no stream").isFalse();
+
+            // 2. The operator's Deploys tab shows the reason as stored, and no live frame carried the value.
+            HttpResponse<String> tab = adminGet("/admin/instances/" + appId + "/page/" + HohenheimSlugs.Tab.DEPLOYMENTS);
+            assertThat(tab.statusCode()).as("step 2: the Deploys tab renders").isEqualTo(200);
+            assertThat(tab.body()).as("step 2: the operator reads the reason").contains("rejected by the daemon")
+                .as("step 2: never the secret value").doesNotContain(DB_PASSWORD);
+            assertThat(frames).as("step 2: the viewers heard the failed operation").isNotEmpty()
+                .noneMatch(frame -> frame.contains(DB_PASSWORD));
+
+            // 3. A segment that fails BEFORE any settle, its output cut off inside a multi-line key: the stream is
+            //    gone with the segment, and the prefix it held is stored masked, never lost and never raw.
+            Row aborted = ReleaseEngine.newOperation(ReleaseOperationModel.KIND_RELEASE, appId, "fp", "fp");
+            int abortedId = aborted.get(ReleaseOperationModel.ID);
+            String[] cut = CUT_KEY.split("\n");
+            assertThatThrownBy(() -> ReleaseEngine.segment(aborted, () -> {
+                ReleaseEngine.step(aborted, cut[0]);
+                ReleaseEngine.step(aborted, cut[1]);
+                throw new IllegalStateException("controller aborted mid-operation");
+            })).isInstanceOf(IllegalStateException.class);
+            assertThat(ReleaseStepLog.isOpen(abortedId)).as("step 3: no stream outlives the failed segment").isFalse();
+            String abortedLog = Models.get(ReleaseOperationModel.class).findById(abortedId)
+                .get(ReleaseOperationModel.STEP_LOG);
+            assertNoKeyLine("step 3: the stored log", abortedLog, CUT_KEY);
+            assertThat(abortedLog).as("step 3: the held prefix landed masked on a line of its own")
+                .endsWith(" " + KnownValueRedactor.PLACEHOLDER + "\n");
+
+            // 4. An operation naming no instance owner has no secret set: its reason is the placeholder, never raw.
+            Row orphan = Models.get(ReleaseOperationModel.class).createEmptyRow();
+            orphan.set(ReleaseOperationModel.FOR_MODEL, "unknown");
+            orphan.set(ReleaseOperationModel.FOR_ID, appId);
+            assertThat(ReleaseStepLog.redactedReason(orphan, "refused: " + DB_PASSWORD))
+                .as("step 4: an owner-less reason fails closed").isEqualTo(KnownValueRedactor.PLACEHOLDER);
+            assertThat(ReleaseStepLog.redactedReason(orphan, null)).as("step 4: no reason stays none").isNull();
+        } finally {
+            watching.unsubscribe();
+            cleanUp(appId);
+        }
+    }
+
+    /** @return a fresh application carrying the test's secret variables */
+    private static int application(String name) {
+        Row app = Models.get(InstanceModel.class).createEmptyRow();
+        app.set(InstanceModel.NAME, name);
+        app.set(InstanceModel.KIND, ApplicationKind.ID.toString());
+        app.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "alpine")));
+        app.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);
+        Models.get(InstanceModel.class).save(app);
+        int appId = app.get(InstanceModel.ID);
+        new InstanceVariables().setValue(appId, null, "TLS_KEY", InstanceVariableModel.KIND_SECRET, WHOLE_KEY);
+        new InstanceVariables().setValue(appId, null, "SIGNING_KEY", InstanceVariableModel.KIND_SECRET, CUT_KEY);
+        new InstanceVariables().setValue(appId, null, "DB_PASSWORD", InstanceVariableModel.KIND_SECRET, DB_PASSWORD);
+        return appId;
+    }
+
+    private static void cleanUp(int appId) {
+        for (Row variable : Models.get(InstanceVariableModel.class).findByInstanceId(appId)) {
+            Models.get(InstanceVariableModel.class).delete(variable.get(InstanceVariableModel.ID));
+        }
+        for (Row op : Models.get(ReleaseOperationModel.class)
+                .findForOwner(InstanceModel.MODEL_ID.toString(), appId, 50)) {
+            Models.get(ReleaseOperationModel.class).delete(op.get(ReleaseOperationModel.ID));
+        }
+        HardDeletes.byId(Models.get(InstanceModel.class), appId);
     }
 
     private static void assertNoKeyLine(String what, String text, String key) {

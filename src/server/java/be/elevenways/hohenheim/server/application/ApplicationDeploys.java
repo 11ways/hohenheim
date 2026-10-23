@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
 import be.elevenways.hohenheim.server.instance.DeployStartPolicy;
 import be.elevenways.hohenheim.model.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
@@ -145,12 +146,13 @@ public final class ApplicationDeploys {
                 commitSha = GitCheckout.materialize(InstanceModel.MODEL_ID, applicationId,
                     branch, settings, checkout);
             } catch (Violations refused) {
-                DeployStatuses.deployFailed(settings, pushedSha, HohenheimViolations.reasonOf(refused));
+                DeployStatuses.deployFailed(settings, pushedSha, safeReasonOf(refused, applicationId));
                 throw refused;
             } catch (Exception failed) {
-                DeployStatuses.deployFailed(settings, pushedSha, HohenheimViolations.reasonOf(failed));
+                String reason = safeReasonOf(failed, applicationId);
+                DeployStatuses.deployFailed(settings, pushedSha, reason);
                 throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("source_checkout_failed")
-                    .withArg("reason", HohenheimViolations.reasonOf(failed)));
+                    .withArg("reason", reason));
             }
             overrides.put("build_context", checkout.getAbsolutePath());
             overrides.put("commit_sha", commitSha);
@@ -170,9 +172,17 @@ public final class ApplicationDeploys {
             }
             return release;
         } catch (RuntimeException failed) {
-            DeployStatuses.deployFailed(settings, commitSha, HohenheimViolations.reasonOf(failed));
+            DeployStatuses.deployFailed(settings, commitSha, safeReasonOf(failed, applicationId));
             throw failed;
         }
+    }
+
+    /**
+     * A failure's reason as it may leave this method (a forge commit status, a refusal): git or daemon text can quote
+     * a secret value, so it is redacted through the application's secrets as one whole text.
+     */
+    private static @NonNull String safeReasonOf(@NonNull Throwable failed, int applicationId) {
+        return ConsoleRedaction.redactWhole(HohenheimViolations.reasonOf(failed), applicationId);
     }
 
     /**

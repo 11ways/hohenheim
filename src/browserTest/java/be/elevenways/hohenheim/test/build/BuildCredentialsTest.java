@@ -133,5 +133,17 @@ class BuildCredentialsTest {
         assertThat(split.text()).as("step 4: the held start of the secret is masked once the output ended")
             .isEqualTo("token [redacted] ok\ndone [redacted]");
         assertThat(heard.toString()).as("step 4: the tap heard exactly what was stored").isEqualTo(split.text());
+
+        // 5. A failure reason is not output, but it quotes the daemon too: redacted through the same secrets as one
+        //    whole text of its own, while the log's stream is left exactly as it was.
+        assertThat(split.redactedWhole("pull refused: denied for hunter2-registry-password at ghcr.io"))
+            .as("step 5: the reason keeps its words and loses the secret")
+            .isEqualTo("pull refused: denied for [redacted] at ghcr.io");
+        assertThat(split.redactedWhole("ends in hunter2-regi"))
+            .as("step 5: a reason cut off inside the secret is masked, being a whole text")
+            .isEqualTo("ends in [redacted]");
+        assertThat(split.redactedWhole(null)).as("step 5: no reason stays none").isNull();
+        assertThat(split.text()).as("step 5: the log itself is untouched")
+            .isEqualTo("token [redacted] ok\ndone [redacted]");
     }
 }

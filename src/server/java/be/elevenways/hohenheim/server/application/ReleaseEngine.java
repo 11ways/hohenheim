@@ -61,6 +61,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.function.Supplier;
 
 import static be.elevenways.hohenheim.RawValues.trimmed;
 
@@ -225,37 +226,39 @@ public final class ReleaseEngine {
         Map<String, Object> desired = spec.settings();
         Row op = newOperation(ReleaseOperationModel.KIND_RELEASE, applicationId,
             ownerFingerprint, ownerFingerprint);
-        step(op, "initial release: creating a health-gated candidate");
-        Integer instanceId = null;
-        try {
-            stampSpec(op, desired, spec.buildOperationId());
-            Row instance = newInstanceRow(applicationId, applicationName, serverId, desired,
-                InstanceModel.ROLE_CANDIDATE);
-            instanceId = instance.get(InstanceModel.ID);
-            op.set(ReleaseOperationModel.CANDIDATE_INSTANCE_ID, instanceId);
-            transition(op,
-                ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.DEPLOYING),
-                "instance " + instanceId + " created");
-            InstanceService instances = new InstanceService();
-            InstanceStatus status = restoreVolumes == null ? instances.deploy(instanceId)
-                : instances.deployRestored(instanceId, restoreVolumes);
-            requireHealthy(status, desired, serverId);
-            transition(op, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SWITCHING),
-                "promoting healthy initial release");
-            new InstanceService().assignRuntimeRole(instanceId, InstanceModel.ROLE_SERVING);
-            ApplicationUpstreams.invalidate(applicationId);
-            op.set(ReleaseOperationModel.IMAGE_ID, trimmed(desired.get(InstanceKindFields.IMAGE)));
-            finish(op,
-                ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), null, "deployed");
-            return new ApplicationReleases.Release(instanceId, status);
-        } catch (RuntimeException e) {
-            if (instanceId != null) {
-                destroyCandidateQuietly(instanceId);
+        return segment(op, () -> {
+            step(op, "initial release: creating a health-gated candidate");
+            Integer instanceId = null;
+            try {
+                stampSpec(op, desired, spec.buildOperationId());
+                Row instance = newInstanceRow(applicationId, applicationName, serverId, desired,
+                    InstanceModel.ROLE_CANDIDATE);
+                instanceId = instance.get(InstanceModel.ID);
+                op.set(ReleaseOperationModel.CANDIDATE_INSTANCE_ID, instanceId);
+                transition(op,
+                    ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.DEPLOYING),
+                    "instance " + instanceId + " created");
+                InstanceService instances = new InstanceService();
+                InstanceStatus status = restoreVolumes == null ? instances.deploy(instanceId)
+                    : instances.deployRestored(instanceId, restoreVolumes);
+                requireHealthy(status, desired, serverId);
+                transition(op, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SWITCHING),
+                    "promoting healthy initial release");
+                new InstanceService().assignRuntimeRole(instanceId, InstanceModel.ROLE_SERVING);
+                ApplicationUpstreams.invalidate(applicationId);
+                op.set(ReleaseOperationModel.IMAGE_ID, trimmed(desired.get(InstanceKindFields.IMAGE)));
+                finish(op,
+                    ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), null, "deployed");
+                return new ApplicationReleases.Release(instanceId, status);
+            } catch (RuntimeException e) {
+                if (instanceId != null) {
+                    destroyCandidateQuietly(instanceId);
+                }
+                finish(op, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.FAILED),
+                    HohenheimViolations.reasonOf(e), "deploy failed");
+                throw e;
             }
-            finish(op, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.FAILED), HohenheimViolations.reasonOf(e),
-                "deploy failed");
-            throw e;
-        }
+        });
     }
 
     /**
@@ -283,62 +286,63 @@ public final class ReleaseEngine {
 
         Row op = newOperation(ReleaseOperationModel.KIND_RELEASE, applicationId,
             ownerFingerprint, ownerFingerprint);
-        Map<String, Object> desired;
-        try {
-            step(op, "resolving the desired spec (build/pull + digest pin)");
-            ApplicationReleases.DesiredSpec spec = ApplicationReleases.desiredSettings(docker,
-                ApplicationReleases.requireApplication(applicationId), sourceSettings);
-            desired = spec.settings();
-            desired.put("source_fingerprint", ownerFingerprint);
-            stampSpec(op, desired, spec.buildOperationId());
-        } catch (RuntimeException e) {
-            finish(op, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.FAILED), HohenheimViolations.reasonOf(e),
-                "spec resolution failed");
-            if (protecting) {
-                Blast.log("RELEASE: application", applicationId, "release failed before a candidate"
-                    + " existed; the prior release keeps serving -", HohenheimViolations.reasonOf(e));
+        return segment(op, () -> {
+            Map<String, Object> desired;
+            try {
+                step(op, "resolving the desired spec (build/pull + digest pin)");
+                ApplicationReleases.DesiredSpec spec = ApplicationReleases.desiredSettings(docker,
+                    ApplicationReleases.requireApplication(applicationId), sourceSettings);
+                desired = spec.settings();
+                desired.put("source_fingerprint", ownerFingerprint);
+                stampSpec(op, desired, spec.buildOperationId());
+            } catch (RuntimeException e) {
+                finish(op, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.FAILED),
+                    HohenheimViolations.reasonOf(e), "spec resolution failed");
+                if (protecting) {
+                    Blast.log("RELEASE: application", applicationId, "release failed before a candidate"
+                        + " existed; the prior release keeps serving -", HohenheimViolations.reasonOf(e));
+                    return new ApplicationReleases.Release(servingId, oldLive);
+                }
+                throw e;
+            }
+
+            if (protecting && specEquals(desired, ApplicationReleases.storedSettings(serving))
+                    && serverId == ServerModel.canonicalServerId(
+                        serving.get(InstanceModel.SERVER_ID))) {
+                try {
+                    requireHealthy(oldLive, desired, serverId);
+                } catch (RuntimeException unhealthy) {
+                    finish(op, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.FAILED),
+                        HohenheimViolations.reasonOf(unhealthy), "existing release failed its health gate");
+                    throw unhealthy;
+                }
+                // The source fingerprint drifted (legacy row, new derivation input) but the
+                // SPEC did not: adopt the fingerprint so the fast lane hits from now on.
+                Row adopting = reload(servingId);
+                Map<String, Object> persisted = new LinkedHashMap<>(InstanceModel.settingsOf(adopting));
+                persisted.put("source_fingerprint", ownerFingerprint);
+                adopting.set(InstanceModel.SETTINGS, persisted);
+                InstanceModel.saveConfiguration(adopting);
+                finish(op, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), null,
+                    "spec unchanged; fingerprint adopted without a deploy");
                 return new ApplicationReleases.Release(servingId, oldLive);
             }
-            throw e;
-        }
 
-        if (protecting && specEquals(desired, ApplicationReleases.storedSettings(serving))
-                && serverId == ServerModel.canonicalServerId(
-                    serving.get(InstanceModel.SERVER_ID))) {
             try {
-                requireHealthy(oldLive, desired, serverId);
-            } catch (RuntimeException unhealthy) {
-                finish(op, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.FAILED), HohenheimViolations
-                    .reasonOf(unhealthy),
-                    "existing release failed its health gate");
-                throw unhealthy;
+                return gatedSwap(docker, op, applicationId, applicationName, serverId, serving, desired);
+            } catch (RuntimeException e) {
+                if (!protecting) {
+                    throw e;
+                }
+                InstanceStatus prior = new InstanceService().liveStatus(servingId);
+                if (!prior.running() || prior.workloadDead()) {
+                    throw e;
+                }
+                Blast.log("RELEASE: application", applicationId, "candidate refused -",
+                    HohenheimViolations.reasonOf(e), "- the prior release keeps serving");
+                return new ApplicationReleases.Release(servingId, prior);
             }
-            // The source fingerprint drifted (legacy row, new derivation input) but the
-            // SPEC did not: adopt the fingerprint so the fast lane hits from now on.
-            Row adopting = reload(servingId);
-            Map<String, Object> persisted = new LinkedHashMap<>(InstanceModel.settingsOf(adopting));
-            persisted.put("source_fingerprint", ownerFingerprint);
-            adopting.set(InstanceModel.SETTINGS, persisted);
-            InstanceModel.saveConfiguration(adopting);
-            finish(op, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), null,
-                "spec unchanged; fingerprint adopted without a deploy");
-            return new ApplicationReleases.Release(servingId, oldLive);
-        }
-
-        try {
-            return gatedSwap(docker, op, applicationId, applicationName, serverId, serving, desired);
-        } catch (RuntimeException e) {
-            if (!protecting) {
-                throw e;
-            }
-            InstanceStatus prior = new InstanceService().liveStatus(servingId);
-            if (!prior.running() || prior.workloadDead()) {
-                throw e;
-            }
-            Blast.log("RELEASE: application", applicationId, "candidate refused -", HohenheimViolations.reasonOf(e),
-                "- the prior release keeps serving");
-            return new ApplicationReleases.Release(servingId, prior);
-        }
+        });
     }
 
     /**
@@ -404,20 +408,22 @@ public final class ReleaseEngine {
             }
             Row op = newOperation(ReleaseOperationModel.KIND_ROLLBACK, applicationId,
                 ownerFingerprint, specFingerprint);
-            try {
-                stampSpec(op, desired, buildOf(target));
-            } catch (RuntimeException e) {
-                finish(op, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.FAILED),
-                    HohenheimViolations.reasonOf(e), "spec resolution failed");
-                throw e;
-            }
-            step(op, "rolling back to retired instance " + target.get(InstanceModel.ID)
-                + " (image " + trimmed(desired.get(InstanceKindFields.IMAGE)) + ")");
-            DockerClient docker = serverId == ServerModel.localServerId()
-                ? new DockerClient()
-                : new ServerService().clientFor(ServerModel.nameOf(serverId));
-            gatedSwap(docker, op, applicationId, serving.get(InstanceModel.NAME), serverId,
-                serving, desired);
+            segment(op, () -> {
+                try {
+                    stampSpec(op, desired, buildOf(target));
+                } catch (RuntimeException e) {
+                    finish(op, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.FAILED),
+                        HohenheimViolations.reasonOf(e), "spec resolution failed");
+                    throw e;
+                }
+                step(op, "rolling back to retired instance " + target.get(InstanceModel.ID)
+                    + " (image " + trimmed(desired.get(InstanceKindFields.IMAGE)) + ")");
+                DockerClient docker = serverId == ServerModel.localServerId()
+                    ? new DockerClient()
+                    : new ServerService().clientFor(ServerModel.nameOf(serverId));
+                return gatedSwap(docker, op, applicationId, serving.get(InstanceModel.NAME), serverId,
+                    serving, desired);
+            });
         });
     }
 
@@ -576,8 +582,10 @@ public final class ReleaseEngine {
                                 op.get(ReleaseOperationModel.STATUS), OperationStatus.DRAINING)) {
                             return;
                         }
-                        completeDrain(applicationId, op, retiredId, servingImage,
-                            "drain window elapsed");
+                        segment(op, () -> {
+                            completeDrain(applicationId, op, retiredId, servingImage, "drain window elapsed");
+                            return null;
+                        });
                     })));
             } catch (RuntimeException undrained) {
                 // Boot recovery finishes a DRAINING operation; the operation row says so.
@@ -601,15 +609,19 @@ public final class ReleaseEngine {
                     ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.DRAINING)))
                 .orderBy(ReleaseOperationModel.ID, SortOrder.ASC)
                 .all()) {
-            Integer retiredId = op.get(ReleaseOperationModel.RETIRED_INSTANCE_ID);
-            drain(applicationId, op, retiredId != null ? retiredId : -1,
-                servingImageOf(applicationId), "superseded by a newer operation; drain completed early");
-            // AIDEV-NOTE: settled AT ONCE, never after the release like an operation's own outcome. This drain belongs
-            // to an EARLIER operation, and the operation running now is about to swap: an earlier one still reading
-            // draining once this one let go would be drained again by the next operation, which reclaims every
-            // retired release but this earlier one's -- the rollback target this swap just retained.
-            settle(op, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), null,
-                "release complete", Now.instant());
+            segment(op, () -> {
+                Integer retiredId = op.get(ReleaseOperationModel.RETIRED_INSTANCE_ID);
+                drain(applicationId, op, retiredId != null ? retiredId : -1,
+                    servingImageOf(applicationId), "superseded by a newer operation; drain completed early");
+                // AIDEV-NOTE: settled AT ONCE, never after the release like an operation's own outcome. This drain
+                // belongs to an EARLIER operation, and the operation running now is about to swap: an earlier one
+                // still reading draining once this one let go would be drained again by the next operation, which
+                // reclaims every retired release but this earlier one's -- the rollback target this swap just
+                // retained.
+                settle(op, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), null,
+                    "release complete", Now.instant());
+                return null;
+            });
         }
     }
 
@@ -743,7 +755,10 @@ public final class ReleaseEngine {
                 Runnable recover = () -> InstanceOperationLock.production().exclusive(
                     applicationId, InstanceOperationLock.Contention.QUEUE,
                     () -> ApplicationReleases.inScopeUnchecked(applicationId,
-                        () -> recoverOne(applicationId, op)));
+                        () -> segment(op, () -> {
+                            recoverOne(applicationId, op);
+                            return null;
+                        })));
                 if (serverId == null) {
                     recover.run();
                 } else {
@@ -1146,6 +1161,33 @@ public final class ReleaseEngine {
         publish(op);
     }
 
+    /**
+     * Run one segment of an operation's work in this process; its step-log stream ends with the segment, however the
+     * segment ends ({@link ReleaseStepLog#close}), so no stream outlives the work that quoted the output.
+     * Package-private for ReleaseStepLogRedactionTest.
+     */
+    static <T> T segment(@NonNull Row op, @NonNull Supplier<T> work) {
+        try {
+            return work.get();
+        } finally {
+            endStream(op);
+        }
+    }
+
+    /** Close the operation's stream; a held tail it released is stored and published like a step line. */
+    private static void endStream(@NonNull Row op) {
+        try {
+            if (ReleaseStepLog.close(op, Now.instant())) {
+                persist(op);
+                publish(op);
+            }
+        } catch (RuntimeException unwritten) {
+            // The stream is already forgotten; a failed write must not replace the segment's own outcome.
+            Blast.log("RELEASE: the held step-log tail of operation", op.get(ReleaseOperationModel.ID),
+                "could not be stored -", HohenheimViolations.reasonOf(unwritten));
+        }
+    }
+
     /** Hand the operation's stored step log to the live viewers of its application ({@link DeployProgress}). */
     private static void publish(@NonNull Row op) {
         Integer applicationId = op.get(ReleaseOperationModel.FOR_ID);
@@ -1179,19 +1221,22 @@ public final class ReleaseEngine {
      * AIDEV-NOTE: a compare-and-set, so ONE statement on the in-flight status assigning every terminal column, plus
      * the image a successful initial release staged for it; the row mirrors what the statement writes. The step log's
      * stream ends BEFORE that statement ({@link ReleaseStepLog#stageFinal}), so it stores the redactor's last output.
+     * The failure reason is redacted HERE, the one write of it ({@link ReleaseStepLog#redactedReason}): every reader
+     * (the Deploys tab, the API, the attention list, the alert) shows the stored text.
      */
     static void settle(@NonNull Row op, @NonNull String status, @Nullable String failureReason,
                        @NonNull String line, @NonNull Instant finished) {
+        String reason = ReleaseStepLog.redactedReason(op, failureReason);
         String inFlight = op.get(ReleaseOperationModel.STATUS);
         op.set(ReleaseOperationModel.STATUS, status);
-        op.set(ReleaseOperationModel.FAILURE_REASON, failureReason);
+        op.set(ReleaseOperationModel.FAILURE_REASON, reason);
         op.set(ReleaseOperationModel.FINISHED_AT, finished);
         ReleaseStepLog.stageFinal(op, line, finished);
         QueryBuilder<Row> settled = Models.get(ReleaseOperationModel.class).find()
             .where(ReleaseOperationModel.ID.eq(op.get(ReleaseOperationModel.ID)))
             .and(ReleaseOperationModel.STATUS.eq(inFlight))
             .assign(ReleaseOperationModel.STATUS, status)
-            .assign(ReleaseOperationModel.FAILURE_REASON, failureReason)
+            .assign(ReleaseOperationModel.FAILURE_REASON, reason)
             .assign(ReleaseOperationModel.FINISHED_AT, finished)
             .assign(ReleaseOperationModel.STEP_LOG, op.get(ReleaseOperationModel.STEP_LOG));
         Instant started = op.get(ReleaseOperationModel.STARTED_AT);
@@ -1208,7 +1253,7 @@ public final class ReleaseEngine {
         }
         publish(op);
         if (ReleaseOperationModel.LIFECYCLE.is(status, OperationStatus.FAILED)) {
-            alertFailed(op, failureReason);
+            alertFailed(op, reason);
         }
         prune(op);
     }

@@ -194,6 +194,9 @@ public final class SandboxedBuilds {
                                    long peakDisk, long artifactBytes, long startedAt) {
         // The output ended: the redactor's held tail is ordinary text now, in the log before it is stored or read.
         log.flush();
+        // The reason quotes daemon or builder text, which can echo a secret: redacted through the same secrets as the
+        // log, ONCE, here; the row, the server log and the caller's Result all carry this text.
+        String safeReason = log.redactedWhole(reason);
         BuildOperationModel model = Models.get(BuildOperationModel.class);
         Row row = model.findById(buildId);
         if (row != null) {
@@ -204,7 +207,7 @@ public final class SandboxedBuilds {
             row.set(BuildOperationModel.STATUS, status);
             row.set(BuildOperationModel.IMAGE_ID, imageId);
             row.set(BuildOperationModel.EXIT_CODE, exitCode);
-            row.set(BuildOperationModel.FAILURE_REASON, reason);
+            row.set(BuildOperationModel.FAILURE_REASON, safeReason);
             row.set(BuildOperationModel.LOG, log.text());
             row.set(BuildOperationModel.PEAK_DISK_BYTES, peakDisk);
             row.set(BuildOperationModel.ARTIFACT_BYTES, artifactBytes);
@@ -219,9 +222,9 @@ public final class SandboxedBuilds {
         boolean succeeded = BuildOperationModel.LIFECYCLE.is(status, OperationStatus.SUCCEEDED);
         if (!succeeded) {
             Blast.log("BUILD:", buildId, "for", request.forModel() + " #" + request.forId(),
-                "ended", status, "-", reason != null ? reason : "exit " + exitCode);
+                "ended", status, "-", safeReason != null ? safeReason : "exit " + exitCode);
         }
-        return new Result(buildId, succeeded, imageId, request.tag(), status, reason);
+        return new Result(buildId, succeeded, imageId, request.tag(), status, safeReason);
     }
 
     private static @Nullable String reasonOf(BuildSandbox.@NonNull Outcome outcome) {

@@ -217,9 +217,9 @@ public final class WorkspaceBuilds {
                 // Appended THROUGH the log, so the secrets the checkout registered are redacted
                 // out of a refusal that quotes git's own output back.
                 log.line("[hohenheim] deploy failed: " + message);
-                finish(operationId, BuildOperationModel.LIFECYCLE.stored(OperationStatus.FAILED), commitSha, message,
-                    log, startedAt);
-                DeployStatuses.deployFailed(settings, commitSha != null ? commitSha : pushedSha, message);
+                String stored = finish(operationId, BuildOperationModel.LIFECYCLE.stored(OperationStatus.FAILED),
+                    commitSha, message, log, startedAt);
+                DeployStatuses.deployFailed(settings, commitSha != null ? commitSha : pushedSha, stored);
                 throw failed;
             }
         } finally {
@@ -415,22 +415,25 @@ public final class WorkspaceBuilds {
     /**
      * Stamp the terminal status, the log and the timings once the workspace's claim is let go
      * ({@link InstanceOperationLock#afterRelease}), timed when the deploy ended; a NARROW write, never a save.
+     *
+     * @return the failure reason as stored: redacted through the log's secrets, since it can quote git or build text
      */
-    private void finish(int operationId, @NonNull String status,
-                        @Nullable String commitSha, @Nullable String failureReason,
-                        @NonNull BuildLog log, long startedAt) {
+    private @Nullable String finish(int operationId, @NonNull String status,
+                                    @Nullable String commitSha, @Nullable String failureReason,
+                                    @NonNull BuildLog log, long startedAt) {
         // The output ended: the redactor's held tail is ordinary text now, in the log before it is stored or read.
         log.flush();
+        String safeReason = log.redactedWhole(failureReason);
         BuildOperationModel model = Models.get(BuildOperationModel.class);
         Row row = model.findById(operationId);
         if (row == null) {
-            return;
+            return safeReason;
         }
         Instant finished = Now.instant();
         row.set(BuildOperationModel.SOURCE_REF,
             commitSha != null ? commitSha : row.get(BuildOperationModel.SOURCE_REF));
         row.set(BuildOperationModel.STATUS, status);
-        row.set(BuildOperationModel.FAILURE_REASON, failureReason);
+        row.set(BuildOperationModel.FAILURE_REASON, safeReason);
         row.set(BuildOperationModel.LOG, log.text());
         row.set(BuildOperationModel.FINISHED_AT, finished);
         row.set(BuildOperationModel.DURATION_MS, (int) (finished.toEpochMilli() - startedAt));
@@ -441,6 +444,7 @@ public final class WorkspaceBuilds {
                 model.pruneHistory(InstanceModel.MODEL_ID.toString(),
                     row.get(BuildOperationModel.FOR_ID), SandboxedBuilds.historyPerOwner());
             });
+        return safeReason;
     }
 
     private static void requireWorkspace(@NonNull Resolved resolved) {
