@@ -1406,23 +1406,23 @@
     "scope": "attention_detail"
   },
   "access_rules": {
-    "text": ".match {$count :number}\none {{1 access rule}}\n* {{{$count :integer} access rules}}",
+    "text": ".match {$count :integer}\none {{1 access rule}}\n* {{{$count :integer} access rules}}",
     "scope": "count"
   },
   "templates": {
-    "text": ".match {$count :number}\none {{1 template}}\n* {{{$count :integer} templates}}",
+    "text": ".match {$count :integer}\none {{1 template}}\n* {{{$count :integer} templates}}",
     "scope": "count"
   },
   "port_claims": {
-    "text": ".match {$count :number}\none {{1 port claim}}\n* {{{$count :integer} port claims}}",
+    "text": ".match {$count :integer}\none {{1 port claim}}\n* {{{$count :integer} port claims}}",
     "scope": "count"
   },
   "engines": {
-    "text": ".match {$count :number}\none {{1 shared database engine}}\n* {{{$count :integer} shared database engines}}",
+    "text": ".match {$count :integer}\none {{1 shared database engine}}\n* {{{$count :integer} shared database engines}}",
     "scope": "count"
   },
   "stacks": {
-    "text": ".match {$count :number}\none {{1 stack}}\n* {{{$count :integer} stacks}}",
+    "text": ".match {$count :integer}\none {{1 stack}}\n* {{{$count :integer} stacks}}",
     "scope": "count"
   },
   "act_review_host_key": {
@@ -1446,7 +1446,7 @@
     "scope": "attention_detail"
   },
   "https_certificates_unloaded": {
-    "text": ".match {$count :number}\none {{The active certificate could not be loaded, so nothing can be answered over HTTPS.}}\n* {{None of the {$count :integer} active certificates could be loaded, so nothing can be answered over HTTPS.}}",
+    "text": ".match {$count :integer}\none {{The active certificate could not be loaded, so nothing can be answered over HTTPS.}}\n* {{None of the {$count :integer} active certificates could be loaded, so nothing can be answered over HTTPS.}}",
     "scope": "attention_detail"
   },
   "https_no_certificate": {
@@ -1730,7 +1730,7 @@
     "scope": "attention_title"
   },
   "sites_held_back": {
-    "text": ".match {$count :number}\none {{Visitors of its site get an error page}}\n* {{Visitors of its {$count :integer} sites get an error page}}",
+    "text": ".match {$count :integer}\none {{Visitors of its site get an error page}}\n* {{Visitors of its {$count :integer} sites get an error page}}",
     "scope": "attention_detail"
   },
   "lines": {
@@ -2996,7 +2996,7 @@
       "scope": "attention_title"
     },
     {
-      "text": ".match {$count :number}\none {{1 Docker resource on this host was not created by Hohenheim. It is left alone; open {$page} to review it.}}\n* {{{$count :integer} Docker resources on this host were not created by Hohenheim. They are left alone; open {$page} to review exactly these.}}",
+      "text": ".match {$count :integer}\none {{1 Docker resource on this host was not created by Hohenheim. It is left alone; open {$page} to review it.}}\n* {{{$count :integer} Docker resources on this host were not created by Hohenheim. They are left alone; open {$page} to review exactly these.}}",
       "scope": "attention_detail"
     }
   ],
@@ -3048,7 +3048,7 @@
       "scope": "backup_target"
     },
     {
-      "text": ".match {$count :number}\none {{The provider answered; 1 repository is visible.}}\n* {{The provider answered; {$count :integer} repositories are visible.}}",
+      "text": ".match {$count :integer}\none {{The provider answered; 1 repository is visible.}}\n* {{The provider answered; {$count :integer} repositories are visible.}}",
       "scope": "git_provider"
     }
   ],
@@ -3096,7 +3096,7 @@
       "scope": "tenant_usage"
     },
     {
-      "text": ".match {$count :number}\none {{1 database}}\n* {{{$count :integer} databases}}",
+      "text": ".match {$count :integer}\none {{1 database}}\n* {{{$count :integer} databases}}",
       "scope": "count"
     }
   ],
@@ -4722,7 +4722,7 @@
       "scope": "security_event_type"
     },
     {
-      "text": ".match {$count :number}\none {{Tried 1 name this server does not serve}}\n* {{Tried {$count :integer} names this server does not serve}}",
+      "text": ".match {$count :integer}\none {{Tried 1 name this server does not serve}}\n* {{Tried {$count :integer} names this server does not serve}}",
       "scope": "ban_cause"
     },
     {
@@ -4737,7 +4737,7 @@
       "scope": "security_event_type"
     },
     {
-      "text": ".match {$count :number}\none {{Failed to sign in once}}\n* {{Failed to sign in {$count :integer} times}}",
+      "text": ".match {$count :integer}\none {{Failed to sign in once}}\n* {{Failed to sign in {$count :integer} times}}",
       "scope": "ban_cause"
     },
     {
@@ -4752,7 +4752,7 @@
       "scope": "security_event_type"
     },
     {
-      "text": ".match {$count :number}\none {{Got locked out of signing in once}}\n* {{Got locked out of signing in {$count :integer} times}}",
+      "text": ".match {$count :integer}\none {{Got locked out of signing in once}}\n* {{Got locked out of signing in {$count :integer} times}}",
       "scope": "ban_cause"
     },
     {
@@ -4767,7 +4767,7 @@
       "scope": "security_event_type"
     },
     {
-      "text": ".match {$count :number}\none {{Went over a rate limit once}}\n* {{Went over a rate limit {$count :integer} times}}",
+      "text": ".match {$count :integer}\none {{Went over a rate limit once}}\n* {{Went over a rate limit {$count :integer} times}}",
       "scope": "ban_cause"
     },
     {
@@ -4782,7 +4782,7 @@
       "scope": "security_event_type"
     },
     {
-      "text": ".match {$count :number}\none {{Sent 1 form without a valid security token}}\n* {{Sent {$count :integer} forms without a valid security token}}",
+      "text": ".match {$count :integer}\none {{Sent 1 form without a valid security token}}\n* {{Sent {$count :integer} forms without a valid security token}}",
       "scope": "ban_cause"
     },
     {
@@ -4797,7 +4797,7 @@
       "scope": "security_event_type"
     },
     {
-      "text": ".match {$count :number}\none {{Opened 1 page it may not see}}\n* {{Opened {$count :integer} pages it may not see}}",
+      "text": ".match {$count :integer}\none {{Opened 1 page it may not see}}\n* {{Opened {$count :integer} pages it may not see}}",
       "scope": "ban_cause"
     },
     {
@@ -4812,7 +4812,7 @@
       "scope": "security_event_type"
     },
     {
-      "text": ".match {$count :number}\none {{Opened 1 live connection from another site}}\n* {{Opened {$count :integer} live connections from another site}}",
+      "text": ".match {$count :integer}\none {{Opened 1 live connection from another site}}\n* {{Opened {$count :integer} live connections from another site}}",
       "scope": "ban_cause"
     },
     {
@@ -4827,7 +4827,7 @@
       "scope": "security_event_type"
     },
     {
-      "text": ".match {$count :number}\none {{Opened 1 live connection without signing in}}\n* {{Opened {$count :integer} live connections without signing in}}",
+      "text": ".match {$count :integer}\none {{Opened 1 live connection without signing in}}\n* {{Opened {$count :integer} live connections without signing in}}",
       "scope": "ban_cause"
     },
     {
@@ -4842,7 +4842,7 @@
       "scope": "security_event_type"
     },
     {
-      "text": ".match {$count :number}\none {{Tried SSH as 1 user that does not exist}}\n* {{Tried SSH as {$count :integer} users that do not exist}}",
+      "text": ".match {$count :integer}\none {{Tried SSH as 1 user that does not exist}}\n* {{Tried SSH as {$count :integer} users that do not exist}}",
       "scope": "ban_cause"
     },
     {
@@ -4857,7 +4857,7 @@
       "scope": "security_event_type"
     },
     {
-      "text": ".match {$count :number}\none {{Gave 1 wrong SSH password}}\n* {{Gave {$count :integer} wrong SSH passwords}}",
+      "text": ".match {$count :integer}\none {{Gave 1 wrong SSH password}}\n* {{Gave {$count :integer} wrong SSH passwords}}",
       "scope": "ban_cause"
     },
     {
@@ -4872,7 +4872,7 @@
       "scope": "security_event_type"
     },
     {
-      "text": ".match {$count :number}\none {{Offered 1 SSH key that was refused}}\n* {{Offered {$count :integer} SSH keys that were refused}}",
+      "text": ".match {$count :integer}\none {{Offered 1 SSH key that was refused}}\n* {{Offered {$count :integer} SSH keys that were refused}}",
       "scope": "ban_cause"
     },
     {
@@ -4887,7 +4887,7 @@
       "scope": "security_event_type"
     },
     {
-      "text": ".match {$count :number}\none {{Dropped 1 SSH connection before signing in}}\n* {{Dropped {$count :integer} SSH connections before signing in}}",
+      "text": ".match {$count :integer}\none {{Dropped 1 SSH connection before signing in}}\n* {{Dropped {$count :integer} SSH connections before signing in}}",
       "scope": "ban_cause"
     },
     {
@@ -4902,7 +4902,7 @@
       "scope": "security_event_type"
     },
     {
-      "text": ".match {$count :number}\none {{Ran out of SSH sign-in attempts once}}\n* {{Ran out of SSH sign-in attempts {$count :integer} times}}",
+      "text": ".match {$count :integer}\none {{Ran out of SSH sign-in attempts once}}\n* {{Ran out of SSH sign-in attempts {$count :integer} times}}",
       "scope": "ban_cause"
     },
     {
@@ -4917,7 +4917,7 @@
       "scope": "security_event_type"
     },
     {
-      "text": ".match {$count :number}\none {{Sent 1 malformed SSH handshake}}\n* {{Sent {$count :integer} malformed SSH handshakes}}",
+      "text": ".match {$count :integer}\none {{Sent 1 malformed SSH handshake}}\n* {{Sent {$count :integer} malformed SSH handshakes}}",
       "scope": "ban_cause"
     },
     {
@@ -6057,7 +6057,7 @@
       "scope": "attention_title"
     },
     {
-      "text": ".match {$count :number}\none {{1 Docker resource has no live owning record: {$names}}}\n* {{{$count :integer} Docker resources have no live owning record: {$names}}}",
+      "text": ".match {$count :integer}\none {{1 Docker resource has no live owning record: {$names}}}\n* {{{$count :integer} Docker resources have no live owning record: {$names}}}",
       "scope": "attention_detail"
     }
   ],
@@ -6067,7 +6067,7 @@
       "scope": "attention_title"
     },
     {
-      "text": ".match {$count :number}\none {{1 unmanaged resource holds a hohenheim-style name: {$names}}}\n* {{{$count :integer} unmanaged resources hold hohenheim-style names: {$names}}}",
+      "text": ".match {$count :integer}\none {{1 unmanaged resource holds a hohenheim-style name: {$names}}}\n* {{{$count :integer} unmanaged resources hold hohenheim-style names: {$names}}}",
       "scope": "attention_detail"
     }
   ],
@@ -6077,7 +6077,7 @@
       "scope": "attention_title"
     },
     {
-      "text": ".match {$count :number}\none {{1 port claim has been releasing for over {$hours} hours: {$ports}. Something outside our management may still hold it.}}\n* {{{$count :integer} port claims have been releasing for over {$hours} hours: {$ports}. Something outside our management may still hold them.}}",
+      "text": ".match {$count :integer}\none {{1 port claim has been releasing for over {$hours} hours: {$ports}. Something outside our management may still hold it.}}\n* {{{$count :integer} port claims have been releasing for over {$hours} hours: {$ports}. Something outside our management may still hold them.}}",
       "scope": "attention_detail"
     }
   ],
@@ -6160,15 +6160,15 @@
     "scope": "released_claim"
   },
   "route_quarantined": {
-    "text": ".match {$days :number}\none {{{$hostname} was recently released by another owner and stays reserved for 1 more day; an administrator can lift the quarantine}}\n* {{{$hostname} was recently released by another owner and stays reserved for {$days :integer} more days; an administrator can lift the quarantine}}",
+    "text": ".match {$days :integer}\none {{{$hostname} was recently released by another owner and stays reserved for 1 more day; an administrator can lift the quarantine}}\n* {{{$hostname} was recently released by another owner and stays reserved for {$days :integer} more days; an administrator can lift the quarantine}}",
     "scope": "violations"
   },
   "enable_route_quarantined": {
-    "text": ".match {$days :number}\none {{Cannot enable this site: {$hostname} was recently released by another owner and stays reserved for 1 more day; an administrator can lift the quarantine}}\n* {{Cannot enable this site: {$hostname} was recently released by another owner and stays reserved for {$days :integer} more days; an administrator can lift the quarantine}}",
+    "text": ".match {$days :integer}\none {{Cannot enable this site: {$hostname} was recently released by another owner and stays reserved for 1 more day; an administrator can lift the quarantine}}\n* {{Cannot enable this site: {$hostname} was recently released by another owner and stays reserved for {$days :integer} more days; an administrator can lift the quarantine}}",
     "scope": "violations"
   },
   "restore_route_quarantined": {
-    "text": ".match {$days :number}\none {{Cannot restore this site: {$hostname} was recently released by another owner and stays reserved for 1 more day; an administrator can lift the quarantine}}\n* {{Cannot restore this site: {$hostname} was recently released by another owner and stays reserved for {$days :integer} more days; an administrator can lift the quarantine}}",
+    "text": ".match {$days :integer}\none {{Cannot restore this site: {$hostname} was recently released by another owner and stays reserved for 1 more day; an administrator can lift the quarantine}}\n* {{Cannot restore this site: {$hostname} was recently released by another owner and stays reserved for {$days :integer} more days; an administrator can lift the quarantine}}",
     "scope": "violations"
   },
   "kind": [
@@ -6671,7 +6671,7 @@
     "scope": "violations"
   },
   "migrate_devices_present": {
-    "text": ".match {$count :number}\none {{Instance {$name} carries 1 attached device, and its host or the destination cannot carry device volumes across, so migrating would silently lose it. Detach the device first.}}\n* {{Instance {$name} carries {$count :integer} attached devices, and its host or the destination cannot carry device volumes across, so migrating would silently lose them. Detach the devices first.}}",
+    "text": ".match {$count :integer}\none {{Instance {$name} carries 1 attached device, and its host or the destination cannot carry device volumes across, so migrating would silently lose it. Detach the device first.}}\n* {{Instance {$name} carries {$count :integer} attached devices, and its host or the destination cannot carry device volumes across, so migrating would silently lose them. Detach the devices first.}}",
     "scope": "violations"
   },
   "migrate_install_media_present": {
@@ -7008,7 +7008,7 @@
       "scope": "database_overview"
     },
     {
-      "text": ".match {$count :number}\none {{1 backup}}\n* {{{$count :integer} backups}}",
+      "text": ".match {$count :integer}\none {{1 backup}}\n* {{{$count :integer} backups}}",
       "scope": "count"
     },
     {
@@ -7113,7 +7113,7 @@
     "scope": "violations"
   },
   "template_in_use": {
-    "text": ".match {$count :number}\none {{Template {$name} is still used by 1 instance}}\n* {{Template {$name} is still used by {$count :integer} instances}}",
+    "text": ".match {$count :integer}\none {{Template {$name} is still used by 1 instance}}\n* {{Template {$name} is still used by {$count :integer} instances}}",
     "scope": "violations"
   },
   "runtime_image_in_use": {
@@ -8175,7 +8175,7 @@
       "target": "happened"
     },
     {
-      "text": ".match {$count :number}\none {{Wrote 1 file}}\n* {{Wrote {$count :integer} files}}",
+      "text": ".match {$count :integer}\none {{Wrote 1 file}}\n* {{Wrote {$count :integer} files}}",
       "scope": "hohenheim",
       "target": "activity_batch"
     },
@@ -8608,7 +8608,7 @@
     }
   ],
   "dns_peer_in_use": {
-    "text": ".match {$count :number}\none {{Peer {$name} is still the primary of 1 secondary zone, {$zone}; repoint or delete it first}}\n* {{Peer {$name} is still the primary of {$count :integer} secondary zones such as {$zone}; repoint or delete them first}}",
+    "text": ".match {$count :integer}\none {{Peer {$name} is still the primary of 1 secondary zone, {$zone}; repoint or delete it first}}\n* {{Peer {$name} is still the primary of {$count :integer} secondary zones such as {$zone}; repoint or delete them first}}",
     "scope": "violations"
   },
   "auth_provider_in_use": {
@@ -9691,7 +9691,7 @@
     "scope": "server"
   },
   "controller_objects_reaped": {
-    "text": ".match {$removed :number}\none {{{$name}: removed 1 shared object of departed controllers, refused {$refused}}}\n* {{{$name}: removed {$removed :integer} shared objects of departed controllers, refused {$refused}}}",
+    "text": ".match {$removed :integer}\none {{{$name}: removed 1 shared object of departed controllers, refused {$refused}}}\n* {{{$name}: removed {$removed :integer} shared objects of departed controllers, refused {$refused}}}",
     "scope": "server"
   },
   "singular": [
@@ -10556,7 +10556,7 @@
     "scope": "violations"
   },
   "host_contact_lapsed": {
-    "text": ".match {$minutes :number}\none {{{$name} last answered 1 minute ago, so no new app is placed there until it answers again}}\n* {{{$name} last answered {$minutes :integer} minutes ago, so no new app is placed there until it answers again}}",
+    "text": ".match {$minutes :integer}\none {{{$name} last answered 1 minute ago, so no new app is placed there until it answers again}}\n* {{{$name} last answered {$minutes :integer} minutes ago, so no new app is placed there until it answers again}}",
     "scope": "violations"
   },
   "preview_branches": [
@@ -10941,7 +10941,7 @@
     "scope": "onboarding_checklist"
   },
   "checklist_host_enrolled_more": {
-    "text": ".match {$more :number}\none {{{$name}, {$runtime} and 1 more}}\n* {{{$name}, {$runtime} and {$more :integer} more}}",
+    "text": ".match {$more :integer}\none {{{$name}, {$runtime} and 1 more}}\n* {{{$name}, {$runtime} and {$more :integer} more}}",
     "scope": "onboarding_checklist"
   },
   "checklist_admit": {
@@ -10957,7 +10957,7 @@
     "scope": "onboarding_checklist"
   },
   "held_back": {
-    "text": ".match {$count :number}\none {{1 app waits for it}}\n* {{{$count :integer} apps wait for it}}",
+    "text": ".match {$count :integer}\none {{1 app waits for it}}\n* {{{$count :integer} apps wait for it}}",
     "scope": "attention_detail"
   },
   "checklist_admit_detail": {
@@ -11579,11 +11579,11 @@
     "scope": "access_rule"
   },
   "protection_password": {
-    "text": ".match {$count :number}\none {{Password, 1 person}}\n* {{Password, {$count :integer} people}}",
+    "text": ".match {$count :integer}\none {{Password, 1 person}}\n* {{Password, {$count :integer} people}}",
     "scope": "access_rule"
   },
   "protection_network": {
-    "text": ".match {$count :number}\none {{Network, 1 rule}}\n* {{Network, {$count :integer} rules}}",
+    "text": ".match {$count :integer}\none {{Network, 1 rule}}\n* {{Network, {$count :integer} rules}}",
     "scope": "access_rule"
   },
   "protection_sign_in": {
@@ -12720,11 +12720,11 @@
   },
   "delete_confirm_named": [
     {
-      "text": ".match {$rules :number}\none {{Delete the access list {$name}? Its one rule goes with it. Nothing is gated by it right now.}}\n* {{Delete the access list {$name}? Its {$rules :integer} rules go with it. Nothing is gated by it right now.}}",
+      "text": ".match {$rules :integer}\none {{Delete the access list {$name}? Its one rule goes with it. Nothing is gated by it right now.}}\n* {{Delete the access list {$name}? Its {$rules :integer} rules go with it. Nothing is gated by it right now.}}",
       "scope": "access_list"
     },
     {
-      "text": ".match {$records :number}\none {{Delete the zone {$origin}? Its one stored record goes with it and this server stops answering for that name.}}\n* {{Delete the zone {$origin}? Its {$records :integer} stored records go with it and this server stops answering for that name.}}",
+      "text": ".match {$records :integer}\none {{Delete the zone {$origin}? Its one stored record goes with it and this server stops answering for that name.}}\n* {{Delete the zone {$origin}? Its {$records :integer} stored records go with it and this server stops answering for that name.}}",
       "scope": "dns_zone"
     },
     {
@@ -12745,7 +12745,7 @@
     "scope": "dns_peer"
   },
   "delete_confirm_gating": {
-    "text": ".match {$rules :number}\none {{Delete the access list {$name}? Its one rule goes with it, and these stop being gated -- their traffic is let through unchecked from that moment on: {$gated}.}}\n* {{Delete the access list {$name}? Its {$rules :integer} rules go with it, and these stop being gated -- their traffic is let through unchecked from that moment on: {$gated}.}}",
+    "text": ".match {$rules :integer}\none {{Delete the access list {$name}? Its one rule goes with it, and these stop being gated -- their traffic is let through unchecked from that moment on: {$gated}.}}\n* {{Delete the access list {$name}? Its {$rules :integer} rules go with it, and these stop being gated -- their traffic is let through unchecked from that moment on: {$gated}.}}",
     "scope": "access_list"
   },
   "delete_local": {
@@ -12754,7 +12754,7 @@
   },
   "delete_in_use": [
     {
-      "text": ".match {$workloads :number}\none {{1 record still names this host: {$instances}, {$stacks}, {$databases}, {$engines} and {$ports}. Remove or move it (release the claim) first, or its record would name a host that no longer exists.}}\n* {{{$workloads :integer} records still name this host: {$instances}, {$stacks}, {$databases}, {$engines} and {$ports}. Remove or move them (release the claims) first, or their records would name a host that no longer exists.}}",
+      "text": ".match {$workloads :integer}\none {{1 record still names this host: {$instances}, {$stacks}, {$databases}, {$engines} and {$ports}. Remove or move it (release the claim) first, or its record would name a host that no longer exists.}}\n* {{{$workloads :integer} records still name this host: {$instances}, {$stacks}, {$databases}, {$engines} and {$ports}. Remove or move them (release the claims) first, or their records would name a host that no longer exists.}}",
       "scope": "server"
     },
     {
@@ -12791,15 +12791,15 @@
     "scope": "server"
   },
   "delete_confirm_dependents": {
-    "text": ".match {$records :number}\none {{Delete the zone {$origin}? Its one stored record goes with it and this server stops answering for that name. These sites and certificates resolve inside it and lose their DNS: {$dependents}.}}\n* {{Delete the zone {$origin}? Its {$records :integer} stored records go with it and this server stops answering for that name. These sites and certificates resolve inside it and lose their DNS: {$dependents}.}}",
+    "text": ".match {$records :integer}\none {{Delete the zone {$origin}? Its one stored record goes with it and this server stops answering for that name. These sites and certificates resolve inside it and lose their DNS: {$dependents}.}}\n* {{Delete the zone {$origin}? Its {$records :integer} stored records go with it and this server stops answering for that name. These sites and certificates resolve inside it and lose their DNS: {$dependents}.}}",
     "scope": "dns_zone"
   },
   "delete_confirm_admin": {
-    "text": ".match {$records :number}\none {{Delete the zone {$origin}? Its one stored record goes with it and this server stops answering for that name. This zone answers for {$host}, the hostname you are reaching this admin panel at: deleting it can lock you out.}}\n* {{Delete the zone {$origin}? Its {$records :integer} stored records go with it and this server stops answering for that name. This zone answers for {$host}, the hostname you are reaching this admin panel at: deleting it can lock you out.}}",
+    "text": ".match {$records :integer}\none {{Delete the zone {$origin}? Its one stored record goes with it and this server stops answering for that name. This zone answers for {$host}, the hostname you are reaching this admin panel at: deleting it can lock you out.}}\n* {{Delete the zone {$origin}? Its {$records :integer} stored records go with it and this server stops answering for that name. This zone answers for {$host}, the hostname you are reaching this admin panel at: deleting it can lock you out.}}",
     "scope": "dns_zone"
   },
   "delete_confirm_admin_dependents": {
-    "text": ".match {$records :number}\none {{Delete the zone {$origin}? Its one stored record goes with it and this server stops answering for that name. These sites and certificates resolve inside it and lose their DNS: {$dependents}. This zone answers for {$host}, the hostname you are reaching this admin panel at: deleting it can lock you out.}}\n* {{Delete the zone {$origin}? Its {$records :integer} stored records go with it and this server stops answering for that name. These sites and certificates resolve inside it and lose their DNS: {$dependents}. This zone answers for {$host}, the hostname you are reaching this admin panel at: deleting it can lock you out.}}",
+    "text": ".match {$records :integer}\none {{Delete the zone {$origin}? Its one stored record goes with it and this server stops answering for that name. These sites and certificates resolve inside it and lose their DNS: {$dependents}. This zone answers for {$host}, the hostname you are reaching this admin panel at: deleting it can lock you out.}}\n* {{Delete the zone {$origin}? Its {$records :integer} stored records go with it and this server stops answering for that name. These sites and certificates resolve inside it and lose their DNS: {$dependents}. This zone answers for {$host}, the hostname you are reaching this admin panel at: deleting it can lock you out.}}",
     "scope": "dns_zone"
   },
   "import_confirm": {
@@ -12892,7 +12892,7 @@
       "scope": "security_event_type"
     },
     {
-      "text": ".match {$count :number}\none {{Signed in once}}\n* {{Signed in {$count :integer} times}}",
+      "text": ".match {$count :integer}\none {{Signed in once}}\n* {{Signed in {$count :integer} times}}",
       "scope": "ban_cause"
     },
     {
@@ -13298,7 +13298,7 @@
     "scope": "dns_zone"
   },
   "check_health_done": {
-    "text": ".match {$secondaries :number}\none {{Delegation: {$verdict}. 1 secondary probed, {$behind} behind.}}\n* {{Delegation: {$verdict}. {$secondaries :integer} secondaries probed, {$behind} behind.}}",
+    "text": ".match {$secondaries :integer}\none {{Delegation: {$verdict}. 1 secondary probed, {$behind} behind.}}\n* {{Delegation: {$verdict}. {$secondaries :integer} secondaries probed, {$behind} behind.}}",
     "scope": "dns_zone"
   },
   "check_health_unserved": {
@@ -13483,7 +13483,7 @@
     "scope": "dns_zone"
   },
   "lead_records": {
-    "text": ".match {$records :number}\none {{1 record}}\n* {{{$records :integer} records}}",
+    "text": ".match {$records :integer}\none {{1 record}}\n* {{{$records :integer} records}}",
     "scope": "dns_zone"
   },
   "lead_secondaries_none": {
@@ -13491,7 +13491,7 @@
     "scope": "dns_zone"
   },
   "lead_secondaries_current": {
-    "text": ".match {$total :number}\none {{{$current :integer} of 1 secondary current}}\n* {{{$current :integer} of {$total :integer} secondaries current}}",
+    "text": ".match {$total :integer}\none {{{$current :integer} of 1 secondary current}}\n* {{{$current :integer} of {$total :integer} secondaries current}}",
     "scope": "dns_zone"
   },
   "lead_transfer": {
@@ -14010,7 +14010,7 @@
       "target": "happened"
     },
     {
-      "text": ".match {$count :number}\none {{Saved 1 file}}\n* {{Saved {$count :integer} files}}",
+      "text": ".match {$count :integer}\none {{Saved 1 file}}\n* {{Saved {$count :integer} files}}",
       "scope": "hohenheim",
       "target": "activity_batch"
     }
@@ -14027,7 +14027,7 @@
       "target": "happened"
     },
     {
-      "text": ".match {$count :number}\none {{Uploaded 1 file}}\n* {{Uploaded {$count :integer} files}}",
+      "text": ".match {$count :integer}\none {{Uploaded 1 file}}\n* {{Uploaded {$count :integer} files}}",
       "scope": "hohenheim",
       "target": "activity_batch"
     }
@@ -14044,7 +14044,7 @@
       "target": "happened"
     },
     {
-      "text": ".match {$count :number}\none {{Created 1 folder}}\n* {{Created {$count :integer} folders}}",
+      "text": ".match {$count :integer}\none {{Created 1 folder}}\n* {{Created {$count :integer} folders}}",
       "scope": "hohenheim",
       "target": "activity_batch"
     }
@@ -14061,7 +14061,7 @@
       "target": "happened"
     },
     {
-      "text": ".match {$count :number}\none {{Renamed 1 file}}\n* {{Renamed {$count :integer} files}}",
+      "text": ".match {$count :integer}\none {{Renamed 1 file}}\n* {{Renamed {$count :integer} files}}",
       "scope": "hohenheim",
       "target": "activity_batch"
     }
@@ -14078,7 +14078,7 @@
       "target": "happened"
     },
     {
-      "text": ".match {$count :number}\none {{Deleted 1 file}}\n* {{Deleted {$count :integer} files}}",
+      "text": ".match {$count :integer}\none {{Deleted 1 file}}\n* {{Deleted {$count :integer} files}}",
       "scope": "hohenheim",
       "target": "activity_batch"
     }
@@ -14624,11 +14624,11 @@
     "scope": "alert"
   },
   "isolation_contained_subject": {
-    "text": ".match {$count :number}\none {{{$sweep}: 1 app was cut off to keep it apart}}\n* {{{$sweep}: {$count :integer} apps were cut off to keep them apart}}",
+    "text": ".match {$count :integer}\none {{{$sweep}: 1 app was cut off to keep it apart}}\n* {{{$sweep}: {$count :integer} apps were cut off to keep them apart}}",
     "scope": "alert"
   },
   "isolation_unconfirmed_subject": {
-    "text": ".match {$count :number}\none {{{$sweep}: 1 thing could not be confirmed as kept apart}}\n* {{{$sweep}: {$count :integer} things could not be confirmed as kept apart}}",
+    "text": ".match {$count :integer}\none {{{$sweep}: 1 thing could not be confirmed as kept apart}}\n* {{{$sweep}: {$count :integer} things could not be confirmed as kept apart}}",
     "scope": "alert"
   },
   "data_integrity_subject": {
@@ -15592,7 +15592,7 @@
     }
   ],
   "stack_kind": {
-    "text": ".match {$count :number}\none {{Stack with 1 service}}\n* {{Stack with {$count :integer} services}}",
+    "text": ".match {$count :integer}\none {{Stack with 1 service}}\n* {{Stack with {$count :integer} services}}",
     "scope": "app_list"
   },
   "type_workload": {
@@ -16378,7 +16378,7 @@
     "scope": "deployments"
   },
   "poll_every": {
-    "text": ".match {$minutes :number}\none {{It checks the repository for new commits every minute; a push webhook, when the repository sends one, deploys at once.}}\n* {{It checks the repository for new commits every {$minutes :integer} minutes; a push webhook, when the repository sends one, deploys at once.}}",
+    "text": ".match {$minutes :integer}\none {{It checks the repository for new commits every minute; a push webhook, when the repository sends one, deploys at once.}}\n* {{It checks the repository for new commits every {$minutes :integer} minutes; a push webhook, when the repository sends one, deploys at once.}}",
     "scope": "deployments"
   },
   "poll_last": {
@@ -16594,11 +16594,11 @@
     "scope": "certificate"
   },
   "state_failing_detail": {
-    "text": ".match {$count :number}\none {{Failed once · {$expiry}}}\n* {{Failed {$count :integer} times · {$expiry}}}",
+    "text": ".match {$count :integer}\none {{Failed once · {$expiry}}}\n* {{Failed {$count :integer} times · {$expiry}}}",
     "scope": "certificate"
   },
   "state_failing_unissued": {
-    "text": ".match {$count :number}\none {{Failed once; not issued yet}}\n* {{Failed {$count :integer} times; not issued yet}}",
+    "text": ".match {$count :integer}\none {{Failed once; not issued yet}}\n* {{Failed {$count :integer} times; not issued yet}}",
     "scope": "certificate"
   },
   "state_waiting_dns": {
@@ -16638,7 +16638,7 @@
     "scope": "access_list"
   },
   "protects_count": {
-    "text": ".match {$count :number}\none {{1 place}}\n* {{{$count :integer} places}}",
+    "text": ".match {$count :integer}\none {{1 place}}\n* {{{$count :integer} places}}",
     "scope": "access_list"
   },
   "protects_site": {
@@ -16662,7 +16662,7 @@
     "scope": "access_rule"
   },
   "lets_in_rules": {
-    "text": ".match {$count :number}\none {{1 rule}}\n* {{{$count :integer} rules}}",
+    "text": ".match {$count :integer}\none {{1 rule}}\n* {{{$count :integer} rules}}",
     "scope": "access_rule"
   },
   "by_column": {
@@ -16692,7 +16692,7 @@
     "scope": "auth_provider"
   },
   "used_by_count": {
-    "text": ".match {$count :number}\none {{1 place}}\n* {{{$count :integer} places}}",
+    "text": ".match {$count :integer}\none {{1 place}}\n* {{{$count :integer} places}}",
     "scope": "auth_provider"
   },
   "back_up_now": {"text": "Back up now", "scope": "database"},
@@ -16723,7 +16723,7 @@
   "backup_never_detail": {"text": "Back up now, or wait for the nightly backup", "scope": "database_overview"},
   "backup_overdue_detail": {"text": "{$size :bytes}; the nightly backup has not written a newer one", "scope": "database_overview"},
   "kept": {"text": "Kept", "scope": "database_overview"},
-  "kept_value": {"text": ".match {$count :number}\none {{The newest dump, on this machine}}\n* {{The newest {$count :integer} dumps, on this machine}}", "scope": "database_overview"},
+  "kept_value": {"text": ".match {$count :integer}\none {{The newest dump, on this machine}}\n* {{The newest {$count :integer} dumps, on this machine}}", "scope": "database_overview"},
   "runs_on_dedicated": {"text": "Own container on {$host}", "scope": "database_overview"},
   "runs_on_shared": {"text": "Shared engine {$engine} on {$host}", "scope": "database_overview"},
   "memory_column": {"text": "Memory", "scope": "host_list"},
@@ -16731,7 +16731,7 @@
   "disk_used": {"text": "{$used :bytes} of {$total :bytes} used", "scope": "host_list"},
   "runs_column": {"text": "Runs", "scope": "host_list"},
   "cordoned_detail": {"text": "Apps already here keep running", "scope": "host_list"},
-  "checks_failed": {"text": ".match {$count :number}\none {{1 required check failed: {$checks}}}\n* {{{$count :integer} required checks failed: {$checks}}}", "scope": "host_list"},
+  "checks_failed": {"text": ".match {$count :integer}\none {{1 required check failed: {$checks}}}\n* {{{$count :integer} required checks failed: {$checks}}}", "scope": "host_list"},
   "never_checked": {"text": "Never checked yet", "scope": "host_list"},
   "checks_pass": {"text": "Its required checks pass; Check and admit lets apps run here", "scope": "host_list"},
   "memory_booked": {"text": "{$booked :bytes} of {$budget :bytes} booked", "scope": "host_list"},
@@ -16742,8 +16742,8 @@
   "host_option_disk": {"text": "Disk: {$disk}", "scope": "host_list"},
   "runs_nothing": {"text": "Nothing yet", "scope": "host_list"},
   "runs_count": {"text": "{$apps}, {$databases}", "scope": "host_list"},
-  "apps_count": {"text": ".match {$count :number}\none {{1 app}}\n* {{{$count :integer} apps}}", "scope": "host_list"},
-  "databases_count": {"text": ".match {$count :number}\none {{1 database}}\n* {{{$count :integer} databases}}", "scope": "host_list"},
+  "apps_count": {"text": ".match {$count :integer}\none {{1 app}}\n* {{{$count :integer} apps}}", "scope": "host_list"},
+  "databases_count": {"text": ".match {$count :integer}\none {{1 database}}\n* {{{$count :integer} databases}}", "scope": "host_list"},
   "stop_forcing_https": [
     {
       "text": "Stop forcing HTTPS",
@@ -16759,7 +16759,7 @@
   "stop_forcing_https_confirm": { "text": "Visitors will reach the names that have no working certificate over plain, unencrypted HTTP. Force HTTPS again once a certificate works.", "scope": "site" },
   "other_event": [
     {
-      "text": ".match {$count :number}\none {{Set off 1 security event: {$event}}}\n* {{Set off {$count :integer} security events: {$event}}}",
+      "text": ".match {$count :integer}\none {{Set off 1 security event: {$event}}}\n* {{Set off {$count :integer} security events: {$event}}}",
       "scope": "ban_cause"
     },
     {
@@ -17016,7 +17016,7 @@
       "scope": "tenant_usage"
     },
     {
-      "text": ".match {$count :number}\none {{1 instance}}\n* {{{$count :integer} instances}}",
+      "text": ".match {$count :integer}\none {{1 instance}}\n* {{{$count :integer} instances}}",
       "scope": "count"
     }
   ],
@@ -17026,7 +17026,7 @@
       "scope": "tenant_usage"
     },
     {
-      "text": ".match {$count :number}\none {{1 site}}\n* {{{$count :integer} sites}}",
+      "text": ".match {$count :integer}\none {{1 site}}\n* {{{$count :integer} sites}}",
       "scope": "count"
     }
   ],
@@ -17440,15 +17440,15 @@
     "scope": "dashboard"
   },
   "stat_apps_live": {
-    "text": ".match {$count :number}\none {{1 live}}\n* {{{$count :integer} live}}",
+    "text": ".match {$count :integer}\none {{1 live}}\n* {{{$count :integer} live}}",
     "scope": "dashboard"
   },
   "stat_apps_problem": {
-    "text": ".match {$count :number}\none {{1 with a problem}}\n* {{{$count :integer} with a problem}}",
+    "text": ".match {$count :integer}\none {{1 with a problem}}\n* {{{$count :integer} with a problem}}",
     "scope": "dashboard"
   },
   "stat_certs_attention": {
-    "text": ".match {$count :number}\none {{1 needs attention}}\n* {{{$count :integer} need attention}}",
+    "text": ".match {$count :integer}\none {{1 needs attention}}\n* {{{$count :integer} need attention}}",
     "scope": "dashboard"
   },
   "stat_certs_next": {
@@ -17468,19 +17468,19 @@
     "scope": "dashboard"
   },
   "tally_waiting": {
-    "text": ".match {$count :number}\none {{1 waiting}}\n* {{{$count :integer} waiting}}",
+    "text": ".match {$count :integer}\none {{1 waiting}}\n* {{{$count :integer} waiting}}",
     "scope": "host_admission"
   },
   "tally_taking": {
-    "text": ".match {$count :number}\none {{1 takes new apps}}\n* {{{$count :integer} take new apps}}",
+    "text": ".match {$count :integer}\none {{1 takes new apps}}\n* {{{$count :integer} take new apps}}",
     "scope": "host_admission"
   },
   "tally_refusing": {
-    "text": ".match {$count :number}\none {{1 refuses new apps}}\n* {{{$count :integer} refuse new apps}}",
+    "text": ".match {$count :integer}\none {{1 refuses new apps}}\n* {{{$count :integer} refuse new apps}}",
     "scope": "host_admission"
   },
   "tally_paused": {
-    "text": ".match {$count :number}\none {{1 paused}}\n* {{{$count :integer} paused}}",
+    "text": ".match {$count :integer}\none {{1 paused}}\n* {{{$count :integer} paused}}",
     "scope": "host_admission"
   },
   "stat_tile": {
@@ -17512,15 +17512,15 @@
     "scope": "isolation_finding"
   },
   "not_repaired": {
-    "text": ".match {$count :number}\none {{The isolation of 1 workload on {$subject} could not be checked or repaired}}\n* {{The isolation of {$count :integer} workloads on {$subject} could not be checked or repaired}}",
+    "text": ".match {$count :integer}\none {{The isolation of 1 workload on {$subject} could not be checked or repaired}}\n* {{The isolation of {$count :integer} workloads on {$subject} could not be checked or repaired}}",
     "scope": "isolation_finding"
   },
   "cut_off": {
-    "text": ".match {$count :number}\none {{1 workload on {$subject} was stopped or cut off because its isolation could not be repaired}}\n* {{{$count :integer} workloads on {$subject} were stopped or cut off because their isolation could not be repaired}}",
+    "text": ".match {$count :integer}\none {{1 workload on {$subject} was stopped or cut off because its isolation could not be repaired}}\n* {{{$count :integer} workloads on {$subject} were stopped or cut off because their isolation could not be repaired}}",
     "scope": "isolation_finding"
   },
   "enforcement_off": {
-    "text": ".match {$count :number}\none {{per-app firewall rules are switched off there, so its 1 app network can be neither checked nor repaired}}\n* {{per-app firewall rules are switched off there, so its {$count :integer} app networks can be neither checked nor repaired}}",
+    "text": ".match {$count :integer}\none {{per-app firewall rules are switched off there, so its 1 app network can be neither checked nor repaired}}\n* {{per-app firewall rules are switched off there, so its {$count :integer} app networks can be neither checked nor repaired}}",
     "scope": "isolation_finding"
   },
   "daemon_unreachable": {
@@ -17672,7 +17672,7 @@
     "scope": "attention_detail"
   },
   "apps_use_it": {
-    "text": ".match {$count :number}\none {{1 app uses it}}\n* {{{$count :integer} apps use it}}",
+    "text": ".match {$count :integer}\none {{1 app uses it}}\n* {{{$count :integer} apps use it}}",
     "scope": "attention_detail"
   },
   "app_database_down": {
@@ -17894,7 +17894,7 @@
     "scope": "alert"
   },
   "spamservice_outage_body": {
-    "text": ".match {$minutes :number}\none {{Spamservice has not answered for 1 minute, so reputation bans and security-event reports are skipped until it does. Last failure, {$source}: {$detail}}}\n* {{Spamservice has not answered for {$minutes :integer} minutes, so reputation bans and security-event reports are skipped until it does. Last failure, {$source}: {$detail}}}",
+    "text": ".match {$minutes :integer}\none {{Spamservice has not answered for 1 minute, so reputation bans and security-event reports are skipped until it does. Last failure, {$source}: {$detail}}}\n* {{Spamservice has not answered for {$minutes :integer} minutes, so reputation bans and security-event reports are skipped until it does. Last failure, {$source}: {$detail}}}",
     "scope": "alert"
   },
   "spamservice_recovered_subject": {
@@ -17910,7 +17910,7 @@
     "scope": "alert"
   },
   "auto_ban_budget_body": {
-    "text": ".match {$budget :number}\none {{1 automatic ban was made in the last hour, the most allowed, so new ones are skipped until it is an hour old. A trigger may be running away, or its events may be poisoned. Manual bans still work.}}\n* {{{$budget :integer} automatic bans were made in the last hour, the most allowed, so new ones are skipped until the oldest is an hour old. A trigger may be running away, or its events may be poisoned. Manual bans still work.}}",
+    "text": ".match {$budget :integer}\none {{1 automatic ban was made in the last hour, the most allowed, so new ones are skipped until it is an hour old. A trigger may be running away, or its events may be poisoned. Manual bans still work.}}\n* {{{$budget :integer} automatic bans were made in the last hour, the most allowed, so new ones are skipped until the oldest is an hour old. A trigger may be running away, or its events may be poisoned. Manual bans still work.}}",
     "scope": "alert"
   },
   "dns_secondaries_stale": {
@@ -17947,11 +17947,11 @@
   },
   "certificate_expiry": [
     {
-      "text": ".match {$days :number}\none {{Expires in 1 day}}\n* {{Expires in {$days :integer} days}}",
+      "text": ".match {$days :integer}\none {{Expires in 1 day}}\n* {{Expires in {$days :integer} days}}",
       "scope": "certificate"
     },
     {
-      "text": ".match {$days :number}\none {{expires in 1 day}}\n* {{expires in {$days :integer} days}}",
+      "text": ".match {$days :integer}\none {{expires in 1 day}}\n* {{expires in {$days :integer} days}}",
       "scope": "certificate",
       "case": "sentence"
     }
@@ -17969,11 +17969,11 @@
   ],
   "certificate_expired": [
     {
-      "text": ".match {$days :number}\none {{Expired 1 day ago}}\n* {{Expired {$days :integer} days ago}}",
+      "text": ".match {$days :integer}\none {{Expired 1 day ago}}\n* {{Expired {$days :integer} days ago}}",
       "scope": "certificate"
     },
     {
-      "text": ".match {$days :number}\none {{expired 1 day ago}}\n* {{expired {$days :integer} days ago}}",
+      "text": ".match {$days :integer}\none {{expired 1 day ago}}\n* {{expired {$days :integer} days ago}}",
       "scope": "certificate",
       "case": "sentence"
     }
@@ -18063,11 +18063,11 @@
     "scope": "instance_overview"
   },
   "offset_value": {
-    "text": ".match {$count :number}\none {{1 second}}\n* {{{$count :integer} seconds}}",
+    "text": ".match {$count :integer}\none {{1 second}}\n* {{{$count :integer} seconds}}",
     "scope": "schedule_step"
   },
   "cores": {
-    "text": ".match {$count :number}\none {{1 core}}\n* {{{$count :integer} cores}}",
+    "text": ".match {$count :integer}\none {{1 core}}\n* {{{$count :integer} cores}}",
     "scope": "instance_overview"
   },
   "database_value": {
@@ -18149,7 +18149,7 @@
     "scope": "attention_detail"
   },
   "could_not_start_held": {
-    "text": ".match {$count :number}\none {{1 app could not start}}\n* {{{$count :integer} apps could not start}}",
+    "text": ".match {$count :integer}\none {{1 app could not start}}\n* {{{$count :integer} apps could not start}}",
     "scope": "attention_detail"
   },
   "points_here_not_checked": {
@@ -18226,7 +18226,7 @@
     "scope": "ban"
   },
   "missed_more": {
-    "text": ".match {$more :number}\none {{1 more}}\n* {{{$more :integer} more}}",
+    "text": ".match {$more :integer}\none {{1 more}}\n* {{{$more :integer} more}}",
     "scope": "ban"
   },
   "other_names_column": {
