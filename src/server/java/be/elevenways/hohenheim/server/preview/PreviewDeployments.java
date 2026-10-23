@@ -29,7 +29,7 @@ import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.server.instance.PlaintextEnvironments;
-import be.elevenways.hohenheim.server.instance.DeployTrigger;
+import be.elevenways.hohenheim.model.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.instance.UnfinishedDestroys;

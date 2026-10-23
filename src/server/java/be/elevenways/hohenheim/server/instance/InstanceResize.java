@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
+import be.elevenways.hohenheim.model.DeployTrigger;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.protoblast.common.Blast;

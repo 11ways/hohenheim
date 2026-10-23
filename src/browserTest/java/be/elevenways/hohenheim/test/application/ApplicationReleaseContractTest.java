@@ -18,7 +18,7 @@ import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
-import be.elevenways.hohenheim.server.instance.DeployTrigger;
+import be.elevenways.hohenheim.model.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
@@ -221,7 +221,7 @@ class ApplicationReleaseContractTest {
                 assertThat(new InstanceService().resolve(second).spec().env())
                     .containsEntry("JAR", "private-two.jar");
                 await("second release settled", () -> ReleaseSettling.settled(applicationId));
-                ReleaseEngine.rollback(applicationId);
+                ReleaseEngine.rollback(applicationId, DeployTrigger.MANUAL);
                 int rolledBack = servingOf(applicationId).get(InstanceModel.ID);
                 assertThat(new InstanceService().resolve(rolledBack).spec().env())
                     .containsEntry("JAR", "private-one.jar");
@@ -451,7 +451,7 @@ class ApplicationReleaseContractTest {
                 //    artifact is addressed by content, which is what makes a rollback
                 //    survive a moved tag.
                 int pullsBefore = daemon.callCount("api:POST /images/create");
-                ReleaseEngine.rollback(applicationId);
+                ReleaseEngine.rollback(applicationId, DeployTrigger.MANUAL);
                 Row rollbackOp = latestOp(applicationId);
                 Row back = servingOf(applicationId);
                 assertThat(settingsOf(back).get("image"))

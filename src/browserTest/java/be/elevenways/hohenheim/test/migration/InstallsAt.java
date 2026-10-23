@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
@@ -40,13 +41,27 @@ public final class InstallsAt {
      * @throws IllegalStateException when that partial migration does not succeed
      */
     public static void migrateBelow(@NonNull Path file, @NonNull String version) {
+        migrate(file, own -> own.compareTo(version) < 0);
+    }
+
+    /**
+     * Migrate a new SQLite file at the path as far as an install that applied Hohenheim's stream
+     * up to and including {@code version}, closing the datasource afterwards.
+     *
+     * @throws IllegalStateException when that partial migration does not succeed
+     */
+    public static void migrateThrough(@NonNull Path file, @NonNull String version) {
+        migrate(file, own -> own.compareTo(version) <= 0);
+    }
+
+    private static void migrate(@NonNull Path file, @NonNull Predicate<String> keepsOwnVersion) {
         SqliteDatasource datasource = new SqliteDatasource(TestSqliteFiles.url(file));
         try {
             List<Supplier<Migration>> kept = new ArrayList<>();
             for (Supplier<Migration> supplier : MigrationRunner.discoverMigrations(
                     datasource.getDatasourceIdentifier())) {
                 Migration migration = supplier.get();
-                if (!isHohenheim(migration) || migration.getVersion().compareTo(version) < 0) {
+                if (!isHohenheim(migration) || keepsOwnVersion.test(migration.getVersion())) {
                     kept.add(supplier);
                 }
             }

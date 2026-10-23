@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.application;
 
+import be.elevenways.hohenheim.model.ArtifactSourceModel;
 import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -11,15 +12,18 @@ import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
 import be.elevenways.hohenheim.server.application.ApplicationDeploys;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
-import be.elevenways.hohenheim.server.instance.DeployTrigger;
+import be.elevenways.hohenheim.model.DeployTrigger;
 import be.elevenways.hohenheim.server.application.ApplicationUpstreams;
 import be.elevenways.hohenheim.server.application.InstanceUpstreamHandler;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
+import be.elevenways.hohenheim.server.application.SpecSnapshots;
+import be.elevenways.zenit.server.security.SecureTokens;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
+import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
@@ -32,6 +36,8 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.security.Accountability;
+import be.elevenways.zenit.common.security.PrincipalRef;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -41,6 +47,7 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.BooleanSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -199,7 +206,7 @@ class ApplicationReleaseTest {
                 // retired release on another thread, so reading it afterwards races that.
                 Object retainedFingerprint = ApplicationReleases.storedSettings(
                     Models.get(InstanceModel.class).findById(firstId)).get("source_fingerprint");
-                ReleaseEngine.rollback(applicationId);
+                ReleaseEngine.rollback(applicationId, DeployTrigger.MANUAL);
                 Row back = ApplicationReleases.ownedServing(applicationId);
                 assertThat(ApplicationReleases.storedSettings(back).get("image"))
                     .as("step 5: the rolled-back release runs the pinned v1 digest")
@@ -290,7 +297,7 @@ class ApplicationReleaseTest {
                     () -> ReleaseSettling.settled(applicationId));
 
                 // 4. A rollback on the same full host lands too, and the books still hold one release.
-                ReleaseEngine.rollback(applicationId);
+                ReleaseEngine.rollback(applicationId, DeployTrigger.MANUAL);
                 assertThat(ApplicationReleases.storedSettings(ApplicationReleases.ownedServing(applicationId))
                         .get("image"))
                     .as("step 4: the rollback serves v1 again").isEqualTo(FakeDockerDaemon.digestOf("fake/app:v1"));
@@ -355,7 +362,7 @@ class ApplicationReleaseTest {
                 await("step 3: the second release reads succeeded after its drain", () ->
                     ReleaseOperationModel.LIFECYCLE.is(latestOp(applicationId).get(ReleaseOperationModel.STATUS),
                         OperationStatus.SUCCEEDED));
-                ReleaseEngine.rollback(applicationId);
+                ReleaseEngine.rollback(applicationId, DeployTrigger.MANUAL);
                 assertThat(latestOp(applicationId).get(ReleaseOperationModel.KIND))
                     .as("step 3: the rollback ran").isEqualTo(ReleaseOperationModel.KIND_ROLLBACK);
                 await("step 3: the rollback's drain settles", () -> ReleaseSettling.settled(applicationId));
@@ -454,6 +461,133 @@ class ApplicationReleaseTest {
                 Models.get(InstanceVolumeModel.class).find()
                     .where(InstanceVolumeModel.INSTANCE_ID.eq(applicationId)).delete();
                 ApplicationReleases.destroyFor(applicationId);
+            }
+        });
+    }
+
+    /**
+     * Every release operation records what started it, who it is accountable to and what it deployed, whichever
+     * entry point asked: the boot converge, a person's Deploy button, the automation API, a forge push, an API
+     * rollback, a lane that names nothing, and a backup restore that carries a commit.
+     */
+    @Test
+    void everyReleaseOperationRecordsWhatStartedItAndWhatItDeployed() {
+        Db.run(datasource, () -> {
+            int applicationId = application("attributed", "v1");
+            int restoredId = application("attributed-restored", "v1");
+            Row withSecret = Models.get(InstanceModel.class).findById(applicationId);
+            Map<String, Object> secretSettings = settingsFor("v1");
+            secretSettings.put("environment_variables", Map.of("DB_PASSWORD", "attribution-secret-value"));
+            withSecret.set(InstanceModel.SETTINGS, secretSettings);
+            Models.get(InstanceModel.class).save(withSecret);
+            // The test body is the installation's own work; a person and an API key holder act through attribution.
+            PrincipalRef system = Accountability.current().actorReference();
+            PrincipalRef person = PrincipalRef.account(UUID.randomUUID());
+            PrincipalRef keyHolder = PrincipalRef.account(UUID.randomUUID());
+            Row source = Models.get(ArtifactSourceModel.class).createEmptyRow();
+            try {
+                // 1. The boot converge (InstanceService.deploy naming no trigger) is the system's own work, and the
+                //    spec it recorded keeps only the release schema's keys, every environment value as a keyed digest.
+                assertThat(system).as("step 1: the test body acts as the system principal").isNotNull();
+                assertThat(system.kind().account()).as("step 1: which is no person").isFalse();
+                new InstanceService().deploy(applicationId);
+                Row boot = latestOp(applicationId);
+                assertThat(boot.get(ReleaseOperationModel.TRIGGER))
+                    .as("step 1: the boot converge records the system trigger").isEqualTo(DeployTrigger.SYSTEM.word());
+                assertThat(ReleaseOperationModel.TRIGGERER.read(boot))
+                    .as("step 1: accountable to the system principal").isEqualTo(system);
+                assertThat(boot.get(ReleaseOperationModel.COMMIT_SHA))
+                    .as("step 1: an image source records no commit").isNull();
+                assertThat(boot.get(ReleaseOperationModel.BUILD_OPERATION_ID))
+                    .as("step 1: and no build, since nothing was built").isNull();
+                assertThat(boot.get(ReleaseOperationModel.SPEC_SNAPSHOT))
+                    .as("step 1: the snapshot names the pinned image")
+                    .contains(FakeDockerDaemon.digestOf("fake/app:v1"))
+                    .as("step 1: and the variable with a keyed fingerprint").contains("DB_PASSWORD")
+                    .contains(SpecSnapshots.fingerprint("attribution-secret-value"))
+                    .as("step 1: never its value").doesNotContain("attribution-secret-value")
+                    .as("step 1: nor an unkeyed digest of it, confirmable from a backup")
+                    .doesNotContain(SecureTokens.sha256Hex("attribution-secret-value").substring(0, 12))
+                    .as("step 1: and no key the release schema does not declare").doesNotContain("crash_policy");
+                assertThat(SpecSnapshots.fingerprint("attribution-secret-value"))
+                    .as("step 1: the stored form is recognisable").matches("hmac:[0-9a-f]{12}");
+
+                // 2. A person pressing Deploy (SiteControlHandlers runs InstanceService.deploy MANUAL as its caller).
+                setSettings(applicationId, "v2");
+                Accountability.runAs(Accountability.ofActor(person, Accountability.ORIGIN_WEB),
+                    () -> new InstanceService().deploy(applicationId, DeployTrigger.MANUAL));
+                Row manual = latestOp(applicationId);
+                assertThat(manual.get(ReleaseOperationModel.TRIGGER))
+                    .as("step 2: the button records the manual trigger").isEqualTo(DeployTrigger.MANUAL.word());
+                assertThat(ReleaseOperationModel.TRIGGERER.read(manual))
+                    .as("step 2: and the person who pressed it").isEqualTo(person);
+                await("step 2: the deploy settles", () -> ReleaseSettling.settled(applicationId));
+
+                // 3. The automation API (PaasApi.queueDeploy) deploys on a background thread; the key holder rides it.
+                setSettings(applicationId, "v3");
+                int beforeApi = latestOp(applicationId).get(ReleaseOperationModel.ID);
+                Accountability.runAs(Accountability.ofActor(keyHolder, Accountability.ORIGIN_WEB),
+                    () -> ApplicationDeploys.deployInBackground(applicationId, null, DeployTrigger.API));
+                await("step 3: the background deploy settles", () -> {
+                    Row latest = latestOp(applicationId);
+                    return latest.get(ReleaseOperationModel.ID) != beforeApi && ReleaseSettling.settled(applicationId);
+                });
+                Row api = latestOp(applicationId);
+                assertThat(api.get(ReleaseOperationModel.TRIGGER))
+                    .as("step 3: the API deploy records the api trigger").isEqualTo(DeployTrigger.API.word());
+                assertThat(ReleaseOperationModel.TRIGGERER.read(api))
+                    .as("step 3: accountable to the key holder across the thread hop").isEqualTo(keyHolder);
+
+                // 4. A forge push (SourceDeploys on GitWebhookHandler's signed, system-run delivery).
+                setSettings(applicationId, "v4");
+                ApplicationDeploys.deploy(applicationId, "main", "0123456789abcdef0123", DeployTrigger.WEBHOOK);
+                Row push = latestOp(applicationId);
+                assertThat(push.get(ReleaseOperationModel.TRIGGER))
+                    .as("step 4: the push records the webhook trigger").isEqualTo(DeployTrigger.WEBHOOK.word());
+                assertThat(ReleaseOperationModel.TRIGGERER.read(push))
+                    .as("step 4: accountable to the system, never a person").isEqualTo(system);
+                await("step 4: the push settles", () -> ReleaseSettling.settled(applicationId));
+
+                // 5. A rollback over the API (PaasApi) records the api trigger on a rollback operation.
+                Accountability.runAs(Accountability.ofActor(keyHolder, Accountability.ORIGIN_WEB),
+                    () -> ReleaseEngine.rollback(applicationId, DeployTrigger.API));
+                Row rollback = latestOp(applicationId);
+                assertThat(rollback.get(ReleaseOperationModel.KIND))
+                    .as("step 5: a rollback operation").isEqualTo(ReleaseOperationModel.KIND_ROLLBACK);
+                assertThat(rollback.get(ReleaseOperationModel.TRIGGER))
+                    .as("step 5: started over the API").isEqualTo(DeployTrigger.API.word());
+                assertThat(ReleaseOperationModel.TRIGGERER.read(rollback))
+                    .as("step 5: by the key holder").isEqualTo(keyHolder);
+                assertThat(rollback.get(ReleaseOperationModel.SPEC_SNAPSHOT))
+                    .as("step 5: its snapshot is the retained release's spec")
+                    .contains(FakeDockerDaemon.digestOf("fake/app:v3"));
+                await("step 5: the rollback settles", () -> ReleaseSettling.settled(applicationId));
+
+                // 6. A lane that enters no attribution records the system trigger, never a person's.
+                setSettings(applicationId, "v5");
+                ApplicationReleases.converge(applicationId, Map.of());
+                Row unattributed = latestOp(applicationId);
+                assertThat(unattributed.get(ReleaseOperationModel.TRIGGER))
+                    .as("step 6: an unattributed release reads as the system's").isEqualTo(DeployTrigger.SYSTEM.word());
+                assertThat(ReleaseOperationModel.TRIGGERER.read(unattributed))
+                    .as("step 6: and attributed to nobody, never a guessed principal").isNull();
+                await("step 6: the converge settles", () -> ReleaseSettling.settled(applicationId));
+
+                // 7. A backup restore of an uploaded artifact records the artifact's digest as its commit.
+                source.set(ArtifactSourceModel.APPLICATION_ID, restoredId);
+                source.set(ArtifactSourceModel.ARTIFACT_SHA256, "b".repeat(64));
+                Models.get(ArtifactSourceModel.class).save(source);
+                ApplicationReleases.restore(restoredId, FakeDockerDaemon.digestOf("fake/app:v1"), resolved -> { });
+                Row restored = latestOp(restoredId);
+                assertThat(restored.get(ReleaseOperationModel.TRIGGER))
+                    .as("step 7: a restore is the system's work").isEqualTo(DeployTrigger.SYSTEM.word());
+                assertThat(restored.get(ReleaseOperationModel.COMMIT_SHA))
+                    .as("step 7: recording the commit it deployed").isEqualTo("b".repeat(64));
+            } finally {
+                ApplicationReleases.destroyFor(applicationId);
+                ApplicationReleases.destroyFor(restoredId);
+                Models.get(ArtifactSourceModel.class).find()
+                    .where(ArtifactSourceModel.APPLICATION_ID.eq(restoredId)).delete();
             }
         });
     }

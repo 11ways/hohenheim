@@ -13,7 +13,7 @@ import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.instance.ImageOrigin;
-import be.elevenways.hohenheim.server.instance.DeployTrigger;
+import be.elevenways.hohenheim.model.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstallMedia;
 import be.elevenways.hohenheim.server.instance.InstanceDevices;
 import be.elevenways.hohenheim.server.instance.InstanceInstalls;

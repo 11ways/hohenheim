@@ -6,7 +6,7 @@ import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.files.InstanceFiles;
 import be.elevenways.hohenheim.server.incus.IncusClient;
-import be.elevenways.hohenheim.server.instance.DeployTrigger;
+import be.elevenways.hohenheim.model.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceExec;

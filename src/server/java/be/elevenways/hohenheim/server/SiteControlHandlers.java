@@ -8,7 +8,7 @@ import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.HohenheimFlash;
 import be.elevenways.hohenheim.server.devtunnel.DevTunnelServerHandler;
-import be.elevenways.hohenheim.server.instance.DeployTrigger;
+import be.elevenways.hohenheim.model.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceConsoleHandler;
 import be.elevenways.hohenheim.server.instance.InstanceShellHandler;
 import be.elevenways.hohenheim.server.instance.VmScreens;
@@ -77,7 +77,7 @@ final class SiteControlHandlers {
                 return HandlerSupport.redirectUntyped(deploymentsPageUrl(conduit, instanceId));
             }
             report(conduit, settleWithin(SETTLE_WINDOW, "rollback of instance " + instanceId,
-                    () -> ReleaseEngine.rollback(instanceId)),
+                    () -> ReleaseEngine.rollback(instanceId, DeployTrigger.MANUAL)),
                 HohenheimMicrocopy.DEPLOYMENTS.of("rollback_done"),
                     HohenheimMicrocopy.DEPLOYMENTS.of("rollback_running"),
                 HohenheimMicrocopy.DEPLOYMENTS.of("rollback_failed"));

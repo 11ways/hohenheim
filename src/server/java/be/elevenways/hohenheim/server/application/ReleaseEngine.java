@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.application;
 
 import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.hohenheim.model.OperationStatus;
+import be.elevenways.hohenheim.model.DeployTrigger;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -213,19 +214,21 @@ public final class ReleaseEngine {
     static ApplicationReleases.@NonNull Release initialRelease(int applicationId,
                                                              @Nullable String applicationName,
                                                              int serverId,
-                                                             @NonNull Map<String, Object> desired,
+                                                             ApplicationReleases.@NonNull DesiredSpec spec,
                                                              @NonNull String ownerFingerprint) {
-        return initialRelease(applicationId, applicationName, serverId, desired, ownerFingerprint, null);
+        return initialRelease(applicationId, applicationName, serverId, spec, ownerFingerprint, null);
     }
 
     static ApplicationReleases.@NonNull Release initialRelease(int applicationId,
-            @Nullable String applicationName, int serverId, @NonNull Map<String, Object> desired,
+            @Nullable String applicationName, int serverId, ApplicationReleases.@NonNull DesiredSpec spec,
             @NonNull String ownerFingerprint, InstanceService.@Nullable RestoreVolumes restoreVolumes) {
+        Map<String, Object> desired = spec.settings();
         Row op = newOperation(ReleaseOperationModel.KIND_RELEASE, applicationId,
             ownerFingerprint, ownerFingerprint);
         step(op, "initial release: creating a health-gated candidate");
         Integer instanceId = null;
         try {
+            stampSpec(op, desired, spec.buildOperationId());
             Row instance = newInstanceRow(applicationId, applicationName, serverId, desired,
                 InstanceModel.ROLE_CANDIDATE);
             instanceId = instance.get(InstanceModel.ID);
@@ -283,9 +286,11 @@ public final class ReleaseEngine {
         Map<String, Object> desired;
         try {
             step(op, "resolving the desired spec (build/pull + digest pin)");
-            desired = ApplicationReleases.desiredSettings(docker,
+            ApplicationReleases.DesiredSpec spec = ApplicationReleases.desiredSettings(docker,
                 ApplicationReleases.requireApplication(applicationId), sourceSettings);
+            desired = spec.settings();
             desired.put("source_fingerprint", ownerFingerprint);
+            stampSpec(op, desired, spec.buildOperationId());
         } catch (RuntimeException e) {
             finish(op, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.FAILED), HohenheimViolations.reasonOf(e),
                 "spec resolution failed");
@@ -349,7 +354,7 @@ public final class ReleaseEngine {
      * @throws Violations when no rollback target exists or the candidate fails its
      *         probe (the current release keeps serving either way)
      */
-    public static void rollback(int applicationId) {
+    public static void rollback(int applicationId, @NonNull DeployTrigger trigger) {
         // The admission every deploy lane shares, asked on the CALLER's thread: power on the
         // application for a tenant-originated call (what the HTML lane's power check asks,
         // so the API is no wider door) and every attached database ready -- a rollback
@@ -359,7 +364,8 @@ public final class ReleaseEngine {
         // answer to what they see serving NOW, and queueing it behind a converge would roll
         // back whatever that converge left instead.
         InstanceOperationLock.production().exclusive(applicationId,
-            InstanceOperationLock.Contention.REFUSE, () -> rollbackLocked(applicationId));
+            InstanceOperationLock.Contention.REFUSE,
+            () -> DeployAttribution.run(trigger, () -> rollbackLocked(applicationId)));
         // AIDEV-NOTE: no proxy reload any more, and that is the point of the re-keying. A
         // flip no longer changes the ROUTE TABLE at all -- the site's route names an
         // application, and the instance upstream handler re-resolves the serving release's
@@ -398,6 +404,13 @@ public final class ReleaseEngine {
             }
             Row op = newOperation(ReleaseOperationModel.KIND_ROLLBACK, applicationId,
                 ownerFingerprint, specFingerprint);
+            try {
+                stampSpec(op, desired, buildOf(target));
+            } catch (RuntimeException e) {
+                finish(op, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.FAILED),
+                    HohenheimViolations.reasonOf(e), "spec resolution failed");
+                throw e;
+            }
             step(op, "rolling back to retired instance " + target.get(InstanceModel.ID)
                 + " (image " + trimmed(desired.get(InstanceKindFields.IMAGE)) + ")");
             DockerClient docker = serverId == ServerModel.localServerId()
@@ -1081,8 +1094,33 @@ public final class ReleaseEngine {
         op.set(ReleaseOperationModel.SPEC_FINGERPRINT, specFingerprint);
         op.set(ReleaseOperationModel.STARTED_AT, Now.instant());
         op.set(ReleaseOperationModel.STEP_LOG, "");
+        DeployAttribution.current().stamp(op);
         model.save(op);
         return op;
+    }
+
+    /**
+     * Record what the operation deploys once its spec is known: the commit, the build and the redacted snapshot.
+     *
+     * AIDEV-NOTE: stamped as soon as the spec resolves, not at the switch where IMAGE_ID lands, so a candidate that
+     * fails its probe still names the commit and build it tried; the image stays a fact of the switch.
+     */
+    private static void stampSpec(@NonNull Row op, @NonNull Map<String, Object> desired,
+                                  @Nullable Integer buildOperationId) {
+        String commit = trimmed(desired.get("commit_sha"));
+        op.set(ReleaseOperationModel.COMMIT_SHA, commit.isEmpty() ? null : commit);
+        op.set(ReleaseOperationModel.BUILD_OPERATION_ID, buildOperationId);
+        op.set(ReleaseOperationModel.SPEC_SNAPSHOT, SpecSnapshots.snapshot(desired));
+        persist(op);
+    }
+
+    /** @return the build behind a retained release's image: the one its own release operation recorded, else null */
+    private static @Nullable Integer buildOf(@NonNull Row release) {
+        Row made = Models.get(ReleaseOperationModel.class).find()
+            .where(ReleaseOperationModel.CANDIDATE_INSTANCE_ID.eq(release.get(InstanceModel.ID)))
+            .orderBy(ReleaseOperationModel.ID, SortOrder.DESC)
+            .first();
+        return made == null ? null : made.get(ReleaseOperationModel.BUILD_OPERATION_ID);
     }
 
     /**

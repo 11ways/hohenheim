@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.BuildOperationModel;
+import be.elevenways.hohenheim.model.DeployTrigger;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
@@ -46,6 +47,8 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.security.PrincipalRef;
+import be.elevenways.zenit.common.orm.history.HistoryText;
 import be.elevenways.zenit.widget.common.data.WidgetBadge;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.server.http.ReturnTarget;
@@ -135,7 +138,7 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
 
         WithheldFailure failures = WithheldFailure.of(conduit);
         if (releaseManaged) {
-            putReleaseVars(vars, instance, failures);
+            putReleaseVars(vars, instance, failures, accessContext);
             putPreviewVars(vars, request, instance);
         } else {
             putWorkspaceVars(vars, instanceId, failures);
@@ -169,12 +172,14 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
     /**
      * The application lane: release operations, the live release and the one release kept for rollback.
      *
-     * AIDEV-NOTE: a release operation records no commit of its own; the commit lives in the stored settings of the
-     * release instance it created ({@code candidate_instance_id}), read here in one batch. A release whose instance
-     * was removed keeps its row but shows no commit. Which history row is "live" or "kept" is read from the
-     * instances' roles (serving, retired), never from the operation's status.
+     * AIDEV-NOTE: a release operation records its own commit since release attribution (2026-10-23); an older row
+     * reads the commit from the stored settings of the release instance it created ({@code candidate_instance_id}),
+     * read here in one batch, and shows none once that instance was removed. Who or what started each row names its
+     * principal through HistoryText, every name on the page read in one call. Which history row is "live" or "kept"
+     * is read from the instances' roles (serving, retired), never from the operation's status.
      */
-    private static void putReleaseVars(Map<String, Object> vars, Row application, WithheldFailure failures) {
+    private static void putReleaseVars(Map<String, Object> vars, Row application, WithheldFailure failures,
+                                       AccessContext reader) {
         int instanceId = application.get(InstanceModel.ID);
         ReleaseOperationModel model = Models.get(ReleaseOperationModel.class);
         List<Row> operations = model.findForOwner(InstanceModel.MODEL_ID.toString(), instanceId, 50);
@@ -213,14 +218,16 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         Integer keptId = kept == null ? null : kept.get(InstanceModel.ID);
 
         Map<Integer, String> commits = releaseCommits(operations);
+        Map<PrincipalRef, String> triggerers = triggerers(operations, reader);
         Map<Object, Row> ranBuilds = buildsRun(operations, builds);
         List<Map<String, Object>> deployments = new ArrayList<>();
         for (Row row : operations) {
             Integer candidate = row.get(ReleaseOperationModel.CANDIDATE_INSTANCE_ID);
+            String ownCommit = row.get(ReleaseOperationModel.COMMIT_SHA);
             Map<String, Object> entry = entry(row.get(ReleaseOperationModel.ID),
                 ReleaseOperationModel.STATUS, row.get(ReleaseOperationModel.STATUS),
                 Objects.toString(row.get(ReleaseOperationModel.KIND), ""),
-                candidate == null ? null : commits.get(candidate),
+                ownCommit != null ? ownCommit : candidate == null ? null : commits.get(candidate),
                 releaseDurationMs(row, ranBuilds.get(row.get(ReleaseOperationModel.ID))),
                 failures.shown(row.get(ReleaseOperationModel.FAILURE_REASON)),
                 row.get(ReleaseOperationModel.STARTED_AT),
@@ -231,6 +238,7 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
             entry.put("kindLabel",
                 CmsSupport.enumLabel(ReleaseOperationModel.KIND, row.get(ReleaseOperationModel.KIND)));
             entry.put("release", true);
+            putTrigger(entry, row, triggerers);
             // The output of the build that made this release's image is the tenant's own build, visible like the
             // log of a build row: without it a release that runs the wrong thing cannot be traced to its build.
             Row build = builtImages.get(Objects.toString(row.get(ReleaseOperationModel.IMAGE_ID), ""));
@@ -370,6 +378,47 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
 
     private static @NonNull String commitOf(@NonNull Row release) {
         return shortSha(ApplicationReleases.storedSettings(release).get("commit_sha"));
+    }
+
+    /** The name of every principal that started one of these operations, for the reader, read in one call. */
+    private static @NonNull Map<PrincipalRef, String> triggerers(@NonNull List<Row> operations,
+                                                                 @NonNull AccessContext reader) {
+        Set<PrincipalRef> principals = new HashSet<>();
+        for (Row row : operations) {
+            PrincipalRef principal = ReleaseOperationModel.TRIGGERER.read(row);
+            if (principal != null) {
+                principals.add(principal);
+            }
+        }
+        return principals.isEmpty() ? Map.of() : HistoryText.principals(principals, reader);
+    }
+
+    /**
+     * What started a release row, in words: "Manual by Jelle" when the trigger was pressed by its principal, "System,
+     * requested by Jelle" when the principal only caused it, the bare trigger without a principal; a legacy row that
+     * recorded no trigger says nothing.
+     */
+    private static void putTrigger(@NonNull Map<String, Object> entry, @NonNull Row operation,
+                                   @NonNull Map<PrincipalRef, String> triggerers) {
+        String trigger = operation.get(ReleaseOperationModel.TRIGGER);
+        if (trigger == null) {
+            entry.put("trigger", "");
+            entry.put("triggerText", "");
+            return;
+        }
+        String label = CmsSupport.enumLabel(ReleaseOperationModel.TRIGGER, trigger);
+        PrincipalRef principal = ReleaseOperationModel.TRIGGERER.read(operation);
+        String by = principal == null ? null : triggerers.get(principal);
+        entry.put("trigger", trigger);
+        if (by == null) {
+            entry.put("triggerText", label);
+            return;
+        }
+        Microcopy words = DeployTrigger.of(trigger).pressedByPerson()
+            ? HohenheimMicrocopy.DEPLOYMENTS.of("triggered_by")
+            : HohenheimMicrocopy.DEPLOYMENTS.of("trigger_requested_by");
+        entry.put("triggerText", CmsSupport.resolvedTextOrDefault(
+            words.withArg("trigger", label).withArg("actor", by)));
     }
 
     /** @return whether two releases name one and the same commit; a release naming none matches nothing */
@@ -576,6 +625,9 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         entry.put("release", false);
         entry.put("buildLog", "");
         entry.put("hasBuildLog", false);
+        // Only a release row records what started it.
+        entry.put("trigger", "");
+        entry.put("triggerText", "");
         return entry;
     }
 

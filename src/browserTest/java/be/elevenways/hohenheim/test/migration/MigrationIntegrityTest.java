@@ -110,8 +110,8 @@ class MigrationIntegrityTest {
 
     /**
      * A database that recorded the squashed 001..019 chain (kuifje, robbedoes, starfleet, daystrom) ADOPTS
-     * M001_HohenheimBaseline under the shipped strict posture without running it, and one holding only part of that
-     * chain is refused with nothing written.
+     * M001_HohenheimBaseline under the shipped strict posture without running it, then applies every migration
+     * appended after the baseline, and one holding only part of that chain is refused with nothing written.
      */
     @Test
     void aDatabaseThatAppliedTheSquashedChainAdoptsTheBaselineAndAPartOfItRefuses() throws Exception {
@@ -127,7 +127,6 @@ class MigrationIntegrityTest {
 
         // 2. The database a live install holds: the whole schema, its ledger naming 001..019 instead of the baseline.
         SqliteDatasource datasource = squashedChainDatabase("squashed-chain");
-        SchemaSnapshot schema = SchemaSnapshot.of(datasource);
         List<String> otherStreams = otherStreamsHistory(datasource);
 
         // 3. A strict rehearsal says it would adopt and writes nothing.
@@ -141,20 +140,30 @@ class MigrationIntegrityTest {
         assertThat(history(datasource)).as("step 3: the rehearsal wrote nothing")
             .containsExactlyElementsOf(SQUASHED_VERSIONS.stream().map(old -> old + " APPLIED").toList());
 
-        // 4. THE ASSERTION -- the strict migrate adopts: the baseline row with its checksum replaces the old rows,
-        //    nothing runs, and the schema and every other stream's ledger stay exactly as they were.
+        // 4. THE ASSERTION -- the strict migrate adopts: the baseline row with its checksum replaces the old rows, the
+        //    baseline never runs, only the migrations appended after it apply, and every other stream's ledger stays
+        //    exactly as it was. The schema ends as a fresh install's.
+        List<String> appended = InstallsAt.hohenheimMigrations(datasource.getDatasourceIdentifier()).stream()
+            .map(Migration::getVersion).filter(other -> other.compareTo(version) > 0).toList();
         withIntegrityMode("fail", () -> {
             MigrationRunner adopting = new MigrationRunner(datasource);
-            assertThat(adopting.migrate().requireSuccess().getAppliedCount()).as("step 4: nothing executed")
-                .isZero();
+            assertThat(adopting.migrate().requireSuccess().getAppliedCount())
+                .as("step 4: only the appended migrations executed").isEqualTo(appended.size());
             assertThat(adopting.getBaselineReport()).as("step 4: the adoption line")
                 .containsExactly("baseline " + stream + ": adopt " + adoption);
         });
-        assertThat(history(datasource)).as("step 4: only the baseline is recorded").containsExactly(version + " APPLIED");
+        List<String> recorded = new ArrayList<>(List.of(version + " APPLIED"));
+        appended.forEach(other -> recorded.add(other + " APPLIED"));
+        assertThat(history(datasource)).as("step 4: the baseline and the appended migrations are recorded")
+            .containsExactlyElementsOf(recorded);
         assertThat(datasource.getMigrationRecord(MigrationKey.of(stream, version)).getChecksum())
             .as("step 4: the baseline's checksum").isEqualTo(MigrationChecksum.compute(baseline));
         assertThat(otherStreamsHistory(datasource)).as("step 4: other streams untouched").isEqualTo(otherStreams);
-        SchemaSnapshot.assertSame(schema, SchemaSnapshot.of(datasource), "step 4: adoption changes no schema");
+        SqliteDatasource fresh = emptyDatabase("fresh-beside-adoption");
+        new MigrationRunner(fresh).migrate().requireSuccess();
+        SchemaSnapshot.assertSame(SchemaSnapshot.of(fresh), SchemaSnapshot.of(datasource),
+            "step 4: the adopted install's schema is a fresh install's");
+        fresh.close();
 
         // 5. Settled: a further strict migrate applies and reports nothing.
         withIntegrityMode("fail", () -> {
@@ -380,8 +389,9 @@ class MigrationIntegrityTest {
             .isNotEmpty()
             .allSatisfy(entry -> assertThat(entry).endsWith(" stream=" + HohenheimMigration.STREAM));
         assertThat(found)
-            .as("step 1: and the stream is exactly ONE migration, the squashed baseline")
-            .containsExactly("M001_HohenheimBaseline stream=" + HohenheimMigration.STREAM);
+            .as("step 1: and the stream is the squashed baseline plus the migrations appended after it")
+            .containsExactly("M001_HohenheimBaseline stream=" + HohenheimMigration.STREAM,
+                "M002_ReleaseAttribution stream=" + HohenheimMigration.STREAM);
 
         // 2. The deployed high-water mark. Every migration at or below DEPLOYED_THROUGH is
         //    APPLIED somewhere, so its structural checksum is recorded in that install's
@@ -466,12 +476,18 @@ class MigrationIntegrityTest {
         return pins;
     }
 
-    /** @return a migrated database whose ledger records the squashed 001..019 chain instead of the baseline */
+    /**
+     * @return a database at the state the live installs recorded the squashed chain in (no migration appended after
+     *         the baseline applied yet), its ledger naming 001..019 instead of the baseline
+     */
     private static SqliteDatasource squashedChainDatabase(String label) throws Exception {
-        SqliteDatasource datasource = emptyDatabase(label);
+        File db = File.createTempFile("hohenheim-migration-" + label, ".db");
+        db.delete();
+        db.deleteOnExit();
         String stream = HohenheimMigration.STREAM;
         String baseline = new M001_HohenheimBaseline().getVersion();
-        new MigrationRunner(datasource).migrate().requireSuccess();
+        InstallsAt.migrateThrough(db.toPath(), baseline);
+        SqliteDatasource datasource = new SqliteDatasource(TestSqliteFiles.url(db.toPath()));
         for (String version : SQUASHED_VERSIONS) {
             datasource.rawUpdate("INSERT INTO zenit_migrations (stream, version, name, applied_at, direction,"
                 + " execution_time_ms, state, checksum) SELECT stream, '" + version + "', 'squashed " + version

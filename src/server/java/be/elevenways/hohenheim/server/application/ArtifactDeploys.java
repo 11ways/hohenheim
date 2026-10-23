@@ -14,7 +14,7 @@ import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.DataDirectory;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.instance.DeployStartPolicy;
-import be.elevenways.hohenheim.server.instance.DeployTrigger;
+import be.elevenways.hohenheim.model.DeployTrigger;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.instance.InstanceService;
@@ -122,7 +122,8 @@ public final class ArtifactDeploys {
                 Map<String, Object> overrides = facts(artifact, digest);
                 String requestedFingerprint = ReleaseEngine.sourceFingerprint(applicationId,
                     ApplicationReleases.resolvedSettings(application, overrides));
-                ApplicationReleases.Release release = ApplicationReleases.converge(applicationId, overrides);
+                ApplicationReleases.Release release = DeployAttribution.supply(trigger,
+                    () -> ApplicationReleases.converge(applicationId, overrides));
                 Row serving = ApplicationReleases.ownedServing(applicationId);
                 Map<String, Object> settings = serving == null ? Map.of() : ApplicationReleases.storedSettings(serving);
                 // A failed candidate can leave the old healthy release serving, including

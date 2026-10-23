@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.model.DeployTrigger;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -116,7 +117,7 @@ public final class InstanceOperationHandlers {
             .applies(instance -> authored(instance)
                 && InstanceKinds.isReleaseManaged(instance.get(InstanceModel.KIND)))
             .handle(call -> {
-                ReleaseEngine.rollback(instanceId(call));
+                ReleaseEngine.rollback(instanceId(call), DeployTrigger.MANUAL);
                 return null;
             });
         // One ISO per machine through its record: a drive that holds one is emptied (the detach) before another goes in.

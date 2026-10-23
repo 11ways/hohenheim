@@ -150,3 +150,13 @@ table migration:be.elevenways.hohenheim@2026_10_21_000001
   replaces 017
   replaces 018
   replaces 019
+table migration:be.elevenways.hohenheim@2026_10_23_000001
+  checksum 6cd230bd264bb9d95433abf144b19599306032a5d68845d0848b74cdbdc24477
+  class be.elevenways.hohenheim.migration.M002_ReleaseAttribution
+  name release_attribution
+  op add_column:release_operations:build_operation_id|integer|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null
+  op add_column:release_operations:commit_sha|string|null=true|uniq=false|pk=false|auto=false|def=none|len=100|prec=null,null
+  op add_column:release_operations:deploy_trigger|string|null=true|uniq=false|pk=false|auto=false|def=none|len=32|prec=null,null
+  op add_column:release_operations:spec_snapshot|text|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null
+  op add_column:release_operations:triggered_by_kind|string|null=true|uniq=false|pk=false|auto=false|def=none|len=100|prec=null,null
+  op add_column:release_operations:triggered_by|uuid|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null

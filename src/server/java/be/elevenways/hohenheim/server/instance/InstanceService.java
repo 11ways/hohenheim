@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.model.DeployTrigger;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceFileModel;
@@ -89,7 +90,7 @@ public final class InstanceService {
     private static final String BIND_ADDRESS = "127.0.0.1";
 
     /** The trigger a deploy records when its caller names none. */
-    public static final String DEFAULT_DEPLOY_REASON = "deploy";
+    public static final String DEFAULT_DEPLOY_REASON = DeployTrigger.SYSTEM.word();
 
     /**
      * Run one runtime operation holding the record's operation lock; re-entrant on the

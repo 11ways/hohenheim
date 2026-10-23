@@ -10,7 +10,7 @@ import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.HandlerSupport;
-import be.elevenways.hohenheim.server.instance.DeployTrigger;
+import be.elevenways.hohenheim.model.DeployTrigger;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -268,7 +268,7 @@ public final class PaasApi {
             }
             try {
                 requireReleaseAuthority(applicationId);
-                ReleaseEngine.rollback(applicationId);
+                ReleaseEngine.rollback(applicationId, DeployTrigger.API);
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             }

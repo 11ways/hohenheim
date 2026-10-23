@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.model.DeployTrigger;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.protoblast.common.i18n.Microcopy;

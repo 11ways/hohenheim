@@ -8,10 +8,10 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  * drift detection can never fragment from package placement.
  *
  * AIDEV-NOTE: zenit chains every stream in version order (a115be18), so a migration declares
- * only its cross-stream edges, never its predecessor. The stream is ONE baseline, M001_HohenheimBaseline,
- * which squashed 001..019 on 2026-10-21; MigrationIntegrityTest pins that it is the only migration
- * and that a migration at or below MigrationIntegrityTest.DEPLOYED_THROUGH is never edited: a change
- * appends a migration.
+ * only its cross-stream edges, never its predecessor. The stream starts with ONE baseline, M001_HohenheimBaseline,
+ * which squashed 001..019 on 2026-10-21, and appended migrations follow it with later dated versions;
+ * MigrationIntegrityTest pins the list and that a migration at or below MigrationIntegrityTest.DEPLOYED_THROUGH is
+ * never edited: a change appends a migration.
  *
  * @author Jelle De Loecker
  * @since  0.1.0

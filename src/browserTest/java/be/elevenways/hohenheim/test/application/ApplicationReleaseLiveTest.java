@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.application;
 
+import be.elevenways.hohenheim.model.DeployTrigger;
 import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.ControllerScope;
@@ -202,7 +203,7 @@ class ApplicationReleaseLiveTest {
                 .contains("retained as the rollback target").contains("release complete");
 
             // 4. Roll back: one durable operation over the retained digest-pinned spec.
-            ReleaseEngine.rollback(applicationId);
+            ReleaseEngine.rollback(applicationId, DeployTrigger.MANUAL);
             String rolledBack = ProxyTestSupport.rawRequest(port, "release.test", "/");
             assertThat(rolledBack)
                 .as("step 4: after the rollback the proxy serves the PRIOR release")
@@ -422,7 +423,7 @@ class ApplicationReleaseLiveTest {
                 .as("step 3: the tag is GONE").isFalse();
 
             // 4. Roll back: the retained spec deploys BY DIGEST -- no tag, no source.
-            ReleaseEngine.rollback(applicationId);
+            ReleaseEngine.rollback(applicationId, DeployTrigger.MANUAL);
             Row servingBack = servingOf(applicationId);
             assertThat(settingsOf(servingBack).get("image"))
                 .as("step 4: the rolled-back release is the pinned v1 digest")

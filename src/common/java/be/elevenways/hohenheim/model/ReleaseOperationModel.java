@@ -11,10 +11,15 @@ import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.TextField;
+import be.elevenways.zenit.common.orm.field.UuidField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.QueryBuilder;
+import be.elevenways.zenit.common.security.PrincipalField;
+import be.elevenways.zenit.common.security.PrincipalKinds;
 import be.elevenways.zenit.common.ui.BadgeVariant;
+
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.Collection;
 import java.util.List;
@@ -28,16 +33,22 @@ import java.util.Set;
  * never a silently forgotten state. A rollback is the SAME operation over the retained
  * release's pinned spec; nothing is rebuilt from mutable source.
  *
- * AIDEV-NOTE: there is deliberately NO spec snapshot column. The pinned spec of every
- * release lives on its (retained) instance row's digest-pinned settings, which is what a
- * rollback deploys; copying it here would duplicate that authority AND leak the secret
- * environment map onto a derived surface: secrets live only on the record that owns them.
+ * AIDEV-NOTE: {@link #SPEC_SNAPSHOT} is NOT the pinned spec. The pinned spec of every release lives on its (retained)
+ * instance row's digest-pinned settings, which is what a rollback deploys; the snapshot is a redacted copy for
+ * comparing releases after their instance rows were reclaimed: only the release schema's keys, every secret value a
+ * keyed fingerprint ({@code SpecSnapshots}), so no secret lands on this derived surface.
+ *
+ * AIDEV-NOTE: {@link #TRIGGER} and {@link #TRIGGERER} say who or what started the attempt, stamped at creation from
+ * the deploy entry point's {@code DeployAttribution}; the commit, build and snapshot are stamped where the image is.
  *
  * AIDEV-NOTE: {@link #OWNER_FINGERPRINT} vs {@link #SPEC_FINGERPRINT} is what makes a
  * rollback SURVIVE convergence: a succeeded rollback whose site_fingerprint still equals
  * the current source identity PINS the site to the rolled-back release, because the
  * source did not change since the operator rejected it; any source change dissolves the
  * pin naturally (a genuinely new deploy wins). For a plain release both are equal.
+ *
+ * @author Jelle De Loecker
+ * @since  0.1.0
  */
 public class ReleaseOperationModel extends Model {
 
@@ -117,6 +128,31 @@ public class ReleaseOperationModel extends Model {
         StringField.builder().name("failure_reason")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("failure_reason")).build());
 
+    /** What started the attempt: a {@link DeployTrigger} word, each value wearing its member's words, icon and colour. */
+    public static final EnumField TRIGGER = SCHEMA.addField(triggerField());
+
+    /** The id of the principal the attempt is accountable to, beside {@link #TRIGGERED_BY_KIND}; null when none was. */
+    public static final UuidField TRIGGERED_BY = SCHEMA.addField(
+        UuidField.builder().name("triggered_by").nullable(true).build());
+
+    /** The kind of {@link #TRIGGERED_BY}'s principal. */
+    public static final StringField TRIGGERED_BY_KIND = SCHEMA.addField(PrincipalKinds.kindField("triggered_by_kind"));
+
+    /** The triggering principal pair, read and written only through this declaration. */
+    public static final PrincipalField TRIGGERER = PrincipalField.of(TRIGGERED_BY_KIND, TRIGGERED_BY);
+
+    /** The source commit the candidate was built from (an uploaded artifact's digest); null for an image source. */
+    public static final StringField COMMIT_SHA = SCHEMA.addField(
+        StringField.builder().name("commit_sha").label(HohenheimMicrocopy.DEPLOYMENTS.of("commit")).build());
+
+    /** The {@code build_operations} row that built the candidate's image; null when nothing was built. */
+    public static final IntegerField BUILD_OPERATION_ID = SCHEMA.addField(
+        IntegerField.builder().name("build_operation_id").filterable(false).build());
+
+    /** The redacted spec the candidate ran, DRY-encoded by {@code SpecSnapshots}. */
+    public static final TextField SPEC_SNAPSHOT = SCHEMA.addField(
+        TextField.builder().name("spec_snapshot").filterable(false).build());
+
     /** Timestamped step lines; every phase of the operation is visible here. */
     public static final TextField STEP_LOG = SCHEMA.addField(
         TextField.builder().name("step_log")
@@ -163,6 +199,15 @@ public class ReleaseOperationModel extends Model {
     /** Keep the newest {@code keep} operations of one owning record and delete the rest. */
     public void pruneHistory(String forModel, int forId, int keep) {
         Retention.keepNewest(this, this.history(forModel, forId), ID, keep);
+    }
+
+    /** @return the trigger column, one value per {@link DeployTrigger} member */
+    private static @NonNull EnumField triggerField() {
+        EnumField.Builder builder = EnumField.builder("deploy_trigger");
+        for (DeployTrigger member : DeployTrigger.values()) {
+            builder.value(member.word(), v -> v.label(member.label()).icon(member.icon()).color(member.variant()));
+        }
+        return builder.label(HohenheimMicrocopy.DEPLOYMENTS.of("trigger")).build();
     }
 
     static {

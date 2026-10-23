@@ -8,7 +8,7 @@ import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.instance.DeployStartPolicy;
-import be.elevenways.hohenheim.server.instance.DeployTrigger;
+import be.elevenways.hohenheim.model.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.source.DeployStatuses;
@@ -82,9 +82,10 @@ public final class ApplicationDeploys {
         // still deploy N+1. The admission is asked BEFORE queueing too, so a refused caller
         // is told at once instead of after the running operation finishes.
         InstanceService.requireDeployAdmitted(applicationId);
-        return InstanceOperationLock.production().exclusive(applicationId,
+        // Every release operation the verb creates records this trigger and whoever this thread acts for.
+        return DeployAttribution.supply(trigger, () -> InstanceOperationLock.production().exclusive(applicationId,
             InstanceOperationLock.Contention.QUEUE,
-            () -> deployLocked(applicationId, ref, pushedSha, trigger));
+            () -> deployLocked(applicationId, ref, pushedSha, trigger)));
     }
 
     /**

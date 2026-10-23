@@ -1,5 +1,8 @@
-package be.elevenways.hohenheim.server.instance;
+package be.elevenways.hohenheim.model;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -14,6 +17,10 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * saying so. The word survives only at the STORAGE boundary -- the activity row's detail
  * and the build operation's record -- which is what {@link #of} exists to read back.
  *
+ * AIDEV-NOTE: the ONE declaring home of the trigger vocabulary. A release operation stores the word
+ * ({@code ReleaseOperationModel.TRIGGER}, whose enum values are derived from these members with their words, icons and
+ * colours), so adding a member is one edit here plus its {@code deploy_trigger} microcopy.
+ *
  * AIDEV-NOTE: an UNRECOGNISED word FAILS CLOSED (it answers like the least-privileged
  * member, {@link #WEBHOOK}). It used to answer like {@link #SYSTEM}, the permissive
  * member, on the argument that every in-house lane is control-plane convergence -- true
@@ -21,30 +28,33 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * third-party surface that spelled its own word all silently bought permission to start a
  * workload an operator stopped. Nothing production-facing calls {@link #of} any more, so
  * failing closed costs nothing and the in-house lanes keep their permission by NAMING it.
+ *
+ * @author Jelle De Loecker
+ * @since  0.1.0
  */
 public enum DeployTrigger {
 
     /** A person pressed a control on this record; they are standing there asking. */
-    MANUAL("manual", true, true),
+    MANUAL("manual", true, true, true, "user", BadgeVariant.INFO),
 
     /**
      * An API key holder asked over {@code /api/v1} or the PaaS API: a deliberate request
      * from a credential an operator issued, so it may start what it deploys -- and it
      * keeps its own word so the activity row still says WHICH surface asked.
      */
-    API("api", true, true),
+    API("api", true, true, true, "key", BadgeVariant.INFO),
 
     /**
      * The control plane converging its own work: {@code InstanceService}'s default
      * reason, and everything that reaches deploy without naming a trigger.
      */
-    SYSTEM(InstanceService.DEFAULT_DEPLOY_REASON, true, false),
+    SYSTEM("deploy", true, false, false, "gear", BadgeVariant.SECONDARY),
 
     /**
      * A record schedule step placed the start or restart. Exactly {@link #SYSTEM}'s start policy, so a scheduled
      * deploy behaves as before; only its recorded word names the surface that asked.
      */
-    SCHEDULE("schedule", true, false),
+    SCHEDULE("schedule", true, false, false, "calendar", BadgeVariant.SECONDARY),
 
     /**
      * Someone else's {@code git push}, relayed by a forge.
@@ -54,13 +64,13 @@ public enum DeployTrigger {
      * third party's push is not an argument against it -- the deploy is recorded, the
      * decision is stated, and nothing is spent.
      */
-    WEBHOOK("webhook", false, false),
+    WEBHOOK("webhook", false, false, false, "code-branch", BadgeVariant.SECONDARY),
 
     /**
      * The scheduled check found a new commit on the source's branch ({@code GitSourcePolls}): the same third-party
      * push as {@link #WEBHOOK}, only learned by asking, so it may not start a stopped workload either.
      */
-    POLL("poll", false, false);
+    POLL("poll", false, false, false, "magnifying-glass", BadgeVariant.SECONDARY);
 
     /**
      * What an unrecognised stored word reads as: the first DECLARED member that may not
@@ -75,16 +85,38 @@ public enum DeployTrigger {
     private final @NonNull String word;
     private final boolean startsStoppedWorkload;
     private final boolean liftsRollbackPin;
+    private final boolean pressedByPerson;
+    private final @NonNull String icon;
+    private final @NonNull BadgeVariant variant;
 
-    DeployTrigger(@NonNull String word, boolean startsStoppedWorkload, boolean liftsRollbackPin) {
+    DeployTrigger(@NonNull String word, boolean startsStoppedWorkload, boolean liftsRollbackPin,
+                  boolean pressedByPerson, @NonNull String icon, @NonNull BadgeVariant variant) {
         this.word = word;
         this.startsStoppedWorkload = startsStoppedWorkload;
         this.liftsRollbackPin = liftsRollbackPin;
+        this.pressedByPerson = pressedByPerson;
+        this.icon = icon;
+        this.variant = variant;
     }
 
     /** The reason word this trigger is recorded under. */
     public @NonNull String word() {
         return this.word;
+    }
+
+    /** @return the trigger in words, read off the {@code deploy_trigger} scope by its word */
+    public @NonNull Microcopy label() {
+        return HohenheimMicrocopy.DEPLOY_TRIGGER.of(this.word);
+    }
+
+    /** @return the plumage icon beside the words */
+    public @NonNull String icon() {
+        return this.icon;
+    }
+
+    /** @return the badge variant the trigger wears */
+    public @NonNull BadgeVariant variant() {
+        return this.variant;
     }
 
     /** Whether a deploy on this trigger may bring a workload that is down back up. */
@@ -100,6 +132,16 @@ public enum DeployTrigger {
      */
     public boolean liftsRollbackPin() {
         return this.liftsRollbackPin;
+    }
+
+    /**
+     * Whether the recorded principal itself asked for this deploy, so the row may read "{trigger} by {actor}".
+     *
+     * Otherwise the principal is only whose request the work was reached from (a resize, a database attach, a
+     * schedule's owner) and the row reads "{trigger}, requested by {actor}".
+     */
+    public boolean pressedByPerson() {
+        return this.pressedByPerson;
     }
 
     /**

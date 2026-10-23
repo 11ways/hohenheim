@@ -109,7 +109,7 @@
                     <pl-table-row data-hh-release-mark={% deploy.get("mark") %}>
                         <pl-table-cell>{% if deploy.get("commit") != "" %}<code>{{ deploy.get("commit") }}</code>{% elseif deploy.get("ref") != "" %}<span class="hh-deploys-ref" data-hh-deploy-ref>{{ t("no_commit_from", scope: "deployments", branch: deploy.get("ref")) }}</span>{% /if %}</pl-table-cell>
                         {% if showTrigger %}
-                        <pl-table-cell>{{ deploy.get("kindLabel") }}</pl-table-cell>
+                        <pl-table-cell>{{ deploy.get("kindLabel") }}{% if deploy.get("triggerText") != "" %}<div class="hh-deploys-sub" data-hh-deploy-trigger={% deploy.get("trigger") %}>{{ deploy.get("triggerText") }}</div>{% /if %}</pl-table-cell>
                         {% /if %}
                         <pl-table-cell>
                             {% if deploy.get("mark") == "live" %}<pl-badge variant={% "success" %}>{{ deploy.get("statusLabel") }}</pl-badge>{% elseif deploy.get("mark") == "kept" %}<pl-badge variant={% "info" %}>{{ deploy.get("statusLabel") }}</pl-badge>{% elseif deploy.get("mark") == "replaced" %}<pl-badge variant={% "secondary" %}>{{ deploy.get("statusLabel") }}</pl-badge>{% elseif deploy.get("statusKnown") == true %}<pl-badge variant={% deploy.get("statusVariant") %} colorSet={% deploy.get("statusColorSet") %}>{% if deploy.get("statusLabel") != null %}{{ deploy.get("statusLabel") }}{% else %}{{ deploy.get("status") }}{% /if %}</pl-badge>{% else %}{{ deploy.get("status") }}{% /if %}

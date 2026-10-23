@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.application;
 
+import be.elevenways.hohenheim.model.DeployTrigger;
 import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -322,7 +323,7 @@ class ReleaseConvergenceSerializationTest {
                     .isEqualTo(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.DRAINING));
 
                 // 2. The operator rolls back INSIDE that window.
-                ReleaseEngine.rollback(applicationId);
+                ReleaseEngine.rollback(applicationId, DeployTrigger.MANUAL);
                 int releaseC = ApplicationReleases.ownedServing(applicationId).get(InstanceModel.ID);
                 assertThat(releaseC)
                     .as("step 2: the rollback minted a fresh serving release")

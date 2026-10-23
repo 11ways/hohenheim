@@ -1196,6 +1196,10 @@
       "scope": "instance",
       "what": "machine",
       "text": "Start"
+    },
+    {
+      "text": "System",
+      "scope": "deploy_trigger"
     }
   ],
   "deploy_now": {
@@ -2087,10 +2091,16 @@
       "scope": "environment"
     }
   ],
-  "webhook": {
-    "text": "Push webhook",
-    "scope": "deployments"
-  },
+  "webhook": [
+    {
+      "text": "Push webhook",
+      "scope": "deployments"
+    },
+    {
+      "text": "Webhook push",
+      "scope": "deploy_trigger"
+    }
+  ],
   "webhook_description": {
     "text": "Configure this URL and secret on your git host (GitHub, GitLab or Gitea) to deploy on every push.",
     "scope": "deployments"
@@ -2298,6 +2308,10 @@
     {
       "text": "Manual",
       "scope": "dns_publisher"
+    },
+    {
+      "text": "Manual",
+      "scope": "deploy_trigger"
     }
   ],
   "automatic_hook": {
@@ -18934,5 +18948,25 @@
   "restore_needs_running": {
     "text": "A dump can only be restored into a running database. Status now: {$state}.",
     "scope": "database_tab"
+  },
+  "api": {
+    "text": "API",
+    "scope": "deploy_trigger"
+  },
+  "schedule": {
+    "text": "Schedule",
+    "scope": "deploy_trigger"
+  },
+  "poll": {
+    "text": "Scheduled check",
+    "scope": "deploy_trigger"
+  },
+  "triggered_by": {
+    "text": "{$trigger} by {$actor}",
+    "scope": "deployments"
+  },
+  "trigger_requested_by": {
+    "text": "{$trigger}, requested by {$actor}",
+    "scope": "deployments"
   }
 }

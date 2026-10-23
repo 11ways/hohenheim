@@ -1196,6 +1196,10 @@
       "scope": "instance",
       "what": "machine",
       "text": "Starten"
+    },
+    {
+      "text": "Systeem",
+      "scope": "deploy_trigger"
     }
   ],
   "deploy_now": {
@@ -2087,10 +2091,16 @@
       "scope": "environment"
     }
   ],
-  "webhook": {
-    "text": "Push-webhook",
-    "scope": "deployments"
-  },
+  "webhook": [
+    {
+      "text": "Push-webhook",
+      "scope": "deployments"
+    },
+    {
+      "text": "Webhook-push",
+      "scope": "deploy_trigger"
+    }
+  ],
   "webhook_description": {
     "text": "Configureer deze URL en dit geheim bij je Git-host (GitHub, GitLab of Gitea) om bij elke push uit te rollen.",
     "scope": "deployments"
@@ -2298,6 +2308,10 @@
     {
       "text": "Handmatig",
       "scope": "dns_publisher"
+    },
+    {
+      "text": "Handmatig",
+      "scope": "deploy_trigger"
     }
   ],
   "automatic_hook": {
@@ -18934,5 +18948,25 @@
   "restore_needs_running": {
     "text": "Een dump kan alleen in een draaiende databank worden teruggezet. Status nu: {$state}.",
     "scope": "database_tab"
+  },
+  "api": {
+    "text": "API",
+    "scope": "deploy_trigger"
+  },
+  "schedule": {
+    "text": "Planning",
+    "scope": "deploy_trigger"
+  },
+  "poll": {
+    "text": "Geplande controle",
+    "scope": "deploy_trigger"
+  },
+  "triggered_by": {
+    "text": "{$trigger} door {$actor}",
+    "scope": "deployments"
+  },
+  "trigger_requested_by": {
+    "text": "{$trigger}, aangevraagd door {$actor}",
+    "scope": "deployments"
   }
 }

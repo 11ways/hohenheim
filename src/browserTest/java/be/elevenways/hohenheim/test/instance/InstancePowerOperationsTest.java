@@ -16,7 +16,7 @@ import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
-import be.elevenways.hohenheim.server.instance.DeployTrigger;
+import be.elevenways.hohenheim.model.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;

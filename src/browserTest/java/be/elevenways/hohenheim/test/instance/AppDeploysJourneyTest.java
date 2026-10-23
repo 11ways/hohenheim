@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.BuildOperationModel;
+import be.elevenways.hohenheim.model.DeployTrigger;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.WebhookDeliveryModel;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
@@ -15,9 +16,11 @@ import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.PrincipalRef;
 import com.microsoft.playwright.Locator;
 import be.elevenways.protoblast.testsupport.browser.BoundedAssertions;
 import org.junit.jupiter.api.AfterAll;
@@ -47,6 +50,7 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
     private static final String LIVE_SHA = "aaaa1111bbbbcccc";
     private static final String KEPT_SHA = "bbbb2222ccccdddd";
     private static final String REPLACED_SHA = "cccc3333ddddeeee";
+    private static final String FAILED_SHA = "dddd4444eeeeffff";
     private static final String LIVE_IMAGE = "sha256:appdeploys-live-image";
     private static final String LIVE_BUILD_OUTPUT = "appdeploys live build output: Successfully built";
     private static final String LIVE_RELEASE_STEPS = "appdeploys live release steps: health ok";
@@ -83,12 +87,15 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
         int live = release("live", LIVE_SHA, InstanceModel.ROLE_SERVING);
         liveId = live;
 
-        operation(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), replaced, null, Instant
-            .parse("2026-09-01T08:00:00Z"), null);
+        Row replacedOp = operation(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), replaced, null,
+            Instant.parse("2026-09-01T08:00:00Z"), null);
         operation(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), kept, null, Instant
             .parse("2026-09-01T09:00:00Z"), null);
-        operation(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), live, null, Instant
+        Row liveOp = operation(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), live, null, Instant
             .parse("2026-09-01T10:00:00Z"), LIVE_IMAGE);
+        // Who or what started a release: a push started the live one, a person the failed one, which names its commit.
+        liveOp.set(ReleaseOperationModel.TRIGGER, DeployTrigger.WEBHOOK.word());
+        Models.get(ReleaseOperationModel.class).save(liveOp);
         // The build that produced the live release's image: a succeeded build is no row of its own.
         Row built = Models.get(BuildOperationModel.class).createEmptyRow();
         built.set(BuildOperationModel.FOR_MODEL, InstanceModel.MODEL_ID.toString());
@@ -100,9 +107,18 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
         built.set(BuildOperationModel.STARTED_AT, Instant.parse("2026-09-01T09:58:00Z"));
         Models.get(BuildOperationModel.class).save(built);
         buildIds.add(built.get(BuildOperationModel.ID));
-        operation(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.FAILED), null,
+        Row failedOp = operation(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.FAILED), null,
             "Did not answer on port 3000 within 60 s",
             Instant.parse("2026-09-01T11:00:00Z"), null);
+        Row admin = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
+        failedOp.set(ReleaseOperationModel.TRIGGER, DeployTrigger.MANUAL.word());
+        ReleaseOperationModel.TRIGGERER.write(failedOp, PrincipalRef.account(admin.get(UserModel.ID)));
+        failedOp.set(ReleaseOperationModel.COMMIT_SHA, FAILED_SHA);
+        Models.get(ReleaseOperationModel.class).save(failedOp);
+        // The control plane's own deploy, reached from that person's request (a resize, a database attach).
+        replacedOp.set(ReleaseOperationModel.TRIGGER, DeployTrigger.SYSTEM.word());
+        ReleaseOperationModel.TRIGGERER.write(replacedOp, PrincipalRef.account(admin.get(UserModel.ID)));
+        Models.get(ReleaseOperationModel.class).save(replacedOp);
         // A deploy whose build was refused never became a release.
         Row build = Models.get(BuildOperationModel.class).createEmptyRow();
         build.set(BuildOperationModel.FOR_MODEL, InstanceModel.MODEL_ID.toString());
@@ -162,8 +178,8 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
         return created[0];
     }
 
-    private static void operation(String status, Integer candidate, String failure, Instant startedAt,
-                                  String imageId) {
+    private static Row operation(String status, Integer candidate, String failure, Instant startedAt,
+                                 String imageId) {
         Row op = Models.get(ReleaseOperationModel.class).createEmptyRow();
         op.set(ReleaseOperationModel.KIND, ReleaseOperationModel.KIND_RELEASE);
         op.set(ReleaseOperationModel.FOR_MODEL, InstanceModel.MODEL_ID.toString());
@@ -179,6 +195,7 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
         }
         Models.get(ReleaseOperationModel.class).save(op);
         operationIds.add(op.get(ReleaseOperationModel.ID));
+        return op;
     }
 
     private static void preview(String ref, Integer pullRequest, String status) {
@@ -317,6 +334,21 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
             .as("step 3c: the live release shows its build output").contains(LIVE_BUILD_OUTPUT)
             .as("step 3c: under the build log's name").contains("Build log")
             .as("step 3c: beside its own release steps").contains(LIVE_RELEASE_STEPS).contains("Release steps");
+
+        // 3d. Each release row says what started it: a push in the trigger's words, a person by name, the system's
+        //     work with the person whose request reached it, and a release names the commit it recorded itself even
+        //     when its instance is gone.
+        assertThat(markedRow(body, "replaced")).as("step 3d: system work names who requested it")
+            .contains("data-hh-deploy-trigger=\"deploy\"").contains("System, requested by ")
+            .as("step 3d: never as if that person pressed a button").doesNotContain("System by ");
+        assertThat(markedRow(body, "live")).as("step 3d: the live release was started by a push")
+            .contains("data-hh-deploy-trigger=\"webhook\"").contains("Webhook push");
+        int manual = body.indexOf("data-hh-deploy-trigger=\"manual\"");
+        assertThat(manual).as("step 3d: the failed release names its trigger").isPositive();
+        String manualRow = body.substring(body.lastIndexOf("<pl-table-row", manual),
+            body.indexOf("</pl-table-row>", manual));
+        assertThat(manualRow).as("step 3d: a person started it, named").contains("Manual by ")
+            .as("step 3d: with the commit the operation recorded").contains("dddd4444");
 
         // 4. The running preview is listed with its pull request; a torn-down one is not.
         assertThat(body)

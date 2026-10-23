@@ -10,7 +10,7 @@ import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.server.build.BuildLog;
-import be.elevenways.hohenheim.server.instance.DeployTrigger;
+import be.elevenways.hohenheim.model.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceReadiness;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;

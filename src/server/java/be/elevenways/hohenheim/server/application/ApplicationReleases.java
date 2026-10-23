@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.model.BuildOperationModel;
+import be.elevenways.hohenheim.model.DeployTrigger;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
@@ -96,6 +97,15 @@ public final class ApplicationReleases {
     }
 
     /**
+     * The spec a release deploys, beside the build that made its image.
+     *
+     * @param settings         the release's settings, stored verbatim on its instance row
+     * @param buildOperationId the {@code build_operations} row that built the image; null when nothing was built
+     */
+    public record DesiredSpec(@NonNull Map<String, Object> settings, @Nullable Integer buildOperationId) {
+    }
+
+    /**
      * Install the ownership funnel on the instance write pipeline (MODULES stage).
      *
      * AIDEV-NOTE: the mechanics live in {@link OwnedInstances} -- the guard, the
@@ -155,12 +165,17 @@ public final class ApplicationReleases {
             () -> convergeLocked(applicationId, overrides, liftRollbackPin));
     }
 
-    /** Restore an imported image and its owner-keyed volumes before the first start. */
+    /**
+     * Restore an imported image and its owner-keyed volumes before the first start.
+     *
+     * AIDEV-NOTE: recorded as {@link DeployTrigger#SYSTEM} work of whoever asked for the restore: a restore is the
+     * control plane rebuilding a record, not a person pressing Deploy on it.
+     */
     public static @NonNull Release restore(int applicationId, @NonNull String verifiedImageId,
                                            InstanceService.@NonNull RestoreVolumes restoreVolumes) {
-        return InstanceOperationLock.production().exclusive(applicationId,
-            InstanceOperationLock.Contention.QUEUE,
-            () -> restoreLocked(applicationId, verifiedImageId, restoreVolumes));
+        return DeployAttribution.supply(DeployTrigger.SYSTEM, () -> InstanceOperationLock.production().exclusive(
+            applicationId, InstanceOperationLock.Contention.QUEUE,
+            () -> restoreLocked(applicationId, verifiedImageId, restoreVolumes)));
     }
 
     /** {@link #restore}'s body; the caller holds the application's operation lock. */
@@ -180,14 +195,14 @@ public final class ApplicationReleases {
         int serverId = ServerModel.canonicalServerId(application.get(InstanceModel.SERVER_ID));
         try {
             return inScope(applicationId, () -> {
-                Map<String, Object> desired = desiredSettings(new ServerService().clientFor(serverId),
+                DesiredSpec desired = desiredSettings(new ServerService().clientFor(serverId),
                         application, imported);
                 for (String key : List.of("artifact_path", "commit_sha")) {
                     if (source.containsKey(key)) {
-                        desired.put(key, source.get(key));
+                        desired.settings().put(key, source.get(key));
                     }
                 }
-                desired.put("source_fingerprint", fingerprint);
+                desired.settings().put("source_fingerprint", fingerprint);
                 return ReleaseEngine.initialRelease(applicationId, application.get(InstanceModel.NAME),
                     serverId, desired, fingerprint, restoreVolumes);
             });
@@ -262,8 +277,8 @@ public final class ApplicationReleases {
                 }
 
                 if (serving == null) {
-                    Map<String, Object> desired = desiredSettings(docker, application, settings);
-                    desired.put("source_fingerprint", fingerprint);
+                    DesiredSpec desired = desiredSettings(docker, application, settings);
+                    desired.settings().put("source_fingerprint", fingerprint);
                     return ReleaseEngine.initialRelease(applicationId, applicationName, serverId,
                         desired, fingerprint);
                 }
@@ -643,11 +658,12 @@ public final class ApplicationReleases {
      *         repository but no checkout was staged and no release exists to reuse -- the
      *         honest answer to "route this site" before anybody deployed
      */
-    static @NonNull Map<String, Object> desiredSettings(@NonNull DockerClient docker,
-                                                        @NonNull Row application,
-                                                        @NonNull Map<String, Object> settings) {
+    static @NonNull DesiredSpec desiredSettings(@NonNull DockerClient docker,
+                                                @NonNull Row application,
+                                                @NonNull Map<String, Object> settings) {
         int applicationId = application.get(InstanceModel.ID);
         Map<String, Object> desired = new LinkedHashMap<>();
+        Integer buildOperationId = null;
 
         String buildContext = trimmed(settings.get("build_context"));
         String artifactPath = trimmed(settings.get("artifact_path"));
@@ -684,6 +700,7 @@ public final class ApplicationReleases {
                             ? build.failureReason() : build.status()));
             }
             desired.put(InstanceKindFields.IMAGE, build.imageId());
+            buildOperationId = build.buildId();
             desired.put("built_image_id", build.imageId());
             desired.put("commit_sha", trimmed(settings.get("commit_sha")));
             if (!artifactPath.isEmpty()) {
@@ -712,7 +729,9 @@ public final class ApplicationReleases {
             }
         }
 
-        String command = trimmed(settings.getOrDefault("command_template", settings.get("command")));
+        // Only the template, never the substituted command: InstanceVariables substitutes secrets into "command", and
+        // the release spec is stored verbatim (resolvedSettings always sets the template).
+        String command = trimmed(settings.get("command_template"));
         if (!command.isEmpty()) {
             desired.put("command", command);
         }
@@ -753,7 +772,7 @@ public final class ApplicationReleases {
 
         ResourceLimits.carry(settings, desired);
         desired.put("crash_policy", settings.getOrDefault("crash_policy", InstanceModel.CRASH_DEFAULT));
-        return desired;
+        return new DesiredSpec(desired, buildOperationId);
     }
 
     /**
