@@ -9,8 +9,8 @@ import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
-import be.elevenways.hohenheim.server.util.KeyedConsumers;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.holder.Subscription;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -82,12 +82,12 @@ public final class SandboxedBuilds {
         }
         // Live before the running row: an overlapping build is a bug refused here, before any row could be left
         // running; from here a viewer of the owner taps this log while the build writes it.
-        KeyedConsumers.Registration live = LiveBuildLogs.register(request.forModel(), request.forId(), log);
+        Subscription live = LiveBuildLogs.register(request.forModel(), request.forId(), log);
         int buildId;
         try {
             buildId = start(request, quota);
         } catch (RuntimeException unstarted) {
-            live.close();
+            live.unsubscribe();
             throw unstarted;
         }
         long startedAt = Now.millis();
@@ -144,7 +144,7 @@ public final class SandboxedBuilds {
             // to prevent, and every failure path above runs through here.
             BuildCredentials.revokeAll(buildId);
             BuildSandbox.deleteQuietly(artifact);
-            live.close();
+            live.unsubscribe();
         }
     }
 

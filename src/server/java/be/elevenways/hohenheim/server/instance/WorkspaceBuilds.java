@@ -23,9 +23,9 @@ import be.elevenways.hohenheim.server.source.GitProviders;
 import be.elevenways.hohenheim.server.source.GitRepository;
 import be.elevenways.hohenheim.source.GitRefNames;
 import be.elevenways.hohenheim.server.source.SiteSources;
-import be.elevenways.hohenheim.server.util.KeyedConsumers;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.holder.Subscription;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.history.History;
@@ -158,7 +158,7 @@ public final class WorkspaceBuilds {
         long startedAt = Now.millis();
         // Live before the running row: an overlapping deploy is a bug refused here, before any row could be left
         // running; from here a viewer of the workspace taps this log while the deploy writes it.
-        KeyedConsumers.Registration live = LiveBuildLogs.register(InstanceModel.MODEL_ID, instanceId, log);
+        Subscription live = LiveBuildLogs.register(InstanceModel.MODEL_ID, instanceId, log);
         // The durable in-flight mark, SandboxedBuilds' contract verbatim: it lands before
         // any daemon work, so a controller that dies mid-deploy leaves `running` behind as
         // visible evidence instead of a clean-looking absence.
@@ -166,7 +166,7 @@ public final class WorkspaceBuilds {
         try {
             operationId = startOperation(instanceId, branch);
         } catch (RuntimeException unstarted) {
-            live.close();
+            live.unsubscribe();
             throw unstarted;
         }
         try {
@@ -223,7 +223,7 @@ public final class WorkspaceBuilds {
                 throw failed;
             }
         } finally {
-            live.close();
+            live.unsubscribe();
         }
     }
 

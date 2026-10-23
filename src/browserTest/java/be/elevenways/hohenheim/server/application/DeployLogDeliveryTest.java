@@ -7,10 +7,10 @@ import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.build.BuildLog;
 import be.elevenways.hohenheim.server.build.LiveBuildLogs;
-import be.elevenways.hohenheim.server.util.KeyedConsumers;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.protoblast.common.holder.Subscription;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.zenit.auth.model.GrantModel;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -75,7 +75,7 @@ class DeployLogDeliveryTest extends HohenheimTestBase {
         RecordGrants.grant(GrantSubjectType.USER, operatorId, InstanceModel.MODEL_ID, appId,
             HohenheimCapabilities.VIEW, true);
         GrantService.createDirectGrant(GrantSubjectType.USER, operatorId, HohenheimSources.ADMIN_ACCESS.value(), true);
-        List<KeyedConsumers.Registration> builds = new ArrayList<>();
+        List<Subscription> builds = new ArrayList<>();
         try {
             // 1. An operator hears the release's step log.
             FakeChannelLink<Object, Object> viewer = new FakeChannelLink<>(HohenheimChannels.DEPLOY_LOG,
@@ -125,7 +125,7 @@ class DeployLogDeliveryTest extends HohenheimTestBase {
             //    the viewer holds.
             assertThat(viewer.awaitSubmitted(buildFrame("compiling while a viewer leaves\n", false), 1, BOUND))
                 .as("step 7: the attached viewer heard the build write").hasSize(1);
-            builds.remove(0).close();
+            builds.remove(0).unsubscribe();
             assertThat(viewer.awaitSubmitted(buildFrame(log.text(), true), 1, BOUND))
                 .as("step 7: and its end, as a snapshot of the final text").hasSize(1);
             int heard = viewer.submitted().size();
@@ -134,8 +134,8 @@ class DeployLogDeliveryTest extends HohenheimTestBase {
             handler.onClose();
             viewer.close();
         } finally {
-            for (KeyedConsumers.Registration build : builds) {
-                build.close();
+            for (Subscription build : builds) {
+                build.unsubscribe();
             }
             revokeAdminAccess(operatorId);
             RecordGrants.revoke(GrantSubjectType.USER, operatorId, InstanceModel.MODEL_ID, appId,

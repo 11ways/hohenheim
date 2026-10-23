@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.server.build;
 
 import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
-import be.elevenways.hohenheim.server.util.KeyedConsumers;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.holder.Subscription;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.ArrayList;
@@ -83,13 +83,13 @@ public final class BuildLog {
      *
      * @return the handle that detaches the tap
      */
-    public KeyedConsumers.@NonNull Registration subscribe(@NonNull Consumer<String> queue, @NonNull Runnable deliver) {
+    public @NonNull Subscription subscribe(@NonNull Consumer<String> queue, @NonNull Runnable deliver) {
         Tap tap = new Tap(queue, deliver);
         synchronized (this) {
             queue.accept(this.text.toString());
             this.taps.add(tap);
         }
-        return () -> this.taps.remove(tap);
+        return Subscription.of(() -> this.taps.remove(tap));
     }
 
     /** Append output; redacted first, then bounded. */

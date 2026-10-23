@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.build;
 
-import be.elevenways.hohenheim.server.util.KeyedConsumers;
+import be.elevenways.protoblast.common.holder.KeyedListenerTable;
+import be.elevenways.protoblast.common.holder.Subscription;
 import be.elevenways.protoblast.common.registry.Identifier;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -16,7 +17,7 @@ import java.util.Map;
  * running when it attaches: it asks {@link #of} AFTER {@link #watch} returns, so a build registered in between is
  * heard twice (start and {@link #of}) and never missed -- a watcher treats a second start of the same log as none. A
  * build's start is announced after it is live and its end after it no longer is, both outside every lock here, so a
- * watcher may block in its callback (KeyedConsumers' rule).
+ * watcher may block in its callback (KeyedListenerTable.deliver's rule).
  *
  * @author Jelle De Loecker
  * @since 0.10.0
@@ -36,7 +37,7 @@ public final class LiveBuildLogs {
     }
 
     private static final Map<Owner, BuildLog> LIVE = new HashMap<>();
-    private static final KeyedConsumers<Owner, Watcher> WATCHERS = new KeyedConsumers<>();
+    private static final KeyedListenerTable<Owner, Watcher> WATCHERS = KeyedListenerTable.delivering();
 
     private LiveBuildLogs() {
     }
@@ -49,8 +50,7 @@ public final class LiveBuildLogs {
      * @throws IllegalStateException when a build is already live for the owner: the owner's operation lock lets one
      *                               build run at a time, so an overlap is a bug, never a build to replace
      */
-    public static KeyedConsumers.@NonNull Registration register(@NonNull Identifier forModel, int forId,
-                                                                @NonNull BuildLog log) {
+    public static @NonNull Subscription register(@NonNull Identifier forModel, int forId, @NonNull BuildLog log) {
         Owner owner = new Owner(forModel.toString(), forId);
         synchronized (LIVE) {
             if (LIVE.containsKey(owner)) {
@@ -58,15 +58,15 @@ public final class LiveBuildLogs {
             }
             LIVE.put(owner, log);
         }
-        WATCHERS.forEach(owner, watcher -> watcher.started(log));
-        return () -> {
+        WATCHERS.deliver(owner, watcher -> watcher.started(log));
+        return Subscription.of(() -> {
             synchronized (LIVE) {
                 if (!LIVE.remove(owner, log)) {
                     return;
                 }
             }
-            WATCHERS.forEach(owner, watcher -> watcher.ended(log));
-        };
+            WATCHERS.deliver(owner, watcher -> watcher.ended(log));
+        });
     }
 
     /** @return the owner's running build's log, or null when none runs */
@@ -81,8 +81,7 @@ public final class LiveBuildLogs {
      *
      * @return the handle that stops watching
      */
-    public static KeyedConsumers.@NonNull Registration watch(@NonNull Identifier forModel, int forId,
-                                                             @NonNull Watcher watcher) {
-        return WATCHERS.add(new Owner(forModel.toString(), forId), watcher);
+    public static @NonNull Subscription watch(@NonNull Identifier forModel, int forId, @NonNull Watcher watcher) {
+        return WATCHERS.register(new Owner(forModel.toString(), forId), watcher);
     }
 }

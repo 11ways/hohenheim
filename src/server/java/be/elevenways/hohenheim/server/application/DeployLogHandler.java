@@ -12,8 +12,8 @@ import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.build.BuildLog;
 import be.elevenways.hohenheim.server.build.LiveBuildLogs;
-import be.elevenways.hohenheim.server.util.KeyedConsumers;
 import be.elevenways.hohenheim.server.util.SerialOutbox;
+import be.elevenways.protoblast.common.holder.Subscription;
 import be.elevenways.zenit.common.channel.ChannelException;
 import be.elevenways.zenit.common.channel.ChannelHandler;
 import be.elevenways.zenit.common.channel.ChannelLink;
@@ -49,11 +49,11 @@ import java.util.List;
  *
  * AIDEV-NOTE: LOCK ORDER, which keeps a closing link and a publishing build or release from deadlocking. The link
  * monitor (zenit's ServerChannelLink holds it across onClose) comes first; then this handler's {@code state}; then a
- * KeyedConsumers table lock or a BuildLog monitor; then the outbox's leaf lock. Nothing is ever delivered under any
- * of them: every frame is QUEUED (SerialOutbox.offer, safe under all of them) and delivered by
- * {@link SerialOutbox#drain}, called holding no lock, one thread at a time, in queue order. So the only thread that
- * waits on the link monitor holds nothing, and onClose (holding the link monitor) only flips {@code closed}, closes
- * the outbox and detaches its registrations, none of which waits on a delivery.
+ * KeyedListenerTable lock (protoblast's consumer table, a leaf) or a BuildLog monitor; then the outbox's leaf lock.
+ * Nothing is ever delivered under any of them: every frame is QUEUED (SerialOutbox.offer, safe under all of them) and
+ * delivered by {@link SerialOutbox#drain}, called holding no lock, one thread at a time, in queue order. So the only
+ * thread that waits on the link monitor holds nothing, and onClose (holding the link monitor) only flips
+ * {@code closed}, closes the outbox and detaches its registrations, none of which waits on a delivery.
  *
  * @author Jelle De Loecker
  * @since 0.10.0
@@ -79,10 +79,10 @@ public final class DeployLogHandler implements ChannelHandler<Object, Object> {
 
     private @Nullable Integer instanceId;
     private boolean closed;
-    private KeyedConsumers.@Nullable Registration buildWatch;
-    private KeyedConsumers.@Nullable Registration stepWatch;
+    private @Nullable Subscription buildWatch;
+    private @Nullable Subscription stepWatch;
     private @Nullable BuildLog tapped;
-    private KeyedConsumers.@Nullable Registration tap;
+    private @Nullable Subscription tap;
     private @Nullable BuildLog lastEnded;
     private boolean buildHeard;
     private boolean stepsHeard;
@@ -143,13 +143,13 @@ public final class DeployLogHandler implements ChannelHandler<Object, Object> {
 
     @Override
     public void onClose() {
-        List<KeyedConsumers.Registration> ending = new ArrayList<>();
+        List<Subscription> ending = new ArrayList<>();
         synchronized (this.state) {
             if (this.closed) {
                 return;
             }
             this.closed = true;
-            for (KeyedConsumers.Registration registration : new KeyedConsumers.Registration[]{
+            for (Subscription registration : new Subscription[]{
                     this.buildWatch, this.stepWatch, this.tap}) {
                 if (registration != null) {
                     ending.add(registration);
@@ -161,8 +161,8 @@ public final class DeployLogHandler implements ChannelHandler<Object, Object> {
             this.tapped = null;
         }
         this.outbox.close();
-        for (KeyedConsumers.Registration registration : ending) {
-            registration.close();
+        for (Subscription registration : ending) {
+            registration.unsubscribe();
         }
     }
 
@@ -173,7 +173,7 @@ public final class DeployLogHandler implements ChannelHandler<Object, Object> {
                 return;
             }
         }
-        KeyedConsumers.Registration watch = DeployProgress.watch(instanceId, this::stepsPublished);
+        Subscription watch = DeployProgress.watch(instanceId, this::stepsPublished);
         boolean kept;
         synchronized (this.state) {
             kept = !this.closed && this.stepWatch == null;
@@ -183,7 +183,7 @@ public final class DeployLogHandler implements ChannelHandler<Object, Object> {
             }
         }
         if (!kept) {
-            watch.close();
+            watch.unsubscribe();
             return;
         }
         // Read outside every lock: a publish that lands meanwhile is as new as this read or newer, so it wins.
@@ -198,13 +198,13 @@ public final class DeployLogHandler implements ChannelHandler<Object, Object> {
     }
 
     private void unwatchSteps() {
-        KeyedConsumers.Registration ending;
+        Subscription ending;
         synchronized (this.state) {
             ending = this.stepWatch;
             this.stepWatch = null;
         }
         if (ending != null) {
-            ending.close();
+            ending.unsubscribe();
         }
     }
 
@@ -222,7 +222,7 @@ public final class DeployLogHandler implements ChannelHandler<Object, Object> {
 
     /** Hear the instance's builds: the running one, else the newest finished one unless a build beats the read. */
     private void watchBuilds(int instanceId) {
-        KeyedConsumers.Registration watch = LiveBuildLogs.watch(InstanceModel.MODEL_ID, instanceId, this.builds);
+        Subscription watch = LiveBuildLogs.watch(InstanceModel.MODEL_ID, instanceId, this.builds);
         boolean kept;
         synchronized (this.state) {
             kept = !this.closed;
@@ -231,7 +231,7 @@ public final class DeployLogHandler implements ChannelHandler<Object, Object> {
             }
         }
         if (!kept) {
-            watch.close();
+            watch.unsubscribe();
             return;
         }
         BuildLog running = LiveBuildLogs.of(InstanceModel.MODEL_ID, instanceId);
@@ -258,7 +258,7 @@ public final class DeployLogHandler implements ChannelHandler<Object, Object> {
                 return;
             }
             if (this.tap != null) {
-                this.tap.close();
+                this.tap.unsubscribe();
             }
             this.tapped = log;
             this.buildHeard = true;
@@ -278,7 +278,7 @@ public final class DeployLogHandler implements ChannelHandler<Object, Object> {
                 return;
             }
             if (this.tap != null) {
-                this.tap.close();
+                this.tap.unsubscribe();
                 this.tap = null;
             }
             this.tapped = null;
