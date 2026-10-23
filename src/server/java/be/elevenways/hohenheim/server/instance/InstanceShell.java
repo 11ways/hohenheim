@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
 import be.elevenways.hohenheim.server.runtime.ConsoleStream;
+import be.elevenways.hohenheim.server.runtime.ConsoleText;
 import be.elevenways.hohenheim.server.runtime.PtySupport;
 import be.elevenways.hohenheim.server.util.Watchdog;
 import be.elevenways.protoblast.common.Blast;
@@ -458,24 +459,32 @@ public final class InstanceShell {
 
         private void pump() {
             ConsoleStream stream = this.pty.stream();
+            ConsoleText decoder = new ConsoleText();
             ConsoleStream.Chunk chunk;
             try {
                 while ((chunk = stream.next()) != null) {
-                    String text = new String(chunk.data(), StandardCharsets.UTF_8);
-                    if (!text.isEmpty()) {
-                        try {
-                            this.output.accept(text);
-                        } catch (RuntimeException deadViewer) {
-                            // A viewer that throws is a viewer that is gone; end the
-                            // session rather than spin on a socket nobody reads.
-                            break;
-                        }
+                    if (!this.emit(decoder.decode(chunk))) {
+                        return;
                     }
                 }
+                this.emit(decoder.finish());
             } finally {
                 // The shell exited (or the daemon went away): tear down without waiting for
                 // anyone to ask. A close already in flight makes this a no-op.
                 this.close(EndReason.EXITED);
+            }
+        }
+
+        /** @return false when the viewer is gone, so the session ends rather than spin on a socket nobody reads */
+        private boolean emit(@NonNull String text) {
+            if (text.isEmpty()) {
+                return true;
+            }
+            try {
+                this.output.accept(text);
+                return true;
+            } catch (RuntimeException deadViewer) {
+                return false;
             }
         }
 

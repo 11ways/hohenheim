@@ -7,7 +7,6 @@ import be.elevenways.protoblast.common.time.Now;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 /**
@@ -27,6 +26,7 @@ public final class DockerStatsFeed implements StatsFeed {
 
     private final @NonNull ConsoleStream stream;
     private final StringBuilder buffer = new StringBuilder();
+    private final ConsoleText text = new ConsoleText();
 
     public DockerStatsFeed(@NonNull ConsoleStream stream) {
         this.stream = stream;
@@ -52,7 +52,7 @@ public final class DockerStatsFeed implements StatsFeed {
             if (chunk == null) {
                 return null;
             }
-            this.buffer.append(new String(chunk.data(), StandardCharsets.UTF_8));
+            this.buffer.append(this.text.decode(chunk));
         }
     }
 

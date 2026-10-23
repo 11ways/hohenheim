@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.runtime.ConsoleStream;
+import be.elevenways.hohenheim.server.runtime.ConsoleText;
 import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
@@ -20,7 +21,6 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -520,14 +520,16 @@ public final class BuildSandbox {
      * A build that hangs because its output stopped being read would be the sandbox
      * causing the failure it is supposed to observe.
      */
-    private static @NonNull Thread drainInto(@NonNull ConsoleStream stream, @NonNull BuildLog log,
-                                             @NonNull String handle) {
+    static @NonNull Thread drainInto(@NonNull ConsoleStream stream, @NonNull BuildLog log,
+                                     @NonNull String handle) {
         // A runner of its own names the reader after the build; it ends with the stream and holds nothing after.
         return JobRunner.createProcessGlobal("build-log-" + handle).startBlockingThread(() -> {
+            ConsoleText text = new ConsoleText();
             ConsoleStream.Chunk chunk;
             while ((chunk = stream.next()) != null) {
-                log.append(new String(chunk.data(), StandardCharsets.UTF_8));
+                log.append(text.decode(chunk));
             }
+            log.append(text.finish());
         });
     }
 

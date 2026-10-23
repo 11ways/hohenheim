@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.hohenheim.server.runtime.ConsoleStream;
+import be.elevenways.hohenheim.server.runtime.ConsoleText;
 import be.elevenways.hohenheim.server.runtime.ConsoleStreamSupport;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.thread.JobRunner;
@@ -192,10 +193,12 @@ final class InstanceConsoleSession {
 
     private void pump() {
         ConsoleStream stream = this.console.stream();
+        ConsoleText text = new ConsoleText();
         ConsoleStream.Chunk chunk;
         while ((chunk = stream.next()) != null) {
-            this.deliver(this.redactor.feed(new String(chunk.data(), StandardCharsets.UTF_8)));
+            this.deliver(this.redactor.feed(text.decode(chunk)));
         }
+        this.deliver(this.redactor.feed(text.finish()));
         // Whatever the redactor was holding back as a possible secret prefix turned out not
         // to be one; it is ordinary output and must not be swallowed.
         this.deliver(this.redactor.flush());
