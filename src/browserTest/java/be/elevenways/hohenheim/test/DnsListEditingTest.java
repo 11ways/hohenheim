@@ -15,6 +15,7 @@ import be.elevenways.zenit.cms.common.render.inline.InlineEditSubmit;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.forms.common.choose.InlineCreateResult;
 import be.elevenways.zenit.server.http.ReturnTarget;
 import com.microsoft.playwright.options.ViewportSize;
@@ -67,7 +68,8 @@ class DnsListEditingTest extends HohenheimTestBase {
         // 3. The quick-add bar rides the record source's create provider, which is the
         //    resource's own persistRow: the SAME codec refusal, on the field that caused it.
         InlineCreateResult refused = quickAdd(Map.of(
-            "zone_id", zoneId, "type", "A", "name", "two", "value", "not-an-ip", "ttl", "300"));
+            "zone_id", zoneId, "type", "A", "name", "two", "value", "not-an-ip", "ttl", "300"),
+            ZenitRefusalReason.INVALID.status());
         assertThat(refused.succeeded()).as("step 3: the bar refused the record").isFalse();
         assertThat(refused.violations()).as("step 3: the refusal names the value")
             .anyMatch(violation -> violation.path().equals("value"));
@@ -99,7 +101,7 @@ class DnsListEditingTest extends HohenheimTestBase {
         // 6. The cell lane is a sibling of the form lane, never a bypass: the codec
         //    refuses the same value here.
         InlineEditResult badCell = cellSubmit(recordId,
-            new InlineEditSubmit("value", "not-an-ip", state.snapshot()));
+            new InlineEditSubmit("value", "not-an-ip", state.snapshot()), ZenitRefusalReason.INVALID.status());
         assertThat(badCell.succeeded()).as("step 6: the cell lane refused the value").isFalse();
         assertThat(badCell.violations()).as("step 6: on the field that caused it")
             .anyMatch(violation -> violation.path().equals("value"));
@@ -666,9 +668,14 @@ class DnsListEditingTest extends HohenheimTestBase {
     }
 
     private InlineCreateResult quickAdd(Map<String, Object> values) throws Exception {
+        return quickAdd(values, 200);
+    }
+
+    /** The bar's add, answering {@code status}: 422 for refused values, 200 otherwise. */
+    private InlineCreateResult quickAdd(Map<String, Object> values, int status) throws Exception {
         HttpResponse<String> response = httpPostDry(RECORD_SOURCE,
             Zenit.DRY.stringify(values), sessionToken, csrfToken);
-        assertThat(response.statusCode()).as("the inline-create lane answered").isEqualTo(200);
+        assertThat(response.statusCode()).as("the inline-create lane answered").isEqualTo(status);
         return (InlineCreateResult) Zenit.DRY.parse(response.body());
     }
 
@@ -683,15 +690,25 @@ class DnsListEditingTest extends HohenheimTestBase {
     }
 
     private InlineEditResult cellSubmit(int recordId, InlineEditSubmit submit) throws Exception {
+        return cellSubmit(recordId, submit, 200);
+    }
+
+    private InlineEditResult cellSubmit(int recordId, InlineEditSubmit submit, int status) throws Exception {
         return cellSubmit("/admin/dns-records/" + recordId + "/cell", submit,
-            new TestSession(sessionToken, csrfToken));
+            new TestSession(sessionToken, csrfToken), status);
     }
 
     private InlineEditResult cellSubmit(String path, InlineEditSubmit submit, TestSession session)
             throws Exception {
+        return cellSubmit(path, submit, session, 200);
+    }
+
+    /** One cell commit, answering {@code status}: 422 for refused values, 200 otherwise. */
+    private InlineEditResult cellSubmit(String path, InlineEditSubmit submit, TestSession session, int status)
+            throws Exception {
         HttpResponse<String> response = httpPostDry(path, Zenit.DRY.stringify(submit),
             session.token(), session.csrf());
-        assertThat(response.statusCode()).as("the cell lane answered").isEqualTo(200);
+        assertThat(response.statusCode()).as("the cell lane answered").isEqualTo(status);
         return (InlineEditResult) Zenit.DRY.parse(response.body());
     }
 
