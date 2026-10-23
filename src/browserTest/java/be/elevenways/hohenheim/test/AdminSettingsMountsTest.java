@@ -4,6 +4,7 @@ import be.elevenways.zenit.test.support.SettingGroupIcons;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.server.cms.HohenheimSettingsSections;
+import be.elevenways.hohenheim.server.HohenheimRetiredNames;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolvers;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
@@ -11,7 +12,10 @@ import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.server.page.SettingsPage;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.setting.SettingGroup;
+import be.elevenways.zenit.notifications.NotificationSettings;
+import be.elevenways.zenit.server.setting.RetiredConfiguration;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -30,6 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AdminSettingsMountsTest extends HohenheimTestBase {
 
     private static final String NAV = ".cms-settings-nav";
+    private static final String DSN = "hub://zcm_test_token_never_shown@127.0.0.1:1?insecure=true";
 
     @Test
     void operatorSectionsComeFirstAndTheFrameworkWaitsBehindItsDisclosure() throws Exception {
@@ -116,23 +121,38 @@ class AdminSettingsMountsTest extends HohenheimTestBase {
         assertThat(page.locator(NAV + " a[data-cms-settings-nav='setting-framework']:not([hidden])").count())
             .as("step 4: the framework's one section row is listed once opened").isEqualTo(1);
 
-        // 5. A deep link reaches a group of each kind of section, a framework group included while folded.
+        // 5. A deep link reaches a group of each kind of section, a framework group included while folded. The
+        //    notifications group is the framework's own settings under its own mount: the host's old comms file and
+        //    prefix are declared retired for every boot to judge, and a stored transport DSN (it carries
+        //    credentials) never renders in clear.
+        assertThat(RetiredConfiguration.declared()).as("step 5: the retired names are declared")
+            .containsAll(HohenheimRetiredNames.RETIRED);
         String backups = HohenheimSettingsSections.BACKUPS.anchorOf(HohenheimSettings.Database.GROUP);
         assertThat(backups).as("step 5: the backups section anchors its database group")
             .isEqualTo("setting-backups-database");
-        navigateToApp("/admin/settings?section=setting-https," + backups
-            + ",setting-framework-network,setting-notifications-channels");
-        waitForHydration();
-        assertThat(page.locator("[data-path='https.letsencrypt_enabled']").count())
-            .as("step 5: a one-group section offers its rows under the section key").isEqualTo(1);
-        assertThat(page.locator("[data-path='backups.database.control_plane_backup_target']").count())
-            .as("step 5: a section of several groups keeps each group's path").isEqualTo(1);
-        assertThat(page.locator("[data-path='notifications.channels.mail_transports']").count())
-            .as("step 5: the notifications section is zenit-notifications' own mount").isEqualTo(1);
-        assertThat(page.locator("#setting-framework-network").isVisible())
-            .as("step 5: a requested framework group shows although the disclosure is folded").isTrue();
-        assertThat(page.locator("[data-path='framework.network.request_body_size_limit']").count())
-            .as("step 5: the framework keeps its shared key").isEqualTo(1);
+        Zenit.SETTINGS_VALUES.setValue(NotificationSettings.Channels.MAIL_TRANSPORTS, DSN);
+        try {
+            navigateToApp("/admin/settings?section=setting-https," + backups
+                + ",setting-framework-network,setting-notifications-channels");
+            waitForHydration();
+            assertThat(page.locator("[data-path='https.letsencrypt_enabled']").count())
+                .as("step 5: a one-group section offers its rows under the section key").isEqualTo(1);
+            assertThat(page.locator("[data-path='backups.database.control_plane_backup_target']").count())
+                .as("step 5: a section of several groups keeps each group's path").isEqualTo(1);
+            assertThat(page.locator("[data-path='notifications.channels.mail_transports']").count())
+                .as("step 5: the notifications section is zenit-notifications' own mount").isEqualTo(1);
+            assertThat(page.locator("[data-path='framework.notifications.channels.mail_transports']").count())
+                .as("step 5: and the framework mount does not repeat it").isZero();
+            assertThat(page.content())
+                .as("step 5: a stored transport DSN carries credentials and never renders in clear")
+                .doesNotContain("zcm_test_token_never_shown");
+            assertThat(page.locator("#setting-framework-network").isVisible())
+                .as("step 5: a requested framework group shows although the disclosure is folded").isTrue();
+            assertThat(page.locator("[data-path='framework.network.request_body_size_limit']").count())
+                .as("step 5: the framework keeps its shared key").isEqualTo(1);
+        } finally {
+            Zenit.SETTINGS_VALUES.setValue(NotificationSettings.Channels.MAIL_TRANSPORTS, null);
+        }
 
         // 6. Every group Hohenheim's sections offer is listed with its icon, a one-group section's
         //    own row included.

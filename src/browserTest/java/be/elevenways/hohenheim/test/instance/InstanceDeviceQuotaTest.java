@@ -22,11 +22,13 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.quota.Quotas;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -54,22 +56,34 @@ class InstanceDeviceQuotaTest extends HohenheimTestBase {
 
     private Integer instanceId;
     private Integer quotaRowId;
-    private Integer quickQuotaRowId;
+    /** The overrides that existed before the test: a form save stores a row the test may never learn the id of. */
+    private final Set<Integer> quotaRowsBefore = new HashSet<>();
     private UUID ownerGroupId;
     private final List<UUID> sharedGroupIds = new ArrayList<>();
     private Integer previousDiskCap;
     private Integer previousNicCap;
 
+    @BeforeEach
+    void rememberQuotaRows() {
+        for (Row row : Models.get(InstanceQuotaModel.class).find().all()) {
+            this.quotaRowsBefore.add(row.get(InstanceQuotaModel.ID));
+        }
+    }
+
+    /**
+     * Every override the test added goes, whatever owner it stored: a form save that lost its picks stores the
+     * operator's override, which would cap every later class in this JVM.
+     */
     @AfterEach
     void cleanUp() {
-        if (this.quotaRowId != null) {
-            Models.get(InstanceQuotaModel.class).delete(this.quotaRowId);
-            this.quotaRowId = null;
+        Model quotas = Models.get(InstanceQuotaModel.class);
+        for (Row row : quotas.find().all()) {
+            if (!this.quotaRowsBefore.contains(row.get(InstanceQuotaModel.ID))) {
+                quotas.delete(row.get(InstanceQuotaModel.ID));
+            }
         }
-        if (this.quickQuotaRowId != null) {
-            Models.get(InstanceQuotaModel.class).delete(this.quickQuotaRowId);
-            this.quickQuotaRowId = null;
-        }
+        this.quotaRowsBefore.clear();
+        this.quotaRowId = null;
         if (this.ownerGroupId != null) {
             Models.get(PermissionGroupModel.class).delete(this.ownerGroupId);
             this.ownerGroupId = null;
@@ -402,7 +416,6 @@ class InstanceDeviceQuotaTest extends HohenheimTestBase {
         page.locator(quick + "[data-cms-quick-add-submit]").click();
         page.waitForCondition(() -> quotas.find().where(InstanceQuotaModel.SUBJECTS.eq(quickPack)).first() != null);
         Row quick5 = quotas.find().where(InstanceQuotaModel.SUBJECTS.eq(quickPack)).first();
-        this.quickQuotaRowId = quick5.get(InstanceQuotaModel.ID);
         assertThat((Integer) quick5.get(InstanceQuotaModel.MAX_INSTANCES))
             .as("step 5: the quick add stored its cap on the shared owner's override").isEqualTo(5);
         page.waitForCondition(() -> page.url().contains("qa.subjects="));

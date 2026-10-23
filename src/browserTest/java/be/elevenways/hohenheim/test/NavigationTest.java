@@ -8,6 +8,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import com.microsoft.playwright.TimeoutError;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Map;
 import static org.assertj.core.api.Assertions.*;
 
@@ -76,6 +77,17 @@ class NavigationTest extends HohenheimTestBase {
         assertThat(page.locator(".cms-brand").textContent()).contains("Hohenheim");
         // The eight sidebar entries, each a link.
         assertThat(page.locator("pl-app-sidebar a").count()).isGreaterThanOrEqualTo(8);
+        // AdminNavigationJourneyTest owns the full inventory and the clusters' members; here the rendered sidebar
+        // names each of the eight entries and offers no demoted peer.
+        String sidebarText = page.locator("pl-app-sidebar").textContent();
+        for (String entry : List.of("Dashboard", "Apps", "Databases", "Hosts", "Domains", "Access", "Activity",
+                "Settings")) {
+            assertThat(sidebarText).as("the sidebar names " + entry).contains(entry);
+        }
+        assertThat(sidebarText).as("what an app is made of is reached through Apps, not the sidebar")
+            .doesNotContain("Sites")
+            .doesNotContain("Instances")
+            .doesNotContain("Sign-in providers");
 
         // Regression: after a soft nav the client renders the list footer itself;
         // filtered short keys ("none" scope=cms target=range) must resolve from
@@ -102,11 +114,22 @@ class NavigationTest extends HohenheimTestBase {
         waitForClusterPage("Domains", "Certificates");
         assertThat(page.url()).endsWith("/admin/certificates");
 
+        // The zenit-auth resources are wired into THIS panel: People is a tab of the Access cluster, and Roles are
+        // reached from the People list (AdminNavigationJourneyTest proves that route). Their own behaviour is
+        // zenit-auth's to prove -- AuthCmsResourcesIntegrationTest.
+        page.locator("pl-app-sidebar a[href='/admin/" + HohenheimSlugs.Cluster.ACCESS + "']").click();
+        // The Certificates page already draws the Domains cluster's tabs: wait for the Access cluster's own heading.
+        page.waitForCondition(() -> page.locator("h1").first().textContent().contains("Access"));
+        assertThat(page.locator("[data-cms-cluster-tabs] a[href='/admin/users']").count())
+            .as("zenit-auth's people resource is a tab of the Access cluster")
+            .isGreaterThan(0);
+
         navigateToApp("/admin/settings");
         waitForHydration();
         assertThat(page.locator("h1").first().textContent()).contains("Settings");
         assertThat(page.content()).contains("Proxy");
         assertThat(page.content()).contains("Security");
+        assertThat(page.content()).contains("Let's Encrypt");
     }
 
     @Test

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
@@ -203,6 +204,20 @@ class DomainEditTest extends HohenheimTestBase {
             .isGreaterThan(0);
         assertThat(page.locator(".cms-breadcrumbs " + Microcopy.WRAPPER_TAG + "[key='" + f.hostname() + "']").count())
             .as("the address is literal text, never a microcopy key").isEqualTo(0);
+
+        // 1. The address page reads as three questions, in this order: which requests, HTTPS, headers.
+        String html = page.content();
+        int requests = html.indexOf("data-section=\"" + HohenheimFormSections.ADDRESS_REQUESTS + "\"");
+        int https = html.indexOf("data-section=\"" + HohenheimFormSections.ADDRESS_HTTPS + "\"");
+        int headers = html.indexOf("data-section=\"" + HohenheimFormSections.ADDRESS_HEADERS + "\"");
+        assertThat(requests).as("step 1: a Which requests section").isPositive();
+        assertThat(https).as("step 1: an HTTPS section after it").isGreaterThan(requests);
+        assertThat(headers).as("step 1: and Headers last").isGreaterThan(https);
+        assertThat(html).as("step 1: the old catch-all Advanced section is gone")
+            .doesNotContain("data-section=\"advanced\"");
+
+        // 2. The heading's lead names the app this address serves.
+        assertThat(html).as("step 2: the lead names the app").contains("Address of " + f.siteName());
     }
 
     @Test
