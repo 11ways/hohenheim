@@ -35,13 +35,12 @@ import java.util.Set;
  * {@code {{KEY}}} substitution from the very variables this class collects, so they are
  * covered by their own value.
  *
- * AIDEV-NOTE: MINIMUM LENGTH {@value #MIN_SECRET_LENGTH}. A short value collides with
- * ordinary output by coincidence, and replacing every occurrence of a 3-character password
- * would shred unrelated text (log levels, hex bytes, words) while teaching a viewer nothing.
- * The accepted consequence is explicit: a secret shorter than the minimum is NOT redacted.
- * That is a statement about the value -- something that short is not a secret -- and not a
- * silent best effort.
- *
+ * AIDEV-NOTE: MINIMUM LENGTH {@value #MIN_SECRET_LENGTH}, the ONE floor of every redaction in Hohenheim (consoles,
+ * build logs, release steps). A short value collides with ordinary output by coincidence, and replacing every
+ * occurrence of a 3-character password would shred unrelated text (log levels, hex bytes, words) while teaching a
+ * viewer nothing. The accepted consequence is explicit: a secret shorter than the minimum is NOT redacted. That is a
+ * statement about the value -- something that short is not a secret -- and not a silent best effort. The floor was 8
+ * here and 6 in the build log's own redaction until the two merged; the lower one won (redact more, never less).
  * AIDEV-NOTE: an ADMIN sees the redacted stream too, and that is a decision, not an
  * oversight. Redaction happens at INGEST, on the single session ring that every viewer and
  * the stored log share; a viewer-dependent stream would mean keeping the raw text somewhere,
@@ -56,7 +55,7 @@ public final class ConsoleRedaction {
     public static final String PLACEHOLDER = "[redacted]";
 
     /** Values shorter than this are left alone; see the class note. */
-    public static final int MIN_SECRET_LENGTH = 8;
+    public static final int MIN_SECRET_LENGTH = 6;
 
     private ConsoleRedaction() {
     }
@@ -165,10 +164,14 @@ public final class ConsoleRedaction {
             this.secrets.sort(Comparator.comparingInt(String::length).reversed());
             this.longest = Math.max(this.longest, secret.length());
         }
-
         /** Whether anything is being redacted at all (the fast path, and a test seam). */
         public synchronized boolean isActive() {
             return !this.secrets.isEmpty();
+        }
+
+        /** @return how many values this redactor replaces; a value under the minimum was never counted */
+        public synchronized int secretCount() {
+            return this.secrets.size();
         }
 
         /**

@@ -22,6 +22,16 @@ public final class HohenheimChannels {
         .requiresLogin()
         .build();
 
+    /**
+     * The live log of one instance's deploy: its release steps and its build output as they are written. openData is
+     * the instance id; like {@link #INSTANCE_STATS} the handler admits per record ({@code view}), and it hands the
+     * release's step log to operators alone. Frames are {@link HohenheimDeployFunctions#frame} maps.
+     */
+    public static final Channel<Object, Object> DEPLOY_LOG = Channel.builder()
+        .identifier(HohenheimIds.id("deploy_log"))
+        .requiresLogin()
+        .build();
+
     private HohenheimChannels() {
     }
 

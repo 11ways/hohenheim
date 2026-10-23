@@ -24,6 +24,7 @@ import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
+import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.instance.InstanceService;
@@ -1136,16 +1137,37 @@ public final class ReleaseEngine {
         Models.get(ReleaseOperationModel.class).saveWrittenUnlessGone(op);
     }
 
-    /** Append a timestamped step line and persist it with whatever else is staged. */
+    /** Append a timestamped step line, persist it with whatever else is staged, and hand it to live viewers. */
     private static void step(@NonNull Row op, @NonNull String line) {
         persist(staged(op, line, Now.instant()));
+        publish(op);
     }
 
-    /** Stage a timestamped step line onto the log the row carries. */
+    /**
+     * Stage a timestamped step line onto the log the row carries.
+     *
+     * AIDEV-NOTE: the line is redacted of the application's own secret values (ConsoleRedaction) before it is staged:
+     * a step quotes daemon text, which can echo the environment it was handed, and the step log is stored and streamed.
+     * It FAILS CLOSED: an operation that names no instance owner has no secret set to redact against, so its line is
+     * stored and streamed as the placeholder, never raw.
+     */
     private static @NonNull Row staged(@NonNull Row op, @NonNull String line, @NonNull Instant at) {
         String existing = op.get(ReleaseOperationModel.STEP_LOG);
-        op.set(ReleaseOperationModel.STEP_LOG, (existing == null ? "" : existing) + at + " " + line + "\n");
+        Integer applicationId = op.get(ReleaseOperationModel.FOR_ID);
+        boolean owned = applicationId != null
+            && InstanceModel.MODEL_ID.toString().equals(op.get(ReleaseOperationModel.FOR_MODEL));
+        String safe = owned ? ConsoleRedaction.redactWhole(line, applicationId) : ConsoleRedaction.PLACEHOLDER;
+        op.set(ReleaseOperationModel.STEP_LOG, (existing == null ? "" : existing) + at + " " + safe + "\n");
         return op;
+    }
+
+    /** Hand the operation's stored step log to the live viewers of its application ({@link DeployProgress}). */
+    private static void publish(@NonNull Row op) {
+        Integer applicationId = op.get(ReleaseOperationModel.FOR_ID);
+        String log = op.get(ReleaseOperationModel.STEP_LOG);
+        if (applicationId != null && log != null) {
+            DeployProgress.published(applicationId, log);
+        }
     }
 
     private static void transition(@NonNull Row op, @NonNull String status, @NonNull String line) {
@@ -1197,6 +1219,7 @@ public final class ReleaseEngine {
         if (settled.updateAll() == 0) {
             return;
         }
+        publish(op);
         if (ReleaseOperationModel.LIFECYCLE.is(status, OperationStatus.FAILED)) {
             alertFailed(op, failureReason);
         }

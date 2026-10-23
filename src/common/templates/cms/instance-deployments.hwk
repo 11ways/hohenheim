@@ -46,6 +46,10 @@
 {#- Set while a deploy runs: the feed cms-live-refresh watches, and the live stamp taken before this render's reads. -#}
 {% declare liveFeed: String = "" %}
 {% declare liveSince: Long = null %}
+{#- Set on the row of the deploy that runs now: what its build and release steps wrote before this render. -#}
+{% declare liveBuildSeed: String = "" %}
+{% declare liveStepSeed: String = "" %}
+{% declare liveShowsSteps: Boolean = false %}
 {% extend "zenitcms:shell" var:title=title %}
 
 {% block "main" %}
@@ -121,7 +125,14 @@
                         </pl-table-cell>
                         <pl-table-cell class="hh-deploys-when">{{ deploy.get("duration") }}</pl-table-cell>
                     </pl-table-row>
-                    {% if deploy.get("error") != "" or deploy.get("hasLog") == true or deploy.get("hasBuildLog") == true %}
+                    {% if deploy.get("live") == true %}
+                    {#- The deploy that runs now: its log follows the deploy as it is written. -#}
+                    <pl-table-row data-detail data-hh-deploy-live>
+                        <pl-table-detail-cell class="hh-deploy-detail">
+                            <hh-deploy-log instanceId={% instanceId %} buildSeed={% liveBuildSeed %} stepSeed={% liveStepSeed %} showSteps={% liveShowsSteps %}></hh-deploy-log>
+                        </pl-table-detail-cell>
+                    </pl-table-row>
+                    {% elseif deploy.get("error") != "" or deploy.get("hasLog") == true or deploy.get("hasBuildLog") == true %}
                     {#- A release row's own log is its release steps; the build that made its image rides beside it. -#}
                     {% let logLabel = deploy.get("release") == true ? t("release_log", scope: "deployments") : t("build_log", scope: "deployments") %}
                     {% render "hohenheim:cms/deploy-detail" var:deploy=deploy var:logLabel=logLabel var:buildLogLabel=t("build_log", scope: "deployments") %}

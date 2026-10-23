@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.hohenheim.server.api.DnsZoneApi;
 import be.elevenways.hohenheim.server.api.HostApi;
 import be.elevenways.hohenheim.server.api.PaasApi;
+import be.elevenways.hohenheim.server.application.DeployLogHandler;
 import be.elevenways.hohenheim.server.cms.EnvironmentParts;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.cms.InstanceDeploymentsPage;
@@ -96,6 +97,7 @@ public final class HohenheimHandlers {
         DnsZoneApi.init();
         InstanceFileEndpoints.init();
         InstanceStatsHandler.init();
+        DeployLogHandler.init();
     }
 
     // -----------------------------------------------------------------------

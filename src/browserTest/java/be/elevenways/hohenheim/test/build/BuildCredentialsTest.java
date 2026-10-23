@@ -98,6 +98,10 @@ class BuildCredentialsTest {
         shortSecret.redact("abc");
         assertThat(shortSecret.redactedSecretCount())
             .as("step 2: a too-short secret is not registered").isZero();
+        shortSecret.redact("abc123");
+        shortSecret.line("pin abc123 accepted");
+        assertThat(shortSecret.text()).as("step 2: six characters is the floor, and it is redacted")
+            .isEqualTo("pin [redacted] accepted\n");
 
         // 3. The cap bounds MEMORY and says so; output past it is dropped with a marker
         //    rather than the reader believing the build went quiet.
@@ -110,5 +114,22 @@ class BuildCredentialsTest {
             .contains("truncated");
         assertThat(bounded.text().length())
             .as("step 3: memory stayed bounded").isLessThan(2048);
+
+        // 4. A daemon hands output over in chunks that are not line-aligned: a secret split across two appends never
+        //    lands in the stored text nor in what a tap hears, and a held near-miss is released at the flush.
+        BuildLog split = new BuildLog(4096);
+        split.redact("hunter2-registry-password");
+        StringBuilder heard = new StringBuilder();
+        split.subscribe(heard::append, () -> { });
+        split.append("token hunter2-regi");
+        assertThat(split.text()).as("step 4: the possible start of the secret is held back").isEqualTo("token ");
+        split.append("stry-password ok\n");
+        split.append("done hunter2");
+        assertThat(split.text()).as("step 4: the split secret was stored as the placeholder")
+            .isEqualTo("token [redacted] ok\ndone ");
+        split.flush();
+        assertThat(split.text()).as("step 4: the near-miss is ordinary text once the output ended")
+            .isEqualTo("token [redacted] ok\ndone hunter2");
+        assertThat(heard.toString()).as("step 4: the tap heard exactly what was stored").isEqualTo(split.text());
     }
 }

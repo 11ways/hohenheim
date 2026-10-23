@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.build.BuildLog;
 import be.elevenways.hohenheim.server.build.BuildQuota;
+import be.elevenways.hohenheim.server.build.LiveBuildLogs;
 import be.elevenways.hohenheim.server.build.SandboxedBuilds;
 import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
@@ -22,6 +23,7 @@ import be.elevenways.hohenheim.server.source.GitProviders;
 import be.elevenways.hohenheim.server.source.GitRepository;
 import be.elevenways.hohenheim.source.GitRefNames;
 import be.elevenways.hohenheim.server.source.SiteSources;
+import be.elevenways.hohenheim.server.util.KeyedConsumers;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
@@ -151,62 +153,77 @@ public final class WorkspaceBuilds {
 
         String branch = ref != null && !ref.isBlank() ? ref : GitSourceSchema.declaredBranch(settings);
         BuildLog log = new BuildLog(BuildQuota.fromSettings().logBytes());
+        // The workspace's own secret values: a checkout or build that echoes one stores and streams the placeholder.
+        log.redactAll(ConsoleRedaction.secretsOf(instanceId));
         long startedAt = Now.millis();
+        // Live before the running row: an overlapping deploy is a bug refused here, before any row could be left
+        // running; from here a viewer of the workspace taps this log while the deploy writes it.
+        KeyedConsumers.Registration live = LiveBuildLogs.register(InstanceModel.MODEL_ID, instanceId, log);
         // The durable in-flight mark, SandboxedBuilds' contract verbatim: it lands before
         // any daemon work, so a controller that dies mid-deploy leaves `running` behind as
         // visible evidence instead of a clean-looking absence.
-        int operationId = startOperation(instanceId, branch);
-
-        // The workload's live state, read ONCE: the trigger policy needs it, and so does
-        // the bring-up below -- and asking the daemon twice would let the two answers
-        // disagree about the very thing being decided.
-        ContainerState state = this.instances.liveStatus(instanceId).state();
-        Microcopy declined =
-            DeployStartPolicy.declineToStart(trigger, state, resolved.row());
-
-        if (declined != null) {
-            String message = HohenheimViolations.textOf(declined);
-            log.line("[hohenheim] deploying " + branch);
-            log.line("[hohenheim] not deployed: " + message);
-            // REFUSED, not FAILED: nothing broke. The row is the honest record that the
-            // push arrived, which branch it named, and what was decided about it.
-            finish(operationId, BuildOperationModel.LIFECYCLE.stored(OperationStatus.REFUSED), null, message, log,
-                startedAt);
-            DeployStatuses.deployDeclined(settings, pushedSha, message);
-            throw Violations.ofForm(declined);
-        }
-
-        // The commit the checkout landed on, kept outside the try: a build that fails after a
-        // good checkout still names that commit on its row, never the branch it started from.
-        String commitSha = null;
+        int operationId;
         try {
-            DeployStatuses.report(settings, pushedSha, GitProviderClient.StatusState.PENDING,
-                DeployStatuses.CONTEXT_DEPLOY, "Deploying", null);
-            log.line("[hohenheim] deploying " + branch);
-            ensureRunning(instanceId, state);
-            commitSha = checkout(resolved, branch, settings, log);
-            boolean built = build(resolved, settings, log);
-            // The workload restarts LAST: the files it will serve are on disk and owned by
-            // the uid it comes back as, so there is no window where a live process reads a
-            // half-written checkout. restartWorkload and not restart: restart re-enters
-            // InstanceService.deploy, whose workspace branch is THIS method.
-            InstanceStatus status = this.instances.restartWorkload(instanceId);
-            History.event(Models.get(InstanceModel.class), instanceId, Change.fact(HohenheimActivityAction.DEPLOYED,
-                Map.of(HohenheimActivityAction.TRIGGER_KEY, trigger.word())));
-            DeployStatuses.report(settings, commitSha, GitProviderClient.StatusState.SUCCESS,
-                DeployStatuses.CONTEXT_DEPLOY, "Deployed", null);
-            finish(operationId, BuildOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), commitSha, null, log,
-                startedAt);
-            return new Outcome(commitSha, built, log.text(), status, operationId);
-        } catch (RuntimeException failed) {
-            String message = HohenheimViolations.reasonOf(failed);
-            // Appended THROUGH the log, so the secrets the checkout registered are redacted
-            // out of a refusal that quotes git's own output back.
-            log.line("[hohenheim] deploy failed: " + message);
-            finish(operationId, BuildOperationModel.LIFECYCLE.stored(OperationStatus.FAILED), commitSha, message, log,
-                startedAt);
-            DeployStatuses.deployFailed(settings, commitSha != null ? commitSha : pushedSha, message);
-            throw failed;
+            operationId = startOperation(instanceId, branch);
+        } catch (RuntimeException unstarted) {
+            live.close();
+            throw unstarted;
+        }
+        try {
+            // The workload's live state, read ONCE: the trigger policy needs it, and so does
+            // the bring-up below -- and asking the daemon twice would let the two answers
+            // disagree about the very thing being decided.
+            ContainerState state = this.instances.liveStatus(instanceId).state();
+            Microcopy declined =
+                DeployStartPolicy.declineToStart(trigger, state, resolved.row());
+
+            if (declined != null) {
+                String message = HohenheimViolations.textOf(declined);
+                log.line("[hohenheim] deploying " + branch);
+                log.line("[hohenheim] not deployed: " + message);
+                // REFUSED, not FAILED: nothing broke. The row is the honest record that the
+                // push arrived, which branch it named, and what was decided about it.
+                finish(operationId, BuildOperationModel.LIFECYCLE.stored(OperationStatus.REFUSED), null, message, log,
+                    startedAt);
+                DeployStatuses.deployDeclined(settings, pushedSha, message);
+                throw Violations.ofForm(declined);
+            }
+
+            // The commit the checkout landed on, kept outside the try: a build that fails after a
+            // good checkout still names that commit on its row, never the branch it started from.
+            String commitSha = null;
+            try {
+                DeployStatuses.report(settings, pushedSha, GitProviderClient.StatusState.PENDING,
+                    DeployStatuses.CONTEXT_DEPLOY, "Deploying", null);
+                log.line("[hohenheim] deploying " + branch);
+                ensureRunning(instanceId, state);
+                commitSha = checkout(resolved, branch, settings, log);
+                boolean built = build(resolved, settings, log);
+                // The workload restarts LAST: the files it will serve are on disk and owned by
+                // the uid it comes back as, so there is no window where a live process reads a
+                // half-written checkout. restartWorkload and not restart: restart re-enters
+                // InstanceService.deploy, whose workspace branch is THIS method.
+                InstanceStatus status = this.instances.restartWorkload(instanceId);
+                History.event(Models.get(InstanceModel.class), instanceId,
+                    Change.fact(HohenheimActivityAction.DEPLOYED,
+                        Map.of(HohenheimActivityAction.TRIGGER_KEY, trigger.word())));
+                DeployStatuses.report(settings, commitSha, GitProviderClient.StatusState.SUCCESS,
+                    DeployStatuses.CONTEXT_DEPLOY, "Deployed", null);
+                finish(operationId, BuildOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), commitSha, null,
+                    log, startedAt);
+                return new Outcome(commitSha, built, log.text(), status, operationId);
+            } catch (RuntimeException failed) {
+                String message = HohenheimViolations.reasonOf(failed);
+                // Appended THROUGH the log, so the secrets the checkout registered are redacted
+                // out of a refusal that quotes git's own output back.
+                log.line("[hohenheim] deploy failed: " + message);
+                finish(operationId, BuildOperationModel.LIFECYCLE.stored(OperationStatus.FAILED), commitSha, message,
+                    log, startedAt);
+                DeployStatuses.deployFailed(settings, commitSha != null ? commitSha : pushedSha, message);
+                throw failed;
+            }
+        } finally {
+            live.close();
         }
     }
 
@@ -402,6 +419,8 @@ public final class WorkspaceBuilds {
     private void finish(int operationId, @NonNull String status,
                         @Nullable String commitSha, @Nullable String failureReason,
                         @NonNull BuildLog log, long startedAt) {
+        // The output ended: the redactor's held tail is ordinary text now, in the log before it is stored or read.
+        log.flush();
         BuildOperationModel model = Models.get(BuildOperationModel.class);
         Row row = model.findById(operationId);
         if (row == null) {

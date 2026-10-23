@@ -1,0 +1,42 @@
+{% tag HhDeployLog {
+    /* The log of the deploy that runs now, as it is written: the build's output and, where the panel shows it, the
+       release's step log. Watching it is a viewer of the deploy-log channel: the element opens the link in @mount and
+       the link closes with the element (the hh-instance-gauges shape). The server seeds what was written before the
+       page rendered; every link opens with a snapshot that REPLACES the held text, then appends
+       (HohenheimDeployFunctions), so a reconnect never doubles a line. Each log is plumage's follow-tail pane. */
+    public required instanceId: Integer
+    public buildSeed: String = ""
+    public stepSeed: String = ""
+    public showSteps: Boolean = false
+
+    private transient build: String = null
+    private transient steps: String = null
+
+    private computed buildText: String = build{:} ?? buildSeed{:}
+    private computed stepText: String = steps{:} ?? stepSeed{:}
+
+    style {
+        display: block;
+
+        > pl-log-view + pl-log-view {
+            margin-top: var(--pl-space-md);
+        }
+    }
+
+    @mount
+    function connect() {
+        DeployLog.connect(this, instanceId, (frame) => { apply(frame) })
+    }
+
+    function apply(frame: Map) {
+        build = DeployLog.buildText(build ?? buildSeed, frame)
+        steps = DeployLog.stepText(steps ?? stepSeed, frame)
+    }
+
+    template {
+        {% if showSteps %}
+        <pl-log-view data-hh-deploy-steps text={% stepText{:} %} label={% t("release_log", scope: "deployments") %}></pl-log-view>
+        {% /if %}
+        <pl-log-view data-hh-deploy-build text={% buildText{:} %} label={% t("build_log", scope: "deployments") %}></pl-log-view>
+    }
+} %}

@@ -85,5 +85,12 @@ class ConsoleRedactionTest {
         assertThat(nested.feed("v=password1234-extended;") + nested.flush())
             .as("step 7: the longest match is replaced whole, leaving no readable tail")
             .isEqualTo("v=" + ConsoleRedaction.PLACEHOLDER + ";");
+
+        // 8. The floor is six characters, the one floor every log in Hohenheim redacts from: a six-character value
+        //    is redacted, even split across two feeds, and a five-character one is left alone.
+        ConsoleRedaction.Redactor six = ConsoleRedaction.redactorOf(secrets("k3y9zq", "q7w2e"));
+        assertThat(six.feed("a=k3y") + six.feed("9zq b=q7w2e\n") + six.flush())
+            .as("step 8: a six-character secret is redacted across a chunk boundary; five characters are not")
+            .isEqualTo("a=" + ConsoleRedaction.PLACEHOLDER + " b=q7w2e\n");
     }
 }

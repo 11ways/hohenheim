@@ -19,6 +19,8 @@ import be.elevenways.hohenheim.model.WebhookDeliveryModel;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.build.BuildLog;
+import be.elevenways.hohenheim.server.build.LiveBuildLogs;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.source.GitSourcePolls;
 import be.elevenways.hohenheim.server.source.GitWebhookHandler;
@@ -147,6 +149,7 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         if (Boolean.TRUE.equals(vars.get("isDeploying"))) {
             vars.put("liveFeed", LIVE_FEED.toString());
             vars.put("liveSince", liveSince);
+            putLiveLog(vars, instanceId, releaseManaged && !failures.delegated());
         }
 
         if (HohenheimAccess.isAdmin(accessContext)) {
@@ -167,6 +170,31 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         vars.put("timeWording", CmsSupport.timeWording(conduit));
 
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_DEPLOYMENTS, vars);
+    }
+
+    /**
+     * Open the live log on the deploy that runs now: the newest in-flight release (its build runs inside it), else the
+     * newest running build, seeded with what the build has written so far (LiveBuildLogs: a running build's log is
+     * stored only when it ends) and, where this panel shows it, the release's step log; the hh-deploy-log element
+     * follows both over the deploy-log channel from there.
+     */
+    private static void putLiveLog(Map<String, Object> vars, int instanceId, boolean showSteps) {
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> deployments = (List<Map<String, Object>>) vars.get("deployments");
+        Map<String, Object> live = deployments == null ? null : deployments.stream()
+            .filter(entry -> Boolean.TRUE.equals(entry.get("inFlight")))
+            .min(Comparator.comparing((Map<String, Object> entry) -> !Boolean.TRUE.equals(entry.get("release"))))
+            .orElse(null);
+        if (live == null) {
+            return;
+        }
+        live.put("live", true);
+        BuildLog running = LiveBuildLogs.of(InstanceModel.MODEL_ID, instanceId);
+        boolean release = Boolean.TRUE.equals(live.get("release"));
+        vars.put("liveBuildSeed", running != null ? running.text()
+            : release ? "" : Objects.toString(live.get("log"), ""));
+        vars.put("liveStepSeed", release && showSteps ? Objects.toString(live.get("log"), "") : "");
+        vars.put("liveShowsSteps", release && showSteps);
     }
 
     /**
@@ -238,6 +266,8 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
             entry.put("kindLabel",
                 CmsSupport.enumLabel(ReleaseOperationModel.KIND, row.get(ReleaseOperationModel.KIND)));
             entry.put("release", true);
+            entry.put("inFlight", ReleaseOperationModel.IN_FLIGHT_STATUSES
+                .contains(Objects.toString(row.get(ReleaseOperationModel.STATUS), "")));
             putTrigger(entry, row, triggerers);
             // The output of the build that made this release's image is the tenant's own build, visible like the
             // log of a build row: without it a release that runs the wrong thing cannot be traced to its build.
@@ -591,6 +621,8 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
             row.get(BuildOperationModel.LOG));
         // The release lane's What column names each row; a build that has not (yet) become a release is a build.
         entry.put("kindLabel", CmsSupport.resolvedTextOrDefault(HohenheimMicrocopy.DEPLOYMENTS.of("kind_build")));
+        entry.put("inFlight", BuildOperationModel.LIFECYCLE.stored(OperationStatus::inFlight)
+            .contains(Objects.toString(row.get(BuildOperationModel.STATUS), "")));
         return entry;
     }
 
@@ -628,6 +660,9 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         // Only a release row records what started it.
         entry.put("trigger", "");
         entry.put("triggerText", "");
+        // Only the row of the deploy that runs now, and only while it runs (putLiveLog).
+        entry.put("inFlight", false);
+        entry.put("live", false);
         return entry;
     }
 

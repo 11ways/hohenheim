@@ -5,8 +5,11 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
+import be.elevenways.hohenheim.server.util.KeyedConsumers;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
@@ -72,7 +75,21 @@ public final class SandboxedBuilds {
     public @NonNull Result run(@NonNull BuildRequest request) {
         BuildQuota quota = request.quota();
         BuildLog log = new BuildLog(quota.logBytes());
-        int buildId = start(request, quota);
+        if (InstanceModel.MODEL_ID.equals(request.forModel())) {
+            // The instance's own secret values (its secret variables, its environment's): a build that echoes one,
+            // substituted into its environment or its arguments, stores and streams the placeholder instead.
+            log.redactAll(ConsoleRedaction.secretsOf(request.forId()));
+        }
+        // Live before the running row: an overlapping build is a bug refused here, before any row could be left
+        // running; from here a viewer of the owner taps this log while the build writes it.
+        KeyedConsumers.Registration live = LiveBuildLogs.register(request.forModel(), request.forId(), log);
+        int buildId;
+        try {
+            buildId = start(request, quota);
+        } catch (RuntimeException unstarted) {
+            live.close();
+            throw unstarted;
+        }
         long startedAt = Now.millis();
         Path artifact = null;
         Builders builder = null;
@@ -127,6 +144,7 @@ public final class SandboxedBuilds {
             // to prevent, and every failure path above runs through here.
             BuildCredentials.revokeAll(buildId);
             BuildSandbox.deleteQuietly(artifact);
+            live.close();
         }
     }
 
@@ -174,6 +192,8 @@ public final class SandboxedBuilds {
                                    @NonNull String status, @Nullable String imageId,
                                    int exitCode, @Nullable String reason, @NonNull BuildLog log,
                                    long peakDisk, long artifactBytes, long startedAt) {
+        // The output ended: the redactor's held tail is ordinary text now, in the log before it is stored or read.
+        log.flush();
         BuildOperationModel model = Models.get(BuildOperationModel.class);
         Row row = model.findById(buildId);
         if (row != null) {
