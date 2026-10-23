@@ -169,7 +169,7 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
         HttpResponse<String> unknown = httpPostEdit("/admin/environment-variables/" + variableId,
             "environment_id=" + environmentId + "&key=CARRIER_PROBE&kind=unknown&secret_value=smuggled",
             sessionToken, csrfToken);
-        assertThat(assertNotStale(unknown).statusCode()).as("step 9: unknown kind is a form refusal").isEqualTo(200);
+        assertThat(assertNotStale(unknown).statusCode()).as("step 9: unknown kind is a form refusal").isEqualTo(422);
         assertThat(unknown.body()).as("step 9: refused for its kind, not as a stale edit")
             .containsAnyOf("Choose one of the offered options", "Unknown variable kind");
         stored = Models.get(InstanceVariableModel.class).find().where(InstanceVariableModel.ID.eq(variableId)).first();
@@ -181,7 +181,7 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
             "environment_id=" + environmentId + "&key=CARRIER_PROBE&kind=&secret_value=smuggled",
             sessionToken, csrfToken);
         assertThat(assertNotStale(blankKind).statusCode())
-            .as("step 9: a blank kind refuses instead of retiring plain data").isEqualTo(200);
+            .as("step 9: a blank kind refuses instead of retiring plain data").isEqualTo(422);
         assertThat(blankKind.body()).as("step 9: refused for its missing kind, not as a stale edit")
             .containsAnyOf("Choose one of the offered options", "Unknown variable kind", " is required");
         for (String kind : new String[] {null, "", "unknown"}) {
@@ -301,7 +301,7 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
         long beforeRefusal = Models.get(InstanceVariableModel.class).find().count();
         HttpResponse<String> emptySecret = httpPostForm("/admin/environment-variables/new",
             "environment_id=" + environmentId + "&key=EMPTY_SECRET&kind=secret", sessionToken, csrfToken);
-        assertThat(emptySecret.statusCode()).as("step 7: missing secret rerenders the form").isEqualTo(200);
+        assertThat(emptySecret.statusCode()).as("step 7: missing secret rerenders the form").isEqualTo(422);
         assertThat(emptySecret.body()).as("step 7: refusal names the secret carrier")
             .containsPattern("<pl-field data-path=\"secret_value\"[^>]*\\sinvalid[\\s>=]");
         Row missingSecret = Models.get(InstanceVariableModel.class).createEmptyRow();
@@ -324,7 +324,7 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
         // 1. Submitting the create form empty is refused and rerendered.
         HttpResponse<String> empty = httpPostForm("/admin/git-providers/new",
             "name=&kind=&base_url=", sessionToken, csrfToken);
-        assertThat(empty.statusCode()).as("the refusal rerenders the form").isEqualTo(200);
+        assertThat(empty.statusCode()).as("the refusal rerenders the form").isEqualTo(422);
 
         // 2. The missing kind is REPORTED -- it used to pass in silence, leaving the
         //    select unmarked while the form complained about the name only.
@@ -357,7 +357,7 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
         //    requirements are enforced server-side and neither passes in silence.
         HttpResponse<String> namelessButTyped = httpPostForm("/admin/git-providers/new",
             "name=&kind=hohenheim%3Agithub&base_url=", sessionToken, csrfToken);
-        assertThat(namelessButTyped.statusCode()).isEqualTo(200);
+        assertThat(namelessButTyped.statusCode()).isEqualTo(422);
         assertThat(namelessButTyped.body())
             .as("the name field is marked invalid")
             .containsPattern("<pl-field data-path=\"name\"[^>]*\\sinvalid[\\s>=]");

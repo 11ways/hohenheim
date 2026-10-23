@@ -266,8 +266,8 @@ class AdminPagesTest extends HohenheimTestBase {
         var response = adminPostForm("/admin/settings",
             "blocking.domain_miss_threshold=not-a-number&blocking.domain_miss_threshold__base=" + before);
 
-        // Validation failure rerenders the page (no PRG redirect).
-        assertThat(response.statusCode()).isEqualTo(200);
+        // Validation failure rerenders the page at 422 (no PRG redirect).
+        assertThat(response.statusCode()).isEqualTo(422);
 
         String raw = Files.exists(settingsDry) ? Files.readString(settingsDry) : "";
         assertThat(raw).doesNotContain("not-a-number");

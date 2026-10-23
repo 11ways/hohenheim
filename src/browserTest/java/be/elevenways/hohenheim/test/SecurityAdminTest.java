@@ -44,7 +44,7 @@ class SecurityAdminTest extends HohenheimTestBase {
         // Validation failure re-renders the form (no redirect) and creates nothing.
         assertThat(Models.get(BanModel.class).find()
             .where(BanModel.IP.eq("192.168.1.1")).count()).isZero();
-        assertThat(privateIp.statusCode()).isEqualTo(200);
+        assertThat(privateIp.statusCode()).isEqualTo(422);
 
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.NEVER_BAN,
             List.of("203.0.113.66", "198.51.100.0/24"));
@@ -52,7 +52,7 @@ class SecurityAdminTest extends HohenheimTestBase {
             for (String ip : new String[] {"203.0.113.66", "198.51.100.9"}) {
                 var allowlisted = adminPostForm("/admin/bans/new", "ip=" + ip + "&duration=24h");
                 // Validation failure re-renders the form and creates nothing.
-                assertThat(allowlisted.statusCode()).isEqualTo(200);
+                assertThat(allowlisted.statusCode()).isEqualTo(422);
                 assertThat(Models.get(BanModel.class).find()
                     .where(BanModel.IP.eq(ip)).count()).as("ip %s", ip).isZero();
             }

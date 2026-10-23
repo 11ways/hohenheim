@@ -52,7 +52,7 @@ class DnsAdminTest extends HohenheimTestBase {
         var invalidOrigin = adminPostForm("/admin/dns-zones/new",
             "origin=*.bad-origin&default_ttl=3600&negative_ttl=300"
             + "&soa_refresh=7200&soa_retry=3600&soa_expire=1209600");
-        assertThat(invalidOrigin.statusCode()).isEqualTo(200);
+        assertThat(invalidOrigin.statusCode()).isEqualTo(422);
         assertThat(invalidOrigin.body()).contains("bare domain");
         assertThat(Models.get(DnsZoneModel.class).findByOrigin("*.bad-origin")).isNull();
 
@@ -60,12 +60,12 @@ class DnsAdminTest extends HohenheimTestBase {
         var duplicate = adminPostForm("/admin/dns-zones/new",
             "origin=admin-zone.example&default_ttl=3600&negative_ttl=300"
             + "&soa_refresh=7200&soa_retry=3600&soa_expire=1209600");
-        assertThat(duplicate.statusCode()).isEqualTo(200);
+        assertThat(duplicate.statusCode()).isEqualTo(422);
         assertThat(duplicate.body()).contains("already exists");
 
         var bad = adminPostForm("/admin/dns-records/new",
             "zone_id=" + zoneId + "&name=www&type=A&value=not-an-ip");
-        assertThat(bad.statusCode()).isEqualTo(200);
+        assertThat(bad.statusCode()).isEqualTo(422);
         assertThat(bad.body()).contains("IPv4");
 
         var good = adminPostForm("/admin/dns-records/new",
@@ -85,7 +85,7 @@ class DnsAdminTest extends HohenheimTestBase {
         // refused by the codec, and one WITH data.priority saves it into the data map.
         var mxNoPriority = adminPostForm("/admin/dns-records/new",
             "zone_id=" + zoneId + "&name=mail&type=MX&value=mx.admin-zone.example.");
-        assertThat(mxNoPriority.statusCode()).isEqualTo(200);
+        assertThat(mxNoPriority.statusCode()).isEqualTo(422);
         assertThat(mxNoPriority.body()).contains("priority");
         var mxGood = adminPostForm("/admin/dns-records/new",
             "zone_id=" + zoneId + "&name=mail&type=MX&value=mx.admin-zone.example."
@@ -102,7 +102,7 @@ class DnsAdminTest extends HohenheimTestBase {
         // CNAME exclusivity is enforced.
         var cname = adminPostForm("/admin/dns-records/new",
             "zone_id=" + zoneId + "&name=www&type=CNAME&value=other.admin-zone.example");
-        assertThat(cname.statusCode()).isEqualTo(200);
+        assertThat(cname.statusCode()).isEqualTo(422);
         assertThat(cname.body()).contains("CNAME");
         assertThat(Models.get(DnsRecordModel.class).findAll(DnsRecordModel.ZONE_ID, zoneId)).hasSize(1);
 
@@ -111,7 +111,7 @@ class DnsAdminTest extends HohenheimTestBase {
         // sees the conflict -- the exclusivity check has to refuse "@" by name.
         var apexCname = adminPostForm("/admin/dns-records/new",
             "zone_id=" + zoneId + "&name=@&type=CNAME&value=other.admin-zone.example");
-        assertThat(apexCname.statusCode()).isEqualTo(200);
+        assertThat(apexCname.statusCode()).isEqualTo(422);
         assertThat(apexCname.body()).contains("CNAME");
         assertThat(Models.get(DnsRecordModel.class).find()
             .where(DnsRecordModel.ZONE_ID.eq(zoneId))
@@ -284,7 +284,7 @@ class DnsAdminTest extends HohenheimTestBase {
         var noCredentials = adminPostForm("/admin/dns-peers/new",
             "name=peer-incomplete&peer_type=hohenheim&transfer_host=&transfer_port="
             + "&tsig_key_name=&tsig_algorithm=&tsig_secret=&base_url=&api_key=&enabled=on");
-        assertThat(noCredentials.statusCode()).isEqualTo(200);
+        assertThat(noCredentials.statusCode()).isEqualTo(422);
         assertThat(noCredentials.body()).contains("admin base URL");
         assertThat(peers.findFirst(DnsPeerModel.NAME, "peer-incomplete")).isNull();
 
@@ -293,7 +293,7 @@ class DnsAdminTest extends HohenheimTestBase {
         var noHost = adminPostForm("/admin/dns-peers/new",
             "name=peer-hostless&peer_type=nameserver&transfer_host=&transfer_port="
             + "&tsig_key_name=&tsig_algorithm=&tsig_secret=&base_url=&api_key=&enabled=on");
-        assertThat(noHost.statusCode()).isEqualTo(200);
+        assertThat(noHost.statusCode()).isEqualTo(422);
         assertThat(noHost.body()).contains("transfer host");
         assertThat(peers.findFirst(DnsPeerModel.NAME, "peer-hostless")).isNull();
 

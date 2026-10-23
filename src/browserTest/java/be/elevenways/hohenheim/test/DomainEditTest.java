@@ -92,7 +92,7 @@ class DomainEditTest extends HohenheimTestBase {
     private static void assertRefused(HttpResponse<String> response, String sentence, String what) {
         assertThat(response.statusCode())
             .as(what + ": the refusal rerenders the form instead of redirecting")
-            .isEqualTo(200);
+            .isEqualTo(422);
         assertThat(response.body())
             .as(what + ": and names the violation")
             .contains(sentence);

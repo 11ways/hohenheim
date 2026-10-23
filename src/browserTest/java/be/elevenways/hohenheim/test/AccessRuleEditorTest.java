@@ -206,7 +206,7 @@ class AccessRuleEditorTest extends HohenheimTestBase {
             "type=ip_allow&data.network=not-an-ip-address", sessionToken, csrfToken));
         assertThat(nonsenseSave.statusCode())
             .as("step 2: a refused save rerenders the form instead of redirecting")
-            .isEqualTo(200);
+            .isEqualTo(422);
         assertThat(nonsenseSave.body())
             .as("step 2: and names what a network looks like")
             .contains("Enter one IP address or CIDR network");
@@ -227,7 +227,7 @@ class AccessRuleEditorTest extends HohenheimTestBase {
         HttpResponse<String> enableEmpty = assertNotStale(httpPostEdit(saveUrl,
             "type=ip_allow&data.network=&enabled=true", sessionToken, csrfToken));
         assertThat(enableEmpty.statusCode())
-            .as("step 4: enabling an empty rule is refused").isEqualTo(200);
+            .as("step 4: enabling an empty rule is refused").isEqualTo(422);
         assertThat(enableEmpty.body())
             .as("step 4: with the same message the save refusal used")
             .contains("Enter one IP address or CIDR network");

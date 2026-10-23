@@ -142,7 +142,7 @@ class NotificationAdminTest extends HohenheimTestBase {
         // 1. A wholly empty submit: all three required fields are named at once, and the
         //    shape rule stays quiet about a box nobody filled in.
         var empty = adminPostForm("/admin/notifications/new", "name=&format=&url=");
-        assertThat(empty.statusCode()).as("step 1: the form rerenders").isEqualTo(200);
+        assertThat(empty.statusCode()).as("step 1: the form rerenders").isEqualTo(422);
         // The refusal speaks the field's LABEL, never its key.
         assertThat(empty.body()).as("step 1: name is required").contains("Name is required");
         assertThat(empty.body()).as("step 1: the raw key never prints").doesNotContain("name is required");
