@@ -43,12 +43,12 @@ public final class HohenheimTestRuntime {
     }
 
     // AIDEV-NOTE: this boots the REAL TaskService -- the zenit TASKS stage is an
-    // unconditional ROOT_STAGE child, and ensureBooted enables all 7 roles, so
-    // minutely and */5 crons (SuperviseProxyListeners, MonitorStacks,
-    // Verify*Isolation) tick throughout every browser test. Anything published via
-    // ServerMain.adoptProxyServer becomes visible to those ticks MID-ASSERTION:
-    // superviseListeners() mutates the very restart counters and listener state a
-    // proxy test is checking. Detach with adoptProxyServer(null) when done.
+    // unconditional ROOT_STAGE child, and ensureBooted enables all 7 roles -- but in a
+    // test lane zenit's TaskRuntime holds every task type, so no cron (minutely
+    // SuperviseProxyListeners, */5 MonitorStacks, Verify*Isolation) ticks during a
+    // browser test unless a test opts in with TaskRuntime.optIn. Such a test sees
+    // anything published via ServerMain.adoptProxyServer MID-ASSERTION: detach with
+    // adoptProxyServer(null) when done.
     public static void ensureBooted() {
         declareFullNodeRolesOnce();
         declareAccessModelsOnce();

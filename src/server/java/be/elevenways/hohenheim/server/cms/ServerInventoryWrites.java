@@ -13,6 +13,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.routing.RouteScope;
+import be.elevenways.zenit.common.security.Secret;
 import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -66,7 +67,7 @@ final class ServerInventoryWrites {
                         HohenheimMicrocopy.VIOLATIONS.of("local_server_immutable"));
                 }
             }
-            if (Texts.trimmedOrNull(values.get(ServerParts.INCUS_TRUST_TOKEN.getName())) != null) {
+            if (tokenText(values.get(ServerParts.INCUS_TRUST_TOKEN.getName())) != null) {
                 throw Violations.ofField(ServerParts.INCUS_TRUST_TOKEN.getName(), "",
                     HohenheimMicrocopy.VIOLATIONS.of("local_server_immutable"));
             }
@@ -115,13 +116,18 @@ final class ServerInventoryWrites {
 
     private static @Nullable String token(Map<String, Object> values, OperationInput.Values merged,
                                           @Nullable Row row) {
-        String token = Texts.trimmedOrNull(values.remove(ServerParts.INCUS_TRUST_TOKEN.getName()));
+        String token = tokenText(values.remove(ServerParts.INCUS_TRUST_TOKEN.getName()));
         if (token != null && (!ServerModel.RUNTIME_INCUS.equals(runtime(merged, row))
                 || !trimmed(merged.get(ServerModel.INCUS_URL.getName())).startsWith("https://"))) {
             throw Violations.ofField(ServerParts.INCUS_TRUST_TOKEN.getName(), "",
                 HohenheimMicrocopy.VIOLATIONS.of("incus_token_needs_https"));
         }
         return token;
+    }
+
+    /** The pipeline seals the secret token entry, so its text is revealed here, never stringified ("[secret]"). */
+    private static @Nullable String tokenText(@Nullable Object raw) {
+        return raw instanceof Secret secret ? Texts.trimmedOrNull(secret.reveal()) : Texts.trimmedOrNull(raw);
     }
 
     private static void validate(OperationInput.Values merged, @Nullable Row row) {

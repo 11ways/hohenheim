@@ -358,8 +358,15 @@ class AcmeReissueContractTest {
         }
     }
 
-    /** One timer a {@link RecordedTimers} holds: its delay or period, and whether it repeats. */
-    private record Armed(long delayMs, boolean fixedRate) {}
+    /**
+     * One timer a {@link RecordedTimers} holds: its delay or period and whether it repeats, or the wall instant it is
+     * due at ({@code at}, null for a delay).
+     */
+    private record Armed(long delayMs, boolean fixedRate, Instant at) {
+        Armed(long delayMs, boolean fixedRate) {
+            this(delayMs, fixedRate, null);
+        }
+    }
 
     /**
      * A lane that runs nothing by itself: it holds every timer armed on it, in arming order, until the test fires
@@ -388,20 +395,25 @@ class AcmeReissueContractTest {
             job.run();
         }
 
-        private synchronized ScheduledJob arm(Runnable job, long delayMs, boolean fixedRate) {
-            this.armed.add(new Armed(delayMs, fixedRate));
+        private synchronized ScheduledJob arm(Runnable job, Armed timer) {
+            this.armed.add(timer);
             this.jobs.add(job);
             return () -> { };
         }
 
         @Override
         protected ScheduledJob doSchedule(Runnable bound, long delayMs) {
-            return this.arm(bound, delayMs, false);
+            return this.arm(bound, new Armed(delayMs, false));
+        }
+
+        @Override
+        protected ScheduledJob doScheduleAt(Runnable bound, Instant due) {
+            return this.arm(bound, new Armed(0L, false, due));
         }
 
         @Override
         protected ScheduledJob doScheduleAtFixedRate(Runnable bound, long periodMs) {
-            return this.arm(bound, periodMs, true);
+            return this.arm(bound, new Armed(periodMs, true));
         }
 
         @Override

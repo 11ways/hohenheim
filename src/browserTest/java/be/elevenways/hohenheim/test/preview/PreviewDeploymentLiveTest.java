@@ -323,10 +323,7 @@ class PreviewDeploymentLiveTest {
 
     // -- helpers --------------------------------------------------------------
 
-    /**
-     * The ambient minute sweeper can win the lease race for the due one-shot; whoever
-     * fires it, the reclaimed STATE is what the test asserts -- await it briefly.
-     */
+    /** runDue starts the due step on its own thread and returns, so the reclaimed state is awaited briefly. */
     private static Row awaitDeleted(int previewId) {
         return Poll.value("preview " + previewId + " is soft-deleted", Duration.ofSeconds(10),
             Duration.ofMillis(100), () -> {

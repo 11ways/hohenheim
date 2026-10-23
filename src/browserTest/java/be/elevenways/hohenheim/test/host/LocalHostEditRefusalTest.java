@@ -74,6 +74,9 @@ class LocalHostEditRefusalTest {
             assertThat(decisionOf(resource, "incus_trust_token", local, operator))
                 .as("step 1: the local host offers no trust token at all")
                 .isEqualTo(FieldAccess.Decision.HIDDEN);
+            assertThat(resource.form().spec().findEntry("incus_trust_token").asksReentry())
+                .as("step 1: the write-only trust token is secret: masked, never echoed by a refused submit")
+                .isTrue();
             assertThat(decisionOf(resource, "posture", local, operator))
                 .as("step 1: while its posture has no binding and stays editable")
                 .isNull();

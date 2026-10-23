@@ -21,6 +21,7 @@ import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.SchemaField;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.security.Secret;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.junit.jupiter.api.BeforeAll;
@@ -101,11 +102,12 @@ class HostEnrolmentTransactionTest {
                 .as("step 2: the one-use token is never stored anywhere on the row")
                 .doesNotContain(TOKEN);
 
-            // 3. A retry with a fresh token completes, and the proven trust clears the record.
+            // 3. A retry with a fresh token completes, and the proven trust clears the record. The token arrives
+            //    sealed, as a secret entry reaches a writer through the operation pipeline: the ceremony gets its text.
             RecordingCeremony accepting = new RecordingCeremony(false, true);
             try (HostEnrolment.Replacement ignored = HostEnrolment.replaceCeremonyForTesting(accepting)) {
                 Map<String, Object> retry = new LinkedHashMap<>();
-                retry.put("incus_trust_token", "fresh-token");
+                retry.put("incus_trust_token", Secret.of("fresh-token"));
                 // The update lane's own entry point: its PartialWrite carries the stored host.
                 PartsWrites.updateRow(resource, servers.findById(id), Map.copyOf(retry), operator);
             }

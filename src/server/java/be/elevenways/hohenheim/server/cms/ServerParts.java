@@ -92,7 +92,8 @@ public final class ServerParts {
     private static final String RUNS_COLUMN = "runs";
     /** Request memo of every host's app and database counts: three queries per rendered list. */
     private static final IdentifierKey<Map<Integer, int[]>> RUNS_COUNTS = IdentifierKey.of("hohenheim", "host_runs");
-    static final StringField INCUS_TRUST_TOKEN = StringField.builder("incus_trust_token")
+    /** Form-only, never stored; secret, so it renders masked and a refused submit never echoes it back. */
+    static final StringField INCUS_TRUST_TOKEN = StringField.builder("incus_trust_token").secret()
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("incus_trust_token"))
         .help(HohenheimMicrocopy.HELP.of("incus_trust_token")).build();
     static final List<String> LOCAL_IMMUTABLE = List.of(ServerModel.NAME.getName(), ServerModel.RUNTIME.getName(),

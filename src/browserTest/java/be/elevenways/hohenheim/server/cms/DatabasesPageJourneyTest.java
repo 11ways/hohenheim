@@ -16,7 +16,6 @@ import be.elevenways.hohenheim.server.database.DatabaseBackups;
 import be.elevenways.hohenheim.server.database.DatabaseEngines;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
-import be.elevenways.hohenheim.server.task.ReconcileInstanceStatus;
 import be.elevenways.hohenheim.test.database.EngineHandles;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -35,8 +34,6 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.server.task.TaskRuntime;
-import be.elevenways.zenit.server.task.TaskService;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
@@ -61,8 +58,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * where a backup cannot be taken.
  *
  * AIDEV-NOTE: the planted engines claim RUNNING with no container behind them; a reconcile sweep landing mid-journey
- * flipped the engine to stopped and step 2 read "No backup can be made now". HohenheimTestBase holds that sweep for
- * the whole test JVM.
+ * flipped the engine to stopped and step 2 read "No backup can be made now". No sweep runs now: a test lane's task
+ * runtime holds every task type (zenit TaskRuntime).
  *
  * @author Jelle De Loecker
  * @since  0.9.0
@@ -72,16 +69,6 @@ class DatabasesPageJourneyTest extends HohenheimHttpTestBase {
     private static final String PREFIX = "dbpage-";
     private static final LocaleChain EN = LocaleChain.ofTags("en");
     private static final String OVERDUE = "the nightly backup has not written a newer one";
-
-    /** The engines below claim RUNNING with nothing behind them, so no background sweep may run in this JVM. */
-    @Test
-    void theBackgroundReconcileSweepIsHeldForTheWholeJvm() {
-        TaskService tasks = TaskRuntime.service();
-        if (tasks != null) {
-            assertThat(tasks.isPaused(ReconcileInstanceStatus.ID))
-                .as("the suite base holds the two-minute reconcile sweep").isTrue();
-        }
-    }
 
     @Test
     void aDatabaseSaysWhereItRunsWhoUsesItAndItsLastBackup() throws Exception {
