@@ -94,6 +94,10 @@ class InstanceApiTest extends HohenheimHttpTestBase {
             for (Row row : instances.find().withTrashed().where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
                 HardDeletes.byId(instances, row.get(InstanceModel.ID));
             }
+            // The admitted host goes too: left behind, it is a placement candidate for every later class.
+            if (hostId != null) {
+                Models.get(ServerModel.class).delete(hostId);
+            }
         } finally {
             FakeDockerDaemon.restore();
             if (daemon != null) daemon.close();

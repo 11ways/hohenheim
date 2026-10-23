@@ -254,9 +254,12 @@ class TenantDatabaseSurfaceTest extends HohenheimHttpTestBase {
         row.set(ServerModel.PREFLIGHT_OK, true);
         servers.save(row);
         HostFixtures.acknowledgePosture(row);
+        // AIDEV-NOTE: placement takes the admitted host with the MOST headroom, lowest id on a tie. A shared-server
+        // JVM may still hold another class's admitted host, so this one is the largest any fixture declares: at an
+        // equal 16 GB an older host won the tie and step 4 read its id.
         HostPreflight.store(PREFIX + "host", new HostPreflight.Report(
             List.of(new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "ok")),
-            Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Now.instant(), null));
+            Map.of("mem_total", 1024L * 1024 * 1024 * 1024), true, Now.instant(), null));
         return row.get(ServerModel.ID);
     }
 
