@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.instance.InstanceInstalls;
 import be.elevenways.hohenheim.server.instance.InstanceService;
@@ -86,6 +87,7 @@ class InstanceReinstallTest extends HohenheimHttpTestBase {
                 .where(InstanceTemplateModel.NAME.startsWith(PREFIX)).all()) {
             templates.delete(row.get(InstanceTemplateModel.ID));
         }
+        Models.get(ServerModel.class).delete(hostId);
         FakeNativeDaemons.resetInstalls();
     }
 

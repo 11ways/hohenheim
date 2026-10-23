@@ -4,6 +4,9 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
+import be.elevenways.hohenheim.model.InstanceVariableModel;
+import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.test.ApiSupport;
@@ -14,6 +17,7 @@ import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -57,6 +61,25 @@ class InstanceFromTemplateWizardTest extends HohenheimHttpTestBase {
         variable("SITE_TITLE", "hohenheim:string", "");
         variable("ADMIN_PASSWORD", "hohenheim:secret", SECRET_DEFAULT);
         hostId = HostFixtures.admittedDockerHost(PREFIX + "host", 16384);
+    }
+
+    /** Removes what the class made, the admitted host last: left behind, it is a placement candidate for later classes. */
+    @AfterAll
+    static void cleanUp() {
+        Model instances = Models.get(InstanceModel.class);
+        for (Row row : instances.find().where(InstanceModel.NAME.startsWith(PREFIX)).withTrashed().all()) {
+            int id = row.get(InstanceModel.ID);
+            for (Row variable : Models.get(InstanceVariableModel.class).findByInstanceId(id)) {
+                Models.get(InstanceVariableModel.class).delete(variable.get(InstanceVariableModel.ID));
+            }
+            HardDeletes.byId(instances, id);
+        }
+        Model variables = Models.get(InstanceTemplateVariableModel.class);
+        for (Row row : variables.find().where(InstanceTemplateVariableModel.TEMPLATE_ID.eq(templateId)).all()) {
+            variables.delete(row.get(InstanceTemplateVariableModel.ID));
+        }
+        Models.get(InstanceTemplateModel.class).delete(templateId);
+        Models.get(ServerModel.class).delete(hostId);
     }
 
     @Test
