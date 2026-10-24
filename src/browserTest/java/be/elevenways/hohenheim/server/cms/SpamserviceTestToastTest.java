@@ -16,6 +16,7 @@ import java.lang.reflect.Field;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -53,7 +54,7 @@ class SpamserviceTestToastTest extends HohenheimTestBase {
             // 1. The real availability check sees a configured, running installation with a management client.
             // AIDEV-NOTE: isolate the singleton's runtime facts, not the operation attachment: replacing its handler
             // would bypass the production client-failure-to-Violations path this regression needs to exercise.
-            process = ManagedServiceProcess.start(Subprocess.of("sleep", "60"), text -> text);
+            process = ManagedServiceProcess.start(Subprocess.of("sleep", "60"), List.of());
             replace(manager, original, "configurationPresent", true);
             replace(manager, original, "configurationEnabled", true);
             replace(manager, original, "process", process);

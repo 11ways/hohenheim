@@ -19,6 +19,7 @@ import be.elevenways.spamservice.client.SpamserviceClient;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.KnownValueRedactor;
 import be.elevenways.zenit.server.security.SecureTokens;
 import be.elevenways.zenit.server.security.SecurityEventSinks;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -53,7 +54,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
-import java.util.function.UnaryOperator;
 
 import static be.elevenways.hohenheim.RawValues.trimmed;
 
@@ -374,11 +374,13 @@ public final class SpamserviceManager {
             this.activeConfig = config;
         }
 
-        UnaryOperator<String> redactor = redactor(config.controllerKey());
+        String controllerKey = Objects.requireNonNull(config.controllerKey());
+        // The reporting key derives from the controller key and travels to the child, which may echo it.
+        List<String> secrets = List.of(controllerKey, installationReportingKey(controllerKey));
         Map<String, String> migrationEnvironment = environment(config, paths, database, null, false);
         setState(requested, SpamserviceState.MIGRATING);
         ManagedServiceProcess migration = launch(config, paths.instanceDirectory(), migrationEnvironment,
-            command(config.maxHeapMb(), artifact.path(), true), redactor, null);
+            command(config.maxHeapMb(), artifact.path(), true), secrets, null);
         adoptProcess(requested, migration);
         boolean migrated = migration.waitFor(MIGRATION_TIMEOUT_MS);
         boolean migrationClean = migration.stop();
@@ -403,7 +405,7 @@ public final class SpamserviceManager {
         String runtimeBaseUrl = baseUrl(config.port());
         setState(requested, SpamserviceState.STARTING);
         ManagedServiceProcess started = launch(config, paths.instanceDirectory(), runtimeEnvironment,
-            command(config.maxHeapMb(), artifact.path(), false), redactor,
+            command(config.maxHeapMb(), artifact.path(), false), secrets,
             Objects.requireNonNull(config.controllerKey()));
         adoptProcess(requested, started);
         Config startedConfig = config;
@@ -427,12 +429,12 @@ public final class SpamserviceManager {
 
     private ManagedServiceProcess launch(Config config, Path workingDirectory,
                                           Map<String, String> environment, List<String> command,
-                                          UnaryOperator<String> redactor, @Nullable String stdinLine)
+                                          List<String> secrets, @Nullable String stdinLine)
             throws IOException {
         Subprocess process = SystemUsers.execution(config.runAs(), environment, command, true)
             .directory(workingDirectory)
             .stopGrace(Duration.ofMillis(STOP_TIMEOUT_MS));
-        return this.processLauncher.launch(process, redactor, stdinLine);
+        return this.processLauncher.launch(process, secrets, stdinLine);
     }
 
     private void installIntegration(long requested, Config config, String runtimeBaseUrl) {
@@ -825,10 +827,6 @@ public final class SpamserviceManager {
             "hohenheim-installation-security-reporter-v1");
     }
 
-    private static UnaryOperator<String> redactor(String secret) {
-        return text -> text == null ? "" : text.replace(secret, "[REDACTED]");
-    }
-
     private static long reputationTtlMs() {
         Integer seconds = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Security.REPUTATION_TTL_SECONDS);
@@ -1032,6 +1030,13 @@ public final class SpamserviceManager {
         Config withMaxHeapMb(int value) {
             return new Config(id, enabled, port, runAs, value, controllerKey);
         }
+
+        /** Never prints the controller key: a record's generated toString would. */
+        @Override
+        public String toString() {
+            return "Config[id=" + id + ", enabled=" + enabled + ", port=" + port + ", runAs=" + runAs
+                + ", maxHeapMb=" + maxHeapMb + ", controllerKey=" + KnownValueRedactor.PLACEHOLDER + "]";
+        }
     }
 
     record RuntimePaths(@NonNull Path managedRoot, @NonNull Path executableDirectory,
@@ -1051,7 +1056,7 @@ public final class SpamserviceManager {
 
     interface ProcessLauncher {
         @NonNull ManagedServiceProcess launch(@NonNull Subprocess process,
-                                               @NonNull UnaryOperator<String> redactor,
+                                               @NonNull List<String> secrets,
                                                @Nullable String stdinLine) throws IOException;
     }
 

@@ -32,7 +32,6 @@ import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.UnaryOperator;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -162,7 +161,7 @@ class SpamserviceManagerTest {
         Subprocess spec = SystemUsers.execution(null,
             SystemUsers.safeEnvironment(this.temp.toString()), List.of("/bin/sleep", "60"), true)
             .stopGrace(Duration.ofMillis(100));
-        ManagedServiceProcess process = ManagedServiceProcess.start(spec, value -> value);
+        ManagedServiceProcess process = ManagedServiceProcess.start(spec, List.of());
         try {
             String base = "http://127.0.0.1:" + this.port;
             assertThat(SpamserviceManager.probeReadiness(base, process, "expected", 300, () -> false))
@@ -297,7 +296,7 @@ class SpamserviceManagerTest {
     void readinessFailureStaysFailOpenAndCleansUpTheProcess() throws Exception {
         RecordingLauncher launcher = new RecordingLauncher(false);
         RecordingSink sink = new RecordingSink();
-        SpamserviceManager manager = manager(new FakeStore(config(true, "key")), launcher,
+        SpamserviceManager manager = manager(new FakeStore(config(true, "controller-key")), launcher,
             (base, process, nonce, timeout, cancelled) -> false, sink);
         try {
             manager.start();
@@ -328,7 +327,7 @@ class SpamserviceManagerTest {
                 return ProcessGroupSupport.GroupState.UNKNOWN;
             }
         };
-        SpamserviceManager.ProcessLauncher launcher = (requested, redactor, stdinLine) -> {
+        SpamserviceManager.ProcessLauncher launcher = (requested, secrets, stdinLine) -> {
             List<String> command = List.copyOf(requested.command());
             commands.add(command);
             boolean migration = command.contains("--run-migrations");
@@ -338,9 +337,9 @@ class SpamserviceManagerTest {
             if (!migration) {
                 actual.stopOperator(ProcessGroupSupport.stopOperator(null, failedCleanup));
             }
-            return ManagedServiceProcess.start(actual, redactor, stdinLine);
+            return ManagedServiceProcess.start(actual, secrets, stdinLine);
         };
-        SpamserviceManager manager = new SpamserviceManager(new FakeStore(config(true, "key")),
+        SpamserviceManager manager = new SpamserviceManager(new FakeStore(config(true, "controller-key")),
             () -> new ByteArrayInputStream(DECLARING_ARTIFACT), launcher,
             (base, process, nonce, timeout, cancelled) -> false, (path, runAs) -> {},
             new RecordingSink(), () -> this.temp.resolve("blocked-cleanup"), () -> {},
@@ -368,7 +367,7 @@ class SpamserviceManagerTest {
     void disabledStateStartsNothingAndLeavesManagedSinkLifecycleForShutdown() throws Exception {
         RecordingLauncher launcher = new RecordingLauncher(false);
         RecordingSink sink = new RecordingSink();
-        SpamserviceManager manager = manager(new FakeStore(config(false, "key")), launcher,
+        SpamserviceManager manager = manager(new FakeStore(config(false, "controller-key")), launcher,
             (base, process, nonce, timeout, cancelled) -> true, sink);
         try {
             manager.reconcile();
@@ -386,7 +385,7 @@ class SpamserviceManagerTest {
     void sharedNonRootSystemUserIsRejectedBeforeAnyProcessLaunch() throws Exception {
         RecordingLauncher launcher = new RecordingLauncher(false);
         SpamserviceManager.Config shared = new SpamserviceManager.Config(1, true, this.port,
-            new SystemUsers.RunAsUser("site-owner", 4242, 4242, this.temp.toString()), 256, "key");
+            new SystemUsers.RunAsUser("site-owner", 4242, 4242, this.temp.toString()), 256, "controller-key");
         SpamserviceManager manager = manager(new FakeStore(shared), launcher,
             (base, process, nonce, timeout, cancelled) -> true, new RecordingSink());
         try {
@@ -403,7 +402,7 @@ class SpamserviceManagerTest {
     void unexpectedExitRecoversThroughBoundedBackoff() throws Exception {
         RecordingLauncher launcher = new RecordingLauncher(false);
         RecordingSink sink = new RecordingSink();
-        SpamserviceManager manager = manager(new FakeStore(config(true, "key")), launcher,
+        SpamserviceManager manager = manager(new FakeStore(config(true, "controller-key")), launcher,
             (base, process, nonce, timeout, cancelled) -> true, sink);
         try {
             manager.start();
@@ -435,7 +434,7 @@ class SpamserviceManagerTest {
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
-                return config(false, "key");
+                return config(false, "controller-key");
             }
             @Override public String persistControllerKey(int id, String key) { return key; }
         };
@@ -529,7 +528,7 @@ class SpamserviceManagerTest {
 
         @Override
         public synchronized ManagedServiceProcess launch(Subprocess requested,
-                                                          UnaryOperator<String> redactor,
+                                                          List<String> secrets,
                                                           String stdinLine)
                 throws IOException {
             List<String> command = List.copyOf(requested.command());
@@ -540,7 +539,7 @@ class SpamserviceManagerTest {
             Subprocess actual = SystemUsers.execution(null, environmentOf(requested),
                 List.of("/bin/sh", "-c", migration || this.serverExits ? "exit 0" : "sleep 60"),
                 true).stopGrace(Duration.ofMillis(100));
-            ManagedServiceProcess process = ManagedServiceProcess.start(actual, redactor, stdinLine);
+            ManagedServiceProcess process = ManagedServiceProcess.start(actual, secrets, stdinLine);
             this.processes.add(process);
             return process;
         }

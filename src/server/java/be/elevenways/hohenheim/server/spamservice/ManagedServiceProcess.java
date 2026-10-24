@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.spamservice;
 
 import be.elevenways.protoblast.server.process.ProcessOutcome;
+import be.elevenways.zenit.common.security.KnownValueRedactor;
 import be.elevenways.protoblast.server.process.RunningProcess;
 import be.elevenways.protoblast.server.process.Subprocess;
 import be.elevenways.protoblast.server.process.TextSink;
@@ -12,17 +13,19 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeoutException;
-import java.util.function.UnaryOperator;
 
 /**
  * Owns one long-lived service process and keeps the redacted tail of what it writes.
  *
  * AIDEV-NOTE: the process is a {@link Subprocess} the caller describes (its session, stop operator and stop grace
  * come from {@code SystemUsers.execution}); this class only adds the merged output, which the subprocess's own pump
- * decodes into a bounded tail ({@link TextSink}), and the one stdin line, written through a pipe so its bytes can be
- * cleared afterwards. The outcome resolves only once that pump drained, so a stop leaves the tail complete.
+ * decodes ({@link TextSink}) and feeds through ONE {@link KnownValueRedactor} stream per process before it lands in
+ * the bounded tail, and the one stdin line, written through a pipe so its bytes can be cleared afterwards. Subprocess
+ * flushes the sink once at the end of the stream, which flushes the redactor (masking a secret cut off mid-value);
+ * the outcome resolves only once that happened, so a stop leaves the tail complete and redacted.
  *
  * @author Jelle De Loecker
  * @since 0.1.0
@@ -30,18 +33,21 @@ import java.util.function.UnaryOperator;
 public final class ManagedServiceProcess {
 
     private static final int MAX_OUTPUT_CHARS = 256 * 1024;
-    private static final int REDACTION_OVERLAP_CHARS = 1_024;
 
     private final RunningProcess process;
-    private final UnaryOperator<String> redactor;
+    private final KnownValueRedactor redactor;
     private final StringBuilder output = new StringBuilder();
 
-    private ManagedServiceProcess(@NonNull Subprocess process, @NonNull UnaryOperator<String> redactor,
+    private ManagedServiceProcess(@NonNull Subprocess process, @NonNull Collection<String> secrets,
                                   @Nullable String stdinLine) throws IOException {
-        this.redactor = redactor;
+        this.redactor = KnownValueRedactor.of(secrets);
+        if (this.redactor.refusedCount() > 0) {
+            throw new IllegalArgumentException("A secret of " + process.command().get(0)
+                + " is shorter than " + KnownValueRedactor.MIN_LENGTH + " characters and cannot be redacted");
+        }
         try {
             this.process = process.mergeStderr()
-                .stdoutTo(TextSink.chunks(StandardCharsets.UTF_8, this::append))
+                .stdoutTo(new RedactedOutput())
                 .stdinPipe()
                 .start();
         } catch (RuntimeException refused) {
@@ -57,19 +63,21 @@ public final class ManagedServiceProcess {
 
     /** Starts a process that reads no stdin. */
     public static @NonNull ManagedServiceProcess start(@NonNull Subprocess process,
-                                                        @NonNull UnaryOperator<String> redactor) throws IOException {
-        return start(process, redactor, null);
+                                                        @NonNull Collection<String> secrets) throws IOException {
+        return start(process, secrets, null);
     }
 
     /**
      * Starts a process and writes one line to its stdin before closing the pipe.
      *
+     * @param secrets the exact values masked out of the output
      * @throws IOException when the process cannot be started or does not take its line
+     * @throws IllegalArgumentException when a secret is too short to be redacted ({@link KnownValueRedactor#MIN_LENGTH})
      */
     public static @NonNull ManagedServiceProcess start(@NonNull Subprocess process,
-                                                        @NonNull UnaryOperator<String> redactor,
+                                                        @NonNull Collection<String> secrets,
                                                         @Nullable String stdinLine) throws IOException {
-        return new ManagedServiceProcess(process, redactor, stdinLine);
+        return new ManagedServiceProcess(process, secrets, stdinLine);
     }
 
     public long pid() {
@@ -122,9 +130,7 @@ public final class ManagedServiceProcess {
 
     public @NonNull String output() {
         synchronized (this.output) {
-            String redacted = this.redactor.apply(this.output.toString());
-            return redacted.length() <= MAX_OUTPUT_CHARS
-                ? redacted : redacted.substring(redacted.length() - MAX_OUTPUT_CHARS);
+            return this.output.toString();
         }
     }
 
@@ -140,16 +146,44 @@ public final class ManagedServiceProcess {
         }
     }
 
-    private void append(String text) {
-        if (text == null || text.isEmpty()) {
+    private void keep(String redacted) {
+        if (redacted.isEmpty()) {
             return;
         }
         synchronized (this.output) {
-            this.output.append(text);
-            int overflow = this.output.length() - (MAX_OUTPUT_CHARS + REDACTION_OVERLAP_CHARS);
+            this.output.append(redacted);
+            int overflow = this.output.length() - MAX_OUTPUT_CHARS;
             if (overflow > 0) {
                 this.output.delete(0, overflow);
             }
+        }
+    }
+
+    /** The stdout sink: decoded chunks go through the redactor stream, and the end-of-stream flush ends that stream. */
+    private final class RedactedOutput extends OutputStream {
+
+        private final TextSink text = TextSink.chunks(StandardCharsets.UTF_8,
+            chunk -> keep(ManagedServiceProcess.this.redactor.feed(chunk)));
+
+        @Override
+        public void write(int b) throws IOException {
+            this.text.write(b);
+        }
+
+        @Override
+        public void write(byte @NonNull [] bytes, int offset, int length) throws IOException {
+            this.text.write(bytes, offset, length);
+        }
+
+        @Override
+        public void flush() throws IOException {
+            this.text.flush();
+            keep(ManagedServiceProcess.this.redactor.flush());
+        }
+
+        @Override
+        public void close() throws IOException {
+            flush();
         }
     }
 }
