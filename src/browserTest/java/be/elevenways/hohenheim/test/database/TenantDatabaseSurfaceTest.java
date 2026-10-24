@@ -22,7 +22,9 @@ import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
+import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HardDeletes;
+import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.protoblast.testsupport.thread.Racers;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.action.PanelAction;
@@ -68,7 +70,10 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * No daemon is needed. Every refusal proven here fires before any driver call, and the
  * allocation itself is a record write plus an instance-row reservation; the container
  * work is scheduled to run after the transaction commits and is irrelevant to the
- * boundary being tested.
+ * boundary being tested. That work is PINNED to be refused (per-workload network policy
+ * reads as unenforceable for the whole class), so no engine container ever runs on any
+ * host, and the steps that lean on that (the backup's post-gate failure, the destroy's
+ * "observed absent") hold by construction rather than by the host's nftables setting.
  */
 class TenantDatabaseSurfaceTest extends HohenheimHttpTestBase {
 
@@ -101,13 +106,42 @@ class TenantDatabaseSurfaceTest extends HohenheimHttpTestBase {
     /** Every quota row a test capped, removed after the class. */
     private static final List<Integer> capRowIds = new ArrayList<>();
 
+    /** How long one allocation's background provisioning may take to reach its refusal. */
+    private static final Duration PROVISIONING_SETTLES = Duration.ofSeconds(30);
+
     @BeforeAll
     static void seed() {
+        // AIDEV-NOTE: the engine deploy is refused on EVERY host, never only where
+        // security.nftables_enabled happens to be off. A host with enforcement on would deploy
+        // the engine against the fake daemon and run real nft; this class proves record
+        // boundaries, and its backup and destroy steps state that no engine container exists.
+        WorkloadNetworkPolicy.overrideForTest(new WorkloadNetworkPolicy((args, stdin) -> {
+            throw new AssertionError("a refused engine deploy never runs nft");
+        }, () -> false));
         admittedHostId = admittedHost();
     }
 
     @AfterAll
     static void cleanUp() {
+        try {
+            removeFixtures();
+        } finally {
+            WorkloadNetworkPolicy.overrideForTest(null);
+        }
+    }
+
+    /**
+     * Remove what the class created, dependents first.
+     *
+     * AIDEV-NOTE: an allocation's provisioning runs on the database pool AFTER its request
+     * answered, and a refused engine deploy still writes: it re-reserves the engine's instance
+     * row (recreating it when a sweep already removed it, so the host then refuses removal as
+     * server_in_use) and stores the engine environment in instance_variables (a child row
+     * landing between the sweep's child delete and the instance delete fails the FOREIGN KEY).
+     * So the sweep starts only once every record on the host left "provisioning": the record's
+     * status flip is the last write that job makes.
+     */
+    private static void removeFixtures() {
         for (Integer capRowId : capRowIds) {
             Models.get(InstanceQuotaModel.class).delete(capRowId);
         }
@@ -118,16 +152,28 @@ class TenantDatabaseSurfaceTest extends HohenheimHttpTestBase {
         Model instances = Models.get(InstanceModel.class);
         Model engines = Models.get(DatabaseEngineModel.class);
         if (admittedHostId != null) {
-            // Instance rows carry generated attribution: read-only, and undeletable,
-            // outside their owning tier's system scope. Soft-deleted ones count too --
-            // a host refuses removal while any row still points at it. The shared
-            // engine's own instance rides the same sweep: it sits on this host too.
-            GeneratedRows.sweeping("database", () -> {
-                for (Row instance : instances.find()
-                        .where(InstanceModel.SERVER_ID.eq(admittedHostId)).all()) {
-                    InstanceRowCleanup.delete(instance.get(InstanceModel.ID));
-                }
-            });
+            Poll.until("every database on " + PREFIX + "host finishing its provisioning", PROVISIONING_SETTLES,
+                () -> databases.find()
+                    .where(DatabaseModel.SERVER_ID.eq(admittedHostId))
+                    .where(DatabaseModel.STATUS.eq(DatabaseModel.STATUS_PROVISIONING)).first() == null);
+        }
+        // Instance rows carry generated attribution: read-only, and undeletable, outside
+        // their owning tier's system scope. Soft-deleted ones count too -- a host refuses
+        // removal while any row still points at it. The shared engine's own instance rides
+        // the same sweep: it sits on this host too. The tenants' application instances are
+        // found by name; their database links go with them.
+        GeneratedRows.sweeping("database", () -> {
+            List<Row> created = new ArrayList<>(instances.find().withTrashed()
+                .where(InstanceModel.NAME.startsWith(PREFIX)).all());
+            if (admittedHostId != null) {
+                created.addAll(instances.find().withTrashed()
+                    .where(InstanceModel.SERVER_ID.eq(admittedHostId)).all());
+            }
+            for (Row instance : created) {
+                InstanceRowCleanup.delete(instance.get(InstanceModel.ID));
+            }
+        });
+        if (admittedHostId != null) {
             InstanceDatabaseModel links = Models.get(InstanceDatabaseModel.class);
             for (Row row : databases.find()
                     .where(DatabaseModel.SERVER_ID.eq(admittedHostId)).all()) {
@@ -207,15 +253,25 @@ class TenantDatabaseSurfaceTest extends HohenheimHttpTestBase {
             TenantDatabases.DATABASES_CREATE.value(), true);
     }
 
-    /** Allocate {@code label} as a tenant through the manage surface; the stored record. */
+    /**
+     * Allocate {@code label} as a tenant through the manage surface, and wait out its background provisioning,
+     * which the pinned policy refuses: the stored record, its engine down.
+     */
     private Row allocate(TestSession session, UserPrincipal tenant, String label) throws Exception {
         HttpResponse<String> created = httpPostForm(CREATE_URL,
             "name=" + label + "&engine=postgres", session.token(), session.csrf());
         assertThat(created.statusCode())
             .as("fixture: tenant " + tenant.displayName() + " allocates " + label).isIn(302, 303);
-        Row database = databaseNamed(storedNameOf(tenant, label));
+        String name = storedNameOf(tenant, label);
+        Row database = databaseNamed(name);
         assertThat(database).as("fixture: the allocation of " + label + " is stored").isNotNull();
-        return database;
+        Poll.until("database " + name + " finishing its provisioning", PROVISIONING_SETTLES,
+            () -> !DatabaseModel.STATUS_PROVISIONING.equals(databaseNamed(name).get(DatabaseModel.STATUS)));
+        Row settled = databaseNamed(name);
+        assertThat((String) settled.get(DatabaseModel.STATUS))
+            .as("fixture: the engine deploy of " + label + " was refused, so no engine container runs")
+            .isEqualTo(DatabaseModel.STATUS_FAILED);
+        return settled;
     }
 
     /** The namespaced stored name the allocation funnel derives for {@code tenant}'s {@code label}. */
