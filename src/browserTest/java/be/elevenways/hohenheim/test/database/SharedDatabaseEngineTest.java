@@ -676,7 +676,8 @@ class SharedDatabaseEngineTest {
      * legacy mongo shell's root password file and mongorestore's config file after a failing client and after the
      * script was terminated by a signal mid-run, and mongosh (which reads the password from its environment) never
      * makes one. The redis container command hands redis-server its password in a config file, quoted, never as an
-     * argument, past the redis 6 entrypoint's argument rewrite, and leaves no path to the file behind.
+     * argument, past the redis 6 entrypoint's argument rewrite, leaves no path to the file behind, and refuses to start
+     * with no password at all.
      */
     @Test
     void aCredentialScriptLeavesNoPasswordFileBehindAndRedisReadsItsPasswordOnStdin(@TempDir Path dir)
@@ -790,6 +791,27 @@ class SharedDatabaseEngineTest {
             .as("step 4: no path to the config file existed while the server ran").isEmpty();
         try (var left = Files.list(tmp)) {
             assertThat(left.toList()).as("step 4: nor after it").isEmpty();
+        }
+
+        // 5. An empty or a missing password refuses to start: requirepass "" is a redis answering everyone. The
+        //    script exits non-zero before anything ran, the entrypoint and the server included, and writes no file.
+        Map<String, List<String>> unauthenticated = Map.of(
+            "empty", ManagedDatabase.Engine.REDIS.secretEnv("").entrySet().stream()
+                .map(entry -> entry.getKey() + "=" + entry.getValue()).toList(),
+            "missing", List.of());
+        for (Map.Entry<String, List<String>> env : unauthenticated.entrySet()) {
+            Path refusedLog = Files.createDirectories(dir.resolve("redis-" + env.getKey()));
+            ProcessOutcome refused = runShell(redisBin + ":" + tools, refusedLog, tmp, command, env.getValue(),
+                Map.of());
+            assertThat(refused.exitCode()).as("step 5 (%s): the start fails: %s", env.getKey(), refused.describe())
+                .isNotZero();
+            assertThat(refused.failureText()).as("step 5 (%s): saying why", env.getKey())
+                .contains("no redis password");
+            assertThat(Files.exists(refusedLog.resolve("argv")))
+                .as("step 5 (%s): neither the entrypoint nor redis-server ran", env.getKey()).isFalse();
+            try (var left = Files.list(tmp)) {
+                assertThat(left.toList()).as("step 5 (%s): and no config file was left", env.getKey()).isEmpty();
+            }
         }
     }
 

@@ -166,3 +166,8 @@ table migration:be.elevenways.hohenheim@2026_10_24_000001
   name credential_generations
   op add_column:instance_databases:deployed_generation|integer|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null
   op add_column:managed_databases:credential_generation|integer|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null
+table migration:be.elevenways.hohenheim@2026_10_24_000002
+  checksum af3349e0b5c43a0f355b9e870a8b506d91d3a0d73a0c563831c865565153a5d3
+  class be.elevenways.hohenheim.migration.M004_PendingPasswords
+  name pending_passwords
+  op add_column:managed_databases:pending_password|string|null=true|uniq=false|pk=false|auto=false|def=none|len=256|prec=null,null

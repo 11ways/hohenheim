@@ -275,6 +275,18 @@ public class DatabaseModel extends Model {
         return generation == null ? 0 : generation;
     }
 
+    /**
+     * The password a change handed the engine and the record does not hold yet (null: none in flight): written inside
+     * the change's claim BEFORE the engine is asked, cleared once the record and the engine agree. A record whose
+     * change failed half-way keeps it, so the next use of its credential asks the engine which of the two it admits
+     * and adopts this one when it is the engine's.
+     */
+    public static final StringField PENDING_PASSWORD = SCHEMA.addField(StringField.builder().name("pending_password")
+        .secret()
+        .encrypted()
+        .filterable(false)
+        .build());
+
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 

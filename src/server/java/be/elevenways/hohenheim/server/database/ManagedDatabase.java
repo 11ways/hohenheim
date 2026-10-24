@@ -417,9 +417,14 @@ public class ManagedDatabase {
          * the entrypoint's check both reopen the deleted file through {@code /dev/stdin}, a regular file, and no path
          * to it exists while the server runs. It belongs to the redis user where the entrypoint will drop to it,
          * because a reopen checks the file's mode. DedicatedDatabasePasswordLiveTest proves it on redis 6 and 7.
+         *
+         * AIDEV-NOTE: an empty or missing password FAILS the start: {@code requirepass ""} is a redis that answers
+         * everyone, so the script exits before any file is written or the server is started.
          */
         static final String REDIS_START_SCRIPT = "umask 077; " + PRIVATE_DIRECTORY + "\n"
-            + "pw=$(printf '%s' \"$" + REDIS_PASSWORD + "\" | sed 's/[\\\\\"]/\\\\&/g')\n"
+            + "[ -n \"$" + REDIS_PASSWORD + "\" ] || { echo 'hohenheim: no redis password in the environment' >&2;"
+            + " exit 1; }\n"
+            + "pw=$(printf '%s' \"$" + REDIS_PASSWORD + "\" | sed 's/[\\\\\"]/\\\\&/g') || exit 1\n"
             + "printf 'protected-mode no\\nrequirepass \"%s\"\\n' \"$pw\" > \"$d/redis.conf\" || exit 1\n"
             + "if command -v docker-entrypoint.sh >/dev/null 2>&1; then set -- docker-entrypoint.sh; else set --; fi\n"
             + "if [ \"$(id -u)\" = 0 ] && id redis >/dev/null 2>&1; then chown redis \"$d/redis.conf\" || exit 1; fi\n"
@@ -540,6 +545,43 @@ public class ManagedDatabase {
             };
         }
 
+        /**
+         * The command asking the engine whether {@code user} logs in with the password in {@link #credentialCheckEnv},
+         * dialled the way a consumer dials it: exit 0 is the engine admitting it, anything else is a refusal or a
+         * check that could not ask, never told apart.
+         *
+         * AIDEV-NOTE: postgres dials the container's own network address, and refuses to run without one: the image
+         * trusts the local socket and loopback TCP without a password, so a check there admits ANY password. Redis's
+         * client exits zero on a NOAUTH reply, so its one success is the reply PONG. A shared mongo user lives in its
+         * own database, a dedicated one (the engine root) in admin. DedicatedDatabasePasswordLiveTest proves each
+         * admits the current password and refuses the old one.
+         *
+         * @param shared whether {@code user} is a logical database's user on a shared engine
+         * @throws IllegalArgumentException for mongo, when the user or a shared database fails
+         *         {@link #isLogicalIdentifier}: both are spelled into its JavaScript
+         */
+        public List<String> credentialCheckCommand(String user, String database, boolean shared) {
+            String port = String.valueOf(this.port);
+            return switch (this) {
+                case POSTGRES -> List.of("sh", "-c", POSTGRES_CHECK_SCRIPT, "hohenheim-check", port, user, database);
+                case MYSQL -> List.of("sh", "-c", MYSQL_CHECK_SCRIPT, "hohenheim-check", port, user);
+                case MONGO -> {
+                    String authDatabase = shared ? database : "admin";
+                    if (!isLogicalIdentifier(user) || !isLogicalIdentifier(authDatabase)) {
+                        throw new IllegalArgumentException("Not a checkable mongo user or database: '" + user + "' in '"
+                            + authDatabase + "' (allowed: [A-Za-z0-9._-], at most " + LOGICAL_IDENTIFIER_MAX + ")");
+                    }
+                    yield List.of("sh", "-c", MONGO_CHECK_SCRIPT, "hohenheim-check", port, user, authDatabase);
+                }
+                case REDIS -> List.of("sh", "-c", REDIS_CHECK_SCRIPT, "hohenheim-check", port);
+            };
+        }
+
+        /** Env for {@link #credentialCheckCommand}: the password as each engine's client reads it, never in argv. */
+        public List<String> credentialCheckEnv(String password) {
+            return rootEnv(password);
+        }
+
         /** The env variable the mongo probe reads its password from. */
         public static final String MONGO_PROBE_PASSWORD = "HOHENHEIM_MONGO_PROBE_PASSWORD";
 
@@ -578,6 +620,26 @@ public class ManagedDatabase {
         static final String MYSQL_CLIENT_PICK =
             "if command -v mysql >/dev/null 2>&1; then client=mysql; else client=mariadb; fi\n";
 
+        /** sh -c body; $1 port, $2 user, $3 database; PGPASSWORD via env. */
+        static final String POSTGRES_CHECK_SCRIPT = "a=$(hostname -i 2>/dev/null | cut -d ' ' -f 1)\n"
+            + "case \"$a\" in ''|127.*|::1) echo 'hohenheim: the container has no network address to dial' >&2;"
+            + " exit 1 ;; esac\n"
+            + "exec psql -w -h \"$a\" -p \"$1\" -U \"$2\" -d \"$3\" -tA -c 'SELECT 1'";
+
+        /** sh -c body; $1 port, $2 user; MYSQL_PWD via env. */
+        static final String MYSQL_CHECK_SCRIPT = MYSQL_CLIENT_PICK
+            + "exec \"$client\" -h 127.0.0.1 -P \"$1\" -u \"$2\" -N -e 'SELECT 1'";
+
+        /** sh -c body; $1 port, $2 user, $3 the database it authenticates in; the password in MONGO_PROBE_PASSWORD. */
+        static final String MONGO_CHECK_SCRIPT = mongoScript("$3",
+            mongoAnswer("db.getSiblingDB('$3').runCommand({ ping: 1 }).ok"));
+
+        /** sh -c body; $1 port; REDISCLI_AUTH via env. Prints the reply either way. */
+        static final String REDIS_CHECK_SCRIPT = "out=$(redis-cli -p \"$1\" ping 2>&1) || { printf '%s\\n' \"$out\";"
+            + " exit 1; }\n"
+            + "printf '%s\\n' \"$out\"\n"
+            + "[ \"$out\" = PONG ]";
+
         /**
          * An {@code sh -c} body running ONE line of JavaScript as the engine root: $1 the port, $2 the root user, the
          * root password in {@link #MONGO_PROBE_PASSWORD}. On success it prints what the line printed through
@@ -597,13 +659,21 @@ public class ManagedDatabase {
          * from stdin does not reliably fail its exit code, so success is the exit code AND {@link #MONGO_DONE}.
          */
         static String mongoRootScript(String javascript) {
+            return mongoScript("admin", javascript);
+        }
+
+        /**
+         * {@link #mongoRootScript} authenticating $2 in {@code authDatabase}, spelled into the JavaScript (a literal or
+         * a positional parameter the outer shell expands), instead of in admin.
+         */
+        static String mongoScript(String authDatabase, String javascript) {
             return MONGO_SHELL_PICK
                 + " if [ \"$shell\" = mongo ]; then " + PRIVATE_DIRECTORY
                 + " (umask 077; printf '%s' \"$" + MONGO_PROBE_PASSWORD + "\" > \"$d/root\") || exit 1; fi\n"
                 + "out=$(\"$shell\" --host 127.0.0.1 --port \"$1\" --quiet 2>&1 <<HOHENHEIM_JS\n"
                 + "var hohenheimRoot = typeof process === 'object' ? process.env." + MONGO_PROBE_PASSWORD
-                + " : cat('$d/root'); if (!db.getSiblingDB('admin').auth('$2', hohenheimRoot)) {"
-                + " throw new Error('hohenheim: the engine root could not authenticate'); } "
+                + " : cat('$d/root'); if (!db.getSiblingDB('" + authDatabase + "').auth('$2', hohenheimRoot)) {"
+                + " throw new Error('hohenheim: the user could not authenticate'); } "
                 + javascript + " print('hohenheim' + '-ok');\n"
                 + "HOHENHEIM_JS\n"
                 + ") || { printf '%s\\n' \"$out\"; exit 1; }\n"

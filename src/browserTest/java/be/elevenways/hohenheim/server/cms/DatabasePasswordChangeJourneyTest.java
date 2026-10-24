@@ -17,6 +17,7 @@ import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.database.DatabaseEngines;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
+import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.DatabaseWrites;
 import be.elevenways.hohenheim.server.database.EngineHost;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
@@ -63,10 +64,12 @@ import be.elevenways.zenit.server.operation.OperationRequest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.net.URLEncoder;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -85,7 +88,8 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * A managed database's "Change password": the owner rotates a leaked password, the engine is handed the provisioning
  * re-credential command with the new one, the record stores it, the attached app asks for a deploy that injects it,
  * and no page ever carries it: the connection card's reveal fetches it per press. A failure once the engine was asked
- * leaves a trace a retry clears, and two changes at once end with the engine and the record agreeing. A dedicated
+ * leaves a trace a retry clears and a pending password the next use of the credential (a retry, a dump) adopts when
+ * the engine admits it, and two changes at once end with the engine and the record agreeing. A dedicated
  * database rotates its own engine's credential, and a plain workload attached to it asks for the restart.
  *
  * AIDEV-NOTE: the engine is the hermetic {@link FakeDockerDaemon}: what this proves is that the product hands the
@@ -327,20 +331,31 @@ class DatabasePasswordChangeJourneyTest extends HohenheimHttpTestBase {
             assertThat((String) drifted.get(DatabaseModel.STATUS)).as("step 9: still active")
                 .isEqualTo(DatabaseModel.STATUS_ACTIVE);
             assertThat((String) drifted.get(DatabaseModel.FAILURE_REASON)).as("step 9: the drift is stamped")
-                .contains("may now hold the new password").contains("retry the rotation")
+                .contains("may now hold the new password").contains("which the record keeps as pending")
                 .as("step 9: redacted too").doesNotContain(unstored);
+            assertThat((String) drifted.get(DatabaseModel.PENDING_PASSWORD))
+                .as("step 9: the record keeps the new password as pending").isEqualTo(unstored);
             assertThat(driftItems(PREFIX + "shop")).as("step 9: the dashboard raises it as a failed operation")
                 .hasSize(1);
 
-            // 10. A retry that succeeds stores the password and clears the trace in the same save.
+            // 10. A retry first asks the engine which password the tenant user logs in with: the stored one (the fake
+            //     engine admits it), so the record and the engine agree and nothing is pending. The change then
+            //     stores the password and clears the trace in the same save.
             invoke(null, databases.findById(shopId), Map.of(DatabaseParts.NEW_PASSWORD.getName(), unstored));
             Row retried = databases.findById(shopId);
             assertThat((String) retried.get(DatabaseModel.DB_PASSWORD)).as("step 10: the retry stored it")
                 .isEqualTo(unstored);
             assertThat((String) retried.get(DatabaseModel.FAILURE_REASON)).as("step 10: and cleared the drift")
                 .isNull();
+            assertThat((String) retried.get(DatabaseModel.PENDING_PASSWORD)).as("step 10: nothing is pending")
+                .isNull();
             assertThat(driftItems(PREFIX + "shop")).as("step 10: the dashboard item is gone").isEmpty();
-            assertThat(this.daemon.execsOn(handle)).as("step 10: one more command ran").hasSize(4);
+            List<FakeDockerDaemon.Exec> retriedExecs = this.daemon.execsOn(handle);
+            assertThat(retriedExecs).as("step 10: the credential check, then the change").hasSize(5);
+            assertThat(retriedExecs.get(3).command()).as("step 10: the tenant user's credential check")
+                .isEqualTo(ManagedDatabase.Engine.POSTGRES.credentialCheckCommand("shopuser", "shopdb", true));
+            assertThat(retriedExecs.get(3).env()).as("step 10: of the stored password")
+                .isEqualTo(ManagedDatabase.Engine.POSTGRES.credentialCheckEnv(typed));
 
             // 11. Two changes at once: the second waits on the engine lock while the first sits in the engine, so the
             //     engine's last password and the record's are the same one.
@@ -371,7 +386,7 @@ class DatabasePasswordChangeJourneyTest extends HohenheimHttpTestBase {
                     () -> rotatingSecond.thread().getState() == Thread.State.BLOCKED || !rotatingSecond.isRunning());
                 assertThat(rotatingSecond.thread().getState()).as("step 11: the second change waits on the lock")
                     .isEqualTo(Thread.State.BLOCKED);
-                assertThat(this.daemon.execsOn(handle)).as("step 11: and has not reached the engine").hasSize(5);
+                assertThat(this.daemon.execsOn(handle)).as("step 11: and has not reached the engine").hasSize(6);
                 releaseFirst.countDown();
                 assertThat(rotatingFirst.await(Duration.ofSeconds(30)).failure()).as("step 11: the first succeeded")
                     .isNull();
@@ -379,10 +394,10 @@ class DatabasePasswordChangeJourneyTest extends HohenheimHttpTestBase {
                     .isNull();
             }
             List<FakeDockerDaemon.Exec> serialized = this.daemon.execsOn(handle);
-            assertThat(serialized).as("step 11: each ran once").hasSize(6);
-            assertThat(serialized.get(4).env()).as("step 11: the first in the engine first")
+            assertThat(serialized).as("step 11: each ran once").hasSize(7);
+            assertThat(serialized.get(5).env()).as("step 11: the first in the engine first")
                 .contains(ManagedDatabase.Engine.LOGICAL_PASSWORD + "=" + first);
-            assertThat(serialized.get(5).env()).as("step 11: the second after it")
+            assertThat(serialized.get(6).env()).as("step 11: the second after it")
                 .contains(ManagedDatabase.Engine.LOGICAL_PASSWORD + "=" + second);
             assertThat((String) databases.findById(shopId).get(DatabaseModel.DB_PASSWORD))
                 .as("step 11: the record names the engine's last password").isEqualTo(second);
@@ -401,7 +416,8 @@ class DatabasePasswordChangeJourneyTest extends HohenheimHttpTestBase {
      * covers, says it runs with the old password until a restart gives it the new one.
      */
     @Test
-    void aDedicatedEngineTakesItsNewPasswordAndAPlainWorkloadAsksForTheRestartThatGivesItToIt() throws Exception {
+    void aDedicatedEngineTakesItsNewPasswordAndAPlainWorkloadAsksForTheRestartThatGivesItToIt(@TempDir Path dumps)
+            throws Exception {
         List<Runnable> cleanup = new ArrayList<>();
         HostFixtures.LocalHostState localBefore = HostFixtures.captureLocal();
         HostFixtures.makeLocalPlaceable(16L * 1024);
@@ -531,6 +547,15 @@ class DatabasePasswordChangeJourneyTest extends HohenheimHttpTestBase {
                     throw new IllegalStateException("the variable store refused the write");
                 }
             };
+            ManagedDatabase.Engine postgres = ManagedDatabase.Engine.POSTGRES;
+            String postgresKept = databases.findById(postgresId).get(DatabaseModel.DB_PASSWORD);
+            int postgresEngine = DatabaseInstances.owned(postgresId).get(InstanceModel.ID);
+            Map<String, String> postgresEnvironment = new InstanceVariables().valuesFor(postgresEngine);
+            String stranded = "Typed.stranded-0006";
+            int mysqlId = dedicated.get(ManagedDatabase.Engine.MYSQL).get(DatabaseModel.ID);
+            String mysqlKept = databases.findById(mysqlId).get(DatabaseModel.DB_PASSWORD);
+            int mysqlEngine = DatabaseInstances.owned(mysqlId).get(InstanceModel.ID);
+            String dumpedWith = "Typed.dumped-0006b";
             GlobalModelHooks.addBeforeWriteHook(readOnlyEnvironment);
             try {
                 ManagedDatabase.Engine redis = ManagedDatabase.Engine.REDIS;
@@ -553,6 +578,8 @@ class DatabasePasswordChangeJourneyTest extends HohenheimHttpTestBase {
                     .isEqualTo(redisKept);
                 assertThat(DatabaseModel.credentialGenerationOf(kept)).as("step 5: and its generation").isEqualTo(1);
                 assertThat((String) kept.get(DatabaseModel.FAILURE_REASON)).as("step 5: nothing drifted").isNull();
+                assertThat((String) kept.get(DatabaseModel.PENDING_PASSWORD))
+                    .as("step 5: and no password is left pending").isNull();
                 assertThat(new InstanceVariables().valuesFor(redisEngine))
                     .as("step 5: the stored environment is unchanged").isEqualTo(redisEnvironment);
                 List<FakeDockerDaemon.Exec> redisExecs = this.daemon.execsOn(handles.get(redis));
@@ -567,12 +594,9 @@ class DatabasePasswordChangeJourneyTest extends HohenheimHttpTestBase {
 
                 // 6. The same failure where the set-back is refused too: the engine holds the new password while the
                 //    record and the stored environment keep the old one, so the drift is stamped, saying a restart of
-                //    the database is unsafe until the rotation is retried, and the dashboard raises it.
-                ManagedDatabase.Engine postgres = ManagedDatabase.Engine.POSTGRES;
-                String postgresKept = databases.findById(postgresId).get(DatabaseModel.DB_PASSWORD);
-                int postgresEngine = DatabaseInstances.owned(postgresId).get(InstanceModel.ID);
-                Map<String, String> postgresEnvironment = new InstanceVariables().valuesFor(postgresEngine);
-                String stranded = "Typed.stranded-0006";
+                //    the database is unsafe and that the record keeps the new password as pending, and the dashboard
+                //    raises it. The pending password is a secret: every redaction of the record's output masks it,
+                //    and no recorded change of the record carries it.
                 refusingStore.add(postgresEngine);
                 refuseSetBack[0] = true;
                 Violations drifted = violationsIn(catchThrowable(() -> DatabaseWrites.changePassword(
@@ -583,10 +607,12 @@ class DatabasePasswordChangeJourneyTest extends HohenheimHttpTestBase {
                 Row stamped = databases.findById(postgresId);
                 assertThat((String) stamped.get(DatabaseModel.DB_PASSWORD)).as("step 6: the record keeps its password")
                     .isEqualTo(postgresKept);
+                assertThat((String) stamped.get(DatabaseModel.PENDING_PASSWORD))
+                    .as("step 6: and the new one as pending").isEqualTo(stranded);
                 assertThat((String) stamped.get(DatabaseModel.STATUS)).as("step 6: still active")
                     .isEqualTo(DatabaseModel.STATUS_ACTIVE);
                 assertThat((String) stamped.get(DatabaseModel.FAILURE_REASON)).as("step 6: the drift is stamped")
-                    .contains("restarting the database is unsafe").contains("rotation is retried")
+                    .contains("restarting the database is unsafe").contains("The record keeps it as pending")
                     .doesNotContain(stranded);
                 assertThat(driftItems(PREFIX + "own-postgres")).as("step 6: the dashboard raises it").hasSize(1);
                 assertThat(new InstanceVariables().valuesFor(postgresEngine))
@@ -595,40 +621,101 @@ class DatabasePasswordChangeJourneyTest extends HohenheimHttpTestBase {
                 assertThat(postgresExecs).as("step 6: the rotation, then the refused set-back").hasSize(3);
                 assertThat(postgresExecs.get(2).env()).as("step 6: the set-back was asked for")
                     .isEqualTo(postgres.rotateEnv(stranded, postgresKept));
+                assertThat(ConsoleRedaction.redactWhole("the engine said " + stranded,
+                    ConsoleRedaction.secretsOfOwner(DatabaseModel.MODEL_ID, postgresId)))
+                    .as("step 6: the record's redaction masks the pending password").doesNotContain(stranded)
+                    .contains(KnownValueRedactor.PLACEHOLDER);
+                RecordedChanges.Recorded pendingWrite = RecordedChanges.lastUpdateOf(databases, postgresId,
+                    DatabaseModel.PENDING_PASSWORD.getName());
+                assertThat(pendingWrite.delta() + " " + pendingWrite.facts() + " " + pendingWrite.change() + " "
+                    + pendingWrite.action()).as("step 6: the recorded change that set it pending never carries it")
+                    .doesNotContain(stranded);
+                assertThat(String.valueOf(RecordedChanges.of(databases, postgresId)))
+                    .as("step 6: nor does any other").doesNotContain(stranded);
+
+                // 6b. The same drift on the mysql database, whose next dump will find it.
+                refusingStore.add(mysqlEngine);
+                Violations mysqlDrifted = violationsIn(catchThrowable(() -> DatabaseWrites.changePassword(
+                    databases.findById(mysqlId), Secret.of(dumpedWith))));
+                assertThat(String.valueOf(mysqlDrifted.all().get(0).message().args().asMap().get("reason")))
+                    .as("step 6b: the mysql change drifted too").contains("restarting the database is unsafe");
+                assertThat((String) databases.findById(mysqlId).get(DatabaseModel.PENDING_PASSWORD))
+                    .as("step 6b: keeping its new password as pending").isEqualTo(dumpedWith);
                 refusingStore.clear();
                 refuseSetBack[0] = false;
             } finally {
                 GlobalModelHooks.removeBeforeWriteHook(readOnlyEnvironment);
             }
 
-            // 7. A retry that stores succeeds: the record, one generation further, and the stored environment name the
-            //    retried password, and the drift is cleared in the same save.
+            // 7. A retry finds the engine refusing the stored password and admitting the pending one: the record
+            //    adopts it first (one generation further, the stored environment naming it, nothing pending, the
+            //    drift cleared), and the change then rotates from the password the engine holds. The record, two
+            //    generations further, and the stored environment name the retried password.
             String retried = "Typed.retried-0007";
+            String postgresHandle = handles.get(postgres);
+            int beforeRetry = this.daemon.execsOn(postgresHandle).size();
+            this.daemon.refuseNextExec(2, "psql: error: password authentication failed for user \"appuser\"");
             DatabaseWrites.changePassword(databases.findById(postgresId), Secret.of(retried));
+            List<FakeDockerDaemon.Exec> recovery = this.daemon.execsOn(postgresHandle);
+            recovery = recovery.subList(beforeRetry, recovery.size());
+            assertThat(recovery).as("step 7: two credential checks, then the rotation").hasSize(3);
+            assertThat(recovery.get(0).command()).as("step 7: the engine's own credential check")
+                .isEqualTo(postgres.credentialCheckCommand("appuser", "appdb", false));
+            assertThat(recovery.get(0).env()).as("step 7: of the stored password first, refused")
+                .isEqualTo(postgres.credentialCheckEnv(postgresKept));
+            assertThat(recovery.get(1).env()).as("step 7: then of the pending one, admitted")
+                .isEqualTo(postgres.credentialCheckEnv(stranded));
+            assertThat(recovery.get(2).env()).as("step 7: the rotation authenticates with the adopted password")
+                .isEqualTo(postgres.rotateEnv(stranded, retried));
             Row cleared = databases.findById(postgresId);
             assertThat((String) cleared.get(DatabaseModel.DB_PASSWORD)).as("step 7: the retry stored it")
                 .isEqualTo(retried);
-            assertThat(DatabaseModel.credentialGenerationOf(cleared)).as("step 7: one generation further")
-                .isEqualTo(2);
+            assertThat(DatabaseModel.credentialGenerationOf(cleared))
+                .as("step 7: one generation for the adoption, one for the retry").isEqualTo(3);
+            assertThat((String) cleared.get(DatabaseModel.PENDING_PASSWORD)).as("step 7: nothing is pending").isNull();
             assertThat((String) cleared.get(DatabaseModel.FAILURE_REASON)).as("step 7: the drift is cleared").isNull();
             assertThat(driftItems(PREFIX + "own-postgres")).as("step 7: the dashboard item is gone").isEmpty();
-            int postgresEngine = DatabaseInstances.owned(postgresId).get(InstanceModel.ID);
             assertThat(new InstanceVariables().valuesFor(postgresEngine))
                 .as("step 7: the stored environment names the retried password")
                 .containsAllEntriesOf(ManagedDatabase.Engine.POSTGRES.secretEnv("appuser", retried));
 
-            // 8. No capture lane carries a dedicated engine's data, so no restore can put an older credential back
+            // 8. A dump of the drifted mysql database finds the engine refusing the stored password: the record adopts
+            //    the pending one and the dump authenticates with it.
+            ManagedDatabase.Engine mysql = ManagedDatabase.Engine.MYSQL;
+            String mysqlHandle = handles.get(mysql);
+            int beforeDump = this.daemon.execsOn(mysqlHandle).size();
+            this.daemon.refuseNextExec(1, "ERROR 1045 (28000): Access denied for user 'appuser'@'127.0.0.1'");
+            new DatabaseService().backupToFile(PREFIX + "own-mysql", dumps, "drift");
+            List<FakeDockerDaemon.Exec> dumped = this.daemon.execsOn(mysqlHandle);
+            dumped = dumped.subList(beforeDump, dumped.size());
+            assertThat(dumped).as("step 8: two credential checks, then the dump").hasSize(3);
+            assertThat(dumped.get(0).env()).as("step 8: the stored password was refused")
+                .isEqualTo(mysql.credentialCheckEnv(mysqlKept));
+            assertThat(dumped.get(1).env()).as("step 8: the pending one admitted")
+                .isEqualTo(mysql.credentialCheckEnv(dumpedWith));
+            assertThat(dumped.get(2).env()).as("step 8: the dump authenticated with the pending password")
+                .containsExactly("MYSQL_PWD=" + dumpedWith);
+            Row adopted = databases.findById(mysqlId);
+            assertThat((String) adopted.get(DatabaseModel.DB_PASSWORD)).as("step 8: the record stores it")
+                .isEqualTo(dumpedWith);
+            assertThat((String) adopted.get(DatabaseModel.PENDING_PASSWORD)).as("step 8: nothing is pending").isNull();
+            assertThat((String) adopted.get(DatabaseModel.FAILURE_REASON)).as("step 8: the drift is cleared").isNull();
+            assertThat(new InstanceVariables().valuesFor(DatabaseInstances.owned(mysqlId).get(InstanceModel.ID)))
+                .as("step 8: the stored environment names it")
+                .containsAllEntriesOf(mysql.secretEnv("appuser", dumpedWith));
+
+            // 9. No capture lane carries a dedicated engine's data, so no restore can put an older credential back
             //    under the record: a snapshot of the engine instance is refused before anything ran, its data volume
             //    being no declared volume.
             int execsBefore = this.daemon.execsOn(handles.get(ManagedDatabase.Engine.POSTGRES)).size();
             Violations noVolumes = violationsIn(catchThrowable(() -> new InstanceSnapshots().create(postgresEngine,
                 null)));
-            assertThat(noVolumes.all().get(0).message().key()).as("step 8: the snapshot is refused")
+            assertThat(noVolumes.all().get(0).message().key()).as("step 9: the snapshot is refused")
                 .isEqualTo("snapshot_no_volumes");
             assertThat(this.daemon.execsOn(handles.get(ManagedDatabase.Engine.POSTGRES)))
-                .as("step 8: nothing ran in the engine").hasSize(execsBefore);
+                .as("step 9: nothing ran in the engine").hasSize(execsBefore);
             assertThat(this.daemon.isRunning(handles.get(ManagedDatabase.Engine.POSTGRES)))
-                .as("step 8: which still runs").isTrue();
+                .as("step 9: which still runs").isTrue();
         } finally {
             for (int i = cleanup.size() - 1; i >= 0; i--) {
                 cleanup.get(i).run();

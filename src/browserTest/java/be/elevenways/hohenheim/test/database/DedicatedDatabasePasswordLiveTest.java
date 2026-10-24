@@ -53,8 +53,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * gives it the new one.
  *
  * AIDEV-NOTE: every refusal is preceded by the identical probe taken as a POSITIVE ANCHOR from the same container, the
- * SharedDatabaseEngineLiveTest discipline: "refused because the probe is broken" must never pass as "refused". Postgres
- * dials the container's own network address: the image trusts the local socket and loopback TCP without a password.
+ * SharedDatabaseEngineLiveTest discipline: "refused because the probe is broken" must never pass as "refused". The probe
+ * is the product's own credential check ({@code Engine.credentialCheckCommand}), the one a drifted password change is
+ * settled with, so this also proves that check admits exactly the password the engine holds.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -269,12 +270,12 @@ class DedicatedDatabasePasswordLiveTest {
         for (String user : usersOf(engine)) {
             DockerClient.ExecResult answer = probe(docker, engine, handle, user, password);
             String said = answer.stdout() + answer.stderr();
+            assertThat(answer.exitCode()).as("%s (%s, %s): refused: %s", step, engine, user, said).isNotZero();
             if (engine == ManagedDatabase.Engine.REDIS) {
                 assertThat(said).as("%s (%s): refused by authentication", step, engine).doesNotContain("PONG")
                     .containsAnyOf("WRONGPASS", "NOAUTH");
                 continue;
             }
-            assertThat(answer.exitCode()).as("%s (%s, %s): refused: %s", step, engine, user, said).isNotZero();
             assertThat(said).as("%s (%s, %s): by authentication", step, engine, user).containsAnyOf(
                 "password authentication failed", "Access denied", "Authentication failed");
         }
@@ -285,17 +286,11 @@ class DedicatedDatabasePasswordLiveTest {
         return engine == ManagedDatabase.Engine.MYSQL ? List.of(USER, "root") : List.of(USER);
     }
 
+    /** The product's credential check of {@code user} with {@code password}, as a drifted change is settled with. */
     private static DockerClient.ExecResult probe(DockerClient docker, ManagedDatabase.Engine engine, String handle,
                                                  String user, String password) throws IOException {
-        return switch (engine) {
-            case POSTGRES -> docker.exec(handle, List.of("sh", "-c", "exec psql -h \"$(hostname -i | cut -d ' ' -f 1)\""
-                + " -U \"$1\" -d \"$2\" -tA -c 'SELECT 1'", "hohenheim-probe", user, DATABASE),
-                List.of("PGPASSWORD=" + password));
-            case MYSQL -> docker.exec(handle, List.of("mysql", "-h", "127.0.0.1", "-u", user, "-N", "-e",
-                "SELECT 1"), List.of("MYSQL_PWD=" + password));
-            case MONGO, REDIS -> docker.exec(handle, engine.readyCommand(user, password, DATABASE),
-                engine.readyEnv(password));
-        };
+        return docker.exec(handle, engine.credentialCheckCommand(user, DATABASE, false),
+            engine.credentialCheckEnv(password));
     }
 
     private static int workload(String name) {

@@ -44,6 +44,7 @@ class EncryptedSecretsAtRestTest {
     private static final String TSIG = "hh-tsig-secret-C3";
     private static final String PEER_KEY = "hh-peer-api-key-D4";
     private static final String DB_PASS = "hh-db-password-E5";
+    private static final String DB_PENDING = "hh-db-pending-password-E6";
     private static final String HOOK_URL = "https://hooks.example.com/services/hh-hook-token-F6";
     private static final String REPORT_TOKEN = "hh-report-token-G7";
     private static final String CONTROLLER = "hh-controller-key-H8";
@@ -116,6 +117,7 @@ class EncryptedSecretsAtRestTest {
             Row database = databases.createEmptyRow();
             database.set(DatabaseModel.DB_USER, "tenant");
             database.set(DatabaseModel.DB_PASSWORD, DB_PASS);
+            database.set(DatabaseModel.PENDING_PASSWORD, DB_PENDING);
             databases.save(database);
 
             Model channels = Models.get(NotificationChannelModel.class);
@@ -175,6 +177,7 @@ class EncryptedSecretsAtRestTest {
             assertCiphertext(datasource, "dns_peers", "tsig_secret", TSIG);
             assertCiphertext(datasource, "dns_peers", "api_key", PEER_KEY);
             assertCiphertext(datasource, "managed_databases", "db_password", DB_PASS);
+            assertCiphertext(datasource, "managed_databases", "pending_password", DB_PENDING);
             assertCiphertext(datasource, "notification_channels", "url", "hh-hook-token-F6");
             assertCiphertext(datasource, "sites", "security_report_token", REPORT_TOKEN);
             assertCiphertext(datasource, "spamservice_installations", "controller_key", CONTROLLER);
@@ -194,9 +197,11 @@ class EncryptedSecretsAtRestTest {
                 .as("step 5: tsig secret round-trips").isEqualTo(TSIG);
             assertThat((String) peerBack.get(DnsPeerModel.API_KEY))
                 .as("step 5: peer api key round-trips").isEqualTo(PEER_KEY);
-            assertThat((String) databases.findById(database.get(DatabaseModel.ID))
-                .get(DatabaseModel.DB_PASSWORD))
+            Row databaseBack = databases.findById(database.get(DatabaseModel.ID));
+            assertThat((String) databaseBack.get(DatabaseModel.DB_PASSWORD))
                 .as("step 5: db password round-trips").isEqualTo(DB_PASS);
+            assertThat((String) databaseBack.get(DatabaseModel.PENDING_PASSWORD))
+                .as("step 5: pending db password round-trips").isEqualTo(DB_PENDING);
             assertThat((String) channels.findById(channel.get(NotificationChannelModel.ID))
                 .get(NotificationChannelModel.URL))
                 .as("step 5: webhook url round-trips").isEqualTo(HOOK_URL);
