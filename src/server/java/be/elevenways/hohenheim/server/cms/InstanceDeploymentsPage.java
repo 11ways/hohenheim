@@ -122,13 +122,14 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
 
     /**
      * Deploy now: the placed deploy operation over this tab's own record, the same operation, gate, handler and
-     * background lane the record's Deploy row action runs. It answers with the run's page at once and refuses before
-     * any run while a deploy runs or a database is not ready (dead, with why); the release or build the run starts
-     * shows here with its live log.
+     * background lane the record's Deploy row action runs. It lands back on this tab at once, the run named in the
+     * heading, and refuses before any run while a deploy runs or a database is not ready (dead, with why); the release
+     * or build the run starts shows here with its live log.
      */
     private static final PanelAction<Row> DEPLOY = PanelAction.<Row, Void>placesRun(InstanceOperations.DEPLOY,
             ActionPlacement.PAGE)
         .finishedRunOpens(Row.class, InstanceDeploymentsPage::tabOf)
+        .startedRunOpens(Row.class, InstanceDeploymentsPage::tabOf)
         .label(HohenheimMicrocopy.DEPLOYMENTS.of("deploy_now"))
         .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.DEPLOYMENTS.of("deploy_now"),
             HohenheimMicrocopy.DEPLOYMENTS.of("deploy_confirm"), ActionStyle.DEFAULT))
@@ -139,11 +140,12 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
      * The one step to the kept release, back or forward: the placed rollback operation over this tab's own record,
      * the same operation, gate, handler and background lane the instance's action band runs. Its words name both
      * releases, and its confirmation names what the switch changes ({@link SpecSnapshots#diff}), a secret setting
-     * only as changed. It answers with the run's page at once; the release the run starts shows here with its live log.
+     * only as changed. It lands back on this tab at once; the release the run starts shows here with its live log.
      */
     private static final PanelAction<Row> ROLLBACK = PanelAction.<Row, Void>placesRun(InstanceOperations.ROLLBACK,
             ActionPlacement.PAGE)
         .finishedRunOpens(Row.class, InstanceDeploymentsPage::tabOf)
+        .startedRunOpens(Row.class, InstanceDeploymentsPage::tabOf)
         .dynamicLabel(application -> Releases.of(application).stepLabel())
         .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.INSTANCE.of("rollback"),
             HohenheimMicrocopy.INSTANCE.of("rollback_confirm"), ActionStyle.DESTRUCTIVE))
@@ -172,7 +174,7 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         return List.of(DEPLOY, ROLLBACK);
     }
 
-    /** @return the slug of this tab, which a finished deploy or rollback run opens on its record */
+    /** @return the slug of this tab, which a started deploy or rollback lands on and its finished run opens */
     static @NonNull String tabOf(@NonNull Row application) {
         return HohenheimSlugs.Tab.DEPLOYMENTS;
     }

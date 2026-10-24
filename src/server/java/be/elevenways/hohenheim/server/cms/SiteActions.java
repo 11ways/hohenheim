@@ -279,11 +279,13 @@ final class SiteActions {
 
     /**
      * Roll a Docker site back to its retained release: one durable operation over the digest-pinned prior spec,
-     * through the same health gate as a forward release. A background run: it lands on the run's page, whose finished
-     * run opens the site; a site whose application keeps nothing to go back to is dead, with the engine's words.
+     * through the same health gate as a forward release. A background run: it lands on the site's front door, whose
+     * band streams the run while it goes, and its finished run opens the site; a site whose application keeps nothing
+     * to go back to is dead, with the engine's words.
      */
     private static @NonNull PanelAction<Row> rollbackAction() {
         return PanelAction.<Row, Void>placesRun(SiteOperations.ROLLBACK_RELEASE, ActionPlacement.ROW)
+            .startedRunOpens(Row.class, site -> null)
             .inlineInRow(false)
             .description(HohenheimMicrocopy.SITE.of("rollback_hint"))
             .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.SITE.of("rollback"),

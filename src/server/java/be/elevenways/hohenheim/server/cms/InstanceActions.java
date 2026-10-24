@@ -90,7 +90,9 @@ final class InstanceActions {
     }
 
     /**
-     * Deploy (the placed deploy operation, a background run whose finished run opens the Deploys tab where the record
+     * Deploy (the placed deploy operation, a background run that lands on the Deploys tab, where its live log streams,
+     * and whose finished run opens that tab, where the record has one), offered only where it means something: the
+     * record is not owned by a product tier, its KIND is one a
      * has one), offered only where it means something: the record is not owned by a product tier, its KIND is one a
      * person may power at all ({@link InstanceKinds#isUserDeployable}, which reads the kind's own
      * {@code generatedOnly()} declaration), and a start would do something ({@link InstanceKinds#offersStart}: a
@@ -105,6 +107,7 @@ final class InstanceActions {
     private static @NonNull PanelAction<Row> deployAction(boolean delegated) {
         return PanelAction.<Row, Void>placesRun(InstanceOperations.DEPLOY, ActionPlacement.ROW)
             .finishedRunOpens(Row.class, InstanceDeploymentsPage::tabOf)
+            .startedRunOpens(Row.class, InstanceDeploymentsPage::tabOf)
             .dynamicLabel(row -> startWords("deploy", row))
             .hiddenWhen(row -> !InstanceKinds.isUserDeployable(row.get(InstanceModel.KIND))
                 || !InstanceKinds.offersStart(row) || InstanceModel.isTerminating(row))
@@ -236,12 +239,13 @@ final class InstanceActions {
      * Roll a release-managed record back to its retained release -- the same engine
      * verb the site row offers, now reachable from the application itself (an
      * unexposed application can still be rolled back). A background run, the lane the
-     * Deploys tab's own step uses: it lands on the run's page, whose finished run opens
-     * the Deploys tab.
+     * Deploys tab's own step uses: it lands on the Deploys tab, where the release it starts
+     * streams its log, and its finished run opens that tab too.
      */
     private static @NonNull PanelAction<Row> rollbackAction() {
         return PanelAction.<Row, Void>placesRun(InstanceOperations.ROLLBACK, ActionPlacement.ROW)
             .finishedRunOpens(Row.class, InstanceDeploymentsPage::tabOf)
+            .startedRunOpens(Row.class, InstanceDeploymentsPage::tabOf)
             .inlineInRow(false)
             .disabledWhen((row, access) -> OwnedInstances.placementReasonOf(row, false, access))
             .description(HohenheimMicrocopy.INSTANCE.of("rollback_hint"))

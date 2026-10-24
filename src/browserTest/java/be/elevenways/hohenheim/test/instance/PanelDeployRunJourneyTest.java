@@ -64,9 +64,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
- * Every deploy and rollback a person starts from the panel is a background run: the instance's Deploy now and the
- * site's rollback answer at once with the run's page, refuse a cheap case before any run row exists, end on their
- * own, open the matching page once finished, record the deploy as a person's, and spend the one hh_deploy budget the
+ * Every deploy and rollback a person starts from the panel is a background run: the instance's Deploy now lands at
+ * once on its Deploys tab and the site's rollback on the site, each naming its run with a link to the run's page;
+ * both refuse a cheap case before any run row exists, end on their own, open the matching page once finished, record
+ * the deploy as a person's, and spend the one hh_deploy budget the
  * application's rollback spends. No handler holds a request for a bounded settle window any more, and a build a dead
  * controller left running refuses no deploy once the boot settled it.
  *
@@ -135,8 +136,8 @@ class PanelDeployRunJourneyTest extends HohenheimTestBase {
             assertThat(((DomainRefusal) eleventh).reason()).as("step 3: with the rate-limit refusal")
                 .isEqualTo(ZenitRefusalReason.RATE_LIMITED);
 
-            // 4. Once nothing runs, Deploy now answers at once with its run's page, the run ends on its own, and the
-            //    finished run opens the Deploys tab. A person's panel deploy records MANUAL.
+            // 4. Once nothing runs, Deploy now lands at once on the Deploys tab naming its run, the run ends on its own,
+            //    and the finished run opens the Deploys tab. A person's panel deploy records MANUAL.
             Models.get(ReleaseOperationModel.class).delete(operationIds.remove(0));
             assertThat(InstanceOperationHandlers.triggerOf(CmsPlacementSurface.ADMIN_ACTION))
                 .as("step 4: a panel deploy is a person's").isEqualTo(DeployTrigger.MANUAL);
@@ -146,12 +147,17 @@ class PanelDeployRunJourneyTest extends HohenheimTestBase {
                 operator);
             assertThat(runs).as("step 4: a run was started for the application").hasSize(1);
             long runId = runs.get(0).id();
-            assertThat(landingOf(started)).as("step 4: to that run's page")
-                .endsWith(CmsRoutes.operationRun(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCES, runId).toUrl());
+            String deploysTab = "/admin/instances/" + app + "/page/" + HohenheimSlugs.Tab.DEPLOYMENTS;
+            String runPage = CmsRoutes.operationRun(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCES, runId).toUrl();
+            assertThat(landingOf(started)).as("step 4: on the Deploys tab, naming that run")
+                .endsWith(deploysTab + "?run=" + runId);
             assertThat(PutOnlineJourneyTest.ended(runId, operator, "step 4").status())
                 .as("step 4: and it ended on its own").isNotEqualTo(OperationRunStatus.RUNNING);
-            assertThat(adminGet(landingOf(started)).body()).as("step 4: the finished run opens the Deploys tab")
-                .contains("/admin/instances/" + app + "/page/" + HohenheimSlugs.Tab.DEPLOYMENTS);
+            String landed = adminGet(landingOf(started)).body();
+            assertThat(landed).as("step 4: the Deploys tab names the run").contains("data-cms-record-run-title")
+                .as("step 4: and links to the run's page").contains("data-cms-record-run-open").contains(runPage);
+            assertThat(adminGet(runPage).body()).as("step 4: the finished run opens the Deploys tab")
+                .contains(deploysTab);
             assertThat(Models.get(ReleaseOperationModel.class).find()
                     .where(ReleaseOperationModel.FOR_MODEL.eq(InstanceModel.MODEL_ID.toString()))
                     .where(ReleaseOperationModel.FOR_ID.eq(app)).all())
@@ -181,8 +187,8 @@ class PanelDeployRunJourneyTest extends HohenheimTestBase {
             assertThat(OperationRuns.recentFor(SiteOperations.SITE, String.valueOf(siteId), 1, operator))
                 .as("step 5b: and no run was started").isEmpty();
 
-            // 6. With a release kept, it answers at once with its run's page; the run ends on its own and, finished,
-            //    opens the site.
+            // 6. With a release kept, it lands at once on the site naming its run; the run ends on its own and,
+            //    finished, opens the site.
             releaseIds.add(release(app, "kept", InstanceModel.ROLE_RETIRED));
             releaseIds.add(release(app, "live", InstanceModel.ROLE_SERVING));
             HttpResponse<String> rolledBack = adminPostForm(siteRollbackPath(siteId), confirmedBody());
@@ -191,11 +197,15 @@ class PanelDeployRunJourneyTest extends HohenheimTestBase {
                 operator);
             assertThat(siteRuns).as("step 6: a run was started for the site").hasSize(1);
             long siteRunId = siteRuns.get(0).id();
-            assertThat(landingOf(rolledBack)).as("step 6: to that run's page")
-                .endsWith(CmsRoutes.operationRun(HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, siteRunId).toUrl());
+            String siteRunPage = CmsRoutes.operationRun(HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, siteRunId)
+                .toUrl();
+            assertThat(landingOf(rolledBack)).as("step 6: on the site's front door, naming that run")
+                .contains("/admin/sites/" + siteId + "/page/").endsWith("?run=" + siteRunId);
             assertThat(PutOnlineJourneyTest.ended(siteRunId, operator, "step 6").status())
                 .as("step 6: and it ended on its own").isNotEqualTo(OperationRunStatus.RUNNING);
-            assertThat(adminGet(landingOf(rolledBack)).body()).as("step 6: the finished run opens the site")
+            assertThat(adminGet(landingOf(rolledBack)).body()).as("step 6: the site links to the ended run's page")
+                .contains("data-cms-record-run-open").contains(siteRunPage);
+            assertThat(adminGet(siteRunPage).body()).as("step 6: the finished run opens the site")
                 .contains("/admin/sites/" + siteId);
         } finally {
             for (Integer id : operationIds) {

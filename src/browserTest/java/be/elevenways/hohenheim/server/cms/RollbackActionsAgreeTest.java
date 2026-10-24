@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
@@ -22,7 +23,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * The two rollback verbs, on a site and on an application, ask the same way and answer the same way: as one
- * background run, from the site's row, the application's action band and its Deploys tab alike.
+ * background run, from the site's row, the application's action band and its Deploys tab alike, landing on the page
+ * that shows the run.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -50,10 +52,14 @@ class RollbackActionsAgreeTest {
                 .isEqualTo(ActionStyle.DESTRUCTIVE);
         }
 
-        // 2. Every rollback is a background run: no toast step. The site's finished run opens the site itself (it has
-        //    no Deploys tab), the application's the Deploys tab, where the release it started shows.
+        // 2. Every rollback is a background run: no toast step. The site's lands on the site itself and its finished
+        //    run opens it too (it has no Deploys tab), the application's land on and open the Deploys tab, where the
+        //    release it started shows.
+        Row siteRow = Models.get(SiteModel.class).createEmptyRow();
         assertThat(site.result()).as("step 2: the site's rollback answers with its run, not a toast").isNull();
         assertThat(site.runOpens()).as("step 2: its finished run opens the site's front door").isNull();
+        assertThat(Objects.requireNonNull(site.startedRunOpens()).slugFor(siteRow))
+            .as("step 2: its started run lands on the site's front door").isNull();
         PanelAction<Row> tab = placed(new InstanceDeploymentsPage().actions(), InstanceOperations.ROLLBACK);
         Row app = Models.get(InstanceModel.class).createEmptyRow();
         app.set(InstanceModel.NAME, "shop-app");
@@ -62,6 +68,9 @@ class RollbackActionsAgreeTest {
                 .isNull();
             assertThat(Objects.requireNonNull(rollback.runOpens()).slugFor(app))
                 .as("step 2: the %s run, once finished, opens the Deploys tab", rollback.placement())
+                .isEqualTo(HohenheimSlugs.Tab.DEPLOYMENTS);
+            assertThat(Objects.requireNonNull(rollback.startedRunOpens()).slugFor(app))
+                .as("step 2: the %s run, once started, lands on the Deploys tab", rollback.placement())
                 .isEqualTo(HohenheimSlugs.Tab.DEPLOYMENTS);
         }
 

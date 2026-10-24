@@ -181,17 +181,17 @@ class ReleasesTabJourneyTest extends HohenheimTestBase {
             assertThat(OperationRuns.recentFor(InstanceOperations.INSTANCE, String.valueOf(other), 1, operator))
                 .as("step 5: nor any run started").isEmpty();
 
-            // 5b. Where a release is kept, the same operation answers at once with its run's page instead of holding
-            //     the request for the gated swap, and the run ends on its own (here refused: nothing of this test
-            //     serves).
+            // 5b. Where a release is kept, the same operation lands at once on the Deploys tab, naming its run,
+            //     instead of holding the request for the gated swap, and the run ends on its own (here refused:
+            //     nothing of this test serves).
             HttpResponse<String> started = adminPostForm(invokePath(HohenheimSlugs.ADMIN, shop), invokeBody());
             assertThat(started.statusCode()).as("step 5b: answered at once, as a redirect").isIn(302, 303);
             List<OperationRun> runs = OperationRuns.recentFor(InstanceOperations.INSTANCE, String.valueOf(shop), 1,
                 operator);
             assertThat(runs).as("step 5b: a run was started for the application").hasSize(1);
             long runId = runs.get(0).id();
-            assertThat(landingOf(started)).as("step 5b: to that run's page")
-                .endsWith(CmsRoutes.operationRun(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCES, runId).toUrl());
+            assertThat(landingOf(started)).as("step 5b: on the Deploys tab, naming that run")
+                .endsWith("/admin/instances/" + shop + "/page/" + HohenheimSlugs.Tab.DEPLOYMENTS + "?run=" + runId);
             assertThat(PutOnlineJourneyTest.ended(runId, operator, "step 5b").status())
                 .as("step 5b: and it ended on its own").isNotEqualTo(OperationRunStatus.RUNNING);
 
