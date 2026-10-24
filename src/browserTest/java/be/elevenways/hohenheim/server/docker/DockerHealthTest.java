@@ -54,6 +54,21 @@ class DockerHealthTest {
         assertThat(stdout)
             .as("step 2: the probe slogs hohenheim.docker_unreachable loudly")
             .contains("hohenheim.docker_unreachable");
+
+        // 3. A failure quoting a credential-bearing daemon URL: the user-info never reaches the recorded problem
+        //    or the structured log, while the address that explains the failure does.
+        DockerHealth credentialed = new DockerHealth(() -> true, () -> {
+            throw new IllegalStateException("cannot reach tcp://admin:d0cker-s3cret@10.0.0.5:2376 (refused)");
+        });
+        String credentialedStdout = capturedStdout(() -> assertThat(credentialed.probe())
+            .as("step 3: the failed construction reports UNREACHABLE")
+            .isEqualTo(DockerHealth.Status.UNREACHABLE));
+        assertThat(credentialed.problem())
+            .as("step 3: the recorded problem keeps the address without its user-info")
+            .contains("10.0.0.5:2376").doesNotContain("d0cker-s3cret").doesNotContain("admin:");
+        assertThat(credentialedStdout)
+            .as("step 3: the structured log carries no credential either")
+            .contains("hohenheim.docker_unreachable").doesNotContain("d0cker-s3cret");
     }
 
     private static String capturedStdout(Runnable block) {

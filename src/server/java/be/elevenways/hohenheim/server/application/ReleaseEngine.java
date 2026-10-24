@@ -1166,27 +1166,44 @@ public final class ReleaseEngine {
      * Run one segment of an operation's work in this process; its step-log stream ends with the segment, however the
      * segment ends ({@link ReleaseStepLog#close}), so no stream outlives the work that quoted the output.
      * Package-private for ReleaseStepLogRedactionTest.
+     *
+     * AIDEV-NOTE: ending the stream never replaces the segment's own outcome. When the work threw, anything ending
+     * the stream throws (an Error included) is logged and suppressed onto that failure, which then propagates
+     * unchanged; when the work returned, a failed tail write is logged and the result still returned.
      */
     static <T> T segment(@NonNull Row op, @NonNull Supplier<T> work) {
+        T result;
         try {
-            return work.get();
-        } finally {
-            endStream(op);
+            result = work.get();
+        } catch (Throwable failure) {
+            try {
+                endStream(op);
+            } catch (Throwable unwritten) {
+                failure.addSuppressed(unwritten);
+                unstoredTail(op, unwritten);
+            }
+            throw failure;
         }
+        try {
+            endStream(op);
+        } catch (RuntimeException unwritten) {
+            unstoredTail(op, unwritten);
+        }
+        return result;
     }
 
     /** Close the operation's stream; a held tail it released is stored and published like a step line. */
     private static void endStream(@NonNull Row op) {
-        try {
-            if (ReleaseStepLog.close(op, Now.instant())) {
-                persist(op);
-                publish(op);
-            }
-        } catch (RuntimeException unwritten) {
-            // The stream is already forgotten; a failed write must not replace the segment's own outcome.
-            Blast.log("RELEASE: the held step-log tail of operation", op.get(ReleaseOperationModel.ID),
-                "could not be stored -", HohenheimViolations.reasonOf(unwritten));
+        if (ReleaseStepLog.close(op, Now.instant())) {
+            persist(op);
+            publish(op);
         }
+    }
+
+    /** The stream is already forgotten when its tail could not be stored; the reason is logged redacted. */
+    private static void unstoredTail(@NonNull Row op, @NonNull Throwable unwritten) {
+        Blast.log("RELEASE: the held step-log tail of operation", op.get(ReleaseOperationModel.ID),
+            "could not be stored -", ReleaseStepLog.reasonOf(op, unwritten));
     }
 
     /** Hand the operation's stored step log to the live viewers of its application ({@link DeployProgress}). */

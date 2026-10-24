@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.docker;
 
 import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.protoblast.common.Blast;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -81,7 +82,9 @@ public final class DockerHealth {
         return status;
     }
 
-    private void recordUnreachable(@NonNull String reason) {
+    /** The reason may quote the daemon's address, whose user-info is a credential: it is stripped before it is kept. */
+    private void recordUnreachable(@NonNull String rawReason) {
+        String reason = ConsoleRedaction.withoutUrlCredentials(rawReason);
         status = Status.UNREACHABLE;
         problem = reason;
         Map<String, Object> data = new LinkedHashMap<>();

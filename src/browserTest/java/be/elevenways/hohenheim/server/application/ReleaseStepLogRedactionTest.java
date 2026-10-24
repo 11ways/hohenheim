@@ -2,11 +2,15 @@ package be.elevenways.hohenheim.server.application;
 
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.StackModel;
+import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
+import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
 import be.elevenways.hohenheim.server.instance.SecretRedactor;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
@@ -181,6 +185,83 @@ class ReleaseStepLogRedactionTest extends HohenheimHttpTestBase {
             watching.unsubscribe();
             cleanUp(appId);
         }
+    }
+
+    @Test
+    void anAttachedDatabasesDerivedCredentialsNeverLeakRawOrUrlEncodedJourney() {
+        int appId = application("release-db-env-redaction");
+        String password = "db@pass/w0rd+7f3a";
+        int databaseId = attachedDatabase(appId, "release-redaction-db", password);
+        try {
+            // 1. The family DatabaseEnvInjection derives at resolve time and stores nowhere: the URL carries the
+            //    password URL-encoded, which reads differently from the raw value.
+            Map<String, String> env = DatabaseEnvInjection.vars(ManagedDatabase.Engine.POSTGRES, "release-db", 5432,
+                "appuser", password, "appdb", "DB", true);
+            String url = env.get("DATABASE_URL");
+            String encoded = DatabaseEnvInjection.urlEncoded(password);
+            assertThat(encoded).as("step 1: the encoded form differs from the raw password").isNotEqualTo(password);
+            assertThat(url).as("step 1: the URL carries the encoded form only").contains(encoded)
+                .doesNotContain(password);
+            String printed = "DATABASE_URL=" + url + "\nDB_PASSWORD=" + env.get("DB_PASSWORD") + "\n";
+
+            // 2. The release step log and the failure reason: neither form is stored.
+            Row op = ReleaseEngine.newOperation(ReleaseOperationModel.KIND_RELEASE, appId, "fp", "fp");
+            for (String line : printed.split("\n")) {
+                ReleaseEngine.step(op, line);
+            }
+            ReleaseEngine.settle(op, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.FAILED),
+                "connect refused for " + url + " with " + password, "deploy failed", Now.instant());
+            Row stored = Models.get(ReleaseOperationModel.class).findById(op.get(ReleaseOperationModel.ID));
+            assertNeitherForm("step 2: the stored step log", stored.get(ReleaseOperationModel.STEP_LOG), password);
+            assertThat((String) stored.get(ReleaseOperationModel.STEP_LOG))
+                .as("step 2: the lines are kept around the placeholders").contains("DATABASE_URL=postgres://");
+            assertNeitherForm("step 2: the stored failure reason", stored.get(ReleaseOperationModel.FAILURE_REASON),
+                password);
+            assertThat((String) stored.get(ReleaseOperationModel.FAILURE_REASON))
+                .as("step 2: the reason still explains the failure").contains("connect refused for");
+
+            // 3. The console: its ring's stream and a whole stored backlog carry neither form.
+            SecretRedactor console = ConsoleRedaction.redactorFor(appId);
+            assertNeitherForm("step 3: the console stream", console.feed(printed) + console.flush(), password);
+            assertNeitherForm("step 3: a console backlog", ConsoleRedaction.redactWhole(printed, appId), password);
+
+            // 4. FAIL CLOSED: an instance whose record is gone has an unreadable set, and its text is masked whole.
+            assertThat(ConsoleRedaction.secretsOf(Integer.MAX_VALUE).readable())
+                .as("step 4: a gone instance's secrets are unreadable").isFalse();
+            assertThat(ConsoleRedaction.redactWhole("DB_PASSWORD=" + password, Integer.MAX_VALUE))
+                .as("step 4: its text is the placeholder").isEqualTo(KnownValueRedactor.PLACEHOLDER);
+        } finally {
+            for (Row link : Models.get(InstanceDatabaseModel.class).findByInstanceId(appId)) {
+                Models.get(InstanceDatabaseModel.class).delete(link.get(InstanceDatabaseModel.ID));
+            }
+            HardDeletes.byId(Models.get(DatabaseModel.class), databaseId);
+            cleanUp(appId);
+        }
+    }
+
+    /** @return a dedicated database record holding the password, attached to the instance under {@code DB} */
+    private static int attachedDatabase(int instanceId, String name, String password) {
+        Row database = Models.get(DatabaseModel.class).createEmptyRow();
+        database.set(DatabaseModel.NAME, name);
+        database.set(DatabaseModel.ENGINE, DatabaseModel.ENGINE_POSTGRES);
+        database.set(DatabaseModel.DB_NAME, "appdb");
+        database.set(DatabaseModel.DB_USER, "appuser");
+        database.set(DatabaseModel.DB_PASSWORD, password);
+        database.set(DatabaseModel.PLACEMENT, DatabaseModel.PLACEMENT_DEDICATED);
+        database.set(DatabaseModel.STATUS, DatabaseModel.STATUS_ACTIVE);
+        Models.get(DatabaseModel.class).save(database);
+        int databaseId = database.get(DatabaseModel.ID);
+        Row link = Models.get(InstanceDatabaseModel.class).createEmptyRow();
+        link.set(InstanceDatabaseModel.INSTANCE_ID, instanceId);
+        link.set(InstanceDatabaseModel.DATABASE_ID, databaseId);
+        link.set(InstanceDatabaseModel.ENV_PREFIX, "DB");
+        Models.get(InstanceDatabaseModel.class).save(link);
+        return databaseId;
+    }
+
+    private static void assertNeitherForm(String what, String text, String password) {
+        assertThat(text).as(what + " carries neither the raw nor the URL-encoded password")
+            .doesNotContain(password).doesNotContain(DatabaseEnvInjection.urlEncoded(password));
     }
 
     /** @return a fresh application carrying the test's secret variables */

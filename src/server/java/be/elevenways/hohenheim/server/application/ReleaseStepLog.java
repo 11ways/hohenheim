@@ -60,14 +60,17 @@ final class ReleaseStepLog {
 
     /**
      * End the operation's stream around its last line: what the redactor held is released (a secret prefix masked),
-     * then the line is fed and flushed on its own, and the stream is forgotten.
+     * then the line is fed and flushed on its own, and the stream is forgotten. With no stream open (no segment output
+     * in this process) the line is redacted whole as {@link #redactedReason} does, and no stream is opened for it.
      */
     static @NonNull Row stageFinal(@NonNull Row op, @NonNull String line, @NonNull Instant at) {
-        SecretRedactor stream = streamOf(op);
+        Integer id = op.get(ReleaseOperationModel.ID);
+        SecretRedactor stream = id == null ? null : STREAMS.remove(id);
         if (stream == null) {
-            return stage(op, line, at);
+            endLine(op);
+            String safe = redactedReason(op, line);
+            return append(op, (safe != null ? safe : KnownValueRedactor.PLACEHOLDER) + "\n", at);
         }
-        STREAMS.remove(op.get(ReleaseOperationModel.ID));
         endLine(append(op, stream.flush(), at));
         append(op, stream.feed(line + "\n"), at);
         endLine(append(op, stream.flush(), at));
@@ -129,14 +132,23 @@ final class ReleaseStepLog {
         }
     }
 
-    /** @return the operation's stream, opened on its owner's secret values; null when it names no instance owner */
+    /**
+     * The operation's stream, opened on its owner's secret values; null when it names no instance owner. The values
+     * are read OUTSIDE the map (a database read never runs under its bin lock); a racing opener's stream wins.
+     */
     private static @Nullable SecretRedactor streamOf(@NonNull Row op) {
         Integer id = op.get(ReleaseOperationModel.ID);
         Integer applicationId = instanceOwnerOf(op);
         if (id == null || applicationId == null) {
             return null;
         }
-        return STREAMS.computeIfAbsent(id, opened -> ConsoleRedaction.redactorFor(applicationId));
+        SecretRedactor open = STREAMS.get(id);
+        if (open != null) {
+            return open;
+        }
+        SecretRedactor opened = ConsoleRedaction.redactorFor(applicationId);
+        SecretRedactor raced = STREAMS.putIfAbsent(id, opened);
+        return raced != null ? raced : opened;
     }
 
     /** @return the application the operation belongs to; null when it names no instance owner */

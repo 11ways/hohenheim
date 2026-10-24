@@ -23,7 +23,14 @@ import java.util.Set;
 public final class SecretRedactor {
 
     private final KnownValueRedactor stream;
-    /** The values the stream took, for a whole text redacted apart from it ({@link #redactWhole}). */
+    /**
+     * The values the stream took, for a whole text redacted apart from it ({@link #redactWhole}).
+     *
+     * AIDEV-NOTE: references to the very String instances the matcher holds, not a second copy of their text. They
+     * are kept because zenit's {@link KnownValueRedactor} exposes neither its values nor a whole-text mode, and a
+     * whole text must never be fed through this stream (it would release this stream's held tail into it). Drop
+     * this set once zenit can redact a whole text through an existing redactor's values.
+     */
     private final Set<String> secrets = new LinkedHashSet<>();
     private boolean masking;
     /** Masking only: the current output line has text that its placeholder has not answered yet. */
@@ -114,13 +121,26 @@ public final class SecretRedactor {
      * @return null for null; the placeholder for a non-empty text when this stream masks
      */
     public synchronized @Nullable String redactWhole(@Nullable String text) {
+        return redactWhole(text, this.secrets, this.masking);
+    }
+
+    /**
+     * Redact a WHOLE text through a secret set read once, without opening a stream over it first.
+     *
+     * @return null for null; the placeholder for a non-empty text when the set could not be read
+     */
+    public static @Nullable String redactWhole(@Nullable String text, ConsoleRedaction.@NonNull Secrets secrets) {
+        return redactWhole(text, secrets.values(), !secrets.readable());
+    }
+
+    private static @Nullable String redactWhole(@Nullable String text, @NonNull Set<String> values, boolean masking) {
         if (text == null) {
             return null;
         }
-        if (this.masking) {
+        if (masking) {
             return text.isEmpty() ? text : KnownValueRedactor.PLACEHOLDER;
         }
-        KnownValueRedactor whole = KnownValueRedactor.of(this.secrets);
+        KnownValueRedactor whole = KnownValueRedactor.of(values);
         return whole.feed(text) + whole.flush();
     }
 }

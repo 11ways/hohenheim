@@ -260,8 +260,8 @@ public final class DatabaseEnvInjection {
                                                 @Nullable String user, @Nullable String password,
                                                 @Nullable String database,
                                                 @NonNull String authDatabase) {
-        String encodedUser = encode(user);
-        String encodedPassword = encode(password);
+        String encodedUser = urlEncoded(user);
+        String encodedPassword = urlEncoded(password);
         String db = database != null ? database : "";
         return switch (engine) {
             case POSTGRES -> "postgres://" + encodedUser + ":" + encodedPassword
@@ -273,11 +273,17 @@ public final class DatabaseEnvInjection {
             // A dedicated record's user is a root user in the admin database; a shared
             // record's user lives on its own logical database (authDatabaseOf).
             case MONGO -> "mongodb://" + encodedUser + ":" + encodedPassword
-                + "@" + host + ":" + port + "/" + db + "?authSource=" + encode(authDatabase);
+                + "@" + host + ":" + port + "/" + db + "?authSource=" + urlEncoded(authDatabase);
         };
     }
 
-    private static @NonNull String encode(@Nullable String value) {
+    /**
+     * A credential as the connection URLs spell it; THE encoding, which redaction also reads
+     * ({@code ConsoleRedaction}) so an encoded password is recognised in a printed URL.
+     *
+     * @return the empty string for null or empty
+     */
+    public static @NonNull String urlEncoded(@Nullable String value) {
         if (value == null || value.isEmpty()) {
             return "";
         }

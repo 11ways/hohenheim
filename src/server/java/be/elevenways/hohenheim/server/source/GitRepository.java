@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.source;
 
 import be.elevenways.hohenheim.server.SystemUsers;
+import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
 import be.elevenways.hohenheim.server.process.ProcessGroupSupport;
 
 import be.elevenways.hohenheim.source.GitRefNames;
@@ -37,8 +38,6 @@ public class GitRepository {
 
     private static final long DEFAULT_TIMEOUT_MILLIS = TimeUnit.MINUTES.toMillis(5);
     private static final int OUTPUT_CAP = 1_000_000;
-    private static final Pattern URI_USER_INFO = Pattern.compile(
-        "(?i)([a-z][a-z0-9+.-]*://)[^\\s/@]+@");
     private static final Pattern URI_AUTHORITY = Pattern.compile(
         "(?i)^([a-z][a-z0-9+.-]*)://([^/?#]*)");
 
@@ -306,7 +305,8 @@ public class GitRepository {
             } catch (SubprocessException refused) {
                 // The start failure's own words, never the whole argv the refusal names.
                 return new GitResult(false,
-                    sanitizeOutput("Failed to execute git: " + refused.getCause().getMessage()), -1);
+                    ConsoleRedaction.withoutUrlCredentials("Failed to execute git: " + refused.getCause().getMessage()),
+                    -1);
             } catch (CompletionException failed) {
                 if (failed.getCause() instanceof InterruptedException interrupted) {
                     // The run already asked the session to stop; the interrupt travels as the exception.
@@ -327,12 +327,13 @@ public class GitRepository {
             int exitCode = outcome.exitCode();
             // Success output is sanitized too: a repo's own insteadOf/submodule
             // config can echo a credentialed URL even when the command succeeds.
-            return new GitResult(exitCode == 0, sanitizeOutput(outcome.stdout().text()), exitCode);
+            return new GitResult(exitCode == 0, ConsoleRedaction.withoutUrlCredentials(outcome.stdout().text()),
+                exitCode);
         } catch (InterruptedException e) {
             throw e;
         } catch (Exception e) {
             return new GitResult(false,
-                sanitizeOutput("Failed to execute git: " + e.getMessage()), -1);
+                ConsoleRedaction.withoutUrlCredentials("Failed to execute git: " + e.getMessage()), -1);
         }
     }
 
@@ -484,14 +485,6 @@ public class GitRepository {
             throw new IllegalArgumentException(
                 "Repository URL must not contain embedded user-info credentials");
         }
-    }
-
-    /** Redacts URI user-info credentials from git output (applied to success and failure alike). */
-    static String sanitizeOutput(String output) {
-        if (output == null) {
-            return "";
-        }
-        return URI_USER_INFO.matcher(output).replaceAll("$1[REDACTED]@");
     }
 
     public record GitResult(boolean success, String output, int exitCode) {}

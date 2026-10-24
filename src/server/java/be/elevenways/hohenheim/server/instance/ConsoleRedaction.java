@@ -1,8 +1,10 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.instance.VariableKind;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
@@ -28,6 +30,7 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.regex.Pattern;
 
 /**
  * Tenant-safe redaction of an instance's console/log stream: the values the control plane KNOWS are secret for THIS
@@ -36,14 +39,16 @@ import java.util.TreeSet;
  *
  * AIDEV-NOTE: the mechanism (by known value, never by pattern; the minimum length; the held-back tail across chunk
  * boundaries) is {@link KnownValueRedactor}'s. This class only answers which values are secret: the
- * {@code instance_variables} rows of kind {@code secret}, plus the same rows on the instance's environment, and for
- * every other owner of quoted output ({@link #secretsOfOwner}) the {@code .secret()} fields of its records plus the
- * secrets of the instances it owns. Its minimum length is the ONE floor of every redaction in Hohenheim (consoles,
- * build logs, release steps, failure reasons).
+ * {@code instance_variables} rows of kind {@code secret}, plus the same rows on the instance's environment, plus the
+ * credentials {@link DatabaseEnvInjection} derives into its environment from each attached database (raw and in the
+ * URL encoding its connection URLs carry), and for every other owner of quoted output ({@link #secretsOfOwner}) the
+ * {@code .secret()} fields of its records plus the secrets of the instances it owns. Its minimum length is the ONE
+ * floor of every redaction in Hohenheim (consoles, build logs, release steps, failure reasons).
  *
  * AIDEV-NOTE: it FAILS CLOSED. A secret set that could not be read (the table unreachable, the owner's record gone,
- * an owner model with no rule here) is {@link Secrets#readable() unreadable}, and every redaction built on it masks
- * the whole text ({@link SecretRedactor}): an empty set would mean "nothing to hide", which is exactly the leak.
+ * the instance's included, an owner model with no rule here) is {@link Secrets#readable() unreadable}, and every
+ * redaction built on it masks the whole text ({@link SecretRedactor}): an empty set would mean "nothing to hide",
+ * which is exactly the leak.
  *
  * AIDEV-NOTE: cloud-init user-data is {@code .secret()} as a whole DOCUMENT and is
  * deliberately NOT a redaction subject. It is content, not a value: matching a multi-KB YAML
@@ -63,6 +68,9 @@ public final class ConsoleRedaction {
 
     private ConsoleRedaction() {
     }
+
+    /** A URL's user-info ({@code scheme://user:password@}), which a credential-bearing endpoint spells inline. */
+    private static final Pattern URL_USER_INFO = Pattern.compile("(?i)([a-z][a-z0-9+.-]*://)[^\\s/@]+@");
 
     /**
      * The secret values one owner's output may carry, or the fact that they could not be read.
@@ -141,7 +149,7 @@ public final class ConsoleRedaction {
 
     /** {@link #redactWhole(String, int)} through a secret set read once by the caller; null for null. */
     public static @Nullable String redactWhole(@Nullable String text, @NonNull Secrets secrets) {
-        return SecretRedactor.of(secrets).redactWhole(text);
+        return SecretRedactor.redactWhole(text, secrets);
     }
 
     /**
@@ -158,6 +166,19 @@ public final class ConsoleRedaction {
     public static @NonNull String reasonOf(@NonNull Identifier model, int ownerId, @NonNull Throwable failure) {
         String reason = redactedReason(model, ownerId, HohenheimViolations.reasonOf(failure));
         return reason != null ? reason : KnownValueRedactor.PLACEHOLDER;
+    }
+
+    /**
+     * Text that may quote an endpoint URL (git output, a daemon address) with every URL's user-info replaced by the
+     * placeholder. It needs no owner: the credential is recognised by where it sits, not by a known value.
+     *
+     * @return the empty string for null
+     */
+    public static @NonNull String withoutUrlCredentials(@Nullable String text) {
+        if (text == null) {
+            return "";
+        }
+        return URL_USER_INFO.matcher(text).replaceAll("$1" + KnownValueRedactor.PLACEHOLDER + "@");
     }
 
     private static @NonNull Secrets read(@NonNull Identifier model, int ownerId, @NonNull Collector collector) {
@@ -179,13 +200,61 @@ public final class ConsoleRedaction {
     }
 
     private static void collectInstance(@NonNull Set<String> into, @NonNull Set<String> refused, int instanceId) {
-        // Trashed included: a destroyed record's logs still carry its environment secrets.
-        Row instance = StoredRows.byId(Models.get(InstanceModel.class), instanceId);
-        Integer environmentId = instance == null ? null : instance.get(InstanceModel.ENVIRONMENT_ID);
+        // Trashed included: a destroyed record's logs still carry its environment secrets. A record gone entirely
+        // has no knowable secrets, so its set is unreadable like every other owner's.
+        Row instance = required(Models.get(InstanceModel.class), InstanceModel.MODEL_ID, instanceId);
+        Integer environmentId = instance.get(InstanceModel.ENVIRONMENT_ID);
         if (environmentId != null) {
             collectVariables(into, refused, Models.get(InstanceVariableModel.class).findByEnvironmentId(environmentId));
         }
         collectVariables(into, refused, Models.get(InstanceVariableModel.class).findByInstanceId(instanceId));
+        collectAttachedDatabases(into, refused, instanceId);
+    }
+
+    /**
+     * The credentials {@link DatabaseEnvInjection#envForInstance} derives into an instance's environment at resolve
+     * time and stores nowhere: each attached database's secret fields and its engine's.
+     */
+    private static void collectAttachedDatabases(@NonNull Set<String> into, @NonNull Set<String> refused,
+                                                 int instanceId) {
+        for (Row link : Models.get(InstanceDatabaseModel.class).findByInstanceId(instanceId)) {
+            Integer databaseId = link.get(InstanceDatabaseModel.DATABASE_ID);
+            Row database = databaseId == null ? null : StoredRows.byId(Models.get(DatabaseModel.class), databaseId);
+            // A link to a missing record injects nothing (DatabaseEnvInjection's record_missing skip).
+            if (database == null) {
+                continue;
+            }
+            collectCredentials(into, refused, database, DatabaseModel.SCHEMA);
+            collectEngineOf(into, refused, database, false);
+        }
+    }
+
+    /** The secret fields of the engine a database lives on, if any; with its owned instances when asked. */
+    private static void collectEngineOf(@NonNull Set<String> into, @NonNull Set<String> refused,
+                                        @NonNull Row database, boolean withOwned) {
+        Integer engineId = database.get(DatabaseModel.ENGINE_ID);
+        Row engine = engineId == null ? null : StoredRows.byId(Models.get(DatabaseEngineModel.class), engineId);
+        if (engine != null) {
+            collectCredentials(into, refused, engine, DatabaseEngineModel.SCHEMA);
+            if (withOwned) {
+                collectOwned(into, refused, DatabaseEngineModel.MODEL_ID, engineId);
+            }
+        }
+    }
+
+    /**
+     * A database's or an engine's {@code .secret()} fields, each also in the URL encoding
+     * ({@link DatabaseEnvInjection#urlEncoded}) a connection URL carries it in: a password holding a reserved
+     * character reads differently there, and the raw value would never match it.
+     */
+    private static void collectCredentials(@NonNull Set<String> into, @NonNull Set<String> refused,
+                                           @NonNull Row row, @NonNull Schema schema) {
+        Set<String> raw = new LinkedHashSet<>();
+        collectFields(raw, refused, row, schema);
+        into.addAll(raw);
+        for (String value : raw) {
+            accept(into, refused, "url-encoded credential", DatabaseEnvInjection.urlEncoded(value));
+        }
     }
 
     private static void collectOwner(@NonNull Set<String> into, @NonNull Set<String> refused,
@@ -211,20 +280,15 @@ public final class ConsoleRedaction {
             }
         } else if (DatabaseModel.MODEL_ID.equals(model)) {
             Row database = required(Models.get(DatabaseModel.class), model, ownerId);
-            collectFields(into, refused, database, DatabaseModel.SCHEMA);
+            collectCredentials(into, refused, database, DatabaseModel.SCHEMA);
             collectOwned(into, refused, model, ownerId);
-            Integer engineId = database.get(DatabaseModel.ENGINE_ID);
-            Row engine = engineId == null ? null : StoredRows.byId(Models.get(DatabaseEngineModel.class), engineId);
-            if (engine != null) {
-                collectFields(into, refused, engine, DatabaseEngineModel.SCHEMA);
-                collectOwned(into, refused, DatabaseEngineModel.MODEL_ID, engineId);
-            }
+            collectEngineOf(into, refused, database, true);
         } else if (DatabaseEngineModel.MODEL_ID.equals(model)) {
-            collectFields(into, refused, required(Models.get(DatabaseEngineModel.class), model, ownerId),
+            collectCredentials(into, refused, required(Models.get(DatabaseEngineModel.class), model, ownerId),
                 DatabaseEngineModel.SCHEMA);
             collectOwned(into, refused, model, ownerId);
             for (Row database : Models.get(DatabaseModel.class).findAll(DatabaseModel.ENGINE_ID, ownerId)) {
-                collectFields(into, refused, database, DatabaseModel.SCHEMA);
+                collectCredentials(into, refused, database, DatabaseModel.SCHEMA);
             }
         } else {
             throw new IllegalStateException("no secret rule for owner model " + model);

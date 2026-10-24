@@ -619,12 +619,12 @@ public class StackRuntime {
         } catch (Throwable e) {
             // Throwable, not Exception: an Error thrown on the worker would otherwise
             // vanish into the executor's unread future and leave the status stuck.
-            String failure = HohenheimViolations.reasonOf(e);
-            log.append("FAILED: ").append(failure).append('\n');
+            // Redacted at the append, through the stack's secrets: the in-memory log, the stored row, this log line
+            // and the returned failure never hold the raw reason, which may quote a service's credential.
+            String safeFailure = scoped(() -> ConsoleRedaction.reasonOf(StackModel.MODEL_ID, stackId, e));
+            log.append("FAILED: ").append(safeFailure).append('\n');
             setStatus(stackId, StackModel.STATUS_FAILED);
-            // The stored row, this log line and the returned failure all carry the REDACTED reason.
-            String safeFailure = scoped(() ->
-                StackDeploymentRecords.finished(stackId, recordId, false, failure, log.toString(), null));
+            scoped(() -> StackDeploymentRecords.finished(stackId, recordId, false, safeFailure, log.toString(), null));
             Blast.log("STACK: deploy failed for stack", stackId, "-", safeFailure);
             if (e instanceof Error error) {
                 throw error;
