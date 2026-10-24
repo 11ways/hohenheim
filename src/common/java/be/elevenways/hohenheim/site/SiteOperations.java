@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.site;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -25,9 +26,9 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * The site operations the panels place: switching a site on and off, cloning it and rolling its release back.
  *
  * AIDEV-NOTE: enable and disable are two operations, one verb each, where the admin used to place one
- * state-dependent toggle; each applies to one state only, so a row shows exactly one of them. Every gate here is
- * {@link OperationGate#open()}: who may act is the server-attached authorizer (SiteOperationHandlers), reach of the
- * site for the switches and installation administration for clone and rollback, so a surface outside the panels gets
+ * state-dependent toggle; each applies to one state only, so a row shows exactly one of them. Every gate here but the
+ * rollback's is {@link OperationGate#open()}: who may act is the server-attached authorizer (SiteOperationHandlers),
+ * reach of the site for the switches and installation administration for clone, so a surface outside the panels gets
  * the same rule the panels' audiences had.
  *
  * @author Jelle De Loecker
@@ -106,6 +107,10 @@ public final class SiteOperations {
      * AIDEV-NOTE: a background run, like the application's own rollback (InstanceOperations.ROLLBACK): the gated swap
      * boots and probes a candidate before the switch, so it never holds a request. The caller lands on the run's page,
      * whose finished run opens the site. It spends the deploy lane's hh_deploy budget.
+     *
+     * AIDEV-NOTE: installation administration is the GATE, declared here, never only a handler's authorizer: the run's
+     * body is off the request, where the release engine's own power check passes for any caller, so this admission
+     * (asked on the caller's request, before any run row) is the one check standing between a caller and the swap.
      */
     public static final Operation<Row, Void, Void> ROLLBACK_RELEASE =
         Operation.declare(HohenheimIds.id("rollback_release"))
@@ -113,7 +118,7 @@ public final class SiteOperations {
             .label(HohenheimMicrocopy.SITE.of("rollback").withFallback("Roll back"))
             .icon(Icon.of("clock-rotate-left"))
             .one(SITE)
-            .gate(OperationGate.open())
+            .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
             .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)
             .command(COMMAND.execution(CommandExecution.OUTSIDE_TRANSACTION))
             .rateLimit(HohenheimEndpoints.DEPLOY_LIMIT)

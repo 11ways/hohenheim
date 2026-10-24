@@ -232,7 +232,7 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
                     HohenheimSlugs.Tab.DEPLOYMENTS).with(CmsEndpoints.LIST_PAGE_PARAM, number).toUrl()
                 : tabUrl));
         putSourceVars(vars, instance);
-        if (Boolean.TRUE.equals(vars.get("isDeploying"))) {
+        if (history.deploying()) {
             vars.put("liveFeed", LIVE_FEED.toString());
             vars.put("liveSince", liveSince);
             putLiveLog(vars, instanceId, releaseManaged && !failures.delegated());
@@ -252,8 +252,8 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_DEPLOYMENTS, vars);
     }
 
-    /** The page of history a render shows, and how many rows the whole history holds. */
-    private record History(@NonNull PageWindow window, long total) {
+    /** The page of history a render shows, how many rows the whole history holds, and whether a deploy runs now. */
+    private record History(@NonNull PageWindow window, long total, boolean deploying) {
     }
 
     /**
@@ -333,7 +333,6 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         Releases releases = Releases.of(application);
         Row serving = releases.serving();
         Row kept = releases.kept();
-        vars.put("isDeploying", inFlight);
         // A kept release of the live release's own commit is no way back (a redeploy of one commit leaves one): going
         // "back" would deploy the very commit that serves now, so the band says so instead of offering it.
         boolean keptSameCommit = releases.keptSameCommit();
@@ -397,7 +396,7 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         deployments.sort(Comparator.comparing((Map<String, Object> entry) ->
             Objects.toString(entry.get("startedAtIso"), "")).reversed());
         vars.put("deployments", deployments);
-        return new History(window, releaseCount + unreleasedCount);
+        return new History(window, releaseCount + unreleasedCount, inFlight);
     }
 
     /** One application's release operations, newest start first. */
@@ -936,9 +935,9 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
             : buildsOf(instanceId).offset(window.offset()).limit(window.pageSize()).all();
 
         // Asked of the whole history, never of the page on screen: page 2 still knows a deploy runs.
-        vars.put("isDeploying", buildsOf(instanceId)
+        boolean deploying = buildsOf(instanceId)
             .where(BuildOperationModel.STATUS.eq(BuildOperationModel.LIFECYCLE.stored(OperationStatus.RUNNING)))
-            .count() > 0);
+            .count() > 0;
         vars.put("canRollback", false);
 
         Row latest = model.latestSuccess(InstanceModel.MODEL_ID.toString(), instanceId);
@@ -952,7 +951,7 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
             deployments.add(buildEntry(row, failures));
         }
         vars.put("deployments", deployments);
-        return new History(window, total);
+        return new History(window, total, deploying);
     }
 
     /**

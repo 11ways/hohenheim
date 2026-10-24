@@ -57,9 +57,10 @@ import java.util.Set;
  * AIDEV-NOTE: attached in a static initializer like InstanceOperationHandlers; {@link #init()} only forces the class
  * to load before boot verifies every operation has its handler. Who may act is an authorizer per operation: reach of
  * the site (manage) for the switches, which is /manage's own row scope and every site for an operator, and
- * installation administration for clone and rollback, which only the admin panel ever offered. A refusal conceals
- * the site as missing, the answer a caller gets for a site it cannot see. The write verbs follow these gates:
- * create and delete are installation administration, both edits reach of the site; the
+ * installation administration for clone, which only the admin panel ever offered; the rollback declares that same
+ * administration as its operation's gate (SiteOperations.ROLLBACK_RELEASE), since its run is off the request. A
+ * refusal conceals the site as missing, the answer a caller gets for a site it cannot see. The write verbs follow
+ * these gates: create and delete are installation administration, both edits reach of the site; the
  * delegated edit never runs the admin normalizers, while the model's write hooks (enable invariant, TenantWrites
  * column freeze, route claims, proxy reload) judge every writer alike.
  *
@@ -95,12 +96,12 @@ public final class SiteOperationHandlers {
             .authorize(administers())
             .handle(call -> cloneSite(call.subject(), Objects.requireNonNull(call.input(), "a clone has its input")));
         // Only a site exposing an application through the instance upstream has a release to roll back. A background
-        // run: what refuses it at once (no application, nothing kept) is asked here, before any run starts.
+        // run: what refuses it at once (no application, nothing kept) is asked here, before any run starts. Who may
+        // ask is the operation's own gate (installation administration), never an authorizer here alone.
         OperationHandlers.attach(SiteOperations.ROLLBACK_RELEASE)
             .applies(site -> live(site)
                 && InstanceUpstreamKind.ID.toString().equals(site.get(SiteModel.UPSTREAM_KIND)))
             .availability(Availability.batch((sites, access) -> rollbackRefusals(sites)))
-            .authorize(administers())
             .handle(SiteOperationHandlers::rollback);
         OperationHandlers.attach(SiteWrites.CREATE)
             .authorize((none, input, access) -> HohenheimAccess.isAdmin(access) ? null

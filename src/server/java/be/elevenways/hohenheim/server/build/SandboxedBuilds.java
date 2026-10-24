@@ -1,9 +1,12 @@
 package be.elevenways.hohenheim.server.build;
 
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.OperationStatus;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.BuildOperationModel;
+import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
@@ -27,7 +30,8 @@ import java.time.Instant;
  *
  * Durability contract, the {@code InstanceInstalls} shape: the {@code running} row
  * lands BEFORE any daemon work, so a controller that dies mid-build leaves visible
- * evidence rather than a clean-looking absence; every ending -- success, non-zero exit,
+ * evidence rather than a clean-looking absence (settled to {@code interrupted} at the next boot,
+ * {@link #recoverInterrupted()}); every ending -- success, non-zero exit,
  * timeout, disk kill, refusal -- stamps a terminal status with its reason and its log;
  * and the credential leases are revoked in a finally block that no path skips.
  *
@@ -235,6 +239,61 @@ public final class SandboxedBuilds {
                 ? "The build exited 0 but produced no readable artifact"
                 : "The build exited " + outcome.exitCode();
         };
+    }
+
+    /**
+     * Settle every build of an instance a dead controller left {@code running} to {@code interrupted}, so the deploy
+     * refusal that trusts running rows (ApplicationReleases.deployingAmong) never trusts a corpse.
+     *
+     * AIDEV-NOTE: the authority is the instance's operation claim, not LiveBuildLogs (one process's memory, blind to a
+     * rival controller's build) and not the clock alone (BootSettle's cross-controller caveat). Every build of an
+     * instance, a sandboxed one of an application or a workspace's own, runs inside that instance's
+     * InstanceOperationLock claim, so holding the claim proves none of its builds runs; a rival's live build keeps the
+     * claim and the row is skipped, left to that controller. The clock only spares this process's own builds, and the
+     * row is read again inside the claim. A trashed or removed instance holds no build (its destroy took the claim), so
+     * its row settles without one. A build owned by anything else (a preview, a runtime image) has no claim to prove it
+     * dead and blocks no deploy: it stays as it is.
+     */
+    public static void recoverInterrupted() {
+        BuildOperationModel model = Models.get(BuildOperationModel.class);
+        for (Row build : model.find().where(BuildOperationModel.FOR_MODEL.eq(InstanceModel.MODEL_ID.toString()))
+                .where(BuildOperationModel.STATUS.eq(BuildOperationModel.LIFECYCLE.stored(OperationStatus.RUNNING)))
+                .all()) {
+            Instant written = build.get(BuildOperationModel.UPDATED_AT);
+            if (written == null) {
+                written = build.get(BuildOperationModel.CREATED_AT);
+            }
+            if (BootSettle.writtenByThisProcess(written)) {
+                continue;   // written by THIS process: a live build, not a corpse
+            }
+            int buildId = build.get(BuildOperationModel.ID);
+            Integer instanceId = build.get(BuildOperationModel.FOR_ID);
+            try {
+                Row instance = instanceId == null ? null : StoredRows.byId(Models.get(InstanceModel.class), instanceId);
+                if (instance == null || InstanceModel.SOFT_DELETE.isTrashed(instance)) {
+                    settleInterrupted(model, buildId);
+                } else {
+                    InstanceOperationLock.production().exclusive(instanceId, InstanceOperationLock.Contention.QUEUE,
+                        () -> settleInterrupted(model, buildId));
+                }
+            } catch (RuntimeException e) {
+                Blast.log("BUILD: recovery of build", buildId, "failed -", HohenheimViolations.reasonOf(e));
+            }
+        }
+    }
+
+    /** Stamp one build {@code interrupted} when it still reads running; a NARROW write, never a save. */
+    private static void settleInterrupted(@NonNull BuildOperationModel model, int buildId) {
+        Row row = StoredRows.byId(model, buildId);
+        if (row == null || !BuildOperationModel.LIFECYCLE.is(row.get(BuildOperationModel.STATUS),
+                OperationStatus.RUNNING)) {
+            return;
+        }
+        row.set(BuildOperationModel.STATUS, BuildOperationModel.LIFECYCLE.stored(OperationStatus.INTERRUPTED));
+        row.set(BuildOperationModel.FAILURE_REASON, "Interrupted by a controller restart");
+        row.set(BuildOperationModel.FINISHED_AT, Now.instant());
+        model.saveWrittenUnlessGone(row);
+        Blast.log("BUILD:", buildId, "settled interrupted: its controller stopped mid-build");
     }
 
     /** Keep the newest N operations per owning record; older rows go. */

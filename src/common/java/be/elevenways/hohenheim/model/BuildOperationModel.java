@@ -44,8 +44,9 @@ import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * THE build-operation record: one row per sandboxed build attempt, shared by every
- * builder kind. It carries the durable state of the operation (an interrupted run
- * leaves {@code running} behind as visible evidence, never a clean-looking record),
+ * builder kind. It carries the durable state of the operation (a run its controller died in
+ * is settled to {@code interrupted} at the next boot, SandboxedBuilds.recoverInterrupted:
+ * visible evidence, never a clean-looking record and never a {@code running} row nobody owns),
  * the quota that was actually in force, what the sandbox observed while enforcing it,
  * and the DIGEST of the artifact -- which is the only thing a release may be pinned to.
  *
@@ -104,7 +105,7 @@ public class BuildOperationModel extends Model {
     /** The statuses a build stores in {@link #STATUS}. */
     public static final OperationLifecycle LIFECYCLE = OperationLifecycle.of(OperationStatus.RUNNING,
         OperationStatus.SUCCEEDED, OperationStatus.FAILED, OperationStatus.TIMED_OUT, OperationStatus.QUOTA_EXCEEDED,
-        OperationStatus.REFUSED);
+        OperationStatus.REFUSED, OperationStatus.INTERRUPTED);
 
     public static final IntegerField ID = SCHEMA.addField(
         IntegerField.builder().name("id").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("id")).build());
@@ -235,7 +236,10 @@ public class BuildOperationModel extends Model {
             LIFECYCLE.stored(OperationStatus.SUCCEEDED), forModel, forIds);
     }
 
-    /** @return which of several owning records of one model have a build still running, in one read */
+    /**
+     * @return which of several owning records of one model have a build still running, in one read; a running row is
+     *         a live build because boot settles the ones a dead controller left (SandboxedBuilds.recoverInterrupted)
+     */
     public Set<Integer> buildingAmong(String forModel, Collection<Integer> forIds) {
         Set<Integer> building = new LinkedHashSet<>();
         for (Row build : find().where(FOR_MODEL.eq(forModel)).where(FOR_ID.in(List.copyOf(forIds)))

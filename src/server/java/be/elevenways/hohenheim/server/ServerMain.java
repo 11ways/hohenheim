@@ -24,6 +24,7 @@ import be.elevenways.hohenheim.server.auth.ProteusRealmSuggestions;
 import be.elevenways.hohenheim.server.docker.DockerHealth;
 import be.elevenways.hohenheim.server.application.ArtifactDeploys;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
+import be.elevenways.hohenheim.server.build.SandboxedBuilds;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceMigrations;
@@ -202,6 +203,11 @@ public class ServerMain {
             roleSkip(HohenheimRoles.Role.INSTANCES,
                 "interrupted-migration settle skipped, no instances run here");
         }
+        // A restart mid-build leaves its build row running, and a running row refuses every later deploy of its
+        // instance (deploy_in_progress). Settled beside the release recovery but on no role: builds run wherever the
+        // deploy funnel runs, and the instance's operation claim (not this process's roles) proves a row dead.
+        // Virtual thread: the claim may wait out a rival controller's live build.
+        BOOT_RECOVERY.get().fireAndForget(SandboxedBuilds::recoverInterrupted);
         if (HohenheimRoles.enabled(HohenheimRoles.Role.PROXY)) {
             // A restart mid-release leaves a durable operation claiming to be in
             // flight: pre-switch ones lose their candidate (the prior release was

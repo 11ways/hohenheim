@@ -76,6 +76,10 @@ public final class InstanceOperations {
      * ({@link PowerResult}), and an operation runs in the background on every surface or on none. Both reach the one
      * funnel (InstanceService.deploy) with the trigger their surface declares, so a panel deploy records MANUAL. It
      * spends the deploy lane's hh_deploy budget, the one the rollback and the PaaS routes spend.
+     *
+     * AIDEV-NOTE: the instance-keyed command like {@link #ROLLBACK}, never START's retry-safe per-verb key: a deploy
+     * that ran again would build and roll out again, which is not "the state it is already in", and its claim of the
+     * instance (InstanceOperationLock) borrows this command's lease on the same key.
      */
     public static final Operation<Row, Void, Void> DEPLOY = Operation.declare(HohenheimIds.id("deploy_instance"))
         .happened(OperationSentences.of("deploy_instance"))
@@ -84,7 +88,7 @@ public final class InstanceOperations {
         .one(INSTANCE)
         .gate(gate(HohenheimCapabilities.POWER))
         .facts(OperationFact.REACHES_OUTSIDE)
-        .command(POWER_FACET)
+        .command(COMMAND_FACET)
         .rateLimit(HohenheimEndpoints.DEPLOY_LIMIT)
         .background(OperationSteps.of(
             OperationSteps.step("deploy", HohenheimMicrocopy.DEPLOYMENTS.of("deploy_step"))))

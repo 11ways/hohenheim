@@ -5,7 +5,6 @@
 {% declare title: String %}
 {% declare instanceId: Integer %}
 {% declare instanceName: String %}
-{% declare isDeploying: Boolean = false %}
 {% declare canRollback: Boolean = false %}
 {#- Whether the kept release runs the live release's own commit, so there is nothing earlier to go back to. -#}
 {% declare keptSameCommit: Boolean = false %}
