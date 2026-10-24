@@ -242,13 +242,13 @@ final class InstanceActions {
     /**
      * Roll a release-managed record back to its retained release -- the same engine
      * verb the site row offers, now reachable from the application itself (an
-     * unexposed application can still be rolled back).
+     * unexposed application can still be rolled back). A background run, the lane the
+     * Deploys tab's own step uses: it lands on the run's page, whose finished run opens
+     * the Deploys tab.
      */
     private static @NonNull PanelAction<Row> rollbackAction() {
-        return PanelAction.<Row, Void>places(InstanceOperations.ROLLBACK, ActionPlacement.ROW,
-                (request, result) -> CmsActionResult.refreshWithToast(
-                    HohenheimMicrocopy.INSTANCE.of("rollback_done")
-                        .withArg("name", request.subject().get(InstanceModel.NAME))))
+        return PanelAction.<Row, Void>placesRun(InstanceOperations.ROLLBACK, ActionPlacement.ROW)
+            .finishedRunOpens(Row.class, InstanceDeploymentsPage::tabOf)
             .inlineInRow(false)
             .disabledWhen((row, access) -> OwnedInstances.placementReasonOf(row, false, access))
             .description(HohenheimMicrocopy.INSTANCE.of("rollback_hint"))

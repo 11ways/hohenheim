@@ -292,15 +292,16 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
                 .as("step 2c: the band says the newer release is kept")
                 .contains("The newer release, aaaa1111, is kept so you can go forward to it in one step.")
                 .doesNotContain("Roll back to release");
-            // The confirm dialog is the shell's (use:CmsConfirm.destructive), drawn once the page hydrates.
+            // The confirm dialog is the shell's (the placed rollback operation's page form), drawn once the page
+            // hydrates; it names both releases and what the step changes (ReleasesTabJourneyTest reads a real diff).
             navigateToApp(pageUrl());
             waitForHydration();
-            click("[data-hh-rollback]");
+            click("[data-hh-rollback] [data-cms-page-action-submit]");
             assertIsVisible(".pl-alertdialog-modal[data-open]", "step 2c: the button asks first");
             // The dialog's words land after it opens: wait for them rather than reading the first frame.
             Locator dialog = this.page.locator(".pl-alertdialog-modal[data-open]");
             BoundedAssertions.assertThat(dialog)
-                .containsText("Go forward to release aaaa1111? The live release stops serving.");
+                .containsText("Go forward to release aaaa1111? Release bbbb2222 stops serving.");
             assertThat(dialog.textContent()).as("step 2c: and the dialog goes forward too")
                 .doesNotContain("Go back to release");
             click("[data-cms-confirm-cancel]");

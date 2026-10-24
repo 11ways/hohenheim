@@ -63,8 +63,8 @@ class SiteAccessControlTest extends HohenheimHttpTestBase {
         siteModel.save(siteB);
         siteBId = siteB.get(SiteModel.ID);
 
-        // Two instances for the instance-keyed deploy/rollback endpoints (the verbs
-        // moved off the site when the release engine was re-keyed to the application).
+        // Two instances for the instance-keyed deploy endpoint (the verb moved off the
+        // site when the release engine was re-keyed to the application).
         var instanceModel = Models.get(InstanceModel.class);
         Row instanceA = instanceModel.createEmptyRow();
         instanceA.set(InstanceModel.NAME, "access-app-a");
@@ -129,8 +129,6 @@ class SiteAccessControlTest extends HohenheimHttpTestBase {
         // 1. Per-instance endpoints refuse a principal holding no capability on the record.
         assertAuthorizationRefusal(limitedPost("/instances/" + instanceAId + "/deploy"),
             "step 1: deploy on an ungranted instance");
-        assertAuthorizationRefusal(limitedPost("/instances/" + instanceAId + "/rollback"),
-            "step 1: rollback on an ungranted instance");
 
         // 2. Installation-scoped sensitive endpoints are admin-only.
         assertAuthorizationRefusal(limitedGet("/certificates/1/download"),

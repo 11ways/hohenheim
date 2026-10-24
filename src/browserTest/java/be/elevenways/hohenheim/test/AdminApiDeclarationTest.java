@@ -41,11 +41,9 @@ class AdminApiDeclarationTest extends HohenheimHttpTestBase {
                 .contains(HohenheimSources.ADMIN_ACCESS);
         }
 
-        // 2. The deploy-tab verbs state their own login requirement.
+        // 2. The deploy-tab verb states its own login requirement (its rollback is the placed rollback operation).
         assertThat(HohenheimEndpoints.INSTANCES_DEPLOY.isLoginRequired())
             .as("step 2: the deploy form declares login").isTrue();
-        assertThat(HohenheimEndpoints.INSTANCES_ROLLBACK.isLoginRequired())
-            .as("step 2: the rollback form declares login").isTrue();
 
         // 3. On the wire: a key whose owner holds no admin permission is refused at the
         //    door for a host read, a zone list and a site create alike.

@@ -12,7 +12,6 @@ import be.elevenways.hohenheim.model.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceConsoleHandler;
 import be.elevenways.hohenheim.server.instance.InstanceShellHandler;
 import be.elevenways.hohenheim.server.instance.VmScreens;
-import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -32,7 +31,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 /**
- * Operational control handlers: the instance Deploys-tab forms, the instance console
+ * Operational control handlers: the instance Deploys-tab deploy form, the instance console
  * and the dev tunnel.
  */
 final class SiteControlHandlers {
@@ -41,13 +40,14 @@ final class SiteControlHandlers {
     }
 
     /**
-     * Deploy control (forms on the instance's Deploys tab).
+     * Deploy control (the deploy form on the instance's Deploys tab).
      *
      * AIDEV-NOTE: keyed by the APPLICATION instance, not the site, since the tab lives on the
-     * application -- the verbs act on the record that owns the releases. The CANCEL verb is
+     * application -- the verb acts on the record that owns the releases. The CANCEL verb is
      * gone with the queue it cancelled: the release engine deploys synchronously behind
      * a health gate, and what a failed candidate does is get destroyed while the prior
-     * release keeps serving -- there is no queued job to take back.
+     * release keeps serving -- there is no queued job to take back. Rollback is no form
+     * here any more: the tab places the rollback operation, the one the action band runs.
      */
     static void initDeployControl() {
         HohenheimEndpoints.INSTANCES_DEPLOY.setHandler(conduit -> {
@@ -65,22 +65,6 @@ final class SiteControlHandlers {
                     new InstanceService().deploy(instanceId, DeployTrigger.MANUAL)),
                 HohenheimMicrocopy.DEPLOYMENTS.of("deploy_done"), HohenheimMicrocopy.DEPLOYMENTS.of("deploy_running"),
                 HohenheimMicrocopy.DEPLOYMENTS.of("deploy_failed"));
-            return HandlerSupport.redirectUntyped(deploymentsPageUrl(conduit, instanceId));
-        });
-
-        HohenheimEndpoints.INSTANCES_ROLLBACK.setHandler(conduit -> {
-            Integer instanceId = conduit.getParameter(HohenheimEndpoints.INSTANCE_ID);
-            if (refusedInstancePower(conduit, instanceId)) {
-                return null;
-            }
-            if (refusedAdmission(conduit, instanceId)) {
-                return HandlerSupport.redirectUntyped(deploymentsPageUrl(conduit, instanceId));
-            }
-            report(conduit, settleWithin(SETTLE_WINDOW, "rollback of instance " + instanceId,
-                    () -> ReleaseEngine.rollback(instanceId, DeployTrigger.MANUAL)),
-                HohenheimMicrocopy.DEPLOYMENTS.of("rollback_done"),
-                    HohenheimMicrocopy.DEPLOYMENTS.of("rollback_running"),
-                HohenheimMicrocopy.DEPLOYMENTS.of("rollback_failed"));
             return HandlerSupport.redirectUntyped(deploymentsPageUrl(conduit, instanceId));
         });
     }

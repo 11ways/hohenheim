@@ -826,6 +826,17 @@ public final class ApplicationReleases {
         }
     }
 
+    /**
+     * The commit a release's own settings column names, trimmed, "" for none.
+     *
+     * AIDEV-NOTE: read off the stored column alone, never through {@link #storedSettings}: a commit is never an
+     * instance variable, and that overlay re-reads the instance row and its variables on every call (a history page
+     * reading each row's commit through it paid one instance read per release found).
+     */
+    public static @NonNull String storedCommit(@NonNull Row instance) {
+        return instance.get(InstanceModel.SETTINGS) instanceof Map<?, ?> map ? trimmed(map.get("commit_sha")) : "";
+    }
+
     public static @NonNull Map<String, Object> storedSettings(@NonNull Row instance) {
         Object stored = instance.get(InstanceModel.SETTINGS);
         if (stored instanceof Map<?, ?> map) {

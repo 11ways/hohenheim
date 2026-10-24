@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.instance;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimCapabilities;
@@ -16,6 +17,7 @@ import be.elevenways.zenit.common.orm.command.CommandExecution;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.OperationInput;
+import be.elevenways.zenit.common.operation.OperationSteps;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.StringField;
@@ -178,7 +180,13 @@ public final class InstanceOperations {
             .facts(OperationFact.REACHES_OUTSIDE)
             .register();
 
-    /** Roll a release-managed instance back to its retained release; POWER on the record. */
+    /**
+     * Roll a release-managed instance back to its retained release; POWER on the record.
+     *
+     * AIDEV-NOTE: a background run, as the gated swap outlives any request (a candidate boots and is probed before
+     * the switch): the caller lands on the run's page and the Deploys tab shows the release it starts with its live
+     * log. It spends the deploy lane's own hh_deploy budget, the one the deploy form and the PaaS routes spend.
+     */
     public static final Operation<Row, Void, Void> ROLLBACK =
         Operation.declare(HohenheimIds.id("rollback_instance"))
             .happened(OperationSentences.of("rollback_instance"))
@@ -188,6 +196,9 @@ public final class InstanceOperations {
             .gate(gate(HohenheimCapabilities.POWER))
             .command(COMMAND_FACET)
             .facts(OperationFact.REACHES_OUTSIDE)
+            .rateLimit(HohenheimEndpoints.DEPLOY_LIMIT)
+            .background(OperationSteps.of(
+                OperationSteps.step("switch", HohenheimMicrocopy.DEPLOYMENTS.of("rollback_step"))))
             .register();
 
     /**

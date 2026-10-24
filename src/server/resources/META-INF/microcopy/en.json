@@ -1937,7 +1937,7 @@
   ],
   "rollback_confirm": [
     {
-      "text": "Go back to release {$commit}? The live release stops serving.",
+      "text": "Go back to release {$commit}? Release {$current} stops serving. {$changes}",
       "scope": "deployments"
     },
     {
@@ -8514,10 +8514,6 @@
       "scope": "site"
     },
     {
-      "text": "Rolled back {$name}",
-      "scope": "instance"
-    },
-    {
       "text": "Rolled back to the retained release",
       "scope": "deployments"
     }
@@ -14521,14 +14517,6 @@
     "text": "Deployed",
     "scope": "deployments"
   },
-  "rollback_running": {
-    "text": "Rollback started; its progress appears on this tab",
-    "scope": "deployments"
-  },
-  "rollback_failed": {
-    "text": "The rollback failed; the reason is recorded on this tab",
-    "scope": "deployments"
-  },
   "enrolment_incomplete": {
     "text": "{$name} is saved but not enrolled: {$reason}. The host stays blocked; save it with a fresh trust token, rotate its identity or probe it to retry.",
     "scope": "server"
@@ -16308,7 +16296,7 @@
     "scope": "deployments"
   },
   "forward_confirm": {
-    "text": "Go forward to release {$commit}? The live release stops serving.",
+    "text": "Go forward to release {$commit}? Release {$current} stops serving. {$changes}",
     "scope": "deployments"
   },
   "live_kept_newer": {
@@ -18971,6 +18959,50 @@
   },
   "trigger_requested_by": {
     "text": "{$trigger}, requested by {$actor}",
+    "scope": "deployments"
+  },
+  "releases_title": {
+    "text": "Releases",
+    "scope": "deployments"
+  },
+  "spec_unchanged": {
+    "text": "Nothing else changes: both releases run the same settings.",
+    "scope": "deployments"
+  },
+  "spec_changes": {
+    "text": "What changes: {$changes}.",
+    "scope": "deployments"
+  },
+  "spec_value": {
+    "text": "{$setting} from {$from} to {$to}",
+    "scope": "deployments"
+  },
+  "spec_set": {
+    "text": "{$setting} set to {$to}",
+    "scope": "deployments"
+  },
+  "spec_cleared": {
+    "text": "{$setting} cleared",
+    "scope": "deployments"
+  },
+  "spec_secret": {
+    "text": "{$setting} (a secret, changed)",
+    "scope": "deployments"
+  },
+  "spec_names_changed": {
+    "text": "{$setting} {$names} changed",
+    "scope": "deployments"
+  },
+  "spec_names_added": {
+    "text": "{$setting} {$names} added",
+    "scope": "deployments"
+  },
+  "spec_names_removed": {
+    "text": "{$setting} {$names} removed",
+    "scope": "deployments"
+  },
+  "rollback_step": {
+    "text": "Switch to the kept release, behind the health gate",
     "scope": "deployments"
   }
 }

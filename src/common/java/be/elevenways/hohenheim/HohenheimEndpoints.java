@@ -139,7 +139,11 @@ public class HohenheimEndpoints {
             .keyBy(RateLimitPolicy.KeyBy.PRINCIPAL_OR_IP)
             .named("hh_media_view");
 
-    private static final RateLimitPolicy DEPLOY_LIMIT =
+    /**
+     * The deploy lane's budget: the Deploys-tab deploy form, the PaaS deploy and rollback routes and the placed
+     * rollback operation (InstanceOperations.ROLLBACK) all spend the one hh_deploy bucket per caller.
+     */
+    public static final RateLimitPolicy DEPLOY_LIMIT =
         RateLimitPolicy.of(10, Duration.ofMinutes(1))
             .keyBy(RateLimitPolicy.KeyBy.PRINCIPAL_OR_IP)
             .named("hh_deploy");
@@ -488,25 +492,17 @@ public class HohenheimEndpoints {
         .rateLimit(MEDIA_VIEW_LIMIT)
         .build();
 
-    // --- Deploy control (forms on the instance Deploys tab) ---
+    // --- Deploy control (the form on the instance Deploys tab) ---
     // AIDEV-NOTE: keyed by INSTANCE since the release engine was re-keyed to the
     // application and the Deployments tab moved with it:
-    // the verbs act on the record that owns the releases, and an application no site
-    // exposes yet can still deploy.
+    // the verb acts on the record that owns the releases, and an application no site
+    // exposes yet can still deploy. Rollback has no endpoint of its own: the tab places
+    // the rollback operation (InstanceOperations.ROLLBACK) through the cms invoke route.
     public static final Endpoint<Object> INSTANCES_DEPLOY = Endpoint.<Object>builder()
         .identifier(HohenheimIds.id("instances_deploy"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
             .addDelimiter().addStatic("deploy").build())
-        .requiresLogin()
-        .rateLimit(DEPLOY_LIMIT)
-        .build();
-
-    public static final Endpoint<Object> INSTANCES_ROLLBACK = Endpoint.<Object>builder()
-        .identifier(HohenheimIds.id("instances_rollback"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
-            .addDelimiter().addStatic("rollback").build())
         .requiresLogin()
         .rateLimit(DEPLOY_LIMIT)
         .build();

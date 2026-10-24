@@ -1937,7 +1937,7 @@
   ],
   "rollback_confirm": [
     {
-      "text": "Terug naar release {$commit}? De live release stopt met serveren.",
+      "text": "Terug naar release {$commit}? Release {$current} stopt met serveren. {$changes}",
       "scope": "deployments"
     },
     {
@@ -8514,10 +8514,6 @@
       "scope": "site"
     },
     {
-      "text": "{$name} teruggedraaid",
-      "scope": "instance"
-    },
-    {
       "text": "Teruggedraaid naar de bewaarde release",
       "scope": "deployments"
     }
@@ -14521,14 +14517,6 @@
     "text": "Uitgerold",
     "scope": "deployments"
   },
-  "rollback_running": {
-    "text": "Terugrollen gestart; de voortgang verschijnt op dit tabblad",
-    "scope": "deployments"
-  },
-  "rollback_failed": {
-    "text": "Terugrollen is mislukt; de reden staat op dit tabblad",
-    "scope": "deployments"
-  },
   "enrolment_incomplete": {
     "text": "{$name} is opgeslagen maar niet ingeschreven: {$reason}. De host blijft geblokkeerd; sla hem op met een nieuw vertrouwenstoken, vernieuw zijn identiteit of peil hem opnieuw om het nog eens te proberen.",
     "scope": "server"
@@ -16308,7 +16296,7 @@
     "scope": "deployments"
   },
   "forward_confirm": {
-    "text": "Vooruit naar release {$commit}? De live release stopt met serveren.",
+    "text": "Vooruit naar release {$commit}? Release {$current} stopt met serveren. {$changes}",
     "scope": "deployments"
   },
   "live_kept_newer": {
@@ -18971,6 +18959,50 @@
   },
   "trigger_requested_by": {
     "text": "{$trigger}, aangevraagd door {$actor}",
+    "scope": "deployments"
+  },
+  "releases_title": {
+    "text": "Releases",
+    "scope": "deployments"
+  },
+  "spec_unchanged": {
+    "text": "Verder verandert er niets: beide releases draaien met dezelfde instellingen.",
+    "scope": "deployments"
+  },
+  "spec_changes": {
+    "text": "Wat verandert: {$changes}.",
+    "scope": "deployments"
+  },
+  "spec_value": {
+    "text": "{$setting} van {$from} naar {$to}",
+    "scope": "deployments"
+  },
+  "spec_set": {
+    "text": "{$setting} ingesteld op {$to}",
+    "scope": "deployments"
+  },
+  "spec_cleared": {
+    "text": "{$setting} leeggemaakt",
+    "scope": "deployments"
+  },
+  "spec_secret": {
+    "text": "{$setting} (een geheim, gewijzigd)",
+    "scope": "deployments"
+  },
+  "spec_names_changed": {
+    "text": "{$setting} {$names} gewijzigd",
+    "scope": "deployments"
+  },
+  "spec_names_added": {
+    "text": "{$setting} {$names} toegevoegd",
+    "scope": "deployments"
+  },
+  "spec_names_removed": {
+    "text": "{$setting} {$names} verwijderd",
+    "scope": "deployments"
+  },
+  "rollback_step": {
+    "text": "Overschakelen naar de bewaarde release, achter de gezondheidscontrole",
     "scope": "deployments"
   }
 }

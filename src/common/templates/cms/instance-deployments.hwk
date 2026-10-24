@@ -37,7 +37,10 @@
     Zenit.Params.zenit.return_to identifier). Never spell "_return" here by hand. -#}
 {% declare returnParam: String %}
 {% declare deployTarget: RouteTarget %}
-{% declare rollbackTarget: RouteTarget %}
+{#- The placed rollback operation's own form over this record, set only where its offer stands for this reader. -#}
+{% declare rollbackForm: PageFormState = null %}
+{#- The history's page window: one page renders nothing. -#}
+{% declare pager: Pager = null %}
 {% declare head: RecordHeadState = null %}
 {% declare timeWording: RelativeTimeWording %}
 {% declare webhookUrl: String = "" %}
@@ -67,12 +70,10 @@
             {% if liveSinceIso != "" %}<span>{{ t("live_since", scope: "deployments") }} <pl-relative-time datetime={% liveSinceIso %} wording={% timeWording %} title={% liveSinceIso %}></pl-relative-time>.</span>{% /if %}
             {% if !keepsReleases %}{{ t("live_workspace_no_rollback", scope: "deployments") }}{% elseif keptSameCommit %}{{ t("live_kept_same_commit", scope: "deployments", commit: keptCommit) }}{% elseif keptNewer %}{{ t("live_kept_newer", scope: "deployments", commit: keptCommit) }}{% elseif keptCommit != "" %}{{ t("live_kept", scope: "deployments", commit: keptCommit) }}{% else %}{{ t("live_nothing_kept", scope: "deployments") }}{% /if %}
         </pl-alert-description>
-        {% if canRollback %}
-        <div class="cms-record-health-fixes">
-            <form use:Zenit.form={% rollbackTarget %} use:CmsConfirm.destructive={% keptNewer ? t("forward_confirm", scope: "deployments", commit: keptCommit) : t("rollback_confirm", scope: "deployments", commit: keptCommit) %}>
-                <input type="hidden" name={% returnParam %} value={% returnUrl %}>
-                <pl-button variant={% "secondary" %} type={% "submit" %} data-hh-rollback>{{ keptNewer ? t("forward_to", scope: "deployments", commit: keptCommit) : t("rollback_to", scope: "deployments", commit: keptCommit) }}</pl-button>
-            </form>
+        {% if rollbackForm != null %}
+        {#- The placed rollback operation: its button names the kept release, its confirmation what the step changes. -#}
+        <div class="cms-record-health-fixes" data-hh-rollback>
+            {% render "zenitcms:form/page-action" var:page=rollbackForm %}
         </div>
         {% /if %}
     </pl-alert>
@@ -80,7 +81,7 @@
 
     <pl-card>
         <pl-card-header>
-            <pl-card-title>{{ t("title", scope: "deployments") }}</pl-card-title>
+            <pl-card-title>{% if keepsReleases %}{{ t("releases_title", scope: "deployments") }}{% else %}{{ t("title", scope: "deployments") }}{% /if %}</pl-card-title>
             {% if keepsReleases %}
             <pl-card-description>{{ t("history_description", scope: "deployments") }}</pl-card-description>
             {% else %}
@@ -140,6 +141,7 @@
                     {% /each %}
                 </pl-table-body>
             </pl-table>
+            {% if pager != null %}<pl-pager pager={% pager %} label={% t("pagination", scope: "cms") %}></pl-pager>{% /if %}
             {% else %}
             <pl-empty-state icon="rocket">
                 <pl-empty-state-title>{{ t("empty", scope: "deployments") }}</pl-empty-state-title>

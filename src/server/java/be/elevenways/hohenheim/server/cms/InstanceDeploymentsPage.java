@@ -16,31 +16,52 @@ import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.WebhookDeliveryModel;
+import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
+import be.elevenways.hohenheim.server.application.SpecDiff;
+import be.elevenways.hohenheim.server.application.SpecSnapshots;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.build.BuildLog;
 import be.elevenways.hohenheim.server.build.LiveBuildLogs;
+import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
+import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
 import be.elevenways.hohenheim.server.source.GitSourcePolls;
 import be.elevenways.hohenheim.server.source.GitWebhookHandler;
 import be.elevenways.hohenheim.server.source.WebhookOutcome;
 import be.elevenways.hohenheim.source.GitSourceSchema;
+import be.elevenways.plumage.component.Pager;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.i18n.wording.Wording;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.live.LiveFeed;
 import be.elevenways.zenit.common.live.LiveFeeds;
 import be.elevenways.zenit.server.live.LiveServer;
+import be.elevenways.zenit.cms.common.action.ActionPlacement;
+import be.elevenways.zenit.cms.common.action.ActionStyle;
+import be.elevenways.protoblast.common.key.IdentifierKey;
+import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
+import be.elevenways.zenit.cms.common.action.PanelAction;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.RecordTab;
+import be.elevenways.zenit.cms.server.page.PageActions;
 import be.elevenways.zenit.cms.server.panel.PanelActionOffers;
 import be.elevenways.zenit.cms.server.render.action.ActionStateTranslator;
 import be.elevenways.zenit.cms.server.render.action.RowOffer;
+import be.elevenways.zenit.common.data.FacetUrlState;
+import be.elevenways.zenit.common.data.ListState;
+import be.elevenways.zenit.common.data.PageWindow;
+import be.elevenways.zenit.common.edit.FieldLabels;
+import be.elevenways.zenit.common.orm.field.Field;
+import be.elevenways.zenit.common.orm.query.QueryBuilder;
+import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.routing.ReturnPath;
+import be.elevenways.zenit.common.routing.RouteScope;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -51,6 +72,7 @@ import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.orm.history.HistoryText;
+import be.elevenways.zenit.common.orm.narration.FieldValueText;
 import be.elevenways.zenit.widget.common.data.WidgetBadge;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.server.http.ReturnTarget;
@@ -97,6 +119,31 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
      */
     static final Identifier LIVE_FEED = HohenheimIds.id("instance_deploys_live");
 
+    /** History rows per page: a release row carries its logs, so one page stays a screen or two. */
+    static final int PAGE_SIZE = 20;
+
+    /**
+     * The one step to the kept release, back or forward: the placed rollback operation over this tab's own record,
+     * the same operation, gate, handler and background lane the instance's action band runs. Its words name both
+     * releases, and its confirmation names what the switch changes ({@link SpecSnapshots#diff}), a secret setting
+     * only as changed. It answers with the run's page at once; the release the run starts shows here with its live log.
+     */
+    private static final PanelAction<Row> ROLLBACK = PanelAction.<Row, Void>placesRun(InstanceOperations.ROLLBACK,
+            ActionPlacement.PAGE)
+        .finishedRunOpens(Row.class, InstanceDeploymentsPage::tabOf)
+        .dynamicLabel(application -> Releases.of(application).stepLabel())
+        .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.INSTANCE.of("rollback"),
+            HohenheimMicrocopy.INSTANCE.of("rollback_confirm"), ActionStyle.DESTRUCTIVE))
+        .dynamicConfirmation(application -> ConfirmationSpec.verb(Releases.of(application).stepLabel(),
+            HohenheimMicrocopy.INSTANCE.of("rollback_confirm"), ActionStyle.DESTRUCTIVE))
+        .confirmationBody((application, input) -> Releases.of(application).confirmation())
+        .selectedByRoute(application -> String.valueOf((Object) application.get(InstanceModel.ID)))
+        .build();
+
+    /** The request's live and kept releases per application, read once however many parts of a render ask. */
+    private static final IdentifierKey<Map<Integer, Releases>> RELEASES =
+        IdentifierKey.of("hohenheim", "instance_deployments_releases");
+
     /** Register {@link #LIVE_FEED}; the tab's own record gates decide what a re-render shows. */
     public static void registerLiveFeed() {
         LiveFeeds.INSTANCE.registerOwned(LIVE_FEED, LiveFeed.of(AccessContext::isAccount,
@@ -106,6 +153,16 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
     @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.DEPLOYMENTS.of("title"); }
     @Override public @NonNull String slug() { return HohenheimSlugs.Tab.DEPLOYMENTS; }
     @Override public @NonNull Icon icon() { return Icon.of("rocket"); }
+
+    @Override
+    public @NonNull List<PanelAction<Row>> actions() {
+        return List.of(ROLLBACK);
+    }
+
+    /** @return the slug of this tab, which a finished rollback run opens on its application */
+    static @NonNull String tabOf(@NonNull Row application) {
+        return HohenheimSlugs.Tab.DEPLOYMENTS;
+    }
 
     /**
      * A record has this tab when deploying it means deploying code ({@code InstanceKinds.deploysCode}): a
@@ -139,12 +196,28 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         vars.put("keepsReleases", releaseManaged);
 
         WithheldFailure failures = WithheldFailure.of(conduit);
+        int requestedPage = FacetUrlState.readState(ListState.Shape.PLAIN, conduit::getQueryParams).page();
+        History history;
         if (releaseManaged) {
-            putReleaseVars(vars, instance, failures, accessContext);
+            history = putReleaseVars(vars, instance, failures, accessContext, requestedPage);
             putPreviewVars(vars, request, instance);
+            // The way back is the placed rollback operation's own form, drawn only where its offer stands for this
+            // reader (a stranger, a generated row or a workspace never gets one).
+            boolean offered = Boolean.TRUE.equals(vars.get("canRollback"))
+                && InstanceOperationHandlers.offered(InstanceOperations.ROLLBACK, accessContext, instance);
+            vars.put("rollbackForm", offered && PageActions.open(request, this, instance, ROLLBACK.id())
+                instanceof PageActions.Form form ? form.state() : null);
         } else {
-            putWorkspaceVars(vars, instanceId, failures);
+            history = putWorkspaceVars(vars, instanceId, failures, requestedPage);
         }
+        // One page of history needs no pager, and an undrawn one must not ride the hydration payload either.
+        String tabUrl = CmsRoutes.subpage(request.panelSlug(), HohenheimSlugs.INSTANCES, instanceId,
+            HohenheimSlugs.Tab.DEPLOYMENTS).toUrl();
+        vars.put("pager", history.window().pageCount() <= 1 ? null
+            : Pager.of(history.window(), history.total(), number -> number > 1
+                ? CmsRoutes.subpage(request.panelSlug(), HohenheimSlugs.INSTANCES, instanceId,
+                    HohenheimSlugs.Tab.DEPLOYMENTS).with(CmsEndpoints.LIST_PAGE_PARAM, number).toUrl()
+                : tabUrl));
         putSourceVars(vars, instance);
         if (Boolean.TRUE.equals(vars.get("isDeploying"))) {
             vars.put("liveFeed", LIVE_FEED.toString());
@@ -156,20 +229,21 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
             putAdminOnlyVars(vars, instance);
         }
 
-        // The deploy/rollback forms echo this as _return so their handlers redirect
-        // back to whichever panel rendered this page.
+        // The deploy form echoes this as _return so its handler redirects back to whichever panel rendered this page.
         vars.put("returnUrl", ReturnTarget.capture(conduit));
         // AIDEV-NOTE: the hidden field NAME comes from the framework constant --
         // ReturnTarget is server-only, so the common template cannot reach it.
         vars.put("returnParam", ReturnTarget.PARAM);
         vars.put("deployTarget", HohenheimEndpoints.INSTANCES_DEPLOY
             .with(HohenheimEndpoints.INSTANCE_ID, instanceId));
-        vars.put("rollbackTarget", HohenheimEndpoints.INSTANCES_ROLLBACK
-            .with(HohenheimEndpoints.INSTANCE_ID, instanceId));
         vars.put("head", recordHead(conduit));
         vars.put("timeWording", CmsSupport.timeWording(conduit));
 
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_DEPLOYMENTS, vars);
+    }
+
+    /** The page of history a render shows, and how many rows the whole history holds. */
+    private record History(@NonNull PageWindow window, long total) {
     }
 
     /**
@@ -205,39 +279,59 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
      * read here in one batch, and shows none once that instance was removed. Who or what started each row names its
      * principal through HistoryText, every name on the page read in one call. Which history row is "live" or "kept"
      * is read from the instances' roles (serving, retired), never from the operation's status.
+     *
+     * AIDEV-NOTE: the history is the releases and the builds that never became one, newest first, one PageWindow over
+     * both: each is counted, each read newest first only as far as the window reaches, and the two merged by start.
+     * Everything a row needs beyond its own columns is then read once for the page's rows, so a page costs the same
+     * reads at 3 rows as at 30 (ReleasesTabJourneyTest measures it).
      */
-    private static void putReleaseVars(Map<String, Object> vars, Row application, WithheldFailure failures,
-                                       AccessContext reader) {
+    private static @NonNull History putReleaseVars(Map<String, Object> vars, Row application,
+                                                   WithheldFailure failures, AccessContext reader,
+                                                   int requestedPage) {
         int instanceId = application.get(InstanceModel.ID);
-        ReleaseOperationModel model = Models.get(ReleaseOperationModel.class);
-        List<Row> operations = model.findForOwner(InstanceModel.MODEL_ID.toString(), instanceId, 50);
+        long releaseCount = releasesOf(instanceId).count();
+        long unreleasedCount = unreleasedOf(instanceId).count();
+        PageWindow window = PageWindow.of(requestedPage, releaseCount + unreleasedCount, PAGE_SIZE,
+            PageWindow.OutOfRange.CLAMP);
+        int reach = window.offset() + window.pageSize();
+        List<Row> releasesRead = releaseCount == 0 ? List.of() : releasesOf(instanceId).limit(reach).all();
+        // A build that did not succeed never became a release: listed beside them, or a deploy a push or the
+        // scheduled check started and the build refused would leave no trace on this page. A build that did
+        // succeed shows on the release it made (builtImages).
+        List<Row> unreleasedRead = unreleasedCount == 0 ? List.of() : unreleasedOf(instanceId).limit(reach).all();
+        List<Row> operations = new ArrayList<>();
+        List<Row> unreleased = new ArrayList<>();
+        int nextRelease = 0;
+        int nextBuild = 0;
+        for (int index = 0; index < reach
+                && (nextRelease < releasesRead.size() || nextBuild < unreleasedRead.size()); index++) {
+            boolean release = nextBuild >= unreleasedRead.size() || (nextRelease < releasesRead.size()
+                && !startOf(releasesRead.get(nextRelease).get(ReleaseOperationModel.STARTED_AT))
+                    .isBefore(startOf(unreleasedRead.get(nextBuild).get(BuildOperationModel.STARTED_AT))));
+            Row row = release ? releasesRead.get(nextRelease++) : unreleasedRead.get(nextBuild++);
+            if (index >= window.offset()) {
+                (release ? operations : unreleased).add(row);
+            }
+        }
 
         // AIDEV-NOTE: "in flight" is the release engine's own answer (a release in flight or a build running), never
         // a status list spelled here: this page used to list pending/deploying/probing and missed switching and
         // draining, so Deploy and Rollback were offered mid-switch.
         boolean inFlight = ApplicationReleases.deploying(instanceId);
-        // A build that did not succeed never became a release: listed beside them, or a deploy a push or the
-        // scheduled check started and the build refused would leave no trace on this page. A build that did
-        // succeed shows on the release it made (builtImages).
-        List<Row> builds = Models.get(BuildOperationModel.class)
-            .findForOwner(InstanceModel.MODEL_ID.toString(), instanceId, 50);
-        List<Row> unreleased = builds.stream()
-            .filter(row -> !BuildOperationModel.LIFECYCLE.is(row.get(BuildOperationModel.STATUS),
-                OperationStatus.SUCCEEDED))
-            .toList();
+        List<Row> builds = buildsAround(instanceId, operations);
         Map<String, Row> builtImages = builtImages(builds);
-        Row serving = ApplicationReleases.ownedServing(instanceId);
-        Row kept = ReleaseEngine.newestRetired(instanceId);
+        Releases releases = Releases.of(application);
+        Row serving = releases.serving();
+        Row kept = releases.kept();
         vars.put("isDeploying", inFlight);
         // A kept release of the live release's own commit is no way back (a redeploy of one commit leaves one): going
         // "back" would deploy the very commit that serves now, so the band says so instead of offering it.
-        boolean keptSameCommit = kept != null && serving != null && sameCommit(kept, serving);
+        boolean keptSameCommit = releases.keptSameCommit();
         vars.put("canRollback", !inFlight && kept != null && serving != null && !keptSameCommit);
         vars.put("keptSameCommit", keptSameCommit);
         // The engine orders releases by their instance id (newestRetired): after a rollback the kept release is the
         // newer one, so the one step goes forward to it, never "back".
-        vars.put("keptNewer", kept != null && serving != null
-            && kept.get(InstanceModel.ID).intValue() > serving.get(InstanceModel.ID).intValue());
+        vars.put("keptNewer", releases.keptNewer());
         vars.put("currentCommit", serving == null ? "" : commitOf(serving));
         vars.put("keptCommit", kept == null ? "" : commitOf(kept));
         Instant liveSince = serving == null ? null : serving.get(InstanceModel.CREATED_AT);
@@ -245,7 +339,7 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         Integer servingId = serving == null ? null : serving.get(InstanceModel.ID);
         Integer keptId = kept == null ? null : kept.get(InstanceModel.ID);
 
-        Map<Integer, String> commits = releaseCommits(operations);
+        Map<Integer, String> commits = legacyCommits(operations);
         Map<PrincipalRef, String> triggerers = triggerers(operations, reader);
         Map<Object, Row> ranBuilds = buildsRun(operations, builds);
         List<Map<String, Object>> deployments = new ArrayList<>();
@@ -293,6 +387,85 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         deployments.sort(Comparator.comparing((Map<String, Object> entry) ->
             Objects.toString(entry.get("startedAtIso"), "")).reversed());
         vars.put("deployments", deployments);
+        return new History(window, releaseCount + unreleasedCount);
+    }
+
+    /** One application's release operations, newest start first. */
+    private static @NonNull QueryBuilder<Row> releasesOf(int applicationId) {
+        return Models.get(ReleaseOperationModel.class).find()
+            .where(ReleaseOperationModel.FOR_MODEL.eq(InstanceModel.MODEL_ID.toString()))
+            .where(ReleaseOperationModel.FOR_ID.eq(applicationId))
+            .orderBy(ReleaseOperationModel.STARTED_AT, SortOrder.DESC)
+            .orderBy(ReleaseOperationModel.ID, SortOrder.DESC);
+    }
+
+    /** One record's builds that did not succeed (running, failed, refused), newest start first. */
+    private static @NonNull QueryBuilder<Row> unreleasedOf(int instanceId) {
+        return buildsOf(instanceId)
+            .where(BuildOperationModel.STATUS.notIn(
+                List.of(BuildOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED))));
+    }
+
+    /** One record's builds, newest start first. */
+    private static @NonNull QueryBuilder<Row> buildsOf(int instanceId) {
+        return Models.get(BuildOperationModel.class).find()
+            .where(BuildOperationModel.FOR_MODEL.eq(InstanceModel.MODEL_ID.toString()))
+            .where(BuildOperationModel.FOR_ID.eq(instanceId))
+            .orderBy(BuildOperationModel.STARTED_AT, SortOrder.DESC)
+            .orderBy(BuildOperationModel.ID, SortOrder.DESC);
+    }
+
+    /** @return a stored start for ordering; one never stamped sorts after every stamped one, as the query puts it */
+    private static @NonNull Instant startOf(@Nullable Instant started) {
+        return started == null ? Instant.MIN : started;
+    }
+
+    /**
+     * The builds a page of releases can have run: every build that started inside the page's span, and every succeeded
+     * build of an image one of them deployed; newest first, each once.
+     */
+    private static @NonNull List<Row> buildsAround(int instanceId, @NonNull List<Row> releases) {
+        Instant earliest = null;
+        Instant latest = null;
+        boolean running = false;
+        Set<String> images = new HashSet<>();
+        for (Row release : releases) {
+            Instant started = release.get(ReleaseOperationModel.STARTED_AT);
+            Instant finished = release.get(ReleaseOperationModel.FINISHED_AT);
+            if (started != null && (earliest == null || started.isBefore(earliest))) {
+                earliest = started;
+            }
+            if (finished == null) {
+                running = true;
+            } else if (latest == null || finished.isAfter(latest)) {
+                latest = finished;
+            }
+            String image = Objects.toString(release.get(ReleaseOperationModel.IMAGE_ID), "");
+            if (!image.isEmpty()) {
+                images.add(image);
+            }
+        }
+        Map<Object, Row> byId = new HashMap<>();
+        if (earliest != null) {
+            QueryBuilder<Row> spanned = buildsOf(instanceId).where(BuildOperationModel.STARTED_AT.gte(earliest));
+            if (!running && latest != null) {
+                spanned = spanned.where(BuildOperationModel.STARTED_AT.lte(latest));
+            }
+            for (Row build : spanned.all()) {
+                byId.put(build.get(BuildOperationModel.ID), build);
+            }
+        }
+        if (!images.isEmpty()) {
+            for (Row build : buildsOf(instanceId)
+                    .where(BuildOperationModel.STATUS.eq(BuildOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED)))
+                    .where(BuildOperationModel.IMAGE_ID.in(images)).all()) {
+                byId.put(build.get(BuildOperationModel.ID), build);
+            }
+        }
+        List<Row> builds = new ArrayList<>(byId.values());
+        builds.sort(Comparator.comparing((Row build) -> ((Number) build.get(BuildOperationModel.ID)).intValue())
+            .reversed());
+        return builds;
     }
 
     /**
@@ -386,12 +559,15 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         return byImage;
     }
 
-    /** The short commit each release instance named, keyed by instance id, trashed instances included. */
-    private static @NonNull Map<Integer, String> releaseCommits(@NonNull List<Row> operations) {
-        Set<Integer> ids = new java.util.HashSet<>();
+    /**
+     * The short commit each legacy row's release instance names, keyed by instance id, trashed instances included: one
+     * read for the whole page, and none once every row records its own commit.
+     */
+    private static @NonNull Map<Integer, String> legacyCommits(@NonNull List<Row> operations) {
+        Set<Integer> ids = new HashSet<>();
         for (Row row : operations) {
             Integer candidate = row.get(ReleaseOperationModel.CANDIDATE_INSTANCE_ID);
-            if (candidate != null) {
+            if (candidate != null && row.get(ReleaseOperationModel.COMMIT_SHA) == null) {
                 ids.add(candidate);
             }
         }
@@ -407,7 +583,7 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
     }
 
     private static @NonNull String commitOf(@NonNull Row release) {
-        return shortSha(ApplicationReleases.storedSettings(release).get("commit_sha"));
+        return shortSha(ApplicationReleases.storedCommit(release));
     }
 
     /** The name of every principal that started one of these operations, for the reader, read in one call. */
@@ -453,9 +629,166 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
 
     /** @return whether two releases name one and the same commit; a release naming none matches nothing */
     private static boolean sameCommit(@NonNull Row left, @NonNull Row right) {
-        String commit = Objects.toString(ApplicationReleases.storedSettings(left).get("commit_sha"), "").trim();
-        return !commit.isEmpty()
-            && commit.equals(Objects.toString(ApplicationReleases.storedSettings(right).get("commit_sha"), "").trim());
+        String commit = ApplicationReleases.storedCommit(left);
+        return !commit.isEmpty() && commit.equals(ApplicationReleases.storedCommit(right));
+    }
+
+    /**
+     * The application's live release and the one kept beside it, as the instances' roles name them: what the band
+     * shows and what the rollback action's words and confirmation read.
+     */
+    private static final class Releases {
+
+        private final @Nullable Row serving;
+        private final @Nullable Row kept;
+        /** Built on first ask: the diff reads both releases' stored snapshots. */
+        private @Nullable Microcopy confirmation;
+
+        private Releases(@Nullable Row serving, @Nullable Row kept) {
+            this.serving = serving;
+            this.kept = kept;
+        }
+
+        /** @return the application's releases, read once per request ({@link RouteScope#memo}) */
+        static @NonNull Releases of(@NonNull Row application) {
+            int applicationId = application.get(InstanceModel.ID);
+            return RouteScope.memo(RELEASES, HashMap::new).computeIfAbsent(applicationId,
+                id -> new Releases(ApplicationReleases.ownedServing(id), ReleaseEngine.newestRetired(id)));
+        }
+
+        @Nullable Row serving() {
+            return this.serving;
+        }
+
+        @Nullable Row kept() {
+            return this.kept;
+        }
+
+        /** @return whether the kept release is newer than the live one (a rollback ran), so the step goes forward */
+        boolean keptNewer() {
+            return this.kept != null && this.serving != null
+                && this.kept.get(InstanceModel.ID).intValue() > this.serving.get(InstanceModel.ID).intValue();
+        }
+
+        /** @return whether the kept release runs the live release's own commit, so there is nothing to step to */
+        boolean keptSameCommit() {
+            return this.kept != null && this.serving != null && sameCommit(this.kept, this.serving);
+        }
+
+        /** @return the step's words: back, or forward after a rollback, to the kept release's commit */
+        @NonNull Microcopy stepLabel() {
+            return HohenheimMicrocopy.DEPLOYMENTS.of(this.keptNewer() ? "forward_to" : "rollback_to")
+                .withArg("commit", this.kept == null ? "" : commitOf(this.kept));
+        }
+
+        /**
+         * The confirmation's sentence: which release stops serving, which one takes over, and what that changes,
+         * diffed over the redacted snapshots each release's own operation stored, so a secret is never more than
+         * "changed" and the diff names what each release deployed. Built once per request, with the releases.
+         */
+        @NonNull Microcopy confirmation() {
+            if (this.confirmation != null) {
+                return this.confirmation;
+            }
+            SpecDiff diff = this.serving == null || this.kept == null ? new SpecDiff(List.of(), List.of())
+                : diffOf(this.serving, this.kept);
+            this.confirmation = HohenheimMicrocopy.DEPLOYMENTS.of(this.keptNewer() ? "forward_confirm"
+                    : "rollback_confirm")
+                .withArg("commit", this.kept == null ? "" : commitOf(this.kept))
+                .withArg("current", this.serving == null ? "" : commitOf(this.serving))
+                // AIDEV-NOTE: resolved here and handed over as text: passed as a nested Microcopy (itself holding a
+                // list argument) it reached the shell's confirm dialog empty, the sentence ending after "stops
+                // serving." (observed 2026-10-24). putTrigger hands its nested label over the same way.
+                .withArg("changes", CmsSupport.resolvedTextOrDefault(changesOf(diff)));
+            return this.confirmation;
+        }
+
+        /**
+         * What replacing the serving release's spec by the kept one's changes, from the snapshot the newest succeeded
+         * operation naming each release stored (one read for both).
+         *
+         * AIDEV-NOTE: a release made before release attribution (2026-10-23) has no stored snapshot; that side alone
+         * falls back to a snapshot of its instance's settings taken now, which is what a rollback would deploy but
+         * costs the variable overlay's reads.
+         */
+        private static @NonNull SpecDiff diffOf(@NonNull Row serving, @NonNull Row kept) {
+            Integer servingId = serving.get(InstanceModel.ID);
+            Integer keptId = kept.get(InstanceModel.ID);
+            Map<Integer, String> stored = new HashMap<>();
+            for (Row operation : Models.get(ReleaseOperationModel.class).find()
+                    .where(ReleaseOperationModel.CANDIDATE_INSTANCE_ID.in(List.of(servingId, keptId)))
+                    .where(ReleaseOperationModel.STATUS.eq(
+                        ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED)))
+                    .orderBy(ReleaseOperationModel.ID, SortOrder.DESC).all()) {
+                String snapshot = operation.get(ReleaseOperationModel.SPEC_SNAPSHOT);
+                if (snapshot != null && !snapshot.isBlank()) {
+                    stored.putIfAbsent(operation.get(ReleaseOperationModel.CANDIDATE_INSTANCE_ID), snapshot);
+                }
+            }
+            return SpecSnapshots.diff(snapshotOf(serving, stored.get(servingId)),
+                snapshotOf(kept, stored.get(keptId)));
+        }
+
+        private static @NonNull String snapshotOf(@NonNull Row release, @Nullable String stored) {
+            return stored != null ? stored : SpecSnapshots.snapshot(ApplicationReleases.storedSettings(release));
+        }
+    }
+
+    /**
+     * What a spec diff changes, in words: each setting by its label (a plain value from and to, worded as the field
+     * words it for the reader; a secret only as changed), each map by the names added, removed and changed, never a
+     * value; "the same" when nothing differs.
+     */
+    static @NonNull Microcopy changesOf(@NonNull SpecDiff diff) {
+        if (diff.isEmpty()) {
+            return HohenheimMicrocopy.DEPLOYMENTS.of("spec_unchanged");
+        }
+        List<Microcopy> changes = new ArrayList<>();
+        for (SpecDiff.Setting setting : diff.settings()) {
+            Microcopy label = settingLabel(setting.key());
+            changes.add(setting.secret() ? HohenheimMicrocopy.DEPLOYMENTS.of("spec_secret").withArg("setting", label)
+                : setting.from() == null ? HohenheimMicrocopy.DEPLOYMENTS.of("spec_set").withArg("setting", label)
+                    .withArg("to", valueText(setting.key(), setting.to()))
+                : setting.to() == null ? HohenheimMicrocopy.DEPLOYMENTS.of("spec_cleared").withArg("setting", label)
+                : HohenheimMicrocopy.DEPLOYMENTS.of("spec_value").withArg("setting", label)
+                    .withArg("from", valueText(setting.key(), setting.from()))
+                    .withArg("to", valueText(setting.key(), setting.to())));
+        }
+        for (SpecDiff.Entries entries : diff.maps()) {
+            Microcopy label = settingLabel(entries.key());
+            addNames(changes, "spec_names_changed", label, entries.changed());
+            addNames(changes, "spec_names_added", label, entries.added());
+            addNames(changes, "spec_names_removed", label, entries.removed());
+        }
+        return HohenheimMicrocopy.DEPLOYMENTS.of("spec_changes").withArg("changes", changes);
+    }
+
+    private static void addNames(@NonNull List<Microcopy> changes, @NonNull String key, @NonNull Microcopy label,
+                                 @NonNull List<String> names) {
+        if (names.isEmpty()) {
+            return;
+        }
+        List<Microcopy> words = new ArrayList<>();
+        for (String name : names) {
+            words.add(Microcopy.literal(name));
+        }
+        changes.add(HohenheimMicrocopy.DEPLOYMENTS.of(key).withArg("setting", label).withArg("names", words));
+    }
+
+    /** @return the release schema field's own label; the diff names only keys the schema declares */
+    private static @NonNull Microcopy settingLabel(@NonNull String key) {
+        return FieldLabels.labelFor(settingField(key));
+    }
+
+    /** @return a stored setting value worded as its field words it for this request's reader ("512 MB") */
+    private static @NonNull String valueText(@NonNull String key, @Nullable Object value) {
+        return FieldValueText.standard().text(ReleaseKind.SETTINGS_SCHEMA, settingField(key), value,
+            CmsSupport.currentReader(), Zenit.getMessageResolver());
+    }
+
+    private static @NonNull Field<?, ?> settingField(@NonNull String key) {
+        return Objects.requireNonNull(ReleaseKind.SETTINGS_SCHEMA.getField(key),
+            () -> "the release schema declares " + key);
     }
 
     /**
@@ -584,14 +917,18 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
      * volume, so there is no previous artifact to point back at -- offering the control
      * would be an affordance that can only refuse.
      */
-    private static void putWorkspaceVars(Map<String, Object> vars, int instanceId, WithheldFailure failures) {
-
+    private static @NonNull History putWorkspaceVars(Map<String, Object> vars, int instanceId,
+                                                     WithheldFailure failures, int requestedPage) {
         BuildOperationModel model = Models.get(BuildOperationModel.class);
-        List<Row> operations = model.findForOwner(InstanceModel.MODEL_ID.toString(),
-            instanceId, 50);
+        long total = buildsOf(instanceId).count();
+        PageWindow window = PageWindow.of(requestedPage, total, PAGE_SIZE, PageWindow.OutOfRange.CLAMP);
+        List<Row> operations = total == 0 ? List.of()
+            : buildsOf(instanceId).offset(window.offset()).limit(window.pageSize()).all();
 
-        vars.put("isDeploying", operations.stream().anyMatch(row ->
-            BuildOperationModel.LIFECYCLE.is(row.get(BuildOperationModel.STATUS), OperationStatus.RUNNING)));
+        // Asked of the whole history, never of the page on screen: page 2 still knows a deploy runs.
+        vars.put("isDeploying", buildsOf(instanceId)
+            .where(BuildOperationModel.STATUS.eq(BuildOperationModel.LIFECYCLE.stored(OperationStatus.RUNNING)))
+            .count() > 0);
         vars.put("canRollback", false);
 
         Row latest = model.latestSuccess(InstanceModel.MODEL_ID.toString(), instanceId);
@@ -605,6 +942,7 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
             deployments.add(buildEntry(row, failures));
         }
         vars.put("deployments", deployments);
+        return new History(window, total);
     }
 
     /**

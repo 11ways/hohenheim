@@ -33,6 +33,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.server.operation.OperationCall;
 import be.elevenways.zenit.server.operation.Applicability;
+import be.elevenways.zenit.server.operation.Availability;
 import be.elevenways.zenit.server.operation.OperationHandlers;
 import be.elevenways.zenit.server.task.record.SchedulePlacements;
 import be.elevenways.zenit.server.task.record.RecordSchedules;
@@ -51,6 +52,7 @@ import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.server.operation.InputScope;
 
 import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -113,11 +115,17 @@ public final class InstanceOperationHandlers {
         OperationHandlers.attach(InstanceOperations.CONSOLE_COMMAND).source(SUBJECTS)
             .applies(InstanceOperationHandlers::authored)
             .handle(InstanceOperationHandlers::consoleCommand);
+        // AIDEV-NOTE: a background run; what refuses it at once is asked here, before the run starts, so a refused
+        // rollback answers in the engine's own words on the surface that asked and mints no run: nothing kept to go
+        // back to, read for every asked application in one go. The engine still refuses it under its lock.
         OperationHandlers.attach(InstanceOperations.ROLLBACK).source(SUBJECTS)
             .applies(instance -> authored(instance)
                 && InstanceKinds.isReleaseManaged(instance.get(InstanceModel.KIND)))
+            .availability(Availability.keyed((Row instance) -> instance.get(InstanceModel.ID),
+                InstanceOperationHandlers::withoutRollbackTarget))
             .handle(call -> {
                 ReleaseEngine.rollback(instanceId(call), DeployTrigger.MANUAL);
+                call.reportStepDone(HohenheimMicrocopy.DEPLOYMENTS.of("rollback_done"));
                 return null;
             });
         // One ISO per machine through its record: a drive that holds one is emptied (the detach) before another goes in.
@@ -273,6 +281,18 @@ public final class InstanceOperationHandlers {
      */
     private static boolean authored(@NonNull Row instance) {
         return instance.get(InstanceModel.GENERATED_BY) == null;
+    }
+
+    /** @return per asked application keeping no retained release, the engine's refusal of its rollback */
+    private static @NonNull Map<Integer, Microcopy> withoutRollbackTarget(@NonNull Set<Integer> applicationIds) {
+        Set<Integer> kept = ReleaseEngine.keepingRetired(applicationIds);
+        Map<Integer, Microcopy> reasons = new HashMap<>();
+        for (Integer applicationId : applicationIds) {
+            if (!kept.contains(applicationId)) {
+                reasons.put(applicationId, ReleaseEngine.NO_ROLLBACK_TARGET);
+            }
+        }
+        return reasons;
     }
 
     /**

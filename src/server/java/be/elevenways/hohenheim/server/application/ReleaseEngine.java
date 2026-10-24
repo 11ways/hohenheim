@@ -36,6 +36,7 @@ import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.time.Pace;
@@ -58,9 +59,12 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Supplier;
 
@@ -98,6 +102,9 @@ import static be.elevenways.hohenheim.RawValues.trimmed;
  * are pruned down to the serving digest. Application delete destroys all of it (destroyFor).
  */
 public final class ReleaseEngine {
+
+    /** Why an application with no retained release cannot roll back. */
+    public static final Microcopy NO_ROLLBACK_TARGET = HohenheimMicrocopy.VIOLATIONS.of("release_no_rollback_target");
 
     /** Keys of {@code adjustPaths}-injected checkout paths: per-slot, never source identity. */
     private static final List<String> VOLATILE_SETTINGS =
@@ -391,7 +398,7 @@ public final class ReleaseEngine {
             Row serving = ApplicationReleases.ownedServing(applicationId);
             Row target = newestRetired(applicationId);
             if (target == null) {
-                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("release_no_rollback_target"));
+                throw Violations.ofForm(NO_ROLLBACK_TARGET);
             }
             if (serving == null) {
                 throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("release_no_serving_release"));
@@ -1093,6 +1100,21 @@ public final class ReleaseEngine {
     public static @Nullable Row newestRetired(int applicationId) {
         List<Row> retired = ownedWithRole(applicationId, InstanceModel.ROLE_RETIRED);
         return retired.isEmpty() ? null : retired.get(0);
+    }
+
+    /** @return which of these applications keep a retained release (a rollback target), in one read */
+    public static @NonNull Set<Integer> keepingRetired(@NonNull Collection<Integer> applicationIds) {
+        Set<Integer> keeping = new HashSet<>();
+        if (applicationIds.isEmpty()) {
+            return keeping;
+        }
+        for (Row release : Models.get(InstanceModel.class).find()
+                .where(InstanceModel.GENERATED_FOR_MODEL.eq(InstanceModel.MODEL_ID.toString()))
+                .where(InstanceModel.GENERATED_FOR_ID.in(List.copyOf(applicationIds)))
+                .where(InstanceModel.RUNTIME_ROLE.eq(InstanceModel.ROLE_RETIRED)).all()) {
+            keeping.add(release.get(InstanceModel.GENERATED_FOR_ID));
+        }
+        return keeping;
     }
 
     // -- operation record plumbing -------------------------------------------
