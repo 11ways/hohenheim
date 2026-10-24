@@ -137,6 +137,23 @@ public final class CertificateCoverage {
     }
 
     /**
+     * The names a visitor's handshake works for: {@link #workingNames()} while this process's proxy terminates HTTPS,
+     * none while it cannot.
+     *
+     * AIDEV-NOTE: THE rule every HTTPS display and every https URL Hohenheim hands out reads (AppHealth's cells, a
+     * hook's pasteable URL): a loaded certificate serves no handshake without a listener that terminates.
+     */
+    public static @NonNull Set<String> handshakeNames() {
+        return terminates() ? workingNames() : Set.of();
+    }
+
+    /** @return whether this process's proxy answers HTTPS at all; true where no proxy runs in this process */
+    public static boolean terminates() {
+        var proxy = ServerMain.getProxyServer();
+        return proxy == null || proxy.isHttpsTerminationAvailable();
+    }
+
+    /**
      * Whether a certificate row is one the running proxy loaded and serves; true where no proxy runs in this process,
      * where the stored rows are all there is to read ({@link #workingNames()}'s same rule).
      */

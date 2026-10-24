@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.security.ThreatScorer;
 import be.elevenways.hohenheim.server.sitetype.ProbeableUpstream;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
+import be.elevenways.hohenheim.server.source.BuildHookHandler;
 import be.elevenways.hohenheim.server.source.GitWebhookHandler;
 import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.hohenheim.server.tls.CertificateStore;
@@ -320,9 +321,13 @@ public class SiteDispatcher implements HttpHandler {
         // row here before it does more damage. Never blocks this request.
         ReputationBanPolicy.INSTANCE.noteRequest(clientIp);
 
-        // --- Git webhook intercept (before hostname routing) ---
+        // --- Git webhook and build hook intercepts (before hostname routing) ---
         if (GitWebhookHandler.matches(exchange)) {
             GitWebhookHandler.handle(exchange);
+            return;
+        }
+        if (BuildHookHandler.matches(exchange)) {
+            BuildHookHandler.handle(exchange);
             return;
         }
 

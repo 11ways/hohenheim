@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.security;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.proxy.auth.ProxyAuthThrottle;
+import be.elevenways.hohenheim.server.source.BuildHookHandler;
 import be.elevenways.hohenheim.server.source.GitWebhookHandler;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
@@ -103,12 +104,15 @@ public final class ThreatScorer {
     // AIDEV-NOTE: a RATE_LIMITED refusal is worth what the REFUSING POLICY says it is, read
     // off the event's policy detail and keyed by the policies' own bucket names, never a
     // re-spelled literal. A forge redelivering webhooks is a legitimate peer shouting, not an
-    // attack (scoring it banned GitHub's hook range), while a proxy-auth refusal IS credential
-    // guessing. A policy missing here keeps the type's weight: fail closed toward banning.
-    // A refusal spent from the shared overflow bucket scores nothing whatever the policy,
-    // because an address sharing that bucket is one of many strangers, not the abuser.
+    // attack (scoring it banned GitHub's hook range), and so is a CI loop over a build hook it
+    // holds the URL of (that budget is spent only once the token named a live hook), while a
+    // proxy-auth refusal IS credential guessing. A policy missing here keeps the type's weight:
+    // fail closed toward banning (a burst of unknown build hook tokens does). A refusal spent
+    // from the shared overflow bucket scores nothing whatever the policy, because an address
+    // sharing that bucket is one of many strangers, not the abuser.
     private static final Map<String, Integer> RATE_LIMITED_POLICY_WEIGHTS = Map.of(
         Objects.requireNonNull(GitWebhookHandler.POLICY.bucketName(), "webhook policy name"), 0,
+        Objects.requireNonNull(BuildHookHandler.HOOK_POLICY.bucketName(), "build hook policy name"), 0,
         Objects.requireNonNull(ProxyAuthThrottle.POLICY.bucketName(), "proxy-auth policy name"),
         EVENT_WEIGHTS.get(SecurityEventTypes.RATE_LIMITED));
 

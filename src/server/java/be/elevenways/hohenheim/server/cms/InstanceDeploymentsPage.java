@@ -12,8 +12,6 @@ import be.elevenways.hohenheim.model.DeployTrigger;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
-import be.elevenways.hohenheim.model.SiteDomainModel;
-import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.WebhookDeliveryModel;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
@@ -28,6 +26,7 @@ import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
 import be.elevenways.hohenheim.server.source.GitSourcePolls;
 import be.elevenways.hohenheim.server.source.GitWebhookHandler;
+import be.elevenways.hohenheim.server.source.HookUrls;
 import be.elevenways.hohenheim.server.source.WebhookOutcome;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.plumage.component.Pager;
@@ -70,6 +69,7 @@ import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.PrincipalRef;
+import be.elevenways.zenit.common.security.StoredRecordPrincipal;
 import be.elevenways.zenit.common.orm.history.HistoryText;
 import be.elevenways.zenit.common.orm.narration.FieldValueText;
 import be.elevenways.zenit.widget.common.data.WidgetBadge;
@@ -597,7 +597,13 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         return shortSha(ApplicationReleases.storedCommit(release));
     }
 
-    /** The name of every principal that started one of these operations, for the reader, read in one call. */
+    /**
+     * The name of every principal that started one of these operations, for the reader, read in one call.
+     *
+     * AIDEV-NOTE: a principal whose kind names a record (a build hook) is named by that record's title, core's
+     * StoredRecordPrincipal reading; HistoryText names any non-account kind by its kind label alone, which would read
+     * "Build hook Build hook". One read per credential model, so the page stays flat.
+     */
     private static @NonNull Map<PrincipalRef, String> triggerers(@NonNull List<Row> operations,
                                                                  @NonNull AccessContext reader) {
         Set<PrincipalRef> principals = new HashSet<>();
@@ -607,13 +613,19 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
                 principals.add(principal);
             }
         }
-        return principals.isEmpty() ? Map.of() : HistoryText.principals(principals, reader);
+        if (principals.isEmpty()) {
+            return Map.of();
+        }
+        Map<PrincipalRef, String> named = new HashMap<>(HistoryText.principals(principals, reader));
+        StoredRecordPrincipal.resolveAll(principals).forEach((reference, record) ->
+            named.put(reference, record.displayName()));
+        return named;
     }
 
     /**
-     * What started a release row, in words: "Manual by Jelle" when the trigger was pressed by its principal, "System,
-     * requested by Jelle" when the principal only caused it, the bare trigger without a principal; a legacy row that
-     * recorded no trigger says nothing.
+     * What started a release row, in words: "Manual by Jelle" when the trigger was pressed by its principal, "Build
+     * hook Nightly" when the principal is the credential that asked, "System, requested by Jelle" when the principal
+     * only caused it, the bare trigger without a principal; a legacy row that recorded no trigger says nothing.
      */
     private static void putTrigger(@NonNull Map<String, Object> entry, @NonNull Row operation,
                                    @NonNull Map<PrincipalRef, String> triggerers) {
@@ -631,8 +643,9 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
             entry.put("triggerText", label);
             return;
         }
-        Microcopy words = DeployTrigger.of(trigger).pressedByPerson()
-            ? HohenheimMicrocopy.DEPLOYMENTS.of("triggered_by")
+        DeployTrigger started = DeployTrigger.of(trigger);
+        Microcopy words = started.principalIsTrigger() ? HohenheimMicrocopy.DEPLOYMENTS.of("trigger_named")
+            : started.pressedByPerson() ? HohenheimMicrocopy.DEPLOYMENTS.of("triggered_by")
             : HohenheimMicrocopy.DEPLOYMENTS.of("trigger_requested_by");
         entry.put("triggerText", CmsSupport.resolvedTextOrDefault(
             words.withArg("trigger", label).withArg("actor", by)));
@@ -1036,21 +1049,7 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         // conduit chain, so it is deliberately outside the Endpoint framework and has no
         // RouteTarget. Referencing the handler's own PREFIX constant is what keeps this
         // display URL from drifting away from the route that actually answers.
-        String path = GitWebhookHandler.PREFIX + instanceId;
-        String url = path;
-        Row site = Models.get(SiteModel.class).find()
-            .where(SiteModel.INSTANCE_ID.eq(instanceId))
-            .first();
-        Row domain = site == null ? null : Models.get(SiteDomainModel.class).find()
-            .where(SiteDomainModel.SITE_ID.eq(site.get(SiteModel.ID)))
-            .where(SiteDomainModel.MATCH_TYPE.eq(SiteDomainModel.MATCH_EXACT))
-            .first();
-        if (domain != null) {
-            String scheme = Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL))
-                ? "https" : "http";
-            url = scheme + "://" + domain.get(SiteDomainModel.HOSTNAME) + path;
-        }
-        vars.put("webhookUrl", url);
+        vars.put("webhookUrl", HookUrls.forInstance(instanceId, GitWebhookHandler.PREFIX + instanceId));
     }
 
     /** A git object name, full or abbreviated; anything else in a commit slot is a ref. */

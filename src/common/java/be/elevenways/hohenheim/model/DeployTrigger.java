@@ -35,26 +35,26 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 public enum DeployTrigger {
 
     /** A person pressed a control on this record; they are standing there asking. */
-    MANUAL("manual", true, true, true, "user", BadgeVariant.INFO),
+    MANUAL("manual", null, true, true, false, "user", BadgeVariant.INFO),
 
     /**
      * An API key holder asked over {@code /api/v1} or the PaaS API: a deliberate request
      * from a credential an operator issued, so it may start what it deploys -- and it
      * keeps its own word so the activity row still says WHICH surface asked.
      */
-    API("api", true, true, true, "key", BadgeVariant.INFO),
+    API("api", null, true, true, false, "key", BadgeVariant.INFO),
 
     /**
      * The control plane converging its own work: {@code InstanceService}'s default
      * reason, and everything that reaches deploy without naming a trigger.
      */
-    SYSTEM("deploy", true, false, false, "gear", BadgeVariant.SECONDARY),
+    SYSTEM("deploy", null, false, false, false, "gear", BadgeVariant.SECONDARY),
 
     /**
      * A record schedule step placed the start or restart. Exactly {@link #SYSTEM}'s start policy, so a scheduled
      * deploy behaves as before; only its recorded word names the surface that asked.
      */
-    SCHEDULE("schedule", true, false, false, "calendar", BadgeVariant.SECONDARY),
+    SCHEDULE("schedule", null, false, false, false, "calendar", BadgeVariant.SECONDARY),
 
     /**
      * Someone else's {@code git push}, relayed by a forge.
@@ -64,13 +64,24 @@ public enum DeployTrigger {
      * third party's push is not an argument against it -- the deploy is recorded, the
      * decision is stated, and nothing is spent.
      */
-    WEBHOOK("webhook", false, false, false, "code-branch", BadgeVariant.SECONDARY),
+    WEBHOOK("webhook", "push_does_not_start_stopped_workload", false, false, false, "code-branch",
+        BadgeVariant.SECONDARY),
 
     /**
      * The scheduled check found a new commit on the source's branch ({@code GitSourcePolls}): the same third-party
      * push as {@link #WEBHOOK}, only learned by asking, so it may not start a stopped workload either.
      */
-    POLL("poll", false, false, false, "magnifying-glass", BadgeVariant.SECONDARY);
+    POLL("poll", "push_does_not_start_stopped_workload", false, false, false, "magnifying-glass",
+        BadgeVariant.SECONDARY),
+
+    /**
+     * A build hook's secret URL was POSTed (a CMS publishing, a cron elsewhere): the hook itself is the recorded
+     * principal, never a person behind it.
+     *
+     * AIDEV-NOTE: an automated rebuild, so it may neither start a workload an operator stopped nor undo a rollback;
+     * whoever holds the URL is a machine the owner pointed at it, not someone standing at the record.
+     */
+    HOOK("hook", "hook_does_not_start_stopped_workload", false, false, true, "link", BadgeVariant.SECONDARY);
 
     /**
      * What an unrecognised stored word reads as: the first DECLARED member that may not
@@ -83,18 +94,22 @@ public enum DeployTrigger {
     private static final @NonNull DeployTrigger LEAST_PRIVILEGED = leastPrivileged();
 
     private final @NonNull String word;
-    private final boolean startsStoppedWorkload;
+    private final @Nullable String declinedStartKey;
     private final boolean liftsRollbackPin;
     private final boolean pressedByPerson;
+    private final boolean principalIsTrigger;
     private final @NonNull String icon;
     private final @NonNull BadgeVariant variant;
 
-    DeployTrigger(@NonNull String word, boolean startsStoppedWorkload, boolean liftsRollbackPin,
-                  boolean pressedByPerson, @NonNull String icon, @NonNull BadgeVariant variant) {
+    /** @param declinedStartKey the violation a deploy on this trigger states for a stopped workload, null when it starts it */
+    DeployTrigger(@NonNull String word, @Nullable String declinedStartKey, boolean liftsRollbackPin,
+                  boolean pressedByPerson, boolean principalIsTrigger, @NonNull String icon,
+                  @NonNull BadgeVariant variant) {
         this.word = word;
-        this.startsStoppedWorkload = startsStoppedWorkload;
+        this.declinedStartKey = declinedStartKey;
         this.liftsRollbackPin = liftsRollbackPin;
         this.pressedByPerson = pressedByPerson;
+        this.principalIsTrigger = principalIsTrigger;
         this.icon = icon;
         this.variant = variant;
     }
@@ -121,7 +136,12 @@ public enum DeployTrigger {
 
     /** Whether a deploy on this trigger may bring a workload that is down back up. */
     public boolean startsStoppedWorkload() {
-        return this.startsStoppedWorkload;
+        return this.declinedStartKey == null;
+    }
+
+    /** @return the {@code violations} key a deploy on this trigger states when it leaves a stopped workload down, null when it starts it */
+    public @Nullable String declinedStartKey() {
+        return this.declinedStartKey;
     }
 
     /**
@@ -145,6 +165,14 @@ public enum DeployTrigger {
     }
 
     /**
+     * Whether the recorded principal IS the credential that asked (a build hook), so the row names it right after the
+     * trigger: "{trigger} {actor}".
+     */
+    public boolean principalIsTrigger() {
+        return this.principalIsTrigger;
+    }
+
+    /**
      * The trigger a STORED reason word names; an unrecognised or absent word fails closed.
      *
      * @return the named member, or {@link #LEAST_PRIVILEGED} for anything else
@@ -162,9 +190,10 @@ public enum DeployTrigger {
 
     private static @NonNull DeployTrigger leastPrivileged() {
         for (DeployTrigger trigger : values()) {
-            if (!trigger.startsStoppedWorkload) {
-                return trigger;
+            if (trigger.startsStoppedWorkload()) {
+                continue;
             }
+            return trigger;
         }
         throw new IllegalStateException("DeployTrigger declares no restrictive member, so an"
             + " unrecognised reason word would fail OPEN");

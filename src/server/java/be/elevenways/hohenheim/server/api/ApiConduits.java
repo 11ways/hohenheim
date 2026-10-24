@@ -146,7 +146,8 @@ public final class ApiConduits {
         DomainRefusal.Reason reason = refusal.reason();
         if (reason instanceof HohenheimRefusalReason hohenheim) {
             return switch (hohenheim) {
-                case INSTANCE_NOT_PERMITTED, DATABASE_NOT_READY -> refusal(conduit, Violations.ofForm(refusal.shown()));
+                case INSTANCE_NOT_PERMITTED, DATABASE_NOT_READY, BUILD_HOOK_REVOKED ->
+                    refusal(conduit, Violations.ofForm(refusal.shown()));
             };
         }
         if (reason instanceof ZenitRefusalReason zenit) {

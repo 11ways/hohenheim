@@ -80,9 +80,10 @@ public final class DeployStartPolicy {
     /** The decision itself; both readers above end here and nothing else takes it. */
     private static @Nullable Microcopy decline(@NonNull DeployTrigger trigger, boolean stopped,
                                                @NonNull Row named) {
-        if (trigger.startsStoppedWorkload() || !stopped) {
+        String declinedKey = trigger.declinedStartKey();
+        if (declinedKey == null || !stopped) {
             return null;
         }
-        return HohenheimViolations.instanceRefusalText("push_does_not_start_stopped_workload", named, null);
+        return HohenheimViolations.instanceRefusalText(declinedKey, named, null);
     }
 }

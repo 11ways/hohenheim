@@ -171,3 +171,10 @@ table migration:be.elevenways.hohenheim@2026_10_24_000002
   class be.elevenways.hohenheim.migration.M004_PendingPasswords
   name pending_passwords
   op add_column:managed_databases:pending_password|string|null=true|uniq=false|pk=false|auto=false|def=none|len=256|prec=null,null
+table migration:be.elevenways.hohenheim@2026_10_24_000003
+  checksum f7cc56ce36bea220699ddb76662f5c47d64a3430a7ef6fd88086df157ce06562
+  class be.elevenways.hohenheim.migration.M005_BuildHooks
+  name build_hooks
+  op add_index:build_hooks:build_hooks_instance_id_index(instance_id)
+  op add_index:build_hooks:build_hooks_token_digest_unique(token_digest):unique
+  op create_table:build_hooks[id|uuid|null=false|uniq=true|pk=true|auto=false|def=none|len=null|prec=null,null,instance_id|integer|null=false|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null|ref=instances.id:null:null,name|string|null=true|uniq=false|pk=false|auto=false|def=none|len=100|prec=null,null,token_digest|string|null=true|uniq=false|pk=false|auto=false|def=none|len=128|prec=null,null,url_preview|string|null=true|uniq=false|pk=false|auto=false|def=none|len=128|prec=null,null,revoked_at|datetime|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null,last_triggered_at|datetime|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null,created_at|datetime|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null,updated_at|datetime|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null]

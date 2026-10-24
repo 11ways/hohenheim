@@ -16,11 +16,13 @@ import java.util.stream.Collectors;
 
 /**
  * Who or what started a release operation: the deploy entry point's trigger and the principal its work is accountable
- * to ({@link Accountability#current()}, read when the entry point enters the scope).
+ * to ({@link Accountability#current()}, read when the entry point enters the scope, unless the entry point names one:
+ * a build hook's system work is accountable to the hook).
  *
  * AIDEV-NOTE: the principal is recorded for EVERY trigger, so a SYSTEM deploy reached from a person's resize or database
- * attach still names whose request caused it. Only {@link DeployTrigger#pressedByPerson()} decides whether the row reads
- * "{trigger} by {actor}" or "{trigger}, requested by {actor}"; without a principal it reads the trigger alone.
+ * attach still names whose request caused it. The trigger's facts ({@link DeployTrigger#principalIsTrigger()},
+ * {@link DeployTrigger#pressedByPerson()}) decide whether the row reads "{trigger} {actor}", "{trigger} by {actor}" or
+ * "{trigger}, requested by {actor}"; without a principal it reads the trigger alone.
  *
  * AIDEV-NOTE: a THREAD scope, the GeneratedRows.as shape. The entry points that name a trigger enter it
  * (ApplicationDeploys.deploy, ArtifactDeploys.run, ApplicationReleases.restore, ReleaseEngine.rollback) and
@@ -44,8 +46,16 @@ public record DeployAttribution(@NonNull DeployTrigger trigger, @Nullable Princi
 
     /** Runs {@code work} with every release operation it creates attributed to {@code trigger} and this thread. */
     public static <T> T supply(@NonNull DeployTrigger trigger, @NonNull Supplier<T> work) {
+        return supply(of(trigger), work);
+    }
+
+    /**
+     * Runs {@code work} with every release operation it creates attributed to {@code attribution}: for a deploy whose
+     * accountable principal is not the thread's (a build hook's system work names the hook).
+     */
+    public static <T> T supply(@NonNull DeployAttribution attribution, @NonNull Supplier<T> work) {
         DeployAttribution outer = ACTIVE.get();
-        ACTIVE.set(of(trigger));
+        ACTIVE.set(attribution);
         try {
             return work.get();
         } finally {

@@ -18,6 +18,8 @@ public final class HohenheimSystemPurposes {
     public static final @NonNull SystemPurpose SHUTDOWN = declare("shutdown");
     public static final @NonNull SystemPurpose GIT_POLL = declare("git_poll");
     public static final @NonNull SystemPurpose GIT_WEBHOOK = declare("git_webhook");
+    /** A build hook's secret URL was POSTed; the hook is named on the deploys it starts. */
+    public static final @NonNull SystemPurpose BUILD_HOOK = declare("build_hook");
     public static final @NonNull SystemPurpose RELEASE_DRAIN = declare("release_drain");
     public static final @NonNull SystemPurpose DATABASE_PROVISION = declare("database_provision");
     public static final @NonNull SystemPurpose TEMPLATE_INSTALL = declare("template_install");

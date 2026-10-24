@@ -393,7 +393,8 @@ class MigrationIntegrityTest {
             .containsExactly("M001_HohenheimBaseline stream=" + HohenheimMigration.STREAM,
                 "M002_ReleaseAttribution stream=" + HohenheimMigration.STREAM,
                 "M003_CredentialGenerations stream=" + HohenheimMigration.STREAM,
-                "M004_PendingPasswords stream=" + HohenheimMigration.STREAM);
+                "M004_PendingPasswords stream=" + HohenheimMigration.STREAM,
+                "M005_BuildHooks stream=" + HohenheimMigration.STREAM);
 
         // 2. The deployed high-water mark. Every migration at or below DEPLOYED_THROUGH is
         //    APPLIED somewhere, so its structural checksum is recorded in that install's

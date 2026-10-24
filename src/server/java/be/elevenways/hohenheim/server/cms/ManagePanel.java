@@ -145,6 +145,7 @@ public final class ManagePanel extends Panel {
         HohenheimPanel.addIf(peers, InstanceScheduleStepParts.manage(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, InstanceAttachmentParts.devicesManage(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, VolumeParts.manage(), Role.INSTANCES);
+        HohenheimPanel.addIf(peers, BuildHookParts.manage(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, InstanceVariableParts.manage(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, InstanceSnapshotParts.manage(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, InstanceBackupParts.manage(), Role.INSTANCES);

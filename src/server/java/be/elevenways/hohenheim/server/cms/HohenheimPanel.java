@@ -144,6 +144,7 @@ public final class HohenheimPanel extends Panel {
         addIf(peers, InstanceScheduleStepParts.admin(), Role.INSTANCES);
         addIf(peers, InstanceAttachmentParts.devicesAdmin(), Role.INSTANCES);
         addIf(peers, VolumeParts.admin(), Role.INSTANCES);
+        addIf(peers, BuildHookParts.admin(), Role.INSTANCES);
         addIf(peers, RuntimeImageParts.admin(), Role.INSTANCES);
         addIf(peers, InstanceScheduleRunParts.admin(), Role.INSTANCES);
         addIf(peers, GameDomainResource.admin(), Role.INSTANCES);

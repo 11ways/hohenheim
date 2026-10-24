@@ -28,6 +28,7 @@ public final class HohenheimSlugs {
     public static final String AUTH_PROVIDERS = "auth-providers";
     public static final String BACKUP_TARGETS = "backup-targets";
     public static final String BANS = "bans";
+    public static final String BUILD_HOOKS = "build-hooks";
     public static final String BUILDS = "builds";
     public static final String CERTIFICATES = "certificates";
     public static final String DASHBOARD = "dashboard";
@@ -107,6 +108,7 @@ public final class HohenheimSlugs {
 
         public static final String ANALYSIS = "analysis";
         public static final String BACKUPS = "backups";
+        public static final String BUILD_HOOKS = "build-hooks";
         public static final String CONSOLE = "console";
         public static final String CONTENTS = "contents";
         public static final String CREDENTIALS = "credentials";

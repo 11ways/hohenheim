@@ -8,8 +8,8 @@ import be.elevenways.zenit.common.refusal.DomainRefusals;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
- * The refusals Hohenheim's instance tier answers in its own words: the uniform "not permitted" that never names the
- * missing capability, and a dependency that is not ready yet.
+ * The refusals Hohenheim answers in its own words: the uniform "not permitted" that never names the missing
+ * capability, a dependency that is not ready yet, and a build hook shaped after it was revoked.
  *
  * AIDEV-NOTE: each {@link #code()} is today's {@code /api/v1} wire code, the violation key {@code ApiConduits.refusal}
  * writes, and each message is the same violations copy the service gates throw, so the API answers a refusal of the
@@ -27,7 +27,11 @@ public enum HohenheimRefusalReason implements DomainRefusal.Reason {
 
     /** An attached managed database is not active yet; deploying now would start the workload without it. */
     DATABASE_NOT_READY("database_not_ready", DomainRefusal.Recovery.AFTER_WAIT,
-        "A database this instance uses is not ready yet");
+        "A database this instance uses is not ready yet"),
+
+    /** The build hook was revoked, possibly by a request that raced this one; a revoked hook stays revoked. */
+    BUILD_HOOK_REVOKED("build_hook_already_revoked", DomainRefusal.Recovery.NEVER,
+        "This build hook is revoked; create a new one instead.");
 
     static {
         DomainRefusals.declare(values());

@@ -788,28 +788,23 @@ final class AppHealth {
     }
 
     /**
-     * The names HTTPS works for: what the running proxy's certificate store answers a handshake for while it
-     * terminates HTTPS, nothing while it cannot, and the names a served certificate row declares where no proxy runs
-     * in this process (a node without the proxy role, a test), because the stored rows are then all there is to read.
+     * The names HTTPS works for, {@link CertificateCoverage#handshakeNames()}.
      *
      * AIDEV-NOTE: a served row is not a working certificate. A shop once had an active row without loadable material,
      * and every HTTPS cell said "Works" while the proxy could serve nothing; reading the store is what makes the cells,
-     * the verdicts and the attention items agree with the handshake a visitor gets. The names are
-     * {@link CertificateCoverage#workingNames()}, the rule routing and the force-HTTPS latch read too; only the
-     * listener half is the display's own, because a visitor's handshake also needs a listener that terminates.
+     * the verdicts and the attention items agree with the handshake a visitor gets.
      */
     static @NonNull Set<String> workingNames() {
-        return httpsTerminates() ? CertificateCoverage.workingNames() : Set.of();
+        return CertificateCoverage.handshakeNames();
     }
 
     /**
-     * Whether this process's proxy answers HTTPS at all; true where no proxy runs in this process, which then reads
-     * the stored rows ({@link #workingNames()}). The one reading the forced address items and the site verdict's cause
-     * share, so "HTTPS is unavailable" and an address's own item never both claim one site.
+     * Whether this process's proxy answers HTTPS at all ({@link CertificateCoverage#terminates()}). The one reading
+     * the forced address items and the site verdict's cause share, so "HTTPS is unavailable" and an address's own item
+     * never both claim one site.
      */
     static boolean httpsTerminates() {
-        var proxy = ServerMain.getProxyServer();
-        return proxy == null || proxy.isHttpsTerminationAvailable();
+        return CertificateCoverage.terminates();
     }
 
     /** @return the first of these paths whose protection admits everyone, null when none does */

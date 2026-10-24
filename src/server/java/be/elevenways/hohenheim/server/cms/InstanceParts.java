@@ -747,6 +747,7 @@ public final class InstanceParts {
         tabs.add(new InstanceBackupsPage(operator));
         tabs.add(new InstanceProvisioningPage());
         tabs.add(VolumeParts.tab(operator));
+        tabs.add(BuildHookParts.tab(operator));
         // The attachments resolve in the hosting panel, which declares them only where this boot serves databases.
         if (InstanceAttachmentParts.databasesServed()) {
             tabs.add(InstanceAttachmentParts.databasesTab(operator));

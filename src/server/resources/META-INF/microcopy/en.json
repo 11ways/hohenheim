@@ -11235,6 +11235,7 @@
     "scope": "spamservice"
   },
   "nav_hint": [
+    {"text": "Secret URLs that deploy an app when something POSTs them.", "scope": "build_hook"},
     {
       "text": "Fleet health at a glance: what needs attention, plus counts and recent changes.",
       "scope": "admin"
@@ -19031,5 +19032,34 @@
   "rollback_step": {
     "text": "Switch to the kept release, behind the health gate",
     "scope": "deployments"
-  }
+  },
+  "build_hooks_plural": {"text": "Build hooks", "scope": "build_hook"},
+  "build_hook_singular": {"text": "Build hook", "scope": "build_hook"},
+  "build_hooks_lead": {"text": "A build hook is a secret URL: anything that POSTs to it, a CMS publishing or a job elsewhere, deploys this app. It answers over HTTPS only, so a new URL shown as a bare path means no address of this app has a working certificate yet: add one, or prefix the path with an https address that has one.", "scope": "build_hook"},
+  "build_hooks_empty": {"text": "No build hooks yet. Create one to let a CMS or a scheduled job deploy this app.", "scope": "build_hook"},
+  "build_hook_name": {"text": "Name", "scope": "build_hook"},
+  "build_hook_name_help": {"text": "What will POST this URL, for example Headless CMS or Nightly rebuild.", "scope": "build_hook"},
+  "build_hook_url": {"text": "URL", "scope": "build_hook"},
+  "build_hook_revoked_at": {"text": "Revoked", "scope": "build_hook"},
+  "build_hook_active": {"text": "Active", "scope": "build_hook"},
+  "build_hook_last_triggered": {"text": "Last triggered", "scope": "build_hook"},
+  "build_hook_never_triggered": {"text": "Never", "scope": "build_hook"},
+  "build_hook_created_at": {"text": "Created", "scope": "build_hook"},
+  "build_hook_last_deploy": {"text": "Last deploy", "scope": "build_hook"},
+  "build_hook_create": [{"text": "Create build hook", "scope": "build_hook"}, {"text": "{$actor} created build hook {$subject}", "scope": "hohenheim", "target": "happened"}],
+  "build_hook_regenerate": [{"text": "Regenerate URL", "scope": "build_hook"}, {"text": "{$actor} regenerated the URL of build hook {$subject}", "scope": "hohenheim", "target": "happened"}],
+  "build_hook_regenerate_confirm": {"text": "The current URL stops working at once. Whatever POSTs it needs the new one, which is shown only once.", "scope": "build_hook"},
+  "build_hook_regenerated": {"text": "The new URL of this build hook, shown only now: {$url}", "scope": "build_hook"},
+  "build_hook_revoke": [{"text": "Revoke", "scope": "build_hook"}, {"text": "{$actor} revoked build hook {$subject}", "scope": "hohenheim", "target": "happened"}],
+  "build_hook_revoke_confirm": {"text": "Its URL stops working at once and cannot be restored. The releases it started keep naming it.", "scope": "build_hook"},
+  "build_hook_revoked_toast": {"text": "The build hook is revoked.", "scope": "build_hook"},
+  "hook": {"text": "Build hook", "scope": "deploy_trigger"},
+  "trigger_named": {"text": "{$trigger} {$actor}", "scope": "deployments"},
+  "hook_does_not_start_stopped_workload": {"text": "'{$name}' is not running, so the build hook did not deploy it: a build hook never starts a workload someone stopped. Start it yourself first.", "scope": "violations"},
+  "build_hook_name_invalid": {"text": "Give the build hook a name of at most {$max} characters.", "scope": "violations"},
+  "build_hook_needs_application": {"text": "Only an app that deploys releases takes a build hook.", "scope": "violations"},
+  "build_hook_already_revoked": {"text": "This build hook is revoked; create a new one instead.", "scope": "violations"},
+  "build_hook_revoked_before_start": {"text": "The build hook that asked for this deploy was revoked before it started.", "scope": "violations"},
+  "build_hook_regenerated_before_start": {"text": "The URL of the build hook that asked for this deploy was regenerated before it started.", "scope": "violations"},
+  "build_hook_no_deploy": {"text": "None yet", "scope": "build_hook"}
 }

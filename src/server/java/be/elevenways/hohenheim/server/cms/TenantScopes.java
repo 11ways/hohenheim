@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
+import be.elevenways.hohenheim.model.BuildHookModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
@@ -185,6 +186,14 @@ public final class TenantScopes {
     public static final RowScope INSTANCE_DATABASES = InstanceAttachmentParts.DATABASE_ROWS.andPerPrincipal(
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(InstanceDatabaseModel.class),
             InstanceModel.MODEL_ID, HohenheimCapabilities.VIEW, InstanceDatabaseModel.INSTANCE_ID::in));
+
+    /**
+     * Build hooks; owners only those of applications they MANAGE, never VIEW: a hook is a standing delegation of the
+     * application's deploy, so who may see one is who may create, regenerate and revoke it.
+     */
+    public static final RowScope BUILD_HOOKS = BuildHookParts.ROWS.andPerPrincipal(
+        ctx -> HohenheimAccess.grantScope(ctx, Models.get(BuildHookModel.class),
+            InstanceModel.MODEL_ID, HohenheimCapabilities.MANAGE, BuildHookModel.INSTANCE_ID::in));
 
     /** Snapshots of the instances the principal holds {@code snapshots} on. */
     public static final RowScope INSTANCE_SNAPSHOTS = RowScope.perPrincipal(

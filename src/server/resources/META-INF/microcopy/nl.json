@@ -11235,6 +11235,7 @@
     "scope": "spamservice"
   },
   "nav_hint": [
+    {"text": "Geheime URL's die een app uitrollen wanneer iets ze aanroept.", "scope": "build_hook"},
     {
       "text": "De toestand van de vloot in een oogopslag: wat aandacht vraagt, plus tellingen en recente wijzigingen.",
       "scope": "admin"
@@ -19031,5 +19032,34 @@
   "rollback_step": {
     "text": "Overschakelen naar de bewaarde release, achter de gezondheidscontrole",
     "scope": "deployments"
-  }
+  },
+  "build_hooks_plural": {"text": "Build hooks", "scope": "build_hook"},
+  "build_hook_singular": {"text": "Build hook", "scope": "build_hook"},
+  "build_hooks_lead": {"text": "Een build hook is een geheime URL: alles wat ernaar POST, een CMS dat publiceert of een taak elders, rolt deze app uit. Hij antwoordt alleen over HTTPS, dus een nieuwe URL die enkel als pad verschijnt betekent dat nog geen adres van deze app een werkend certificaat heeft: voeg er een toe, of zet een https-adres met een certificaat voor het pad.", "scope": "build_hook"},
+  "build_hooks_empty": {"text": "Nog geen build hooks. Maak er een aan om een CMS of een geplande taak deze app te laten uitrollen.", "scope": "build_hook"},
+  "build_hook_name": {"text": "Naam", "scope": "build_hook"},
+  "build_hook_name_help": {"text": "Wat deze URL zal aanroepen, bijvoorbeeld Headless CMS of Nachtelijke build.", "scope": "build_hook"},
+  "build_hook_url": {"text": "URL", "scope": "build_hook"},
+  "build_hook_revoked_at": {"text": "Ingetrokken", "scope": "build_hook"},
+  "build_hook_active": {"text": "Actief", "scope": "build_hook"},
+  "build_hook_last_triggered": {"text": "Laatst gebruikt", "scope": "build_hook"},
+  "build_hook_never_triggered": {"text": "Nooit", "scope": "build_hook"},
+  "build_hook_created_at": {"text": "Aangemaakt", "scope": "build_hook"},
+  "build_hook_last_deploy": {"text": "Laatste uitrol", "scope": "build_hook"},
+  "build_hook_create": [{"text": "Build hook aanmaken", "scope": "build_hook"}, {"text": "{$actor} heeft build hook {$subject} aangemaakt", "scope": "hohenheim", "target": "happened"}],
+  "build_hook_regenerate": [{"text": "Nieuwe URL maken", "scope": "build_hook"}, {"text": "{$actor} heeft een nieuwe URL gemaakt voor build hook {$subject}", "scope": "hohenheim", "target": "happened"}],
+  "build_hook_regenerate_confirm": {"text": "De huidige URL werkt meteen niet meer. Wat hem aanroept heeft de nieuwe nodig, die maar een keer getoond wordt.", "scope": "build_hook"},
+  "build_hook_regenerated": {"text": "De nieuwe URL van deze build hook, alleen nu getoond: {$url}", "scope": "build_hook"},
+  "build_hook_revoke": [{"text": "Intrekken", "scope": "build_hook"}, {"text": "{$actor} heeft build hook {$subject} ingetrokken", "scope": "hohenheim", "target": "happened"}],
+  "build_hook_revoke_confirm": {"text": "De URL werkt meteen niet meer en kan niet hersteld worden. De releases die hij startte blijven hem noemen.", "scope": "build_hook"},
+  "build_hook_revoked_toast": {"text": "De build hook is ingetrokken.", "scope": "build_hook"},
+  "hook": {"text": "Build hook", "scope": "deploy_trigger"},
+  "trigger_named": {"text": "{$trigger} {$actor}", "scope": "deployments"},
+  "hook_does_not_start_stopped_workload": {"text": "'{$name}' draait niet, dus de build hook heeft hem niet uitgerold: een build hook start nooit een workload die iemand heeft gestopt. Start hem eerst zelf.", "scope": "violations"},
+  "build_hook_name_invalid": {"text": "Geef de build hook een naam van hoogstens {$max} tekens.", "scope": "violations"},
+  "build_hook_needs_application": {"text": "Alleen een app die releases uitrolt kan een build hook krijgen.", "scope": "violations"},
+  "build_hook_already_revoked": {"text": "Deze build hook is ingetrokken; maak in de plaats een nieuwe aan.", "scope": "violations"},
+  "build_hook_revoked_before_start": {"text": "De build hook die deze uitrol vroeg werd ingetrokken voordat die begon.", "scope": "violations"},
+  "build_hook_regenerated_before_start": {"text": "De URL van de build hook die deze uitrol vroeg werd vernieuwd voordat die begon.", "scope": "violations"},
+  "build_hook_no_deploy": {"text": "Nog geen", "scope": "build_hook"}
 }

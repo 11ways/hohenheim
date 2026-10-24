@@ -74,6 +74,27 @@ public final class ApplicationDeploys {
                                                               @Nullable String ref,
                                                               @Nullable String pushedSha,
                                                               @NonNull DeployTrigger trigger) {
+        return deploy(applicationId, ref, pushedSha, DeployAttribution.of(trigger));
+    }
+
+    /**
+     * {@link #deploy(int, String, String, DeployTrigger)} attributed to a named principal rather than this thread's
+     * (a build hook names itself while its work runs as the system).
+     */
+    public static ApplicationReleases.@NonNull Release deploy(int applicationId,
+                                                              @Nullable String ref,
+                                                              @Nullable String pushedSha,
+                                                              @NonNull DeployAttribution attribution) {
+        return deploy(applicationId, ref, pushedSha, attribution, DeployStartGate.OPEN);
+    }
+
+    /** {@link #deploy(int, String, String, DeployAttribution)} asking the caller's gate right before it starts. */
+    private static ApplicationReleases.@NonNull Release deploy(int applicationId,
+                                                               @Nullable String ref,
+                                                               @Nullable String pushedSha,
+                                                               @NonNull DeployAttribution attribution,
+                                                               @NonNull DeployStartGate gate) {
+        DeployTrigger trigger = attribution.trigger();
         // AIDEV-NOTE: the WHOLE verb -- checkout, converge, the durable records -- runs
         // under the application's operation lock. The checkout used to run OUTSIDE the
         // convergence lock, so two pushes (or a push and the Deploy button) fetched and
@@ -83,10 +104,10 @@ public final class ApplicationDeploys {
         // still deploy N+1. The admission is asked BEFORE queueing too, so a refused caller
         // is told at once instead of after the running operation finishes.
         InstanceService.requireDeployAdmitted(applicationId);
-        // Every release operation the verb creates records this trigger and whoever this thread acts for.
-        return DeployAttribution.supply(trigger, () -> InstanceOperationLock.production().exclusive(applicationId,
+        // Every release operation the verb creates records this trigger and the attributed principal.
+        return DeployAttribution.supply(attribution, () -> InstanceOperationLock.production().exclusive(applicationId,
             InstanceOperationLock.Contention.QUEUE,
-            () -> deployLocked(applicationId, ref, pushedSha, trigger)));
+            () -> deployLocked(applicationId, ref, pushedSha, trigger, gate)));
     }
 
     /**
@@ -104,17 +125,52 @@ public final class ApplicationDeploys {
      */
     public static void deployInBackground(int applicationId, @Nullable String ref,
                                           @NonNull DeployTrigger trigger) {
-        ApplicationReleases.requireApplication(applicationId);
-        InstanceService.requireDeployAdmitted(applicationId);
-        HandlerSupport.inBackgroundLogged("APPLICATION: deploy of application " + applicationId,
-            () -> deploy(applicationId, ref, null, trigger));
+        deployInBackground(applicationId, ref, DeployAttribution.of(trigger));
+    }
+
+    /** {@link #deployInBackground(int, String, DeployTrigger)} attributed to a named principal. */
+    public static void deployInBackground(int applicationId, @Nullable String ref,
+                                          @NonNull DeployAttribution attribution) {
+        deployInBackground(applicationId, ref, attribution, DeployStartGate.OPEN);
+    }
+
+    /**
+     * {@link #deployInBackground(int, String, DeployAttribution)} asking {@code gate} under the application's lock,
+     * right before the deploy starts; the gate is settled by the background deploy once it runs, or here when the
+     * deploy is refused or never handed off.
+     *
+     * AIDEV-NOTE: settling is guaranteed by ownership, not by catching: this call owns the gate until the hand-off
+     * returned, so a refusal, an Error or a hand-off that failed to start its thread settles it in the finally below;
+     * from then on the background work owns it and settles it in its own finally, an Error included. HookStart's
+     * settle is CAS-guarded, so the gate's own early settle (at start) and these never release a slot twice.
+     */
+    public static void deployInBackground(int applicationId, @Nullable String ref,
+                                          @NonNull DeployAttribution attribution, @NonNull DeployStartGate gate) {
+        boolean handedOff = false;
+        try {
+            ApplicationReleases.requireApplication(applicationId);
+            InstanceService.requireDeployAdmitted(applicationId);
+            HandlerSupport.inBackgroundLogged("APPLICATION: deploy of application " + applicationId, () -> {
+                try {
+                    deploy(applicationId, ref, null, attribution, gate);
+                } finally {
+                    gate.settled();
+                }
+            });
+            handedOff = true;
+        } finally {
+            if (!handedOff) {
+                gate.settled();
+            }
+        }
     }
 
     /** {@link #deploy}'s body; the caller holds the application's operation lock. */
     private static ApplicationReleases.@NonNull Release deployLocked(int applicationId,
                                                                      @Nullable String ref,
                                                                      @Nullable String pushedSha,
-                                                                     @NonNull DeployTrigger trigger) {
+                                                                     @NonNull DeployTrigger trigger,
+                                                                     @NonNull DeployStartGate gate) {
         // The admission every deploy lane shares (power on a tenant-originated call, every
         // attached database ready), asked HERE so the API, the forge webhook and the button
         // cannot differ -- see InstanceService.requireDeployAdmitted.
@@ -127,8 +183,12 @@ public final class ApplicationDeploys {
         // THE policy, on the STORED status of the release the operator's stop settled on.
         // An application owns no container of its own, so the daemon has nothing to
         // report about it -- and the daemon could not tell a stop from a crash anyway.
+        // The caller's gate is asked last, so it sees a deploy that starts unless it declines.
         Microcopy declined = DeployStartPolicy.declineToStartStored(trigger,
             ApplicationReleases.ownedServing(applicationId), application);
+        if (declined == null) {
+            declined = gate.declineToStart();
+        }
 
         if (declined != null) {
             String message = HohenheimViolations.textOf(declined);

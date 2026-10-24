@@ -552,8 +552,22 @@ Webhooks: `POST /api/webhooks/git/<segment>` (`GitWebhookHandler.PREFIX`)
 triggers a deploy. The handler is intercepted on the proxy port before
 hostname routing, so the forge signature IS the authentication; every refusal
 short of a verified signature is the same 404. A push relayed by a forge carries
-the `webhook` deploy trigger, which is the one trigger that may not start a
-workload an operator stopped.
+the `webhook` deploy trigger, which may not start a workload an operator stopped.
+
+Build hooks: an application's Build hooks tab mints named secret URLs,
+`POST /api/hooks/build/<token>` (`BuildHookHandler.PREFIX`), intercepted the
+same way. The URL is shown once (only a keyed digest of its token is stored); a
+POST answers 202 and deploys in the background under the `hook` trigger with the
+hook as the release's principal, so the Deploys tab reads "Build hook <name>".
+Unknown and revoked tokens share one 404, and neither a hook nor a push starts a
+stopped workload. A hook answers over HTTPS only (a plain-HTTP POST is refused
+with 403 before any lookup), and its URL is shown with an https address only
+where a working certificate covers one of the app's names, else as a bare path.
+Revoking or regenerating a hook declines its accepted deploys that have not
+started yet (each is recorded as refused); a deploy that already started
+completes. Each hook is budgeted per client and, for accepted POSTs only, across
+all clients, and an application holds a capped number of accepted hook deploys
+not yet started (429 with a Retry-After).
 
 ## Managed databases
 
