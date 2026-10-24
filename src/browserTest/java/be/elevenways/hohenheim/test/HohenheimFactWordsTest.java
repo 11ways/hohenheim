@@ -8,7 +8,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.instance.InstanceShell;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
-import be.elevenways.zenit.common.orm.activity.FactShape;
+import be.elevenways.zenit.common.fact.FactShape;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;

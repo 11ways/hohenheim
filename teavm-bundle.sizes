@@ -2099,7 +2099,7 @@ cms.js	be.elevenways.zenit.common.orm.activity.ActivityActions	1039
 cms.js	be.elevenways.zenit.common.orm.activity.ActivityRules	967
 cms.js	be.elevenways.zenit.common.orm.activity.ActivitySeverity	365
 cms.js	be.elevenways.zenit.common.orm.activity.DeltaSide	479
-cms.js	be.elevenways.zenit.common.orm.activity.FactShape	1533
+cms.js	be.elevenways.zenit.common.fact.FactShape	1533
 cms.js	be.elevenways.zenit.common.orm.activity.InverseCommandModel	682
 cms.js	be.elevenways.zenit.common.orm.activity.InverseEpisodeModel	726
 cms.js	be.elevenways.zenit.common.orm.activity.InverseItemModel	576
