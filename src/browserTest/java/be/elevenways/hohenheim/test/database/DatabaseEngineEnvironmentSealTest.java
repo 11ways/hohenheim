@@ -62,7 +62,7 @@ class DatabaseEngineEnvironmentSealTest {
         // 1. A shared mongo record mints its engine and reserves the engine instance: the
         //    settings carry no environment at all.
         new DatabaseService(datasource).insertRecord("envseal", ManagedDatabase.Engine.MONGO, null,
-            "envuser", "envpassword", "envdb", false, ServerService.LOCAL_HOST_NAME,
+            "envuser", "envpassword-01", "envdb", false, ServerService.LOCAL_HOST_NAME,
             ResourceLimits.none(), DatabaseModel.STATUS_PROVISIONING);
         int[] ids = new int[2];
         Db.run(datasource, () -> {

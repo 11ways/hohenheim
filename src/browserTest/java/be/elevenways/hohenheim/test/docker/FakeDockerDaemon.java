@@ -26,11 +26,14 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * The hermetic Docker daemon of the site tier: ONE in-memory container/volume/image store
@@ -52,8 +55,9 @@ import java.util.Set;
  * product path: an unhealthy candidate ({@link #answerWithForNextWorkload}), a container
  * the daemon reports RUNNING while its workload is dead ({@link #reportWorkloadDead},
  * which is the daemon's {@code OOMKilled} the reuse lane refuses to reuse), a create
- * that refuses a foreign workload under our handle, and a stop the daemon will not
- * settle ({@link #refuseStopOf}, the drain's stop-failure branch).
+ * that refuses a foreign workload under our handle, a stop the daemon will not
+ * settle ({@link #refuseStopOf}, the drain's stop-failure branch) and an exec the engine
+ * refuses ({@link #refuseNextExec}) or answers slowly ({@link #duringNextExec}).
  *
  * AIDEV-NOTE: the stop-failure knob was DECLINED when this fake was written -- "a knob no
  * test uses is scaffolding" -- and it arrives now WITH the journey that consumes it
@@ -111,6 +115,32 @@ public final class FakeDockerDaemon implements DockerTransport {
 
     /** Consumed by the next start: a writer that appears while the daemon is working. */
     private @Nullable Runnable duringNextStart;
+
+    /** One exec the daemon ran inside a container: the container, the command and its environment. */
+    public record Exec(@NonNull String handle, @NonNull List<String> command, @NonNull List<String> env) {
+    }
+
+    /** What an exec answers: its exit code and the text on each stream. */
+    private record ExecAnswer(int exitCode, @NonNull String stdout, @NonNull String stderr) {
+    }
+
+    /** Every exec that was started, in order; written from whichever thread drives the engine. */
+    private final List<Exec> execs = Collections.synchronizedList(new ArrayList<>());
+
+    /** exec id -> the exec created under it and not yet started. */
+    private final Map<String, Exec> createdExecs = new ConcurrentHashMap<>();
+
+    /** exec id -> the exit code its start recorded. */
+    private final Map<String, Integer> execExits = new ConcurrentHashMap<>();
+
+    /** Numbers the exec ids. */
+    private final AtomicInteger execIds = new AtomicInteger();
+
+    /** Consumed by the next exec start: the answer it gives instead of success. */
+    private volatile @Nullable ExecAnswer nextExecAnswer;
+
+    /** Consumed by the next exec start: run once the engine took the command, before the daemon answers. */
+    private volatile @Nullable Runnable duringNextExec;
 
     // -- scripting ------------------------------------------------------------
 
@@ -215,6 +245,42 @@ public final class FakeDockerDaemon implements DockerTransport {
     public boolean isRunning(@NonNull String handle) {
         Workload workload = this.workloads.get(handle);
         return workload != null && workload.running;
+    }
+
+    /**
+     * Place a RUNNING container with no published port under this handle, as a controller's earlier deploy left it:
+     * the engine an exec runs in when the test planted the engine's instance row without deploying it.
+     */
+    public void seedRunning(@NonNull String handle) {
+        Workload workload = new Workload(handle, Map.of(), "fake", 0);
+        workload.running = true;
+        this.workloads.put(handle, workload);
+    }
+
+    /** The NEXT exec exits with this code and writes {@code stderr}: the engine refusing the command. */
+    public void refuseNextExec(int exitCode, @NonNull String stderr) {
+        this.nextExecAnswer = new ExecAnswer(exitCode, "", stderr);
+    }
+
+    /**
+     * The NEXT exec runs {@code work} after it is recorded (the engine took the command) and before the daemon
+     * answers, on the thread that started it: a slow engine another caller can race.
+     */
+    public void duringNextExec(@NonNull Runnable work) {
+        this.duringNextExec = work;
+    }
+
+    /** Every exec started inside one container, in order. */
+    public @NonNull List<Exec> execsOn(@NonNull String handle) {
+        List<Exec> mine = new ArrayList<>();
+        synchronized (this.execs) {
+            for (Exec exec : this.execs) {
+                if (exec.handle().equals(handle)) {
+                    mine.add(exec);
+                }
+            }
+        }
+        return mine;
     }
 
     /** Release every real loopback listener this daemon opened. */
@@ -568,6 +634,53 @@ public final class FakeDockerDaemon implements DockerTransport {
             return response(204, "", "application/json");
         }
 
+        // -- execs -----------------------------------------------------------
+        // A container that is absent or stopped refuses an exec the way the daemon does; a started exec answers
+        // success with "hohenheim-ok" unless refuseNextExec scripted a refusal.
+        if ("POST".equals(method) && path.startsWith("/containers/") && path.endsWith("/exec")) {
+            String handle = path.substring("/containers/".length(), path.length() - "/exec".length());
+            Workload workload = this.workloads.get(handle);
+            if (workload == null) {
+                return json(404, Map.of("message", "No such container: " + handle));
+            }
+            if (!workload.running) {
+                return json(409, Map.of("message", "Container " + handle + " is not running"));
+            }
+            Map<String, Object> spec = parse(body);
+            String id = "exec-" + this.execIds.incrementAndGet();
+            this.createdExecs.put(id, new Exec(handle, strings(spec.get("Cmd")), strings(spec.get("Env"))));
+            return json(201, Map.of("Id", id));
+        }
+        if ("POST".equals(method) && path.startsWith("/exec/") && path.endsWith("/start")) {
+            String id = path.substring("/exec/".length(), path.length() - "/start".length());
+            Exec exec = this.createdExecs.remove(id);
+            if (exec == null) {
+                return json(404, Map.of("message", "No such exec instance: " + id));
+            }
+            ExecAnswer answer = this.nextExecAnswer != null ? this.nextExecAnswer
+                : new ExecAnswer(0, "hohenheim-ok", "");
+            this.nextExecAnswer = null;
+            this.execs.add(exec);
+            this.execExits.put(id, answer.exitCode());
+            this.calls.add("exec:" + exec.handle());
+            Runnable during = this.duringNextExec;
+            this.duringNextExec = null;
+            if (during != null) {
+                during.run();
+            }
+            byte[] out = FakeContainerFiles.frame(1, answer.stdout());
+            byte[] err = answer.stderr().isEmpty() ? new byte[0] : FakeContainerFiles.frame(2, answer.stderr());
+            byte[] stream = new byte[out.length + err.length];
+            System.arraycopy(out, 0, stream, 0, out.length);
+            System.arraycopy(err, 0, stream, out.length, err.length);
+            return FakeContainerFiles.raw(200, Map.of("Content-Type", "application/vnd.docker.raw-stream"), stream);
+        }
+        if ("GET".equals(method) && path.startsWith("/exec/") && path.endsWith("/json")) {
+            Integer exit = this.execExits.get(path.substring("/exec/".length(), path.length() - "/json".length()));
+            return exit == null ? json(404, Map.of("message", "No such exec instance"))
+                : json(200, Map.of("ExitCode", exit, "Running", false));
+        }
+
         // -- networks --------------------------------------------------------
         // The fake RUNTIME owns deploys, so nothing here creates a network; the sweeps
         // that LOOK and the teardowns that REMOVE are answered honestly with "no such network".
@@ -625,6 +738,17 @@ public final class FakeDockerDaemon implements DockerTransport {
             map.forEach((key, value) -> copy.put(String.valueOf(key), String.valueOf(value)));
         }
         return copy;
+    }
+
+    /** @return a JSON array's entries as text, empty for an absent one */
+    private static @NonNull List<String> strings(@Nullable Object array) {
+        List<String> entries = new ArrayList<>();
+        if (array instanceof List<?> list) {
+            for (Object entry : list) {
+                entries.add(String.valueOf(entry));
+            }
+        }
+        return entries;
     }
 
     private static @NonNull Map<String, Object> parse(@NonNull String json) throws IOException {

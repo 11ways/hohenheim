@@ -125,7 +125,8 @@ public class HohenheimEndpoints {
             .keyBy(RateLimitPolicy.KeyBy.PRINCIPAL_OR_IP)
             .named("hh_download");
 
-    private static final RateLimitPolicy DATABASE_IO_LIMIT =
+    /** The hh_db_io budget: database dumps, restores and password changes (engine execs) and install media transfers. */
+    public static final RateLimitPolicy DATABASE_IO_LIMIT =
         RateLimitPolicy.of(5, Duration.ofMinutes(1))
             .keyBy(RateLimitPolicy.KeyBy.PRINCIPAL_OR_IP)
             .named("hh_db_io");

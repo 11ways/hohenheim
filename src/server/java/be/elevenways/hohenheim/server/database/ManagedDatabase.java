@@ -13,6 +13,7 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.time.Pace;
 import java.time.Duration;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.security.KnownValueRedactor;
 import be.elevenways.zenit.server.io.DurableFiles;
 import be.elevenways.zenit.server.security.SecureTokens;
 
@@ -494,6 +495,15 @@ public class ManagedDatabase {
         /** The env variable every logical-database script reads the NEW user's password from. */
         public static final String LOGICAL_PASSWORD = "HOHENHEIM_LOGICAL_PASSWORD";
 
+        /** The longest logical database name, user or password the scripts accept. */
+        public static final int LOGICAL_IDENTIFIER_MAX = 64;
+
+        /**
+         * The shortest NEW logical password: long enough that every log and console redacts it
+         * ({@link KnownValueRedactor#MIN_LENGTH}) and never under twelve. A stored shorter one keeps working.
+         */
+        public static final int LOGICAL_PASSWORD_MIN = Math.max(12, KnownValueRedactor.MIN_LENGTH);
+
         /** The shell-picking prefix every mongo script shares (mongosh on 5.0+, legacy mongo below). */
         static final String MONGO_SHELL_PICK =
             "if command -v mongosh >/dev/null 2>&1; then shell=mongosh; else shell=mongo; fi;";
@@ -513,7 +523,7 @@ public class ManagedDatabase {
          * by name at create, never mangled.
          */
         public static boolean isLogicalIdentifier(@Nullable String value) {
-            if (value == null || value.isEmpty() || value.length() > 64) {
+            if (value == null || value.isEmpty() || value.length() > LOGICAL_IDENTIFIER_MAX) {
                 return false;
             }
             for (int i = 0; i < value.length(); i++) {
@@ -525,6 +535,11 @@ public class ManagedDatabase {
                 }
             }
             return true;
+        }
+
+        /** Whether a NEW logical password may be set: a {@link #isLogicalIdentifier} of at least {@link #LOGICAL_PASSWORD_MIN}. */
+        public static boolean isNewLogicalPassword(@Nullable String value) {
+            return value != null && isLogicalIdentifier(value) && value.length() >= LOGICAL_PASSWORD_MIN;
         }
 
         /**
@@ -669,7 +684,7 @@ public class ManagedDatabase {
             for (String value : values) {
                 if (!isLogicalIdentifier(value)) {
                     throw new IllegalArgumentException("Not a logical-database identifier for "
-                        + this + ": '" + value + "' (allowed: [A-Za-z0-9._-], at most 64)");
+                        + this + ": '" + value + "' (allowed: [A-Za-z0-9._-], at most " + LOGICAL_IDENTIFIER_MAX + ")");
                 }
             }
         }
@@ -679,16 +694,28 @@ public class ManagedDatabase {
                 + " a " + token + " managed database is always dedicated");
         }
 
-        /** sh -c body; $1 port, $2 root user, $3 database, $4 user; passwords via env. */
+        /**
+         * sh -c body; $1 port, $2 root user, $3 database, $4 user; passwords via env.
+         *
+         * AIDEV-NOTE: the JavaScript reaches the shell on STDIN, from a here-document the outer shell expands, never
+         * through {@code --eval}: an argument would put the expanded new password into the shell's argv, readable in
+         * the engine container's process table (the legacy {@code mongo} shell cannot read an env variable itself).
+         * A script read from stdin does not reliably fail its exit code, so success is the exit code AND the marker
+         * the last statement prints. The root password still rides {@code --password}; neither shell reads it from
+         * the environment.
+         */
         static final String MONGO_CREATE_SCRIPT = MONGO_SHELL_PICK
-            + " exec \"$shell\" --host 127.0.0.1 --port \"$1\" --username \"$2\""
+            + " out=$(\"$shell\" --host 127.0.0.1 --port \"$1\" --username \"$2\""
             + " --password \"$" + MONGO_PROBE_PASSWORD + "\" --authenticationDatabase admin"
-            + " --quiet --eval \"var target = db.getSiblingDB('$3');"
-            + " var roles = [{role: 'dbOwner', db: '$3'}];"
-            + " if (target.getUser('$4')) { target.updateUser('$4', {pwd: '$"
-            + LOGICAL_PASSWORD + "', roles: roles}); }"
-            + " else { target.createUser({user: '$4', pwd: '$" + LOGICAL_PASSWORD
-            + "', roles: roles}); } print('hohenheim-ok');\"";
+            + " --quiet 2>&1 <<HOHENHEIM_JS\n"
+            + "var target = db.getSiblingDB('$3'); var roles = [{role: 'dbOwner', db: '$3'}];"
+            + " if (target.getUser('$4')) { target.updateUser('$4', {pwd: '$" + LOGICAL_PASSWORD + "', roles: roles}); }"
+            + " else { target.createUser({user: '$4', pwd: '$" + LOGICAL_PASSWORD + "', roles: roles}); }"
+            + " print('hohenheim-ok');\n"
+            + "HOHENHEIM_JS\n"
+            + ") || { printf '%s\\n' \"$out\"; exit 1; }\n"
+            + "printf '%s\\n' \"$out\"\n"
+            + "case \"$out\" in *hohenheim-ok*) ;; *) exit 1 ;; esac";
 
         /** sh -c body; $1 port, $2 root user, $3 database, $4 user, $5 drop data (1/0). */
         static final String MONGO_DROP_SCRIPT = MONGO_SHELL_PICK
@@ -728,12 +755,16 @@ public class ManagedDatabase {
             + " '$2'\")\" != 0 ]; then exec mysql -u \"$1\" -e \"REVOKE ALL PRIVILEGES ON \\`$2\\`.*"
             + " FROM '$3'@'%'\"; fi";
 
-        /** sh -c body; $1 root user, $2 database, $3 user, $4 grant pattern; MYSQL_PWD + LOGICAL_PASSWORD via env. */
-        static final String MYSQL_CREATE_SCRIPT = "set -e; mysql -u \"$1\" -e \"CREATE DATABASE IF NOT EXISTS"
-            + " \\`$2\\`; CREATE USER IF NOT"
-            + " EXISTS '$3'@'%' IDENTIFIED BY '$" + LOGICAL_PASSWORD
-            + "'; ALTER USER '$3'@'%' IDENTIFIED BY '$" + LOGICAL_PASSWORD
-            + "';\"; "
+        /**
+         * sh -c body; $1 root user, $2 database, $3 user, $4 grant pattern; MYSQL_PWD + LOGICAL_PASSWORD via env. The
+         * password statements reach mysql on stdin, never through {@code -e} (see {@link #MONGO_CREATE_SCRIPT}).
+         */
+        static final String MYSQL_CREATE_SCRIPT = "set -e\n"
+            + "mysql -u \"$1\" <<HOHENHEIM_SQL\n"
+            + "CREATE DATABASE IF NOT EXISTS \\`$2\\`;"
+            + " CREATE USER IF NOT EXISTS '$3'@'%' IDENTIFIED BY '$" + LOGICAL_PASSWORD + "';"
+            + " ALTER USER '$3'@'%' IDENTIFIED BY '$" + LOGICAL_PASSWORD + "';\n"
+            + "HOHENHEIM_SQL\n"
             + MYSQL_GRANT_SCRIPT;
 
         /** sh -c body; $1 root user, $2 database, $3 user, $4 drop data (1/0). */
@@ -771,18 +802,23 @@ public class ManagedDatabase {
             + " definer <> '$3@%') + (SELECT COUNT(*) FROM information_schema.events WHERE event_schema"
             + " = '$2' AND definer <> '$3@%')\"";
 
-        /** sh -c body; $1 root user, $2 database, $3 user; PGPASSWORD + LOGICAL_PASSWORD via env. */
-        static final String POSTGRES_CREATE_SCRIPT = "set -e;"
-            + " psql -v ON_ERROR_STOP=1 -U \"$1\" -d postgres -c"
-            + " \"DO \\$\\$ BEGIN IF EXISTS (SELECT FROM pg_roles WHERE rolname = '$3')"
-            + " THEN ALTER ROLE \\\"$3\\\" WITH LOGIN PASSWORD '$" + LOGICAL_PASSWORD + "';"
-            + " ELSE CREATE ROLE \\\"$3\\\" WITH LOGIN PASSWORD '$" + LOGICAL_PASSWORD + "';"
-            + " END IF; END \\$\\$;\";"
-            + " if [ \"$(psql -v ON_ERROR_STOP=1 -U \"$1\" -d postgres -tAc"
+        /**
+         * sh -c body; $1 root user, $2 database, $3 user; PGPASSWORD + LOGICAL_PASSWORD via env. The role statement
+         * reaches psql on stdin, never through {@code -c} (see {@link #MONGO_CREATE_SCRIPT}); {@code \$\$} keeps the
+         * here-document from expanding the DO body's quote into the shell's pid.
+         */
+        static final String POSTGRES_CREATE_SCRIPT = "set -e\n"
+            + "psql -v ON_ERROR_STOP=1 -U \"$1\" -d postgres <<HOHENHEIM_SQL\n"
+            + "DO \\$\\$ BEGIN IF EXISTS (SELECT FROM pg_roles WHERE rolname = '$3')"
+            + " THEN ALTER ROLE \"$3\" WITH LOGIN PASSWORD '$" + LOGICAL_PASSWORD + "';"
+            + " ELSE CREATE ROLE \"$3\" WITH LOGIN PASSWORD '$" + LOGICAL_PASSWORD + "';"
+            + " END IF; END \\$\\$;\n"
+            + "HOHENHEIM_SQL\n"
+            + "if [ \"$(psql -v ON_ERROR_STOP=1 -U \"$1\" -d postgres -tAc"
             + " \"SELECT 1 FROM pg_database WHERE datname = '$2'\")\" != 1 ]; then"
             + " psql -v ON_ERROR_STOP=1 -U \"$1\" -d postgres -c"
-            + " \"CREATE DATABASE \\\"$2\\\" OWNER \\\"$3\\\"\"; fi;"
-            + " psql -v ON_ERROR_STOP=1 -U \"$1\" -d postgres -c \"REVOKE ALL ON DATABASE \\\"$2\\\""
+            + " \"CREATE DATABASE \\\"$2\\\" OWNER \\\"$3\\\"\"; fi\n"
+            + "psql -v ON_ERROR_STOP=1 -U \"$1\" -d postgres -c \"REVOKE ALL ON DATABASE \\\"$2\\\""
             + " FROM PUBLIC\"";
 
         /**

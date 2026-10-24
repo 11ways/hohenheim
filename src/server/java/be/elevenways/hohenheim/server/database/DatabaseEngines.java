@@ -157,7 +157,7 @@ public final class DatabaseEngines {
      *         with the reason
      */
     public static void ensureRunning(int engineId) throws IOException {
-        synchronized (LOCKS.computeIfAbsent(engineId, key -> new Object())) {
+        synchronized (lockOf(engineId)) {
             Row row = require(engineId);
             EngineHost host = EngineHost.ofEngine(row);
             ManagedDatabase.LiveStatus live = DatabaseInstances.liveStatus(host);
@@ -253,7 +253,7 @@ public final class DatabaseEngines {
      * dedicated database's resize; open connections drop until the engine is back.
      */
     public static void redeploy(int engineId) throws IOException {
-        synchronized (LOCKS.computeIfAbsent(engineId, key -> new Object())) {
+        synchronized (lockOf(engineId)) {
             Row row = require(engineId);
             try {
                 DatabaseInstances.deploy(EngineHost.ofEngine(row));
@@ -270,6 +270,30 @@ public final class DatabaseEngines {
             }
             reconcileIsolationLogged(engineId);
         }
+    }
+
+    /** A body run under an engine's lock that fails the way engine work fails. */
+    @FunctionalInterface
+    interface LockedWork<T> {
+        T run() throws IOException;
+    }
+
+    /**
+     * Run {@code work} holding the engine's lock, the one {@link #ensureRunning} and {@link #redeploy} hold; reentrant,
+     * so the body may call either.
+     *
+     * AIDEV-NOTE: this is what serializes every write of a logical user's password into the engine with the store of
+     * that password on the record (DatabaseService.changePassword and provisionLogical): a body re-reads the record
+     * INSIDE it, so no exec can hand the engine a password the record is about to stop naming.
+     */
+    static <T> T underLock(int engineId, @NonNull LockedWork<T> work) throws IOException {
+        synchronized (lockOf(engineId)) {
+            return work.run();
+        }
+    }
+
+    private static @NonNull Object lockOf(int engineId) {
+        return LOCKS.computeIfAbsent(engineId, key -> new Object());
     }
 
     /** {@link #ensureRunning} on the provisioning pool, flipping the row's status. */

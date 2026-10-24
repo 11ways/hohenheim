@@ -28,6 +28,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.DatabaseWrites;
 import be.elevenways.hohenheim.server.database.TenantDatabases;
+import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -67,6 +68,7 @@ import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
+import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
@@ -76,6 +78,7 @@ import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.security.Secret;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.server.operation.Applicability;
 import be.elevenways.zenit.server.operation.Availability;
@@ -108,9 +111,10 @@ import static be.elevenways.hohenheim.RawValues.trimmed;
  *
  * AIDEV-NOTE: the /manage twin is a NARROWING, never a gate of its own: its rows are the databases the caller may view
  * ({@link TenantScopes#DATABASES}), it allocates through the tenant funnel ({@link TenantDatabases#allocate}) and
- * edits nothing; {@code TenantWrites.DATABASE_TENANT_WRITABLE} stays empty, so no tenant-originated write reaches a
- * stored database row whatever a grant says. The delete is the same operation on both twins: it demands
- * {@code destroy} on the record, which an operator holds on every one.
+ * edits nothing; {@code TenantWrites.DATABASE_TENANT_WRITABLE} stays empty, so no tenant-originated COLUMN write reaches
+ * a stored database row whatever a grant says. The delete and the password change are the same operations on both
+ * twins: the delete demands {@code destroy} on the record and the password change {@code manage} (its store runs as
+ * the authorized continuation of that gate), both of which an operator holds on every one.
  *
  * @author Jelle De Loecker
  * @since  0.9.0
@@ -287,6 +291,44 @@ public final class DatabaseParts {
             .command(CmsCommands.EXTERNAL)
             .register();
 
+    /** The password change's one input: blank generates a password, as a create does. */
+    public static final StringField NEW_PASSWORD = StringField.builder(DatabaseModel.DB_PASSWORD.getName())
+        .secret()
+        .label(HohenheimMicrocopy.DATABASE.of("new_password"))
+        .help(HohenheimMicrocopy.DATABASE.of("new_password_help")
+            .withArg("minimum", ManagedDatabase.Engine.LOGICAL_PASSWORD_MIN)
+            .withArg("maximum", ManagedDatabase.Engine.LOGICAL_IDENTIFIER_MAX))
+        .build();
+
+    /** @param password the password to set, null to generate one */
+    public record PasswordInput(@Nullable Secret password) {
+    }
+
+    /**
+     * Sets a new password on a shared database's user inside its engine, then stores it (DatabaseWrites.changePassword);
+     * demands {@code manage} on the record, which an operator holds on every one. Attached apps get it at their next
+     * deploy: the stored row is part of an application's release fingerprint, so its page asks for that deploy.
+     *
+     * AIDEV-NOTE: synchronous, not a background run: the engine work is ONE exec of the provisioning re-credential
+     * command, as bounded as the logical drop a delete runs inline. It spends hh_db_io, the budget of the verbs that
+     * exec inside a managed database's engine.
+     */
+    public static final Operation<Row, PasswordInput, Void> CHANGE_PASSWORD =
+        Operation.declare(HohenheimIds.id("change_database_password"))
+            .happened(OperationSentences.of("change_database_password"))
+            .label(HohenheimMicrocopy.DATABASE.of("change_password"))
+            .description(HohenheimMicrocopy.DATABASE.of("change_password_hint"))
+            .icon(Icon.of("key"))
+            .one(DATABASE)
+            .gate(OperationGate.open().subjectCapability(HohenheimCapabilities.MANAGE))
+            .input(OperationInput.of(FormSpec.builder().add(NEW_PASSWORD).build(), PasswordInput.class,
+                    values -> new PasswordInput(values.get(NEW_PASSWORD.getName()) instanceof Secret typed
+                        ? typed : null))
+                .component(NEW_PASSWORD.getName(), "password"))
+            .rateLimit(HohenheimEndpoints.DATABASE_IO_LIMIT)
+            .command(CmsCommands.EXTERNAL)
+            .register();
+
     static {
         OperationHandlers.attach(DELETE)
             .authorize((database, input, access) -> mayDestroy(database, access) ? null
@@ -334,6 +376,13 @@ public final class DatabaseParts {
             .applies(engine -> DatabaseModel.STATUS_DESTROY_FAILED.equals(engine.get(DatabaseEngineModel.STATUS)))
             .handle(call -> {
                 DatabaseWrites.forceDestroyEngine(call.subject());
+                return null;
+            });
+        OperationHandlers.attach(CHANGE_PASSWORD)
+            .availability(Availability.batch((databases, access) -> passwordUnavailable(databases)))
+            .handle(call -> {
+                DatabaseWrites.changePassword(call.subject(),
+                    Objects.requireNonNull(call.input(), "the password change has its input").password());
                 return null;
             });
     }
@@ -433,8 +482,9 @@ public final class DatabaseParts {
                 .delete(DELETE)
                 .build())
             .deleteConfirmation(deleteConfirmation())
-            .actions(List.of(backUpNow(), backupLink(HohenheimIds.id("backup_database"), false), moveToShared(),
-                finishOldEngine(), forceDelete(FORCE_DELETE, HohenheimMicrocopy.DATABASE, DatabaseModel.NAME)))
+            .actions(List.of(backUpNow(), backupLink(HohenheimIds.id("backup_database"), false), changePassword(),
+                moveToShared(), finishOldEngine(),
+                forceDelete(FORCE_DELETE, HohenheimMicrocopy.DATABASE, DatabaseModel.NAME)))
             // The overview first (the record's front door), then the restore tab; no history, as the legacy subpages()
             // override had it; contributed tabs (zenit-auth's Access tab) join like on every converted entry.
             .tabs(ResourceTabs.<Row>of(List.of(DatabaseOverview.tab(), new DatabaseRestorePage())).withContributions())
@@ -490,7 +540,7 @@ public final class DatabaseParts {
                 .delete(DELETE)
                 .build())
             .deleteConfirmation(deleteConfirmation())
-            .actions(List.of(backupLink(ManageTwin.id("backup_database"), true)))
+            .actions(List.of(backupLink(ManageTwin.id("backup_database"), true), changePassword()))
             .build();
     }
 
@@ -679,6 +729,38 @@ public final class DatabaseParts {
                 (request, result) -> CmsActionResult.refreshWithToast(HohenheimMicrocopy.DATABASE.of("back_up_started")
                     .withArg("name", request.subject().get(DatabaseModel.NAME))))
             .build();
+    }
+
+    /**
+     * "Change password" in the More menus, asking for a password or none (generated); the answer names what happens to
+     * the apps using it, never the value, which the connection card shows behind its reveal.
+     */
+    private static @NonNull PanelAction<Row> changePassword() {
+        ConfirmationSpec confirm = ConfirmationSpec.verb(HohenheimMicrocopy.DATABASE.of("change_password"),
+            HohenheimMicrocopy.DATABASE.of("change_password_confirm_generic"), ActionStyle.DEFAULT);
+        return PanelAction.<Row, Void>places(CHANGE_PASSWORD, ActionPlacement.ROW,
+                (request, result) -> CmsActionResult.refreshWithToast(HohenheimMicrocopy.DATABASE.of("password_changed")
+                    .withArg("name", request.subject().get(DatabaseModel.NAME))))
+            .inlineInRow(false)
+            .inlineOnRecord(false)
+            .confirmation(confirm)
+            .dynamicConfirmation(database -> confirm.withBody(HohenheimMicrocopy.DATABASE.of("change_password_confirm")
+                .withArg("name", database.get(DatabaseModel.NAME))))
+            .build();
+    }
+
+    /** @return per database: why its password cannot be changed now (dedicated, or not serving), null where it can */
+    static @NonNull List<@Nullable Microcopy> passwordUnavailable(@NonNull List<? extends Row> databases) {
+        Iterator<Microcopy> notServing = whileNotServing(databases,
+            HohenheimMicrocopy.DATABASE.of("password_not_active"),
+            HohenheimMicrocopy.DATABASE.of("password_not_serving")).iterator();
+        List<Microcopy> reasons = new ArrayList<>(databases.size());
+        for (Row database : databases) {
+            Microcopy serving = notServing.next();
+            reasons.add(DatabaseModel.isShared(database) ? serving
+                : HohenheimMicrocopy.DATABASE.of("password_dedicated"));
+        }
+        return reasons;
     }
 
     /** @return why this database cannot be backed up now, or null when it can */

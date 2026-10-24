@@ -1061,8 +1061,8 @@ public final class TenantWrites {
      * writing your own host budget. {@code ephemeral} flips the data directory to a tmpfs:
      * a silent total data loss on the next deploy. {@code db_user}/{@code db_password}/
      * {@code db_name} are mirrored into the RUNNING engine's secrets
-     * (DatabaseInstances.writeEngineSecrets) -- rotation is a real operation, but it is a
-     * SERVICE op that rewrites both sides, never a column write, because a raw write
+     * (DatabaseInstances.writeEngineSecrets) -- rotation is a real operation
+     * (DatabaseService.changePassword, the engine first), never a column write, because a raw write
      * desynchronizes the record from the engine and locks everyone out.
      */
     private static final Set<String> DATABASE_TENANT_WRITABLE = Set.of();

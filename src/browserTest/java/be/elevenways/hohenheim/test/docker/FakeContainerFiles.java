@@ -196,7 +196,7 @@ public final class FakeContainerFiles implements DockerTransport, DockerStreamTr
             ExecOutcome outcome = runScript(this.execs.get(id));
             this.execs.put(id, List.of("EXIT:" + outcome.exit()));
             return raw(200, Map.of("Content-Type", "application/vnd.docker.raw-stream"),
-                frame(outcome.stdout()));
+                frame(1, outcome.stdout()));
         }
         if ("GET".equals(method) && path.startsWith("/exec/") && path.endsWith("/json")) {
             String id = path.substring("/exec/".length(), path.length() - "/json".length());
@@ -512,11 +512,15 @@ public final class FakeContainerFiles implements DockerTransport, DockerStreamTr
         }
     }
 
-    /** Docker's stdout frame: [1,0,0,0,size(4be)] + payload. */
-    private static byte[] frame(String stdout) {
-        byte[] payload = stdout.getBytes(StandardCharsets.UTF_8);
+    /**
+     * One frame of Docker's multiplexed exec stream: [stream,0,0,0,size(4be)] + payload.
+     *
+     * @param stream 1 for stdout, 2 for stderr
+     */
+    static byte[] frame(int stream, String text) {
+        byte[] payload = text.getBytes(StandardCharsets.UTF_8);
         byte[] framed = new byte[8 + payload.length];
-        framed[0] = 1;
+        framed[0] = (byte) stream;
         framed[4] = (byte) (payload.length >>> 24);
         framed[5] = (byte) (payload.length >>> 16);
         framed[6] = (byte) (payload.length >>> 8);
@@ -530,7 +534,7 @@ public final class FakeContainerFiles implements DockerTransport, DockerStreamTr
         return raw(status, Map.of("Content-Type", "application/json"), body);
     }
 
-    private static byte[] raw(int status, Map<String, String> headers, byte[] body) {
+    static byte[] raw(int status, Map<String, String> headers, byte[] body) {
         StringBuilder head = new StringBuilder("HTTP/1.1 " + status + " "
             + (status < 400 ? "OK" : "Error") + "\r\n");
         headers.forEach((name, value) -> head.append(name).append(": ").append(value)

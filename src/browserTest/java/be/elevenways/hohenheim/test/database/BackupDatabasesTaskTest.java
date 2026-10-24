@@ -74,12 +74,12 @@ class BackupDatabasesTaskTest {
         try {
             // The backed-up database is durable; the ephemeral one pins the skip.
             service.create(name, ManagedDatabase.Engine.POSTGRES, PG_IMAGE,
-                "appuser", "secret123", "appdb", false);
+                "appuser", "secret123-durable", "appdb", false);
             service.create(ephemeralName, ManagedDatabase.Engine.POSTGRES, PG_IMAGE,
                 "appuser", "secret123", "appdb", true);   // ephemeral: tmpfs
             DockerClient.ExecResult seed = docker.exec(Db.supply(datasource, () -> EngineHandles.of(name)),
                 List.of("psql", "-U", "appuser", "-d", "appdb", "-c", "CREATE TABLE notes (id int);"),
-                List.of("PGPASSWORD=secret123"));
+                List.of("PGPASSWORD=secret123-durable"));
             assertThat(seed.exitCode()).withFailMessage("seed failed: %s", seed.stderr()).isZero();
 
             // Two stale dumps that retention=1 must prune once a fresh dump is written.

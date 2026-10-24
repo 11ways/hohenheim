@@ -56,7 +56,7 @@ class EngineConfigurationSaveTest {
         HohenheimTestRuntime.ensureBooted();
         Db.run(datasource, () -> HostFixtures.makeLocalPlaceable(16384));
         new DatabaseService(datasource).insertRecord("cfgsave", ManagedDatabase.Engine.MONGO, null,
-            "cfguser", "cfgpassword", "cfgdb", false, ServerService.LOCAL_HOST_NAME,
+            "cfguser", "cfgpassword-01", "cfgdb", false, ServerService.LOCAL_HOST_NAME,
             ResourceLimits.none(), DatabaseModel.STATUS_PROVISIONING);
         int[] ids = new int[2];
         EngineHost[] host = new EngineHost[1];

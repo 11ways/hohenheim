@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.database.DatabaseEngines;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.database.DatabaseService;
+import be.elevenways.hohenheim.server.database.DatabaseWrites;
 import be.elevenways.hohenheim.server.database.EngineHost;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
@@ -28,6 +29,7 @@ import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.Secret;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -133,8 +135,8 @@ class SharedDatabaseEngineLiveTest {
         String nameB = "sharedmgb" + System.nanoTime();
         String dbA = "tenanta";
         String dbB = "tenantb";
-        String passwordA = "mgpwA1234";
-        String passwordB = "mgpwB1234";
+        String passwordA = "mgpwA1234-shared";
+        String passwordB = "mgpwB1234-shared";
         Integer engineId = null;
         String engineVolume = null;
         try {
@@ -332,7 +334,7 @@ class SharedDatabaseEngineLiveTest {
             //     very user name the dedicated record carries. The move must not
             //     re-credential it; the dedicated record's user is renamed instead.
             service.create(squatterName, ManagedDatabase.Engine.MONGO, MONGO_IMAGE, user,
-                "squatpw1234", "squat", false, ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
+                "squatpw1234-shared", "squat", false, ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
                 DatabaseModel.PLACEMENT_SHARED);
 
             // 2. Three documents through the dedicated container, as its own root user.
@@ -435,7 +437,7 @@ class SharedDatabaseEngineLiveTest {
                     "print('count=' + db.moved.countDocuments({}));"))
                 .as("step 4: and the record's own (renamed) user reads them on its own database")
                 .contains("count=3");
-            assertThat(mongo(docker, engine, user, "squatpw1234", "squat", "squat",
+            assertThat(mongo(docker, engine, user, "squatpw1234-shared", "squat", "squat",
                     "print('squat=' + db.getName());"))
                 .as("step 4: the squatter's credential still works, untouched by the move")
                 .contains("squat=squat");
@@ -527,7 +529,7 @@ class SharedDatabaseEngineLiveTest {
         String mysqlVictim = "sharedmyv" + System.nanoTime();
         String mysqlDatabase = "myshared";
         String postgresDatabase = "pgshared";
-        String password = "sqlpw1234";
+        String password = "sqlpw1234-shared";
         Integer mysqlEngineId = null;
         Integer postgresEngineId = null;
         String mysqlVolume = null;
@@ -550,7 +552,7 @@ class SharedDatabaseEngineLiveTest {
             //     anything runs on the engine: MySQL users are engine-global, and the
             //     create script would have re-credentialed the first record's user.
             assertThatThrownBy(() -> service.create(mysqlName + "b",
-                    ManagedDatabase.Engine.MYSQL, MYSQL_IMAGE, "myuser", "otherpw1234",
+                    ManagedDatabase.Engine.MYSQL, MYSQL_IMAGE, "myuser", "otherpw1234-shared",
                     "mysharedb", false, ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
                     DatabaseModel.PLACEMENT_SHARED))
                 .as("step 1b: the same logical user on one engine is refused")
@@ -656,6 +658,37 @@ class SharedDatabaseEngineLiveTest {
                 .as("step 3e: postgres isolation re-asserts without a failure").isEmpty();
             assertThat(DatabaseEngines.reconcileIsolation(mysqlEngineId))
                 .as("step 3e: and so does mysql's").isEmpty();
+
+            // 3f. CHANGE PASSWORD. Each database's user takes a new password inside its engine through the
+            //     provisioning re-credential command, and the record stores what the engine took. The ENGINE's own
+            //     reply admits the new password and refuses the old one, the admitted probe first as the positive
+            //     anchor. Postgres dials the container's own network address: the image trusts the local socket
+            //     AND loopback TCP without a password, so only a non-loopback address asks for one.
+            DatabaseModel databaseModel = Models.get(DatabaseModel.class);
+            DatabaseWrites.changePassword(databaseModel.findByName(postgresName), null);
+            String pgPassword = databaseModel.findByName(postgresName).get(DatabaseModel.DB_PASSWORD);
+            assertThat(pgPassword).as("step 3f: postgres's record holds a generated password").isNotEqualTo(password);
+            List<String> pgProbe = List.of("sh", "-c", "exec psql -h \"$(hostname -i | cut -d ' ' -f 1)\""
+                + " -U \"$1\" -d \"$2\" -tA -c 'SELECT id FROM probe'", "hohenheim-probe", "pguser", postgresDatabase);
+            DockerClient.ExecResult pgNew = docker.exec(pgHandle, pgProbe, List.of("PGPASSWORD=" + pgPassword));
+            assertThat(pgNew.stdout()).as("step 3f: postgres admits the new password: %s", pgNew.stderr())
+                .contains("42");
+            DockerClient.ExecResult pgOld = docker.exec(pgHandle, pgProbe, List.of("PGPASSWORD=" + password));
+            assertThat(pgOld.exitCode()).as("step 3f: and refuses the old one: %s", pgOld.stdout()).isNotZero();
+            assertThat(pgOld.stderr()).as("step 3f: by password authentication")
+                .contains("password authentication failed");
+            String typed = "Typed.mysql-password_01";
+            DatabaseWrites.changePassword(databaseModel.findByName(mysqlName), Secret.of(typed));
+            assertThat((String) databaseModel.findByName(mysqlName).get(DatabaseModel.DB_PASSWORD))
+                .as("step 3f: mysql's record holds the typed password").isEqualTo(typed);
+            DockerClient.ExecResult myNew = docker.exec(myHandle, List.of("mysql", "-h", "127.0.0.1",
+                "-u", "myuser", mysqlDatabase, "-N", "-e", "SELECT id FROM probe"), List.of("MYSQL_PWD=" + typed));
+            assertThat(myNew.stdout()).as("step 3f: mysql admits the new password: %s", myNew.stderr())
+                .contains("42");
+            DockerClient.ExecResult myOld = docker.exec(myHandle, List.of("mysql", "-h", "127.0.0.1",
+                "-u", "myuser", mysqlDatabase, "-N", "-e", "SELECT id FROM probe"), List.of("MYSQL_PWD=" + password));
+            assertThat(myOld.exitCode()).as("step 3f: and refuses the old one: %s", myOld.stdout()).isNotZero();
+            assertThat(myOld.stderr()).as("step 3f: as access denied").contains("Access denied");
             service.destroy(postgresOther, true);
             service.destroy(mysqlWild, true);
             service.destroy(mysqlVictim, true);

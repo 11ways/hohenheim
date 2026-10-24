@@ -15,6 +15,7 @@ import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.Secret;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -119,6 +120,32 @@ public final class DatabaseWrites {
         DatabaseService service = new DatabaseService();
         ProvisionedRecords.resize(Models.get(DatabaseModel.class), existing, merged, DATABASE_CEILINGS,
             DatabaseInstances::reserveEngineRow, service::provisionInBackground);
+    }
+
+    /**
+     * THE password change of a managed database: a generated password unless one is typed, set inside the engine and
+     * then stored ({@link DatabaseService#changePassword}, which re-reads the record by id and holds the new password
+     * to the create rule). Attached apps keep the password they were deployed with until their next deploy, which
+     * injects the stored one.
+     *
+     * AIDEV-NOTE: SHARED placement only. A dedicated engine is initialised from its environment once, so its password
+     * lives in the data directory and nothing in the provisioning code re-credentials it; refusing by name beats a new
+     * per-engine root script nobody has proven against a real engine.
+     *
+     * @param typed the password to set, or null to generate one
+     * @throws Violations {@code database_password_dedicated}, {@code database_logical_password} or
+     *                    {@code database_password_failed}
+     */
+    public static void changePassword(@NonNull Row database, @Nullable Secret typed) {
+        int recordId = database.get(DatabaseModel.ID);
+        String password = typed == null ? Secrets.generatePassword() : typed.reveal();
+        try {
+            new DatabaseService().changePassword(recordId, password);
+        } catch (IOException refused) {
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("database_password_failed")
+                .withArg("name", String.valueOf((Object) database.get(DatabaseModel.NAME)))
+                .withArg("reason", String.valueOf(refused.getMessage())));
+        }
     }
 
     /**

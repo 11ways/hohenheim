@@ -24,9 +24,15 @@ import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.KnownValueRedactor;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.protoblast.server.process.ProcessOutcome;
+import be.elevenways.protoblast.server.process.Subprocess;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -130,7 +136,7 @@ class SharedDatabaseEngineTest {
 
         // 1. A mongo record created with the default placement lands SHARED and bound.
         Row first = service.insertRecord("shareda", ManagedDatabase.Engine.MONGO, null,
-            "usera", "passworda", "dba", false, ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
+            "usera", "password-a-0001", "dba", false, ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
             DatabaseModel.STATUS_PROVISIONING);
         Db.run(datasource, () -> {
             Row stored = Models.get(DatabaseModel.class).findByName("shareda");
@@ -154,7 +160,7 @@ class SharedDatabaseEngineTest {
             assertThat((String) engine.get(DatabaseEngineModel.ROOT_PASSWORD))
                 .as("step 2: with a generated password, never the record's")
                 .isNotBlank()
-                .isNotEqualTo("passworda");
+                .isNotEqualTo("password-a-0001");
             assertThat((String) engine.get(DatabaseEngineModel.STATUS))
                 .as("step 2: nothing is running yet, so it is provisioning")
                 .isEqualTo(DatabaseModel.STATUS_PROVISIONING);
@@ -193,7 +199,7 @@ class SharedDatabaseEngineTest {
         // 4. A SECOND mongo record on the same host binds to the SAME engine -- no second
         //    engine row and no second container. That is the entire saving.
         service.insertRecord("sharedb", ManagedDatabase.Engine.MONGO, null,
-            "userb", "passwordb", "dbb", false, ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
+            "userb", "password-b-0001", "dbb", false, ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
             DatabaseModel.STATUS_PROVISIONING);
         Db.run(datasource, () -> {
             Integer engineA = Models.get(DatabaseModel.class).findByName("shareda")
@@ -222,13 +228,13 @@ class SharedDatabaseEngineTest {
             //     one credential reached both databases, 2026-09-02 on robbedoes). Both
             //     are refused by name BEFORE any row is written.
             assertThat(refusalOf(() -> service.insertRecord("sharedc",
-                    ManagedDatabase.Engine.MONGO, null, "userc", "passwordc", "dba", false,
+                    ManagedDatabase.Engine.MONGO, null, "userc", "password-c-0001", "dba", false,
                     ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
                     DatabaseModel.STATUS_PROVISIONING)))
                 .as("step 4b: a taken logical database name is refused by name")
                 .isEqualTo("database_logical_name_taken");
             assertThat(refusalOf(() -> service.insertRecord("sharedc",
-                    ManagedDatabase.Engine.MONGO, null, "usera", "passwordc", "dbc", false,
+                    ManagedDatabase.Engine.MONGO, null, "usera", "password-c-0001", "dbc", false,
                     ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
                     DatabaseModel.STATUS_PROVISIONING)))
                 .as("step 4b: a taken logical user is refused by name")
@@ -241,7 +247,7 @@ class SharedDatabaseEngineTest {
             // 5. A DEDICATED record beside them is unaffected: it owns nothing on the
             //    engine and the engine's own instance is still the only one.
             service.insertRecord("dedicatedc", ManagedDatabase.Engine.MONGO, null,
-                "userc", "passwordc", "dbc", false, ServerService.LOCAL_HOST_NAME,
+                "userc", "password-c-0001", "dbc", false, ServerService.LOCAL_HOST_NAME,
                 ResourceLimits.of(256, null), DatabaseModel.STATUS_PROVISIONING,
                 DatabaseModel.PLACEMENT_DEDICATED, null);
             Row dedicated = Models.get(DatabaseModel.class).findByName("dedicatedc");
@@ -268,15 +274,15 @@ class SharedDatabaseEngineTest {
             Row engine = Models.get(DatabaseEngineModel.class).findById(engineA);
             String rootPassword = engine.get(DatabaseEngineModel.ROOT_PASSWORD);
             DatabaseEngines.setStatus(engineA, DatabaseModel.STATUS_FAILED,
-                "psql: auth failed for root/" + rootPassword + " creating usera/passworda");
+                "psql: auth failed for root/" + rootPassword + " creating usera/password-a-0001");
             String stored = Models.get(DatabaseEngineModel.class).findById(engineA)
                 .get(DatabaseEngineModel.FAILURE_REASON);
             assertThat(stored).as("step 6: the engine's stored reason keeps its words")
                 .contains("psql: auth failed for root/" + KnownValueRedactor.PLACEHOLDER)
-                .as("step 6: and loses both passwords").doesNotContain(rootPassword).doesNotContain("passworda");
+                .as("step 6: and loses both passwords").doesNotContain(rootPassword).doesNotContain("password-a-0001");
             int sharedaId = Models.get(DatabaseModel.class).findByName("shareda").get(DatabaseModel.ID);
             assertThat(ConsoleRedaction.redactedReason(DatabaseModel.MODEL_ID, sharedaId,
-                    "restore refused for passworda as root " + rootPassword))
+                    "restore refused for password-a-0001 as root " + rootPassword))
                 .as("step 6: a database's reason loses its own password and its engine's")
                 .isEqualTo("restore refused for [redacted] as root [redacted]");
             DatabaseEngines.setStatus(engineA, DatabaseModel.STATUS_PROVISIONING, null);
@@ -294,7 +300,7 @@ class SharedDatabaseEngineTest {
         // 1. Redis has no logical databases, so a shared placement is refused by name
         //    rather than silently downgraded to dedicated.
         assertThat(refusalOf(() -> service.insertRecord("refuseredis",
-                ManagedDatabase.Engine.REDIS, null, "user", "password", "db0", false,
+                ManagedDatabase.Engine.REDIS, null, "user", "password-0001", "db0", false,
                 REFUSAL_HOST, ResourceLimits.none(),
                 DatabaseModel.STATUS_PROVISIONING, DatabaseModel.PLACEMENT_SHARED, null)))
             .as("step 1: redis cannot host a logical database")
@@ -303,7 +309,7 @@ class SharedDatabaseEngineTest {
         // 2. A shared record declares no ceilings of its own: the ENGINE is what is
         //    booked and resized, so a per-record limit would describe nothing.
         assertThat(refusalOf(() -> service.insertRecord("refuselimits",
-                ManagedDatabase.Engine.MONGO, null, "user", "password", "dbl", false,
+                ManagedDatabase.Engine.MONGO, null, "user", "password-0001", "dbl", false,
                 REFUSAL_HOST, ResourceLimits.of(512, null),
                 DatabaseModel.STATUS_PROVISIONING, DatabaseModel.PLACEMENT_SHARED, null)))
             .as("step 2: ceilings belong to the engine, not to a logical database")
@@ -316,17 +322,30 @@ class SharedDatabaseEngineTest {
                 REFUSAL_HOST, ResourceLimits.none(),
                 DatabaseModel.STATUS_PROVISIONING, DatabaseModel.PLACEMENT_SHARED, null)))
             .as("step 3: a quote in the password cannot ride a shell script")
-            .isEqualTo("database_logical_identifier");
+            .isEqualTo("database_logical_password");
         assertThat(refusalOf(() -> service.insertRecord("refusespace",
-                ManagedDatabase.Engine.MONGO, null, "us er", "password", "dbs", false,
+                ManagedDatabase.Engine.MONGO, null, "us er", "password-0001", "dbs", false,
                 REFUSAL_HOST, ResourceLimits.none(),
                 DatabaseModel.STATUS_PROVISIONING, DatabaseModel.PLACEMENT_SHARED, null)))
             .as("step 3: nor a space in the user")
             .isEqualTo("database_logical_identifier");
+        // 3b. A NEW password shorter than the minimum is refused by the password's own rule, so no create stores a
+        //     value too short for every log to redact; one character more is the boundary and passes the rule.
+        String tooShort = "p".repeat(ManagedDatabase.Engine.LOGICAL_PASSWORD_MIN - 1);
+        assertThat(refusalOf(() -> service.insertRecord("refuseshort",
+                ManagedDatabase.Engine.MONGO, null, "user", tooShort, "dbt", false,
+                REFUSAL_HOST, ResourceLimits.none(),
+                DatabaseModel.STATUS_PROVISIONING, DatabaseModel.PLACEMENT_SHARED, null)))
+            .as("step 3b: a password under the minimum is refused")
+            .isEqualTo("database_logical_password");
+        assertThat(ManagedDatabase.Engine.isNewLogicalPassword(tooShort + "p"))
+            .as("step 3b: the minimum itself passes").isTrue();
+        assertThat(ManagedDatabase.Engine.isLogicalIdentifier(tooShort))
+            .as("step 3b: while a STORED short password still passes the scripts' own rule").isTrue();
 
         // 4. An UNKNOWN placement token is refused too: the vocabulary is closed.
         assertThat(refusalOf(() -> service.insertRecord("refuseplacement",
-                ManagedDatabase.Engine.MONGO, null, "user", "password", "dbp", false,
+                ManagedDatabase.Engine.MONGO, null, "user", "password-0001", "dbp", false,
                 REFUSAL_HOST, ResourceLimits.none(),
                 DatabaseModel.STATUS_PROVISIONING, "somewhere-else", null)))
             .as("step 4: a placement nobody declared is refused")
@@ -335,7 +354,7 @@ class SharedDatabaseEngineTest {
         // 5. POSITIVE ANCHOR: with all four corrected, the very same create succeeds and
         //    mints the engine -- so the refusals above are about what they name.
         Row ok = service.insertRecord("refuseanchor", ManagedDatabase.Engine.MONGO, null,
-            "user", "password", "dbok", false, REFUSAL_HOST, ResourceLimits.none(),
+            "user", "password-0001", "dbok", false, REFUSAL_HOST, ResourceLimits.none(),
             DatabaseModel.STATUS_PROVISIONING, DatabaseModel.PLACEMENT_SHARED, null);
         int mongoEngineId = ok.get(DatabaseModel.ENGINE_ID);
         assertThat(mongoEngineId).as("step 5: the corrected create is bound to an engine")
@@ -345,7 +364,7 @@ class SharedDatabaseEngineTest {
             // 6. An EXPLICIT engine of another kind is refused: a mysql record may not
             //    live in a mongo process however deliberately it is asked for.
             assertThat(refusalOf(() -> service.insertRecord("refusekind",
-                    ManagedDatabase.Engine.MYSQL, null, "user", "password", "dbk", false,
+                    ManagedDatabase.Engine.MYSQL, null, "user", "password-0001", "dbk", false,
                     REFUSAL_HOST, ResourceLimits.none(),
                     DatabaseModel.STATUS_PROVISIONING, DatabaseModel.PLACEMENT_SHARED,
                     mongoEngineId)))
@@ -364,7 +383,7 @@ class SharedDatabaseEngineTest {
             remote.set(DatabaseEngineModel.STATUS, DatabaseModel.STATUS_ACTIVE);
             Models.get(DatabaseEngineModel.class).save(remote);
             assertThat(refusalOf(() -> service.insertRecord("refusehost",
-                    ManagedDatabase.Engine.MONGO, null, "user", "password", "dbh", false,
+                    ManagedDatabase.Engine.MONGO, null, "user", "password-0001", "dbh", false,
                     REFUSAL_HOST, ResourceLimits.none(),
                     DatabaseModel.STATUS_PROVISIONING, DatabaseModel.PLACEMENT_SHARED,
                     (Integer) remote.get(DatabaseEngineModel.ID))))
@@ -375,7 +394,7 @@ class SharedDatabaseEngineTest {
             //    the engine's, anything else must MATCH, so nothing lands on the wrong
             //    major version by accident.
             assertThat(refusalOf(() -> service.insertRecord("refuseimage",
-                    ManagedDatabase.Engine.MONGO, "mongo:4.4", "user", "password", "dbi",
+                    ManagedDatabase.Engine.MONGO, "mongo:4.4", "user", "password-0001", "dbi",
                     false, REFUSAL_HOST, ResourceLimits.none(),
                     DatabaseModel.STATUS_PROVISIONING, DatabaseModel.PLACEMENT_SHARED,
                     null)))
@@ -385,7 +404,7 @@ class SharedDatabaseEngineTest {
             // taken user is a refusal of its own, step 4b of the previous journey.)
             Row matching = service.insertRecord("matchingimage",
                 ManagedDatabase.Engine.MONGO, MONGO_DEFAULT_IMAGE,
-                "usermatch", "password", "dbm", false, REFUSAL_HOST,
+                "usermatch", "password-0001", "dbm", false, REFUSAL_HOST,
                 ResourceLimits.none(), DatabaseModel.STATUS_PROVISIONING,
                 DatabaseModel.PLACEMENT_SHARED, null);
             assertThat((Integer) matching.get(DatabaseModel.ENGINE_ID))
@@ -492,8 +511,9 @@ class SharedDatabaseEngineTest {
             .as("step 1: the positional arguments are port, root user, database, user")
             .containsExactly(String.valueOf(mongo.port()), "root", "tenantdb", "tenantuser");
 
-        // 2. THE SECRET NEVER RIDES ARGV. Both passwords reach the script through the
-        //    environment, which is what keeps them out of a container's process table.
+        // 2. THE SECRET NEVER RIDES THE COMMAND. Both passwords reach the script through the
+        //    environment; that the expanded scripts keep the new one out of every client's argv
+        //    too is the next test's, which runs them.
         List<String> env = mongo.logicalEnv("rootsecret", password);
         assertThat(create).as("step 2: no argument carries the new user's password")
             .noneMatch(argument -> argument.contains(password));
@@ -550,6 +570,53 @@ class SharedDatabaseEngineTest {
                 true))
             .as("step 5: nor a quoted user")
             .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    /**
+     * The create scripts as a shell really expands them, against stub clients that record their argv and stdin: the
+     * new password reaches psql, mysql and mongosh as data on stdin and never as an argument, so it never shows in an
+     * engine container's process table. The scripts run with an empty stdin of their own, as a docker exec gives them.
+     */
+    @Test
+    void theCreateScriptsHandTheNewPasswordToEveryClientOnStdinNeverInItsArgv(@TempDir Path dir) throws Exception {
+        String password = "kJ8-vQ2mZx_LpR4tN7wYbG1s";
+        Path bin = Files.createDirectories(dir.resolve("bin"));
+        String stub = "#!/bin/sh\n"
+            + "printf '%s\\n' \"${0##*/} $*\" >> \"$HH_STUB_LOG/argv\"\n"
+            + "input=$(cat)\n"
+            + "printf '%s\\n' \"$input\" >> \"$HH_STUB_LOG/stdin\"\n"
+            + "case \"$*\" in *'SELECT COUNT'*) echo 0 ;; esac\n"
+            + "case \"$input\" in *hohenheim-ok*) echo hohenheim-ok ;; esac\n";
+        for (String client : List.of("psql", "mysql", "mongosh")) {
+            Path file = bin.resolve(client);
+            Files.writeString(file, stub);
+            assertThat(file.toFile().setExecutable(true)).as("anchor: the %s stub is executable", client).isTrue();
+        }
+        Map<ManagedDatabase.Engine, String> clients = Map.of(ManagedDatabase.Engine.POSTGRES, "psql",
+            ManagedDatabase.Engine.MYSQL, "mysql", ManagedDatabase.Engine.MONGO, "mongosh");
+        for (Map.Entry<ManagedDatabase.Engine, String> entry : clients.entrySet()) {
+            ManagedDatabase.Engine engine = entry.getKey();
+            Path log = Files.createDirectories(dir.resolve(engine.token()));
+            Subprocess script = Subprocess.of(engine.createLogicalCommand("root", "tenantdb", "tenantuser"))
+                .withoutInheritedEnvironment()
+                .environment("PATH", bin + ":/usr/local/bin:/usr/bin:/bin")
+                .environment("HH_STUB_LOG", log.toString())
+                .stdin(new byte[0])
+                .timeout(Duration.ofSeconds(30));
+            for (String variable : engine.logicalEnv("rootsecret", password)) {
+                int eq = variable.indexOf('=');
+                script.environment(variable.substring(0, eq), variable.substring(eq + 1));
+            }
+            ProcessOutcome outcome = script.run();
+            assertThat(outcome.exitCode()).as("step 1 (%s): the script ran to its end: %s", engine, outcome.describe())
+                .isZero();
+            String argv = Files.readString(log.resolve("argv"));
+            assertThat(argv).as("step 1 (%s): through its client", engine).contains(entry.getValue() + " ")
+                .as("step 2 (%s): no client was handed the new password as an argument", engine)
+                .doesNotContain(password);
+            assertThat(Files.readString(log.resolve("stdin")))
+                .as("step 3 (%s): the client read it as data on stdin instead", engine).contains(password);
+        }
     }
 
     /**
