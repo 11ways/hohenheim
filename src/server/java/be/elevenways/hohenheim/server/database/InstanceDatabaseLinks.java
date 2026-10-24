@@ -157,11 +157,102 @@ public final class InstanceDatabaseLinks {
      * @return per asked instance with a database that is not ready, the reason naming its first such database
      */
     public static @NonNull Map<Integer, Microcopy> notReadyReasons(@NonNull Collection<Integer> instanceIds) {
+        Map<Integer, Microcopy> reasons = new HashMap<>();
+        Linked linked = linkedOf(instanceIds);
+        for (Row link : linked.links()) {
+            Integer instanceId = link.get(InstanceDatabaseModel.INSTANCE_ID);
+            Row database = linked.databaseOf(link);
+            if (instanceId == null || database == null || reasons.containsKey(instanceId)) {
+                continue;
+            }
+            Microcopy reason = notReadyReasonOf(database);
+            if (reason != null) {
+                reasons.put(instanceId, reason);
+            }
+        }
+        return reasons;
+    }
+
+    /**
+     * The credential generation ({@link DatabaseModel#CREDENTIAL_GENERATION}) each of the instance's attachments
+     * stands at now, by link id: what a deploy reads BEFORE it derives its environment and records once it succeeded
+     * ({@link #stampDeployed}).
+     *
+     * AIDEV-NOTE: read before the derivation on purpose. A password change landing between this read and the
+     * environment's derivation leaves the older generation recorded, so the workload asks for one restart too many;
+     * read after, it would record a generation whose password the workload may not hold, and ask for none.
+     */
+    public static @NonNull Map<Integer, Integer> credentialGenerations(int instanceId) {
+        Map<Integer, Integer> generations = new LinkedHashMap<>();
+        Linked linked = linkedOf(List.of(instanceId));
+        for (Row link : linked.links()) {
+            Row database = linked.databaseOf(link);
+            if (database != null) {
+                generations.put(link.get(InstanceDatabaseModel.ID), DatabaseModel.credentialGenerationOf(database));
+            }
+        }
+        return generations;
+    }
+
+    /**
+     * Record on each attachment the credential generation a deploy that succeeded was derived from
+     * ({@link #credentialGenerations}): one hook-free set write per distinct generation, the way a deploy's status
+     * stamp is written, since it is the deploy's bookkeeping and no attachment edit.
+     */
+    public static void stampDeployed(@NonNull Map<Integer, Integer> generations) {
+        Map<Integer, List<Integer>> linksByGeneration = new LinkedHashMap<>();
+        generations.forEach((linkId, generation) ->
+            linksByGeneration.computeIfAbsent(generation, key -> new ArrayList<>()).add(linkId));
+        InstanceDatabaseModel links = Models.get(InstanceDatabaseModel.class);
+        linksByGeneration.forEach((generation, linkIds) -> links.find()
+            .where(InstanceDatabaseModel.ID.in(linkIds))
+            .assign(InstanceDatabaseModel.DEPLOYED_GENERATION, generation)
+            .bypassBehaviours()
+            .updateAll());
+    }
+
+    /**
+     * Per instance: its first attached database whose password changed after the instance was last deployed (the
+     * attachment's {@link InstanceDatabaseModel#DEPLOYED_GENERATION} behind the database's generation), so the running
+     * workload still holds the old one. Two queries however many instances are asked.
+     *
+     * @return instance id to that database's row; an instance whose attachments are all current is absent
+     */
+    public static @NonNull Map<Integer, Row> staleCredentials(@NonNull Collection<Integer> instanceIds) {
+        Map<Integer, Row> stale = new HashMap<>();
+        Linked linked = linkedOf(instanceIds);
+        for (Row link : linked.links()) {
+            Integer instanceId = link.get(InstanceDatabaseModel.INSTANCE_ID);
+            Row database = linked.databaseOf(link);
+            if (instanceId == null || database == null || stale.containsKey(instanceId)) {
+                continue;
+            }
+            if (InstanceDatabaseModel.deployedGenerationOf(link) < DatabaseModel.credentialGenerationOf(database)) {
+                stale.put(instanceId, database);
+            }
+        }
+        return stale;
+    }
+
+    /**
+     * The attachments of some instances, oldest first, and the databases they name.
+     *
+     * @param links       the attachment rows, in id order
+     * @param databases   the named database rows by id
+     */
+    private record Linked(@NonNull List<Row> links, @NonNull Map<Integer, Row> databases) {
+
+        @Nullable Row databaseOf(@NonNull Row link) {
+            return this.databases.get(link.get(InstanceDatabaseModel.DATABASE_ID));
+        }
+    }
+
+    /** @return the asked instances' attachments and their databases, in two queries */
+    private static @NonNull Linked linkedOf(@NonNull Collection<Integer> instanceIds) {
         DatabaseModel databases = Models.get(DatabaseModel.class);
         InstanceDatabaseModel links = Models.get(InstanceDatabaseModel.class);
-        Map<Integer, Microcopy> reasons = new HashMap<>();
         if (databases == null || links == null || instanceIds.isEmpty()) {
-            return reasons;
+            return new Linked(List.of(), Map.of());
         }
         List<Row> linked = links.find().where(InstanceDatabaseModel.INSTANCE_ID.in(List.copyOf(instanceIds)))
             .orderBy(InstanceDatabaseModel.ID, SortOrder.ASC).all();
@@ -178,18 +269,7 @@ public final class InstanceDatabaseLinks {
                 databaseById.put(database.get(DatabaseModel.ID), database);
             }
         }
-        for (Row link : linked) {
-            Integer instanceId = link.get(InstanceDatabaseModel.INSTANCE_ID);
-            Row database = databaseById.get(link.get(InstanceDatabaseModel.DATABASE_ID));
-            if (instanceId == null || database == null || reasons.containsKey(instanceId)) {
-                continue;
-            }
-            Microcopy reason = notReadyReasonOf(database);
-            if (reason != null) {
-                reasons.put(instanceId, reason);
-            }
-        }
-        return reasons;
+        return new Linked(linked, databaseById);
     }
 
     /** @return why this database keeps a workload from deploying, or null when it is active */

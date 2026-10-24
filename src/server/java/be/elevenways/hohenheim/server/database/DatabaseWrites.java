@@ -123,17 +123,13 @@ public final class DatabaseWrites {
     }
 
     /**
-     * THE password change of a managed database: a generated password unless one is typed, set inside the engine and
-     * then stored ({@link DatabaseService#changePassword}, which re-reads the record by id and holds the new password
-     * to the create rule). Attached apps keep the password they were deployed with until their next deploy, which
-     * injects the stored one.
-     *
-     * AIDEV-NOTE: SHARED placement only. A dedicated engine is initialised from its environment once, so its password
-     * lives in the data directory and nothing in the provisioning code re-credentials it; refusing by name beats a new
-     * per-engine root script nobody has proven against a real engine.
+     * THE password change of a managed database, shared or dedicated: a generated password unless one is typed, set
+     * inside the engine and then stored ({@link DatabaseService#changePassword}, which re-reads the record by id and
+     * holds the new password to the create rule). Attached workloads keep the password they were deployed with until
+     * their next deploy or restart, which injects the stored one.
      *
      * @param typed the password to set, or null to generate one
-     * @throws Violations {@code database_password_dedicated}, {@code database_logical_password} or
+     * @throws Violations {@code database_logical_identifier}, {@code database_logical_password} or
      *                    {@code database_password_failed}
      */
     public static void changePassword(@NonNull Row database, @Nullable Secret typed) {

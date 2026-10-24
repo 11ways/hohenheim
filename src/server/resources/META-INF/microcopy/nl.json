@@ -16330,6 +16330,20 @@
     "text": "De configuratie is gewijzigd nadat de draaiende release werd gebouwd. Deploy om de wijziging live te zetten.",
     "scope": "app_health"
   },
+  "credentials_not_live": [
+    {
+      "text": "Databasewachtwoord nog niet live",
+      "scope": "app_health"
+    },
+    {
+      "text": "{$name} draait met een oud databasewachtwoord",
+      "scope": "attention_title"
+    }
+  ],
+  "credentials_not_live_detail": {
+    "text": "Het wachtwoord van database {$database} is gewijzigd nadat deze workload gestart werd, dus hij verbindt nog met het oude, dat de database weigert. Herstart hem om hem het nieuwe wachtwoord te geven.",
+    "scope": "app_health"
+  },
   "mark_kept": {
     "text": "Bewaard om terug te rollen",
     "scope": "deployments"
@@ -16715,17 +16729,15 @@
   "finish_old_engine": {"text": "Oude engine verder verwijderen", "scope": "database"},
   "finish_old_engine_hint": {"text": "Verwijdert de eigen engine die een verhuizing naar een gedeelde engine niet kon verwijderen; de database zelf blijft.", "scope": "database"},
   "change_password": {"text": "Wachtwoord wijzigen", "scope": "database"},
-  "change_password_hint": {"text": "Zet een nieuw wachtwoord op de gebruiker van deze database, in de engine zelf; apps die hem gebruiken krijgen het bij hun volgende deploy.", "scope": "database"},
-  "change_password_confirm": {"text": "Het wachtwoord van '{$name}' wijzigen? De engine neemt het nieuwe wachtwoord meteen over. Apps die hem gebruiken houden het oude tot hun volgende deploy, en verbindingen die ze intussen openen worden geweigerd.", "scope": "database"},
-  "change_password_confirm_generic": {"text": "Het wachtwoord van deze database wijzigen? De engine neemt het nieuwe wachtwoord meteen over. Apps die hem gebruiken houden het oude tot hun volgende deploy, en verbindingen die ze intussen openen worden geweigerd.", "scope": "database"},
+  "change_password_hint": {"text": "Zet een nieuw wachtwoord in de engine van deze database; apps die hem gebruiken krijgen het bij hun volgende deploy of herstart.", "scope": "database"},
+  "change_password_confirm": {"text": "Het wachtwoord van '{$name}' wijzigen? De engine neemt het nieuwe wachtwoord meteen over. Apps die hem gebruiken houden het oude tot hun volgende deploy of herstart, en verbindingen die ze intussen openen worden geweigerd.", "scope": "database"},
+  "change_password_confirm_generic": {"text": "Het wachtwoord van deze database wijzigen? De engine neemt het nieuwe wachtwoord meteen over. Apps die hem gebruiken houden het oude tot hun volgende deploy of herstart, en verbindingen die ze intussen openen worden geweigerd.", "scope": "database"},
   "new_password": {"text": "Nieuw wachtwoord", "scope": "database"},
   "new_password_help": {"text": "Laat leeg om er een te genereren. Letters, cijfers, punt, liggend streepje en koppelteken, {$minimum :integer} tot {$maximum :integer} tekens.", "scope": "database"},
-  "password_changed": {"text": "Het wachtwoord van {$name} is gewijzigd. Apps die hem gebruiken krijgen het nieuwe bij hun volgende deploy.", "scope": "database"},
-  "password_dedicated": {"text": "Een database met een eigen engine houdt het wachtwoord waarmee hij gemaakt is; verhuis hem naar een gedeelde engine om het te wijzigen.", "scope": "database"},
+  "password_changed": {"text": "Het wachtwoord van {$name} is gewijzigd. Apps die hem gebruiken krijgen het nieuwe bij hun volgende deploy of herstart.", "scope": "database"},
   "password_not_active": {"text": "Alleen een draaiende database kan een nieuw wachtwoord krijgen.", "scope": "database"},
   "password_not_serving": {"text": "Het wachtwoord kan nu niet gewijzigd worden. {$reason}.", "scope": "database"},
   "change_database_password": {"text": "{$actor} wijzigde het wachtwoord van database {$subject}", "scope": "hohenheim", "target": "happened"},
-  "database_password_dedicated": {"text": "Een database met een eigen engine houdt het wachtwoord waarmee hij gemaakt is; verhuis hem naar een gedeelde engine om het te wijzigen", "scope": "violations"},
   "database_password_failed": {"text": "Het wachtwoord van '{$name}' wijzigen is mislukt: {$reason}", "scope": "violations"},
   "finish_old_engine_done": {"text": "De oude engine van {$name} is verwijderd", "scope": "database"},
   "act_finish_old_engine": {"text": "{$name} openen en de oude engine verder verwijderen", "scope": "attention_action"},

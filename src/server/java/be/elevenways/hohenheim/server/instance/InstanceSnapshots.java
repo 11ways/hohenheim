@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.backup.BackupArchive;
+import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
@@ -271,6 +272,9 @@ public final class InstanceSnapshots {
 
     /** {@link #restore}'s body; the caller holds the instance's operation lock. */
     private void restoreLocked(int instanceId, int snapshotId, @NonNull Row snapshot) {
+        // Read BEFORE resolve derives the environment (InstanceDatabaseLinks.credentialGenerations says why): the
+        // volume lane recreates the workload from that environment, so it records what a deploy records.
+        Map<Integer, Integer> credentials = InstanceDatabaseLinks.credentialGenerations(instanceId);
         Resolved resolved = this.instances.resolve(instanceId);
         InstanceOperationGuard.requireOperable(resolved.row());
         String nativeName = snapshot.get(InstanceSnapshotModel.NATIVE_NAME);
@@ -333,6 +337,7 @@ public final class InstanceSnapshots {
                     resolved.runtime().destroy(resolved.spec().handle());
                     support.removeVolumesForRestore(resolved.spec(), volumes, tars.keySet());
                     resolved.runtime().create(resolved.spec());
+                    InstanceDatabaseLinks.stampDeployed(credentials);
                     support.restoreVolumes(resolved.spec(), volumes, tars);
                 });
         } catch (IOException error) {

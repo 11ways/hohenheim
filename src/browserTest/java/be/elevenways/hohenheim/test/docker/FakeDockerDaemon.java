@@ -7,7 +7,9 @@ import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.instance.DockerContainerKind;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
+import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
+import be.elevenways.hohenheim.server.runtime.LinkNetworkSupport;
 import be.elevenways.hohenheim.test.instance.ForwardingKindHandler;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
@@ -97,6 +99,9 @@ public final class FakeDockerDaemon implements DockerTransport {
     private final Map<String, Workload> workloads = new LinkedHashMap<>();
     private final Map<String, Map<String, String>> volumes = new LinkedHashMap<>();
     private final Set<String> images = new LinkedHashSet<>();
+
+    /** The link networks the runtime face holds; see {@link FakeReleaseRuntime#ensureLinkNetwork}. */
+    private final Set<String> linkNetworks = new LinkedHashSet<>();
 
     /** Every daemon-facing act in order; the assertable half of "what actually happened". */
     private final List<String> calls = new ArrayList<>();
@@ -298,7 +303,36 @@ public final class FakeDockerDaemon implements DockerTransport {
         return new FakeReleaseRuntime();
     }
 
-    private final class FakeReleaseRuntime implements InstanceRuntime {
+    private final class FakeReleaseRuntime implements InstanceRuntime, LinkNetworkSupport {
+
+        /**
+         * A database attachment's link network joins the workload to its engine before start
+         * (InstanceDatabaseNetworks): the fake keeps the networks and refuses a member it does not hold, as the
+         * daemon refuses a container that does not exist.
+         */
+        @Override
+        public @NonNull String ensureLinkNetwork(@NonNull String linkHandle, @NonNull Map<String, String> ownerLabels,
+                                                 @NonNull Egress egress) {
+            FakeDockerDaemon.this.linkNetworks.add(linkHandle);
+            FakeDockerDaemon.this.calls.add("link-network:" + linkHandle);
+            return linkHandle;
+        }
+
+        @Override
+        public void connectToLinkNetwork(@NonNull String linkHandle, @NonNull String containerHandle,
+                                         @NonNull List<String> aliases) throws IOException {
+            if (!FakeDockerDaemon.this.linkNetworks.contains(linkHandle)) {
+                throw new IOException("no link network " + linkHandle);
+            }
+            require(containerHandle);
+            FakeDockerDaemon.this.calls.add("link-connect:" + linkHandle + ":" + containerHandle);
+        }
+
+        @Override
+        public void removeLinkNetwork(@NonNull String linkHandle) {
+            FakeDockerDaemon.this.linkNetworks.remove(linkHandle);
+            FakeDockerDaemon.this.calls.add("link-remove:" + linkHandle);
+        }
 
         @Override
         public @NonNull String create(@NonNull InstanceSpec spec) throws IOException {

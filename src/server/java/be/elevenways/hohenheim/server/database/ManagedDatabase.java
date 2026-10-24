@@ -212,6 +212,17 @@ public class ManagedDatabase {
         }
 
         /**
+         * Whether this engine's credential belongs to a named user, which a password change spells into SQL or
+         * JavaScript ({@link #rotateOwnCommand}); redis has only one password and no user.
+         */
+        public boolean credentialNamesUser() {
+            return switch (this) {
+                case POSTGRES, MYSQL, MONGO -> true;
+                case REDIS -> false;
+            };
+        }
+
+        /**
          * The database the engine's OWN init creates and the readiness probe dials when
          * the container is a shared engine rather than one record's: a name that exists
          * on every fresh engine of this kind.
@@ -275,7 +286,7 @@ public class ManagedDatabase {
                     env.put("MONGO_INITDB_DATABASE", safeDatabase);
                 }
                 case REDIS -> {
-                    // redis takes its password through containerCommandTemplate()
+                    // redis takes its password through containerCommand()
                 }
             }
             return env;
@@ -287,9 +298,9 @@ public class ManagedDatabase {
          * environment at deploy -- never into the settings JSON.
          *
          * AIDEV-NOTE: Redis declares {@code REDIS_PASSWORD} even though the engine
-         * ignores that variable: the value is consumed by the {@code {{REDIS_PASSWORD}}}
-         * placeholder in {@link #containerCommandTemplate()}, which is the only
-         * substitution lane a secret can reach. The key is deliberately NOT
+         * ignores that variable: {@link #containerCommand()} reads it from the container's
+         * own environment and hands it to the server as configuration on stdin, never as an
+         * argument. The key is deliberately NOT
          * {@code REDISCLI_AUTH} -- an ambient auth variable would make a bare
          * {@code redis-cli ping} inside the container succeed and turn every
          * authentication negative control vacuous.
@@ -310,18 +321,38 @@ public class ManagedDatabase {
                     }
                 }
                 case MONGO -> env.put("MONGO_INITDB_ROOT_PASSWORD", password);
-                case REDIS -> env.put("REDIS_PASSWORD", password);
+                case REDIS -> env.put(REDIS_PASSWORD, password);
             }
             return env;
         }
 
+        /** The variable the redis container command reads its password from ({@link #containerCommand}). */
+        static final String REDIS_PASSWORD = "REDIS_PASSWORD";
+
         /**
-         * Container command override with {@code {{KEY}}} placeholders resolved against
-         * the instance's variables, or null to keep the image's default.
+         * The container command, or null to keep the image's own.
+         *
+         * AIDEV-NOTE: redis reads its password from no environment variable, and {@code --requirepass} on the command
+         * line put it in the container's Cmd (docker inspect) and in every process table of the host. The command is a
+         * shell that reads {@link #REDIS_PASSWORD} from the container's own environment and hands {@code redis-server}
+         * its configuration on STDIN ({@code redis-server -}), through the image's entrypoint where the image has one,
+         * so the server still drops to the redis user. Every create and every start of the container runs it again
+         * from the environment the container was created with: the instance's stored one.
          */
-        public @Nullable String containerCommandTemplate() {
-            return this == REDIS ? "redis-server --requirepass {{REDIS_PASSWORD}}" : null;
+        public @Nullable List<String> containerCommand() {
+            return this == REDIS ? List.of("sh", "-c", REDIS_START_SCRIPT, "hohenheim-redis") : null;
         }
+
+        /**
+         * The redis container's {@code sh -c} body: the password in {@link #REDIS_PASSWORD}, written as a quoted
+         * config value (a backslash and a double quote escaped, the config grammar's only two) on the server's stdin.
+         */
+        static final String REDIS_START_SCRIPT =
+            "if command -v docker-entrypoint.sh >/dev/null 2>&1; then set -- docker-entrypoint.sh; else set --; fi\n"
+            + "pw=$(printf '%s' \"$" + REDIS_PASSWORD + "\" | sed 's/[\\\\\"]/\\\\&/g')\n"
+            + "exec \"$@\" redis-server - <<HOHENHEIM_REDIS\n"
+            + "requirepass \"$pw\"\n"
+            + "HOHENHEIM_REDIS";
 
         /**
          * The tool + args that dump this engine to stdout as text (SQL).
@@ -374,6 +405,17 @@ public class ManagedDatabase {
             + " printf \"password: '%s'\\n\" \"$pw\" > \"$d/auth.yaml\";";
 
         /**
+         * The shell fragment making {@code $d} a private (0700) directory that is removed when the script ends: by its
+         * own exit, a failure included, or by a hangup, an interrupt or a termination.
+         *
+         * AIDEV-NOTE: an EXIT trap alone does not run when a signal kills the shell, which left the directory and the
+         * password file in it behind in the engine container's /tmp. Each signal's trap exits instead, and that exit
+         * runs the EXIT trap.
+         */
+        static final String PRIVATE_DIRECTORY = "d=$(mktemp -d) || exit 1; trap 'rm -rf \"$d\"' EXIT;"
+            + " trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM;";
+
+        /**
          * The command dumping one Mongo database into {@code <directory>/dump.archive}: sh -c
          * body, $1 the private directory (already created), $2 user, $3 database; the
          * password via {@link #dumpEnv}.
@@ -421,8 +463,8 @@ public class ManagedDatabase {
          * @throws UnsupportedOperationException for redis, whose restore is an RDB swap
          * @throws IllegalArgumentException when the role fails {@link #isLogicalIdentifier}
          */
-        List<String> restoreFromStdinCommand(String user, String database, long bytes,
-                                             @Nullable String ownerRole) {
+        public List<String> restoreFromStdinCommand(String user, String database, long bytes,
+                                                    @Nullable String ownerRole) {
             if (ownerRole != null && !isLogicalIdentifier(ownerRole)) {
                 throw new IllegalArgumentException("Not a restorable owner role: '" + ownerRole + "'");
             }
@@ -436,8 +478,8 @@ public class ManagedDatabase {
                 // and --nsInclude keeps a restore on a SHARED engine inside this one
                 // database whatever else an uploaded archive may carry. A bare --archive
                 // reads stdin. The password reaches mongorestore through a --config file
-                // in a private directory removed on exit, never through its argv.
-                case MONGO -> "set -e; d=$(mktemp -d); trap 'rm -rf \"$d\"' EXIT; "
+                // in a private directory removed on exit or on a signal, never through its argv.
+                case MONGO -> "set -e; " + PRIVATE_DIRECTORY + " "
                     + MONGO_AUTH_FILE
                     + " head -c \"$1\" | mongorestore --config=\"$d/auth.yaml\" --username \"$2\""
                     + " --authenticationDatabase admin --drop --nsInclude=\"$3.*\" --archive";
@@ -449,7 +491,7 @@ public class ManagedDatabase {
         }
 
         /** Env for {@link #restoreFromStdinCommand}: the password, never in argv of the exec. */
-        List<String> restoreEnv(String password) {
+        public List<String> restoreEnv(String password) {
             return dumpEnv(password);
         }
 
@@ -492,7 +534,10 @@ public class ManagedDatabase {
         /** MySQL's superuser name: the one MYSQL_USER may not name. */
         static final String MYSQL_ROOT = "root";
 
-        /** The env variable every logical-database script reads the NEW user's password from. */
+        /**
+         * The env variable every credential script reads the NEW password from: a logical user's on a shared engine,
+         * a dedicated engine's own on a rotation ({@link #rotateOwnCommand}).
+         */
         public static final String LOGICAL_PASSWORD = "HOHENHEIM_LOGICAL_PASSWORD";
 
         /** The longest logical database name, user or password the scripts accept. */
@@ -507,6 +552,57 @@ public class ManagedDatabase {
         /** The shell-picking prefix every mongo script shares (mongosh on 5.0+, legacy mongo below). */
         static final String MONGO_SHELL_PICK =
             "if command -v mongosh >/dev/null 2>&1; then shell=mongosh; else shell=mongo; fi;";
+
+        /**
+         * What a mongo root script prints last when every statement ran. The script spells it in two halves, so a
+         * shell echoing the script's source (a syntax error's code frame) can never print it whole.
+         */
+        static final String MONGO_DONE = "hohenheim-ok";
+
+        /** The prefix of each line a mongo root script answers with; the script prints only those lines on success. */
+        static final String MONGO_ANSWER = "hohenheim-answer";
+
+        /** The client-picking prefix of the mysql scripts that must also run on a mariadb image (no mysql binary). */
+        static final String MYSQL_CLIENT_PICK =
+            "if command -v mysql >/dev/null 2>&1; then client=mysql; else client=mariadb; fi\n";
+
+        /**
+         * An {@code sh -c} body running ONE line of JavaScript as the engine root: $1 the port, $2 the root user, the
+         * root password in {@link #MONGO_PROBE_PASSWORD}. On success it prints what the line printed through
+         * {@code print('hohenheim' + '-answer ' + value)}, one value per line, and nothing else.
+         *
+         * AIDEV-NOTE: NO password rides the shell's argv. The JavaScript reaches the shell on STDIN, from a
+         * here-document the outer shell expands, and the root authenticates INSIDE it ({@code db.auth}) instead of
+         * through {@code --password}, which put the expanded root password in the engine container's process table
+         * for as long as the shell ran. The root password is never spelled into the JavaScript either: mongosh reads it
+         * from its own environment ({@code process.env}) and nothing touches the disk; only the legacy {@code mongo}
+         * shell (4.4, no process object) reads it with {@code cat()} from a 0600 file in a private directory
+         * ({@link #PRIVATE_DIRECTORY}) the script removes on exit or on a signal. Proven against mongo:7 and mongo:4.4
+         * with a password holding quotes and a dollar sign.
+         *
+         * AIDEV-NOTE: the line is ONE line on purpose: mongosh evaluates stdin line by line and goes on after a
+         * failed line, so an authentication failure must abort the very line that holds the work. A script read
+         * from stdin does not reliably fail its exit code, so success is the exit code AND {@link #MONGO_DONE}.
+         */
+        static String mongoRootScript(String javascript) {
+            return MONGO_SHELL_PICK
+                + " if [ \"$shell\" = mongo ]; then " + PRIVATE_DIRECTORY
+                + " (umask 077; printf '%s' \"$" + MONGO_PROBE_PASSWORD + "\" > \"$d/root\") || exit 1; fi\n"
+                + "out=$(\"$shell\" --host 127.0.0.1 --port \"$1\" --quiet 2>&1 <<HOHENHEIM_JS\n"
+                + "var hohenheimRoot = typeof process === 'object' ? process.env." + MONGO_PROBE_PASSWORD
+                + " : cat('$d/root'); if (!db.getSiblingDB('admin').auth('$2', hohenheimRoot)) {"
+                + " throw new Error('hohenheim: the engine root could not authenticate'); } "
+                + javascript + " print('hohenheim' + '-ok');\n"
+                + "HOHENHEIM_JS\n"
+                + ") || { printf '%s\\n' \"$out\"; exit 1; }\n"
+                + "case \"$out\" in *" + MONGO_DONE + "*) ;; *) printf '%s\\n' \"$out\"; exit 1 ;; esac\n"
+                + "printf '%s\\n' \"$out\" | sed -n 's/^.*" + MONGO_ANSWER + " //p'";
+        }
+
+        /** The JavaScript expression a mongo root script prints {@code value} with. */
+        static String mongoAnswer(String value) {
+            return "print('hohenheim' + '-answer ' + " + value + ");";
+        }
 
         // -- logical databases on a shared engine -----------------------------------
 
@@ -666,14 +762,58 @@ public class ManagedDatabase {
          * dump carry it, plus the new user's password under {@link #LOGICAL_PASSWORD}.
          */
         public List<String> logicalEnv(String rootPassword, @Nullable String userPassword) {
-            List<String> env = new java.util.ArrayList<>(switch (this) {
-                case MONGO -> readyEnv(rootPassword);
-                case MYSQL, POSTGRES -> dumpEnv(rootPassword);
-                case REDIS -> throw noLogical();
-            });
+            if (!supportsLogicalDatabases()) {
+                throw noLogical();
+            }
+            List<String> env = new ArrayList<>(rootEnv(rootPassword));
             if (userPassword != null) {
                 env.add(LOGICAL_PASSWORD + "=" + userPassword);
             }
+            return env;
+        }
+
+        /** The engine root's password as each engine's client reads it from its environment. */
+        private List<String> rootEnv(String rootPassword) {
+            return switch (this) {
+                case MONGO, REDIS -> readyEnv(rootPassword);
+                case MYSQL, POSTGRES -> dumpEnv(rootPassword);
+            };
+        }
+
+        /**
+         * The command that sets a DEDICATED engine's own credential to the password in {@link #LOGICAL_PASSWORD},
+         * run inside it as its root with the current password ({@link #rotateEnv}); idempotent.
+         *
+         * AIDEV-NOTE: a dedicated engine was initialised ONCE from its environment ({@link #env}, {@link #secretEnv}),
+         * so its password lives in the data directory, and each engine holds it in its own place: postgres's
+         * superuser IS the record's user; mysql gave root (localhost and %) and the record's user (MYSQL_USER) the one
+         * password, all three change together; mongo's record user is the root in {@code admin}; redis has only
+         * {@code requirepass}, which CONFIG SET changes in the running process and the next container start takes
+         * from the container's environment ({@link #containerCommand}), a create from the instance's stored one. The new
+         * password reaches every client on stdin, the current one through the environment, never an argument.
+         *
+         * @param rootUser the record's user, the engine's root (postgres, mongo) or MYSQL_USER (mysql, unless root)
+         * @throws IllegalArgumentException when the user fails {@link #isLogicalIdentifier}: it is spelled into
+         *         SQL and JavaScript (redis has no user)
+         */
+        public List<String> rotateOwnCommand(String rootUser) {
+            if (credentialNamesUser() && !isLogicalIdentifier(rootUser)) {
+                throw new IllegalArgumentException("Not a rotatable user for " + this + ": '" + rootUser
+                    + "' (allowed: [A-Za-z0-9._-], at most " + LOGICAL_IDENTIFIER_MAX + ")");
+            }
+            return switch (this) {
+                case POSTGRES -> List.of("sh", "-c", POSTGRES_ROTATE_SCRIPT, "hohenheim-rotate", rootUser);
+                case MYSQL -> List.of("sh", "-c", MYSQL_ROTATE_SCRIPT, "hohenheim-rotate", rootUser);
+                case MONGO -> List.of("sh", "-c", MONGO_ROTATE_SCRIPT, "hohenheim-rotate", String.valueOf(port),
+                    rootUser);
+                case REDIS -> List.of("sh", "-c", REDIS_ROTATE_SCRIPT, "hohenheim-rotate", String.valueOf(port));
+            };
+        }
+
+        /** Env for {@link #rotateOwnCommand}: the current root password and the new one, never in argv. */
+        public List<String> rotateEnv(String currentPassword, String newPassword) {
+            List<String> env = new ArrayList<>(rootEnv(currentPassword));
+            env.add(LOGICAL_PASSWORD + "=" + newPassword);
             return env;
         }
 
@@ -695,44 +835,61 @@ public class ManagedDatabase {
         }
 
         /**
-         * sh -c body; $1 port, $2 root user, $3 database, $4 user; passwords via env.
-         *
-         * AIDEV-NOTE: the JavaScript reaches the shell on STDIN, from a here-document the outer shell expands, never
-         * through {@code --eval}: an argument would put the expanded new password into the shell's argv, readable in
-         * the engine container's process table (the legacy {@code mongo} shell cannot read an env variable itself).
-         * A script read from stdin does not reliably fail its exit code, so success is the exit code AND the marker
-         * the last statement prints. The root password still rides {@code --password}; neither shell reads it from
-         * the environment.
+         * sh -c body; $1 port, $2 root user, $3 database, $4 user; passwords via env. The new user's password is
+         * spelled into the JavaScript the script reads on stdin ({@link #mongoRootScript}), which the logical
+         * identifier rule makes safe; never an argument.
          */
-        static final String MONGO_CREATE_SCRIPT = MONGO_SHELL_PICK
-            + " out=$(\"$shell\" --host 127.0.0.1 --port \"$1\" --username \"$2\""
-            + " --password \"$" + MONGO_PROBE_PASSWORD + "\" --authenticationDatabase admin"
-            + " --quiet 2>&1 <<HOHENHEIM_JS\n"
-            + "var target = db.getSiblingDB('$3'); var roles = [{role: 'dbOwner', db: '$3'}];"
+        static final String MONGO_CREATE_SCRIPT = mongoRootScript(
+            "var target = db.getSiblingDB('$3'); var roles = [{role: 'dbOwner', db: '$3'}];"
             + " if (target.getUser('$4')) { target.updateUser('$4', {pwd: '$" + LOGICAL_PASSWORD + "', roles: roles}); }"
-            + " else { target.createUser({user: '$4', pwd: '$" + LOGICAL_PASSWORD + "', roles: roles}); }"
-            + " print('hohenheim-ok');\n"
-            + "HOHENHEIM_JS\n"
-            + ") || { printf '%s\\n' \"$out\"; exit 1; }\n"
-            + "printf '%s\\n' \"$out\"\n"
-            + "case \"$out\" in *hohenheim-ok*) ;; *) exit 1 ;; esac";
+            + " else { target.createUser({user: '$4', pwd: '$" + LOGICAL_PASSWORD + "', roles: roles}); }");
 
         /** sh -c body; $1 port, $2 root user, $3 database, $4 user, $5 drop data (1/0). */
-        static final String MONGO_DROP_SCRIPT = MONGO_SHELL_PICK
-            + " exec \"$shell\" --host 127.0.0.1 --port \"$1\" --username \"$2\""
-            + " --password \"$" + MONGO_PROBE_PASSWORD + "\" --authenticationDatabase admin"
-            + " --quiet --eval \"var target = db.getSiblingDB('$3');"
-            + " if (target.getUser('$4')) { target.dropUser('$4'); }"
-            + " if ('$5' === '1') { target.dropDatabase(); } print('hohenheim-ok');\"";
+        static final String MONGO_DROP_SCRIPT = mongoRootScript(
+            "var target = db.getSiblingDB('$3'); if (target.getUser('$4')) { target.dropUser('$4'); }"
+            + " if ('$5' === '1') { target.dropDatabase(); }");
 
         /** sh -c body; $1 port, $2 root user, $3 database. */
-        static final String MONGO_FINGERPRINT_SCRIPT = MONGO_SHELL_PICK
-            + " exec \"$shell\" --host 127.0.0.1 --port \"$1\" --username \"$2\""
-            + " --password \"$" + MONGO_PROBE_PASSWORD + "\" --authenticationDatabase admin"
-            + " --quiet --eval \"var r = db.getSiblingDB('$3').runCommand({dbHash: 1});"
+        static final String MONGO_FINGERPRINT_SCRIPT = mongoRootScript(
+            "var r = db.getSiblingDB('$3').runCommand({dbHash: 1});"
             + " var names = Object.keys(r.collections || {}).sort(); var out = [];"
-            + " for (var i = 0; i < names.length; i++) { out.push(names[i] + '='"
-            + " + r.collections[names[i]]); } print(out.join(' ') + ' md5=' + r.md5);\"";
+            + " for (var i = 0; i < names.length; i++) { out.push(names[i] + '=' + r.collections[names[i]]); }"
+            + " " + mongoAnswer("out.join(' ') + ' md5=' + r.md5"));
+
+        /** sh -c body; $1 port, $2 root user (the record's own on a dedicated engine); the new password via env. */
+        static final String MONGO_ROTATE_SCRIPT = mongoRootScript(
+            "db.getSiblingDB('admin').changeUserPassword('$2', '$" + LOGICAL_PASSWORD + "');");
+
+        /** sh -c body; $1 the superuser, the record's own; PGPASSWORD + LOGICAL_PASSWORD via env, the SQL on stdin. */
+        static final String POSTGRES_ROTATE_SCRIPT = "set -e\n"
+            + "psql -v ON_ERROR_STOP=1 -U \"$1\" -d postgres <<HOHENHEIM_SQL\n"
+            + "ALTER ROLE \"$1\" WITH PASSWORD '$" + LOGICAL_PASSWORD + "';\n"
+            + "HOHENHEIM_SQL";
+
+        /**
+         * sh -c body; $1 the record's user (MYSQL_USER, or root itself); MYSQL_PWD (root's current password) +
+         * LOGICAL_PASSWORD via env, the statements on stdin. The image creates root at localhost and, unless
+         * MYSQL_ROOT_HOST says otherwise, at %; IF EXISTS leaves out the one it did not create.
+         */
+        static final String MYSQL_ROTATE_SCRIPT = "set -e\n"
+            + MYSQL_CLIENT_PICK
+            + "if [ \"$1\" = " + MYSQL_ROOT + " ]; then own=; else own=\"ALTER USER '$1'@'%' IDENTIFIED BY '$"
+            + LOGICAL_PASSWORD + "';\"; fi\n"
+            + "\"$client\" -u " + MYSQL_ROOT + " <<HOHENHEIM_SQL\n"
+            + "$own ALTER USER IF EXISTS '" + MYSQL_ROOT + "'@'localhost' IDENTIFIED BY '$" + LOGICAL_PASSWORD + "';"
+            + " ALTER USER IF EXISTS '" + MYSQL_ROOT + "'@'%' IDENTIFIED BY '$" + LOGICAL_PASSWORD + "';\n"
+            + "HOHENHEIM_SQL";
+
+        /**
+         * sh -c body; $1 port; REDISCLI_AUTH (the current password) + LOGICAL_PASSWORD via env, the command on stdin.
+         * redis-cli exits zero on an error reply, so the one success is the reply {@code OK}.
+         */
+        static final String REDIS_ROTATE_SCRIPT = "out=$(redis-cli -p \"$1\" 2>&1 <<HOHENHEIM_REDIS\n"
+            + "CONFIG SET requirepass $" + LOGICAL_PASSWORD + "\n"
+            + "HOHENHEIM_REDIS\n"
+            + ") || { printf '%s\\n' \"$out\"; exit 1; }\n"
+            + "printf '%s\\n' \"$out\"\n"
+            + "[ \"$out\" = OK ]";
 
         /**
          * sh -c body; $1 root user, $2 database, $3 user, $4 the GRANT pattern of the
@@ -883,11 +1040,9 @@ public class ManagedDatabase {
             + " ('pg_catalog', 'information_schema') ORDER BY 1\""
             + " | psql -v ON_ERROR_STOP=1 -U \"$1\" -d \"$2\" -tA";
 
-        /** {@code sh -c} body: $1 = port, $2 = user; picks whichever shell the image has. */
-        static final String MONGO_READY_SCRIPT = MONGO_SHELL_PICK
-            + " exec \"$shell\" --host 127.0.0.1 --port \"$1\" --username \"$2\""
-            + " --password \"$" + MONGO_PROBE_PASSWORD + "\" --authenticationDatabase admin"
-            + " --quiet --eval 'db.runCommand({ ping: 1 }).ok'";
+        /** {@code sh -c} body: $1 = port, $2 = user; picks whichever shell the image has and prints the ping's ok. */
+        static final String MONGO_READY_SCRIPT = mongoRootScript(
+            mongoAnswer("db.getSiblingDB('admin').runCommand({ ping: 1 }).ok"));
 
         /**
          * The STDOUT text a successful readiness probe must contain, or null when this

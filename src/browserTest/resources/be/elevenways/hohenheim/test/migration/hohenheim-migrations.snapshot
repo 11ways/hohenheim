@@ -160,3 +160,9 @@ table migration:be.elevenways.hohenheim@2026_10_23_000001
   op add_column:release_operations:spec_snapshot|text|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null
   op add_column:release_operations:triggered_by_kind|string|null=true|uniq=false|pk=false|auto=false|def=none|len=100|prec=null,null
   op add_column:release_operations:triggered_by|uuid|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null
+table migration:be.elevenways.hohenheim@2026_10_24_000001
+  checksum f748bf2bb0a8cac206a213da13be24122eab2c85392c3c892ae93b99b91b888e
+  class be.elevenways.hohenheim.migration.M003_CredentialGenerations
+  name credential_generations
+  op add_column:instance_databases:deployed_generation|integer|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null
+  op add_column:managed_databases:credential_generation|integer|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null

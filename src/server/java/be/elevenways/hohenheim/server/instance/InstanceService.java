@@ -289,6 +289,9 @@ public final class InstanceService {
                                                       @NonNull DeployTrigger trigger,
                                                       @Nullable RestoreVolumes restoreVolumes) {
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimCapabilities.POWER);
+        // Read BEFORE resolve derives the environment (InstanceDatabaseLinks.credentialGenerations says why), and
+        // recorded on the attachments once the workload is up: what its health compares a password change against.
+        Map<Integer, Integer> credentials = InstanceDatabaseLinks.credentialGenerations(instanceId);
         Resolved resolved = resolve(instanceId);
         resolved.requireImage();
         // The trigger policy for every kind that owns a container directly -- a preview
@@ -403,6 +406,7 @@ public final class InstanceService {
             // The published port is fresh (loopback publications are ephemeral), so any
             // generated SRV rows riding this proxy re-reconcile now.
             GameDomains.afterInstanceDeploy(instanceId);
+            InstanceDatabaseLinks.stampDeployed(credentials);
             recordPower(instanceId, HohenheimActivityAction.DEPLOYED, resolved);
             return status;
         } catch (IOException e) {

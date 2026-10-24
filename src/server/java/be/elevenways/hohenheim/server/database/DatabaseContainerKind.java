@@ -161,11 +161,18 @@ public final class DatabaseContainerKind implements InstanceKindHandler {
         PortPublication publication =
             new PortPublication(engine.port, PortPublication.TCP, false, null, null);
 
-        return ContainerSettings.spec(instanceId, image, settings, defaultFootprintMb(settings), engine.hardening())
+        InstanceSpec.Builder spec = ContainerSettings.spec(instanceId, image, settings, defaultFootprintMb(settings),
+                engine.hardening())
             .volumes(volumes)
             .publication(publication)
-            .tmpfs(tmpfs)
-            .build();
+            .tmpfs(tmpfs);
+        // The engine's own command wins over a "command" an older controller stored in the settings (redis's used to
+        // spell its password into the container's Cmd), so a restart of such an instance already runs without it.
+        List<String> command = engine.containerCommand();
+        if (command != null) {
+            spec.command(command);
+        }
+        return spec.build();
     }
 
     /**

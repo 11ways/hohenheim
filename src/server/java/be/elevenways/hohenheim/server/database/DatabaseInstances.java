@@ -583,11 +583,8 @@ public final class DatabaseInstances {
         settings.put("data_volume", host.ephemeral() ? "" : host.dataVolume());
         // No environment_variables: the engine's WHOLE environment (the root user and the
         // init database as well as the passwords) rides the secret lane, see
-        // writeEngineEnvironment.
-        String command = engine.containerCommandTemplate();
-        if (command != null) {
-            settings.put("command", command);
-        }
+        // writeEngineEnvironment. No command either: the kind takes the engine's own
+        // (ManagedDatabase.Engine.containerCommand), which no setting may carry a secret into.
         if (host.limits().memoryMb() != null) {
             settings.put(InstanceKindFields.MEMORY_LIMIT_MB, host.limits().memoryMb());
         }
@@ -610,6 +607,23 @@ public final class DatabaseInstances {
      */
     private static void writeEngineEnvironment(int instanceId, @NonNull EngineHost host) {
         new InstanceVariables().storeSecretEnvironment(instanceId, engineEnvironment(host));
+    }
+
+    /**
+     * Rewrite the stored environment of the host's engine instance from {@code host}: what its next container create
+     * starts from. A password change of a dedicated engine calls it once the engine took the new password, so a
+     * restart (which recreates the container) never brings back the old one; a deploy writes the same environment
+     * itself from the record.
+     *
+     * @return false when the host owns no engine instance, so there is nothing to rewrite
+     */
+    public static boolean storeEngineEnvironment(@NonNull EngineHost host) {
+        Row instance = ownedBy(host);
+        if (instance == null) {
+            return false;
+        }
+        writeEngineEnvironment(instance.get(InstanceModel.ID), host);
+        return true;
     }
 
     /**

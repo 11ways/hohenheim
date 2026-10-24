@@ -16330,6 +16330,20 @@
     "text": "The configuration changed after the running release was built. Deploy to make the change live.",
     "scope": "app_health"
   },
+  "credentials_not_live": [
+    {
+      "text": "Database password not live yet",
+      "scope": "app_health"
+    },
+    {
+      "text": "{$name} runs with an old database password",
+      "scope": "attention_title"
+    }
+  ],
+  "credentials_not_live_detail": {
+    "text": "The password of database {$database} changed after this workload was started, so it still connects with the old one, which the database refuses. Restart it to give it the new password.",
+    "scope": "app_health"
+  },
   "mark_kept": {
     "text": "Kept for rollback",
     "scope": "deployments"
@@ -16715,17 +16729,15 @@
   "finish_old_engine": {"text": "Finish removing the old engine", "scope": "database"},
   "finish_old_engine_hint": {"text": "Removes the dedicated engine a move onto a shared engine could not remove; the database itself stays.", "scope": "database"},
   "change_password": {"text": "Change password", "scope": "database"},
-  "change_password_hint": {"text": "Sets a new password on this database's user inside its engine; apps that use it get it at their next deploy.", "scope": "database"},
-  "change_password_confirm": {"text": "Change the password of '{$name}'? The engine takes the new password at once. Apps that use it keep the old one until their next deploy, and connections they open meanwhile are refused.", "scope": "database"},
-  "change_password_confirm_generic": {"text": "Change the password of this database? The engine takes the new password at once. Apps that use it keep the old one until their next deploy, and connections they open meanwhile are refused.", "scope": "database"},
+  "change_password_hint": {"text": "Sets a new password inside this database's engine; apps that use it get it at their next deploy or restart.", "scope": "database"},
+  "change_password_confirm": {"text": "Change the password of '{$name}'? The engine takes the new password at once. Apps that use it keep the old one until their next deploy or restart, and connections they open meanwhile are refused.", "scope": "database"},
+  "change_password_confirm_generic": {"text": "Change the password of this database? The engine takes the new password at once. Apps that use it keep the old one until their next deploy or restart, and connections they open meanwhile are refused.", "scope": "database"},
   "new_password": {"text": "New password", "scope": "database"},
   "new_password_help": {"text": "Leave it empty to generate one. Letters, digits, dot, underscore and dash, {$minimum :integer} to {$maximum :integer} characters.", "scope": "database"},
-  "password_changed": {"text": "Changed the password of {$name}. Apps that use it get the new one at their next deploy.", "scope": "database"},
-  "password_dedicated": {"text": "A database with its own engine keeps the password it was created with; move it to a shared engine to change it.", "scope": "database"},
+  "password_changed": {"text": "Changed the password of {$name}. Apps that use it get the new one at their next deploy or restart.", "scope": "database"},
   "password_not_active": {"text": "Only a running database can get a new password.", "scope": "database"},
   "password_not_serving": {"text": "Its password cannot be changed now. {$reason}.", "scope": "database"},
   "change_database_password": {"text": "{$actor} changed the password of database {$subject}", "scope": "hohenheim", "target": "happened"},
-  "database_password_dedicated": {"text": "A database with its own engine keeps the password it was created with; move it to a shared engine to change it", "scope": "violations"},
   "database_password_failed": {"text": "Changing the password of '{$name}' failed: {$reason}", "scope": "violations"},
   "finish_old_engine_done": {"text": "Removed the old engine of {$name}", "scope": "database"},
   "act_finish_old_engine": {"text": "Open {$name} and finish removing its old engine", "scope": "attention_action"},

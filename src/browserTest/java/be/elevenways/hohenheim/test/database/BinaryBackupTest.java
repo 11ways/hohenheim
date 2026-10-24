@@ -197,8 +197,8 @@ class BinaryBackupTest {
     }
 
     /**
-     * A redis-cli that AUTHENTICATES. Managed redis containers run
-     * {@code redis-server --requirepass <password>} (ManagedDatabase.Engine.containerCommandTemplate), so
+     * A redis-cli that AUTHENTICATES. Managed redis containers require a password
+     * (ManagedDatabase.Engine.containerCommand hands it to redis-server on stdin), so
      * an unauthenticated client gets "NOAUTH Authentication required" -- ON STDOUT, with
      * EXIT CODE 0. Every exitCode-only assertion around a redis-cli call therefore passed
      * while the command did nothing at all; only the round trip, which asserts a VALUE,

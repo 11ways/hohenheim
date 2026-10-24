@@ -305,13 +305,15 @@ public final class DatabaseParts {
     }
 
     /**
-     * Sets a new password on a shared database's user inside its engine, then stores it (DatabaseWrites.changePassword);
-     * demands {@code manage} on the record, which an operator holds on every one. Attached apps get it at their next
-     * deploy: the stored row is part of an application's release fingerprint, so its page asks for that deploy.
+     * Sets a new password inside the engine serving the database (a shared database's user, a dedicated engine's own
+     * credential), then stores it (DatabaseWrites.changePassword); demands {@code manage} on the record, which an
+     * operator holds on every one. Attached workloads get it at their next deploy or restart: an application's page
+     * asks for that deploy (the stored row is part of its release fingerprint), any other workload's for a restart
+     * (its attachment's deployed credential generation falls behind the database's).
      *
-     * AIDEV-NOTE: synchronous, not a background run: the engine work is ONE exec of the provisioning re-credential
-     * command, as bounded as the logical drop a delete runs inline. It spends hh_db_io, the budget of the verbs that
-     * exec inside a managed database's engine.
+     * AIDEV-NOTE: synchronous, not a background run: the engine work is ONE exec of a credential script, as bounded as
+     * the logical drop a delete runs inline. It spends hh_db_io, the budget of the verbs that exec inside a managed
+     * database's engine.
      */
     public static final Operation<Row, PasswordInput, Void> CHANGE_PASSWORD =
         Operation.declare(HohenheimIds.id("change_database_password"))
@@ -749,18 +751,10 @@ public final class DatabaseParts {
             .build();
     }
 
-    /** @return per database: why its password cannot be changed now (dedicated, or not serving), null where it can */
+    /** @return per database: why its password cannot be changed now (not serving), null where it can */
     static @NonNull List<@Nullable Microcopy> passwordUnavailable(@NonNull List<? extends Row> databases) {
-        Iterator<Microcopy> notServing = whileNotServing(databases,
-            HohenheimMicrocopy.DATABASE.of("password_not_active"),
-            HohenheimMicrocopy.DATABASE.of("password_not_serving")).iterator();
-        List<Microcopy> reasons = new ArrayList<>(databases.size());
-        for (Row database : databases) {
-            Microcopy serving = notServing.next();
-            reasons.add(DatabaseModel.isShared(database) ? serving
-                : HohenheimMicrocopy.DATABASE.of("password_dedicated"));
-        }
-        return reasons;
+        return whileNotServing(databases, HohenheimMicrocopy.DATABASE.of("password_not_active"),
+            HohenheimMicrocopy.DATABASE.of("password_not_serving"));
     }
 
     /** @return why this database cannot be backed up now, or null when it can */

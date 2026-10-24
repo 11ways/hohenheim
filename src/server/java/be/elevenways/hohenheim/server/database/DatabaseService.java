@@ -22,6 +22,7 @@ import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.UnfinishedDestroys;
+import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
@@ -49,6 +50,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -283,93 +285,188 @@ public class DatabaseService extends DatasourceScoped {
     }
 
     /**
-     * Set a SHARED record's user's password inside its engine through the provisioning re-credential command
-     * ({@link ManagedDatabase.Engine#createLogicalCommand}), then store it on the record.
+     * Set a record's password inside the engine serving it, then store it on the record: a SHARED record's user
+     * through the provisioning re-credential command ({@link ManagedDatabase.Engine#createLogicalCommand}), a
+     * DEDICATED engine's own credential through {@link ManagedDatabase.Engine#rotateOwnCommand}, whose engine
+     * instance's stored environment is then rewritten so its next container create starts from the new password.
+     * Either way the store bumps the record's credential generation, which attached workloads compare against.
      *
      * AIDEV-NOTE: the engine goes first, so a refusal BEFORE the command is dispatched (no serving engine, no handle)
-     * stores nothing. Once it is dispatched, ANY failure may leave the engine holding the new password: the create
-     * scripts run several statements and the password statement comes first, so a non-zero exit (a later CREATE
-     * DATABASE or REVOKE refused) does not mean the engine kept the old one, and a store failing after a clean exit
-     * certainly does. Every such failure is stamped on the record as an active record's failure reason
-     * (DatabaseAttention's "last operation failed" item) and refused, never swallowed; a later successful change
-     * clears it in the same save. Every failure text is redacted through the record's stored secrets plus the new
-     * password, which no stored row names yet; the unredacted cause is never chained.
+     * stores nothing. Once it is dispatched, a non-zero exit may leave the engine holding the new password: the
+     * scripts run several statements and the password statement comes first, so a later CREATE DATABASE or REVOKE
+     * refused does not mean the engine kept the old one. That failure is stamped on the record as an active record's
+     * failure reason (DatabaseAttention's "last operation failed" item) and refused, never swallowed; a later
+     * successful change clears it in the same save. After a clean exit the record and a dedicated engine instance's
+     * stored environment are written in ONE transaction, so a failing store writes neither, and the same command then
+     * sets the engine back to the password the record keeps; only when that fails too is the drift stamped, and for a
+     * dedicated record it says a restart is unsafe (the stored environment names the old password while the data
+     * directory, or redis's running process, holds the new one). Every failure text is redacted through the record's
+     * stored secrets plus the new password, which no stored row names yet; the unredacted cause is never chained.
      *
-     * AIDEV-NOTE: the exec and the store run under the engine's lock ({@link DatabaseEngines#underLock}), the record
-     * re-read and re-validated inside it, so two concurrent changes (or a change and a provisioning re-credential)
-     * cannot end with the engine holding one password and the record another.
+     * AIDEV-NOTE: no capture lane carries a dedicated engine's data, so no restore can put an older credential back
+     * under a record holding a newer one: the engine's data volume is the kind's {@code data_volume}, never a declared
+     * {@code volumes} entry, so a snapshot of the engine instance is refused ({@code snapshot_no_volumes}) and a backup
+     * captures none of its data, and a restore-to-new of the generated-only kind is refused. The database's own dump
+     * and restore move data, never the engine's users. A capture lane that ever covers that volume must record the
+     * credential generation and the password with it and put both back on restore.
+     *
+     * AIDEV-NOTE: the exec and the store run under ONE claim, the record re-read and re-validated inside it, so two
+     * concurrent changes (or a change and a provisioning re-credential, or a change and a restart of the engine)
+     * cannot end with the engine holding one password and the record another. A shared record holds its engine's lock
+     * ({@link DatabaseEngines#underLock}), the one provisioning re-credentials under; a dedicated record holds its
+     * engine instance's operation claim ({@link InstanceOperationLock}), the one every deploy, stop and restart of
+     * that container holds, queueing behind a running one.
      *
      * AIDEV-NOTE: the store runs in {@link TenantWrites#inAuthorizedOperation}: the operation already demanded
      * {@code manage} on this very record, and the tenant write invariant freezes every database column for a tenant,
-     * so without the scope the owner's own rotation would be refused as a column write.
+     * so without the scope the owner's own rotation would be refused as a column write. The engine instance's
+     * environment is the system's mirror of that record, written as the provisioning lane writes it.
      *
-     * @param password the new password, held here to {@link #requireNewLogicalCredentials}
-     * @throws Violations {@code database_password_dedicated} or a credential refusal
+     * @param password the new password, held here to {@link #requireNewLogicalCredentials} or
+     *                 {@link #requireNewOwnCredentials}
+     * @throws Violations a credential refusal, or the engine instance's claim refused
      * @throws IOException naming why, redacted
      */
     public void changePassword(int recordId, @NonNull String password) throws IOException {
         Row row = requireRecord(recordId);
-        Integer engineId = row.get(DatabaseModel.ENGINE_ID);
-        if (!DatabaseModel.isShared(row) || engineId == null) {
-            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("database_password_dedicated"));
+        if (DatabaseModel.isShared(row)) {
+            Integer engineId = row.get(DatabaseModel.ENGINE_ID);
+            if (engineId == null) {
+                throw new IOException("Database '" + row.get(DatabaseModel.NAME) + "' is shared but names no engine");
+            }
+            DatabaseEngines.underLock(engineId, () -> {
+                rotateLocked(recordId, engineId, password);
+                return null;
+            });
+            return;
         }
-        DatabaseEngines.underLock(engineId, () -> {
-            rotateLocked(recordId, engineId, password);
-            return null;
-        });
+        Row instance = query(() -> DatabaseInstances.owned(recordId));
+        if (instance == null) {
+            throw new IOException("Managed database '" + row.get(DatabaseModel.NAME)
+                + "' is served by no engine instance yet; provision it before changing its password");
+        }
+        try {
+            InstanceOperationLock.production().exclusive((Integer) instance.get(InstanceModel.ID),
+                InstanceOperationLock.Contention.QUEUE, () -> {
+                    try {
+                        rotateLocked(recordId, null, password);
+                    } catch (IOException failed) {
+                        throw new UncheckedIOException(failed);
+                    }
+                });
+        } catch (UncheckedIOException failed) {
+            throw failed.getCause();
+        }
     }
 
-    /** The body of {@link #changePassword}, holding the lock of the engine the record named when it was read. */
-    private void rotateLocked(int recordId, int engineId, @NonNull String password) throws IOException {
+    /**
+     * The body of {@link #changePassword}, holding the claim of the engine the record named when it was read.
+     *
+     * @param engineId the shared engine whose lock is held, null for a dedicated record holding its instance's claim
+     */
+    private void rotateLocked(int recordId, @Nullable Integer engineId, @NonNull String password) throws IOException {
         Row row = requireRecord(recordId);
-        if (!DatabaseModel.isShared(row)) {
-            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("database_password_dedicated"));
-        }
         String name = row.get(DatabaseModel.NAME);
-        if (!Objects.equals(row.get(DatabaseModel.ENGINE_ID), engineId)) {
+        boolean shared = DatabaseModel.isShared(row);
+        if (shared != (engineId != null) || (shared && !Objects.equals(row.get(DatabaseModel.ENGINE_ID), engineId))) {
             throw new IOException("Database '" + name + "' moved to another engine while its password change waited;"
                 + " change it again");
         }
-        requireNewLogicalCredentials(row.get(DatabaseModel.DB_USER), password, row.get(DatabaseModel.DB_NAME));
+        if (shared) {
+            requireNewLogicalCredentials(row.get(DatabaseModel.DB_USER), password, row.get(DatabaseModel.DB_NAME));
+        } else {
+            requireNewOwnCredentials(engineOf(row), row.get(DatabaseModel.DB_USER), password);
+        }
         ConsoleRedaction.Secrets secrets = query(() -> ConsoleRedaction.secretsOfOwner(DatabaseModel.MODEL_ID,
             recordId)).and(credentialSecrets(password));
         EngineHost host;
         String handle;
         List<String> command;
+        List<String> env;
         try {
             host = query(() -> EngineHost.serving(row));
             handle = handleOf(row, host);
-            command = host.engine().createLogicalCommand(host.rootUser(), row.get(DatabaseModel.DB_NAME),
-                row.get(DatabaseModel.DB_USER));
+            if (shared) {
+                command = host.engine().createLogicalCommand(host.rootUser(), row.get(DatabaseModel.DB_NAME),
+                    row.get(DatabaseModel.DB_USER));
+                env = host.engine().logicalEnv(host.rootPassword(), password);
+            } else {
+                command = host.engine().rotateOwnCommand(host.rootUser());
+                env = host.engine().rotateEnv(host.rootPassword(), password);
+            }
         } catch (IOException | RuntimeException refused) {
             throw new IOException(ConsoleRedaction.redactWhole(HohenheimViolations.reasonOf(refused), secrets));
         }
+        String what = shared
+            ? "change the password of logical database '" + row.get(DatabaseModel.DB_NAME) + "'"
+            : "change the password of database '" + name + "'";
         try {
-            runLogical(host, handle, command, host.engine().logicalEnv(host.rootPassword(), password),
-                "change the password of logical database '" + row.get(DatabaseModel.DB_NAME) + "'");
-            TenantWrites.inAuthorizedOperation(() -> exec(() -> {
-                DatabaseModel model = model();
-                Row fresh = Objects.requireNonNull(model.findById(recordId), "the database record is gone");
-                fresh.set(DatabaseModel.DB_PASSWORD, password);
-                if (fresh.get(DatabaseModel.FAILURE_REASON) != null) {
-                    fresh.set(DatabaseModel.FAILURE_REASON, null);
-                }
-                model.save(fresh);
-            }));
+            runLogical(host, handle, command, env, what);
         } catch (IOException | RuntimeException failed) {
-            String reason = "Changing the password of '" + name + "' failed after the engine was asked to take it ("
-                + ConsoleRedaction.redactWhole(HohenheimViolations.reasonOf(failed), secrets)
+            throw drifted(recordId, row, secrets, "Changing the password of '" + name + "' failed after the engine was"
+                + " asked to take it (" + ConsoleRedaction.redactWhole(HohenheimViolations.reasonOf(failed), secrets)
                 + "); the engine may now hold the new password, so retry the rotation until the record and the"
-                + " engine agree";
-            try {
-                TenantWrites.inAuthorizedOperation(() -> setStatus(recordId,
-                    Objects.toString(row.get(DatabaseModel.STATUS), DatabaseModel.STATUS_ACTIVE), reason));
-            } catch (RuntimeException unstamped) {
-                Blast.log("DB: the password drift of", name, "could not be stamped either -",
-                    ConsoleRedaction.redactWhole(HohenheimViolations.reasonOf(unstamped), secrets));
-            }
-            throw new IOException(reason);
+                + " engine agree");
         }
+        try {
+            TenantWrites.inAuthorizedOperation(() -> exec(() -> model().getResolvedDatasource().withTransaction(
+                transaction -> storeRotated(recordId, shared, password))));
+        } catch (RuntimeException unstored) {
+            String why = ConsoleRedaction.redactWhole(HohenheimViolations.reasonOf(unstored), secrets);
+            String current = Objects.toString(row.get(DatabaseModel.DB_PASSWORD), "");
+            List<String> undo = shared ? host.engine().logicalEnv(host.rootPassword(), current)
+                : host.engine().rotateEnv(password, current);
+            try {
+                runLogical(host, handle, command, undo, "set the password of '" + name + "' back");
+            } catch (IOException | RuntimeException notUndone) {
+                throw drifted(recordId, row, secrets, "The engine of '" + name + "' took the new password but storing"
+                    + " it failed (" + why + "), and setting the engine back failed too ("
+                    + ConsoleRedaction.redactWhole(HohenheimViolations.reasonOf(notUndone), secrets) + "): the"
+                    + " engine holds the new password while the record keeps the old one"
+                    + (shared ? "" : " and so does the engine instance's stored environment, so restarting the"
+                        + " database is unsafe")
+                    + " until the rotation is retried");
+            }
+            throw new IOException("Changing the password of '" + name + "' failed while storing it (" + why
+                + "); the engine was set back to the password the record keeps, so nothing changed");
+        }
+    }
+
+    /**
+     * Store a password the engine took: the record one credential generation further and, for a dedicated record, its
+     * engine instance's stored environment. The caller holds ONE transaction around both, so a failure of either
+     * leaves neither written.
+     */
+    private static void storeRotated(int recordId, boolean shared, @NonNull String password) {
+        DatabaseModel model = model();
+        Row fresh = Objects.requireNonNull(model.findById(recordId), "the database record is gone");
+        fresh.set(DatabaseModel.DB_PASSWORD, password);
+        fresh.set(DatabaseModel.CREDENTIAL_GENERATION, DatabaseModel.credentialGenerationOf(fresh) + 1);
+        if (fresh.get(DatabaseModel.FAILURE_REASON) != null) {
+            fresh.set(DatabaseModel.FAILURE_REASON, null);
+        }
+        model.save(fresh);
+        if (!shared) {
+            EngineHost own = EngineHost.dedicated(fresh);
+            ExecutionIdentity.runAsSystem(HohenheimSystemPurposes.DATABASE_PROVISION,
+                () -> DatabaseInstances.storeEngineEnvironment(own));
+        }
+    }
+
+    /**
+     * Stamp a password change's drift on the record as an active record's failure reason and hand back the refusal
+     * saying it; a stamp that fails too is logged, never masking the refusal.
+     */
+    private IOException drifted(int recordId, @NonNull Row row, ConsoleRedaction.@NonNull Secrets secrets,
+                                @NonNull String reason) {
+        try {
+            TenantWrites.inAuthorizedOperation(() -> setStatus(recordId,
+                Objects.toString(row.get(DatabaseModel.STATUS), DatabaseModel.STATUS_ACTIVE), reason));
+        } catch (RuntimeException unstamped) {
+            Blast.log("DB: the password drift of", row.get(DatabaseModel.NAME), "could not be stamped either -",
+                ConsoleRedaction.redactWhole(HohenheimViolations.reasonOf(unstamped), secrets));
+        }
+        return new IOException(reason);
     }
 
     /** @return a credential and its URL-encoded spelling as redactable secrets; a value too short to redact is left out */
@@ -626,6 +723,25 @@ public class DatabaseService extends DatasourceScoped {
      */
     static void requireNewLogicalCredentials(String user, String password, String database) {
         requireLogicalNames(user, database);
+        requireNewPassword(password);
+    }
+
+    /**
+     * The rule for a DEDICATED engine's new password: the password as {@link #requireNewLogicalCredentials} holds it,
+     * and the user the rotation spells into SQL or JavaScript as a logical identifier where the engine names one
+     * ({@link ManagedDatabase.Engine#credentialNamesUser}).
+     *
+     * @throws Violations {@code database_logical_identifier} for the user, {@code database_logical_password}
+     */
+    static void requireNewOwnCredentials(ManagedDatabase.@NonNull Engine engine, String user, String password) {
+        if (engine.credentialNamesUser() && !ManagedDatabase.Engine.isLogicalIdentifier(user)) {
+            throw Violations.ofField(DatabaseModel.DB_USER.getName(), user, logicalIdentifierRefusal());
+        }
+        requireNewPassword(password);
+    }
+
+    /** @throws Violations {@code database_logical_password} for a password a new credential may not be */
+    private static void requireNewPassword(String password) {
         if (!ManagedDatabase.Engine.isNewLogicalPassword(password)) {
             throw Violations.ofField(DatabaseModel.DB_PASSWORD.getName(), "",
                 HohenheimMicrocopy.VIOLATIONS.of("database_logical_password")
@@ -906,6 +1022,45 @@ public class DatabaseService extends DatasourceScoped {
     }
 
     /**
+     * Run {@code work} with the record and its host read under the claim a password change of that record holds,
+     * when the credential the work authenticates with is the record's own: a DEDICATED record's engine instance claim,
+     * queueing behind a running change (or deploy, or restart), so a dump or a restore never authenticates with a
+     * password a rotation is replacing.
+     *
+     * AIDEV-NOTE: a SHARED record's dump and restore authenticate as the engine's root, whose password no record's
+     * change touches, so they take no claim: holding the engine's lock for a dump's whole length would stall every
+     * tenant's provisioning on that engine.
+     */
+    private <T> T underCredentialClaim(@NonNull Row row, @NonNull CredentialWork<T> work) throws IOException {
+        Integer recordId = row.get(DatabaseModel.ID);
+        Row instance = DatabaseModel.isShared(row) || recordId == null ? null
+            : query(() -> DatabaseInstances.owned(recordId));
+        if (instance == null) {
+            // Shared, or not served yet (the handle lookup refuses that by name).
+            return work.run(row, hostOf(row));
+        }
+        try {
+            return InstanceOperationLock.production().exclusive((Integer) instance.get(InstanceModel.ID),
+                InstanceOperationLock.Contention.QUEUE, () -> {
+                    try {
+                        Row current = requireRecord(recordId);
+                        return work.run(current, hostOf(current));
+                    } catch (IOException failed) {
+                        throw new UncheckedIOException(failed);
+                    }
+                });
+        } catch (UncheckedIOException failed) {
+            throw failed.getCause();
+        }
+    }
+
+    /** Work on a record with the host serving it, read under {@link #underCredentialClaim}. */
+    @FunctionalInterface
+    private interface CredentialWork<T> {
+        T run(@NonNull Row row, @NonNull EngineHost host) throws IOException;
+    }
+
+    /**
      * Back up a persisted database into {@code directory}, naming the file {@code baseName} plus
      * the engine's dump extension, and return the written path. Handles text (SQL) and binary
      * (RDB / mongodump archive) engines. A shared record dumps ONE logical database out of its
@@ -917,12 +1072,13 @@ public class DatabaseService extends DatasourceScoped {
     }
 
     private Path backupRowToFile(Row row, Path directory, String baseName) throws IOException {
-        EngineHost host = hostOf(row);
-        Files.createDirectories(directory);
-        Path target = directory.resolve(baseName + "." + host.engine().dumpExtension());
-        managedFor(host.serverId()).backupToFile(handleOf(row, host), host.engine(),
-            host.rootUser(), host.rootPassword(), row.get(DatabaseModel.DB_NAME), target);
-        return target;
+        return underCredentialClaim(row, (current, host) -> {
+            Files.createDirectories(directory);
+            Path target = directory.resolve(baseName + "." + host.engine().dumpExtension());
+            managedFor(host.serverId()).backupToFile(handleOf(current, host), host.engine(),
+                host.rootUser(), host.rootPassword(), current.get(DatabaseModel.DB_NAME), target);
+            return target;
+        });
     }
 
     /**
@@ -954,21 +1110,22 @@ public class DatabaseService extends DatasourceScoped {
      */
     public BackupStream backupStream(String name) throws IOException {
         Row row = requireWith(name, HohenheimCapabilities.BACKUPS);
-        EngineHost host = hostOf(row);
-        Path directory = Files.createTempDirectory("hohenheim-backup");
-        Path dump = directory.resolve(name + "." + host.engine().dumpExtension());
-        try {
-            managedFor(host.serverId()).backupToFile(handleOf(row, host), host.engine(),
-                host.rootUser(), host.rootPassword(), row.get(DatabaseModel.DB_NAME), dump);
-            long size = Files.size(dump);
-            InputStream content = Files.newInputStream(dump);
-            return new BackupStream(dump.getFileName().toString(),
-                host.engine().dumpContentType(), content, size);
-        } finally {
-            // Unlinked while (on success) still open: see BackupStream.
-            Files.deleteIfExists(dump);
-            Files.deleteIfExists(directory);
-        }
+        return underCredentialClaim(row, (current, host) -> {
+            Path directory = Files.createTempDirectory("hohenheim-backup");
+            Path dump = directory.resolve(name + "." + host.engine().dumpExtension());
+            try {
+                managedFor(host.serverId()).backupToFile(handleOf(current, host), host.engine(),
+                    host.rootUser(), host.rootPassword(), current.get(DatabaseModel.DB_NAME), dump);
+                long size = Files.size(dump);
+                InputStream content = Files.newInputStream(dump);
+                return new BackupStream(dump.getFileName().toString(),
+                    host.engine().dumpContentType(), content, size);
+            } finally {
+                // Unlinked while (on success) still open: see BackupStream.
+                Files.deleteIfExists(dump);
+                Files.deleteIfExists(directory);
+            }
+        });
     }
 
     /** Restore a dump file (text or binary) into a persisted database by name. */
@@ -987,10 +1144,12 @@ public class DatabaseService extends DatasourceScoped {
      * root IS the record's user, so it restores as itself.
      */
     private void restoreRowFromFile(Row row, Path source) throws IOException {
-        EngineHost host = hostOf(row);
-        managedFor(host.serverId()).restoreFromFile(handleOf(row, host), host.engine(),
-            host.rootUser(), host.rootPassword(), row.get(DatabaseModel.DB_NAME), source,
-            host.shared() ? row.get(DatabaseModel.DB_USER) : null);
+        underCredentialClaim(row, (current, host) -> {
+            managedFor(host.serverId()).restoreFromFile(handleOf(current, host), host.engine(),
+                host.rootUser(), host.rootPassword(), current.get(DatabaseModel.DB_NAME), source,
+                host.shared() ? current.get(DatabaseModel.DB_USER) : null);
+            return null;
+        });
     }
 
     /**

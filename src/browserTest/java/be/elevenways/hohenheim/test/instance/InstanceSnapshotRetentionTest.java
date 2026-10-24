@@ -2,10 +2,14 @@ package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceSnapshotModel;
+import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceSnapshots;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -479,6 +483,69 @@ class InstanceSnapshotRetentionTest {
         } catch (IOException failed) {
             throw new IllegalStateException(failed);
         }
+    }
+
+    /**
+     * An in-place restore on the volume lane recreates the workload with the environment derived from the attached
+     * database as it is NOW, so it records on the attachment the credential generation that environment carries, as
+     * a deploy does; a workload the restore leaves stopped is not reported as running behind a password change.
+     */
+    @Test
+    void aVolumeRestoreRecordsTheCredentialGenerationItsRecreatedWorkloadCarries() {
+        Db.run(datasource, () -> {
+            InstanceService service = new InstanceService();
+            InstanceSnapshots snapshots = new InstanceSnapshots();
+            Row database = Models.get(DatabaseModel.class).createEmptyRow();
+            database.set(DatabaseModel.NAME, "snap-credentials-db");
+            database.set(DatabaseModel.ENGINE, DatabaseModel.ENGINE_POSTGRES);
+            database.set(DatabaseModel.PLACEMENT, DatabaseModel.PLACEMENT_DEDICATED);
+            database.set(DatabaseModel.DB_NAME, "appdb");
+            database.set(DatabaseModel.DB_USER, "appuser");
+            database.set(DatabaseModel.DB_PASSWORD, "snapshot-secret-password-1");
+            database.set(DatabaseModel.SERVER_ID, hostId);
+            database.set(DatabaseModel.STATUS, DatabaseModel.STATUS_ACTIVE);
+            Models.get(DatabaseModel.class).save(database);
+            int databaseId = database.get(DatabaseModel.ID);
+            int instanceId = volumeInstanceRecord("snap-credentials", hostId);
+            Row link = Models.get(InstanceDatabaseModel.class).createEmptyRow();
+            link.set(InstanceDatabaseModel.INSTANCE_ID, instanceId);
+            link.set(InstanceDatabaseModel.DATABASE_ID, databaseId);
+            link.set(InstanceDatabaseModel.ENV_PREFIX, "DB");
+            Models.get(InstanceDatabaseModel.class).save(link);
+            try {
+                // 1. Deployed at generation 0 and captured; the capture hands the workload back through a deploy.
+                service.deploy(instanceId);
+                int snapshotId = snapshots.create(instanceId, "credentials");
+                assertThat(deployedGeneration(link)).as("step 1 anchor: deployed with generation 0").isZero();
+
+                // 2. Stopped, and the database's password changes twice: the attachment is behind.
+                service.stop(instanceId);
+                Models.get(DatabaseModel.class).find().where(DatabaseModel.ID.eq(databaseId))
+                    .assign(DatabaseModel.CREDENTIAL_GENERATION, 2).bypassBehaviours().updateAll();
+                assertThat(InstanceDatabaseLinks.staleCredentials(List.of(instanceId)))
+                    .as("step 2 anchor: the stopped workload reads as behind the change").containsOnlyKeys(instanceId);
+
+                // 3. The restore recreates it (left stopped, nothing deploys it) from the environment derived now:
+                //    the attachment records generation 2.
+                snapshots.restore(snapshotId);
+                assertThat((String) Models.get(InstanceModel.class).findById(instanceId).get(InstanceModel.STATUS))
+                    .as("step 3 anchor: the restore left it stopped").isEqualTo(InstanceModel.STATUS_STOPPED);
+                assertThat(deployedGeneration(link)).as("step 3: the recreated workload's generation is recorded")
+                    .isEqualTo(2);
+                assertThat(InstanceDatabaseLinks.staleCredentials(List.of(instanceId)))
+                    .as("step 3: and it no longer reads as behind").isEmpty();
+            } finally {
+                service.destroy(instanceId);
+                HardDeletes.byId(Models.get(InstanceDatabaseModel.class), link.get(InstanceDatabaseModel.ID));
+                HardDeletes.row(Models.get(DatabaseModel.class), database);
+            }
+        });
+    }
+
+    /** @return the generation the attachment last recorded */
+    private static int deployedGeneration(Row link) {
+        return InstanceDatabaseModel.deployedGenerationOf(Models.get(InstanceDatabaseModel.class)
+            .findById(link.get(InstanceDatabaseModel.ID)));
     }
 
     /** An instance of the VOLUME-snapshot fake kind, with one logical volume declared. */

@@ -391,7 +391,8 @@ class MigrationIntegrityTest {
         assertThat(found)
             .as("step 1: and the stream is the squashed baseline plus the migrations appended after it")
             .containsExactly("M001_HohenheimBaseline stream=" + HohenheimMigration.STREAM,
-                "M002_ReleaseAttribution stream=" + HohenheimMigration.STREAM);
+                "M002_ReleaseAttribution stream=" + HohenheimMigration.STREAM,
+                "M003_CredentialGenerations stream=" + HohenheimMigration.STREAM);
 
         // 2. The deployed high-water mark. Every migration at or below DEPLOYED_THROUGH is
         //    APPLIED somewhere, so its structural checksum is recorded in that install's

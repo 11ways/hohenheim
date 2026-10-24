@@ -21,6 +21,7 @@ import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
+import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
@@ -479,7 +480,7 @@ final class AppHealth {
         // cause its dashboard item folds under. An application's is its serving release's (ApplicationReleases).
         AttentionSubject root = status == InstanceStatus.ERROR ? WorkloadErrors.rootOf(runtime) : null;
         RecordHealth health = switch (status) {
-            case RUNNING -> changesNotLiveOr(instance, runningVerdict(facts.sitesByInstance.get(
+            case RUNNING -> changesNotLiveOr(instance, facts, runningVerdict(facts.sitesByInstance.get(
                 instance.get(InstanceModel.ID)), facts.sites, () -> facts.deployedAt(instance), delegated, viewer));
             // What stopped it, as its recorded cause says (the dashboard item's detail too), the failure's own message
             // as the band's technical line; a tenant reads the sentence without the daemon's own message.
@@ -547,13 +548,30 @@ final class AppHealth {
     }
 
     /**
-     * A running application whose saved configuration its serving release was not produced from says so, with Deploy
-     * as its fix: the change is stored, not live. Whatever the running verdict already flags speaks first.
+     * A running workload whose saved configuration is not what it runs says so, whatever the running verdict already
+     * flags speaking first. An application whose serving release was not produced from its saved configuration asks
+     * for Deploy: the change is stored, not live. Any other workload attached to a database whose password changed
+     * after it was deployed asks for Restart: it still connects with the old password, which the database refuses.
+     *
+     * AIDEV-NOTE: ONE notice per workload. An application's database password is part of its release fingerprint
+     * (ApplicationReleases.configPending), so its rotation already reads as changes not live; the attachment's
+     * credential generation (InstanceDatabaseLinks.staleCredentials) is the fact for every workload no release
+     * fingerprint covers, and is never asked of an application.
      */
-    private static @NonNull RecordHealth changesNotLiveOr(@NonNull Row instance, @NonNull RecordHealth running) {
+    private static @NonNull RecordHealth changesNotLiveOr(@NonNull Row instance, @NonNull InstanceFacts facts,
+                                                          @NonNull RecordHealth running) {
         InstanceKindHandler kind = InstanceKinds.handlerOf(instance);
-        if (running.tone() != HealthTone.OK || kind == null || !kind.releaseManaged()
-                || ApplicationReleases.deploying(instance.get(InstanceModel.ID))
+        if (running.tone() != HealthTone.OK || kind == null) {
+            return running;
+        }
+        if (!kind.releaseManaged()) {
+            Row database = facts.staleCredentialsOf(instance);
+            return database == null ? running : RecordHealth.attention(Headline.CREDENTIALS_NOT_LIVE.copy())
+                .detail(HohenheimMicrocopy.APP_HEALTH.of("credentials_not_live_detail")
+                    .withArg("database", database.get(DatabaseModel.NAME)))
+                .fixedBy(InstanceOperations.RESTART.id());
+        }
+        if (ApplicationReleases.deploying(instance.get(InstanceModel.ID))
                 || !ApplicationReleases.configPending(instance)) {
             return running;
         }
@@ -996,7 +1014,8 @@ final class AppHealth {
         INSTALL_FAILED("install_failed"),
         CANNOT_START("cannot_start"),
         NOT_RUNNING("not_running"),
-        CHANGES_NOT_LIVE("changes_not_live");
+        CHANGES_NOT_LIVE("changes_not_live"),
+        CREDENTIALS_NOT_LIVE("credentials_not_live");
 
         private final String key;
 
@@ -1082,12 +1101,13 @@ final class AppHealth {
 
     /**
      * Everything a page of instance verdicts reads: the sites serving each, those sites' own facts, the row whose
-     * status speaks for each one's runtime, and when each was last deployed (read once, and only when a healthy
-     * verdict asks).
+     * status speaks for each one's runtime, and when each was last deployed and which attached database's password
+     * each runs behind (both read once, and only when a healthy verdict asks).
      */
     private record InstanceFacts(@NonNull Map<Integer, List<Row>> sitesByInstance, @NonNull SiteFacts sites,
                                  @NonNull Map<Integer, Row> runtimes,
-                                 @NonNull Supplier<Map<Integer, Instant>> deploys) {
+                                 @NonNull Supplier<Map<Integer, Instant>> deploys,
+                                 @NonNull Supplier<Map<Integer, Row>> staleCredentials) {
 
         static @NonNull InstanceFacts of(@NonNull List<Row> instances) {
             return of(instances, null);
@@ -1101,9 +1121,12 @@ final class AppHealth {
                 serving.addAll(sites);
             }
             AtomicReference<Map<Integer, Instant>> deploys = new AtomicReference<>();
+            AtomicReference<Map<Integer, Row>> stale = new AtomicReference<>();
             return new InstanceFacts(sitesByInstance, SiteFacts.of(serving, access),
                 ApplicationReleases.runtimeRows(instances),
-                () -> deploys.updateAndGet(read -> read != null ? read : lastDeploys(instances)));
+                () -> deploys.updateAndGet(read -> read != null ? read : lastDeploys(instances)),
+                () -> stale.updateAndGet(read -> read != null ? read
+                    : InstanceDatabaseLinks.staleCredentials(idsOf(instances))));
         }
 
         /** @return the row whose status speaks for this instance's runtime, the instance itself when none other */
@@ -1116,11 +1139,13 @@ final class AppHealth {
             return this.deploys.get().get((Integer) instance.get(InstanceModel.ID));
         }
 
-        /**
-         * When each instance was last deployed: its last-finished succeeded release (an application) or build (a
-         * workspace, a git-sourced app), whichever finished later. A workload nothing ever built or released is absent.
-         */
-        private static @NonNull Map<Integer, Instant> lastDeploys(@NonNull List<Row> instances) {
+        /** @return the first attached database whose password this instance was deployed before, null for none */
+        @Nullable Row staleCredentialsOf(@NonNull Row instance) {
+            return this.staleCredentials.get().get((Integer) instance.get(InstanceModel.ID));
+        }
+
+        /** @return the ids of the stored instances among these rows */
+        private static @NonNull List<Integer> idsOf(@NonNull List<Row> instances) {
             List<Integer> ids = new ArrayList<>();
             for (Row instance : instances) {
                 Integer id = instance.get(InstanceModel.ID);
@@ -1128,6 +1153,15 @@ final class AppHealth {
                     ids.add(id);
                 }
             }
+            return ids;
+        }
+
+        /**
+         * When each instance was last deployed: its last-finished succeeded release (an application) or build (a
+         * workspace, a git-sourced app), whichever finished later. A workload nothing ever built or released is absent.
+         */
+        private static @NonNull Map<Integer, Instant> lastDeploys(@NonNull List<Row> instances) {
+            List<Integer> ids = idsOf(instances);
             String owner = InstanceModel.MODEL_ID.toString();
             Map<Integer, Instant> deployed = new HashMap<>();
             Models.get(BuildOperationModel.class).lastSucceededAmong(owner, ids).forEach((id, build) ->

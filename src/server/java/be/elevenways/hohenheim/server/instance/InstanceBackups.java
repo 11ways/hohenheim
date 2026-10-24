@@ -26,6 +26,7 @@ import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.application.ArtifactDeploys;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
+import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.source.SiteSources;
@@ -836,6 +837,8 @@ public final class InstanceBackups {
             }
         }
 
+        // Read BEFORE resolve derives the environment (InstanceDatabaseLinks.credentialGenerations says why).
+        Map<Integer, Integer> credentials = InstanceDatabaseLinks.credentialGenerations(newId);
         Resolved resolved = this.instances.resolve(newId);
         resolved.requireImage();
         try {
@@ -846,7 +849,7 @@ public final class InstanceBackups {
                 new InstanceMaintenanceWindow.Plan(InstanceModel.STATUS_RESTORING, false,
                     InstanceModel.STATUS_STOPPED, true,
                     InstanceMaintenanceWindow.Failure.HOLD_ERROR),
-                () -> restorePayload(profile, newId, manifest, resolved, opened, staging));
+                () -> restorePayload(profile, newId, manifest, resolved, credentials, opened, staging));
         } catch (IOException error) {
             throw HohenheimViolations.instanceRefusal("instance_restore_failed", record, error);
         }
@@ -887,10 +890,14 @@ public final class InstanceBackups {
      * Land a verified archive's payload in a freshly created record: count what the
      * database re-materialized, then rebuild the workload from the export (native lane)
      * or create it and restore its volume tars.
+     *
+     * @param credentials the attachments' credential generations, read before {@code resolved} derived its
+     *                    environment: what the volume lane's create records, as a deploy does
      */
     private static void restorePayload(@Nullable InstanceProfile profile, int newId,
                                        @NonNull BackupManifest manifest,
                                        @NonNull Resolved resolved,
+                                       @NonNull Map<Integer, Integer> credentials,
                                        BackupArchive.@NonNull Opened opened,
                                        @NonNull Path staging) throws IOException {
         // Count what the DATABASE now holds, before a single byte of payload moves: a
@@ -937,6 +944,7 @@ public final class InstanceBackups {
             VolumeSnapshotSupport support = InstanceSnapshots.requireSupport(resolved);
             Map<String, String> volumes = InstanceSnapshots.logicalVolumes(resolved);
             resolved.runtime().create(resolved.spec());
+            InstanceDatabaseLinks.stampDeployed(credentials);
             Map<String, Path> tars = BackupArchive.extractVolumes(opened,
                 staging.resolve("volumes"));
             support.restoreVolumes(resolved.spec(), volumes, tars);

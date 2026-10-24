@@ -26,6 +26,7 @@ import be.elevenways.zenit.common.security.KnownValueRedactor;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.protoblast.server.process.ProcessOutcome;
 import be.elevenways.protoblast.server.process.Subprocess;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -573,50 +574,235 @@ class SharedDatabaseEngineTest {
     }
 
     /**
-     * The create scripts as a shell really expands them, against stub clients that record their argv and stdin: the
-     * new password reaches psql, mysql and mongosh as data on stdin and never as an argument, so it never shows in an
-     * engine container's process table. The scripts run with an empty stdin of their own, as a docker exec gives them.
+     * The credential scripts as a shell really expands them, against stub clients that record their argv and stdin:
+     * every NEW password reaches psql, mysql, mongosh and redis-cli as data on stdin and never as an argument, and no
+     * root password rides an argument either (mongo's authenticates inside the script it reads), so neither shows in
+     * an engine container's process table. The scripts run with an empty stdin of their own, as a docker exec gives
+     * them. Live proof that the real clients take them is SharedDatabaseEngineLiveTest (create) and
+     * DedicatedDatabasePasswordLiveTest (rotation).
      */
     @Test
-    void theCreateScriptsHandTheNewPasswordToEveryClientOnStdinNeverInItsArgv(@TempDir Path dir) throws Exception {
+    void theCredentialScriptsHandEveryPasswordToTheirClientOnStdinNeverInItsArgv(@TempDir Path dir) throws Exception {
         String password = "kJ8-vQ2mZx_LpR4tN7wYbG1s";
+        String root = "root-secret-0001";
         Path bin = Files.createDirectories(dir.resolve("bin"));
         String stub = "#!/bin/sh\n"
             + "printf '%s\\n' \"${0##*/} $*\" >> \"$HH_STUB_LOG/argv\"\n"
             + "input=$(cat)\n"
             + "printf '%s\\n' \"$input\" >> \"$HH_STUB_LOG/stdin\"\n"
             + "case \"$*\" in *'SELECT COUNT'*) echo 0 ;; esac\n"
-            + "case \"$input\" in *hohenheim-ok*) echo hohenheim-ok ;; esac\n";
-        for (String client : List.of("psql", "mysql", "mongosh")) {
+            + "case \"$input\" in *'CONFIG SET'*) echo OK ;; *hohenheim*) echo hohenheim-ok ;; esac\n";
+        for (String client : List.of("psql", "mysql", "mongosh", "redis-cli")) {
             Path file = bin.resolve(client);
             Files.writeString(file, stub);
             assertThat(file.toFile().setExecutable(true)).as("anchor: the %s stub is executable", client).isTrue();
         }
         Map<ManagedDatabase.Engine, String> clients = Map.of(ManagedDatabase.Engine.POSTGRES, "psql",
-            ManagedDatabase.Engine.MYSQL, "mysql", ManagedDatabase.Engine.MONGO, "mongosh");
-        for (Map.Entry<ManagedDatabase.Engine, String> entry : clients.entrySet()) {
-            ManagedDatabase.Engine engine = entry.getKey();
-            Path log = Files.createDirectories(dir.resolve(engine.token()));
-            Subprocess script = Subprocess.of(engine.createLogicalCommand("root", "tenantdb", "tenantuser"))
-                .withoutInheritedEnvironment()
-                .environment("PATH", bin + ":/usr/local/bin:/usr/bin:/bin")
-                .environment("HH_STUB_LOG", log.toString())
-                .stdin(new byte[0])
-                .timeout(Duration.ofSeconds(30));
-            for (String variable : engine.logicalEnv("rootsecret", password)) {
-                int eq = variable.indexOf('=');
-                script.environment(variable.substring(0, eq), variable.substring(eq + 1));
-            }
-            ProcessOutcome outcome = script.run();
-            assertThat(outcome.exitCode()).as("step 1 (%s): the script ran to its end: %s", engine, outcome.describe())
-                .isZero();
+            ManagedDatabase.Engine.MYSQL, "mysql", ManagedDatabase.Engine.MONGO, "mongosh",
+            ManagedDatabase.Engine.REDIS, "redis-cli");
+
+        // 1. A shared engine's create script: the new user's password on stdin, the root's in the environment.
+        for (ManagedDatabase.Engine engine : List.of(ManagedDatabase.Engine.POSTGRES, ManagedDatabase.Engine.MYSQL,
+                ManagedDatabase.Engine.MONGO)) {
+            Path log = Files.createDirectories(dir.resolve("create-" + engine.token()));
+            runStubbed(bin, log, engine.createLogicalCommand("root", "tenantdb", "tenantuser"),
+                engine.logicalEnv(root, password), "step 1 (" + engine + ")");
             String argv = Files.readString(log.resolve("argv"));
-            assertThat(argv).as("step 1 (%s): through its client", engine).contains(entry.getValue() + " ")
-                .as("step 2 (%s): no client was handed the new password as an argument", engine)
-                .doesNotContain(password);
+            assertThat(argv).as("step 1 (%s): through its client", engine).contains(clients.get(engine) + " ")
+                .as("step 1 (%s): no client was handed the new password as an argument", engine)
+                .doesNotContain(password)
+                .as("step 1 (%s): nor the root password", engine).doesNotContain(root);
             assertThat(Files.readString(log.resolve("stdin")))
-                .as("step 3 (%s): the client read it as data on stdin instead", engine).contains(password);
+                .as("step 1 (%s): the client read the new one as data on stdin instead", engine).contains(password);
         }
+
+        // 2. A dedicated engine's own rotation, every engine: the same discipline, the current password (the
+        //    engine's root) in the environment and the new one on stdin.
+        for (ManagedDatabase.Engine engine : ManagedDatabase.Engine.values()) {
+            Path log = Files.createDirectories(dir.resolve("rotate-" + engine.token()));
+            List<String> command = engine.rotateOwnCommand("appuser");
+            List<String> env = engine.rotateEnv(root, password);
+            assertThat(String.join(" ", command)).as("step 2 (%s): the command carries neither password", engine)
+                .doesNotContain(password).doesNotContain(root);
+            assertThat(env).as("step 2 (%s): the new password rides the environment", engine)
+                .contains(ManagedDatabase.Engine.LOGICAL_PASSWORD + "=" + password);
+            runStubbed(bin, log, command, env, "step 2 (" + engine + ")");
+            String argv = Files.readString(log.resolve("argv"));
+            assertThat(argv).as("step 2 (%s): through its client", engine).contains(clients.get(engine) + " ")
+                .as("step 2 (%s): no client was handed the new password as an argument", engine)
+                .doesNotContain(password)
+                .as("step 2 (%s): nor the current one", engine).doesNotContain(root);
+            assertThat(Files.readString(log.resolve("stdin")))
+                .as("step 2 (%s): the client read the new one on stdin", engine).contains(password);
+        }
+        String mysqlRotation = String.join(" ", ManagedDatabase.Engine.MYSQL.rotateOwnCommand("appuser"));
+        assertThat(mysqlRotation).as("step 2: mysql changes the record's user and root, at localhost and %")
+            .contains("ALTER USER '$1'@'%'").contains("'root'@'localhost'").contains("'root'@'%'");
+        assertThatThrownBy(() -> ManagedDatabase.Engine.POSTGRES.rotateOwnCommand("app'user"))
+            .as("step 2: a user the scripts cannot spell never reaches a shell body")
+            .isInstanceOf(IllegalArgumentException.class);
+        assertThat(ManagedDatabase.Engine.REDIS.rotateOwnCommand("anything"))
+            .as("step 2: redis has one password and no user").endsWith("hohenheim-rotate", "6379");
+
+        // 3. Every mongo script run as the engine root keeps the root password out of every argv: the readiness
+        //    probe, the drop and the fingerprint authenticate inside the script they read, as the create does.
+        Map<String, List<String>> mongoRootScripts = Map.of(
+            "ready", ManagedDatabase.Engine.MONGO.readyCommand("root", root, "admin"),
+            "drop", ManagedDatabase.Engine.MONGO.dropLogicalCommand("root", "tenantdb", "tenantuser", true),
+            "fingerprint", ManagedDatabase.Engine.MONGO.fingerprintCommand("root", "tenantdb"));
+        for (Map.Entry<String, List<String>> script : mongoRootScripts.entrySet()) {
+            Path log = Files.createDirectories(dir.resolve("mongo-" + script.getKey()));
+            runStubbed(bin, log, script.getValue(), ManagedDatabase.Engine.MONGO.logicalEnv(root, null),
+                "step 3 (" + script.getKey() + ")");
+            assertThat(Files.readString(log.resolve("argv")))
+                .as("step 3 (%s): mongosh ran", script.getKey()).contains("mongosh --host 127.0.0.1")
+                .as("step 3 (%s): without the root password in its argv", script.getKey()).doesNotContain(root)
+                .doesNotContain("--password");
+            assertThat(Files.readString(log.resolve("stdin")))
+                .as("step 3 (%s): the script authenticates as root inside it", script.getKey())
+                .contains("auth('root'");
+        }
+    }
+
+    /** Runs {@code command} with only the stub clients on its PATH, logging their argv and stdin under {@code log}. */
+    private static void runStubbed(Path bin, Path log, List<String> command, List<String> env, String step)
+            throws Exception {
+        ProcessOutcome outcome = runShell(bin + ":/usr/local/bin:/usr/bin:/bin", log, null, command, env, Map.of());
+        assertThat(outcome.exitCode()).as("%s: the script ran to its end: %s", step, outcome.describe()).isZero();
+    }
+
+    /**
+     * The private directory a credential script writes a password file into is gone however the script ends: the
+     * legacy mongo shell's root password file and mongorestore's config file after a failing client and after the
+     * script was terminated by a signal mid-run, and mongosh (which reads the password from its environment) never
+     * makes one. The redis container command hands redis-server its password as configuration on stdin, quoted, and
+     * never as an argument.
+     */
+    @Test
+    void aCredentialScriptLeavesNoPasswordFileBehindAndRedisReadsItsPasswordOnStdin(@TempDir Path dir)
+            throws Exception {
+        String root = "root-secret-0001";
+        Path tmp = Files.createDirectories(dir.resolve("tmp"));
+        // The stub records whether a password file existed while it ran, then fails, or terminates the script's own
+        // shell (the topmost ancestor naming the script) and exits, as a signal from outside would.
+        String stub = "#!/bin/sh\n"
+            + "printf '%s\\n' \"${0##*/} $*\" >> \"$HH_STUB_LOG/argv\"\n"
+            + "cat >> \"$HH_STUB_LOG/stdin\"\n"
+            + "ls \"$TMPDIR\"/*/* >> \"$HH_STUB_LOG/files\" 2>/dev/null\n"
+            + "case \"$HH_STUB_MODE\" in\n"
+            + "  signal)\n"
+            + "    p=$PPID; top=\n"
+            + "    while [ -n \"$p\" ] && [ \"$p\" -gt 1 ]; do\n"
+            + "      if tr '\\0' ' ' < /proc/$p/cmdline | grep -q \"$HH_STUB_SCRIPT\"; then top=$p; fi\n"
+            + "      p=$(sed -n 's/^PPid:[[:space:]]*//p' /proc/$p/status)\n"
+            + "    done\n"
+            + "    kill -TERM \"$top\"; exit 0 ;;\n"
+            + "  *) exit 1 ;;\n"
+            + "esac\n";
+        Path legacy = Files.createDirectories(dir.resolve("legacy"));
+        Path modern = Files.createDirectories(dir.resolve("modern"));
+        for (Path client : List.of(legacy.resolve("mongo"), legacy.resolve("mongorestore"), modern.resolve("mongosh"))) {
+            Files.writeString(client, stub);
+            assertThat(client.toFile().setExecutable(true)).as("anchor: the %s stub is executable", client).isTrue();
+        }
+        // Only the stubs and the plain tools the scripts use: a host with a real mongosh on its PATH would otherwise
+        // answer the legacy-shell journeys with it.
+        Path tools = Files.createDirectories(dir.resolve("tools"));
+        for (String tool : List.of("sh", "bash", "mktemp", "rm", "sed", "cat", "ls", "tr", "grep", "head")) {
+            Path found = Files.exists(Path.of("/usr/bin", tool)) ? Path.of("/usr/bin", tool) : Path.of("/bin", tool);
+            Files.createSymbolicLink(tools.resolve(tool), found);
+        }
+        ManagedDatabase.Engine mongo = ManagedDatabase.Engine.MONGO;
+        Map<String, List<String>> scripts = Map.of(
+            "hohenheim-rotate", mongo.rotateOwnCommand("appuser"),
+            "hohenheim-restore", mongo.restoreFromStdinCommand("appuser", "appdb", 0, null));
+        Map<String, List<String>> envs = Map.of(
+            "hohenheim-rotate", mongo.rotateEnv(root, "New.password-0000000001"),
+            "hohenheim-restore", mongo.restoreEnv(root));
+
+        // 1-2. The legacy shell's root file and mongorestore's config file: written, and gone after a failing client
+        //      (step 1) and after the script's shell was terminated while the client ran (step 2).
+        for (String mode : List.of("fail", "signal")) {
+            for (Map.Entry<String, List<String>> script : scripts.entrySet()) {
+                String step = (mode.equals("fail") ? "step 1 (" : "step 2 (") + script.getKey() + ")";
+                Path log = Files.createDirectories(dir.resolve(mode + "-" + script.getKey()));
+                ProcessOutcome outcome = runShell(legacy + ":" + tools, log, tmp, script.getValue(),
+                    envs.get(script.getKey()),
+                    Map.of("HH_STUB_MODE", mode, "HH_STUB_SCRIPT", script.getKey()));
+                assertThat(Files.readString(log.resolve("files")))
+                    .as("%s anchor: the client ran while the password file existed", step)
+                    .containsAnyOf("/root", "/auth.yaml");
+                assertThat(outcome.exitCode()).as("%s: the script failed: %s", step, outcome.describe())
+                    .isEqualTo(mode.equals("fail") ? 1 : 143);
+                try (var left = Files.list(tmp)) {
+                    assertThat(left.toList()).as("%s: and its private directory is gone", step).isEmpty();
+                }
+            }
+        }
+
+        // 3. mongosh reads the root password from its environment: no file is written at all.
+        Path log = Files.createDirectories(dir.resolve("mongosh"));
+        runShell(modern + ":" + tools, log, tmp, scripts.get("hohenheim-rotate"), envs.get("hohenheim-rotate"),
+            Map.of("HH_STUB_MODE", "fail", "HH_STUB_SCRIPT", "hohenheim-rotate"));
+        assertThat(Files.readString(log.resolve("argv"))).as("step 3 anchor: mongosh ran").contains("mongosh ");
+        assertThat(Files.exists(log.resolve("files")) ? Files.readString(log.resolve("files")) : "")
+            .as("step 3: no password file existed while it ran").isEmpty();
+        try (var left = Files.list(tmp)) {
+            assertThat(left.toList()).as("step 3: nor any directory for one").isEmpty();
+        }
+
+        // 4. Redis: the container command spells no password; its shell hands redis-server the password from the
+        //    container's environment as a quoted config line on stdin, through the image's entrypoint when there is
+        //    one, with a backslash and a double quote escaped.
+        String password = "Redis\"pass\\word-0000000001";
+        List<String> command = ManagedDatabase.Engine.REDIS.containerCommand();
+        assertThat(command).as("step 4: redis declares its own command").isNotNull();
+        Map<String, String> secret = ManagedDatabase.Engine.REDIS.secretEnv(password);
+        assertThat(String.join(" ", command)).as("step 4: the command carries no password").doesNotContain(password);
+        Path redisBin = Files.createDirectories(dir.resolve("redis"));
+        Files.writeString(redisBin.resolve("redis-server"), "#!/bin/sh\n"
+            + "printf '%s\\n' \"${0##*/} $*\" >> \"$HH_STUB_LOG/argv\"\n"
+            + "cat >> \"$HH_STUB_LOG/stdin\"\n");
+        Files.writeString(redisBin.resolve("docker-entrypoint.sh"), "#!/bin/sh\n"
+            + "printf '%s\\n' \"${0##*/} $*\" >> \"$HH_STUB_LOG/argv\"\n"
+            + "exec \"$@\"\n");
+        for (String file : List.of("redis-server", "docker-entrypoint.sh")) {
+            assertThat(redisBin.resolve(file).toFile().setExecutable(true)).as("anchor: %s is executable", file)
+                .isTrue();
+        }
+        Path redisLog = Files.createDirectories(dir.resolve("redis-log"));
+        ProcessOutcome started = runShell(redisBin + ":" + tools, redisLog, tmp, command,
+            secret.entrySet().stream().map(entry -> entry.getKey() + "=" + entry.getValue()).toList(), Map.of());
+        assertThat(started.exitCode()).as("step 4: the command ran: %s", started.describe()).isZero();
+        assertThat(Files.readString(redisLog.resolve("argv")).lines().toList())
+            .as("step 4: the entrypoint started redis-server reading its config from stdin, no password in argv")
+            .containsExactly("docker-entrypoint.sh redis-server -", "redis-server -");
+        assertThat(Files.readString(redisLog.resolve("stdin")))
+            .as("step 4: the config redis-server read names the password, quoted and escaped")
+            .isEqualTo("requirepass \"Redis\\\"pass\\\\word-0000000001\"\n");
+    }
+
+    /**
+     * Runs {@code command} with {@code path} as its PATH (and {@code tmp}, when given, as its TMPDIR), logging the
+     * stubs' argv and stdin under {@code log}.
+     */
+    private static ProcessOutcome runShell(String path, Path log, @Nullable Path tmp, List<String> command,
+                                           List<String> env, Map<String, String> extra) throws Exception {
+        Subprocess script = Subprocess.of(command)
+            .withoutInheritedEnvironment()
+            .environment("PATH", path)
+            .environment("HH_STUB_LOG", log.toString())
+            .stdin(new byte[0])
+            .timeout(Duration.ofSeconds(30));
+        if (tmp != null) {
+            script.environment("TMPDIR", tmp.toString());
+        }
+        for (String variable : env) {
+            int eq = variable.indexOf('=');
+            script.environment(variable.substring(0, eq), variable.substring(eq + 1));
+        }
+        extra.forEach(script::environment);
+        return script.run();
     }
 
     /**

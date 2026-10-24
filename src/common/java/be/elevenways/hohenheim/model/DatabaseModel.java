@@ -262,6 +262,18 @@ public class DatabaseModel extends Model {
      */
     public static final StringField QUOTA_BUCKET = SCHEMA.addField(
         StringField.builder().name("quota_bucket").filterable(false).build());
+    /**
+     * How many times this record's password was changed (null: never): the credential generation an attached workload
+     * compares the generation it was deployed with against (InstanceDatabaseModel.DEPLOYED_GENERATION).
+     */
+    public static final IntegerField CREDENTIAL_GENERATION = SCHEMA.addField(
+        IntegerField.builder().name("credential_generation").filterable(false).build());
+
+    /** @return the record's credential generation, a never-changed password's being 0 */
+    public static int credentialGenerationOf(@NonNull Row database) {
+        Integer generation = database.get(CREDENTIAL_GENERATION);
+        return generation == null ? 0 : generation;
+    }
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());

@@ -78,6 +78,19 @@ public class InstanceDatabaseModel extends Model {
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("env_prefix"))
             .help(HohenheimMicrocopy.HELP.of("env_prefix"))
             .build());
+    /**
+     * The database's credential generation ({@link DatabaseModel#CREDENTIAL_GENERATION}) the attached workload was
+     * last deployed with, null for none recorded (read as 0). Written by the deploy that derived the environment; a
+     * lower number than the database's means a password change the running workload does not have.
+     */
+    public static final IntegerField DEPLOYED_GENERATION = SCHEMA.addField(
+        IntegerField.builder().name("deployed_generation").filterable(false).build());
+
+    /** @return the generation this link was last deployed with, none recorded being 0 */
+    public static int deployedGenerationOf(Row link) {
+        Integer generation = link.get(DEPLOYED_GENERATION);
+        return generation == null ? 0 : generation;
+    }
     public static final DateTimeField CREATED_AT = SCHEMA.addField(
         DateTimeField.builder().name("created_at").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("created_at")).build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(

@@ -5,11 +5,14 @@ import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.StoredSecret;
+import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.database.DatabaseEngines;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
@@ -19,11 +22,15 @@ import be.elevenways.hohenheim.server.database.EngineHost;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
+import be.elevenways.hohenheim.server.instance.InstanceService;
+import be.elevenways.hohenheim.server.instance.InstanceVariables;
+import be.elevenways.hohenheim.server.instance.InstanceSnapshots;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
+import be.elevenways.hohenheim.test.InstanceRowCleanup;
 import be.elevenways.hohenheim.test.RecordedChanges;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.TestAccessContexts;
@@ -36,6 +43,7 @@ import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.cms.common.resource.RecordHealth;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
@@ -43,6 +51,9 @@ import be.elevenways.zenit.common.flash.FlashNotice;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.datasource.context.SaveToDatasource;
+import be.elevenways.zenit.common.orm.model.GlobalModelHooks;
+import be.elevenways.zenit.common.orm.model.ModelHook;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.KnownValueRedactor;
 import be.elevenways.zenit.common.security.Secret;
@@ -58,9 +69,11 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -72,12 +85,14 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * A managed database's "Change password": the owner rotates a leaked password, the engine is handed the provisioning
  * re-credential command with the new one, the record stores it, the attached app asks for a deploy that injects it,
  * and no page ever carries it: the connection card's reveal fetches it per press. A failure once the engine was asked
- * leaves a trace a retry clears, and two changes at once end with the engine and the record agreeing.
+ * leaves a trace a retry clears, and two changes at once end with the engine and the record agreeing. A dedicated
+ * database rotates its own engine's credential, and a plain workload attached to it asks for the restart.
  *
  * AIDEV-NOTE: the engine is the hermetic {@link FakeDockerDaemon}: what this proves is that the product hands the
- * engine EXACTLY the provisioning command ({@code createLogicalCommand}) with the new password in its environment and
- * acts on the engine's answer. That the real engines then admit the new password and refuse the old one is proven
- * against a real daemon by SharedDatabaseEngineLiveTest step 3f (postgres and mysql); that the scripts keep the
+ * engine EXACTLY the credential command ({@code createLogicalCommand}, {@code rotateOwnCommand}) with the passwords in
+ * its environment and acts on the engine's answer. That the real engines then admit the new password and refuse the
+ * old one is proven against a real daemon by SharedDatabaseEngineLiveTest step 3f (shared postgres and mysql) and
+ * DedicatedDatabasePasswordLiveTest (dedicated, all four engines, across a restart); that the scripts keep every
  * password out of every client's argv once the shell expands it, by SharedDatabaseEngineTest.
  *
  * @author Jelle De Loecker
@@ -377,6 +392,256 @@ class DatabasePasswordChangeJourneyTest extends HohenheimHttpTestBase {
             }
             localBefore.restore();
         }
+    }
+
+    /**
+     * A DEDICATED database rotates its own engine's credential, every engine through its own script with both
+     * passwords off the command line, its engine instance's stored environment follows so a restart (which recreates
+     * the container) starts from the new password, and a plain workload attached to it, which no release fingerprint
+     * covers, says it runs with the old password until a restart gives it the new one.
+     */
+    @Test
+    void aDedicatedEngineTakesItsNewPasswordAndAPlainWorkloadAsksForTheRestartThatGivesItToIt() throws Exception {
+        List<Runnable> cleanup = new ArrayList<>();
+        HostFixtures.LocalHostState localBefore = HostFixtures.captureLocal();
+        HostFixtures.makeLocalPlaceable(16L * 1024);
+        HostFixtures.giveLocalVolumeQuota();
+        this.daemon.installContainerKind();
+        Model databases = Models.get(DatabaseModel.class);
+        Model instances = Models.get(InstanceModel.class);
+        try {
+            // 1. One dedicated database per engine, each served by its own running engine instance, and a plain
+            //    container workload attached to the postgres one, deployed once: its attachment records the
+            //    credential generation it was deployed with.
+            Map<ManagedDatabase.Engine, Row> dedicated = new LinkedHashMap<>();
+            Map<ManagedDatabase.Engine, String> handles = new LinkedHashMap<>();
+            for (ManagedDatabase.Engine engine : ManagedDatabase.Engine.values()) {
+                Row database = row(cleanup, databases, Map.of(DatabaseModel.NAME.getName(), PREFIX + "own-"
+                        + engine.token(), DatabaseModel.ENGINE.getName(), engine.token(),
+                    DatabaseModel.PLACEMENT.getName(), DatabaseModel.PLACEMENT_DEDICATED,
+                    DatabaseModel.DB_NAME.getName(), "appdb", DatabaseModel.DB_USER.getName(), "appuser",
+                    DatabaseModel.DB_PASSWORD.getName(), OLD_PASSWORD,
+                    DatabaseModel.SERVER_ID.getName(), ServerModel.localServerId(),
+                    DatabaseModel.STATUS.getName(), DatabaseModel.STATUS_ACTIVE));
+                int databaseId = database.get(DatabaseModel.ID);
+                String handle = EngineHandles.plant(databaseId, PREFIX + "own-" + engine.token(), engine.token(),
+                    InstanceModel.STATUS_RUNNING);
+                int engineInstance = DatabaseInstances.owned(databaseId).get(InstanceModel.ID);
+                cleanup.add(() -> OwnedInstances.inScopeUnchecked(DatabaseInstances.SOURCE, DatabaseModel.MODEL_ID,
+                    databaseId, () -> InstanceRowCleanup.delete(engineInstance)));
+                this.daemon.seedRunning(handle);
+                dedicated.put(engine, database);
+                handles.put(engine, handle);
+            }
+            int postgresId = dedicated.get(ManagedDatabase.Engine.POSTGRES).get(DatabaseModel.ID);
+            Row app = instances.createEmptyRow();
+            app.set(InstanceModel.NAME, PREFIX + "plain");
+            app.set(InstanceModel.KIND, "hohenheim:docker_container");
+            app.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+            app.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "fake/app", "tag", "v1",
+                "container_port", 8080)));
+            instances.save(app);
+            int appId = app.get(InstanceModel.ID);
+            cleanup.add(() -> {
+                PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, appId);
+                InstanceRowCleanup.delete(appId);
+            });
+            Row link = row(cleanup, Models.get(InstanceDatabaseModel.class), Map.of(
+                InstanceDatabaseModel.INSTANCE_ID.getName(), appId,
+                InstanceDatabaseModel.DATABASE_ID.getName(), postgresId,
+                InstanceDatabaseModel.ENV_PREFIX.getName(), "DB"));
+            InstanceService service = new InstanceService();
+            service.deploy(appId);
+            assertThat(this.daemon.isRunning(FakeDockerDaemon.handleOf(appId)))
+                .as("step 1 anchor: the plain workload runs").isTrue();
+            assertThat((Integer) Models.get(InstanceDatabaseModel.class).findById(link.get(InstanceDatabaseModel.ID))
+                .get(InstanceDatabaseModel.DEPLOYED_GENERATION))
+                .as("step 1: its attachment records the generation it was deployed with").isZero();
+            assertThat(healthOf(appId).headline().key()).as("step 1: and nothing asks for a restart")
+                .isNotEqualTo("credentials_not_live");
+            for (ManagedDatabase.Engine engine : ManagedDatabase.Engine.values()) {
+                assertThat(DatabaseParts.passwordUnavailable(List.of(dedicated.get(engine))).get(0))
+                    .as("step 1 (%s): a serving dedicated database offers Change password", engine).isNull();
+            }
+
+            // 2. Each dedicated database rotates with nothing typed: ONE command ran in its own engine, its own
+            //    rotation, the current password and the new one in its environment and neither on its command line.
+            //    The record stores the new password one credential generation further, and the engine instance's
+            //    stored environment is what a deploy would write from the record now: the next container create
+            //    starts from the new password.
+            for (ManagedDatabase.Engine engine : ManagedDatabase.Engine.values()) {
+                int databaseId = dedicated.get(engine).get(DatabaseModel.ID);
+                invoke(null, databases.findById(databaseId), Map.of());
+                Row rotatedRow = databases.findById(databaseId);
+                String rotated = rotatedRow.get(DatabaseModel.DB_PASSWORD);
+                assertThat(rotated).as("step 2 (%s): the record holds a new generated password", engine)
+                    .isNotEqualTo(OLD_PASSWORD).matches("[A-Za-z0-9_-]{24}");
+                assertThat(DatabaseModel.credentialGenerationOf(rotatedRow))
+                    .as("step 2 (%s): one credential generation further", engine).isEqualTo(1);
+                List<FakeDockerDaemon.Exec> execs = this.daemon.execsOn(handles.get(engine));
+                assertThat(execs).as("step 2 (%s): one command ran in its own engine", engine).hasSize(1);
+                assertThat(execs.get(0).command()).as("step 2 (%s): the engine's own rotation", engine)
+                    .isEqualTo(engine.rotateOwnCommand("appuser"));
+                assertThat(execs.get(0).env()).as("step 2 (%s): the current and the new password ride the env", engine)
+                    .isEqualTo(engine.rotateEnv(OLD_PASSWORD, rotated));
+                assertThat(String.join(" ", execs.get(0).command()))
+                    .as("step 2 (%s): neither is on the command line", engine)
+                    .doesNotContain(rotated).doesNotContain(OLD_PASSWORD);
+                int engineInstance = DatabaseInstances.owned(databaseId).get(InstanceModel.ID);
+                assertThat(new InstanceVariables().valuesFor(engineInstance))
+                    .as("step 2 (%s): the engine instance's stored environment names the new password", engine)
+                    .isEqualTo(DatabaseInstances.engineEnvironment(EngineHost.dedicated(rotatedRow)))
+                    .containsAllEntriesOf(engine.secretEnv("appuser", rotated));
+            }
+
+            // 3. The plain workload still runs with the old password: its health says so, naming the database, with
+            //    Restart as the fix. Nothing restarted it.
+            assertThat(this.daemon.isRunning(FakeDockerDaemon.handleOf(appId)))
+                .as("step 3 anchor: the workload still runs").isTrue();
+            var stale = healthOf(appId);
+            assertThat(stale.headline().key()).as("step 3: it asks for the new password")
+                .isEqualTo("credentials_not_live");
+            assertThat(String.valueOf(stale.detail().args().asMap().get("database")))
+                .as("step 3: naming the database").isEqualTo(PREFIX + "own-postgres");
+            assertThat(stale.fixes()).as("step 3: Restart is the fix")
+                .containsExactly(InstanceOperations.RESTART.id());
+
+            // 4. The restart derives the new password into its environment and records the generation it was
+            //    deployed with: the notice is gone.
+            service.restart(appId);
+            assertThat((Integer) Models.get(InstanceDatabaseModel.class).findById(link.get(InstanceDatabaseModel.ID))
+                .get(InstanceDatabaseModel.DEPLOYED_GENERATION))
+                .as("step 4: the attachment records the new generation").isEqualTo(1);
+            assertThat(healthOf(appId).headline().key()).as("step 4: and the workload no longer asks")
+                .isNotEqualTo("credentials_not_live");
+
+            // 5. Storing a rotation fails after the engine took it: the engine instance's stored environment refuses
+            //    its write. The record and that environment are ONE transaction, so neither changed, and the same
+            //    command set the engine back to the password the record keeps: nothing drifted, so nothing is stamped,
+            //    and the refusal says the change did not happen.
+            Set<Integer> refusingStore = new HashSet<>();
+            boolean[] refuseSetBack = {false};
+            ModelHook<SaveToDatasource> readOnlyEnvironment = context -> {
+                if (context.getModel() instanceof InstanceVariableModel && context.getRow() != null
+                        && refusingStore.contains(context.getRow().get(InstanceVariableModel.INSTANCE_ID))) {
+                    if (refuseSetBack[0]) {
+                        // The rotation already ran: the next exec is the set-back.
+                        this.daemon.refuseNextExec(2, "psql: error: connection to server failed");
+                    }
+                    throw new IllegalStateException("the variable store refused the write");
+                }
+            };
+            GlobalModelHooks.addBeforeWriteHook(readOnlyEnvironment);
+            try {
+                ManagedDatabase.Engine redis = ManagedDatabase.Engine.REDIS;
+                int redisId = dedicated.get(redis).get(DatabaseModel.ID);
+                String redisKept = databases.findById(redisId).get(DatabaseModel.DB_PASSWORD);
+                int redisEngine = DatabaseInstances.owned(redisId).get(InstanceModel.ID);
+                Map<String, String> redisEnvironment = new InstanceVariables().valuesFor(redisEngine);
+                String unstored = "Typed.unstored-0005";
+                refusingStore.add(redisEngine);
+                // Through the operation's write itself: the invoke route allows five changes a minute per caller.
+                Violations undone = violationsIn(catchThrowable(() -> DatabaseWrites.changePassword(
+                    databases.findById(redisId), Secret.of(unstored))));
+                assertThat(undone.all().get(0).message().key()).as("step 5: the change is refused")
+                    .isEqualTo("database_password_failed");
+                assertThat(String.valueOf(undone.all().get(0).message().args().asMap().get("reason")))
+                    .as("step 5: saying the engine was set back").contains("set back")
+                    .contains("nothing changed").doesNotContain(unstored);
+                Row kept = databases.findById(redisId);
+                assertThat((String) kept.get(DatabaseModel.DB_PASSWORD)).as("step 5: the record keeps its password")
+                    .isEqualTo(redisKept);
+                assertThat(DatabaseModel.credentialGenerationOf(kept)).as("step 5: and its generation").isEqualTo(1);
+                assertThat((String) kept.get(DatabaseModel.FAILURE_REASON)).as("step 5: nothing drifted").isNull();
+                assertThat(new InstanceVariables().valuesFor(redisEngine))
+                    .as("step 5: the stored environment is unchanged").isEqualTo(redisEnvironment);
+                List<FakeDockerDaemon.Exec> redisExecs = this.daemon.execsOn(handles.get(redis));
+                assertThat(redisExecs).as("step 5: the rotation, then the set-back").hasSize(3);
+                assertThat(redisExecs.get(1).env()).as("step 5: the engine took the new password")
+                    .isEqualTo(redis.rotateEnv(redisKept, unstored));
+                assertThat(redisExecs.get(2).command()).as("step 5: the set-back is the same rotation")
+                    .isEqualTo(redis.rotateOwnCommand("appuser"));
+                assertThat(redisExecs.get(2).env()).as("step 5: from the new password back to the kept one")
+                    .isEqualTo(redis.rotateEnv(unstored, redisKept));
+                refusingStore.clear();
+
+                // 6. The same failure where the set-back is refused too: the engine holds the new password while the
+                //    record and the stored environment keep the old one, so the drift is stamped, saying a restart of
+                //    the database is unsafe until the rotation is retried, and the dashboard raises it.
+                ManagedDatabase.Engine postgres = ManagedDatabase.Engine.POSTGRES;
+                String postgresKept = databases.findById(postgresId).get(DatabaseModel.DB_PASSWORD);
+                int postgresEngine = DatabaseInstances.owned(postgresId).get(InstanceModel.ID);
+                Map<String, String> postgresEnvironment = new InstanceVariables().valuesFor(postgresEngine);
+                String stranded = "Typed.stranded-0006";
+                refusingStore.add(postgresEngine);
+                refuseSetBack[0] = true;
+                Violations drifted = violationsIn(catchThrowable(() -> DatabaseWrites.changePassword(
+                    databases.findById(postgresId), Secret.of(stranded))));
+                assertThat(String.valueOf(drifted.all().get(0).message().args().asMap().get("reason")))
+                    .as("step 6: the refusal says a restart is unsafe").contains("restarting the database is unsafe")
+                    .doesNotContain(stranded);
+                Row stamped = databases.findById(postgresId);
+                assertThat((String) stamped.get(DatabaseModel.DB_PASSWORD)).as("step 6: the record keeps its password")
+                    .isEqualTo(postgresKept);
+                assertThat((String) stamped.get(DatabaseModel.STATUS)).as("step 6: still active")
+                    .isEqualTo(DatabaseModel.STATUS_ACTIVE);
+                assertThat((String) stamped.get(DatabaseModel.FAILURE_REASON)).as("step 6: the drift is stamped")
+                    .contains("restarting the database is unsafe").contains("rotation is retried")
+                    .doesNotContain(stranded);
+                assertThat(driftItems(PREFIX + "own-postgres")).as("step 6: the dashboard raises it").hasSize(1);
+                assertThat(new InstanceVariables().valuesFor(postgresEngine))
+                    .as("step 6: the stored environment is unchanged").isEqualTo(postgresEnvironment);
+                List<FakeDockerDaemon.Exec> postgresExecs = this.daemon.execsOn(handles.get(postgres));
+                assertThat(postgresExecs).as("step 6: the rotation, then the refused set-back").hasSize(3);
+                assertThat(postgresExecs.get(2).env()).as("step 6: the set-back was asked for")
+                    .isEqualTo(postgres.rotateEnv(stranded, postgresKept));
+                refusingStore.clear();
+                refuseSetBack[0] = false;
+            } finally {
+                GlobalModelHooks.removeBeforeWriteHook(readOnlyEnvironment);
+            }
+
+            // 7. A retry that stores succeeds: the record, one generation further, and the stored environment name the
+            //    retried password, and the drift is cleared in the same save.
+            String retried = "Typed.retried-0007";
+            DatabaseWrites.changePassword(databases.findById(postgresId), Secret.of(retried));
+            Row cleared = databases.findById(postgresId);
+            assertThat((String) cleared.get(DatabaseModel.DB_PASSWORD)).as("step 7: the retry stored it")
+                .isEqualTo(retried);
+            assertThat(DatabaseModel.credentialGenerationOf(cleared)).as("step 7: one generation further")
+                .isEqualTo(2);
+            assertThat((String) cleared.get(DatabaseModel.FAILURE_REASON)).as("step 7: the drift is cleared").isNull();
+            assertThat(driftItems(PREFIX + "own-postgres")).as("step 7: the dashboard item is gone").isEmpty();
+            int postgresEngine = DatabaseInstances.owned(postgresId).get(InstanceModel.ID);
+            assertThat(new InstanceVariables().valuesFor(postgresEngine))
+                .as("step 7: the stored environment names the retried password")
+                .containsAllEntriesOf(ManagedDatabase.Engine.POSTGRES.secretEnv("appuser", retried));
+
+            // 8. No capture lane carries a dedicated engine's data, so no restore can put an older credential back
+            //    under the record: a snapshot of the engine instance is refused before anything ran, its data volume
+            //    being no declared volume.
+            int execsBefore = this.daemon.execsOn(handles.get(ManagedDatabase.Engine.POSTGRES)).size();
+            Violations noVolumes = violationsIn(catchThrowable(() -> new InstanceSnapshots().create(postgresEngine,
+                null)));
+            assertThat(noVolumes.all().get(0).message().key()).as("step 8: the snapshot is refused")
+                .isEqualTo("snapshot_no_volumes");
+            assertThat(this.daemon.execsOn(handles.get(ManagedDatabase.Engine.POSTGRES)))
+                .as("step 8: nothing ran in the engine").hasSize(execsBefore);
+            assertThat(this.daemon.isRunning(handles.get(ManagedDatabase.Engine.POSTGRES)))
+                .as("step 8: which still runs").isTrue();
+        } finally {
+            for (int i = cleanup.size() - 1; i >= 0; i--) {
+                cleanup.get(i).run();
+            }
+            FakeDockerDaemon.restore();
+            localBefore.restore();
+        }
+    }
+
+    /** @return an instance's health as the operator reads it on its overview */
+    private static RecordHealth healthOf(int instanceId) {
+        return AppHealth.instances(false).read(Models.get(InstanceModel.class).findById(instanceId),
+            TenantConduits.operator());
     }
 
     /** @return the dashboard's "last operation failed" items about the database named {@code name} */
