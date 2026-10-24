@@ -19,6 +19,7 @@ import be.elevenways.hohenheim.HohenheimWidgets;
 import be.elevenways.hohenheim.instance.InstanceDiskView;
 import be.elevenways.hohenheim.instance.InstanceEndpointView;
 import be.elevenways.hohenheim.instance.InstanceLiveUsageView;
+import be.elevenways.hohenheim.instance.LiveFigureView;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
@@ -33,6 +34,7 @@ import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
+import be.elevenways.hohenheim.server.instance.InstanceFigures;
 import be.elevenways.hohenheim.server.instance.InstanceStats;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolver;
@@ -152,7 +154,7 @@ public final class InstanceOverview {
                     ? HohenheimMicrocopy.INSTANCE_OVERVIEW.of("connect_name").withArg("address", gameAddress)
                     : service ? PortPurpose.connectLead(namedPorts(settingsOf(instance)).stream()
                         .map(PublishedPort::purpose).toList())
-                    : HohenheimMicrocopy.INSTANCE_OVERVIEW.of("endpoint_hint"), ports);
+                    : HohenheimMicrocopy.INSTANCE_OVERVIEW.of("endpoint_hint"), ports, liveFigure(instance));
             // The game address is the operator's entry on the Configuration (InstanceParts.gameAddressAccess): the card
             // that names it leads there, so a game server is given a name from its own page.
             String linkKey = gameAddress != null ? "game_address_change" : "game_address_set";
@@ -484,9 +486,31 @@ public final class InstanceOverview {
     /** The card listing where clients connect: each port an owner holds, its protocol, purpose and state. */
     static @NonNull WidgetInstance portsCard(@NonNull Microcopy title, @NonNull Microcopy lead,
                                              @NonNull List<InstanceEndpointView> ports) {
-        return new WidgetInstance(CardWidget.ID, Map.of("title", title, "lead", lead),
-            new WidgetTree(List.of(new WidgetInstance(HohenheimWidgets.INSTANCE_ENDPOINTS.id(), Map.of())
-                .withData(ports))));
+        return portsCard(title, lead, ports, null);
+    }
+
+    /** {@link #portsCard(Microcopy, Microcopy, List)} led by the service's live figure, when it declares one. */
+    static @NonNull WidgetInstance portsCard(@NonNull Microcopy title, @NonNull Microcopy lead,
+                                             @NonNull List<InstanceEndpointView> ports,
+                                             @Nullable WidgetInstance figure) {
+        List<WidgetInstance> body = new ArrayList<>();
+        if (figure != null) {
+            body.add(figure);
+        }
+        body.add(new WidgetInstance(HohenheimWidgets.INSTANCE_ENDPOINTS.id(), Map.of()).withData(ports));
+        return new WidgetInstance(CardWidget.ID, Map.of("title", title, "lead", lead), new WidgetTree(body));
+    }
+
+    /**
+     * The service's live figure ("8 of 20 players online"): its element holds the live figure link while the overview
+     * is open, seeded from the row and the hub's memory ({@link InstanceFigures#viewOf}); the render never asks.
+     *
+     * @return null for an instance that declares no status probe
+     */
+    private static @Nullable WidgetInstance liveFigure(@NonNull Row instance) {
+        LiveFigureView view = InstanceFigures.viewOf(instance);
+        return view == null ? null
+            : new WidgetInstance(HohenheimWidgets.INSTANCE_LIVE_FIGURE.id(), Map.of()).withData(view);
     }
 
     /**

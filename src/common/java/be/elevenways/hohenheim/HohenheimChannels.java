@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim;
 
 import be.elevenways.zenit.common.channel.Channel;
+import be.elevenways.zenit.common.channel.KeyedChannel;
 
 /**
  * Hohenheim's typed channels, declared in COMMON so the browser opens the same object the
@@ -31,6 +32,25 @@ public final class HohenheimChannels {
         .identifier(HohenheimIds.id("deploy_log"))
         .requiresLogin()
         .build();
+
+    /**
+     * The small live figures ("8 of 20 players online") of the instances one page shows, over ONE link however many
+     * rows show one: a keyed channel ({@link #INSTANCE_FIGURE_KEYS}), so openData and every later message are the list
+     * of instance ids the page shows now, of which core's key guard hands the server handler those it may view.
+     * {@link HohenheimFigureFunctions} maps naming their instance.
+     */
+    public static final Channel<Object, Object> INSTANCE_FIGURE = Channel.builder()
+        .identifier(HohenheimIds.id("instance_figure"))
+        .requiresLogin()
+        .build();
+
+    /**
+     * {@link #INSTANCE_FIGURE}'s keys: instance ids, named under {@code instance} in every frame. Every page that shows
+     * figures shows fewer than the cap (the instance lists page TableSpec's default 25 rows, which
+     * LiveFigureDeliveryTest asserts), so it only bites a hostile or broken client, which is refused TOO_LARGE.
+     */
+    public static final KeyedChannel<Integer> INSTANCE_FIGURE_KEYS =
+        KeyedChannel.integers(INSTANCE_FIGURE, "instance", 200);
 
     private HohenheimChannels() {
     }

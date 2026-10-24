@@ -98,6 +98,11 @@ public final class InstanceKindFields {
             .help(HohenheimMicrocopy.HELP.of("srv_service")).build();
     }
 
+    /** How the controller asks the service for its live figure ({@link StatusProbe} is the vocabulary's home). */
+    public static @NonNull EnumField statusProbe() {
+        return StatusProbe.field();
+    }
+
     /** @param vm whether the kind is a VM, the only one offered the VM-only origins */
     public static @NonNull EnumField imageOrigin(boolean vm) {
         return ImageOrigin.fieldBuilder(vm)

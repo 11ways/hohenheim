@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.game;
 import be.elevenways.hohenheim.model.InstanceTemplateFileModel;
 import be.elevenways.hohenheim.instance.ReadinessKind;
 import be.elevenways.hohenheim.instance.StarterTemplate;
+import be.elevenways.hohenheim.instance.StatusProbe;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
@@ -13,10 +14,13 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.orm.seed.SeedContext;
 import be.elevenways.zenit.server.orm.seed.Seeder;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Starter game templates: a Minecraft server players reach directly, and a Velocity proxy with a Paper backend, the
@@ -58,6 +62,7 @@ public final class GameTemplateSeeder implements Seeder {
         });
         ctx.once("hohenheim.game-templates.standalone", GameTemplateSeeder::seedMinecraftStandalone);
         ctx.once("hohenheim.game-templates.names-and-ports", GameTemplateSeeder::upgradeStarters);
+        ctx.once("hohenheim.game-templates.status-probe", GameTemplateSeeder::declareStatusProbes);
     }
 
     /**
@@ -85,6 +90,49 @@ public final class GameTemplateSeeder implements Seeder {
             row.set(InstanceTemplateModel.SETTINGS, settings);
             model.save(row);
         }
+    }
+
+    /**
+     * The starters players connect to directly declare the Minecraft server-list ping as their status probe, so an
+     * instance made from one shows its players online: the standalone server and the Velocity proxy (which answers for
+     * its whole network). Only a row whose settings still equal what was seeded changes ({@link #standaloneSettings},
+     * {@link #velocitySettings}); any operator edit, a deliberately cleared probe among them, sticks.
+     */
+    public static void declareStatusProbes() {
+        var model = Models.get(InstanceTemplateModel.class);
+        Map<String, Map<String, Object>> seeded = Map.of(
+            MINECRAFT_SERVER, standaloneSettings(),
+            VELOCITY_PROXY, velocitySettings());
+        seeded.forEach((name, baseline) -> {
+            for (Row row : starters(name)) {
+                if (!sameValue(row.get(InstanceTemplateModel.SETTINGS), baseline)) {
+                    continue;
+                }
+                Map<String, Object> settings = new LinkedHashMap<>(baseline);
+                settings.put(StatusProbe.SETTING, StatusProbe.MINECRAFT_JAVA.token());
+                row.set(InstanceTemplateModel.SETTINGS, settings);
+                model.save(row);
+            }
+        });
+    }
+
+    /** @return whether two stored settings values are the same, numbers compared by value whatever their type */
+    private static boolean sameValue(@Nullable Object stored, @Nullable Object seeded) {
+        if (stored instanceof Map<?, ?> left && seeded instanceof Map<?, ?> right) {
+            if (left.size() != right.size()) {
+                return false;
+            }
+            for (Map.Entry<?, ?> entry : right.entrySet()) {
+                if (!left.containsKey(entry.getKey()) || !sameValue(left.get(entry.getKey()), entry.getValue())) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        if (stored instanceof Number left && seeded instanceof Number right) {
+            return new BigDecimal(left.toString()).compareTo(new BigDecimal(right.toString())) == 0;
+        }
+        return Objects.equals(stored, seeded);
     }
 
     private static void rename(@NonNull String seeded, @NonNull String name) {
@@ -123,22 +171,31 @@ public final class GameTemplateSeeder implements Seeder {
         template(
             MINECRAFT_SERVER,
             "A Paper server with a world volume and a console, reached on its own game port.",
-            Map.of(
-                InstanceKindFields.IMAGE, "itzg/minecraft-server",
-                "tag", "latest",
-                InstanceKindFields.ENVIRONMENT_VARIABLES, Map.of(
-                    "EULA", "TRUE",
-                    "TYPE", "PAPER",
-                    "MEMORY", "1G"),
-                "volumes", Map.of("data", "/data"),
-                PublishedPort.FIELD, Map.of(PortPurpose.GAME.token(), "25565/" + PublishedPort.TCP),
-                PublishedPort.SRV_SERVICE, "minecraft",
-                InstanceKindFields.MEMORY_LIMIT_MB, 1536),
+            standaloneSettings(),
             ")! For help, type",
             "stop");
     }
 
-    private static void seedVelocity() {
+    /** @return the settings the standalone server was seeded with, before its status probe */
+    static @NonNull Map<String, Object> standaloneSettings() {
+        return Map.of(
+            InstanceKindFields.IMAGE, "itzg/minecraft-server",
+            "tag", "latest",
+            InstanceKindFields.ENVIRONMENT_VARIABLES, Map.of(
+                "EULA", "TRUE",
+                "TYPE", "PAPER",
+                "MEMORY", "1G"),
+            "volumes", Map.of("data", "/data"),
+            PublishedPort.FIELD, Map.of(PortPurpose.GAME.token(), "25565/" + PublishedPort.TCP),
+            PublishedPort.SRV_SERVICE, "minecraft",
+            InstanceKindFields.MEMORY_LIMIT_MB, 1536);
+    }
+
+    /**
+     * @return the settings the Velocity proxy was seeded with (or upgraded to by {@link #upgradeStarters}), before its
+     *         status probe
+     */
+    static @NonNull Map<String, Object> velocitySettings() {
         Map<String, Object> settings = new LinkedHashMap<>(Map.of(
             InstanceKindFields.IMAGE, "dockcenter/velocity",
             "tag", "latest",
@@ -148,11 +205,15 @@ public final class GameTemplateSeeder implements Seeder {
         // The proxy IS the public entry: players connect to its published game port (the SRV rides it). The backend
         // template stays unpublished.
         settings.putAll(velocityPorts());
+        return settings;
+    }
+
+    private static void seedVelocity() {
         int templateId = template(
             VELOCITY_PROXY,
             "Fronts Minecraft backends: forced hosts, modern player-info forwarding"
                 + " and the public entry port. Backends attach via game-domain mappings.",
-            settings,
+            velocitySettings(),
             "Done (",
             "shutdown");
         variable(templateId, GameDomains.PROXY_SECRET_KEY, "Forwarding secret",

@@ -13,6 +13,8 @@ import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.instance.InstanceKindInfo;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.instance.InstanceOperations;
+import be.elevenways.hohenheim.instance.LiveFigureView;
+import be.elevenways.hohenheim.server.instance.InstanceFigures;
 import be.elevenways.hohenheim.instance.ManagedByCell;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.EnvironmentModel;
@@ -133,6 +135,9 @@ public final class InstanceParts {
     /** Virtual column naming the owning product record of a generated row. */
     static final String MANAGED_BY_COLUMN = "managed_by";
 
+    /** Virtual column holding a service's live figure ("8 of 20 players online"), blank without a status probe. */
+    static final String LIVE_FIGURE_COLUMN = "live_figure";
+
     /** The relational host filter's variable key. */
     static final String HOST_FILTER = "server.name";
 
@@ -180,6 +185,8 @@ public final class InstanceParts {
                 .search(InstanceModel.NAME)
                 .computed(Objects.requireNonNull(table.column(MANAGED_BY_COLUMN)),
                     (row, request) -> managedByCellOf(row))
+                .computed(Objects.requireNonNull(table.column(LIVE_FIGURE_COLUMN)),
+                    (row, request) -> liveFigureCellOf(row))
                 .build())
             .form(form(createForm()).createDefaults((access, panel) -> InstanceParts.createDefaults(access))
                 .bindings(List.of(ResourceFieldBinding.of(InstanceModel.KIND.getName(), kindAccess()),
@@ -218,6 +225,15 @@ public final class InstanceParts {
         // delegated surface too: their one UI is the owning record's own page. The operator tabs a delegate needs,
         // declared like the admin set (no contributions). No related pages: the operator entry names sibling peers of
         // the ADMIN panel, which this panel does not register.
+        // Not the admin fleet list's views and rule builder: a tenant sees their instances through two columns, and a
+        // service's live figure beside them.
+        TableSpec<Row> manageTable = TableSpec.<Row>builder()
+            .column(ColumnSpec.fromField(InstanceModel.NAME).subtext("kind").build())
+            .column(ColumnSpec.fromField(InstanceModel.KIND).hidden().build())
+            .column(ColumnSpec.fromField(InstanceModel.STATUS).filterable().subtext("install_state").build())
+            .column(installStateColumn().hidden().build())
+            .column(liveFigureColumn())
+            .build();
         return ManageTwin.reached(entry(ManageTwin.id("instance")), TenantScopes.INSTANCES,
                 ResourceTabs.of(manageTabs()))
             // The tenant's words, where the toolbar, the heading and the command palette read them: what the rows ARE
@@ -232,16 +248,12 @@ public final class InstanceParts {
             // The host is operator inventory: never a rule, sort, search or value of this list.
             .withholds(HostFields.of(InstanceModel.MODEL_ID))
             .reads(runtimeReads(() -> runtimeSchemaVocabulary().build()))
-            // Not the admin fleet list's views and rule builder: a tenant sees their instances through two columns.
-            .list(ResourceList.rows(TableSpec.<Row>builder()
-                    .column(ColumnSpec.fromField(InstanceModel.NAME).subtext("kind").build())
-                    .column(ColumnSpec.fromField(InstanceModel.KIND).hidden().build())
-                    .column(ColumnSpec.fromField(InstanceModel.STATUS).filterable().subtext("install_state").build())
-                    .column(installStateColumn().hidden().build())
-                    .build())
+            .list(ResourceList.rows(manageTable)
                 .chrome(ListChrome.MINIMAL)
                 .facets().ruleFilters()
                 .search(InstanceModel.NAME)
+                .computed(Objects.requireNonNull(manageTable.column(LIVE_FIGURE_COLUMN)),
+                    (row, request) -> liveFigureCellOf(row))
                 .build())
             .form(form(FormSpec.builder()
                     .add(InstanceModel.NAME)
@@ -635,6 +647,7 @@ public final class InstanceParts {
             .column(ColumnSpec.fromField(InstanceModel.SERVER_ID)
                 .relation(RelationPick.of(InstanceModel.SERVER_ID, ServerModel.MODEL_ID).build()).build())
             .column(ColumnSpec.fromField(InstanceModel.STATUS).filterable().subtext("install_state").build())
+            .column(liveFigureColumn())
             .column(installStateColumn().filterable().hidden().build())
             // Who runs this record: blank for an authored row, the owning product record (linked) for a generated
             // one -- the honesty column that lets generated rows appear here without becoming a second UI.
@@ -912,6 +925,23 @@ public final class InstanceParts {
         int application = ApplicationReleases.linkOwnerOf(instance);
         return id == null || application == id ? CmsRoutes.list(panel, HohenheimSlugs.INSTANCES)
             : CmsRoutes.subpage(panel, HohenheimSlugs.INSTANCES, application, HohenheimSlugs.Tab.DEPLOYMENTS);
+    }
+
+    /** The live figure column: each cell's element follows its row's figure over the page's one figure link. */
+    private static @NonNull ColumnSpec liveFigureColumn() {
+        return ColumnSpec.virtual(LIVE_FIGURE_COLUMN, HohenheimMicrocopy.INSTANCE.of("live_figure"))
+            .renderer(HohenheimTemplateIds.CELL_LIVE_FIGURE).build();
+    }
+
+    /**
+     * A row's live figure cell, seeded from the row's own settings and state and the hub's memory
+     * ({@link InstanceFigures#viewOf}), so drawing the column costs no query however many rows it shows. Following the
+     * figures afterwards is ONE channel link for the whole page, admitted set-wise ({@code InstanceFigureHandler}).
+     *
+     * @return null (blank) for a row that declares no status probe
+     */
+    static @Nullable LiveFigureView liveFigureCellOf(@NonNull Row row) {
+        return InstanceFigures.viewOf(row);
     }
 
     /**

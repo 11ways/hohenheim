@@ -19033,6 +19033,16 @@
     "text": "Switch to the kept release, behind the health gate",
     "scope": "deployments"
   },
+  "status_probe": [
+    {"scope": "hohenheim_field", "text": "Live status"},
+    {"scope": "help", "text": "How Hohenheim asks this service for a small live figure, such as its players online, shown on its overview and in the list. It asks the published game port while somebody looks. Empty: no live figure."}
+  ],
+  "minecraft_java": {"scope": "status_probe", "text": "Minecraft server list (Java edition)"},
+  "players_online": {"scope": "status_probe", "text": "{$online :integer} of {$capacity :integer} players online"},
+  "players_online_uncapped": {"scope": "status_probe", "text": ".match {$online :integer}\none {{1 player online}}\n* {{{$online :integer} players online}}"},
+  "not_answering": {"scope": "status_probe", "text": "Not answering"},
+  "checking": {"scope": "status_probe", "text": "Checking"},
+  "live_figure": {"scope": "instance", "text": "Live"},
   "build_hooks_plural": {"text": "Build hooks", "scope": "build_hook"},
   "build_hook_singular": {"text": "Build hook", "scope": "build_hook"},
   "build_hooks_lead": {"text": "A build hook is a secret URL: anything that POSTs to it, a CMS publishing or a job elsewhere, deploys this app. It answers over HTTPS only, so a new URL shown as a bare path means no address of this app has a working certificate yet: add one, or prefix the path with an https address that has one.", "scope": "build_hook"},

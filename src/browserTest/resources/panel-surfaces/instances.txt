@@ -7,9 +7,10 @@ column health at=1 shown=true hidden=false sortable=false filterable=false copya
 column kind at=2 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 column server_id at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 column status at=4 shown=true hidden=false sortable=false filterable=true copyable=false subtext=install_state relation=false
-column install_state at=5 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column managed_by at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-column created_at at=7 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column live_figure at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column install_state at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column managed_by at=7 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column created_at at=8 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 filter name at=0 kind=leaf:variable%3Dname,key%3Dfilter.name,operators%3Dprotoblast:contains,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/text%2525252Cfilter.name%2525252Cprotoblast:text%2525252CTEXT%2525252C%25252525-%2525252Cfalse%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.name%3D%252525- facet=false param=filter.name
 filter kind at=1 kind=leaf:variable%3Dkind,key%3Dfilter.kind,operators%3Dprotoblast:equals,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/choice%2525252Cfilter.kind%2525252Cprotoblast:text%2525252CENUM%2525252Chohenheim:database_container%252525252Chohenheim:release%252525252Chohenheim:application%252525252Chohenheim:docker_container%252525252Chohenheim:static_site%252525252Chohenheim:system_container%252525252Chohenheim:vm%252525252Chohenheim:workspace%252525252Chohenheim:stack_service%2525252Ctrue%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.kind%3D%252525- facet=true param=filter.kind
 filter status at=2 kind=leaf:variable%3Dstatus,key%3Dfilter.status,operators%3Dprotoblast:equals,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/choice%2525252Cfilter.status%2525252Cprotoblast:text%2525252CENUM%2525252Ccreated%252525252Cstarting%252525252Crunning%252525252Cstopped%252525252Cerror%252525252Ccapturing%252525252Crestoring%252525252Cmigrating%252525252Cdestroying%2525252Ctrue%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.status%3D%252525- facet=false param=filter.status
@@ -101,11 +102,12 @@ control CREATE%20settings[hohenheim:docker_container]/settings.port_exposure at=
 control CREATE%20settings[hohenheim:docker_container]/settings.host_port at=6 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:docker_container]/settings.published_ports at=7 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:docker_container]/settings.srv_service at=8 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:docker_container]/settings.environment_variables at=9 kind=zenitforms:form/key-value input=secret required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:docker_container]/settings.volumes at=10 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:docker_container]/settings.memory_limit_mb at=11 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:docker_container]/settings.cpu_limit at=12 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:docker_container]/settings.console_kind at=13 kind=zenitforms:form/select input=select required=false readonly=false options=plain,tty binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20settings[hohenheim:docker_container]/settings.status_probe at=9 kind=zenitforms:form/select input=select required=false readonly=false options=minecraft_java binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20settings[hohenheim:docker_container]/settings.environment_variables at=10 kind=zenitforms:form/key-value input=secret required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:docker_container]/settings.volumes at=11 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:docker_container]/settings.memory_limit_mb at=12 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:docker_container]/settings.cpu_limit at=13 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:docker_container]/settings.console_kind at=14 kind=zenitforms:form/select input=select required=false readonly=false options=plain,tty binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:static_site]/settings.repository_url at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:static_site]/settings.provider_id at=1 kind=zenitforms:form/select input=number required=false readonly=false options= binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:static_site]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id,resolver:be.elevenways.hohenheim.source.GitRepositoryResolver#35e141c07927,clearable:true,free:true
@@ -141,7 +143,8 @@ control CREATE%20settings[hohenheim:vm]/settings.secure_boot at=7 kind=zenitform
 control CREATE%20settings[hohenheim:vm]/settings.guest_agent at=8 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:vm]/settings.published_ports at=9 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:vm]/settings.srv_service at=10 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:vm]/settings.network_mode at=11 kind=zenitforms:form/select input=select required=false readonly=false options=hidden,local_network binding=searchable:false,clearable:false,presentation:DEFAULT
+control CREATE%20settings[hohenheim:vm]/settings.status_probe at=11 kind=zenitforms:form/select input=select required=false readonly=false options=minecraft_java binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20settings[hohenheim:vm]/settings.network_mode at=12 kind=zenitforms:form/select input=select required=false readonly=false options=hidden,local_network binding=searchable:false,clearable:false,presentation:DEFAULT
 control CREATE%20settings[hohenheim:workspace]/settings.repository_url at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:workspace]/settings.provider_id at=1 kind=zenitforms:form/select input=number required=false readonly=false options= binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:workspace]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id,resolver:be.elevenways.hohenheim.source.GitRepositoryResolver#35e141c07927,clearable:true,free:true
@@ -192,9 +195,10 @@ column health at=1 shown=true hidden=false sortable=false filterable=false copya
 column kind at=2 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 column server_id at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 column status at=4 shown=true hidden=false sortable=false filterable=true copyable=false subtext=install_state relation=false
-column install_state at=5 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column managed_by at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-column created_at at=7 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column live_figure at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column install_state at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column managed_by at=7 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column created_at at=8 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 filter name at=0 kind=leaf:variable%3Dname,key%3Dfilter.name,operators%3Dprotoblast:contains,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/text%2525252Cfilter.name%2525252Cprotoblast:text%2525252CTEXT%2525252C%25252525-%2525252Cfalse%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.name%3D%252525- facet=false param=filter.name
 filter kind at=1 kind=leaf:variable%3Dkind,key%3Dfilter.kind,operators%3Dprotoblast:equals,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/choice%2525252Cfilter.kind%2525252Cprotoblast:text%2525252CENUM%2525252Chohenheim:database_container%252525252Chohenheim:release%252525252Chohenheim:application%252525252Chohenheim:docker_container%252525252Chohenheim:static_site%252525252Chohenheim:system_container%252525252Chohenheim:vm%252525252Chohenheim:workspace%252525252Chohenheim:stack_service%2525252Ctrue%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.kind%3D%252525- facet=true param=filter.kind
 filter status at=2 kind=leaf:variable%3Dstatus,key%3Dfilter.status,operators%3Dprotoblast:equals,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/choice%2525252Cfilter.status%2525252Cprotoblast:text%2525252CENUM%2525252Ccreated%252525252Cstarting%252525252Crunning%252525252Cstopped%252525252Cerror%252525252Ccapturing%252525252Crestoring%252525252Cmigrating%252525252Cdestroying%2525252Ctrue%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.status%3D%252525- facet=false param=filter.status
@@ -295,11 +299,12 @@ control CREATE%20settings[hohenheim:docker_container]/settings.port_exposure at=
 control CREATE%20settings[hohenheim:docker_container]/settings.host_port at=6 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:docker_container]/settings.published_ports at=7 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:docker_container]/settings.srv_service at=8 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:docker_container]/settings.environment_variables at=9 kind=zenitforms:form/key-value input=secret required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:docker_container]/settings.volumes at=10 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:docker_container]/settings.memory_limit_mb at=11 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:docker_container]/settings.cpu_limit at=12 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:docker_container]/settings.console_kind at=13 kind=zenitforms:form/select input=select required=false readonly=false options=plain,tty binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20settings[hohenheim:docker_container]/settings.status_probe at=9 kind=zenitforms:form/select input=select required=false readonly=false options=minecraft_java binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20settings[hohenheim:docker_container]/settings.environment_variables at=10 kind=zenitforms:form/key-value input=secret required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:docker_container]/settings.volumes at=11 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:docker_container]/settings.memory_limit_mb at=12 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:docker_container]/settings.cpu_limit at=13 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:docker_container]/settings.console_kind at=14 kind=zenitforms:form/select input=select required=false readonly=false options=plain,tty binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:static_site]/settings.repository_url at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:static_site]/settings.provider_id at=1 kind=zenitforms:form/select input=number required=false readonly=false options= binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:static_site]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id,resolver:be.elevenways.hohenheim.source.GitRepositoryResolver#35e141c07927,clearable:true,free:true
@@ -335,7 +340,8 @@ control CREATE%20settings[hohenheim:vm]/settings.secure_boot at=7 kind=zenitform
 control CREATE%20settings[hohenheim:vm]/settings.guest_agent at=8 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:vm]/settings.published_ports at=9 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:vm]/settings.srv_service at=10 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:vm]/settings.network_mode at=11 kind=zenitforms:form/select input=select required=false readonly=false options=hidden,local_network binding=searchable:false,clearable:false,presentation:DEFAULT
+control CREATE%20settings[hohenheim:vm]/settings.status_probe at=11 kind=zenitforms:form/select input=select required=false readonly=false options=minecraft_java binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20settings[hohenheim:vm]/settings.network_mode at=12 kind=zenitforms:form/select input=select required=false readonly=false options=hidden,local_network binding=searchable:false,clearable:false,presentation:DEFAULT
 control CREATE%20settings[hohenheim:workspace]/settings.repository_url at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:workspace]/settings.provider_id at=1 kind=zenitforms:form/select input=number required=false readonly=false options= binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:workspace]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id,resolver:be.elevenways.hohenheim.source.GitRepositoryResolver#35e141c07927,clearable:true,free:true
@@ -438,11 +444,12 @@ control EDIT%20settings[hohenheim:docker_container]/settings.port_exposure at=5 
 control EDIT%20settings[hohenheim:docker_container]/settings.host_port at=6 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:docker_container]/settings.published_ports at=7 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:docker_container]/settings.srv_service at=8 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
-control EDIT%20settings[hohenheim:docker_container]/settings.environment_variables at=9 kind=zenitforms:form/key-value input=secret required=false readonly=false options= binding=
-control EDIT%20settings[hohenheim:docker_container]/settings.volumes at=10 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
-control EDIT%20settings[hohenheim:docker_container]/settings.memory_limit_mb at=11 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
-control EDIT%20settings[hohenheim:docker_container]/settings.cpu_limit at=12 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
-control EDIT%20settings[hohenheim:docker_container]/settings.console_kind at=13 kind=zenitforms:form/select input=select required=false readonly=false options=plain,tty binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20settings[hohenheim:docker_container]/settings.status_probe at=9 kind=zenitforms:form/select input=select required=false readonly=false options=minecraft_java binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20settings[hohenheim:docker_container]/settings.environment_variables at=10 kind=zenitforms:form/key-value input=secret required=false readonly=false options= binding=
+control EDIT%20settings[hohenheim:docker_container]/settings.volumes at=11 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
+control EDIT%20settings[hohenheim:docker_container]/settings.memory_limit_mb at=12 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20settings[hohenheim:docker_container]/settings.cpu_limit at=13 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20settings[hohenheim:docker_container]/settings.console_kind at=14 kind=zenitforms:form/select input=select required=false readonly=false options=plain,tty binding=searchable:false,clearable:true,presentation:DEFAULT
 control EDIT%20settings[hohenheim:static_site]/settings.repository_url at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:static_site]/settings.provider_id at=1 kind=zenitforms:form/select input=number required=false readonly=false options= binding=searchable:false,clearable:true,presentation:DEFAULT
 control EDIT%20settings[hohenheim:static_site]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id,resolver:be.elevenways.hohenheim.source.GitRepositoryResolver#35e141c07927,clearable:true,free:true
@@ -478,7 +485,8 @@ control EDIT%20settings[hohenheim:vm]/settings.secure_boot at=7 kind=zenitforms:
 control EDIT%20settings[hohenheim:vm]/settings.guest_agent at=8 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:vm]/settings.published_ports at=9 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:vm]/settings.srv_service at=10 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
-control EDIT%20settings[hohenheim:vm]/settings.network_mode at=11 kind=zenitforms:form/select input=select required=false readonly=false options=hidden,local_network binding=searchable:false,clearable:false,presentation:DEFAULT
+control EDIT%20settings[hohenheim:vm]/settings.status_probe at=11 kind=zenitforms:form/select input=select required=false readonly=false options=minecraft_java binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20settings[hohenheim:vm]/settings.network_mode at=12 kind=zenitforms:form/select input=select required=false readonly=false options=hidden,local_network binding=searchable:false,clearable:false,presentation:DEFAULT
 control EDIT%20settings[hohenheim:workspace]/settings.repository_url at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:workspace]/settings.provider_id at=1 kind=zenitforms:form/select input=number required=false readonly=false options= binding=searchable:false,clearable:true,presentation:DEFAULT
 control EDIT%20settings[hohenheim:workspace]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id,resolver:be.elevenways.hohenheim.source.GitRepositoryResolver#35e141c07927,clearable:true,free:true
@@ -527,6 +535,7 @@ column name at=0 shown=true hidden=false sortable=false filterable=false copyabl
 column kind at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
 column status at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext=install_state relation=false
 column install_state at=3 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column live_figure at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 tab overview at=0 landing=true view=false
 tab deployments at=1 landing=false view=false
 tab console at=2 landing=false view=false
@@ -551,6 +560,7 @@ column name at=0 shown=true hidden=false sortable=false filterable=false copyabl
 column kind at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
 column status at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext=install_state relation=false
 column install_state at=3 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column live_figure at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 row hohenheim:deploy_instance at=0 verb=invoke band=inline style=DEFAULT disabled=deploy_blocked_delegated confirm= target=/{panel}/{entry}/invoke/hohenheim.deploy_instance?ids%3D{record}
 row zenit:edit at=1 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
 row hohenheim:restart_instance at=2 verb=invoke band=overflow style=DEFAULT disabled=deploy_blocked_delegated confirm=style:DEFAULT,title:restart%252Cscope%3Dinstance,body:restart_confirm%252Cscope%3Dinstance,confirm:restart%252Cscope%3Dinstance,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/invoke/hohenheim.restart_instance?ids%3D{record}

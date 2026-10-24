@@ -1,15 +1,13 @@
 package be.elevenways.hohenheim.server.application;
 
-import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.HohenheimChannels;
 import be.elevenways.hohenheim.HohenheimDeployFunctions;
 import be.elevenways.hohenheim.HohenheimDeployFunctions.Source;
 import be.elevenways.hohenheim.HohenheimSources;
-import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.instance.InstanceViewLinks;
 import be.elevenways.hohenheim.server.build.BuildLog;
 import be.elevenways.hohenheim.server.build.LiveBuildLogs;
 import be.elevenways.hohenheim.server.util.SerialOutbox;
@@ -19,8 +17,6 @@ import be.elevenways.zenit.common.channel.ChannelHandler;
 import be.elevenways.zenit.common.channel.ChannelLink;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.refusal.DomainRefusal;
-import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Principal;
 import be.elevenways.zenit.common.websocket.WebSocketSession;
@@ -99,11 +95,7 @@ public final class DeployLogHandler implements ChannelHandler<Object, Object> {
 
     @Override
     public void onOpen(@Nullable Object openData) {
-        Integer instanceId = RawValues.parsedInt(openData);
-        if (instanceId == null || !this.permitted(instanceId)) {
-            // The SAME refusal for "no such instance" and "not yours": anything else is an existence oracle.
-            throw new DomainRefusal(ZenitRefusalReason.PERMISSION_DENIED, "Not permitted");
-        }
+        int instanceId = InstanceViewLinks.admitted(this.link, openData);
         synchronized (this.state) {
             this.instanceId = instanceId;
         }
@@ -130,7 +122,7 @@ public final class DeployLogHandler implements ChannelHandler<Object, Object> {
         synchronized (this.state) {
             instanceId = this.closed ? null : this.instanceId;
         }
-        if (instanceId == null || !this.permitted(instanceId)) {
+        if (instanceId == null || !InstanceViewLinks.views(this.link, instanceId)) {
             return false;
         }
         if (this.isOperator()) {
@@ -332,12 +324,5 @@ public final class DeployLogHandler implements ChannelHandler<Object, Object> {
     private boolean isOperator() {
         Principal principal = this.link.getPrincipal();
         return principal != null && AccessContext.detached(principal).hasPermission(HohenheimSources.ADMIN_ACCESS);
-    }
-
-    /** The principal-only capability walk: following a deploy is observation, the {@code view} the tab is scoped by. */
-    private boolean permitted(int instanceId) {
-        Principal principal = this.link.getPrincipal();
-        return principal != null && HohenheimAccess.hasInstanceCapability(
-            principal, instanceId, HohenheimCapabilities.VIEW);
     }
 }

@@ -81,6 +81,14 @@ public final class HohenheimWidgets {
         HohenheimTemplateIds.WIDGET_INSTANCE_LIVE_USAGE,
         HohenheimMicrocopy.APP_OVERVIEW.of("resources"), "gauge");
 
+    /**
+     * A service's live figure ("8 of 20 players online") on its overview: the element that says it holds the live
+     * figure link while the overview is open.
+     */
+    public static final DisplayWidget INSTANCE_LIVE_FIGURE = register("instance_live_figure",
+        HohenheimTemplateIds.WIDGET_INSTANCE_LIVE_FIGURE,
+        HohenheimMicrocopy.INSTANCE.of("live_figure"), "users");
+
     /** An app's addresses with whether HTTPS works for each: the body of the overview's Addresses card. */
     public static final DisplayWidget APP_ADDRESSES = register("app_addresses",
             HohenheimTemplateIds.WIDGET_APP_ADDRESSES,

@@ -151,7 +151,7 @@ table migration:be.elevenways.hohenheim@2026_10_21_000001
   replaces 018
   replaces 019
 table migration:be.elevenways.hohenheim@2026_10_23_000001
-  checksum 5b5512f55d82d603b09c4b9b4c6d2ffc7b6e78feccdd9e274a05da7ab6415e8c
+  checksum d6927e16a69df48564a781f415302a8d0e6a947e01e55719ba9073af41440d8c
   class be.elevenways.hohenheim.migration.M002_AfterBaseline
   name after_baseline
   op add_column:instance_databases:deployed_generation|integer|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null
@@ -166,3 +166,5 @@ table migration:be.elevenways.hohenheim@2026_10_23_000001
   op add_index:build_hooks:build_hooks_instance_id_index(instance_id)
   op add_index:build_hooks:build_hooks_token_digest_unique(token_digest):unique
   op create_table:build_hooks[id|uuid|null=false|uniq=true|pk=true|auto=false|def=none|len=null|prec=null,null,instance_id|integer|null=false|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null|ref=instances.id:null:null,name|string|null=true|uniq=false|pk=false|auto=false|def=none|len=100|prec=null,null,token_digest|string|null=true|uniq=false|pk=false|auto=false|def=none|len=128|prec=null,null,url_preview|string|null=true|uniq=false|pk=false|auto=false|def=none|len=128|prec=null,null,revoked_at|datetime|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null,last_triggered_at|datetime|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null,created_at|datetime|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null,updated_at|datetime|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null]
+  op create_table:status_probe_backfills[instance_id|integer|null=false|uniq=true|pk=true|auto=false|def=none|len=null|prec=null,null]
+  op data:give the starter Minecraft servers made before it existed their status probe@2

@@ -19033,6 +19033,16 @@
     "text": "Overschakelen naar de bewaarde release, achter de gezondheidscontrole",
     "scope": "deployments"
   },
+  "status_probe": [
+    {"scope": "hohenheim_field", "text": "Live status"},
+    {"scope": "help", "text": "Hoe Hohenheim deze dienst om een klein live cijfer vraagt, zoals de spelers online, getoond op het overzicht en in de lijst. Het vraagt de gepubliceerde spelpoort zolang iemand kijkt. Leeg: geen live cijfer."}
+  ],
+  "minecraft_java": {"scope": "status_probe", "text": "Minecraft-serverlijst (Java-editie)"},
+  "players_online": {"scope": "status_probe", "text": "{$online :integer} van {$capacity :integer} spelers online"},
+  "players_online_uncapped": {"scope": "status_probe", "text": ".match {$online :integer}\none {{1 speler online}}\n* {{{$online :integer} spelers online}}"},
+  "not_answering": {"scope": "status_probe", "text": "Antwoordt niet"},
+  "checking": {"scope": "status_probe", "text": "Bezig met nagaan"},
+  "live_figure": {"scope": "instance", "text": "Live"},
   "build_hooks_plural": {"text": "Build hooks", "scope": "build_hook"},
   "build_hook_singular": {"text": "Build hook", "scope": "build_hook"},
   "build_hooks_lead": {"text": "Een build hook is een geheime URL: alles wat ernaar POST, een CMS dat publiceert of een taak elders, rolt deze app uit. Hij antwoordt alleen over HTTPS, dus een nieuwe URL die enkel als pad verschijnt betekent dat nog geen adres van deze app een werkend certificaat heeft: voeg er een toe, of zet een https-adres met een certificaat voor het pad.", "scope": "build_hook"},

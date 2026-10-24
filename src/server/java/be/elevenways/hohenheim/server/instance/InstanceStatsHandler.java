@@ -1,10 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
-import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.HohenheimChannels;
 import be.elevenways.hohenheim.HohenheimSources;
-import be.elevenways.hohenheim.HohenheimCapabilities;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.channel.ChannelHandler;
 import be.elevenways.zenit.common.channel.ChannelLink;
@@ -24,8 +21,8 @@ import java.util.function.Consumer;
  * layer (the {@code InstanceConsoleHandler} shape, one transport over).
  *
  * The channel declares only {@code requiresLogin}, because a record capability is not a
- * permission -- so admission is decided HERE, per record, through the same precedence walk
- * every other instance surface rides.
+ * permission -- so admission is decided per record, through {@link InstanceViewLinks}, the
+ * precedence walk every other instance surface rides.
  *
  * AIDEV-NOTE: {@link #revalidate} is that admission again, and zenit asks it (through
  * {@link ChannelHandler#admits}) at every revalidation of the gateway socket: its periodic
@@ -51,13 +48,7 @@ public final class InstanceStatsHandler implements ChannelHandler<Object, Object
 
     @Override
     public void onOpen(@Nullable Object openData) {
-        Integer instanceId = RawValues.parsedInt(openData);
-        if (instanceId == null || !this.permitted(instanceId)) {
-            // The SAME refusal for "no such instance" and "not yours": naming the
-            // difference would make this an instance-existence oracle. Typed, so the
-            // client ends the link instead of retrying a refusal no wait lifts.
-            throw new DomainRefusal(ZenitRefusalReason.PERMISSION_DENIED, "Not permitted");
-        }
+        int instanceId = InstanceViewLinks.admitted(this.link, openData);
         this.instanceId = instanceId;
 
         // AIDEV-NOTE: inside onOpen the link is OPENING, neither open nor closed, and what it submits is queued until
@@ -93,7 +84,7 @@ public final class InstanceStatsHandler implements ChannelHandler<Object, Object
     @Override
     public boolean revalidate(@NonNull WebSocketSession session) {
         Integer instanceId = this.instanceId;
-        return instanceId != null && this.permitted(instanceId);
+        return instanceId != null && InstanceViewLinks.views(this.link, instanceId);
     }
 
     @Override
@@ -103,18 +94,5 @@ public final class InstanceStatsHandler implements ChannelHandler<Object, Object
         if (subscription != null) {
             subscription.close();
         }
-    }
-
-    /**
-     * The principal-only capability walk (no conduit exists on a channel link). Live
-     * stats are OBSERVATION of the tenant's own record, so they ask {@code view} -- the
-     * same capability the page carrying the chart is scoped by.
-     */
-    private boolean permitted(int instanceId) {
-        // The link's own face: the session's principal with an anonymous one folded to
-        // null, and the seam a socketless FakeChannelLink answers too.
-        Principal principal = this.link.getPrincipal();
-        return principal != null && HohenheimAccess.hasInstanceCapability(
-            principal, instanceId, HohenheimCapabilities.VIEW);
     }
 }

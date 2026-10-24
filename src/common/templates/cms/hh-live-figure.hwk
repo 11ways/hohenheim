@@ -1,0 +1,30 @@
+{% tag HhLiveFigure {
+    /* One service's small live figure ("8 of 20 players online"), on its overview and as its list cell. Showing it is
+       a viewer of the live figure hub: the element joins the page's ONE instance-figure link in @mount and leaves it
+       with its own disconnect (the hh-instance-gauges shape), so a list of N rows holds one link and the hub asks a
+       service only while somebody looks. The hub replays the figure it holds on joining, the seed among them, so only
+       a newer figure changes the words. */
+    public required instanceId: Integer
+    public seed: Map = null
+
+    private transient latest: Map = null
+
+    private computed now = latest{:} ?? seed
+
+    @mount
+    function connect() {
+        InstanceFigure.connect(this, instanceId, (figure) => { apply(figure) })
+    }
+
+    function apply(figure: Map) {
+        if InstanceStats.newer(figure, latest ?? seed) {
+            latest = figure
+        }
+    }
+
+    template {
+        <span class="hh-live-figure" data-live-figure={% InstanceFigure.state(now{:}) %}>
+            <pl-badge variant={% InstanceFigure.variant(now{:}) %}>{{ InstanceFigure.words(now{:}) }}</pl-badge>
+        </span>
+    }
+} %}

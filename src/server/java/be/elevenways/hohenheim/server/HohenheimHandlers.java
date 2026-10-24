@@ -23,6 +23,7 @@ import be.elevenways.hohenheim.server.instance.InstanceApi;
 import be.elevenways.hohenheim.server.instance.InstanceBackupOperationHandlers;
 import be.elevenways.hohenheim.server.instance.InstanceChildDeletes;
 import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
+import be.elevenways.hohenheim.server.instance.InstanceFigureHandler;
 import be.elevenways.hohenheim.server.instance.InstanceStatsHandler;
 import be.elevenways.hohenheim.server.instance.InstanceTemplateHandlers;
 import be.elevenways.hohenheim.server.preview.PreviewOperationHandlers;
@@ -96,6 +97,7 @@ public final class HohenheimHandlers {
         DnsZoneApi.init();
         InstanceFileEndpoints.init();
         InstanceStatsHandler.init();
+        InstanceFigureHandler.init();
         DeployLogHandler.init();
     }
 

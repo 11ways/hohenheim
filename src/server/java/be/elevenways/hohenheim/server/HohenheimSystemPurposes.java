@@ -24,6 +24,7 @@ public final class HohenheimSystemPurposes {
     public static final @NonNull SystemPurpose DATABASE_PROVISION = declare("database_provision");
     public static final @NonNull SystemPurpose TEMPLATE_INSTALL = declare("template_install");
     public static final @NonNull SystemPurpose INSTANCE_CONSOLE = declare("instance_console");
+    public static final @NonNull SystemPurpose LIVE_FIGURE = declare("live_figure");
     public static final @NonNull SystemPurpose INSTANCE_RESIZE = declare("instance_resize");
     public static final @NonNull SystemPurpose FORCE_SSL_LATCH = declare("force_ssl_latch");
     public static final @NonNull SystemPurpose ACME = declare("acme");

@@ -154,6 +154,9 @@ public final class VmKind implements InstanceKindHandler {
 
     public static final StringField SRV_SERVICE = SETTINGS_SCHEMA.addField(InstanceKindFields.srvService());
 
+    /** How the controller asks the guest's service for its live figure, on its published game port. */
+    public static final EnumField STATUS_PROBE = SETTINGS_SCHEMA.addField(InstanceKindFields.statusProbe());
+
     /**
      * Hidden behind its host (the default) or on its host's local network, the Proxmox shape. Operator-only: the
      * delegated panel offers no settings form, a tenant's settings write is frozen (TenantWrites) and a tenant's
@@ -171,7 +174,7 @@ public final class VmKind implements InstanceKindHandler {
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.NETWORK,
             List.of(NETWORK_MODE.getName())));
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.PORTS,
-            List.of(PUBLISHED_PORTS.getName(), SRV_SERVICE.getName())));
+            List.of(PUBLISHED_PORTS.getName(), SRV_SERVICE.getName(), STATUS_PROBE.getName())));
     }
 
     @Override

@@ -133,6 +133,9 @@ public final class DockerContainerKind implements InstanceKindHandler {
 
     public static final StringField SRV_SERVICE = SETTINGS_SCHEMA.addField(InstanceKindFields.srvService());
 
+    /** How the controller asks the service for its live figure (the players online), on its published game port. */
+    public static final EnumField STATUS_PROBE = SETTINGS_SCHEMA.addField(InstanceKindFields.statusProbe());
+
     // secret(): redacted on derived surfaces, masked in forms, kept on blank submit.
     public static final StringMapField ENVIRONMENT_VARIABLES = SETTINGS_SCHEMA.addField(
         InstanceKindFields.environmentVariables());
@@ -156,7 +159,7 @@ public final class DockerContainerKind implements InstanceKindHandler {
     static {
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.PORTS,
             List.of(PORT_PROTOCOL.getName(), PORT_EXPOSURE.getName(), HOST_PORT.getName(), PUBLISHED_PORTS.getName(),
-                SRV_SERVICE.getName())));
+                SRV_SERVICE.getName(), STATUS_PROBE.getName())));
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.LIMITS,
             List.of(MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName())));
         // The console shape has a working default (plain); a TUI workload opts in.

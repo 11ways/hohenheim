@@ -62,6 +62,8 @@ public final class HohenheimTemplateIds {
         Identifier.of("hohenheim", "cms/widget-instance-endpoints");
     public static final Identifier WIDGET_INSTANCE_LIVE_USAGE =
         Identifier.of("hohenheim", "cms/widget-instance-live-usage");
+    public static final Identifier WIDGET_INSTANCE_LIVE_FIGURE =
+        Identifier.of("hohenheim", "cms/widget-instance-live-figure");
     public static final Identifier WIDGET_APP_ADDRESSES = Identifier.of("hohenheim", "cms/widget-app-addresses");
     public static final Identifier WIDGET_APP_PROTECTION = Identifier.of("hohenheim", "cms/widget-app-protection");
     public static final Identifier WIDGET_APPS = Identifier.of("hohenheim", "cms/widget-apps");
@@ -76,6 +78,7 @@ public final class HohenheimTemplateIds {
     public static final Identifier CELL_INSTALL_STATE = Identifier.of("hohenheim", "cms/cell/install-state");
     public static final Identifier CELL_SITE_HOSTNAMES = Identifier.of("hohenheim", "cms/cell/site-hostnames");
     public static final Identifier CELL_SITE_UPSTREAM = Identifier.of("hohenheim", "cms/cell/site-upstream");
+    public static final Identifier CELL_LIVE_FIGURE = Identifier.of("hohenheim", "cms/cell/live-figure");
 
     private HohenheimTemplateIds() {
     }

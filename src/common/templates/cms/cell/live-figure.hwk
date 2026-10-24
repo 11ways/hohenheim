@@ -1,0 +1,6 @@
+{#- A service's live figure in the instances list: blank for a row that declares no status probe. The element follows
+    the row's figure over the page's one figure link while the list is shown. -#}
+{% declare value: LiveFigureView %}
+{% if value != null %}
+<hh-live-figure instanceId={% value.instanceId %} seed={% value.seed %}></hh-live-figure>
+{% /if %}

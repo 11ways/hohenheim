@@ -173,7 +173,8 @@ class InstanceSettingsSectionTest {
             .containsExactly("image", "tag", "command", "container_port",
                 "environment_variables", "volumes");
         assertThat(sectionMembers(DockerContainerKind.SETTINGS_SCHEMA, HohenheimFormSections.PORTS))
-            .containsExactly("port_protocol", "port_exposure", "host_port", "published_ports", "srv_service");
+            .containsExactly("port_protocol", "port_exposure", "host_port", "published_ports", "srv_service",
+                "status_probe");
         assertThat(sectionMembers(DockerContainerKind.SETTINGS_SCHEMA, HohenheimFormSections.RUNTIME))
             .as("the console shape defaults to plain, so it folds")
             .containsExactly("console_kind");

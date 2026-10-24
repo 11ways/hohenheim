@@ -1,0 +1,8 @@
+{# A service's live figure inside its overview's Connect to card (InstanceOverview). The element follows the figure
+   over the page's figure link while the overview is open; this widget only hands it the instance and the seed. #}
+{% declare widget: WidgetInstance %}
+{% declare data: LiveFigureView = null %}
+
+{% if data %}
+<p><hh-live-figure instanceId={% data.instanceId %} seed={% data.seed %}></hh-live-figure></p>
+{% /if %}
