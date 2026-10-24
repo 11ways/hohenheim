@@ -7,7 +7,6 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
-import be.elevenways.hohenheim.StoredSecret;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.DeployTrigger;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -1022,14 +1021,14 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
      * The webhook endpoint is intercepted before hostname routing, so any hostname pointing at the proxy works; an
      * exposing site's first exact hostname is the copy-pastable choice.
      *
-     * AIDEV-NOTE: the secret itself never enters the page: only the token of its reveal
-     * ({@link StoredSecret#WEBHOOK_SECRET}), which fetches it per press through SecretReveals (admin-gated, recorded).
+     * AIDEV-NOTE: the secret itself never enters the page: only the reference of its reveal
+     * ({@link HohenheimSecrets#WEBHOOK_SECRET}), fetched per press through core's reveal route (admin-gated, recorded).
      */
     private static void putAdminOnlyVars(Map<String, Object> vars, Row instance) {
         Integer instanceId = instance.get(InstanceModel.ID);
         Map<String, Object> settings = ApplicationReleases.storedSettings(instance);
         vars.put("webhookSecretReveal", Objects.toString(settings.get(GitSourceSchema.WEBHOOK_SECRET), "").isEmpty()
-            ? "" : StoredSecret.WEBHOOK_SECRET.token());
+            ? null : HohenheimSecrets.WEBHOOK_SECRET.ref(instanceId));
         vars.put("webhookAutoDeploy",
             GitSourceSchema.autoDeploys(settings));
 

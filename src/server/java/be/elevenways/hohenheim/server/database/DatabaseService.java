@@ -1025,12 +1025,14 @@ public class DatabaseService extends DatasourceScoped {
             return false;
         }
         String name = row.get(DatabaseModel.NAME);
+        // Generated before the attempt, so a failure after the engine or the record took it still redacts it.
+        String generated = Secrets.generatePassword();
         try {
-            repairRedisPassword(recordId, instanceId);
+            repairRedisPassword(recordId, instanceId, generated);
             return true;
         } catch (IOException | RuntimeException failed) {
             ConsoleRedaction.Secrets secrets = query(() -> ConsoleRedaction.secretsOfOwner(DatabaseModel.MODEL_ID,
-                recordId));
+                recordId)).and(new ConsoleRedaction.Secrets(Set.of(generated), true));
             String reason = CredentialStamp.of("The redis engine of '" + name + "' has no password in its stored"
                 + " environment, so it cannot start again, and giving it one failed ("
                 + ConsoleRedaction.redactWhole(HohenheimViolations.reasonOf(failed), secrets) + "). Change its"
@@ -1047,8 +1049,12 @@ public class DatabaseService extends DatasourceScoped {
         }
     }
 
-    /** The repair of {@link #repairRedisPassword(int)} for an engine instance whose stored environment names none. */
-    private void repairRedisPassword(int recordId, int instanceId) throws IOException {
+    /**
+     * The repair of {@link #repairRedisPassword(int)} for an engine instance whose stored environment names none.
+     *
+     * @param generated the password the engine gets when the record names no usable one either
+     */
+    private void repairRedisPassword(int recordId, int instanceId, @NonNull String generated) throws IOException {
         Row row = requireRecord(recordId);
         String name = row.get(DatabaseModel.NAME);
         if (ManagedDatabase.Engine.isUsablePassword(row.get(DatabaseModel.DB_PASSWORD))) {
@@ -1061,7 +1067,6 @@ public class DatabaseService extends DatasourceScoped {
                 "had no password in its stored environment; it names the record's again");
             return;
         }
-        String generated = Secrets.generatePassword();
         if (query(() -> DatabaseInstances.liveStatus(recordId)).running()) {
             changePassword(recordId, generated);
         } else {

@@ -4,7 +4,6 @@ import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
-import be.elevenways.hohenheim.StoredSecret;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -200,7 +199,7 @@ class DatabasePasswordChangeJourneyTest extends HohenheimHttpTestBase {
             String overviewPath = "/admin/" + HohenheimSlugs.DATABASES + "/" + shopId + "/page/overview";
             assertThat(adminGet(overviewPath).body()).as("step 1 anchor: no page carries the password")
                 .doesNotContain(OLD_PASSWORD);
-            assertThat(revealedValue(revealSecret(StoredSecret.DATABASE_PASSWORD, shopId, sessionToken, csrfToken)))
+            assertThat(revealedValue(revealSecret(HohenheimSecrets.DATABASE_PASSWORD, shopId, sessionToken, csrfToken)))
                 .as("step 1 anchor: the reveal answers it on request").isEqualTo(OLD_PASSWORD);
 
             // 2. Tenant A, who manages the database, rotates with nothing typed: a password is generated, the engine
@@ -259,7 +258,7 @@ class DatabasePasswordChangeJourneyTest extends HohenheimHttpTestBase {
             assertThat(overview).as("step 6 anchor: the overview points at the tab that reveals the password")
                 .contains("/admin/" + HohenheimSlugs.DATABASES + "/" + shopId + "/page/" + HohenheimSlugs.Tab.RESTORE);
             assertThat(overview).as("step 6: the new password is in no page").doesNotContain(rotated);
-            assertThat(revealedValue(revealSecret(StoredSecret.DATABASE_PASSWORD, shopId, sessionToken, csrfToken)))
+            assertThat(revealedValue(revealSecret(HohenheimSecrets.DATABASE_PASSWORD, shopId, sessionToken, csrfToken)))
                 .as("step 6: the reveal answers the new password").isEqualTo(rotated);
             assertThat(overview).as("step 6: the old one is gone").doesNotContain(OLD_PASSWORD);
             assertThat(adminGet("/admin/" + HohenheimSlugs.DATABASES + "/" + shopId).body())

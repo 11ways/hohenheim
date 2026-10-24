@@ -4,13 +4,15 @@ import be.elevenways.zenit.browsertest.ZenitBrowserTestBase;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
-import be.elevenways.hohenheim.StoredSecret;
 import be.elevenways.hohenheim.server.HohenheimSettingsBoot;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.AuthSettings;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ZenitAuth;
+import be.elevenways.zenit.common.secret.RevealableSecret;
+import be.elevenways.zenit.common.secret.SecretRef;
+import be.elevenways.zenit.common.secret.SecretReveals;
 import be.elevenways.zenit.cms.common.RecordsCopy;
 import be.elevenways.zenit.auth.server.GrantMatrixSnapshots;
 import be.elevenways.zenit.auth.server.RecordSharing;
@@ -432,13 +434,15 @@ public abstract class HohenheimTestBase extends ZenitBrowserTestBase {
     }
 
     /**
-     * Presses a stored secret's reveal as the caller holding {@code session}: the POST the {@code hh-secret-reveal}
-     * control sends, CSRF token included.
+     * Presses a stored secret's reveal as the caller holding {@code session}: the POST the {@code pl-secret-reveal}
+     * control sends to core's reveal route, CSRF token included.
      */
-    protected HttpResponse<String> revealSecret(@NonNull StoredSecret secret, int recordId, @NonNull String session,
-                                                @NonNull String csrf) throws Exception {
-        return httpPostForm(HohenheimEndpoints.SECRETS_REVEAL.with(HohenheimEndpoints.SECRET, secret.token())
-            .with(HohenheimEndpoints.SECRET_RECORD_ID, recordId).toUrl(), "", session, csrf);
+    protected HttpResponse<String> revealSecret(@NonNull RevealableSecret secret, int recordId,
+                                                @NonNull String session, @NonNull String csrf) throws Exception {
+        SecretRef ref = secret.ref(recordId);
+        return httpPostForm(SecretReveals.ENDPOINT.with(SecretReveals.SECRET, ref.secret())
+            .with(SecretReveals.RECORD, ref.record()).with(SecretReveals.FIELD, ref.field()).toUrl(), "", session,
+            csrf);
     }
 
     /** @return the value a 200 reveal answered, decoded from its DRY body */

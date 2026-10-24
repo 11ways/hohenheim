@@ -2,14 +2,14 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.HohenheimSlugs;
-import be.elevenways.hohenheim.StoredSecret;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
+import be.elevenways.hohenheim.server.cms.HohenheimSecrets;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.cms.common.ZenitCmsActivityAction;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -106,7 +106,7 @@ class SecretRevealJourneyTest extends HohenheimTestBase {
             }
             for (String drawn : List.of("operator restore", "tenant credentials", "operator deploys")) {
                 assertThat(pages.get(drawn).body()).as("step 1: the %s draws the reveal", drawn)
-                    .contains("<hh-secret-reveal");
+                    .contains("<pl-secret-reveal");
             }
 
             // 2. The operator presses Show value on the Restore tab: ONE fetch, answered no-store, shows the password
@@ -122,71 +122,74 @@ class SecretRevealJourneyTest extends HohenheimTestBase {
             assertThat(page.content()).as("step 2: the hydrated page holds no password").doesNotContain(PASSWORD);
             assertThat(fetches).as("step 2: nothing is fetched before the press").isEmpty();
             Response answer = page.waitForResponse(response -> response.url().contains("/secrets/"),
-                () -> page.locator("[data-hh-database-password] [data-hh-secret-reveal]").click());
+                () -> page.locator("[data-hh-database-password] .pl-secret-reveal__toggle").click());
             assertThat(answer.status()).as("step 2: the reveal answered").isEqualTo(200);
             assertThat(answer.headers().get("cache-control")).as("step 2: and no cache keeps it").contains("no-store");
-            page.locator("[data-hh-secret-value]").waitFor();
-            assertThat(page.locator("[data-hh-secret-value]").textContent()).as("step 2: the press shows the password")
+            page.locator(".pl-secret-reveal__value").waitFor();
+            assertThat(page.locator(".pl-secret-reveal__value").textContent())
+                .as("step 2: the press shows the password")
                 .isEqualTo(PASSWORD);
             assertThat(fetches).as("step 2: one press, one fetch").hasSize(1);
             int operatorReveals = 1;
             List<RecordedChanges.Recorded> reveals = RecordedChanges.withFact(databases, databaseId,
-                ZenitCmsActivityAction.SECRET_REVEALED);
+                ZenitActivityAction.SECRET_REVEALED);
             assertThat(reveals).as("step 2: the press is one recorded reveal").hasSize(1);
-            assertThat(reveals.get(0).fact(ZenitCmsActivityAction.SECRET_REVEALED))
-                .as("step 2: naming the field").isEqualTo(Map.of("field", StoredSecret.DATABASE_PASSWORD.field()));
+            assertThat(reveals.get(0).fact(ZenitActivityAction.SECRET_REVEALED))
+                .as("step 2: naming the field")
+                .isEqualTo(Map.of("field", HohenheimSecrets.DATABASE_PASSWORD.ref(databaseId).field()));
             assertThat(reveals.get(0).facts() + " " + reveals.get(0).delta() + " " + reveals.get(0).change())
                 .as("step 2: and never the value").doesNotContain(PASSWORD).doesNotContain(encoded(PASSWORD));
 
             // 3. A tenant without the credentials capability is refused, exactly as for a record that does not exist,
             //    and nothing is recorded as revealed; the tenant holding it reads it, recorded under their name.
-            HttpResponse<String> refused = revealSecret(StoredSecret.DATABASE_PASSWORD, databaseId, viewOnly.token(),
+            HttpResponse<String> refused = revealSecret(HohenheimSecrets.DATABASE_PASSWORD, databaseId,
+                viewOnly.token(),
                 viewOnly.csrf());
             assertThat(refused.statusCode()).as("step 3: the view-only tenant is refused").isEqualTo(404);
             assertThat(refused.body()).as("step 3: and the refusal carries no password").doesNotContain(PASSWORD);
-            assertThat(revealSecret(StoredSecret.DATABASE_PASSWORD, Integer.MAX_VALUE, viewOnly.token(),
+            assertThat(revealSecret(HohenheimSecrets.DATABASE_PASSWORD, Integer.MAX_VALUE, viewOnly.token(),
                 viewOnly.csrf()).statusCode()).as("step 3: the same answer as a missing record").isEqualTo(404);
-            assertThat(revealSecret(StoredSecret.WEBHOOK_SECRET, appId, tenant.token(), tenant.csrf()).statusCode())
+            assertThat(revealSecret(HohenheimSecrets.WEBHOOK_SECRET, appId, tenant.token(), tenant.csrf()).statusCode())
                 .as("step 3: the webhook secret is the operator's alone").isEqualTo(404);
-            assertThat(RecordedChanges.withFact(databases, databaseId, ZenitCmsActivityAction.SECRET_REVEALED))
+            assertThat(RecordedChanges.withFact(databases, databaseId, ZenitActivityAction.SECRET_REVEALED))
                 .as("step 3: no refusal is recorded as a reveal").hasSize(1);
-            assertThat(revealedValue(revealSecret(StoredSecret.DATABASE_PASSWORD, databaseId, tenant.token(),
+            assertThat(revealedValue(revealSecret(HohenheimSecrets.DATABASE_PASSWORD, databaseId, tenant.token(),
                 tenant.csrf()))).as("step 3: the credentials tenant reads it").isEqualTo(PASSWORD);
-            reveals = RecordedChanges.withFact(databases, databaseId, ZenitCmsActivityAction.SECRET_REVEALED);
+            reveals = RecordedChanges.withFact(databases, databaseId, ZenitActivityAction.SECRET_REVEALED);
             assertThat(reveals).as("step 3: their reveal is recorded too").hasSize(2);
             assertThat(reveals.get(1).actor()).as("step 3: under their name").isEqualTo(credentialed.toString());
 
             // 4. The copy button copies what the press fetched, and copying fetches nothing more.
-            page.locator("[data-hh-secret-copy] button").click();
-            page.waitForFunction("() => document.querySelector('[data-hh-secret-copy]')"
+            page.locator(".pl-secret-reveal__copy button").click();
+            page.waitForFunction("() => document.querySelector('.pl-secret-reveal__copy')"
                 + ".getAttribute('data-outcome') === 'copied'");
             assertThat(page.evaluate("() => navigator.clipboard.readText()")).as("step 4: the clipboard holds it")
                 .isEqualTo(PASSWORD);
             assertThat(fetches).as("step 4: still the one fetch").hasSize(1);
 
             // The webhook secret takes the same lane: revealed for the operator, recorded on the app.
-            assertThat(revealedValue(revealSecret(StoredSecret.WEBHOOK_SECRET, appId, sessionToken, csrfToken)))
+            assertThat(revealedValue(revealSecret(HohenheimSecrets.WEBHOOK_SECRET, appId, sessionToken, csrfToken)))
                 .as("step 4: the operator reveals the webhook secret").isEqualTo(WEBHOOK_SECRET);
             operatorReveals++;
-            assertThat(RecordedChanges.withFact(instances, appId, ZenitCmsActivityAction.SECRET_REVEALED))
+            assertThat(RecordedChanges.withFact(instances, appId, ZenitActivityAction.SECRET_REVEALED))
                 .as("step 4: recorded on the app").hasSize(1);
 
             // 5. The budget: an operator walking reveals is cut off at the tenth in a minute, and a refused attempt
             //    records nothing and answers nothing.
             int limit = 10;
             for (int press = operatorReveals; press < limit; press++) {
-                assertThat(revealSecret(StoredSecret.DATABASE_PASSWORD, databaseId, sessionToken, csrfToken)
+                assertThat(revealSecret(HohenheimSecrets.DATABASE_PASSWORD, databaseId, sessionToken, csrfToken)
                     .statusCode()).as("step 5: reveal %d of %d answers", press + 1, limit).isEqualTo(200);
             }
-            int recorded = RecordedChanges.withFact(databases, databaseId, ZenitCmsActivityAction.SECRET_REVEALED)
+            int recorded = RecordedChanges.withFact(databases, databaseId, ZenitActivityAction.SECRET_REVEALED)
                 .size();
-            HttpResponse<String> limited = revealSecret(StoredSecret.DATABASE_PASSWORD, databaseId, sessionToken,
+            HttpResponse<String> limited = revealSecret(HohenheimSecrets.DATABASE_PASSWORD, databaseId, sessionToken,
                 csrfToken);
             assertThat(limited.statusCode()).as("step 5: the next one is refused").isEqualTo(429);
             assertThat(limited.body()).as("step 5: without the password").doesNotContain(PASSWORD);
-            assertThat(RecordedChanges.withFact(databases, databaseId, ZenitCmsActivityAction.SECRET_REVEALED))
+            assertThat(RecordedChanges.withFact(databases, databaseId, ZenitActivityAction.SECRET_REVEALED))
                 .as("step 5: and nothing recorded").hasSize(recorded);
-            assertThat(revealedValue(revealSecret(StoredSecret.DATABASE_PASSWORD, databaseId, tenant.token(),
+            assertThat(revealedValue(revealSecret(HohenheimSecrets.DATABASE_PASSWORD, databaseId, tenant.token(),
                 tenant.csrf()))).as("step 5: the budget is per caller").isEqualTo(PASSWORD);
         } finally {
             HardDeletes.byId(instances, appId);

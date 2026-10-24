@@ -1,6 +1,6 @@
 {#- The connection card of a managed database, ONE partial for the admin Restore tab and the tenant Credentials tab:
     the engine and what the database does as badges, where it runs, the database and user, and the password behind its
-    reveal (hh-secret-reveal: fetched per press, recorded, never in this page), plus the rows a caller has (the
+    reveal (pl-secret-reveal: fetched per press, recorded, never in this page), plus the rows a caller has (the
     instances using the database, the live container host and port). The reveal's server gate decides who reads the
     password; this only draws the control. Its facts are a property list, so a long value (where it runs, a revealed
     password) wraps under its label on a phone instead of widening the page. -#}
@@ -9,9 +9,8 @@
 {% declare runsOn: Microcopy = null %}
 {% declare dbUser: String %}
 {% declare dbName: String %}
-{#- The record the password reveal reads, and the StoredSecret token naming the password. -#}
-{% declare recordId: Integer %}
-{% declare passwordSecret: String %}
+{#- The password's reveal, naming the record and the secret (HohenheimSecrets.DATABASE_PASSWORD). -#}
+{% declare passwordSecret: SecretRef %}
 {% declare containerHost: String = "" %}
 {% declare port: String = "" %}
 {% declare usedBy: List = null %}
@@ -29,8 +28,8 @@
             <pl-property label={% t("database", scope: "database_tab") %}>{{ dbName }}</pl-property>
             <pl-property label={% t("user", scope: "database_tab") %}>{{ dbUser }}</pl-property>
             <pl-property label={% t("password", scope: "database_tab") %} data-hh-database-password>
-                <hh-secret-reveal secret={% passwordSecret %} recordId={% recordId %}
-                                  copyLabel={% t("copy_password", scope: "database_tab") %}></hh-secret-reveal>
+                <pl-secret-reveal secret={% passwordSecret %}
+                                  copyLabel={% t("copy_password", scope: "database_tab") %}></pl-secret-reveal>
             </pl-property>
             {% if usedBy %}
             <pl-property label={% t("used_by", scope: "database_tab") %}>

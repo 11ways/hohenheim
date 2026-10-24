@@ -79,7 +79,7 @@ class DatabaseAdminTest extends HohenheimTestBase {
             String body = page.locator("body").textContent();
             assertThat(body).contains("Connection").contains("detailuser").contains("detaildb")
                 .contains("PostgreSQL");
-            assertThat(page.locator("[data-hh-database-password] hh-secret-reveal").count())
+            assertThat(page.locator("[data-hh-database-password] pl-secret-reveal").count())
                 .as("step 1: the password is behind its reveal").isEqualTo(1);
             assertThat(page.content()).as("step 1: and not in the page").doesNotContain("detailpass")
                 .doesNotContain("detailpending-0001");

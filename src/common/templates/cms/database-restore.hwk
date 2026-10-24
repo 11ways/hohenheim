@@ -7,8 +7,7 @@
 {% declare runsOn: Microcopy = null %}
 {% declare dbUser: String %}
 {% declare dbName: String %}
-{% declare recordId: Integer %}
-{% declare passwordSecret: String %}
+{% declare passwordSecret: SecretRef %}
 {% declare restoreUrl: String = "" %}
 {#- Why no restore is offered now, null while one is. -#}
 {% declare restoreRefusal: Microcopy = null %}
@@ -21,7 +20,7 @@
     {% if head != null %}{% render "zenitcms:record-head" var:head=head %}{% /if %}
 
     {% render "hohenheim:cms/database-connection" var:engine=engine var:status=status var:runsOn=runsOn var:dbName=dbName
-        var:dbUser=dbUser var:recordId=recordId var:passwordSecret=passwordSecret var:usedBy=usedBy %}
+        var:dbUser=dbUser var:passwordSecret=passwordSecret var:usedBy=usedBy %}
 
     <pl-card data-hh-database-restore>
         <pl-card-header>

@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimSlugs;
-import be.elevenways.hohenheim.StoredSecret;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
@@ -22,10 +21,10 @@ import java.util.Objects;
  * admin Restore tab and the tenant Credentials tab draw: the engine and the database's state as badges, where it runs
  * (the Overview's own words, {@link DatabaseOverview#runsOn}), its names, and the password's reveal control.
  *
- * AIDEV-NOTE: this never reads the plaintext password. The card names the record and the secret
- * ({@link StoredSecret#DATABASE_PASSWORD}); the reveal fetches it per press from {@link SecretReveals}, which asks its
- * own gate (the operator or the {@code credentials} capability) and records the reveal. A secret in the page HTML or
- * widget state is readable by anyone who can see or cache the page, pressed or not.
+ * AIDEV-NOTE: this never reads the plaintext password. The card names the record's secret
+ * ({@link HohenheimSecrets#DATABASE_PASSWORD}); the reveal fetches it per press through core's reveal route, which
+ * asks its own gate (the operator or the {@code credentials} capability) and records the reveal. A secret in the page
+ * HTML or widget state is readable by anyone who can see or cache the page, pressed or not.
  *
  * @author Jelle De Loecker
  * @since  0.9.0
@@ -51,8 +50,7 @@ final class DatabaseConnectionCard {
         }
         facts.put("dbName", Objects.toString(database.get(DatabaseModel.DB_NAME), ""));
         facts.put("dbUser", Objects.toString(database.get(DatabaseModel.DB_USER), ""));
-        facts.put("recordId", database.get(DatabaseModel.ID));
-        facts.put("passwordSecret", StoredSecret.DATABASE_PASSWORD.token());
+        facts.put("passwordSecret", HohenheimSecrets.DATABASE_PASSWORD.ref(database.get(DatabaseModel.ID)));
         return facts;
     }
 
@@ -62,7 +60,7 @@ final class DatabaseConnectionCard {
      * AIDEV-NOTE: the gate names its panel instead of reading the request's panel parameter (CmsSupport.panelSlug falls
      * back to admin), because only the admin Databases resource declares the Overview. It judges the record gate
      * alone and relies on the admin panel's admission in front of it, so it is never a gate on its own: the reveal
-     * asks SecretReveals' gate.
+     * asks HohenheimSecrets' gate.
      */
     @SuppressWarnings("unchecked")
     static boolean passwordReadableBy(@NonNull Row database, @NonNull AccessContext access) {

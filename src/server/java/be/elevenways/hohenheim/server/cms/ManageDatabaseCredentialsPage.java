@@ -26,7 +26,7 @@ import java.util.Map;
 
 /**
  * THE surface the {@code credentials} capability gates: a managed database's connection
- * details and its password's reveal (SecretReveals answers the password to the same capability),
+ * details and its password's reveal (HohenheimSecrets reveals the password to the same capability),
  * the ONLY delegated place they are readable.
  *
  * The record form cannot be that place -- {@code db_password} is a {@code .secret()}

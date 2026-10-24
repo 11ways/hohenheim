@@ -10,8 +10,8 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
-import be.elevenways.hohenheim.StoredSecret;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.cms.HohenheimSecrets;
 import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.database.DatabaseService;
@@ -570,10 +570,10 @@ class TenantDatabaseSurfaceTest extends HohenheimHttpTestBase {
         HttpResponse<String> owner = get(sessionA, credentialsUrl);
         assertThat(owner.statusCode()).as("step 3: the owner opens the tab").isEqualTo(200);
         assertThat(owner.body()).as("step 3: with the password's reveal, not the password")
-            .contains("<hh-secret-reveal").doesNotContain(password);
-        assertThat(revealedValue(revealSecret(StoredSecret.DATABASE_PASSWORD, databaseAId, sessionA,
+            .contains("<pl-secret-reveal").doesNotContain(password);
+        assertThat(revealedValue(revealSecret(HohenheimSecrets.DATABASE_PASSWORD, databaseAId, sessionA,
             cast.sessionA().csrf()))).as("step 3: and reads the credential through it").isEqualTo(password);
-        assertThat(revealSecret(StoredSecret.DATABASE_PASSWORD, databaseAId, sessionViewer,
+        assertThat(revealSecret(HohenheimSecrets.DATABASE_PASSWORD, databaseAId, sessionViewer,
             cast.sessionViewer().csrf()).statusCode()).as("step 3: the view-only teammate's reveal is refused")
             .isEqualTo(404);
 
@@ -583,7 +583,7 @@ class TenantDatabaseSurfaceTest extends HohenheimHttpTestBase {
         assertThat(get(sessionViewer, credentialsUrl).statusCode())
             .as("step 4: an explicit credentials grant is what opens it")
             .isEqualTo(200);
-        assertThat(revealedValue(revealSecret(StoredSecret.DATABASE_PASSWORD, databaseAId, sessionViewer,
+        assertThat(revealedValue(revealSecret(HohenheimSecrets.DATABASE_PASSWORD, databaseAId, sessionViewer,
             cast.sessionViewer().csrf()))).as("step 4: and its reveal").isEqualTo(password);
         RecordGrants.revoke(GrantSubjectType.USER, viewerId, DatabaseModel.MODEL_ID, databaseAId,
             HohenheimCapabilities.CREDENTIALS);

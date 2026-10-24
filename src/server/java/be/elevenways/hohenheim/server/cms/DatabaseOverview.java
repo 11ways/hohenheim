@@ -39,9 +39,9 @@ import java.util.List;
  * record beside it): how it is reached, which apps use it and the dumps it has on disk. Everything here is a stored
  * fact; nothing dials the engine per render.
  *
- * AIDEV-NOTE: the password is NEVER a fact here (a widget fact ships its value in the page HTML and the widget state,
- * pressed or not): a reader the Restore tab's own gate admits ({@link DatabaseConnectionCard#passwordReadableBy}) gets
- * a link to that tab, whose connection card reveals it per press ({@link SecretReveals}); anyone else sees no row.
+ * AIDEV-NOTE: the password is no fact here: a reader the Restore tab's own gate admits
+ * ({@link DatabaseConnectionCard#passwordReadableBy}) gets a link to that tab, whose connection card reveals it per
+ * press ({@link HohenheimSecrets#DATABASE_PASSWORD}); anyone else sees no row.
  *
  * @author Jelle De Loecker
  * @since  0.9.0

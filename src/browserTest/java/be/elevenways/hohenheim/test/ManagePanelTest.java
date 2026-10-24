@@ -298,7 +298,7 @@ class ManagePanelTest extends HohenheimTestBase {
             "/admin/instances/" + appAId + "/page/deployments");
         assertThat(admin.statusCode()).isEqualTo(200);
         assertThat(admin.body()).as("the operator gets the secret's reveal, never the secret")
-            .doesNotContain("private-webhook-secret").contains("data-webhook-secret").contains("<hh-secret-reveal")
+            .doesNotContain("private-webhook-secret").contains("data-webhook-secret").contains("<pl-secret-reveal")
             .contains("/admin/instances/invoke/hohenheim.deploy_instance");
         } finally {
             RecordGrants.revoke(GrantSubjectType.USER, operatorId, InstanceModel.MODEL_ID,

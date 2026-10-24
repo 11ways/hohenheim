@@ -39,9 +39,9 @@
 {% declare head: RecordHeadState = null %}
 {% declare timeWording: RelativeTimeWording %}
 {% declare webhookUrl: String = "" %}
-{#- The StoredSecret token of the webhook secret's reveal, set only for the operator and only while one is stored;
-    the secret itself never enters this page. -#}
-{% declare webhookSecretReveal: String = "" %}
+{#- The webhook secret's reveal (HohenheimSecrets.WEBHOOK_SECRET), set only for the operator and only while one is
+    stored; the secret itself never enters this page. -#}
+{% declare webhookSecretReveal: SecretRef = null %}
 {% declare webhookAutoDeploy: Boolean = false %}
 {#- Set while a deploy runs: the feed cms-live-refresh watches, and the live stamp taken before this render's reads. -#}
 {% declare liveFeed: String = "" %}
@@ -206,7 +206,7 @@
             </p>
             {% /if %}
             {% /if %}
-            {% if webhookSecretReveal != "" %}
+            {% if webhookSecretReveal != null %}
             <dl class="hh-webhook-fields">
                 <dt>{{ t("payload_url", scope: "deployments") }}</dt>
                 <dd>
@@ -215,8 +215,8 @@
                 </dd>
                 <dt>{{ t("secret", scope: "deployments") }}</dt>
                 <dd data-webhook-secret>
-                    <hh-secret-reveal secret={% webhookSecretReveal %} recordId={% instanceId %}
-                                      copyLabel={% t("copy_webhook_secret", scope: "deployments") %}></hh-secret-reveal>
+                    <pl-secret-reveal secret={% webhookSecretReveal %}
+                                      copyLabel={% t("copy_webhook_secret", scope: "deployments") %}></pl-secret-reveal>
                 </dd>
             </dl>
             {% if !webhookAutoDeploy %}
