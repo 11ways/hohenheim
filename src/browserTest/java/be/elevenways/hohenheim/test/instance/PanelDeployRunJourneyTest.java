@@ -17,6 +17,7 @@ import be.elevenways.hohenheim.server.build.SandboxedBuilds;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
+import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.hohenheim.test.ApiSupport;
@@ -237,8 +238,8 @@ class PanelDeployRunJourneyTest extends HohenheimTestBase {
 
     /**
      * A RUNNING build row is trusted as a live build only because boot settles the ones a dead controller left: one
-     * written before this process started is stamped interrupted and stops refusing the instance's Deploy, while one
-     * this process writes stays running and keeps refusing.
+     * whose instance claim is free is stamped interrupted and stops refusing the instance's Deploy, while one whose
+     * claim is held (a build running here or on a rival controller) stays running and keeps refusing.
      */
     @Test
     void aBuildLeftRunningByAPreviousProcessIsSettledAtBootAndRefusesNoDeploy() {
@@ -246,8 +247,8 @@ class PanelDeployRunJourneyTest extends HohenheimTestBase {
         int live = application(PREFIX + "live");
         AccessContext operator = operator();
         try {
-            // 1. One build a dead controller left running (written before this process started) and one this process
-            //    runs now: both read as a deploy under way, so Deploy is refused on both.
+            // 1. One build a dead controller left running (its claim is free) and one running now (its claim held):
+            //    both read as a deploy under way, so Deploy is refused on both.
             int staleBuild = runningBuild(stale);
             ((SqlDatasource) Datasources.getDefault()).rawUpdate("UPDATE build_operations"
                 + " SET created_at = '2000-01-01T00:00:00Z', updated_at = '2000-01-01T00:00:00Z' WHERE id = "
@@ -258,9 +259,10 @@ class PanelDeployRunJourneyTest extends HohenheimTestBase {
             assertThat(deployOffer(operator, stale)).as("step 1: the stale row refuses Deploy")
                 .isInstanceOf(OperationPipeline.Offer.Unavailable.class);
 
-            // 2. The boot settle stamps the previous process's build interrupted, with its reason and its end; this
-            //    process's own build is left running.
-            SandboxedBuilds.recoverInterrupted();
+            // 2. The boot settle stamps the dead controller's build interrupted, with its reason and its end; the build
+            //    whose claim is held is left running, never waited for.
+            InstanceOperationLock.production().exclusive(live, InstanceOperationLock.Contention.REFUSE,
+                SandboxedBuilds::recoverInterrupted);
             Row settled = StoredRows.byId(Models.get(BuildOperationModel.class), staleBuild);
             assertThat((String) settled.get(BuildOperationModel.STATUS)).as("step 2: settled as interrupted")
                 .isEqualTo(BuildOperationModel.LIFECYCLE.stored(OperationStatus.INTERRUPTED));
@@ -268,7 +270,7 @@ class PanelDeployRunJourneyTest extends HohenheimTestBase {
                 .contains("controller restart");
             assertThat(settled.get(BuildOperationModel.FINISHED_AT)).as("step 2: and when it ended").isNotNull();
             assertThat((String) StoredRows.byId(Models.get(BuildOperationModel.class), liveBuild)
-                    .get(BuildOperationModel.STATUS)).as("step 2: this process's build is untouched")
+                    .get(BuildOperationModel.STATUS)).as("step 2: the held build is untouched")
                 .isEqualTo(BuildOperationModel.LIFECYCLE.stored(OperationStatus.RUNNING));
 
             // 3. The settled application's Deploy is offered again; the live build still refuses its own.

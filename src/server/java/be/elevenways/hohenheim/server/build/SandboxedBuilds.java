@@ -6,7 +6,6 @@ import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.BuildOperationModel;
-import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
@@ -245,27 +244,20 @@ public final class SandboxedBuilds {
      * Settle every build of an instance a dead controller left {@code running} to {@code interrupted}, so the deploy
      * refusal that trusts running rows (ApplicationReleases.deployingAmong) never trusts a corpse.
      *
-     * AIDEV-NOTE: the authority is the instance's operation claim, not LiveBuildLogs (one process's memory, blind to a
-     * rival controller's build) and not the clock alone (BootSettle's cross-controller caveat). Every build of an
-     * instance, a sandboxed one of an application or a workspace's own, runs inside that instance's
-     * InstanceOperationLock claim, so holding the claim proves none of its builds runs; a rival's live build keeps the
-     * claim and the row is skipped, left to that controller. The clock only spares this process's own builds, and the
-     * row is read again inside the claim. A trashed or removed instance holds no build (its destroy took the claim), so
-     * its row settles without one. A build owned by anything else (a preview, a runtime image) has no claim to prove it
-     * dead and blocks no deploy: it stays as it is.
+     * AIDEV-NOTE: the authority is the instance's operation claim alone, not LiveBuildLogs (one process's memory, blind
+     * to a rival controller's build) and not the clock (a dead controller with a clock ahead of ours would look live).
+     * Every build of an instance, a sandboxed one of an application or a workspace's own, runs inside that instance's
+     * InstanceOperationLock claim, so a free claim proves none of its builds runs. runIfIdle never waits: a busy claim
+     * (a live build here or on a rival) leaves the row to its holder, and one stuck record never delays the others.
+     * The row is read again inside the claim. A trashed or removed instance holds no build (its destroy took the
+     * claim), so its row settles without one. A build owned by anything else (a preview, a runtime image) has no claim
+     * to prove it dead and blocks no deploy: it stays as it is.
      */
     public static void recoverInterrupted() {
         BuildOperationModel model = Models.get(BuildOperationModel.class);
         for (Row build : model.find().where(BuildOperationModel.FOR_MODEL.eq(InstanceModel.MODEL_ID.toString()))
                 .where(BuildOperationModel.STATUS.eq(BuildOperationModel.LIFECYCLE.stored(OperationStatus.RUNNING)))
                 .all()) {
-            Instant written = build.get(BuildOperationModel.UPDATED_AT);
-            if (written == null) {
-                written = build.get(BuildOperationModel.CREATED_AT);
-            }
-            if (BootSettle.writtenByThisProcess(written)) {
-                continue;   // written by THIS process: a live build, not a corpse
-            }
             int buildId = build.get(BuildOperationModel.ID);
             Integer instanceId = build.get(BuildOperationModel.FOR_ID);
             try {
@@ -273,8 +265,7 @@ public final class SandboxedBuilds {
                 if (instance == null || InstanceModel.SOFT_DELETE.isTrashed(instance)) {
                     settleInterrupted(model, buildId);
                 } else {
-                    InstanceOperationLock.production().exclusive(instanceId, InstanceOperationLock.Contention.QUEUE,
-                        () -> settleInterrupted(model, buildId));
+                    InstanceOperationLock.production().runIfIdle(instanceId, () -> settleInterrupted(model, buildId));
                 }
             } catch (RuntimeException e) {
                 Blast.log("BUILD: recovery of build", buildId, "failed -", HohenheimViolations.reasonOf(e));

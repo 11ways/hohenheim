@@ -93,7 +93,6 @@ final class InstanceActions {
      * Deploy (the placed deploy operation, a background run that lands on the Deploys tab, where its live log streams,
      * and whose finished run opens that tab, where the record has one), offered only where it means something: the
      * record is not owned by a product tier, its KIND is one a
-     * has one), offered only where it means something: the record is not owned by a product tier, its KIND is one a
      * person may power at all ({@link InstanceKinds#isUserDeployable}, which reads the kind's own
      * {@code generatedOnly()} declaration), and a start would do something ({@link InstanceKinds#offersStart}: a
      * running machine offers Restart and Stop instead). Dead, with the database and its state on screen, while an
