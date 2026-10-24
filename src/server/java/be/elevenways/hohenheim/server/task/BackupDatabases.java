@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.database.DatabaseBackups;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.hohenheim.server.HohenheimRoles;
+import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
@@ -80,7 +81,9 @@ public class BackupDatabases extends ScheduledTask {
                 // space and a dump failure would fire a false BACKUP_FAILED alert.
                 continue;
             }
-            String failure = DatabaseBackups.backUpOrAlert(databaseService, db.name());
+            // The one caller that QUEUEs behind a running dump or restore (DatabaseContentLock): it runs unattended.
+            String failure = DatabaseBackups.backUpOrAlert(databaseService, db.name(),
+                InstanceOperationLock.Contention.QUEUE);
             if (failure == null) {
                 backedUp++;
             } else {

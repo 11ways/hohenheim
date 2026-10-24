@@ -114,12 +114,18 @@ public class BackupTargetModel extends Model {
      * the store returned first, and this refusal protected an arbitrary one of them. Do not
      * drop that index without moving the setting to an id.
      *
-     * @throws Violations {@code backup_target_in_use} or
-     *                    {@code backup_target_control_plane}
+     * AIDEV-NOTE: database dumps ({@link DatabaseDumpModel}) count beside the instance backups, but EVERY dump row
+     * holds its target, a failed one included: a failed dump's artifact may survive (a cleanup or a boot settle that
+     * could not reach the target names its key), and only the row's own delete, through its target, removes it. The
+     * dump setting's target refuses like the control-plane one: both are named by the same unique {@code name}.
+     *
+     * @throws Violations {@code backup_target_in_use}, {@code backup_target_control_plane} or
+     *                    {@code backup_target_database_dumps}
      */
     static void refuseRemovalWhileReferenced(@NonNull RemoveFromDatasource context) {
         String controlPlane = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET);
+        String dumps = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.BACKUP_TARGET);
         context.eachDoomedRow(doomed -> {
             Integer targetId = doomed.get(ID);
             if (targetId == null) {
@@ -131,11 +137,19 @@ public class BackupTargetModel extends Model {
                 throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("backup_target_control_plane")
                     .withArg("name", name));
             }
+            if (name.equals(dumps)) {
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("backup_target_database_dumps")
+                    .withArg("name", name));
+            }
+            Criteria held = Criteria.or(
+                InstanceBackupModel.STATUS.eq(InstanceBackupModel.STATUS_COMPLETE),
+                InstanceBackupModel.STATUS.eq(InstanceBackupModel.STATUS_UPLOADING));
             long backups = Models.get(InstanceBackupModel.class).find()
                 .where(InstanceBackupModel.TARGET_ID.eq(targetId))
-                .where(Criteria.or(
-                    InstanceBackupModel.STATUS.eq(InstanceBackupModel.STATUS_COMPLETE),
-                    InstanceBackupModel.STATUS.eq(InstanceBackupModel.STATUS_UPLOADING)))
+                .where(held)
+                .count()
+                + Models.get(DatabaseDumpModel.class).find()
+                .where(DatabaseDumpModel.TARGET_ID.eq(targetId))
                 .count();
             long instances = Models.get(InstanceModel.class).find()
                 .where(InstanceModel.BACKUP_TARGET_ID.eq(targetId))

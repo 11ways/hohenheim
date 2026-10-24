@@ -574,9 +574,8 @@ not yet started (429 with a Retry-After).
 Hohenheim can create and manage databases (PostgreSQL, MySQL, Redis, MongoDB) on an
 inventoried **server**, attach them to an **instance** (their credentials are
 resolved at deploy time and injected into that workload's environment, never
-baked into stored settings), back them up on a schedule
-(`database.backup_path`, `database.backup_retention`), and restore from an
-uploaded dump. A record describes a provisioned container, so name, engine, db
+baked into stored settings), back them up on a schedule, and restore them. A
+record describes a provisioned container, so name, engine, db
 name/user/password, image, ephemeral flag and server are frozen once it exists;
 only the resource ceilings can be corrected afterwards. Anything else means
 destroy and recreate.
@@ -586,6 +585,42 @@ own, while `shared` (the default where the engine supports logical databases)
 makes it a logical database with its own user on one shared engine process per
 host, so ten small databases cost one engine footprint instead of ten. See
 [`docs/shared-database-engines.md`](docs/shared-database-engines.md).
+
+### Database backups and restore
+
+Every dump (the nightly `BackupDatabases` task at 03:00, "Back up now", and the
+automatic backup an in-place restore takes first) is encrypted with the
+field-encryption keyring (AES-256-GCM) and stored on the **backup target** named
+by `database.backup_target`. A dump counts as stored only after the target
+re-hashed it and the sha256 matched; each one is a record listed on the
+database's **Backups** tab, and `database.backup_retention` (default 7) keeps the
+newest complete dumps per database, removing older ones from the target.
+`database.backup_target` is **required**: while it is unset every dump fails
+(the `BACKUP_FAILED` alert, "Back up now" offered dead with the reason). A
+filesystem target keeps the dumps on this machine; an ssh target keeps them on
+another host. `database.backup_path` is now only the staging directory. An
+install that already has managed databases and no `database.backup_target`
+when it upgrades gets a filesystem target, `local-database-dumps`, at
+`database.backup_path`, and the setting names it until `settings/local.dry` or
+the environment sets another one; when that directory cannot be written no
+target is made and the dumps fail as above.
+
+From the Backups tab an operator restores a complete dump **into a new
+database** (same engine and image, dedicated placement; the source keeps
+running) or **in place** (a fresh dump of the database is stored first, then
+its contents are replaced). A dump of another kind, or one whose artifact is
+missing or does not match its recorded checksum, is refused before anything is
+created or overwritten. A dump outlives its database, so the dump of a deleted
+database still restores into a new one. The Restore tab's upload is an
+in-place restore too: it stores a fresh dump first. A PostgreSQL load runs in
+one transaction, so a failed one leaves the database as it was; a failed MySQL,
+MongoDB or Redis load may leave it mixed, and the failure names the pre-restore
+dump to restore from. One database's dumps and restores never overlap.
+
+Dumps written before the target existed (`<backup_path>/<database>/*.sql`,
+`.rdb`, `.archive`) are not moved, listed or pruned: they stay on disk,
+unencrypted, restorable through the Restore tab's upload, and are removed by
+hand once the target holds enough dumps.
 
 ## DNS server
 

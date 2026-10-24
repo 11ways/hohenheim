@@ -238,8 +238,8 @@ public final class DatabaseParts {
             .register();
 
     /**
-     * Dumps the database next to its nightly dumps, now, in the background; offered dead on a temporary database and
-     * on one that is not running.
+     * Dumps the database to the backup target beside its nightly dumps, now, in the background; offered dead on a
+     * temporary database, on one that is not running and while no backup target is set.
      */
     public static final Operation<Row, Void, Void> BACK_UP_NOW =
         Operation.declare(HohenheimIds.id("back_up_database"))
@@ -343,7 +343,7 @@ public final class DatabaseParts {
         OperationHandlers.attach(BACK_UP_NOW)
             .availability(Availability.batch((databases, access) -> backUpUnavailable(databases)))
             .handle(call -> {
-                DatabaseBackups.backUpInBackground(call.subject().get(DatabaseModel.NAME));
+                DatabaseBackups.backUpInBackground(call.subject());
                 return null;
             });
         OperationHandlers.attach(MOVE_TO_SHARED)
@@ -460,7 +460,7 @@ public final class DatabaseParts {
                 .computed(Objects.requireNonNull(table.column(USED_BY_COLUMN)),
                     (database, request) -> usedByCell(database, request))
                 .computed(Objects.requireNonNull(table.column(LAST_BACKUP_COLUMN)),
-                    (database, request) -> lastBackupCell(database, request))
+                    (database, request) -> lastBackupCell(database, backupOf(database), request.conduit()))
                 .rowLinkToTab(RecordOverview.SLUG)
                 // The selected database's Overview beside the list (the board's 2fr / 1fr): its connection, users
                 // and backups, under the Overview tab's own gate.
@@ -489,7 +489,8 @@ public final class DatabaseParts {
                 forceDelete(FORCE_DELETE, HohenheimMicrocopy.DATABASE, DatabaseModel.NAME)))
             // The overview first (the record's front door), then the restore tab; no history, as the legacy subpages()
             // override had it; contributed tabs (zenit-auth's Access tab) join like on every converted entry.
-            .tabs(ResourceTabs.<Row>of(List.of(DatabaseOverview.tab(), new DatabaseRestorePage())).withContributions())
+            .tabs(ResourceTabs.<Row>of(List.of(DatabaseOverview.tab(), DatabaseDumpParts.tab(),
+                new DatabaseRestorePage())).withContributions())
             .build();
     }
 
@@ -556,11 +557,25 @@ public final class DatabaseParts {
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(50)
             .reads(ResourceReads.rows().pageBatch((databases, access) -> {
-                // The state cell of a page of databases, judged together (its computed cell is the one-record read).
+                // The state cell and the last backup of a page of databases, judged together (their computed cells
+                // are the one-record reads): one read of the newest dumps for the page.
                 Function<Row, DatabaseVerdict> verdicts = DatabaseVerdict.ofDatabases(databases);
-                return (database, column) -> STATE_COLUMN.equals(column.name()) ? verdicts.apply(database).cell()
-                    : null;
+                Map<Integer, DatabaseBackups.Stored> newest = DatabaseBackups.newestOf(idsOf(databases));
+                return (database, column) -> switch (column.name()) {
+                    case STATE_COLUMN -> verdicts.apply(database).cell();
+                    case LAST_BACKUP_COLUMN -> lastBackupCell(database,
+                        backupOf(database, newest.get(database.get(DatabaseModel.ID))), access.conduit());
+                    default -> null;
+                };
             }));
+    }
+
+    private static @NonNull List<Integer> idsOf(@NonNull List<? extends Row> databases) {
+        List<Integer> ids = new ArrayList<>(databases.size());
+        for (Row database : databases) {
+            ids.add(database.get(DatabaseModel.ID));
+        }
+        return ids;
     }
 
     /**
@@ -762,7 +777,10 @@ public final class DatabaseParts {
         return backUpUnavailable(List.of(database)).get(0);
     }
 
-    /** @return per database: why it cannot be backed up now, null where it can; the verdicts read once for all */
+    /**
+     * @return per database: why it cannot be backed up now, null where it can; the verdicts read once for all. A
+     *         temporary one never is; an engine that does not serve says so first, then a missing backup target.
+     */
     static @NonNull List<@Nullable Microcopy> backUpUnavailable(@NonNull List<? extends Row> databases) {
         List<Row> persistent = new ArrayList<>();
         for (Row database : databases) {
@@ -770,14 +788,19 @@ public final class DatabaseParts {
                 persistent.add(database);
             }
         }
+        Microcopy noTarget = persistent.isEmpty() ? null : DatabaseBackups.targetRefusal();
         // A dump runs inside the engine serving it.
         Iterator<Microcopy> notServing = whileNotServing(persistent,
             HohenheimMicrocopy.DATABASE.of("back_up_not_active"),
             HohenheimMicrocopy.DATABASE.of("back_up_not_serving")).iterator();
         List<Microcopy> reasons = new ArrayList<>(databases.size());
         for (Row database : databases) {
-            reasons.add(Boolean.TRUE.equals(database.get(DatabaseModel.EPHEMERAL))
-                ? HohenheimMicrocopy.DATABASE.of("back_up_temporary") : notServing.next());
+            if (Boolean.TRUE.equals(database.get(DatabaseModel.EPHEMERAL))) {
+                reasons.add(HohenheimMicrocopy.DATABASE.of("back_up_temporary"));
+            } else {
+                Microcopy engine = notServing.next();
+                reasons.add(engine != null ? engine : noTarget);
+            }
         }
         return reasons;
     }
@@ -934,13 +957,17 @@ public final class DatabaseParts {
      */
     record BackupReading(@NonNull BackupState state, DatabaseBackups.@Nullable Stored newest) {}
 
-    /** @return where this database's backups stand, read from the dumps on disk ({@link DatabaseBackups}) */
+    /** @return where this database's backups stand, read from its complete dumps ({@link DatabaseBackups}) */
     static @NonNull BackupReading backupOf(@NonNull Row database) {
+        return backupOf(database, Boolean.TRUE.equals(database.get(DatabaseModel.EPHEMERAL)) ? null
+            : DatabaseBackups.newest(database.get(DatabaseModel.ID)));
+    }
+
+    /** @param newest its newest complete dump, read by the caller (for a page at once) */
+    static @NonNull BackupReading backupOf(@NonNull Row database, DatabaseBackups.@Nullable Stored newest) {
         if (Boolean.TRUE.equals(database.get(DatabaseModel.EPHEMERAL))) {
             return new BackupReading(BackupState.TEMPORARY, null);
         }
-        String name = database.get(DatabaseModel.NAME);
-        DatabaseBackups.Stored newest = name == null ? null : DatabaseBackups.newest(name);
         if (newest == null) {
             return new BackupReading(BackupState.NEVER, null);
         }
@@ -953,8 +980,8 @@ public final class DatabaseParts {
      * nightly backup allows, "Never" as a warning while a persistent database has none, and "Not backed up" for a
      * temporary one.
      */
-    private static @NonNull StateLineCell lastBackupCell(@NonNull Row database, @NonNull PanelRequest request) {
-        BackupReading backup = backupOf(database);
+    private static @NonNull StateLineCell lastBackupCell(@NonNull Row database, @NonNull BackupReading backup,
+                                                         @NonNull Conduit conduit) {
         DatabaseBackups.Stored newest = backup.newest();
         BackupState state = backup.state();
         return switch (state) {
@@ -962,16 +989,16 @@ public final class DatabaseParts {
                 HohenheimMicrocopy.DATABASE_OVERVIEW.of("backup_temporary_detail"));
             case NEVER -> StateLineCell.of(state, HohenheimMicrocopy.DATABASE_OVERVIEW.of("backup_never"),
                 neverBackedUpDetail(database));
-            case OVERDUE -> StateLineCell.of(state, Microcopy.literal(ago(newest, request)),
+            case OVERDUE -> StateLineCell.of(state, Microcopy.literal(ago(newest, conduit)),
                 HohenheimMicrocopy.DATABASE_OVERVIEW.of("backup_overdue_detail")
                     .withArg("size", newest.bytes()));
-            case DONE -> StateLineCell.of(state, Microcopy.literal(ago(newest, request)),
+            case DONE -> StateLineCell.of(state, Microcopy.literal(ago(newest, conduit)),
                 UsageData.sizeOf(newest.bytes()));
         };
     }
 
-    private static @NonNull String ago(DatabaseBackups.@NonNull Stored dump, @NonNull PanelRequest request) {
-        return Wording.relative(request.conduit().getReader(), dump.at(), request.conduit().getMessageResolver());
+    private static @NonNull String ago(DatabaseBackups.@NonNull Stored dump, @NonNull Conduit conduit) {
+        return Wording.relative(conduit.getReader(), dump.at(), conduit.getMessageResolver());
     }
 
     /** The state column every database and engine list draws in place of the stored status. */

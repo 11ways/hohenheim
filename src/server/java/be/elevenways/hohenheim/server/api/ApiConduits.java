@@ -146,7 +146,9 @@ public final class ApiConduits {
         DomainRefusal.Reason reason = refusal.reason();
         if (reason instanceof HohenheimRefusalReason hohenheim) {
             return switch (hohenheim) {
-                case INSTANCE_NOT_PERMITTED, DATABASE_NOT_READY, BUILD_HOOK_REVOKED ->
+                case INSTANCE_NOT_PERMITTED, DATABASE_NOT_READY, BUILD_HOOK_REVOKED, DATABASE_DUMP_KIND_MISMATCH,
+                     DATABASE_DUMP_UNUSABLE, DATABASE_DUMP_SOURCE_GONE, DATABASE_BUSY, DATABASE_DUMP_WHOLE_SERVER,
+                     DATABASE_STAGING_UNSAFE, DATABASE_RESTORE_FAILED ->
                     refusal(conduit, Violations.ofForm(refusal.shown()));
             };
         }

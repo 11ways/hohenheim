@@ -219,8 +219,7 @@ public final class ControlPlaneBackups {
 
     /** Where archives are built before upload; never a resting place. */
     public static @NonNull Path stagingDirectory() {
-        return Path.of(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.BACKUP_PATH))
-            .resolve(STAGING_SUBDIRECTORY);
+        return DatabaseBackups.backupRoot().resolve(STAGING_SUBDIRECTORY);
     }
 
     /**

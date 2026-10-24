@@ -36,6 +36,7 @@ import be.elevenways.hohenheim.test.DnsFixtures;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.hohenheim.test.database.DumpTargetFixture;
 import be.elevenways.hohenheim.test.database.EngineHandles;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.HohenheimSlugs;
@@ -71,6 +72,8 @@ import be.elevenways.zenit.test.support.DatasourceProbe;
 import be.elevenways.zenit.test.support.EndpointConduit;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -1027,9 +1030,14 @@ class GroupedReadsQueryCountJourneyTest extends HohenheimTestBase {
             .extracting(offer -> offer instanceof Offer.Unavailable)
             .containsExactlyElementsOf(used);
         // The verdicts behind Back up now read the serving instances, then the hosts the records name and those
-        // instances' hosts in one read (DatabaseInstances.servingAmong).
-        Measured backUp = measure(DatabaseParts.BACK_UP_NOW, model, DatabaseModel.ID, databases, "instances",
-            "servers", "database_engines");
+        // instances' hosts in one read (DatabaseInstances.servingAmong); a dump needs a target to go to.
+        Measured backUp;
+        try (DumpTargetFixture target = DumpTargetFixture.install("grouped-reads-" + System.nanoTime())) {
+            backUp = measure(DatabaseParts.BACK_UP_NOW, model, DatabaseModel.ID, databases, "instances",
+                "servers", "database_engines");
+        } catch (IOException noDirectory) {
+            throw new UncheckedIOException(noDirectory);
+        }
         assertThat(backUp.statements()).as(step + ": Back up now reads the engines and their hosts once")
             .isEqualTo(Map.of("instances", 1, "servers", 1, "database_engines", 0));
         assertThat(backUp.offers()).as(step + ": every running database can be backed up")

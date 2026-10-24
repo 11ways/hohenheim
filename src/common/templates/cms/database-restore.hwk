@@ -9,6 +9,8 @@
 {% declare dbName: String %}
 {% declare passwordSecret: SecretRef %}
 {% declare restoreUrl: String = "" %}
+{#- What the upload replaces and the fresh backup it takes first, the submit's confirmation; null while refused. -#}
+{% declare restoreConfirm: Microcopy = null %}
 {#- Why no restore is offered now, null while one is. -#}
 {% declare restoreRefusal: Microcopy = null %}
 {% declare usedBy: List = null %}
@@ -31,7 +33,7 @@
             {% if restoreRefusal != null %}
             <pl-alert variant="warning" data-hh-restore-refused><pl-alert-description>{{ restoreRefusal }}</pl-alert-description></pl-alert>
             {% else %}
-            <form method="POST" action={% restoreUrl %} enctype="multipart/form-data">
+            <form method="POST" action={% restoreUrl %} enctype="multipart/form-data" use:CmsConfirm.destructive={% restoreConfirm %}>
                 {% csrf() %}
                 <pl-field>
                     <pl-label>{{ t("dump_file", scope: "database_tab") }}</pl-label>

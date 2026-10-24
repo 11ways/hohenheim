@@ -17,6 +17,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.database.DatabaseBackups;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
+import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.protoblast.common.time.Now;
@@ -323,23 +324,25 @@ class AlertsTest {
 
     /** A nightly dump refused at its cap reaches the administrator in words, its sizes worded as sizes. */
     @Test
-    void aDumpOverItsCapAlertsTheAdministratorWithItsSizesWorded() {
+    void aDumpOverItsCapAlertsTheAdministratorWithItsSizesWorded() throws Exception {
         seedUser("cap-admin@hohenheim.local", true, true);
         Integer previous = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.MAX_DUMP_MB);
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.MAX_DUMP_MB, 1);
-        try {
+        try (DumpTargetFixture target = DumpTargetFixture.install("cap-alert-target")) {
+            DumpTargetFixture.databaseRow("shop", "redis");
             // 1. One database's dump is half a megabyte over the cap; the backup refuses it and alerts.
             ScriptedDumpDocker docker = new ScriptedDumpDocker(new byte[(int) (ByteUnit.MEGABYTE.factor() * 3 / 2)]);
             DatabaseService capped = new DatabaseService() {
                 @Override
-                public Path backupToFile(String name, Path directory, String baseName) throws IOException {
+                public Path backupToFile(String name, Path directory, String baseName,
+                                         InstanceOperationLock.@NonNull Contention contention) throws IOException {
                     Path target = directory.resolve(baseName + ".rdb");
                     new ManagedDatabase(docker).backupToFile("db-" + name, ManagedDatabase.Engine.REDIS, "user",
                         "secret", name, target);
                     return target;
                 }
             };
-            String failure = DatabaseBackups.backUpOrAlert(capped, "shop");
+            String failure = DatabaseBackups.backUpOrAlert(capped, "shop", InstanceOperationLock.Contention.QUEUE);
             assertThat(failure).as("step 1: the run names the refusal technically").contains("max_dump_mb");
 
             // 2. THE ASSERTION: the administrator reads the dump's size and the cap as sizes, never a hand-built count.
@@ -351,6 +354,7 @@ class AlertsTest {
                     + " Nothing was transferred.");
         } finally {
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.MAX_DUMP_MB, previous);
+            Models.get(DatabaseModel.class).find().where(DatabaseModel.NAME.eq("shop")).delete();
         }
     }
 

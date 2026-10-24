@@ -136,7 +136,7 @@ final class DatabaseOverview {
         return facts;
     }
 
-    /** The dumps on disk, newest first, under the retention they are kept to. */
+    /** The complete dumps on the backup target, newest first, under the retention they are kept to. */
     private static @NonNull List<WidgetFact> backupFacts(@NonNull Row database, @NonNull LocaleChain locales,
                                                          @Nullable MessageResolver resolver) {
         List<WidgetFact> facts = new ArrayList<>();
@@ -145,11 +145,12 @@ final class DatabaseOverview {
                 text("backup_temporary_detail", locales, resolver)));
             return facts;
         }
+        String target = DatabaseBackups.configuredTargetName();
         facts.add(WidgetFact.of(text("kept", locales, resolver), HohenheimMicrocopy.DATABASE_OVERVIEW.of("kept_value")
             .withArg("count", Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.BACKUP_RETENTION))
+            .withArg("target", target != null ? target : "-")
             .resolve(locales, resolver)));
-        String name = database.get(DatabaseModel.NAME);
-        List<DatabaseBackups.Stored> dumps = name == null ? List.of() : DatabaseBackups.stored(name);
+        List<DatabaseBackups.Stored> dumps = DatabaseBackups.stored(database.get(DatabaseModel.ID));
         for (DatabaseBackups.Stored dump : dumps) {
             facts.add(WidgetFact.instant(Wording.bytes(Reader.of(locales, resolver), dump.bytes(), resolver),
                 dump.at().toString()));

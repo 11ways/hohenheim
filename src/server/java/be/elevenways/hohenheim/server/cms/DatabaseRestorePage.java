@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.database.DatabaseBackups;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.RecordTab;
@@ -28,8 +29,9 @@ import java.util.Map;
 
 /**
  * Restore tab on a managed database: connection details plus the dump-upload form posting to the host-declared
- * restore endpoint, offered only while the database serves (DatabaseVerdict): a failed or stopped one has no engine
- * to load a dump into, and the tab says so instead of offering an upload that can only fail.
+ * restore endpoint, offered only while the database serves (DatabaseVerdict) and a dump of it can be stored: the
+ * upload is an in-place restore whose fresh pre-restore dump the confirmation names. Otherwise the tab says why
+ * instead of offering an upload that can only fail.
  */
 public final class DatabaseRestorePage implements RecordTab.Rendered<Row> {
 
@@ -46,12 +48,17 @@ public final class DatabaseRestorePage implements RecordTab.Rendered<Row> {
             !CmsSupport.isDelegatedPanel(conduit)));
         vars.put("title", CmsSupport.pageTitle(conduit, HohenheimMicrocopy.DATABASE_RESTORE, name));
         DatabaseVerdict verdict = DatabaseVerdict.ofDatabase(record);
-        if (verdict.serves()) {
-            vars.put("restoreUrl", HohenheimEndpoints.DATABASES_RESTORE
-                .with(HohenheimEndpoints.DATABASE_NAME, name).toUrl());
-        } else {
+        Microcopy noTarget = DatabaseBackups.targetRefusal();
+        if (!verdict.serves()) {
             vars.put("restoreRefusal", HohenheimMicrocopy.DATABASE_TAB.of("restore_needs_running")
                 .withArg("state", verdict.state().label()));
+        } else if (noTarget != null) {
+            vars.put("restoreRefusal", noTarget);
+        } else {
+            vars.put("restoreUrl", HohenheimEndpoints.DATABASES_RESTORE
+                .with(HohenheimEndpoints.DATABASE_NAME, name).toUrl());
+            vars.put("restoreConfirm", HohenheimMicrocopy.DATABASE_TAB.of("restore_upload_confirm")
+                .withArg("name", name));
         }
         vars.put("usedBy", usedBy(record.get(DatabaseModel.ID)));
         vars.put("head", recordHead(conduit));

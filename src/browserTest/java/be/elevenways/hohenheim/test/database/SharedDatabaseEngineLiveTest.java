@@ -386,6 +386,26 @@ class SharedDatabaseEngineLiveTest {
                     capBefore);
             }
 
+            // 2d. A logical database of the same name already HOLDING data on the shared engine (what a destroy that
+            //     kept the data leaves under a name no record describes) refuses the move by name: the dump carries
+            //     --clean, so loading it there would replace those contents. They stay as they were.
+            Row sharedEngine = Models.get(DatabaseEngineModel.class)
+                .findOnHost(ServerModel.localServerId(), "mongo");
+            String sharedHandle = EngineHandles.ofEngine(sharedEngine);
+            mongoRoot(sharedEngine, docker, sharedHandle,
+                "db.getSiblingDB('" + database + "').leftover.insertOne({kept: 1});");
+            assertThatThrownBy(() -> service.moveToSharedEngine(name))
+                .as("step 2d: a move never loads over existing contents")
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("already exists")
+                .hasMessageContaining("nothing was switched");
+            assertThat(service.detail(name).placement()).as("step 2d: the record stays dedicated")
+                .isEqualTo(DatabaseModel.PLACEMENT_DEDICATED);
+            assertThat(mongoRoot(sharedEngine, docker, sharedHandle,
+                    "print('kept=' + db.getSiblingDB('" + database + "').leftover.countDocuments({}));"))
+                .as("step 2d: the existing contents are untouched").contains("kept=1");
+            mongoRoot(sharedEngine, docker, sharedHandle, "db.getSiblingDB('" + database + "').dropDatabase();");
+
             // 2c. THE HOST IS FULL: its reading shrinks to one megabyte short of what the
             //     engine needs beside the dedicated container. The move still succeeds,
             //     because the engine is booked against the memory the dedicated container
@@ -659,6 +679,22 @@ class SharedDatabaseEngineLiveTest {
             assertThat(DatabaseEngines.reconcileIsolation(mysqlEngineId))
                 .as("step 3e: and so does mysql's").isEmpty();
 
+            // 3g. The empty-target probe a move asks first: "absent" for no such database, a count for one that
+            //     exists, and a schema of its own (Postgres) or a table (MySQL) counts as an object.
+            assertThat(objects(docker, pgHandle, postgresEngine, "nosuchdb")).as("step 3g: postgres, absent")
+                .isEqualTo("absent");
+            assertThat(objects(docker, myHandle, mysqlEngine, "nosuchdb")).as("step 3g: mysql, absent")
+                .isEqualTo("absent");
+            assertThat(objects(docker, pgHandle, postgresEngine, "pgother"))
+                .as("step 3g: a new postgres database holds nothing of its own").isEqualTo("0");
+            DockerClient.ExecResult schema = docker.exec(pgHandle, List.of("psql", "-v", "ON_ERROR_STOP=1",
+                "-U", "pgother", "-d", "pgother", "-c", "CREATE SCHEMA extra"), List.of("PGPASSWORD=" + password));
+            assertThat(schema.exitCode()).as("step 3g: the owner adds a schema: %s", schema.stderr()).isZero();
+            assertThat(objects(docker, pgHandle, postgresEngine, "pgother"))
+                .as("step 3g: a schema alone makes it non-empty").isEqualTo("1");
+            assertThat(objects(docker, myHandle, mysqlEngine, "my_wild"))
+                .as("step 3g: a mysql database with a table is non-empty").isNotEqualTo("0").matches("[0-9]+");
+
             // 3f. CHANGE PASSWORD. Each database's user takes a new password inside its engine through the
             //     provisioning re-credential command, and the record stores what the engine took. The ENGINE's own
             //     reply admits the new password and refuses the old one, the admitted probe first as the positive
@@ -774,6 +810,17 @@ class SharedDatabaseEngineLiveTest {
         assertThat(result.exitCode())
             .as("the fingerprint command must succeed: %s", result.stderr()).isZero();
         return result.stdout();
+    }
+
+    /** The PRODUCT's own empty-target probe, trimmed, run where the move runs it. */
+    private static String objects(DockerClient docker, String handle, Row engineRow, String database)
+            throws IOException {
+        EngineHost host = EngineHost.ofEngine(engineRow);
+        DockerClient.ExecResult result = docker.exec(handle,
+            host.engine().logicalObjectsCommand(host.rootUser(), database),
+            host.engine().logicalEnv(host.rootPassword(), null));
+        assertThat(result.exitCode()).as("the objects probe must succeed: %s", result.stderr()).isZero();
+        return result.stdout().trim();
     }
 
     private static String mysqlDatabases(DockerClient docker, String handle, Row engineRow)

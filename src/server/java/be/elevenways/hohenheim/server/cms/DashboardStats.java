@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.app.DashboardStat;
 import be.elevenways.hohenheim.host.HostStanding;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.database.DatabaseBackups;
@@ -165,8 +166,16 @@ final class DashboardStats {
                 newestSize = latest.get(InstanceBackupModel.SIZE_BYTES);
             }
         }
-        for (Row database : AppDirectory.listed(panel, HohenheimSlugs.DATABASES, access)) {
-            DatabaseParts.BackupReading reading = DatabaseParts.backupOf(database);
+        List<Row> databases = AppDirectory.listed(panel, HohenheimSlugs.DATABASES, access);
+        List<Integer> databaseIds = new ArrayList<>(databases.size());
+        for (Row database : databases) {
+            databaseIds.add(database.get(DatabaseModel.ID));
+        }
+        // The newest dump of every listed database in one read, never one per database.
+        Map<Integer, DatabaseBackups.Stored> newestDumps = DatabaseBackups.newestOf(databaseIds);
+        for (Row database : databases) {
+            DatabaseParts.BackupReading reading = DatabaseParts.backupOf(database,
+                newestDumps.get(database.get(DatabaseModel.ID)));
             if (!reading.state().expectsBackups()) {
                 continue;
             }

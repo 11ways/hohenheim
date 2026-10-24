@@ -7,6 +7,8 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.WorkloadTier;
 import be.elevenways.hohenheim.app.DashboardStat;
 import be.elevenways.hohenheim.host.WorkloadView;
+import be.elevenways.hohenheim.model.BackupStatus;
+import be.elevenways.hohenheim.model.DatabaseDumpModel;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
@@ -17,6 +19,7 @@ import be.elevenways.hohenheim.server.database.DatabaseEngines;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.test.database.EngineHandles;
+import be.elevenways.hohenheim.test.database.DumpTargetFixture;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
@@ -29,6 +32,7 @@ import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -37,9 +41,6 @@ import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.attribute.FileTime;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -48,13 +49,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Pattern;
-import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * The Databases list and a database's overview say where each runs, which apps use it and when it
- * was last backed up (read from the dumps on disk, never a stored claim), and "Back up now" beside them, offered dead
+ * was last backed up (read from the stored dumps' ledger), and "Back up now" beside them, offered dead
  * where a backup cannot be taken.
  *
  * AIDEV-NOTE: the planted engines claim RUNNING with no container behind them; a reconcile sweep landing mid-journey
@@ -73,7 +73,7 @@ class DatabasesPageJourneyTest extends HohenheimHttpTestBase {
     @Test
     void aDatabaseSaysWhereItRunsWhoUsesItAndItsLastBackup() throws Exception {
         List<Runnable> cleanup = new ArrayList<>();
-        try {
+        try (DumpTargetFixture target = DumpTargetFixture.install(PREFIX + "target")) {
             // 1. A persistent database an app uses, its engine running, and a temporary one nobody uses.
             Row shop = database(cleanup, "shop", false);
             plantEngine(cleanup, shop, InstanceModel.STATUS_RUNNING);
@@ -104,18 +104,15 @@ class DatabasesPageJourneyTest extends HohenheimHttpTestBase {
             assertThat(say(DatabaseParts.backUpUnavailable(scratch))).as("step 2: a temporary one cannot")
                 .isEqualTo("A temporary database is not backed up.");
 
-            // 3. Three dumps on disk: the list reads the newest, the overview lists them under the retention, and
-            //    pruning keeps the newest.
-            Path directory = DatabaseBackups.directoryOf(PREFIX + "shop");
-            cleanup.add(() -> deleteTree(directory));
-            Files.createDirectories(directory);
+            // 3. Three dumps on the target: the list reads the newest, the overview lists them under the retention.
             Instant now = Now.instant();
-            dump(directory, "20261001-030000.sql", 2048, now.minus(2, ChronoUnit.DAYS));
-            dump(directory, "20261002-030000.sql", 4096, now.minus(1, ChronoUnit.DAYS));
-            dump(directory, "20261003-030000.sql", 18 * 1024 * 1024, now.minus(3, ChronoUnit.HOURS));
-            assertThat(DatabaseBackups.stored(PREFIX + "shop")).extracting(DatabaseBackups.Stored::file)
-                .as("step 3: the dumps on disk, newest first")
-                .containsExactly("20261003-030000.sql", "20261002-030000.sql", "20261001-030000.sql");
+            Row oldest = dump(shop, 2048, now.minus(2, ChronoUnit.DAYS));
+            Row middle = dump(shop, 4096, now.minus(1, ChronoUnit.DAYS));
+            Row newest = dump(shop, 18 * 1024 * 1024, now.minus(3, ChronoUnit.HOURS));
+            assertThat(DatabaseBackups.stored(shop.get(DatabaseModel.ID))).extracting(DatabaseBackups.Stored::id)
+                .as("step 3: the stored dumps, newest first")
+                .containsExactly((Integer) newest.get(DatabaseDumpModel.ID), (Integer) middle.get(DatabaseDumpModel.ID),
+                    (Integer) oldest.get(DatabaseDumpModel.ID));
             list = adminGet("/admin/" + HohenheimSlugs.DATABASES);
             assertThat(list.body()).as("step 3: the list reads the newest dump's size").contains("18 MB")
                 .as("step 3: a dump from last night is not overdue").doesNotContain(OVERDUE);
@@ -131,12 +128,14 @@ class DatabasesPageJourneyTest extends HohenheimHttpTestBase {
                 .contains("Apps that use it get these as environment variables; nobody has to paste them.")
                 .as("step 3: the app using it links to its page").contains(PREFIX + "app")
                 .as("step 3: every dump with its size").contains("18 MB", "4 KB", "2 KB")
-                .as("step 3: and how many are kept").contains("dumps, on this machine");
-
-            DatabaseBackups.prune(directory, 2);
-            assertThat(DatabaseBackups.stored(PREFIX + "shop")).extracting(DatabaseBackups.Stored::file)
-                .as("step 3: pruning keeps the newest two").containsExactly("20261003-030000.sql",
-                    "20261002-030000.sql");
+                .as("step 3: and how many are kept, where").contains("dumps, on " + PREFIX + "target");
+            Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN), "the admin panel");
+            PanelEntry dumpsEntry = Objects.requireNonNull(admin.entryBySlug(HohenheimSlugs.DATABASE_DUMPS));
+            PanelEntry databasesEntry = Objects.requireNonNull(admin.entryBySlug(HohenheimSlugs.DATABASES));
+            assertThat(dumpsEntry.requiredPermission()).as("step 3: the dumps are read behind the databases' own gate")
+                .isEqualTo(databasesEntry.requiredPermission());
+            assertThat(admin.accessPermission()).as("step 3: the admin panel's, which admits operators only")
+                .isEqualTo(HohenheimPanel.ACCESS);
 
             // 4. The front door: a database row opens its overview, and the overview is the landing tab.
             assertThat(list.body()).as("step 4: a row opens the overview")
@@ -144,9 +143,9 @@ class DatabasesPageJourneyTest extends HohenheimHttpTestBase {
 
             // 5. The nightly backup stopped: the newest dump is three days old, so the list warns instead of
             //    reading it as done.
-            Files.delete(directory.resolve("20261003-030000.sql"));
-            Files.delete(directory.resolve("20261002-030000.sql"));
-            dump(directory, "20260930-030000.sql", 1024, now.minus(3, ChronoUnit.DAYS));
+            deleteDump(newest);
+            deleteDump(middle);
+            dump(shop, 1024, now.minus(3, ChronoUnit.DAYS));
             list = adminGet("/admin/" + HohenheimSlugs.DATABASES);
             assertThat(list.body()).as("step 5: an old newest dump says the nightly backup stopped")
                 .contains("1 KB; " + OVERDUE);
@@ -222,6 +221,7 @@ class DatabasesPageJourneyTest extends HohenheimHttpTestBase {
             assertThat(selected).as("step 9: the row reads selected").containsPattern(Pattern.compile(
                 "data-row-key=\"" + shop.get(DatabaseModel.ID) + "\"[^>]*data-cms-selected"));
         } finally {
+            Models.get(DatabaseDumpModel.class).find().delete();
             for (int i = cleanup.size() - 1; i >= 0; i--) {
                 cleanup.get(i).run();
             }
@@ -236,7 +236,7 @@ class DatabasesPageJourneyTest extends HohenheimHttpTestBase {
     @Test
     void aDatabaseDumpIsABackupTheDashboardCounts() throws Exception {
         List<Runnable> cleanup = new ArrayList<>();
-        try {
+        try (DumpTargetFixture target = DumpTargetFixture.install(PREFIX + "tile-target")) {
             // 1. Whatever the shared database already holds is the baseline; a persistent database without a dump
             //    is one more thing that should be backed up and is not (the Databases list's "Never").
             int[] before = backupsTile();
@@ -249,10 +249,7 @@ class DatabasesPageJourneyTest extends HohenheimHttpTestBase {
 
             // 2. Its nightly dump lands: the tile counts it backed up, by the same verdict the Last backup cell reads,
             //    and names it as the newest copy (once: "0, No app has a backup target" beside a 16-hour-old dump).
-            Path directory = DatabaseBackups.directoryOf(PREFIX + "kept");
-            cleanup.add(() -> deleteTree(directory));
-            Files.createDirectories(directory);
-            dump(directory, "20261008-030000.sql", 18 * 1024 * 1024, Now.instant().minus(16, ChronoUnit.HOURS));
+            Row nightly = dump(kept, 18 * 1024 * 1024, Now.instant().minus(16, ChronoUnit.HOURS));
             assertThat(DatabaseParts.backupOf(kept).state()).as("step 2: a dump from last night is done")
                 .isEqualTo(DatabaseParts.BackupState.DONE);
             assertThat(backupsTile()).as("step 2: the tile counts it backed up")
@@ -262,7 +259,7 @@ class DatabasesPageJourneyTest extends HohenheimHttpTestBase {
                 .startsWith("Newest ").endsWith(", 18 MB");
 
             // 3. A dump older than the nightly allows is not a good backup: counted, not backed up.
-            dump(directory, "20261008-030000.sql", 18 * 1024 * 1024, Now.instant().minus(3, ChronoUnit.DAYS));
+            stamp(nightly, Now.instant().minus(3, ChronoUnit.DAYS));
             assertThat(backupsTile()).as("step 3: an overdue dump does not count as backed up")
                 .containsExactly(before[0], before[1] + 1);
 
@@ -271,6 +268,7 @@ class DatabasesPageJourneyTest extends HohenheimHttpTestBase {
             assertThat(backupsTile()).as("step 4: a temporary database leaves the count alone")
                 .containsExactly(before[0], before[1] + 1);
         } finally {
+            Models.get(DatabaseDumpModel.class).find().delete();
             for (int i = cleanup.size() - 1; i >= 0; i--) {
                 cleanup.get(i).run();
             }
@@ -298,7 +296,7 @@ class DatabasesPageJourneyTest extends HohenheimHttpTestBase {
     @Test
     void aDatabaseThatDoesNotRunIsOneProblemEverySurfaceReads() throws Exception {
         List<Runnable> cleanup = new ArrayList<>();
-        try {
+        try (DumpTargetFixture target = DumpTargetFixture.install(PREFIX + "problem-target")) {
             // 1. A shared engine running one database that two apps use: nothing to say.
             Row engine = row(cleanup, Models.get(DatabaseEngineModel.class), Map.of(
                 DatabaseEngineModel.NAME.getName(), PREFIX + "shared-engine",
@@ -486,21 +484,33 @@ class DatabasesPageJourneyTest extends HohenheimHttpTestBase {
         return row;
     }
 
-    private static void dump(Path directory, String file, int bytes, Instant at) throws Exception {
-        Path path = directory.resolve(file);
-        Files.write(path, new byte[bytes]);
-        Files.setLastModifiedTime(path, FileTime.from(at));
+    /** A complete stored dump of {@code database} taken at {@code at}, as the dump lane records one. */
+    private static Row dump(Row database, long bytes, Instant at) {
+        Model dumps = Models.get(DatabaseDumpModel.class);
+        Row dump = dumps.createEmptyRow();
+        dump.set(DatabaseDumpModel.DATABASE_ID, database.get(DatabaseModel.ID));
+        dump.set(DatabaseDumpModel.DATABASE_NAME, database.get(DatabaseModel.NAME));
+        dump.set(DatabaseDumpModel.ENGINE, database.get(DatabaseModel.ENGINE));
+        dump.set(DatabaseDumpModel.STATUS, BackupStatus.COMPLETE.key());
+        dump.set(DatabaseDumpModel.REMOTE_KEY, "planted/" + at.toEpochMilli() + ".sql.hdb");
+        dump.set(DatabaseDumpModel.SIZE_BYTES, bytes);
+        dumps.save(dump);
+        stamp(dump, at);
+        dump.set(DatabaseDumpModel.CREATED_AT, at);
+        return dump;
     }
 
-    private static void deleteTree(Path directory) {
-        try (Stream<Path> files = Files.list(directory)) {
-            for (Path file : files.toList()) {
-                Files.deleteIfExists(file);
-            }
-            Files.deleteIfExists(directory);
-        } catch (Exception gone) {
-            // Nothing left to remove.
-        }
+    /** The moment a dump was taken, written hook-free (the save stamps its own). */
+    private static void stamp(Row dump, Instant at) {
+        Models.get(DatabaseDumpModel.class).find().where(DatabaseDumpModel.ID.eq(dump.get(DatabaseDumpModel.ID)))
+            .assign(DatabaseDumpModel.CREATED_AT, at)
+            .bypassBehaviours()
+            .updateAll();
+    }
+
+    private static void deleteDump(Row dump) {
+        Models.get(DatabaseDumpModel.class).find().where(DatabaseDumpModel.ID.eq(dump.get(DatabaseDumpModel.ID)))
+            .delete();
     }
 
     private static String say(Microcopy copy) {

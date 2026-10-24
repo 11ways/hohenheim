@@ -18,7 +18,6 @@ import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.server.panel.PartsReads;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.orm.field.Field;
-import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.data.UsageData;
@@ -32,19 +31,12 @@ import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.server.page.CmsActionResultTranslator;
-import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
-import be.elevenways.zenit.cms.common.resource.ResourceForm;
-import be.elevenways.zenit.cms.common.resource.ResourceList;
 import be.elevenways.zenit.cms.common.resource.RecordOverview;
-import be.elevenways.zenit.cms.common.resource.ResourceMutations;
 import be.elevenways.zenit.cms.common.resource.ResourceParent;
-import be.elevenways.zenit.cms.common.resource.ResourceReads;
 import be.elevenways.zenit.cms.common.resource.ResourceTabs;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
-import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.conduit.Conduit;
-import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -58,7 +50,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 
 /**
  * The backup entries from shared parts: the operator's on /admin and the tenant's on /manage. Backups are born from
@@ -249,54 +240,33 @@ public final class InstanceBackupParts {
             .tab(HohenheimSlugs.Tab.BACKUPS);
     }
 
+    /** The instance backup ledger's list shape, beside the database dumps' (BackupLedgerList). */
+    private static final BackupLedgerList LEDGER_LIST = new BackupLedgerList(InstanceBackupOperations.BACKUP,
+        HohenheimSlugs.INSTANCE_BACKUPS, HohenheimMicrocopy.INSTANCE_BACKUP.of("plural"),
+        HohenheimMicrocopy.INSTANCE_BACKUP.of("singular"), 17, InstanceBackupParts::title,
+        InstanceBackupOperations.DELETE_BACKUP, InstanceBackupModel.CREATED_AT, InstanceBackupModel.STATUS,
+        InstanceBackupModel.SIZE_BYTES, InstanceBackupModel.TARGET_ID, InstanceBackupModel.REMOTE_KEY);
+
     /**
      * The parts both twins share: identity, list, title and the delete that removes the artifact too.
      *
-     * AIDEV-NOTE: the list leads with when the backup was taken and how it stands, the columns a phone keeps beside
-     * the sticky actions; the target and the raw amounts wait behind the picker. Whether its data disks or its host
-     * volumes apply is the instance kind's fact, which the Backups tab reads (InstanceBackupsPage).
+     * AIDEV-NOTE: whether its data disks or its host volumes apply is the instance kind's fact, which the Backups tab
+     * reads (InstanceBackupsPage); the target waits behind the picker. The instance is named, linked, on the
+     * overview's details card, never in the title.
      */
     private static PanelResource.@NonNull Builder<Row> base(@NonNull Identifier id,
                                                             @NonNull ResourceParent<Row> parent) {
-        RelationPick instance = RelationPick.of(InstanceBackupModel.INSTANCE_ID, InstanceModel.MODEL_ID).build();
-        TableSpec<Row> table = TableSpec.<Row>builder()
-            .column(ColumnSpec.fromField(InstanceBackupModel.CREATED_AT).build())
-            .column(ColumnSpec.fromField(InstanceBackupModel.STATUS).filterable().subtext("size_bytes").build())
-            .column(ColumnSpec.virtual(DATA_DISKS_COLUMN, HohenheimMicrocopy.INSTANCE_BACKUP.of(DATA_DISKS_COLUMN))
-                .absent(HohenheimMicrocopy.INSTANCE_BACKUP.of("data_disks_none")).build())
-            .column(ColumnSpec.virtual(HOST_VOLUMES_COLUMN,
-                    HohenheimMicrocopy.INSTANCE_BACKUP.of(HOST_VOLUMES_COLUMN))
-                .absent(HohenheimMicrocopy.INSTANCE_BACKUP.of("host_volumes_none")).build())
-            .column(ColumnSpec.fromField(InstanceBackupModel.INSTANCE_ID).relation(instance).build())
-            .column(ColumnSpec.fromField(InstanceBackupModel.TARGET_ID)
-                .relation(RelationPick.of(InstanceBackupModel.TARGET_ID, BackupTargetModel.MODEL_ID).build())
-                .hidden().build())
-            .column(ColumnSpec.fromField(InstanceBackupModel.SIZE_BYTES).hidden().build())
-            // AIDEV-NOTE: the remote key is what a restore is driven by on the target itself. It stays out of the
-            // default layout (it is long and noise on a healthy list) but the picker can bring it back, chip and all.
-            .column(ColumnSpec.fromField(InstanceBackupModel.REMOTE_KEY).hidden().copyable().build())
-            .build();
-        return PanelResource.builder(id, HohenheimSlugs.INSTANCE_BACKUPS, InstanceBackupOperations.BACKUP)
-            .label(HohenheimMicrocopy.INSTANCE_BACKUP.of("plural"))
-            .recordLabel(HohenheimMicrocopy.INSTANCE_BACKUP.of("singular"))
-            .icon(Icon.of("box-archive"))
-            .navGroup(HohenheimPanel.DEPLOY_GROUP)
-            .navOrder(17)
-            .showInNav(false)
-            .parent(parent)
-            .reads(ResourceReads.rows().title(InstanceBackupParts::title))
-            // A backup is immutable evidence: no create (born from the instance action or the nightly task) and no
-            // update; readers view, actions act. Its archive key is the page's one field, never its title; the instance
-            // is named, linked, on the overview's details card.
-            .form(ResourceForm.<Row>of(FormSpec.builder().add(InstanceBackupModel.REMOTE_KEY).build())
-                .landingTab(RecordOverview.SLUG).build())
-            .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL)
-                .computed(Objects.requireNonNull(table.column(DATA_DISKS_COLUMN)),
-                    (backup, request) -> dataDisksText(backup))
-                .computed(Objects.requireNonNull(table.column(HOST_VOLUMES_COLUMN)),
-                    (backup, request) -> hostVolumesText(backup))
-                .build())
-            .writes(ResourceMutations.rows().delete(InstanceBackupOperations.DELETE_BACKUP).build());
+        ColumnSpec dataDisks = ColumnSpec.virtual(DATA_DISKS_COLUMN,
+                HohenheimMicrocopy.INSTANCE_BACKUP.of(DATA_DISKS_COLUMN))
+            .absent(HohenheimMicrocopy.INSTANCE_BACKUP.of("data_disks_none")).build();
+        ColumnSpec hostVolumes = ColumnSpec.virtual(HOST_VOLUMES_COLUMN,
+                HohenheimMicrocopy.INSTANCE_BACKUP.of(HOST_VOLUMES_COLUMN))
+            .absent(HohenheimMicrocopy.INSTANCE_BACKUP.of("host_volumes_none")).build();
+        ColumnSpec instance = ColumnSpec.fromField(InstanceBackupModel.INSTANCE_ID)
+            .relation(RelationPick.of(InstanceBackupModel.INSTANCE_ID, InstanceModel.MODEL_ID).build()).build();
+        return LEDGER_LIST.resource(id, parent, List.of(dataDisks, hostVolumes, instance), false, List.of(),
+            list -> list.computed(dataDisks, (backup, request) -> dataDisksText(backup))
+                .computed(hostVolumes, (backup, request) -> hostVolumesText(backup)));
     }
 
     /**

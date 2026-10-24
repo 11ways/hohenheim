@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.server.cli.OfflineBoot;
+import be.elevenways.hohenheim.server.database.DatabaseBackups;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
@@ -213,6 +214,11 @@ public class ServerMain {
         // deploy funnel runs, and the instance's operation claim (not this process's roles) proves a row dead.
         // Virtual thread: the claim may wait out a rival controller's live build.
         BOOT_RECOVERY.get().fireAndForget(SandboxedBuilds::recoverInterrupted);
+        if (HohenheimRoles.enabled(HohenheimRoles.Role.DATABASES)) {
+            // A controller killed mid-dump leaves its dump row UPLOADING and possibly a committed artifact; the same
+            // process-start fence as the backup settle above.
+            BOOT_RECOVERY.get().fireAndForget(DatabaseBackups::recoverInterrupted);
+        }
         if (HohenheimRoles.enabled(HohenheimRoles.Role.PROXY)) {
             // A restart mid-release leaves a durable operation claiming to be in
             // flight: pre-switch ones lose their candidate (the prior release was

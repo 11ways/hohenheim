@@ -32,6 +32,7 @@ public final class HohenheimSlugs {
     public static final String BUILDS = "builds";
     public static final String CERTIFICATES = "certificates";
     public static final String DASHBOARD = "dashboard";
+    public static final String DATABASE_DUMPS = "database-dumps";
     public static final String DATABASE_ENGINES = "database-engines";
     public static final String DATABASES = "databases";
     public static final String DNS_PEERS = "dns-peers";

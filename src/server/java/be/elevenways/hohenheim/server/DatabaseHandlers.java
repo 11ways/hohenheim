@@ -7,19 +7,27 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.cms.HohenheimFlash;
+import be.elevenways.hohenheim.server.database.DatabaseBackups;
+import be.elevenways.hohenheim.server.database.DatabaseContentLock;
+import be.elevenways.hohenheim.server.database.DatabaseRestores;
 import be.elevenways.hohenheim.server.database.DatabaseService;
+import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.util.Closeables;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.io.DurableFiles;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -94,24 +102,52 @@ final class DatabaseHandlers {
                     .withArg("name", name));
                 return HandlerSupport.redirect(restorePage);
             }
+            Microcopy noTarget = DatabaseBackups.targetRefusal();
+            if (noTarget != null) {
+                // The restore's safety net is the pre-restore dump, which has nowhere to go.
+                HohenheimFlash.error(conduit, noTarget);
+                return HandlerSupport.redirect(restorePage);
+            }
+            // AIDEV-NOTE: the upload is an IN-PLACE restore, the Backups tab's own flow: a fresh dump of the database
+            // first, because a dump carries --clean and replaces the same-named tables of whatever it is loaded into.
+            // It REFUSES while another dump or restore of the database runs (database_busy), never parking this
+            // request thread behind one.
+            // AIDEV-TODO: the multipart lane already holds the file in heap (zenit parses the whole body, and
+            // DominoFile offers only getBytes); streaming it to disk needs the raw-body lane (use:CmsUpload.to), which
+            // does not yet wait for the form's CmsConfirm hold, so the destructive confirmation would be skipped.
+            Path staging = null;
             try {
-                Path temp = Files.createTempFile("hohenheim-restore-upload", null);
-                try {
-                    Files.write(temp, file.getBytes());
-                    databaseService.restoreFromFile(name, temp);
-                } finally {
-                    Files.deleteIfExists(temp);
+                Row database = Models.get(DatabaseModel.class).findByName(name);
+                if (database != null) {
+                    DatabaseContentLock.requireIdle(database.get(DatabaseModel.ID));
                 }
+                staging = DatabaseBackups.stagingDirectory("upload-");
+                // Created owner-only and empty before a byte of the dump is written into it.
+                Path upload = Files.createFile(staging.resolve("upload"));
+                DurableFiles.restrictToOwner(upload);
+                Files.write(upload, file.getBytes());
+                DatabaseRestores.restoreUploadInPlace(databaseService, name, upload);
             } catch (UnsupportedOperationException e) {
                 Blast.log("DB: restore of", name, "rejected -", e.getMessage());
                 HohenheimFlash.error(conduit, HohenheimMicrocopy.DATABASE_TAB.of("restore_unsupported")
                     .withArg("name", name));
                 return HandlerSupport.redirect(restorePage);
-            } catch (IOException e) {
+            } catch (DomainRefusal refused) {
+                Blast.log("DB: restore of", name, "refused -", refused.getMessage());
+                HohenheimFlash.error(conduit, refused.shown());
+                return HandlerSupport.redirect(restorePage);
+            } catch (Violations refused) {
+                // A gate of the pre-restore dump or the load (requireWith, the engine instance's claim): nothing loaded.
+                Blast.log("DB: restore of", name, "refused -", refused.getMessage());
+                HohenheimFlash.error(conduit, HandlerSupport.violationMessage(refused));
+                return HandlerSupport.redirect(restorePage);
+            } catch (IOException | UncheckedIOException e) {
                 Blast.log("DB: restore of", name, "failed -", e.getMessage());
                 HohenheimFlash.error(conduit, HohenheimMicrocopy.DATABASE_TAB.of("restore_failed")
                     .withArg("name", name));
                 return HandlerSupport.redirect(restorePage);
+            } finally {
+                FileTrees.deleteQuietly(staging);
             }
             recordOn(name, Change.fact(HohenheimActivityAction.RESTORED_BACKUP));
             HohenheimFlash.success(conduit, HohenheimMicrocopy.DATABASE_TAB.of("restored").withArg("name", name));

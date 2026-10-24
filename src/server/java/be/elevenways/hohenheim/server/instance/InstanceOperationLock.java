@@ -65,7 +65,7 @@ public final class InstanceOperationLock {
      * longer than any sandbox build a converge may be running, short enough that a wedged
      * operation cannot pile up waiting threads forever.
      */
-    static final int QUEUE_SECONDS = 3600;
+    public static final int QUEUE_SECONDS = 3600;
 
     /** How a caller meets an operation that is already running on the same record. */
     public enum Contention {
@@ -81,7 +81,15 @@ public final class InstanceOperationLock {
          * commit N+1 arriving during the release of N must still deploy N+1, and a drain
          * must run after the operation it belongs to, never beside the next one.
          */
-        QUEUE
+        QUEUE;
+
+        /** @return how long a caller of this policy waits for a claim another holder has, in seconds */
+        public int waitSeconds() {
+            return switch (this) {
+                case REFUSE -> 0;
+                case QUEUE -> QUEUE_SECONDS;
+            };
+        }
     }
 
     /** The lease-key prefix of an instance record's claim. */
@@ -367,10 +375,7 @@ public final class InstanceOperationLock {
     }
 
     private ClaimedRows<Integer>.@Nullable Held hold(int instanceId, @NonNull Contention contention, boolean stored) {
-        int wait = switch (contention) {
-            case REFUSE -> 0;
-            case QUEUE -> QUEUE_SECONDS;
-        };
+        int wait = contention.waitSeconds();
         Set<Thread> threads = this.waiting.computeIfAbsent(instanceId, ignored -> ConcurrentHashMap.newKeySet());
         Thread current = Thread.currentThread();
         ClaimedRows<Integer>.Held own = this.rows.heldHere(instanceId);

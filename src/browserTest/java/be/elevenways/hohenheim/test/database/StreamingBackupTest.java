@@ -1,6 +1,10 @@
 package be.elevenways.hohenheim.test.database;
 
 import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.server.database.DatabaseBackups;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -11,6 +15,7 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerStreamConnection;
 import be.elevenways.hohenheim.server.docker.DockerStreamTransport;
 import be.elevenways.hohenheim.server.docker.DockerTransport;
+import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.util.Http11;
 import be.elevenways.hohenheim.server.runtime.WorkloadLiveness;
@@ -139,13 +144,12 @@ class StreamingBackupTest {
      * catch let escape and abort the loop) must not cost the next database its backup.
      */
     @Test
-    void oneFailingDatabaseDoesNotAbortTheNightlyLoop() throws IOException {
-        Path backupRoot = Files.createTempDirectory("hohenheim-loop-bk");
-        String originalPath = Zenit.SETTINGS_VALUES.getValue(
-            HohenheimSettings.Database.BACKUP_PATH);
-        Zenit.SETTINGS_VALUES.setValue(
-            HohenheimSettings.Database.BACKUP_PATH, backupRoot.toString());
-        try {
+    void oneFailingDatabaseDoesNotAbortTheNightlyLoop() throws Exception {
+        TestDatabases.freshDatabase();
+        HohenheimTestRuntime.ensureBooted();
+        try (DumpTargetFixture target = DumpTargetFixture.install("loop-dump-target")) {
+            DumpTargetFixture.databaseRow("broken", DatabaseModel.ENGINE_POSTGRES);
+            Row healthy = DumpTargetFixture.databaseRow("healthy", DatabaseModel.ENGINE_POSTGRES);
             DatabaseService twoDatabases = new DatabaseService() {
 
                 @Override
@@ -154,8 +158,8 @@ class StreamingBackupTest {
                 }
 
                 @Override
-                public Path backupToFile(String name, Path directory, String baseName)
-                        throws IOException {
+                public Path backupToFile(String name, Path directory, String baseName,
+                                         InstanceOperationLock.Contention contention) throws IOException {
                     if ("broken".equals(name)) {
                         throw new IllegalStateException("boom: not an IOException");
                     }
@@ -174,12 +178,10 @@ class StreamingBackupTest {
                 .as("step 1: a per-database failure never escapes the loop")
                 .isNull();
 
-            // 2. The database AFTER the failing one still got its backup.
-            try (Stream<Path> files = Files.list(backupRoot.resolve("healthy"))) {
-                assertThat(files.toList())
-                    .as("step 2: the healthy database was still backed up")
-                    .hasSize(1);
-            }
+            // 2. The database AFTER the failing one still got its backup, on the target.
+            assertThat(DatabaseBackups.stored(healthy.get(DatabaseModel.ID)))
+                .as("step 2: the healthy database was still backed up")
+                .hasSize(1);
 
             // 3. The outcome is an honest partial: one dumped, one named failure -- the
             //    executor turns a non-empty failure list into a FAILED history row.
@@ -189,9 +191,8 @@ class StreamingBackupTest {
                 .as("step 3: the failure names the database and the reason")
                 .singleElement().asString().startsWith("broken: ").contains("boom");
         } finally {
-            Zenit.SETTINGS_VALUES.setValue(
-                HohenheimSettings.Database.BACKUP_PATH, originalPath);
-            deleteRecursively(backupRoot);
+            Models.get(DatabaseModel.class).find().where(DatabaseModel.NAME.eq("broken")).delete();
+            Models.get(DatabaseModel.class).find().where(DatabaseModel.NAME.eq("healthy")).delete();
         }
     }
 

@@ -17,6 +17,7 @@ import be.elevenways.zenit.common.security.KnownValueRedactor;
 import be.elevenways.zenit.server.io.DurableFiles;
 import be.elevenways.zenit.server.security.SecureTokens;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -26,7 +27,9 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Pattern;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -49,6 +52,19 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * @since   0.1.0
  */
 public class ManagedDatabase {
+
+    /** How much of a text dump {@link Engine#databaseSwitchIn} reads before it calls the header over. */
+    static final long HEADER_SCAN_CHARS = 16L << 20;
+
+    /** How much of one dump line the header scan keeps: a switch statement is short, a data row need not be. */
+    private static final int HEADER_LINE_CHARS = 4096;
+
+    /** What {@link Engine#headerVerdict} answers for a line that ends the header; no stripped statement equals it. */
+    private static final String HEADER_ENDED = "\n";
+
+    /** A mysqldump {@code USE `name`;} statement on a line of its own, from its first column. */
+    private static final Pattern MYSQL_USE = Pattern.compile("USE\\s+`(?:[^`]|``)+`\\s*;\\s*",
+        Pattern.CASE_INSENSITIVE);
 
     /**
      * Supported engines with their stored token, default image, port, data path,
@@ -361,10 +377,15 @@ public class ManagedDatabase {
          * dump restored onto a shared engine whose user had to be renamed used to hand every
          * object to ANOTHER record's role while the move reported success. The restore
          * decides the owner instead ({@link #restoreFromStdinCommand}'s role).
+         *
+         * AIDEV-NOTE: --clean --if-exists makes a dump restorable IN PLACE: each object is dropped (when present)
+         * before it is created, as mysqldump's default DROP TABLE IF EXISTS and mongorestore's --drop already do. Into
+         * an empty database the drops are no-ops. An object created after the dump was taken is not in it and stays.
          */
         List<String> dumpCommand(String user, String database) {
             return switch (this) {
-                case POSTGRES -> List.of("pg_dump", "--no-owner", "--no-acl", "-U", user, "-d", database);
+                case POSTGRES -> List.of("pg_dump", "--no-owner", "--no-acl", "--clean", "--if-exists",
+                    "-U", user, "-d", database);
                 // --no-tablespaces: MySQL 8 otherwise needs the global PROCESS privilege, which a
                 // per-database app user lacks. --single-transaction: consistent InnoDB dump, no locks.
                 case MYSQL -> List.of("mysqldump", "--no-tablespaces", "--single-transaction",
@@ -496,10 +517,11 @@ public class ManagedDatabase {
                 throw new IllegalArgumentException("Not a restorable owner role: '" + ownerRole + "'");
             }
             String body = switch (this) {
-                // ON_ERROR_STOP makes a failed statement abort with non-zero (no silent
-                // half-restore); the SET ROLE line goes FIRST on the same session.
+                // ON_ERROR_STOP makes a failed statement abort with non-zero, and --single-transaction runs the whole
+                // load as ONE transaction, so a failure rolls the --clean drops back too (restoresAtomically); the
+                // SET ROLE line goes FIRST on the same session.
                 case POSTGRES -> "{ if [ -n \"$4\" ]; then printf 'SET ROLE \"%s\";\\n' \"$4\"; fi;"
-                    + " head -c \"$1\"; } | psql -v ON_ERROR_STOP=1 -U \"$2\" -d \"$3\"";
+                    + " head -c \"$1\"; } | psql -v ON_ERROR_STOP=1 --single-transaction -U \"$2\" -d \"$3\"";
                 case MYSQL -> "head -c \"$1\" | mysql -u \"$2\" \"$3\"";
                 // --drop replaces existing collections; the archive carries its own db name,
                 // and --nsInclude keeps a restore on a SHARED engine inside this one
@@ -520,6 +542,109 @@ public class ManagedDatabase {
         /** Env for {@link #restoreFromStdinCommand}: the password, never in argv of the exec. */
         public List<String> restoreEnv(String password) {
             return dumpEnv(password);
+        }
+
+        /**
+         * Whether a failed {@link #restoreFromStdinCommand} load leaves the database as it was.
+         *
+         * AIDEV-NOTE: only PostgreSQL loads in one transaction. MySQL commits every DROP and CREATE TABLE on its own,
+         * mongorestore --drop replaces collection by collection and a redis restore swaps its RDB before the restart
+         * that can still fail, so a failed load of those may leave the dump's contents mixed with the previous ones.
+         */
+        public boolean restoresAtomically() {
+            return switch (this) {
+                case POSTGRES -> true;
+                case MYSQL, MONGO, REDIS -> false;
+            };
+        }
+
+        /**
+         * Whether a load replaces the engine's data files and restarts the server around them, which an ephemeral
+         * (tmpfs) data directory does not survive.
+         */
+        public boolean restoresByRestart() {
+            return switch (this) {
+                case REDIS -> true;
+                case POSTGRES, MYSQL, MONGO -> false;
+            };
+        }
+
+        /**
+         * The first statement in a text dump's header that creates or connects to a database of its own (pg_dump
+         * --create, pg_dumpall, mysqldump --databases), which a load into one named database cannot honour.
+         *
+         * AIDEV-NOTE: a HEADER scan: such a statement comes before the first table or data of the dump, so the scan
+         * ends at the first table, COPY, INSERT or data section ({@link #headerVerdict}) or after
+         * {@link ManagedDatabase#HEADER_SCAN_CHARS}, in fixed chunks keeping at most
+         * {@link ManagedDatabase#HEADER_LINE_CHARS} of a line, so neither a large dump nor one without a newline is ever
+         * held whole. It reads ISO-8859-1, which decodes every byte: the markers are ASCII and a dump need not be UTF-8.
+         *
+         * @return the offending statement, trimmed; null when none was found or the engine dumps no text
+         */
+        public @Nullable String databaseSwitchIn(@NonNull Path dump) throws IOException {
+            boolean text = switch (this) {
+                case POSTGRES, MYSQL -> true;
+                case REDIS, MONGO -> false;
+            };
+            if (!text) {
+                return null;
+            }
+            long read = 0;
+            char[] chunk = new char[64 * 1024];
+            StringBuilder line = new StringBuilder();
+            try (BufferedReader reader = Files.newBufferedReader(dump, StandardCharsets.ISO_8859_1)) {
+                int count;
+                while (read < HEADER_SCAN_CHARS
+                        && (count = reader.read(chunk, 0, (int) Math.min(chunk.length, HEADER_SCAN_CHARS - read)))
+                            != -1) {
+                    read += count;
+                    for (int i = 0; i < count; i++) {
+                        char c = chunk[i];
+                        if (c != '\n') {
+                            if (line.length() < HEADER_LINE_CHARS) {
+                                line.append(c);
+                            }
+                            continue;
+                        }
+                        String verdict = headerVerdict(line.toString());
+                        if (verdict != null) {
+                            return HEADER_ENDED.equals(verdict) ? null : verdict;
+                        }
+                        line.setLength(0);
+                    }
+                }
+            }
+            // The last line, ended by the file or by the cap rather than a newline.
+            String verdict = headerVerdict(line.toString());
+            return verdict == null || HEADER_ENDED.equals(verdict) ? null : verdict;
+        }
+
+        /**
+         * One header line read: the statement trimmed when it switches databases, {@link #HEADER_ENDED} when it
+         * starts a table or data (so a data row is never read as a statement), null to read on.
+         */
+        private @Nullable String headerVerdict(@NonNull String line) {
+            String statement = line.strip().toUpperCase(Locale.ROOT);
+            boolean ends = switch (this) {
+                case POSTGRES -> statement.startsWith("CREATE TABLE ") || statement.startsWith("CREATE UNLOGGED TABLE ")
+                    || statement.startsWith("CREATE FOREIGN TABLE ") || statement.startsWith("INSERT ")
+                    || (statement.startsWith("COPY ") && statement.contains(" FROM STDIN"))
+                    || statement.startsWith("-- DATA FOR NAME:");
+                case MYSQL -> statement.startsWith("CREATE TABLE ") || statement.startsWith("INSERT ")
+                    || statement.startsWith("REPLACE ") || statement.startsWith("LOCK TABLES ")
+                    || statement.startsWith("-- DUMPING DATA FOR TABLE ");
+                case REDIS, MONGO -> true;
+            };
+            if (ends) {
+                return HEADER_ENDED;
+            }
+            boolean switches = switch (this) {
+                case POSTGRES -> statement.startsWith("CREATE DATABASE ") || statement.startsWith("\\CONNECT ")
+                    || statement.startsWith("\\C ");
+                case MYSQL -> statement.startsWith("CREATE DATABASE ") || MYSQL_USE.matcher(line).matches();
+                case REDIS, MONGO -> false;
+            };
+            return switches ? line.strip() : null;
         }
 
         // AIDEV-NOTE: Probe over TCP (-h 127.0.0.1), not the unix socket. Postgres/MySQL run a
@@ -802,6 +927,24 @@ public class ManagedDatabase {
         }
 
         /**
+         * The command printing how many objects one logical database holds, or {@code absent} when it does not exist:
+         * relations, routines, types, schemas, large objects, extensions, event triggers, foreign servers and
+         * publications (Postgres), tables, views, routines, events and triggers (MySQL), collections (Mongo, where a
+         * database without one does not exist).
+         */
+        public List<String> logicalObjectsCommand(String rootUser, String database) {
+            requireLogical(rootUser, database, rootUser);
+            return switch (this) {
+                case MONGO -> List.of("sh", "-c", MONGO_OBJECTS_SCRIPT, "hohenheim-objects",
+                    String.valueOf(port), rootUser, database);
+                case MYSQL -> List.of("sh", "-c", MYSQL_OBJECTS_SCRIPT, "hohenheim-objects", rootUser, database);
+                case POSTGRES -> List.of("sh", "-c", POSTGRES_OBJECTS_SCRIPT, "hohenheim-objects", rootUser,
+                    database);
+                case REDIS -> throw noLogical();
+            };
+        }
+
+        /**
          * The command that re-asserts a logical database's TENANT ISOLATION on a shared
          * engine, as root. Idempotent; safe on every run.
          *
@@ -954,6 +1097,11 @@ public class ManagedDatabase {
             + " for (var i = 0; i < names.length; i++) { out.push(names[i] + '=' + r.collections[names[i]]); }"
             + " " + mongoAnswer("out.join(' ') + ' md5=' + r.md5"));
 
+        /** sh -c body; $1 port, $2 root user, $3 database. Prints how many collections the database holds. */
+        static final String MONGO_OBJECTS_SCRIPT = mongoRootScript(
+            "var names = db.getSiblingDB('$3').getCollectionNames(); "
+                + mongoAnswer("(names.length ? names.length : 'absent')"));
+
         /** sh -c body; $1 port, $2 root user (the record's own on a dedicated engine); the new password via env. */
         static final String MONGO_ROTATE_SCRIPT = mongoRootScript(
             "db.getSiblingDB('admin').changeUserPassword('$2', '$" + LOGICAL_PASSWORD + "');");
@@ -1046,6 +1194,17 @@ public class ManagedDatabase {
             + " \"$1\" -N -B";
 
         /**
+         * sh -c body; $1 root user, $2 database. Prints how many tables and views, routines, events and triggers it
+         * holds, or {@code absent}.
+         */
+        static final String MYSQL_OBJECTS_SCRIPT = "exec mysql -u \"$1\" -N -B -e \"SELECT IF((SELECT COUNT(*) FROM"
+            + " information_schema.schemata WHERE schema_name = '$2') = 0, 'absent', (SELECT COUNT(*)"
+            + " FROM information_schema.tables WHERE table_schema = '$2') + (SELECT COUNT(*) FROM"
+            + " information_schema.routines WHERE routine_schema = '$2') + (SELECT COUNT(*) FROM"
+            + " information_schema.events WHERE event_schema = '$2') + (SELECT COUNT(*) FROM"
+            + " information_schema.triggers WHERE trigger_schema = '$2'))\"";
+
+        /**
          * sh -c body; $1 root user, $2 database, $3 user. Prints how many views, routines,
          * triggers and events of the database carry a DEFINER other than the user.
          */
@@ -1100,6 +1259,10 @@ public class ManagedDatabase {
             + " | psql -v ON_ERROR_STOP=1 -q -U \"$1\" -d postgres; psql -v ON_ERROR_STOP=1 -q -U"
             + " \"$1\" -d postgres -c \"REVOKE CREATE ON SCHEMA public FROM PUBLIC\"";
 
+        /** The SQL condition on {@code pg_namespace n} that keeps a database's own schemas, never the system ones. */
+        static final String POSTGRES_OWN_NAMESPACE = "n.nspname NOT IN ('pg_catalog', 'information_schema')"
+            + " AND n.nspname NOT LIKE 'pg\\_%'";
+
         /**
          * sh -c body; $1 root user, $2 database, $3 user. Prints how many relations,
          * functions, types and schemas of the database the user does NOT own; prints
@@ -1107,13 +1270,11 @@ public class ManagedDatabase {
          */
         static final String POSTGRES_FOREIGN_OWNER_SCRIPT = "exec psql -v ON_ERROR_STOP=1 -U \"$1\" -d \"$2\" -tAc"
             + " \"SELECT (SELECT count(*) FROM"
-            + " pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname NOT IN"
-            + " ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg\\_%' AND c.relowner <>"
-            + " r.oid) + (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace"
-            + " WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE"
-            + " 'pg\\_%' AND p.proowner <> r.oid) + (SELECT count(*) FROM pg_type t JOIN pg_namespace n"
-            + " ON n.oid = t.typnamespace WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')"
-            + " AND n.nspname NOT LIKE 'pg\\_%' AND t.typowner <> r.oid) + (SELECT count(*) FROM"
+            + " pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE " + POSTGRES_OWN_NAMESPACE
+            + " AND c.relowner <> r.oid) + (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace"
+            + " WHERE " + POSTGRES_OWN_NAMESPACE + " AND p.proowner <> r.oid) + (SELECT count(*) FROM pg_type t JOIN"
+            + " pg_namespace n ON n.oid = t.typnamespace WHERE " + POSTGRES_OWN_NAMESPACE
+            + " AND t.typowner <> r.oid) + (SELECT count(*) FROM"
             + " pg_namespace n WHERE n.nspname NOT IN ('pg_catalog', 'information_schema', 'public')"
             + " AND n.nspname NOT LIKE 'pg\\_%' AND n.nspowner <> r.oid) FROM pg_roles r WHERE"
             + " r.rolname = '$3'\"";
@@ -1137,6 +1298,27 @@ public class ManagedDatabase {
             + " ON n.oid = c.relnamespace WHERE c.relkind = 'r' AND n.nspname NOT IN"
             + " ('pg_catalog', 'information_schema') ORDER BY 1\""
             + " | psql -v ON_ERROR_STOP=1 -U \"$1\" -d \"$2\" -tA";
+
+        /**
+         * sh -c body; $1 root user, $2 database. Prints how many objects of its own the database holds beyond what a
+         * new one carries (the public schema, plpgsql), or {@code absent} when it does not exist.
+         */
+        static final String POSTGRES_OBJECTS_SCRIPT = "set -e;"
+            + " if [ \"$(psql -v ON_ERROR_STOP=1 -U \"$1\" -d postgres -tAc"
+            + " \"SELECT 1 FROM pg_database WHERE datname = '$2'\")\" != 1 ]; then echo absent; else"
+            + " exec psql -v ON_ERROR_STOP=1 -U \"$1\" -d \"$2\" -tAc \"SELECT"
+            + " (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE "
+            + POSTGRES_OWN_NAMESPACE + ")"
+            + " + (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE "
+            + POSTGRES_OWN_NAMESPACE + ")"
+            + " + (SELECT count(*) FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace WHERE "
+            + POSTGRES_OWN_NAMESPACE + ")"
+            + " + (SELECT count(*) FROM pg_namespace n WHERE " + POSTGRES_OWN_NAMESPACE + " AND n.nspname <> 'public')"
+            + " + (SELECT count(*) FROM pg_largeobject_metadata)"
+            + " + (SELECT count(*) FROM pg_extension WHERE extname <> 'plpgsql')"
+            + " + (SELECT count(*) FROM pg_event_trigger)"
+            + " + (SELECT count(*) FROM pg_foreign_server)"
+            + " + (SELECT count(*) FROM pg_publication)\"; fi";
 
         /** {@code sh -c} body: $1 = port, $2 = user; picks whichever shell the image has and prints the ping's ok. */
         static final String MONGO_READY_SCRIPT = mongoRootScript(
@@ -1520,8 +1702,7 @@ public class ManagedDatabase {
             for (Object mount : list) {
                 if (mount instanceof Map<?, ?> m && dataPath.equals(m.get("Destination"))) {
                     if ("tmpfs".equals(m.get("Type"))) {
-                        throw new UnsupportedOperationException("redis restore needs a persistent data"
-                            + " volume; an ephemeral (tmpfs) data dir is wiped by the required restart");
+                        throw ephemeralRestore(Engine.REDIS);
                     }
                     return;
                 }
@@ -1529,6 +1710,12 @@ public class ManagedDatabase {
         }
         throw new UnsupportedOperationException(
             "redis restore needs a persistent data volume; none is mounted at " + dataPath);
+    }
+
+    /** The refusal of a restore-by-restart ({@link Engine#restoresByRestart}) into an ephemeral data directory. */
+    static @NonNull UnsupportedOperationException ephemeralRestore(@NonNull Engine engine) {
+        return new UnsupportedOperationException(engine.token + " restore needs a persistent data volume; an"
+            + " ephemeral (tmpfs) data dir is wiped by the required restart");
     }
 
     private void waitForStopped(String handle, long timeoutMillis) throws IOException {

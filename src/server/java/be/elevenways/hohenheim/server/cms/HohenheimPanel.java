@@ -119,6 +119,7 @@ public final class HohenheimPanel extends Panel {
         addIf(peers, AuthProviderParts.admin(), Role.PROXY);
         addIf(peers, DatabaseParts.admin(), Role.DATABASES);
         addIf(peers, DatabaseParts.engines(), Role.DATABASES);
+        addIf(peers, DatabaseDumpParts.admin(), Role.DATABASES);
         if (InstanceAttachmentParts.databasesServed()) {
             peers.add(InstanceAttachmentParts.databasesAdmin());
         }

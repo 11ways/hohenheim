@@ -702,14 +702,30 @@ public class HohenheimSettings {
             .hostOnly()
             .defaultValue("data/backups")
             .filesystemPath(HohenheimPaths.SERVER_FILES, PathKind.DIRECTORY)
-            .description("Directory for scheduled managed-database dumps")
+            .description("Directory the managed-database dumps are staged in before they are encrypted and stored "
+                + "on the backup target, and where dumps written before the target existed stay")
             .build();
 
         public static final SettingDefinition<Integer> BACKUP_RETENTION = GROUP.buildSetting("backup_retention",
                 Integer.class)
             .defaultValue(7)
-            .description("Number of dumps to keep per managed database")
+            .description("Number of dumps kept per managed database on the backup target")
             .build();
+
+        /**
+         * The backup TARGET record (by name) every managed-database dump is encrypted to.
+         *
+         * AIDEV-NOTE: required, with no default and no local fallback: a dump has exactly one path, the target, and a
+         * filesystem target is how a dump stays on this machine. Unset means every dump FAILS loudly (the
+         * BACKUP_FAILED alert, Back up now offered dead with the reason) instead of being written somewhere else.
+         */
+        public static final SettingDefinition<String> BACKUP_TARGET =
+            GROUP.buildSetting("backup_target", String.class)
+                .hostOnly()
+                .description("Name of the backup target managed-database dumps are encrypted to. Required: pick a "
+                    + "filesystem target to keep them on this machine, or an ssh target to keep them elsewhere")
+                .references(BackupTargetModel.MODEL_ID, BackupTargetModel.NAME)
+                .build();
 
         /**
          * The backup TARGET record (by name) control-plane recovery archives are uploaded to.

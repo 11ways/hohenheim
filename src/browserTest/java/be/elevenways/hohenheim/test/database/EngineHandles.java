@@ -79,6 +79,16 @@ public final class EngineHandles {
         }
     }
 
+    /** Removes an engine instance {@link #plant} planted, through the same owner scope the guard demands. */
+    public static void unplant(int databaseId, int instanceId) {
+        try {
+            OwnedInstances.inScope(DatabaseInstances.SOURCE, DatabaseModel.MODEL_ID, databaseId,
+                () -> Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(instanceId)).delete());
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     /**
      * The {@link #plant} sibling for a SHARED engine: the owned instance of a
      * {@link DatabaseEngineModel} row, planted with no daemon.

@@ -151,7 +151,7 @@ table migration:be.elevenways.hohenheim@2026_10_21_000001
   replaces 018
   replaces 019
 table migration:be.elevenways.hohenheim@2026_10_23_000001
-  checksum d6927e16a69df48564a781f415302a8d0e6a947e01e55719ba9073af41440d8c
+  checksum 43fd62c58bfc7a480c60ab9ad8b1453c06ff71e24e6c13d27d4d4080f46f541d
   class be.elevenways.hohenheim.migration.M002_AfterBaseline
   name after_baseline
   op add_column:instance_databases:deployed_generation|integer|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null
@@ -165,6 +165,8 @@ table migration:be.elevenways.hohenheim@2026_10_23_000001
   op add_column:release_operations:triggered_by|uuid|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null
   op add_index:build_hooks:build_hooks_instance_id_index(instance_id)
   op add_index:build_hooks:build_hooks_token_digest_unique(token_digest):unique
+  op add_index:database_dumps:database_dumps_database_id_index(database_id)
   op create_table:build_hooks[id|uuid|null=false|uniq=true|pk=true|auto=false|def=none|len=null|prec=null,null,instance_id|integer|null=false|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null|ref=instances.id:null:null,name|string|null=true|uniq=false|pk=false|auto=false|def=none|len=100|prec=null,null,token_digest|string|null=true|uniq=false|pk=false|auto=false|def=none|len=128|prec=null,null,url_preview|string|null=true|uniq=false|pk=false|auto=false|def=none|len=128|prec=null,null,revoked_at|datetime|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null,last_triggered_at|datetime|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null,created_at|datetime|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null,updated_at|datetime|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null]
+  op create_table:database_dumps[id|integer|null=false|uniq=true|pk=true|auto=true|def=none|len=null|prec=null,null,database_id|integer|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null,database_name|string|null=true|uniq=false|pk=false|auto=false|def=none|len=191|prec=null,null,engine|string|null=true|uniq=false|pk=false|auto=false|def=none|len=50|prec=null,null,image|string|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null,db_name|string|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null,target_id|integer|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null|ref=backup_targets.id:null:null,status|string|null=true|uniq=false|pk=false|auto=false|def=lit:failed|len=50|prec=null,null,remote_key|string|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null,sha256|string|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null,size_bytes|long|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null,error|text|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null,created_at|datetime|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null,updated_at|datetime|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null]
   op create_table:status_probe_backfills[instance_id|integer|null=false|uniq=true|pk=true|auto=false|def=none|len=null|prec=null,null]
   op data:give the starter Minecraft servers made before it existed their status probe@2

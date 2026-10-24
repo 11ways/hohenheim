@@ -358,8 +358,9 @@ row hohenheim:change_database_password at=3 verb=invoke band=overflow style=DEFA
 row hohenheim:move_database_shared at=4 verb=invoke band=overflow style=DEFAULT disabled=move_not_serving confirm=style:PRIMARY,title:move_shared%252Cscope%3Ddatabase,body:move_shared_confirm%252Cscope%3Ddatabase,confirm:move_shared_ok%252Cscope%3Ddatabase,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/move_database_shared
 row zenit:delete at=5 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Ddatabase,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 tab overview at=0 landing=true view=false
-tab restore at=1 landing=false view=false
-tab access at=2 landing=false view=false
+tab backups at=1 landing=false view=false
+tab restore at=2 landing=false view=false
+tab access at=3 landing=false view=false
 control CREATE%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20engine at=1 kind=zenitforms:form/select input=select required=false readonly=false options=postgres,mysql,redis,mongo binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20placement at=2 kind=zenitforms:form/select input=select required=false readonly=false options=dedicated,shared binding=searchable:false,clearable:true,presentation:DEFAULT

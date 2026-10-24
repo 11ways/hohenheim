@@ -5,15 +5,6 @@ import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
 import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
-import org.bouncycastle.crypto.InvalidCipherTextException;
-import org.bouncycastle.crypto.engines.AESEngine;
-import org.bouncycastle.crypto.modes.GCMBlockCipher;
-import org.bouncycastle.crypto.modes.GCMModeCipher;
-import org.bouncycastle.crypto.params.AEADParameters;
-import org.bouncycastle.crypto.params.KeyParameter;
-
-import javax.crypto.Cipher;
-import javax.crypto.spec.GCMParameterSpec;
 import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -22,9 +13,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.security.GeneralSecurityException;
-import java.security.MessageDigest;
-import java.security.SecureRandom;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.List;
@@ -34,30 +22,17 @@ import java.util.zip.ZipOutputStream;
 
 /**
  * The instance-backup archive format: a zip ({@code manifest.dry} + one
- * {@code volumes/<name>.tar} per payload) encrypted WHOLE with a key from the field-
- * encryption keyring -- settings carry secret variables and volume data is tenant
+ * {@code volumes/<name>.tar} per payload) encrypted WHOLE through {@link BackupCipher} under the
+ * {@link #MAGIC} {@code HIB1} -- settings carry secret variables and volume data is tenant
  * data, so nothing of either leaves the controller in the clear. The GCM tag
  * authenticates the whole ciphertext; per-entry sha256s inside the manifest pin each
  * plaintext payload on top of it.
  *
- * File layout: magic {@code HIB1}, key id (2-byte length + UTF-8), 12-byte IV, then
- * AES-256-GCM ciphertext of the zip. Magic and key id ride as GCM additional data,
- * so a header swap is an authentication failure, not a different decryption.
- *
- * AIDEV-NOTE: decryption FULLY verifies the GCM tag (doFinal) before anything reads
- * the plaintext zip -- a partially-decrypted stream must never feed a restore, which
- * is why this class decrypts to a staging file instead of handing out a
- * CipherInputStream.
- *
- * AIDEV-NOTE: decryption STREAMS through BouncyCastle's GCM, never the JDK Cipher. The
- * JDK's AES/GCM decrypt holds back ALL ciphertext until doFinal (it may not release
- * plaintext before the tag is checked), so an archive larger than the heap was written
- * fine and could never be restored. BouncyCastle releases plaintext as it goes and checks
- * the tag at the end; the plaintext lands in the staging file, which openVerified deletes
- * when the tag fails, so the "nothing unauthenticated reaches a restore" rule is kept by
- * the staging file rather than by the cipher. The FORMAT is unchanged (standard
- * AES-256-GCM, 128-bit tag, the same AAD), so every archive written before this still
- * opens; encryption keeps the JDK cipher, which streams on that side.
+ * AIDEV-NOTE: decryption FULLY verifies the GCM tag before anything reads the plaintext
+ * zip -- a partially-decrypted stream must never feed a restore, which is why this class
+ * decrypts to a staging file instead of handing out a CipherInputStream. The cipher (and
+ * why it streams through BouncyCastle) lives in {@link BackupCipher}, shared with the
+ * managed-database dumps; the format is unchanged, so every archive written before still opens.
  */
 public final class BackupArchive {
 
@@ -74,10 +49,6 @@ public final class BackupArchive {
 
     /** Archive entry prefix of each host volume's payload ({@link BackupManifest.HostVolumeEntry}). */
     public static final String HOST_VOLUME_PREFIX = "host-volumes/";
-
-    private static final SecureRandom RANDOM = new SecureRandom();
-    private static final int GCM_TAG_BITS = 128;
-    private static final int IV_BYTES = 12;
 
     private BackupArchive() {}
 
@@ -122,7 +93,7 @@ public final class BackupArchive {
                     zip.closeEntry();
                 }
             }
-            encrypt(plainZip, outFile, keyring);
+            BackupCipher.encrypt(MAGIC, plainZip, outFile, keyring);
             return Files.size(outFile);
         } finally {
             Files.deleteIfExists(plainZip);
@@ -143,7 +114,7 @@ public final class BackupArchive {
         Path plainZip = Files.createTempFile(workDir, ".backup-open", ".zip");
         boolean keep = false;
         try {
-            decrypt(archive, plainZip, keyring);
+            BackupCipher.decrypt(MAGIC, archive, plainZip, keyring);
             BackupManifest manifest;
             try (ZipFile zip = new ZipFile(plainZip.toFile())) {
                 ZipEntry manifestEntry = zip.getEntry(MANIFEST_ENTRY);
@@ -306,110 +277,6 @@ public final class BackupArchive {
     /** Stream a local file through SHA-256 (zenit's {@link SecureTokens#sha256Hex(Path)}). */
     public static @NonNull String sha256Of(@NonNull Path file) throws IOException {
         return SecureTokens.sha256Hex(file);
-    }
-
-    // -- encryption -----------------------------------------------------------
-
-    private static void encrypt(Path plainFile, Path outFile, EncryptionKeyring keyring)
-            throws IOException {
-        String keyId = keyring.activeKeyId();
-        byte[] iv = new byte[IV_BYTES];
-        RANDOM.nextBytes(iv);
-        try (OutputStream out = Files.newOutputStream(outFile,
-                StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
-            byte[] keyIdBytes = keyId.getBytes(StandardCharsets.UTF_8);
-            out.write(MAGIC);
-            out.write((keyIdBytes.length >> 8) & 0xFF);
-            out.write(keyIdBytes.length & 0xFF);
-            out.write(keyIdBytes);
-            out.write(iv);
-
-            Cipher cipher = gcm(Cipher.ENCRYPT_MODE, keyring.activeKey(), iv, keyIdBytes);
-            byte[] buffer = new byte[64 * 1024];
-            try (InputStream in = Files.newInputStream(plainFile)) {
-                int read;
-                while ((read = in.read(buffer)) >= 0) {
-                    byte[] chunk = cipher.update(buffer, 0, read);
-                    if (chunk != null && chunk.length > 0) {
-                        out.write(chunk);
-                    }
-                }
-            }
-            try {
-                out.write(cipher.doFinal());
-            } catch (GeneralSecurityException impossible) {
-                throw new IOException("Backup archive encryption failed", impossible);
-            }
-        }
-    }
-
-    private static void decrypt(Path archive, Path plainOut, EncryptionKeyring keyring)
-            throws IOException {
-        try (InputStream in = Files.newInputStream(archive)) {
-            byte[] magic = in.readNBytes(MAGIC.length);
-            if (magic.length != MAGIC.length || !MessageDigest.isEqual(magic, MAGIC)) {
-                throw new IOException("Backup archive does not start with the HIB1 magic;"
-                    + " not a hohenheim instance backup or truncated at byte zero");
-            }
-            byte[] lengthBytes = in.readNBytes(2);
-            if (lengthBytes.length != 2) {
-                throw new IOException("Backup archive header is truncated");
-            }
-            int keyIdLength = ((lengthBytes[0] & 0xFF) << 8) | (lengthBytes[1] & 0xFF);
-            byte[] keyIdBytes = in.readNBytes(keyIdLength);
-            byte[] iv = in.readNBytes(IV_BYTES);
-            if (keyIdBytes.length != keyIdLength || iv.length != IV_BYTES) {
-                throw new IOException("Backup archive header is truncated");
-            }
-            String keyId = new String(keyIdBytes, StandardCharsets.UTF_8);
-            if (!keyring.containsKey(keyId)) {
-                throw new IOException("Backup archive was encrypted under key '" + keyId
-                    + "', which this controller's keyring does not contain; restore needs"
-                    + " the keyring the backup was written under");
-            }
-            GCMModeCipher cipher = GCMBlockCipher.newInstance(AESEngine.newInstance());
-            cipher.init(false, new AEADParameters(
-                new KeyParameter(keyring.keyById(keyId).getEncoded()), GCM_TAG_BITS, iv));
-            cipher.processAADBytes(MAGIC, 0, MAGIC.length);
-            cipher.processAADBytes(keyIdBytes, 0, keyIdBytes.length);
-            try (OutputStream out = Files.newOutputStream(plainOut,
-                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
-                byte[] buffer = new byte[64 * 1024];
-                byte[] chunk = new byte[cipher.getUpdateOutputSize(buffer.length)];
-                int read;
-                while ((read = in.read(buffer)) >= 0) {
-                    int needed = cipher.getUpdateOutputSize(read);
-                    if (chunk.length < needed) {
-                        chunk = new byte[needed];
-                    }
-                    int produced = cipher.processBytes(buffer, 0, read, chunk, 0);
-                    out.write(chunk, 0, produced);
-                }
-                byte[] tail = new byte[cipher.getOutputSize(0)];
-                int produced;
-                try {
-                    produced = cipher.doFinal(tail, 0);
-                } catch (InvalidCipherTextException tampered) {
-                    throw new IOException("Backup archive fails authentication: the ciphertext"
-                        + " does not match its GCM tag. The backup is corrupt or tampered with"
-                        + " and is refused whole -- nothing was restored from it", tampered);
-                }
-                out.write(tail, 0, produced);
-            }
-        }
-    }
-
-    private static Cipher gcm(int mode, javax.crypto.spec.SecretKeySpec key, byte[] iv, byte[] aadKeyId)
-            throws IOException {
-        try {
-            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            cipher.init(mode, key, new GCMParameterSpec(GCM_TAG_BITS, iv));
-            cipher.updateAAD(MAGIC);
-            cipher.updateAAD(aadKeyId);
-            return cipher;
-        } catch (GeneralSecurityException error) {
-            throw new IOException("AES-GCM unavailable or key invalid", error);
-        }
     }
 
     private record Hashed(@NonNull String sha256, long size) {}

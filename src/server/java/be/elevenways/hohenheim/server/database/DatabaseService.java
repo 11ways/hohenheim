@@ -191,8 +191,19 @@ public class DatabaseService extends DatasourceScoped {
                                              boolean ephemeral, String serverName,
                                              ResourceLimits limits, @Nullable String placement)
             throws IOException {
-        Row created = insertRecord(name, engine, image, user, password, database, ephemeral,
-            serverName, limits, DatabaseModel.STATUS_PROVISIONING, placement, null);
+        return provisionInserted(insertRecord(name, engine, image, user, password, database, ephemeral,
+            serverName, limits, DatabaseModel.STATUS_PROVISIONING, placement, null));
+    }
+
+    /**
+     * Provisions the runtime of a record {@link #insertRecord} just persisted as provisioning, and marks it active.
+     *
+     * AIDEV-NOTE: split from {@link #create} so a caller that must undo ITS OWN create (a restore into a new database)
+     * holds the inserted record's id before anything can fail, and never has to find what it created by name.
+     *
+     * @throws IOException when the provision fails; the record is then marked failed, never deleted
+     */
+    public ManagedDatabase.Connection provisionInserted(@NonNull Row created) throws IOException {
         int recordId = created.get(DatabaseModel.ID);
         try {
             ManagedDatabase.Connection connection = provisionRuntime(created);
@@ -677,7 +688,7 @@ public class DatabaseService extends DatasourceScoped {
 
     /** A datasource-scoped body that may fail the way a daemon operation fails. */
     @FunctionalInterface
-    private interface ThrowingSupplier<T> {
+    interface ThrowingSupplier<T> {
         T get() throws IOException;
     }
 
@@ -1097,18 +1108,20 @@ public class DatabaseService extends DatasourceScoped {
      * Stamp the provisioning outcome; a reason is stored on failure and cleared otherwise. THE write of a database's
      * failure reason: daemon or engine text can quote its password or its engine's, so it is stored redacted.
      *
+     * AIDEV-NOTE: a two-column atomic update, never a load-mutate-save. A failed move stamps this after its credential
+     * claim ended, while a password change that queued on that claim may already be storing its password; saving the
+     * whole row read here wrote the old password back over the change's.
+     *
      * @return the reason as stored (redacted); null for none
      */
     private @Nullable String setStatus(int recordId, String status, @Nullable String failureReason) {
         return query(() -> {
             String stored = ConsoleRedaction.redactedReason(DatabaseModel.MODEL_ID, recordId, failureReason);
-            DatabaseModel model = model();
-            Row row = model.findById(recordId);
-            if (row != null) {
-                row.set(DatabaseModel.STATUS, status);
-                row.set(DatabaseModel.FAILURE_REASON, stored);
-                model.save(row);
-            }
+            model().find()
+                .where(DatabaseModel.ID.eq(recordId))
+                .assign(DatabaseModel.STATUS, status)
+                .assign(DatabaseModel.FAILURE_REASON, stored)
+                .updateAll();
             return stored;
         });
     }
@@ -1324,14 +1337,16 @@ public class DatabaseService extends DatasourceScoped {
      *
      * AIDEV-NOTE: a SHARED record's dump and restore authenticate as the engine's root, whose password no record's
      * change touches, so they take no claim: holding the engine's lock for a dump's whole length would stall every
-     * tenant's provisioning on that engine.
+     * tenant's provisioning on that engine. What serializes one record's dumps and restores, shared or dedicated, is
+     * the record's own {@link DatabaseContentLock}, which every dump and restore lane takes before this.
      *
      * AIDEV-NOTE: the record read under the claim is first settled ({@link #settlePending}): a password change that
      * drifted left the engine maybe holding the pending password, which the work would otherwise fail against. A
      * shared record with a pending password is settled under its engine's lock, the one its changes hold, and only
      * then works unlocked.
      */
-    private <T> T underCredentialClaim(@NonNull Row row, @NonNull CredentialWork<T> work) throws IOException {
+    private <T> T underCredentialClaim(@NonNull Row row, InstanceOperationLock.@NonNull Contention contention,
+                                       @NonNull CredentialWork<T> work) throws IOException {
         Integer recordId = row.get(DatabaseModel.ID);
         Row instance = DatabaseModel.isShared(row) || recordId == null ? null
             : query(() -> DatabaseInstances.owned(recordId));
@@ -1345,7 +1360,7 @@ public class DatabaseService extends DatasourceScoped {
         }
         try {
             return InstanceOperationLock.production().exclusive((Integer) instance.get(InstanceModel.ID),
-                InstanceOperationLock.Contention.QUEUE, () -> {
+                contention, () -> {
                     try {
                         Row current = settlePending(requireRecord(recordId)).row();
                         return work.run(current, hostOf(current));
@@ -1368,19 +1383,33 @@ public class DatabaseService extends DatasourceScoped {
      * Back up a persisted database into {@code directory}, naming the file {@code baseName} plus
      * the engine's dump extension, and return the written path. Handles text (SQL) and binary
      * (RDB / mongodump archive) engines. A shared record dumps ONE logical database out of its
-     * engine with the engine's root credentials.
+     * engine with the engine's root credentials. Refused at once while another dump or restore of it,
+     * or another operation on its engine instance, runs.
      */
     public Path backupToFile(String name, Path directory, String baseName) throws IOException {
+        return backupToFile(name, directory, baseName, InstanceOperationLock.Contention.REFUSE);
+    }
+
+    /** {@link #backupToFile(String, Path, String)}, meeting a running dump, restore or operation as told. */
+    public Path backupToFile(String name, Path directory, String baseName,
+                             InstanceOperationLock.@NonNull Contention contention) throws IOException {
         Row row = requireWith(name, HohenheimCapabilities.BACKUPS);
-        return backupRowToFile(row, directory, baseName);
+        return DatabaseContentLock.exclusive(row.get(DatabaseModel.ID), contention, () -> underCredentialClaim(row,
+            contention, (current, host) -> dumpToFile(current, host, directory, baseName)));
     }
 
-    private Path backupRowToFile(Row row, Path directory, String baseName) throws IOException {
-        return underCredentialClaim(row, (current, host) -> dumpToFile(current, host, directory, baseName));
-    }
-
-    /** The dump of {@link #backupRowToFile}, for a caller already holding {@link #underCredentialClaim}. */
+    /**
+     * The dump of {@link #backupToFile}, for a caller already holding the record's content lease and
+     * {@link #underCredentialClaim}.
+     *
+     * @throws IllegalStateException when the calling thread does not hold the record's {@link DatabaseContentLock}
+     */
     private Path dumpToFile(Row current, EngineHost host, Path directory, String baseName) throws IOException {
+        Integer recordId = current.get(DatabaseModel.ID);
+        if (recordId == null || !DatabaseContentLock.isHeldHere(recordId)) {
+            throw new IllegalStateException("Managed database " + current.get(DatabaseModel.NAME)
+                + " is dumped outside its content lease");
+        }
         Files.createDirectories(directory);
         Path target = directory.resolve(baseName + "." + host.engine().dumpExtension());
         managedFor(host.serverId()).backupToFile(handleOf(current, host), host.engine(),
@@ -1417,7 +1446,11 @@ public class DatabaseService extends DatasourceScoped {
      */
     public BackupStream backupStream(String name) throws IOException {
         Row row = requireWith(name, HohenheimCapabilities.BACKUPS);
-        return underCredentialClaim(row, (current, host) -> {
+        // AIDEV-TODO: the download still QUEUEs on a request thread; refusing needs its handler to tell a busy claim
+        // from the absence it answers 404 for (DatabaseHandlers), which it cannot yet.
+        InstanceOperationLock.Contention contention = InstanceOperationLock.Contention.QUEUE;
+        return DatabaseContentLock.exclusive(row.get(DatabaseModel.ID), contention, () -> underCredentialClaim(row,
+                contention, (current, host) -> {
             Path directory = Files.createTempDirectory("hohenheim-backup");
             Path dump = directory.resolve(name + "." + host.engine().dumpExtension());
             try {
@@ -1432,31 +1465,38 @@ public class DatabaseService extends DatasourceScoped {
                 Files.deleteIfExists(dump);
                 Files.deleteIfExists(directory);
             }
-        });
-    }
-
-    /** Restore a dump file (text or binary) into a persisted database by name. */
-    public void restoreFromFile(String name, Path source) throws IOException {
-        // No `restore` capability exists: an uploaded dump is arbitrary SQL run as the
-        // engine superuser and no delegated surface offers it, so this stays an operator
-        // act. A tenant-originated call is refused outright rather than silently allowed.
-        Row row = requireWith(name, null);
-        restoreRowFromFile(row, source);
+        }));
     }
 
     /**
+     * Restore a dump file (text or binary) into a persisted database by name; refused at once while another dump or
+     * restore of it, or another operation on its engine instance, runs.
+     */
+    public void restoreFromFile(String name, Path source) throws IOException {
+        restoreFromFile(name, source, InstanceOperationLock.Contention.REFUSE);
+    }
+
+    /**
+     * {@link #restoreFromFile(String, Path)}, meeting a running dump, restore or operation as {@code contention} says.
+     *
      * AIDEV-NOTE: a SHARED record restores with the engine's root credentials but under
      * the record's own role, so what the dump creates is the tenant's and not root's (a
      * root-owned table is one the tenant's own login cannot read). A dedicated engine's
      * root IS the record's user, so it restores as itself.
      */
-    private void restoreRowFromFile(Row row, Path source) throws IOException {
-        underCredentialClaim(row, (current, host) -> {
+    public void restoreFromFile(String name, Path source, InstanceOperationLock.@NonNull Contention contention)
+            throws IOException {
+        // No `restore` capability exists: an uploaded dump is arbitrary SQL run as the
+        // engine superuser and no delegated surface offers it, so this stays an operator
+        // act. A tenant-originated call is refused outright rather than silently allowed.
+        Row row = requireWith(name, null);
+        DatabaseContentLock.exclusive(row.get(DatabaseModel.ID), contention, () -> underCredentialClaim(row,
+                contention, (current, host) -> {
             managedFor(host.serverId()).restoreFromFile(handleOf(current, host), host.engine(),
                 host.rootUser(), host.rootPassword(), current.get(DatabaseModel.DB_NAME), source,
                 host.shared() ? current.get(DatabaseModel.DB_USER) : null);
             return null;
-        });
+        }));
     }
 
     /**
@@ -1490,10 +1530,34 @@ public class DatabaseService extends DatasourceScoped {
             throws IOException {
         Row row = query(() -> model().findByName(name));
         if (row != null) {
-            Integer recordId = row.get(DatabaseModel.ID);
-            if (recordId != null) {
-                HohenheimAccess.requireDatabaseCapability(recordId, HohenheimCapabilities.DESTROY);
-            }
+            destroyRecord(row, removeData, policy);
+        }
+    }
+
+    /**
+     * {@link #destroy(String, boolean)} of the record with this id, for a caller that must remove exactly the record it
+     * created and never another holding its name; a record already gone destroys nothing.
+     */
+    public void destroyById(int recordId, boolean removeData) throws IOException {
+        Row row = query(() -> model().findById(recordId));
+        if (row != null) {
+            destroyRecord(row, removeData, UnfinishedDestroys.Policy.AUTOMATIC);
+        }
+    }
+
+    /**
+     * The teardown of {@link #destroy(String, boolean, UnfinishedDestroys.Policy)}, then the record by its id.
+     *
+     * AIDEV-NOTE: under the database's content lease, refusing at once ({@code database_busy}) while a dump or restore
+     * of it runs: a teardown beside a running load or dump left the record gone and the dump's ledger row or the
+     * half-loaded engine behind. Re-entrant, so a restore's own cleanup of the record it created still runs.
+     */
+    private void destroyRecord(@NonNull Row row, boolean removeData, UnfinishedDestroys.@NonNull Policy policy)
+            throws IOException {
+        int recordId = row.get(DatabaseModel.ID);
+        String name = row.get(DatabaseModel.NAME);
+        HohenheimAccess.requireDatabaseCapability(recordId, HohenheimCapabilities.DESTROY);
+        DatabaseContentLock.exclusive(recordId, InstanceOperationLock.Contention.REFUSE, () -> {
             try {
                 scoped(() -> {
                     if (DatabaseModel.isShared(row)) {
@@ -1506,18 +1570,17 @@ public class DatabaseService extends DatasourceScoped {
                     return null;
                 });
             } catch (IOException e) {
-                if (recordId != null) {
-                    // The status stamp is the service's own bookkeeping inside an
-                    // operation whose destroy gate already ran above; a tenant-originated
-                    // caller must not see its refusal rewritten as "status is frozen".
-                    TenantWrites.inAuthorizedOperation(
-                        () -> setStatus(recordId, DatabaseModel.STATUS_DESTROY_FAILED, e.getMessage()));
-                }
+                // The status stamp is the service's own bookkeeping inside an
+                // operation whose destroy gate already ran above; a tenant-originated
+                // caller must not see its refusal rewritten as "status is frozen".
+                TenantWrites.inAuthorizedOperation(
+                    () -> setStatus(recordId, DatabaseModel.STATUS_DESTROY_FAILED, e.getMessage()));
                 throw new IOException("Destroy of '" + name + "' could not verify its teardown"
                     + " (record kept): " + e.getMessage(), e);
             }
-        }
-        exec(() -> model().find().where(DatabaseModel.NAME.eq(name)).delete());
+            exec(() -> model().find().where(DatabaseModel.ID.eq(recordId)).delete());
+            return null;
+        });
     }
 
     /**
@@ -1711,10 +1774,13 @@ public class DatabaseService extends DatasourceScoped {
                 stopped.add(instanceId);
             }
 
-            // 2-5. Under the credential claim: dump, land on the shared engine, verify, switch the record.
+            // 2-5. Under the content lease and then the credential claim: dump, land on the shared engine, verify,
+            //      switch the record. The lease keeps a backup or restore of the record from running beside the move's
+            //      dump and load, and refuses the move at once while one runs; the claim queues as a password change's.
             Path backupRoot = Path.of(Zenit.SETTINGS_VALUES.getValue(
                 HohenheimSettings.Database.BACKUP_PATH));
-            Moved moved = underCredentialClaim(row, (current, old) -> {
+            Moved moved = DatabaseContentLock.exclusive(recordId, InstanceOperationLock.Contention.REFUSE,
+                () -> underCredentialClaim(row, InstanceOperationLock.Contention.QUEUE, (current, old) -> {
                 String storedUser = current.get(DatabaseModel.DB_USER);
                 String password = current.get(DatabaseModel.DB_PASSWORD);
                 String database = current.get(DatabaseModel.DB_NAME);
@@ -1756,7 +1822,9 @@ public class DatabaseService extends DatasourceScoped {
                 EngineHost target = scoped(() -> EngineHost.ofEngine(DatabaseEngines.require(engineId)));
                 String targetHandle = handleOf(current, target);
 
-                // 4. Logical database + user, restore, verify.
+                // 4. Logical database + user, restore, verify. A logical database already holding anything is
+                //    refused first: the dump carries --clean, so loading it would replace what is there.
+                requireLogicalEmpty(target, targetHandle, database);
                 runLogical(target, targetHandle, engine.createLogicalCommand(target.rootUser(),
                     database, user), engine.logicalEnv(target.rootPassword(), password),
                     "create logical database '" + database + "'");
@@ -1783,7 +1851,7 @@ public class DatabaseService extends DatasourceScoped {
                     model().save(fresh);
                 });
                 return new Moved(old, target, dump);
-            });
+            }));
             EngineHost old = moved.old();
             EngineHost target = moved.target();
             Path dump = moved.dump();
@@ -2048,6 +2116,36 @@ public class DatabaseService extends DatasourceScoped {
     }
 
     /**
+     * Refuses a logical database that already exists on the engine holding any object, so a move never loads over
+     * contents of its own; an absent or empty one passes.
+     *
+     * AIDEV-NOTE: fail CLOSED: a probe that exits non-zero or prints anything but a count or {@code absent} refuses as
+     * well. Such a database is what a destroy that kept the data leaves behind under a name no record describes.
+     *
+     * @return whether the database was absent, so the move that creates it may drop it again when it fails
+     * @throws IOException naming the database, the engine and what it holds; nothing was switched
+     */
+    private boolean requireLogicalEmpty(EngineHost host, String handle, String database) throws IOException {
+        DockerClient.ExecResult result = new ServerService().clientFor(host.serverId()).exec(handle,
+            host.engine().logicalObjectsCommand(host.rootUser(), database),
+            host.engine().logicalEnv(host.rootPassword(), null));
+        String answer = result.stdout().trim();
+        if (result.exitCode() == 0 && "absent".equals(answer)) {
+            return true;
+        }
+        if (result.exitCode() != 0 || !answer.matches("[0-9]+")) {
+            throw new IOException("Could not tell whether logical database '" + database + "' on engine '"
+                + host.name() + "' is empty (exit " + result.exitCode() + "): "
+                + (result.stderr() + " " + answer).trim() + "; nothing was switched");
+        }
+        if (!"0".equals(answer.replaceFirst("^0+(?=.)", ""))) {
+            throw new IOException("Logical database '" + database + "' already exists on engine '" + host.name()
+                + "' holding " + answer + " objects; a move never loads over existing contents, so nothing was"
+                + " switched (remove or rename that database on the engine first)");
+        }
+    }
+
+    /**
      * Refuse a restored database any of whose objects another role owns (Postgres) or
      * another user defines (MySQL views, routines, triggers, events).
      *
@@ -2076,6 +2174,7 @@ public class DatabaseService extends DatasourceScoped {
                             + user + "'"))
                 + "; nothing was switched");
         }
+        return false;
     }
 
     /**

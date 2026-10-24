@@ -19,7 +19,6 @@ import be.elevenways.hohenheim.model.Retention;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
-import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
@@ -38,6 +37,7 @@ import be.elevenways.hohenheim.server.backup.BackupManifest.TemplateRef;
 import be.elevenways.hohenheim.server.backup.BackupManifest.VariableEntry;
 import be.elevenways.hohenheim.server.backup.BackupTarget;
 import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
+import be.elevenways.hohenheim.server.backup.UploadLedger;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
 import be.elevenways.hohenheim.server.runtime.ImageIdentity;
@@ -68,7 +68,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -968,45 +967,7 @@ public final class InstanceBackups {
         } else {
             HohenheimAccess.requireOperationCapability(instanceId, HohenheimCapabilities.BACKUPS);
         }
-        deleteAuthorized(backup, null, null);
-    }
-
-    /**
-     * The delete the retention sweep runs: the BACKUPS capability was proven for the
-     * instance when the operation was entered, and re-asking per row only made the
-     * sweep's {@code catch (Violations)} unable to tell a refusal from an unreachable
-     * target. Same reasoning as {@code InstanceSnapshots.deleteAuthorized}.
-     *
-     * AIDEV-NOTE: {@code currentTarget} exists for the explicit-target flow: a row whose
-     * TARGET_ID cannot be re-resolved (null, from the tests/re-target overload) made
-     * {@code targetFor} throw here, so retention kept the row FOREVER while its artifact
-     * stayed on the target. When the sweep runs inside a backup that holds the very
-     * target such a row was written to, that in-hand handle is used instead.
-     *
-     * @param currentTargetId the target id the calling operation used, or null
-     * @param currentTarget   the resolved target of the calling operation, or null
-     */
-    private void deleteAuthorized(@NonNull Row backup, @Nullable Integer currentTargetId,
-                                  @Nullable BackupTarget currentTarget) {
-        int backupId = backup.get(InstanceBackupModel.ID);
-        String key = backup.get(InstanceBackupModel.REMOTE_KEY);
-        if (key != null && !key.isBlank()) {
-            try {
-                Integer rowTargetId = backup.get(InstanceBackupModel.TARGET_ID);
-                BackupTarget target = currentTarget != null
-                        && Objects.equals(rowTargetId, currentTargetId)
-                    ? currentTarget
-                    : BackupTargetKinds.targetFor(rowTargetId);
-                target.delete(key);
-            } catch (IOException | Violations unreachable) {
-                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("backup_delete_failed")
-                    .withArg("reason", unreachable instanceof IOException io
-                        ? HohenheimViolations.reasonOf(io) : "target unavailable"));
-            }
-        }
-        Models.get(InstanceBackupModel.class).find()
-            .where(InstanceBackupModel.ID.eq(backupId))
-            .delete();
+        LEDGER.delete(backup);
     }
 
     /**
@@ -1019,57 +980,30 @@ public final class InstanceBackups {
     }
 
     /**
-     * The sweep as {@code backupNow} runs it, carrying the target the completed backup
-     * used so same-target rows are prunable even when their id cannot be re-resolved.
+     * The sweep as {@code backupNow} runs it, carrying the target the completed backup used so same-target rows are
+     * prunable even when their id cannot be re-resolved ({@link UploadLedger#delete(Row, Integer, BackupTarget)}).
+     *
+     * AIDEV-NOTE: each row is deleted without re-asking the BACKUPS capability: it was proven for the instance when the
+     * operation was entered, and re-asking per row only made the sweep's {@code catch (Violations)} unable to tell a
+     * refusal from an unreachable target. Same reasoning as {@code InstanceSnapshots.deleteAuthorized}.
      */
     private void pruneForRetention(int instanceId, @Nullable Integer currentTargetId,
                                    @Nullable BackupTarget currentTarget) {
-        RETENTION.sweep(instanceId, old -> deleteAuthorized(old, currentTargetId, currentTarget));
+        RETENTION.sweep(instanceId, old -> LEDGER.delete(old, currentTargetId, currentTarget));
     }
 
+    /** The instance backup ledger's columns, for the boot settle and the delete. */
+    private static final UploadLedger LEDGER = new UploadLedger(InstanceBackupModel.class, InstanceBackupModel.ID,
+        InstanceBackupModel.TARGET_ID, InstanceBackupModel.STATUS, InstanceBackupModel.REMOTE_KEY,
+        InstanceBackupModel.ERROR, InstanceBackupModel.CREATED_AT, InstanceBackupModel.UPDATED_AT, "BACKUP");
+
     /**
-     * Boot recovery: settle every backup row a killed controller left {@code uploading}.
-     *
-     * A row is settled only when its last write predates THIS process's start: an upload
-     * is a synchronous in-process operation, so no upload recorded before this process
-     * existed can still be running -- an exact fence, not an age guess. Rows written by
-     * this process (the listener binds before this sweep runs) are live operations and
-     * are left alone; if this process is killed too, the next boot settles them. The
-     * possibly-committed artifact is removed (absent is success, the target's delete
-     * contract); a target that refuses keeps the key in the FAILED row's error text so
-     * the evidence still names what may survive remotely.
+     * Boot recovery: settle every backup row a killed controller left {@code uploading} ({@link UploadLedger}).
+     * Rows written by this process (the listener binds before this sweep runs) are live operations and are left
+     * alone; if this process is killed too, the next boot settles them.
      */
     public static void recoverInterrupted() {
-        List<Row> stuck = Models.get(InstanceBackupModel.class).find()
-            .where(InstanceBackupModel.STATUS.eq(InstanceBackupModel.STATUS_UPLOADING))
-            .all();
-        for (Row row : stuck) {
-            Instant written = row.get(InstanceBackupModel.UPDATED_AT);
-            if (written == null) {
-                written = row.get(InstanceBackupModel.CREATED_AT);
-            }
-            if (BootSettle.writtenByThisProcess(written)) {
-                continue;   // written by THIS process: a live upload, not a corpse
-            }
-            Object id = row.get(InstanceBackupModel.ID);
-            String key = row.get(InstanceBackupModel.REMOTE_KEY);
-            String error = "Interrupted by a controller restart mid-upload";
-            if (key != null && !key.isBlank()) {
-                try {
-                    BackupTargetKinds.targetFor(row.get(InstanceBackupModel.TARGET_ID))
-                        .delete(key);
-                } catch (IOException | Violations unreachable) {
-                    error += "; the possibly-committed artifact could not be removed"
-                        + " and may remain on the target under " + key;
-                    Blast.log("BACKUP: could not remove interrupted upload", key, ":",
-                        HohenheimViolations.reasonOf(unreachable));
-                }
-            }
-            row.set(InstanceBackupModel.STATUS, InstanceBackupModel.STATUS_FAILED);
-            row.set(InstanceBackupModel.ERROR, error);
-            Models.get(InstanceBackupModel.class).saveWritten(row);
-            Blast.log("BACKUP: settled interrupted upload row", id, "as failed");
-        }
+        LEDGER.settleInterrupted();
     }
 
     // -- internals ------------------------------------------------------------
