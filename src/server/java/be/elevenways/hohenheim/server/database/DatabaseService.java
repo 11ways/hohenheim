@@ -964,12 +964,16 @@ public class DatabaseService extends DatasourceScoped {
             try {
                 provisionRuntime(row);
                 setStatus(recordId, DatabaseModel.STATUS_ACTIVE, null);
-            } catch (Exception e) {
+            } catch (Exception | Error e) {
                 // TERMINAL and visible: the status is what the list badge, the detail
                 // page and DatabaseAttention.failedDatabases read; the reason rides the
-                // record so the operator learns WHY without the journal.
+                // record so the operator learns WHY without the journal. An Error marks the record failed too (a record
+                // left "provisioning" is wedged for good), then propagates: the pool decides what an Error means.
                 String reason = setStatus(recordId, DatabaseModel.STATUS_FAILED, HohenheimViolations.reasonOf(e));
                 Blast.log("DB: provisioning failed for", name, "-", reason);
+                if (e instanceof Error error) {
+                    throw error;
+                }
             }
         });
     }

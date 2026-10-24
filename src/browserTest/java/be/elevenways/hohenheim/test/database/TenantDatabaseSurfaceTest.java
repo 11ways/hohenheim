@@ -116,7 +116,7 @@ class TenantDatabaseSurfaceTest extends HohenheimHttpTestBase {
         // the engine against the fake daemon and run real nft; this class proves record
         // boundaries, and its backup and destroy steps state that no engine container exists.
         WorkloadNetworkPolicy.overrideForTest(new WorkloadNetworkPolicy((args, stdin) -> {
-            throw new AssertionError("a refused engine deploy never runs nft");
+            throw new IllegalStateException("a refused engine deploy never runs nft");
         }, () -> false));
         admittedHostId = admittedHost();
     }
@@ -151,28 +151,31 @@ class TenantDatabaseSurfaceTest extends HohenheimHttpTestBase {
         Model databases = Models.get(DatabaseModel.class);
         Model instances = Models.get(InstanceModel.class);
         Model engines = Models.get(DatabaseEngineModel.class);
-        if (admittedHostId != null) {
-            Poll.until("every database on " + PREFIX + "host finishing its provisioning", PROVISIONING_SETTLES,
-                () -> databases.find()
-                    .where(DatabaseModel.SERVER_ID.eq(admittedHostId))
-                    .where(DatabaseModel.STATUS.eq(DatabaseModel.STATUS_PROVISIONING)).first() == null);
-        }
-        // Instance rows carry generated attribution: read-only, and undeletable, outside
-        // their owning tier's system scope. Soft-deleted ones count too -- a host refuses
-        // removal while any row still points at it. The shared engine's own instance rides
-        // the same sweep: it sits on this host too. The tenants' application instances are
-        // found by name; their database links go with them.
-        GeneratedRows.sweeping("database", () -> {
-            List<Row> created = new ArrayList<>(instances.find().withTrashed()
-                .where(InstanceModel.NAME.startsWith(PREFIX)).all());
+        try {
             if (admittedHostId != null) {
-                created.addAll(instances.find().withTrashed()
-                    .where(InstanceModel.SERVER_ID.eq(admittedHostId)).all());
+                Poll.until("every database on " + PREFIX + "host finishing its provisioning", PROVISIONING_SETTLES,
+                    () -> databases.find()
+                        .where(DatabaseModel.SERVER_ID.eq(admittedHostId))
+                        .where(DatabaseModel.STATUS.eq(DatabaseModel.STATUS_PROVISIONING)).first() == null);
             }
-            for (Row instance : created) {
-                InstanceRowCleanup.delete(instance.get(InstanceModel.ID));
-            }
-        });
+        } finally {
+            // Swept even when the wait timed out: the timeout is still reported, the rows never stay behind for the
+            // next class in this fork. Instance rows carry generated attribution: read-only, and undeletable, outside
+            // their owning tier's system scope. Soft-deleted ones count too -- a host refuses removal while any row
+            // still points at it. The shared engine's own instance rides the same sweep: it sits on this host too.
+            // The tenants' application instances are found by name; their database links go with them.
+            GeneratedRows.sweeping("database", () -> {
+                List<Row> created = new ArrayList<>(instances.find().withTrashed()
+                    .where(InstanceModel.NAME.startsWith(PREFIX)).all());
+                if (admittedHostId != null) {
+                    created.addAll(instances.find().withTrashed()
+                        .where(InstanceModel.SERVER_ID.eq(admittedHostId)).all());
+                }
+                for (Row instance : created) {
+                    InstanceRowCleanup.delete(instance.get(InstanceModel.ID));
+                }
+            });
+        }
         if (admittedHostId != null) {
             InstanceDatabaseModel links = Models.get(InstanceDatabaseModel.class);
             for (Row row : databases.find()
