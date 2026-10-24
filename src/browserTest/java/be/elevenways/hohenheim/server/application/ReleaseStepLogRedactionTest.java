@@ -6,6 +6,9 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
+import be.elevenways.hohenheim.model.StackModel;
+import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
+import be.elevenways.hohenheim.server.instance.SecretRedactor;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.test.HardDeletes;
@@ -157,6 +160,23 @@ class ReleaseStepLogRedactionTest extends HohenheimHttpTestBase {
             assertThat(ReleaseStepLog.redactedReason(orphan, "refused: " + DB_PASSWORD))
                 .as("step 4: an owner-less reason fails closed").isEqualTo(KnownValueRedactor.PLACEHOLDER);
             assertThat(ReleaseStepLog.redactedReason(orphan, null)).as("step 4: no reason stays none").isNull();
+
+            // 5. FAIL CLOSED: an owner whose secrets cannot be read (its record gone, or a model with no rule; the
+            //    same catch an unreadable variable table lands in) masks whole, never emits raw text.
+            ConsoleRedaction.Secrets gone = ConsoleRedaction.secretsOfOwner(StackModel.MODEL_ID, Integer.MAX_VALUE);
+            assertThat(gone.readable()).as("step 5: a gone owner's secrets are unreadable").isFalse();
+            assertThat(ConsoleRedaction.secretsOfOwner(ReleaseOperationModel.MODEL_ID, failedId).readable())
+                .as("step 5: an owner model with no rule is unreadable").isFalse();
+            assertThat(ConsoleRedaction.redactedReason(StackModel.MODEL_ID, Integer.MAX_VALUE, "refused: " + DB_PASSWORD))
+                .as("step 5: its failure reason is the placeholder").isEqualTo(KnownValueRedactor.PLACEHOLDER);
+            SecretRedactor masking = SecretRedactor.of(gone);
+            assertThat(masking.feed("first line\nsecond " + DB_PASSWORD + "\npartial"))
+                .as("step 5: a stream over it masks every line it releases")
+                .isEqualTo(KnownValueRedactor.PLACEHOLDER + "\n" + KnownValueRedactor.PLACEHOLDER + "\n");
+            assertThat(masking.flush()).as("step 5: and the unfinished line at its end")
+                .isEqualTo(KnownValueRedactor.PLACEHOLDER);
+            assertThat(ConsoleRedaction.secretsOf(appId).readable())
+                .as("step 5 anchor: a readable owner is not masked").isTrue();
         } finally {
             watching.unsubscribe();
             cleanUp(appId);

@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.DeployTrigger;
+import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.source.TestSources;
@@ -15,6 +16,7 @@ import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.cms.common.resource.ResourceVerb;
 import be.elevenways.zenit.cms.common.resource.RowWriteCall;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
+import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.preview.PreviewBranches;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -26,6 +28,7 @@ import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.security.KnownValueRedactor;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.hohenheim.preview.PreviewOperations;
 import be.elevenways.hohenheim.test.PlacedActionClicks;
@@ -164,6 +167,26 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
             Row failed = Models.get(PreviewDeploymentModel.class).findById(firstId);
             assertThat((String) failed.get(PreviewDeploymentModel.LAST_ERROR))
                 .as("step 3: the failure reason is recorded on the row").isNotBlank();
+
+            // 3b. A secret the failure quotes is stored REDACTED: the application declares the very text the failed
+            //     checkout reported as a secret value, the preview is queued again and fails the same way, and the
+            //     row keeps the placeholder where the value was.
+            String quoted = failed.get(PreviewDeploymentModel.LAST_ERROR);
+            new InstanceVariables().setValue(applicationId, null, "PREVIEW_QUOTED",
+                InstanceVariableModel.KIND_SECRET, quoted);
+            try {
+                PreviewDeployments.queue(applicationId, "manual-a", null, null, DeployTrigger.MANUAL);
+                awaitStatus(firstId, PreviewDeploymentModel.STATUS_FAILED);
+                assertThat((String) Models.get(PreviewDeploymentModel.class).findById(firstId)
+                        .get(PreviewDeploymentModel.LAST_ERROR))
+                    .as("step 3b: the stored reason carries the placeholder, never the secret value")
+                    .contains(KnownValueRedactor.PLACEHOLDER)
+                    .doesNotContain(quoted);
+            } finally {
+                for (Row variable : Models.get(InstanceVariableModel.class).findByInstanceId(applicationId)) {
+                    Models.get(InstanceVariableModel.class).delete(variable.get(InstanceVariableModel.ID));
+                }
+            }
 
             // 4. A FAILED preview still holds its charge until reclaimed (the expiry
             //    schedule armed at claim time is the backstop); destroying it releases

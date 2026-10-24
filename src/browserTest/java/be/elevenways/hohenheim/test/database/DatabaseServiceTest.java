@@ -22,6 +22,7 @@ import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.KnownValueRedactor;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -252,16 +253,22 @@ class DatabaseServiceTest {
                 .isNotNull();
 
             // 3. A provision that CANNOT succeed (an image nobody can pull) ends FAILED,
-            //    with the daemon's own words on the record -- never "provisioning".
+            //    with the daemon's own words on the record -- never "provisioning". The image
+            //    is named by the record's own password, so the daemon's refusal quotes it: the
+            //    stored reason keeps the placeholder where the password was.
+            String doomedPassword = "hunter2doomedpw";
             service.createAsync(doomed, ManagedDatabase.Engine.POSTGRES,
-                "hohenheim-test/does-not-exist:never", "appuser", "secret123", "appdb", true);
+                "hohenheim-test/" + doomedPassword + ":never", "appuser", doomedPassword, "appdb", true);
             assertThat(awaitStatus(service, doomed, DatabaseModel.STATUS_FAILED, 120_000))
                 .as("step 3: an unpullable image is a terminal failure")
                 .isEqualTo(DatabaseModel.STATUS_FAILED);
             DatabaseService.Detail failed = service.detail(doomed);
             assertThat(failed.failureReason())
                 .as("step 3: the record carries WHY")
-                .isNotBlank();
+                .isNotBlank()
+                .as("step 3: with the password it quoted redacted")
+                .contains(KnownValueRedactor.PLACEHOLDER)
+                .doesNotContain(doomedPassword);
 
             // 4. And the failure finds the operator: the attention list names the
             //    database with that reason.

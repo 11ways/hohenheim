@@ -146,10 +146,12 @@ public final class ApplicationDeploys {
                 commitSha = GitCheckout.materialize(InstanceModel.MODEL_ID, applicationId,
                     branch, settings, checkout);
             } catch (Violations refused) {
-                DeployStatuses.deployFailed(settings, pushedSha, safeReasonOf(refused, applicationId));
+                DeployStatuses.deployFailed(settings, pushedSha,
+                    ConsoleRedaction.reasonOf(InstanceModel.MODEL_ID, applicationId, refused));
                 throw refused;
             } catch (Exception failed) {
-                String reason = safeReasonOf(failed, applicationId);
+                // Git or daemon text can quote a secret value: the reason leaves (forge status, refusal) redacted.
+                String reason = ConsoleRedaction.reasonOf(InstanceModel.MODEL_ID, applicationId, failed);
                 DeployStatuses.deployFailed(settings, pushedSha, reason);
                 throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("source_checkout_failed")
                     .withArg("reason", reason));
@@ -172,17 +174,10 @@ public final class ApplicationDeploys {
             }
             return release;
         } catch (RuntimeException failed) {
-            DeployStatuses.deployFailed(settings, commitSha, safeReasonOf(failed, applicationId));
+            DeployStatuses.deployFailed(settings, commitSha,
+                ConsoleRedaction.reasonOf(InstanceModel.MODEL_ID, applicationId, failed));
             throw failed;
         }
-    }
-
-    /**
-     * A failure's reason as it may leave this method (a forge commit status, a refusal): git or daemon text can quote
-     * a secret value, so it is redacted through the application's secrets as one whole text.
-     */
-    private static @NonNull String safeReasonOf(@NonNull Throwable failed, int applicationId) {
-        return ConsoleRedaction.redactWhole(HohenheimViolations.reasonOf(failed), applicationId);
     }
 
     /**

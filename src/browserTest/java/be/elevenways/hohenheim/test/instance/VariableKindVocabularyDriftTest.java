@@ -74,14 +74,14 @@ class VariableKindVocabularyDriftTest extends HohenheimHttpTestBase {
             stored.set(InstanceVariableModel.KIND, InstanceVariableModel.KIND_PLAIN);
             stored.set(InstanceVariableModel.PLAIN_VALUE, "hunter2-plaintext-value");
             Models.get(InstanceVariableModel.class).save(stored);
-            assertThat(ConsoleRedaction.secretsOf(instanceId))
+            assertThat(ConsoleRedaction.secretsOf(instanceId).values())
                 .as("step 4: a PLAIN value is not a console secret")
                 .doesNotContain("hunter2-plaintext-value");
             Models.get(InstanceVariableModel.class).find()
                 .where(InstanceVariableModel.ID.eq(stored.get(InstanceVariableModel.ID)))
                 .assign(InstanceVariableModel.KIND, "mystery")
                 .updateAll();
-            assertThat(ConsoleRedaction.secretsOf(instanceId))
+            assertThat(ConsoleRedaction.secretsOf(instanceId).values())
                 .as("step 4: an unknown-kind value IS redacted, read from its plain column")
                 .contains("hunter2-plaintext-value");
         } finally {

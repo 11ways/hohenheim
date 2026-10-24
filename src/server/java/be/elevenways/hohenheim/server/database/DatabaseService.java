@@ -16,6 +16,7 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.InstanceDatabaseNetworks;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
@@ -535,23 +536,29 @@ public class DatabaseService extends DatasourceScoped {
                 // TERMINAL and visible: the status is what the list badge, the detail
                 // page and DatabaseAttention.failedDatabases read; the reason rides the
                 // record so the operator learns WHY without the journal.
-                String reason = HohenheimViolations.reasonOf(e);
-                setStatus(recordId, DatabaseModel.STATUS_FAILED, reason);
+                String reason = setStatus(recordId, DatabaseModel.STATUS_FAILED, HohenheimViolations.reasonOf(e));
                 Blast.log("DB: provisioning failed for", name, "-", reason);
             }
         });
     }
 
-    /** Stamp the provisioning outcome; a reason is stored on failure and cleared otherwise. */
-    private void setStatus(int recordId, String status, String failureReason) {
-        exec(() -> {
+    /**
+     * Stamp the provisioning outcome; a reason is stored on failure and cleared otherwise. THE write of a database's
+     * failure reason: daemon or engine text can quote its password or its engine's, so it is stored redacted.
+     *
+     * @return the reason as stored (redacted); null for none
+     */
+    private @Nullable String setStatus(int recordId, String status, @Nullable String failureReason) {
+        return query(() -> {
+            String stored = ConsoleRedaction.redactedReason(DatabaseModel.MODEL_ID, recordId, failureReason);
             DatabaseModel model = model();
             Row row = model.findById(recordId);
             if (row != null) {
                 row.set(DatabaseModel.STATUS, status);
-                row.set(DatabaseModel.FAILURE_REASON, failureReason);
+                row.set(DatabaseModel.FAILURE_REASON, stored);
                 model.save(row);
             }
+            return stored;
         });
     }
 
@@ -1078,6 +1085,8 @@ public class DatabaseService extends DatasourceScoped {
         int serverId = ServerModel.canonicalServerId(row.get(DatabaseModel.SERVER_ID));
 
         List<Integer> stopped = new ArrayList<>();
+        // The shared engine a failed move was landing on: its root password can be quoted before the switch.
+        int[] targetEngine = {-1};
         try {
             // 1. Stop the consumers: their injected address is about to change.
             for (Row instance : query(() -> InstanceDatabaseLinks.liveInstances(recordId))) {
@@ -1105,6 +1114,7 @@ public class DatabaseService extends DatasourceScoped {
                 () -> query(() -> DatabaseEngines.findOrCreateShared(serverId, engine,
                     row.get(DatabaseModel.IMAGE))));
             int engineId = engineRow.get(DatabaseEngineModel.ID);
+            targetEngine[0] = engineId;
             // The logical USER must be unique on the engine: MySQL and Postgres users are
             // engine-global, so a dedicated record's "app" landing beside another
             // record's "app" would re-credential that record and reach both databases
@@ -1158,14 +1168,15 @@ public class DatabaseService extends DatasourceScoped {
                 // The switch stands (the shared copy is verified); the old container
                 // still runs and still holds its port, memory booking and data. A log
                 // line is not visibility: the operator is ALERTED, by name.
+                String leftover = query(() -> ConsoleRedaction.reasonOf(DatabaseModel.MODEL_ID, recordId, e));
                 Blast.log("DB-MOVE: the old dedicated engine of", name,
-                    "could not be destroyed after the move -", e.getMessage());
+                    "could not be destroyed after the move -", leftover);
                 Alerts.trySend(NotificationEvents.DATABASE_MOVE_LEFTOVER, Alerts.about(DatabaseModel.MODEL_ID, name),
                     HohenheimMicrocopy.ALERT.of("database_move_leftover_subject")
                         .withArg("name", name),
                     HohenheimMicrocopy.ALERT.of("database_move_leftover_body")
                         .withArg("name", name).withArg("engine", target.name())
-                        .withArg("reason", String.valueOf(e.getMessage())));
+                        .withArg("reason", leftover));
             }
             query(() -> InstanceDatabaseNetworks.reattachForDatabase(recordId));
             for (int instanceId : stopped) {
@@ -1178,7 +1189,10 @@ public class DatabaseService extends DatasourceScoped {
             // a 5.3 GB archive) skipped this block entirely and left the record
             // "provisioning" and its workload stopped, with no line in any log. The
             // compensation runs for every failure; the Error is rethrown as itself.
-            String reason = HohenheimViolations.reasonOf(failed);
+            String reason = query(() -> ConsoleRedaction.redactWhole(HohenheimViolations.reasonOf(failed),
+                ConsoleRedaction.secretsOfOwner(DatabaseModel.MODEL_ID, recordId).and(targetEngine[0] < 0
+                    ? ConsoleRedaction.Secrets.NONE
+                    : ConsoleRedaction.secretsOfOwner(DatabaseEngineModel.MODEL_ID, targetEngine[0]))));
             Blast.log("DB-MOVE: moving", name, "failed -", reason);
             // The record goes back to ACTIVE before its consumers are redeployed: a deploy
             // resolves the injected credentials off the record and REFUSES a database that
@@ -1189,8 +1203,8 @@ public class DatabaseService extends DatasourceScoped {
                 try {
                     exec(() -> new InstanceService().deploy(instanceId));
                 } catch (RuntimeException e) {
-                    Blast.log("DB-MOVE: could not restart workload", instanceId,
-                        "after the failed move -", e.getMessage());
+                    Blast.log("DB-MOVE: could not restart workload", instanceId, "after the failed move -",
+                        query(() -> ConsoleRedaction.reasonOf(InstanceModel.MODEL_ID, instanceId, e)));
                 }
             }
             if (failed instanceof Error error) {

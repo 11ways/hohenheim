@@ -348,7 +348,7 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
                 Map.of("PORT", "8080", "API_TOKEN", "derived-api-token-value"));
             assertThat(Models.get(InstanceVariableModel.class).findByInstanceId(generatedId))
                 .as("step 9: both derived values are stored as secrets").hasSize(2);
-            assertThat(ConsoleRedaction.secretsOf(generatedId))
+            assertThat(ConsoleRedaction.secretsOf(generatedId).values())
                 .as("step 9: only the redactable one is a console secret")
                 .containsExactly("derived-api-token-value");
         } finally {

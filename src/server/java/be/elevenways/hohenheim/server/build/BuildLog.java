@@ -2,14 +2,14 @@ package be.elevenways.hohenheim.server.build;
 
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.holder.Subscription;
+import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
+import be.elevenways.hohenheim.server.instance.SecretRedactor;
 import be.elevenways.zenit.common.security.KnownValueRedactor;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.LinkedHashSet;
-import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
@@ -26,10 +26,11 @@ import java.util.function.Consumer;
  * AIDEV-NOTE: redaction is VALUE-based and unconditional, and it happens before anything
  * is stored, because a builder we do not control decides what it echoes. A registry
  * credential printed by a base image's entrypoint is the same leak as one printed by us.
- * It is THE streaming redactor ({@link KnownValueRedactor}), because a daemon hands
+ * It is THE streaming redactor ({@link SecretRedactor} over {@link KnownValueRedactor}), because a daemon hands
  * output over in chunks that are not line-aligned: a secret split across two appends is held
  * back until it can be judged whole, and the held tail is released by {@link #flush} when the
- * build ends. The cap counts redacted text.
+ * build ends. The cap counts redacted text. An owner whose secrets could not be read makes the
+ * log MASK every line ({@link #redactAll}): it fails closed, never open.
  *
  * AIDEV-NOTE: a viewer TAPS the log ({@link #subscribe}) and is handed exactly what was STORED -- the redacted,
  * capped delta of each append -- so a live viewer can never read a secret or a byte the persisted log would not hold.
@@ -43,9 +44,7 @@ public final class BuildLog {
     private record Tap(@NonNull Consumer<String> queue, @NonNull Runnable deliver) {}
 
     private final int maxBytes;
-    private final KnownValueRedactor redactor = KnownValueRedactor.of(Set.of());
-    /** The values the redactor took, for a whole text redacted apart from the stream ({@link #redactedWhole}). */
-    private final Set<String> secrets = new LinkedHashSet<>();
+    private final SecretRedactor redactor = SecretRedactor.of(ConsoleRedaction.Secrets.NONE);
     private final StringBuilder text = new StringBuilder();
     private boolean truncated;
     private final List<Tap> taps = new CopyOnWriteArrayList<>();
@@ -67,17 +66,19 @@ public final class BuildLog {
         if (!taken) {
             Blast.log("BUILD: a secret value shorter than", KnownValueRedactor.MIN_LENGTH,
                 "characters is NOT redacted from this build log");
-        } else {
-            synchronized (this) {
-                this.secrets.add(secret);
-            }
         }
         return taken;
     }
 
-    /** Register every value of a set as a secret ({@link #redact}). */
-    public void redactAll(@NonNull Set<String> secrets) {
-        for (String secret : secrets) {
+    /**
+     * Register an owner's secret set ({@link #redact} for each value); a set that could not be read makes this log
+     * mask every line from here on, and its {@link #redactedWhole} answer the placeholder.
+     */
+    public void redactAll(ConsoleRedaction.@NonNull Secrets secrets) {
+        if (!secrets.readable()) {
+            this.redactor.maskAll();
+        }
+        for (String secret : secrets.values()) {
             this.redact(secret);
         }
     }
@@ -90,17 +91,10 @@ public final class BuildLog {
      * Redact a text that is not output (a build's failure reason) through this log's secrets, as one whole stream of
      * its own: the log's stream and its held tail are untouched.
      *
-     * @return null for null
+     * @return null for null; the placeholder for a non-empty text when this log masks (its owner's secrets unreadable)
      */
     public @Nullable String redactedWhole(@Nullable String text) {
-        if (text == null) {
-            return null;
-        }
-        KnownValueRedactor whole;
-        synchronized (this) {
-            whole = KnownValueRedactor.of(this.secrets);
-        }
-        return whole.feed(text) + whole.flush();
+        return this.redactor.redactWhole(text);
     }
 
     /**

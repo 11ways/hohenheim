@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.build;
 
 import be.elevenways.hohenheim.server.build.BuildCredentials;
 import be.elevenways.hohenheim.server.build.BuildLog;
+import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
 import be.elevenways.protoblast.testsupport.time.Poll;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
@@ -145,5 +146,17 @@ class BuildCredentialsTest {
         assertThat(split.redactedWhole(null)).as("step 5: no reason stays none").isNull();
         assertThat(split.text()).as("step 5: the log itself is untouched")
             .isEqualTo("token [redacted] ok\ndone [redacted]");
+
+        // 6. FAIL CLOSED: an owner whose secrets could not be read never lets output through raw. Every line is the
+        //    placeholder (the line structure kept), the cut-off end too, and a failure reason is the placeholder.
+        BuildLog masked = new BuildLog(4096);
+        masked.redactAll(ConsoleRedaction.Secrets.UNREADABLE);
+        masked.append("step 1 echo hunter2-registry-password\nstep ");
+        masked.append("2 done\ncut off");
+        masked.flush();
+        assertThat(masked.text()).as("step 6: an unreadable secret set masks every line of the log")
+            .isEqualTo("[redacted]\n[redacted]\n[redacted]");
+        assertThat(masked.redactedWhole("pull refused: denied for hunter2-registry-password"))
+            .as("step 6: and its failure reason whole").isEqualTo("[redacted]");
     }
 }

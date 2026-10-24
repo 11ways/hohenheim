@@ -2,6 +2,8 @@ package be.elevenways.hohenheim.server.stack;
 
 import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.model.StackDeploymentModel;
+import be.elevenways.hohenheim.model.StackModel;
+import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -39,25 +41,33 @@ final class StackDeploymentRecords {
         }
     }
 
-    /** Stamp the outcome (and the spec snapshot on success) onto the running row. */
-    static void finished(@Nullable Integer recordId, boolean success, @Nullable String error,
-                         String log, @Nullable String specSnapshot) {
+    /**
+     * Stamp the outcome (and the spec snapshot on success) onto the running row: THE write of a deployment's error
+     * and log, both redacted whole through the stack's secrets (ConsoleRedaction.secretsOfOwner), because a service's
+     * daemon or orchestration text can quote one of its credentials.
+     *
+     * @return the error as stored (redacted), also when there is no row to stamp; null for no error
+     */
+    static @Nullable String finished(int stackId, @Nullable Integer recordId, boolean success,
+                                     @Nullable String error, @NonNull String log, @Nullable String specSnapshot) {
+        ConsoleRedaction.Secrets secrets = ConsoleRedaction.secretsOfOwner(StackModel.MODEL_ID, stackId);
+        String safeError = ConsoleRedaction.redactWhole(error, secrets);
         if (recordId == null) {
-            return;
+            return safeError;
         }
         try {
             StackDeploymentModel model = Models.get(StackDeploymentModel.class);
             Row row = model.find().where(StackDeploymentModel.ID.eq(recordId)).first();
             if (row == null) {
-                return;
+                return safeError;
             }
             Instant started = row.get(StackDeploymentModel.STARTED_AT);
             Instant finished = Now.instant();
             row.set(StackDeploymentModel.STATUS,
                 success ? StackDeploymentModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED)
                     : StackDeploymentModel.LIFECYCLE.stored(OperationStatus.FAILED));
-            row.set(StackDeploymentModel.ERROR, error);
-            row.set(StackDeploymentModel.LOG, log);
+            row.set(StackDeploymentModel.ERROR, safeError);
+            row.set(StackDeploymentModel.LOG, ConsoleRedaction.redactWhole(log, secrets));
             if (specSnapshot != null) {
                 row.set(StackDeploymentModel.SPEC, specSnapshot);
             }
@@ -67,13 +77,14 @@ final class StackDeploymentRecords {
                     (int) (finished.toEpochMilli() - started.toEpochMilli()));
             }
             model.save(row);
-            Integer stackId = row.get(StackDeploymentModel.STACK_ID);
-            if (stackId != null) {
-                model.pruneHistory(stackId, KEEP_PER_STACK);
+            Integer storedStackId = row.get(StackDeploymentModel.STACK_ID);
+            if (storedStackId != null) {
+                model.pruneHistory(storedStackId, KEEP_PER_STACK);
             }
         } catch (RuntimeException e) {
             Blast.log("STACK: could not record deployment outcome", recordId, "-", e.getMessage());
         }
+        return safeError;
     }
 
     /**
@@ -92,7 +103,7 @@ final class StackDeploymentRecords {
                         StackDeploymentModel.LIFECYCLE.stored(OperationStatus.RUNNING)))
                     .all()) {
                 String log = row.get(StackDeploymentModel.LOG);
-                finished(row.get(StackDeploymentModel.ID), false, error,
+                finished(stackId, row.get(StackDeploymentModel.ID), false, error,
                     (log != null ? log : "") + "FAILED: " + error + '\n', null);
                 finalized++;
             }

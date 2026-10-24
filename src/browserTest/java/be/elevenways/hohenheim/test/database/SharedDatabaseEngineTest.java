@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.database.TenantDatabases;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
@@ -21,6 +22,7 @@ import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.KnownValueRedactor;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -259,6 +261,25 @@ class SharedDatabaseEngineTest {
                     .findByName("shareda")).ownerModel())
                 .as("step 5 anchor: while a shared record is served by the engine row")
                 .isEqualTo(DatabaseEngineModel.MODEL_ID);
+
+            // 6. A failure quoting the engine's root password or a hosted database's password is stored REDACTED:
+            //    the engine's write redacts through its own and its databases' credentials, and a database's
+            //    reason through its own and its engine's.
+            Row engine = Models.get(DatabaseEngineModel.class).findById(engineA);
+            String rootPassword = engine.get(DatabaseEngineModel.ROOT_PASSWORD);
+            DatabaseEngines.setStatus(engineA, DatabaseModel.STATUS_FAILED,
+                "psql: auth failed for root/" + rootPassword + " creating usera/passworda");
+            String stored = Models.get(DatabaseEngineModel.class).findById(engineA)
+                .get(DatabaseEngineModel.FAILURE_REASON);
+            assertThat(stored).as("step 6: the engine's stored reason keeps its words")
+                .contains("psql: auth failed for root/" + KnownValueRedactor.PLACEHOLDER)
+                .as("step 6: and loses both passwords").doesNotContain(rootPassword).doesNotContain("passworda");
+            int sharedaId = Models.get(DatabaseModel.class).findByName("shareda").get(DatabaseModel.ID);
+            assertThat(ConsoleRedaction.redactedReason(DatabaseModel.MODEL_ID, sharedaId,
+                    "restore refused for passworda as root " + rootPassword))
+                .as("step 6: a database's reason loses its own password and its engine's")
+                .isEqualTo("restore refused for [redacted] as root [redacted]");
+            DatabaseEngines.setStatus(engineA, DatabaseModel.STATUS_PROVISIONING, null);
         });
     }
 

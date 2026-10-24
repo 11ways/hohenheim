@@ -650,8 +650,8 @@ public final class InstanceConsoles {
         int serverId = resolved.serverId();
         String name = resolved.row().get(InstanceModel.NAME);
         // Built HERE, under the caller's Db scope: the pump thread must never have to read
-        // the variable table itself, and an unreadable table must fail loudly at open
-        // rather than silently stream a secret later.
+        // the variable table itself. An unreadable table opens a MASKING redactor (every line
+        // the placeholder, the failure logged), never a stream that could carry a secret raw.
         String handle = resolved.spec().handle();
         String key = key(instanceId);
         InstanceConsoleSession session = new InstanceConsoleSession(instanceId, key,

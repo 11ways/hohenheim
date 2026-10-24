@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.server.preview;
 
 import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
-import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.RawValues;
@@ -28,6 +27,7 @@ import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
+import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
 import be.elevenways.hohenheim.server.instance.PlaintextEnvironments;
 import be.elevenways.hohenheim.model.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceService;
@@ -46,6 +46,7 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.text.SlugText;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
+import be.elevenways.zenit.common.security.KnownValueRedactor;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -111,12 +112,33 @@ public final class PreviewDeployments {
         try {
             deploy(applicationId, ref, sha, prNumber, trigger);
         } catch (Exception e) {
-            Blast.log("PREVIEW: deploy of application", applicationId, "ref", ref, "failed -",
-                e.getMessage());
+            String reason = reasonOf(applicationId, ref, e);
+            Blast.log("PREVIEW: deploy of application", applicationId, "ref", ref, "failed -", reason);
             if (e instanceof Violations && sha != null && !sha.isBlank()) {
-                reportRefusal(applicationId, sha, HohenheimViolations.reasonOf(e));
+                reportRefusal(applicationId, sha, reason);
             }
         }
+    }
+
+    /**
+     * A preview failure's reason as it may be logged or sent: through the preview's secrets once its row exists
+     * (its application's and its own instance's), else through its application's.
+     *
+     * @return the placeholder when not even the preview row could be looked up (fail closed)
+     */
+    private static @NonNull String reasonOf(int applicationId, @NonNull String ref, @NonNull Throwable failure) {
+        Row preview;
+        try {
+            preview = Models.get(PreviewDeploymentModel.class).find()
+                .where(PreviewDeploymentModel.APPLICATION_ID.eq(applicationId))
+                .where(PreviewDeploymentModel.GIT_REF.eq(ref))
+                .first();
+        } catch (RuntimeException unreadable) {
+            return KnownValueRedactor.PLACEHOLDER;
+        }
+        Integer previewId = preview == null ? null : preview.get(PreviewDeploymentModel.ID);
+        return previewId != null ? ConsoleRedaction.reasonOf(PreviewDeploymentModel.MODEL_ID, previewId, failure)
+            : ConsoleRedaction.reasonOf(InstanceModel.MODEL_ID, applicationId, failure);
     }
 
     /**
@@ -159,7 +181,7 @@ public final class PreviewDeployments {
             } catch (Exception e) {
                 // The row already records status failed + last_error.
                 Blast.log("PREVIEW: queued deploy of application", applicationId, "ref", ref,
-                    "failed -", e.getMessage());
+                    "failed -", ConsoleRedaction.reasonOf(PreviewDeploymentModel.MODEL_ID, previewId, e));
             }
         }));
         return preview;
@@ -326,11 +348,13 @@ public final class PreviewDeployments {
             Blast.log("PREVIEW:", hostname, "ready (application", applicationId + ", ref", ref + ")");
             return preview;
         } catch (Exception failed) {
+            // Git, build or daemon text can quote a secret value: the reason is stored and sent to the forge redacted.
+            String reason = ConsoleRedaction.reasonOf(PreviewDeploymentModel.MODEL_ID, previewId, failed);
             preview.set(PreviewDeploymentModel.STATUS, PreviewDeploymentModel.STATUS_FAILED);
-            preview.set(PreviewDeploymentModel.LAST_ERROR, HohenheimViolations.reasonOf(failed));
+            preview.set(PreviewDeploymentModel.LAST_ERROR, reason);
             model.save(preview);
             DeployStatuses.report(sourceSettings, sha, GitProviderClient.StatusState.FAILURE,
-                DeployStatuses.CONTEXT_PREVIEW, "Preview failed: " + HohenheimViolations.reasonOf(failed), null);
+                DeployStatuses.CONTEXT_PREVIEW, "Preview failed: " + reason, null);
             throw failed;
         }
     }
@@ -366,7 +390,7 @@ public final class PreviewDeployments {
             }
         } catch (Exception e) {
             Blast.log("PREVIEW: teardown of application", applicationId, "ref", ref, "failed -",
-                e.getMessage());
+                reasonOf(applicationId, ref, e));
         }
     }
 
@@ -419,8 +443,8 @@ public final class PreviewDeployments {
             } catch (Exception failed) {
                 preview.set(PreviewDeploymentModel.STATUS,
                     PreviewDeploymentModel.STATUS_FAILED);
-                preview.set(PreviewDeploymentModel.LAST_ERROR,
-                    "teardown failed: " + HohenheimViolations.reasonOf(failed));
+                preview.set(PreviewDeploymentModel.LAST_ERROR, "teardown failed: "
+                    + ConsoleRedaction.reasonOf(PreviewDeploymentModel.MODEL_ID, previewId, failed));
                 model.save(preview);
                 if (failed instanceof RuntimeException runtime) {
                     throw runtime;
@@ -436,7 +460,7 @@ public final class PreviewDeployments {
                     previewId, "");
             } catch (RuntimeException pruneFailed) {
                 Blast.log("PREVIEW: artifact prune of preview", previewId, "failed -",
-                    pruneFailed.getMessage());
+                    ConsoleRedaction.reasonOf(PreviewDeploymentModel.MODEL_ID, previewId, pruneFailed));
             }
             GitCheckout.discard(PreviewDeploymentModel.MODEL_ID, previewId);
             preview.set(PreviewDeploymentModel.STATUS,
@@ -559,7 +583,7 @@ public final class PreviewDeployments {
                 ? URI.create("http://127.0.0.1:" + port + "/") : null;
         } catch (RuntimeException e) {
             Blast.log("PREVIEW: upstream of preview", previewId, "unresolvable -",
-                e.getMessage());
+                ConsoleRedaction.reasonOf(PreviewDeploymentModel.MODEL_ID, previewId, e));
             return null;
         }
     }

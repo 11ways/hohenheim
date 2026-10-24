@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.database;
 
+import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
 import be.elevenways.hohenheim.server.instance.UnfinishedDestroys;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -237,10 +238,12 @@ public final class DatabaseEngines {
         try {
             List<String> failures = reconcileIsolation(engineId);
             if (!failures.isEmpty()) {
-                Blast.log("DB-ENGINE: isolation repair failed on engine", engineId, "-", failures);
+                Blast.log("DB-ENGINE: isolation repair failed on engine", engineId, "-",
+                    ConsoleRedaction.redactedReason(DatabaseEngineModel.MODEL_ID, engineId, String.valueOf(failures)));
             }
         } catch (IOException | RuntimeException e) {
-            Blast.log("DB-ENGINE: isolation of engine", engineId, "not confirmed -", e.getMessage());
+            Blast.log("DB-ENGINE: isolation of engine", engineId, "not confirmed -",
+                ConsoleRedaction.reasonOf(DatabaseEngineModel.MODEL_ID, engineId, e));
         }
     }
 
@@ -276,7 +279,7 @@ public final class DatabaseEngines {
                 ensureRunning(engineId);
             } catch (Exception e) {
                 Blast.log("DB-ENGINE: provisioning failed for engine", engineId, "-",
-                    e.getMessage());
+                    ConsoleRedaction.reasonOf(DatabaseEngineModel.MODEL_ID, engineId, e));
             }
         });
     }
@@ -294,7 +297,8 @@ public final class DatabaseEngines {
             try {
                 redeploy(engineId);
             } catch (Exception e) {
-                Blast.log("DB-ENGINE: resize failed for engine", engineId, "-", e.getMessage());
+                Blast.log("DB-ENGINE: resize failed for engine", engineId, "-",
+                    ConsoleRedaction.reasonOf(DatabaseEngineModel.MODEL_ID, engineId, e));
             }
         });
     }
@@ -359,12 +363,16 @@ public final class DatabaseEngines {
         return names.toString();
     }
 
-    /** Stamp an outcome; a reason is stored on failure and cleared otherwise. */
+    /**
+     * Stamp an outcome; a reason is stored on failure and cleared otherwise. THE write of an engine's failure reason:
+     * daemon or engine text can quote its root password or a hosted database's, so it is stored redacted.
+     */
     public static void setStatus(int engineId, @NonNull String status, @Nullable String reason) {
         Row row = model().findById(engineId);
         if (row != null) {
             row.set(DatabaseEngineModel.STATUS, status);
-            row.set(DatabaseEngineModel.FAILURE_REASON, reason);
+            row.set(DatabaseEngineModel.FAILURE_REASON,
+                ConsoleRedaction.redactedReason(DatabaseEngineModel.MODEL_ID, engineId, reason));
             model().save(row);
         }
     }

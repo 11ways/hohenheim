@@ -11,6 +11,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.security.KnownValueRedactor;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.net.http.HttpResponse;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -163,6 +165,27 @@ class StackDeployFailureRecordTest extends HohenheimHttpTestBase {
         assertThat(Models.get(StackModel.class).findById(stackId).get(StackModel.STATUS))
             .as("step 5: and the stack no longer claims to be deploying")
             .isNotEqualTo(StackModel.STATUS_DEPLOYING);
+
+        // 6. A stack secret the failure quotes is stored REDACTED: the missing dependency is named by a value the
+        //    service's environment declares, so the refusal quotes it; the row's error and log keep the placeholder.
+        String secret = "ghost-hunter2-stack-secret";
+        Model serviceModel = Models.get(StackServiceModel.class);
+        Row service = serviceModel.find().where(StackServiceModel.STACK_ID.eq(stackId)).first();
+        Row quotingDependency = new Row();
+        quotingDependency.set(StackServiceModel.DEPENDS_SERVICE, secret);
+        quotingDependency.set(StackServiceModel.DEPENDS_CONDITION, StackServiceModel.CONDITION_STARTED);
+        service.setRecords(StackServiceModel.DEPENDS_ON, List.of(quotingDependency));
+        service.set(StackServiceModel.ENVIRONMENT, Map.of("API_TOKEN", secret));
+        serviceModel.save(service);
+        assertThatThrownBy(() -> StackRuntime.get().deploy(stackId, "manual"))
+            .isInstanceOf(IOException.class);
+        Row quoting = deployments().get(0);
+        assertThat((String) quoting.get(StackDeploymentModel.ERROR))
+            .as("step 6: the stored error keeps the placeholder, never the stack's secret")
+            .contains(KnownValueRedactor.PLACEHOLDER)
+            .doesNotContain(secret);
+        assertThat((String) quoting.get(StackDeploymentModel.LOG))
+            .as("step 6: and so does the stored log").contains("FAILED:").doesNotContain(secret);
     }
 
     private static List<Row> deployments() {

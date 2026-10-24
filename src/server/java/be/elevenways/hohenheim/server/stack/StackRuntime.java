@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.stack;
 
+import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
 import be.elevenways.hohenheim.server.instance.UnfinishedDestroys;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -139,7 +140,8 @@ public class StackRuntime {
                 setStatus(stackId, StackModel.STATUS_INACTIVE);
                 refreshStatus(stackId);
                 scoped(() -> {
-                    StackDeploymentRecords.finished(recordId, false, failure, "FAILED: " + failure + '\n', null);
+                    StackDeploymentRecords.finished(stackId, recordId, false, failure,
+                        "FAILED: " + failure + '\n', null);
                     return null;
                 });
                 return;
@@ -154,7 +156,7 @@ public class StackRuntime {
             try {
                 runStop(stackId);
             } catch (Exception e) {
-                Blast.log("STACK: stop failed for stack", stackId, "-", e.getMessage());
+                Blast.log("STACK: stop failed for stack", stackId, "-", reasonOf(stackId, e));
                 refreshStatus(stackId);
             }
         });
@@ -465,7 +467,7 @@ public class StackRuntime {
             try {
                 purgeVolumes(stackId);
             } catch (Exception e) {
-                Blast.log("STACK: volume purge failed for stack", stackId, "-", e.getMessage());
+                Blast.log("STACK: volume purge failed for stack", stackId, "-", reasonOf(stackId, e));
                 refreshStatus(stackId);
             }
         });
@@ -605,7 +607,7 @@ public class StackRuntime {
             // is never turned away by the deploy it just read about. The same order on every settle below.
             setStatus(stackId, StackModel.STATUS_ACTIVE);
             scoped(() -> {
-                StackDeploymentRecords.finished(recordId, true, null, log.toString(), specSnapshot);
+                StackDeploymentRecords.finished(stackId, recordId, true, null, log.toString(), specSnapshot);
                 return null;
             });
             // The SETTLED operation, never the queued intent: a deploy that failed is
@@ -620,15 +622,14 @@ public class StackRuntime {
             String failure = HohenheimViolations.reasonOf(e);
             log.append("FAILED: ").append(failure).append('\n');
             setStatus(stackId, StackModel.STATUS_FAILED);
-            scoped(() -> {
-                StackDeploymentRecords.finished(recordId, false, failure, log.toString(), null);
-                return null;
-            });
-            Blast.log("STACK: deploy failed for stack", stackId, "-", failure);
+            // The stored row, this log line and the returned failure all carry the REDACTED reason.
+            String safeFailure = scoped(() ->
+                StackDeploymentRecords.finished(stackId, recordId, false, failure, log.toString(), null));
+            Blast.log("STACK: deploy failed for stack", stackId, "-", safeFailure);
             if (e instanceof Error error) {
                 throw error;
             }
-            return e instanceof IOException io ? io : new IOException(failure, e);
+            return e instanceof IOException io ? io : new IOException(safeFailure, e);
         }
     }
 
@@ -939,15 +940,13 @@ public class StackRuntime {
                 body.run();
             } catch (Throwable e) {
                 String failure = HohenheimViolations.reasonOf(e);
-                Blast.log("STACK: queued work failed for stack", stackId, "-", failure);
                 if (recordId != null) {
                     setStatus(stackId, StackModel.STATUS_FAILED);
-                    scoped(() -> {
-                        StackDeploymentRecords.finished(recordId, false, failure,
-                            "FAILED: " + failure + '\n', null);
-                        return null;
-                    });
                 }
+                // Redacted through the stack's secrets; a null record id stores nothing and only redacts.
+                String safeFailure = scoped(() -> StackDeploymentRecords.finished(stackId, recordId, false, failure,
+                    "FAILED: " + failure + '\n', null));
+                Blast.log("STACK: queued work failed for stack", stackId, "-", safeFailure);
             } finally {
                 CURRENT_STACK.remove();
             }
@@ -1020,6 +1019,11 @@ public class StackRuntime {
                 return failure;
             }
         });
+    }
+
+    /** @return a failure's reason redacted through the stack's secrets, for a log line */
+    private @NonNull String reasonOf(int stackId, @NonNull Throwable failure) {
+        return scoped(() -> ConsoleRedaction.reasonOf(StackModel.MODEL_ID, stackId, failure));
     }
 
     /** Run model access on the injected datasource when one is set (tests). */
