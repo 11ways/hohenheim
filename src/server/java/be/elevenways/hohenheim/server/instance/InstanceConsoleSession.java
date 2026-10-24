@@ -8,6 +8,7 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
+import be.elevenways.zenit.common.security.KnownValueRedactor;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -29,7 +30,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * the hub, which owns the fence.
  *
  * AIDEV-NOTE: REDACTION IS AT INGEST. Every byte the driver produces passes through the
- * session's {@link SecretRedactor} before it touches the ring, the line matcher,
+ * session's {@link KnownValueRedactor} before it touches the ring, the line matcher,
  * a viewer or the persisted log -- so raw output exists in exactly one place (a local
  * variable in {@link #pump()}) and no copy of a secret survives behind it. Redacting per
  * consumer instead would mean keeping the raw text and trusting every future reader, which
@@ -63,7 +64,7 @@ final class InstanceConsoleSession {
     private final @NonNull Resizer resizer;
     private final @Nullable String stopCommand;
     private final @NonNull ExitListener exitListener;
-    private final @NonNull SecretRedactor redactor;
+    private final @NonNull KnownValueRedactor redactor;
     private final InstanceConsoleLogs.@Nullable Sink logSink;
 
     private volatile long lastFlushAt;
@@ -93,7 +94,7 @@ final class InstanceConsoleSession {
                            boolean exclusive,
                            @NonNull Resizer resizer,
                            @Nullable String stopCommand,
-                           @NonNull SecretRedactor redactor,
+                           @NonNull KnownValueRedactor redactor,
                            InstanceConsoleLogs.@Nullable Sink logSink,
                            long generation,
                            @NonNull ExitListener exitListener) {
@@ -124,7 +125,7 @@ final class InstanceConsoleSession {
     /**
      * Teach the live redactor a value declared secret after this session opened.
      *
-     * @return false when the value is too short to be redacted (see {@link SecretRedactor#addSecret(String)})
+     * @return false when the value is too short to be redacted (see {@link KnownValueRedactor#addSecret(String)})
      */
     boolean addSecret(@NonNull String secret) {
         return this.redactor.addSecret(secret);

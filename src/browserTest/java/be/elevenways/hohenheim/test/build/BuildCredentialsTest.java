@@ -149,8 +149,7 @@ class BuildCredentialsTest {
 
         // 6. FAIL CLOSED: an owner whose secrets could not be read never lets output through raw. Every line is the
         //    placeholder (the line structure kept), the cut-off end too, and a failure reason is the placeholder.
-        BuildLog masked = new BuildLog(4096);
-        masked.redactAll(ConsoleRedaction.Secrets.UNREADABLE);
+        BuildLog masked = new BuildLog(4096, ConsoleRedaction.Secrets.UNREADABLE);
         masked.append("step 1 echo hunter2-registry-password\nstep ");
         masked.append("2 done\ncut off");
         masked.flush();

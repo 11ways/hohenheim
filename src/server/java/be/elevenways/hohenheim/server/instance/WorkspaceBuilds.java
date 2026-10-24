@@ -152,9 +152,8 @@ public final class WorkspaceBuilds {
         }
 
         String branch = ref != null && !ref.isBlank() ? ref : GitSourceSchema.declaredBranch(settings);
-        BuildLog log = new BuildLog(BuildQuota.fromSettings().logBytes());
         // The workspace's own secret values: a checkout or build that echoes one stores and streams the placeholder.
-        log.redactAll(ConsoleRedaction.secretsOf(instanceId));
+        BuildLog log = new BuildLog(BuildQuota.fromSettings().logBytes(), ConsoleRedaction.secretsOf(instanceId));
         long startedAt = Now.millis();
         // Live before the running row: an overlapping deploy is a bug refused here, before any row could be left
         // running; from here a viewer of the workspace taps this log while the deploy writes it.

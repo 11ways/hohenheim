@@ -12,7 +12,6 @@ import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
-import be.elevenways.hohenheim.server.instance.SecretRedactor;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.test.HardDeletes;
@@ -173,7 +172,7 @@ class ReleaseStepLogRedactionTest extends HohenheimHttpTestBase {
                 .as("step 5: an owner model with no rule is unreadable").isFalse();
             assertThat(ConsoleRedaction.redactedReason(StackModel.MODEL_ID, Integer.MAX_VALUE, "refused: " + DB_PASSWORD))
                 .as("step 5: its failure reason is the placeholder").isEqualTo(KnownValueRedactor.PLACEHOLDER);
-            SecretRedactor masking = SecretRedactor.of(gone);
+            KnownValueRedactor masking = gone.redactor();
             assertThat(masking.feed("first line\nsecond " + DB_PASSWORD + "\npartial"))
                 .as("step 5: a stream over it masks every line it releases")
                 .isEqualTo(KnownValueRedactor.PLACEHOLDER + "\n" + KnownValueRedactor.PLACEHOLDER + "\n");
@@ -221,7 +220,7 @@ class ReleaseStepLogRedactionTest extends HohenheimHttpTestBase {
                 .as("step 2: the reason still explains the failure").contains("connect refused for");
 
             // 3. The console: its ring's stream and a whole stored backlog carry neither form.
-            SecretRedactor console = ConsoleRedaction.redactorFor(appId);
+            KnownValueRedactor console = ConsoleRedaction.redactorFor(appId);
             assertNeitherForm("step 3: the console stream", console.feed(printed) + console.flush(), password);
             assertNeitherForm("step 3: a console backlog", ConsoleRedaction.redactWhole(printed, appId), password);
 

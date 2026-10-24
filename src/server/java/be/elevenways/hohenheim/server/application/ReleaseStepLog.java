@@ -4,7 +4,6 @@ import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
-import be.elevenways.hohenheim.server.instance.SecretRedactor;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.KnownValueRedactor;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -33,7 +32,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * AIDEV-NOTE: the secret set is read once, when the operation's first line is staged in this process; a value declared
  * later is not redacted from this operation (KnownValueRedactor.addSecret's rule). It FAILS CLOSED: an operation that
  * names no instance owner has no secret set, so each of its lines is stored as the placeholder, never raw; an owner
- * whose secrets could not be read gets a masking stream ({@link SecretRedactor}), which stores the same.
+ * whose secrets could not be read gets a masking stream ({@link KnownValueRedactor#maskingAll()}), which stores the
+ * same.
  *
  * AIDEV-NOTE: a stream lives as long as ONE segment of the operation's work in this process, never until restart: the
  * engine runs every segment (a release, a rollback, a drain, a boot recovery) through {@code ReleaseEngine.segment},
@@ -47,14 +47,14 @@ import java.util.concurrent.ConcurrentHashMap;
 final class ReleaseStepLog {
 
     /** The open stream of each operation that staged a line and has not ended, by operation id. */
-    private static final Map<Integer, SecretRedactor> STREAMS = new ConcurrentHashMap<>();
+    private static final Map<Integer, KnownValueRedactor> STREAMS = new ConcurrentHashMap<>();
 
     private ReleaseStepLog() {
     }
 
     /** Feed one step line into the operation's stream and stage what it released onto the log the row carries. */
     static @NonNull Row stage(@NonNull Row op, @NonNull String line, @NonNull Instant at) {
-        SecretRedactor stream = streamOf(op);
+        KnownValueRedactor stream = streamOf(op);
         return append(op, stream == null ? KnownValueRedactor.PLACEHOLDER + "\n" : stream.feed(line + "\n"), at);
     }
 
@@ -65,7 +65,7 @@ final class ReleaseStepLog {
      */
     static @NonNull Row stageFinal(@NonNull Row op, @NonNull String line, @NonNull Instant at) {
         Integer id = op.get(ReleaseOperationModel.ID);
-        SecretRedactor stream = id == null ? null : STREAMS.remove(id);
+        KnownValueRedactor stream = id == null ? null : STREAMS.remove(id);
         if (stream == null) {
             endLine(op);
             String safe = redactedReason(op, line);
@@ -85,7 +85,7 @@ final class ReleaseStepLog {
      */
     static boolean close(@NonNull Row op, @NonNull Instant at) {
         Integer id = op.get(ReleaseOperationModel.ID);
-        SecretRedactor stream = id == null ? null : STREAMS.remove(id);
+        KnownValueRedactor stream = id == null ? null : STREAMS.remove(id);
         if (stream == null) {
             return false;
         }
@@ -136,18 +136,18 @@ final class ReleaseStepLog {
      * The operation's stream, opened on its owner's secret values; null when it names no instance owner. The values
      * are read OUTSIDE the map (a database read never runs under its bin lock); a racing opener's stream wins.
      */
-    private static @Nullable SecretRedactor streamOf(@NonNull Row op) {
+    private static @Nullable KnownValueRedactor streamOf(@NonNull Row op) {
         Integer id = op.get(ReleaseOperationModel.ID);
         Integer applicationId = instanceOwnerOf(op);
         if (id == null || applicationId == null) {
             return null;
         }
-        SecretRedactor open = STREAMS.get(id);
+        KnownValueRedactor open = STREAMS.get(id);
         if (open != null) {
             return open;
         }
-        SecretRedactor opened = ConsoleRedaction.redactorFor(applicationId);
-        SecretRedactor raced = STREAMS.putIfAbsent(id, opened);
+        KnownValueRedactor opened = ConsoleRedaction.redactorFor(applicationId);
+        KnownValueRedactor raced = STREAMS.putIfAbsent(id, opened);
         return raced != null ? raced : opened;
     }
 

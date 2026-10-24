@@ -3,7 +3,6 @@ package be.elevenways.hohenheim.server.build;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.holder.Subscription;
 import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
-import be.elevenways.hohenheim.server.instance.SecretRedactor;
 import be.elevenways.zenit.common.security.KnownValueRedactor;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -26,11 +25,11 @@ import java.util.function.Consumer;
  * AIDEV-NOTE: redaction is VALUE-based and unconditional, and it happens before anything
  * is stored, because a builder we do not control decides what it echoes. A registry
  * credential printed by a base image's entrypoint is the same leak as one printed by us.
- * It is THE streaming redactor ({@link SecretRedactor} over {@link KnownValueRedactor}), because a daemon hands
+ * It is THE streaming redactor ({@link KnownValueRedactor}), because a daemon hands
  * output over in chunks that are not line-aligned: a secret split across two appends is held
  * back until it can be judged whole, and the held tail is released by {@link #flush} when the
  * build ends. The cap counts redacted text. An owner whose secrets could not be read makes the
- * log MASK every line ({@link #redactAll}): it fails closed, never open.
+ * log MASK every line ({@link ConsoleRedaction.Secrets#redactor()}): it fails closed, never open.
  *
  * AIDEV-NOTE: a viewer TAPS the log ({@link #subscribe}) and is handed exactly what was STORED -- the redacted,
  * capped delta of each append -- so a live viewer can never read a secret or a byte the persisted log would not hold.
@@ -44,13 +43,20 @@ public final class BuildLog {
     private record Tap(@NonNull Consumer<String> queue, @NonNull Runnable deliver) {}
 
     private final int maxBytes;
-    private final SecretRedactor redactor = SecretRedactor.of(ConsoleRedaction.Secrets.NONE);
+    private final KnownValueRedactor redactor;
     private final StringBuilder text = new StringBuilder();
     private boolean truncated;
     private final List<Tap> taps = new CopyOnWriteArrayList<>();
 
+    /** A log with no owner secrets; values are declared through {@link #redact}. */
     public BuildLog(int maxBytes) {
+        this(maxBytes, ConsoleRedaction.Secrets.NONE);
+    }
+
+    /** A log redacting an owner's secret set; a set that could not be read makes it mask every line. */
+    public BuildLog(int maxBytes, ConsoleRedaction.@NonNull Secrets secrets) {
         this.maxBytes = Math.max(1024, maxBytes);
+        this.redactor = secrets.redactor();
     }
 
     /**
@@ -68,19 +74,6 @@ public final class BuildLog {
                 "characters is NOT redacted from this build log");
         }
         return taken;
-    }
-
-    /**
-     * Register an owner's secret set ({@link #redact} for each value); a set that could not be read makes this log
-     * mask every line from here on, and its {@link #redactedWhole} answer the placeholder.
-     */
-    public void redactAll(ConsoleRedaction.@NonNull Secrets secrets) {
-        if (!secrets.readable()) {
-            this.redactor.maskAll();
-        }
-        for (String secret : secrets.values()) {
-            this.redact(secret);
-        }
     }
 
     public int redactedSecretCount() {

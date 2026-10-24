@@ -47,8 +47,8 @@ import java.util.regex.Pattern;
  *
  * AIDEV-NOTE: it FAILS CLOSED. A secret set that could not be read (the table unreachable, the owner's record gone,
  * the instance's included, an owner model with no rule here) is {@link Secrets#readable() unreadable}, and every
- * redaction built on it masks the whole text ({@link SecretRedactor}): an empty set would mean "nothing to hide",
- * which is exactly the leak.
+ * redaction built on it masks the whole text ({@link Secrets#redactor()}): an empty set would mean "nothing to
+ * hide", which is exactly the leak.
  *
  * AIDEV-NOTE: cloud-init user-data is {@code .secret()} as a whole DOCUMENT and is
  * deliberately NOT a redaction subject. It is content, not a value: matching a multi-KB YAML
@@ -92,6 +92,11 @@ public final class ConsoleRedaction {
             union.addAll(other.values);
             return new Secrets(Collections.unmodifiableSet(union), this.readable && other.readable);
         }
+
+        /** @return a fresh stream over these values; a {@link KnownValueRedactor#maskingAll()} one when unreadable */
+        public @NonNull KnownValueRedactor redactor() {
+            return this.readable ? KnownValueRedactor.of(this.values) : KnownValueRedactor.maskingAll();
+        }
     }
 
     /** Reads an owner's values into {@code into}, naming a too-short one in {@code refused}; throws when it cannot. */
@@ -132,8 +137,8 @@ public final class ConsoleRedaction {
     }
 
     /** A redactor over one instance's secret values ({@link #secretsOf}), for ONE stream of its output. */
-    public static @NonNull SecretRedactor redactorFor(int instanceId) {
-        return SecretRedactor.of(secretsOf(instanceId));
+    public static @NonNull KnownValueRedactor redactorFor(int instanceId) {
+        return secretsOf(instanceId).redactor();
     }
 
     /**
@@ -149,7 +154,7 @@ public final class ConsoleRedaction {
 
     /** {@link #redactWhole(String, int)} through a secret set read once by the caller; null for null. */
     public static @Nullable String redactWhole(@Nullable String text, @NonNull Secrets secrets) {
-        return SecretRedactor.redactWhole(text, secrets);
+        return secrets.redactor().redactWhole(text);
     }
 
     /**

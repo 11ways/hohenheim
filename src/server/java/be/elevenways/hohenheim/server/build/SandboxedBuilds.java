@@ -73,12 +73,12 @@ public final class SandboxedBuilds {
      */
     public @NonNull Result run(@NonNull BuildRequest request) {
         BuildQuota quota = request.quota();
-        BuildLog log = new BuildLog(quota.logBytes());
         // The owner's secret values (an instance's secret variables and its environment's, a preview's application's
         // and its own instance's; ConsoleRedaction.secretsOfOwner names every owner): a build that echoes one,
         // substituted into its environment or its arguments, stores and streams the placeholder instead. An owner
         // whose values cannot be read, or that has no rule, makes the log mask every line (fail closed).
-        log.redactAll(ConsoleRedaction.secretsOfOwner(request.forModel(), request.forId()));
+        BuildLog log = new BuildLog(quota.logBytes(),
+            ConsoleRedaction.secretsOfOwner(request.forModel(), request.forId()));
         // Live before the running row: an overlapping build is a bug refused here, before any row could be left
         // running; from here a viewer of the owner taps this log while the build writes it.
         Subscription live = LiveBuildLogs.register(request.forModel(), request.forId(), log);
