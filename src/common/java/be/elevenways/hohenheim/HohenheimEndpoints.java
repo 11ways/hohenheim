@@ -7,6 +7,7 @@ import be.elevenways.zenit.common.routing.Endpoint;
 import be.elevenways.zenit.common.routing.EndpointRoute;
 import be.elevenways.zenit.common.routing.ParameterDefinition;
 import be.elevenways.zenit.common.routing.RateLimitPolicy;
+import be.elevenways.zenit.common.routing.ResponseCachePolicy;
 import be.elevenways.zenit.common.routing.WebSocketEndpoint;
 
 import java.time.Duration;
@@ -111,6 +112,18 @@ public class HohenheimEndpoints {
         .stringResolver(Integer::parseInt)
         .build();
 
+    /** The {@link StoredSecret} token of a reveal. */
+    public static final ParameterDefinition<String> SECRET = ParameterDefinition.builder(String.class)
+        .name("secret")
+        .stringResolver(value -> value)
+        .build();
+
+    /** The record holding the secret a reveal reads. */
+    public static final ParameterDefinition<Integer> SECRET_RECORD_ID = ParameterDefinition.builder(Integer.class)
+        .name("secretRecordId")
+        .stringResolver(Integer::parseInt)
+        .build();
+
     // --- Rate limits: expensive or upstream-quota-bound operations. ---
     // The LE request burns Let's Encrypt quota; db dump/restore stream whole
     // databases; deploys spawn builds. Keyed per principal (per IP for
@@ -130,6 +143,15 @@ public class HohenheimEndpoints {
         RateLimitPolicy.of(5, Duration.ofMinutes(1))
             .keyBy(RateLimitPolicy.KeyBy.PRINCIPAL_OR_IP)
             .named("hh_db_io");
+
+    /**
+     * The hh_secret_reveal budget: every reveal is a recorded disclosure of a stored secret, so a script walking record
+     * ids is capped per caller; a person presses it a handful of times.
+     */
+    private static final RateLimitPolicy SECRET_REVEAL_LIMIT =
+        RateLimitPolicy.of(10, Duration.ofMinutes(1))
+            .keyBy(RateLimitPolicy.KeyBy.PRINCIPAL_OR_IP)
+            .named("hh_secret_reveal");
 
     /**
      * The Install media tab's live re-read: at most two per coalescing window per open tab, and
@@ -491,6 +513,23 @@ public class HohenheimEndpoints {
             .addDelimiter().addStatic("media").build())
         .requiresPermission(HohenheimSources.MEDIA_MANAGE)
         .rateLimit(MEDIA_VIEW_LIMIT)
+        .build();
+
+    // --- Stored secrets, revealed on request ---
+
+    /**
+     * Answers ONE record's stored secret ({@link StoredSecret}) to a caller its gate admits, recording the reveal on
+     * the record; the reveal controls fetch it per press, so no page carries the value. A POST because every answer
+     * writes an activity entry; never stored by any cache.
+     */
+    public static final Endpoint<String> SECRETS_REVEAL = Endpoint.<String>builder()
+        .identifier(HohenheimIds.id("secrets_reveal"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("secrets").addDelimiter().addParameter(SECRET)
+            .addDelimiter().addParameter(SECRET_RECORD_ID).addDelimiter().addStatic("reveal").build())
+        .requiresLogin()
+        .rateLimit(SECRET_REVEAL_LIMIT)
+        .cache(ResponseCachePolicy.noStore())
         .build();
 
     // --- Automation API (znit_ bearer keys via zenit-auth) ---

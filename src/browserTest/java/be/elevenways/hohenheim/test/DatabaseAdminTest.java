@@ -71,14 +71,16 @@ class DatabaseAdminTest extends HohenheimTestBase {
         Integer id = row.get(DatabaseModel.ID);
         try {
             // 1. A database whose setup failed: the card names the engine by its label and the state as a badge, the
-            //    password behind its reveal, and no upload is offered into a database that does not run.
+            //    password behind its reveal and never in the page, and no upload is offered into a database that does
+            //    not run.
             navigateToApp("/admin/databases/" + id + "/page/restore");
             waitForHydration();
             String body = page.locator("body").textContent();
             assertThat(body).contains("Connection").contains("detailuser").contains("detaildb")
                 .contains("PostgreSQL");
-            assertThat(page.locator("[data-hh-database-password] pl-input[type='secret']").count())
-                .as("step 1: the password is masked behind its reveal").isEqualTo(1);
+            assertThat(page.locator("[data-hh-database-password] hh-secret-reveal").count())
+                .as("step 1: the password is behind its reveal").isEqualTo(1);
+            assertThat(page.content()).as("step 1: and not in the page").doesNotContain("detailpass");
             assertThat(page.locator("[data-hh-restore-refused]").count())
                 .as("step 1: the restore says why it is not offered").isEqualTo(1);
             assertThat(page.locator("form[action='/databases/" + name + "/restore']").count())

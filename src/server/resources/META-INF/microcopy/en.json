@@ -16734,6 +16734,7 @@
   "last_backup_column": {"text": "Last backup", "scope": "database_list"},
   "runs_on": {"text": "Runs on", "scope": "database_overview"},
   "connect_with": {"text": "Connect with", "scope": "database_overview"},
+  "password_where": {"text": "Shown on request on the {$tab} tab", "scope": "database_overview"},
   "how_apps_connect_value": {"text": "Apps that use it get these as environment variables; nobody has to paste them.", "scope": "database_overview"},
   "used_by_none": {"text": "No app", "scope": "database_overview"},
   "used_by_none_detail": {"text": "Attach it from the app's page: More, then Attached databases.", "scope": "database_overview"},

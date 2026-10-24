@@ -53,7 +53,6 @@ public final class DatabaseRestorePage implements RecordTab.Rendered<Row> {
             vars.put("restoreRefusal", HohenheimMicrocopy.DATABASE_TAB.of("restore_needs_running")
                 .withArg("state", verdict.state().label()));
         }
-        vars.put("recordId", record.get(DatabaseModel.ID));
         vars.put("usedBy", usedBy(record.get(DatabaseModel.ID)));
         vars.put("head", recordHead(conduit));
         return new RenderTemplateResult(HohenheimTemplateIds.DATABASE_RESTORE, vars);

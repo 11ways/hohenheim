@@ -16734,6 +16734,7 @@
   "last_backup_column": {"text": "Laatste backup", "scope": "database_list"},
   "runs_on": {"text": "Draait op", "scope": "database_overview"},
   "connect_with": {"text": "Verbinden met", "scope": "database_overview"},
+  "password_where": {"text": "Op verzoek getoond op het tabblad {$tab}", "scope": "database_overview"},
   "how_apps_connect_value": {"text": "Apps die hem gebruiken krijgen deze als omgevingsvariabelen; niemand hoeft ze te plakken.", "scope": "database_overview"},
   "used_by_none": {"text": "Geen app", "scope": "database_overview"},
   "used_by_none_detail": {"text": "Koppel hem vanaf de pagina van de app: Meer, dan Gekoppelde databanken.", "scope": "database_overview"},

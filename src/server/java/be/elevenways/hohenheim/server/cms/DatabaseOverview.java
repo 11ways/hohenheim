@@ -39,9 +39,9 @@ import java.util.List;
  * record beside it): how it is reached, which apps use it and the dumps it has on disk. Everything here is a stored
  * fact; nothing dials the engine per render.
  *
- * AIDEV-NOTE: the password is a secret fact (plumage's masked reveal with its copy button), added only for a reader
- * the Restore tab's own gate admits ({@link DatabaseConnectionCard#passwordReadableBy}); anyone else sees the card
- * without it. It ships in the page masked, exactly as the Restore tab's connection card ships it.
+ * AIDEV-NOTE: the password is NEVER a fact here (a widget fact ships its value in the page HTML and the widget state,
+ * pressed or not): a reader the Restore tab's own gate admits ({@link DatabaseConnectionCard#passwordReadableBy}) gets
+ * a link to that tab, whose connection card reveals it per press ({@link SecretReveals}); anyone else sees no row.
  *
  * @author Jelle De Loecker
  * @since  0.9.0
@@ -107,9 +107,11 @@ final class DatabaseOverview {
             .resolve(locales, resolver), database.get(DatabaseModel.DB_NAME)));
         facts.add(WidgetFact.of(HohenheimMicrocopy.DATABASE_TAB.of("user")
             .resolve(locales, resolver), database.get(DatabaseModel.DB_USER)));
-        if (DatabaseConnectionCard.passwordReadableBy(database, access)) {
-            facts.add(WidgetFact.secret(HohenheimMicrocopy.DATABASE_TAB.of("password").resolve(locales, resolver),
-                database.get(DatabaseModel.DB_PASSWORD)));
+        if (id != null && DatabaseConnectionCard.passwordReadableBy(database, access)) {
+            facts.add(WidgetFact.link(HohenheimMicrocopy.DATABASE_TAB.of("password").resolve(locales, resolver),
+                HohenheimMicrocopy.DATABASE_OVERVIEW.of("password_where")
+                    .withArg("tab", HohenheimMicrocopy.DATABASE.of("restore")).resolve(locales, resolver),
+                CmsRoutes.subpage(panelSlug, HohenheimSlugs.DATABASES, id, HohenheimSlugs.Tab.RESTORE).toUrl()));
         }
         return facts;
     }

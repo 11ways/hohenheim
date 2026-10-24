@@ -124,9 +124,9 @@ class DatabasesPageJourneyTest extends HohenheimHttpTestBase {
                 .get(DatabaseModel.ID)
                 + "/page/overview");
             assertThat(overview.statusCode()).as("step 3: the database's overview renders").isEqualTo(200);
-            assertThat(overview.body()).as("step 3: the connection names, and the operator's password masked")
-                .contains("shopdb", "shopuser").containsPattern(Pattern.compile(
-                    "<pl-input[^>]*data-widget-fact-secret[^>]*>", Pattern.DOTALL))
+            assertThat(overview.body()).as("step 3: the connection names, and where the operator's password is revealed")
+                .contains("shopdb", "shopuser")
+                .contains("/page/" + HohenheimSlugs.Tab.RESTORE)
                 .as("step 3: the apps' environment line under the card's title")
                 .contains("Apps that use it get these as environment variables; nobody has to paste them.")
                 .as("step 3: the app using it links to its page").contains(PREFIX + "app")
@@ -215,8 +215,8 @@ class DatabasesPageJourneyTest extends HohenheimHttpTestBase {
             assertThat(beside).as("step 9: the selected database stands beside the list").isPositive();
             assertThat(selected.substring(beside)).as("step 9: its Overview's connection facts")
                 .contains("shopdb", "shopuser", "Connect with")
-                .as("step 9: the password masked behind the reveal")
-                .containsPattern(Pattern.compile("<pl-input[^>]*data-widget-fact-secret", Pattern.DOTALL))
+                .as("step 9: the password only as the way to its reveal, never its value")
+                .contains("Shown on request on the Restore tab")
                 .as("step 9: who uses it").contains(PREFIX + "app")
                 .as("step 9: its record actions, Back up now among them").contains("Back up now");
             assertThat(selected).as("step 9: the row reads selected").containsPattern(Pattern.compile(

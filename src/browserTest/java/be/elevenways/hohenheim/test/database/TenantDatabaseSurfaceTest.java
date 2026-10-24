@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
+import be.elevenways.hohenheim.StoredSecret;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
@@ -508,17 +509,26 @@ class TenantDatabaseSurfaceTest extends HohenheimHttpTestBase {
             .doesNotContain("/page/credentials");
 
         // 3. The OWNER reads them -- manage implies credentials, so the positive anchor is
-        //    not a second grant, it is ownership.
+        //    not a second grant, it is ownership. The tab carries the password's reveal, never
+        //    the password; the reveal answers it.
         HttpResponse<String> owner = get(sessionA, credentialsUrl);
         assertThat(owner.statusCode()).as("step 3: the owner opens the tab").isEqualTo(200);
-        assertThat(owner.body()).as("step 3: and reads the credential").contains(password);
+        assertThat(owner.body()).as("step 3: with the password's reveal, not the password")
+            .contains("<hh-secret-reveal").doesNotContain(password);
+        assertThat(revealedValue(revealSecret(StoredSecret.DATABASE_PASSWORD, databaseAId, sessionA,
+            cast.sessionA().csrf()))).as("step 3: and reads the credential through it").isEqualTo(password);
+        assertThat(revealSecret(StoredSecret.DATABASE_PASSWORD, databaseAId, sessionViewer,
+            cast.sessionViewer().csrf()).statusCode()).as("step 3: the view-only teammate's reveal is refused")
+            .isEqualTo(404);
 
         // 4. Granting the teammate CREDENTIALS explicitly opens exactly that one door.
         RecordGrants.grant(GrantSubjectType.USER, viewerId, DatabaseModel.MODEL_ID, databaseAId,
             HohenheimCapabilities.CREDENTIALS, true);
-        assertThat(get(sessionViewer, credentialsUrl).body())
+        assertThat(get(sessionViewer, credentialsUrl).statusCode())
             .as("step 4: an explicit credentials grant is what opens it")
-            .contains(password);
+            .isEqualTo(200);
+        assertThat(revealedValue(revealSecret(StoredSecret.DATABASE_PASSWORD, databaseAId, sessionViewer,
+            cast.sessionViewer().csrf()))).as("step 4: and its reveal").isEqualTo(password);
         RecordGrants.revoke(GrantSubjectType.USER, viewerId, DatabaseModel.MODEL_ID, databaseAId,
             HohenheimCapabilities.CREDENTIALS);
         assertThat(get(sessionViewer, credentialsUrl).statusCode())

@@ -4,6 +4,7 @@ import be.elevenways.zenit.browsertest.ZenitBrowserTestBase;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.StoredSecret;
 import be.elevenways.hohenheim.server.HohenheimSettingsBoot;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.zenit.auth.AuthKeys;
@@ -428,6 +429,22 @@ public abstract class HohenheimTestBase extends ZenitBrowserTestBase {
     /** A DRY POST as the harness admin, CSRF token included. */
     protected HttpResponse<String> adminPostDry(String path, String body) throws Exception {
         return httpPostDry(path, body, sessionToken, csrfToken);
+    }
+
+    /**
+     * Presses a stored secret's reveal as the caller holding {@code session}: the POST the {@code hh-secret-reveal}
+     * control sends, CSRF token included.
+     */
+    protected HttpResponse<String> revealSecret(@NonNull StoredSecret secret, int recordId, @NonNull String session,
+                                                @NonNull String csrf) throws Exception {
+        return httpPostForm(HohenheimEndpoints.SECRETS_REVEAL.with(HohenheimEndpoints.SECRET, secret.token())
+            .with(HohenheimEndpoints.SECRET_RECORD_ID, recordId).toUrl(), "", session, csrf);
+    }
+
+    /** @return the value a 200 reveal answered, decoded from its DRY body */
+    protected static @NonNull String revealedValue(@NonNull HttpResponse<String> answer) {
+        assertThat(answer.statusCode()).as("the reveal answered").isEqualTo(200);
+        return String.valueOf(Zenit.DRY.parse(answer.body()));
     }
 
     protected HttpResponse<String> keyGet(String key, String path) throws Exception {

@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.StoredSecret;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
@@ -63,7 +64,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -71,8 +71,8 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 /**
  * A managed database's "Change password": the owner rotates a leaked password, the engine is handed the provisioning
  * re-credential command with the new one, the record stores it, the attached app asks for a deploy that injects it,
- * and no surface but the connection card's reveal ever shows it. A failure once the engine was asked leaves a trace a
- * retry clears, and two changes at once end with the engine and the record agreeing.
+ * and no page ever carries it: the connection card's reveal fetches it per press. A failure once the engine was asked
+ * leaves a trace a retry clears, and two changes at once end with the engine and the record agreeing.
  *
  * AIDEV-NOTE: the engine is the hermetic {@link FakeDockerDaemon}: what this proves is that the product hands the
  * engine EXACTLY the provisioning command ({@code createLogicalCommand}) with the new password in its environment and
@@ -179,8 +179,10 @@ class DatabasePasswordChangeJourneyTest extends HohenheimHttpTestBase {
                 .as("step 1 anchor: the serving release was built from what is stored").isFalse();
             assertThat(this.daemon.execsOn(handle)).as("step 1 anchor: nothing ran in the engine yet").isEmpty();
             String overviewPath = "/admin/" + HohenheimSlugs.DATABASES + "/" + shopId + "/page/overview";
-            int revealed = occurrences(adminGet(overviewPath).body(), OLD_PASSWORD);
-            assertThat(revealed).as("step 1 anchor: the connection card's reveal carries the password").isPositive();
+            assertThat(adminGet(overviewPath).body()).as("step 1 anchor: no page carries the password")
+                .doesNotContain(OLD_PASSWORD);
+            assertThat(revealedValue(revealSecret(StoredSecret.DATABASE_PASSWORD, shopId, sessionToken, csrfToken)))
+                .as("step 1 anchor: the reveal answers it on request").isEqualTo(OLD_PASSWORD);
 
             // 2. Tenant A, who manages the database, rotates with nothing typed: a password is generated, the engine
             //    is handed the provisioning re-credential command with it, and the record stores what the engine took.
@@ -232,13 +234,14 @@ class DatabasePasswordChangeJourneyTest extends HohenheimHttpTestBase {
             assertThat(recorded).as("step 5: no password in the recorded change")
                 .doesNotContain(rotated).doesNotContain(OLD_PASSWORD);
 
-            // 6. The pages: the password appears exactly where the connection card's reveal carried the old one (its
-            //    masked input, its copy button and their page state) and nowhere more; the form masks it.
+            // 6. The pages: neither password is in the overview (a link to the tab whose card reveals it per press),
+            //    the reveal answers the new one, and the form masks it.
             String overview = adminGet(overviewPath).body();
-            assertThat(overview).as("step 6 anchor: the connection card draws its password reveal")
-                .containsPattern(Pattern.compile("<pl-input[^>]*data-widget-fact-secret[^>]*>"));
-            assertThat(occurrences(overview, rotated)).as("step 6: the new password only where the reveal holds it")
-                .isEqualTo(revealed);
+            assertThat(overview).as("step 6 anchor: the overview points at the tab that reveals the password")
+                .contains("/admin/" + HohenheimSlugs.DATABASES + "/" + shopId + "/page/" + HohenheimSlugs.Tab.RESTORE);
+            assertThat(overview).as("step 6: the new password is in no page").doesNotContain(rotated);
+            assertThat(revealedValue(revealSecret(StoredSecret.DATABASE_PASSWORD, shopId, sessionToken, csrfToken)))
+                .as("step 6: the reveal answers the new password").isEqualTo(rotated);
             assertThat(overview).as("step 6: the old one is gone").doesNotContain(OLD_PASSWORD);
             assertThat(adminGet("/admin/" + HohenheimSlugs.DATABASES + "/" + shopId).body())
                 .as("step 6: the form never draws it").doesNotContain(rotated);
@@ -403,15 +406,6 @@ class DatabasePasswordChangeJourneyTest extends HohenheimHttpTestBase {
     private static String typedBody(String password) {
         return DatabaseParts.NEW_PASSWORD.getName() + "=" + URLEncoder.encode(password, StandardCharsets.UTF_8) + "&"
             + ApiSupport.invokeTransport();
-    }
-
-    /** @return how often {@code needle} occurs in {@code text} */
-    private static int occurrences(String text, String needle) {
-        int count = 0;
-        for (int at = text.indexOf(needle); at >= 0; at = text.indexOf(needle, at + needle.length())) {
-            count++;
-        }
-        return count;
     }
 
     /** @return the Violations a refusal carries, itself or as a cause */
