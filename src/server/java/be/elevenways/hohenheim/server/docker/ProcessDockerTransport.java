@@ -9,6 +9,7 @@ import be.elevenways.protoblast.server.process.Termination;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.SocketTimeoutException;
 import java.time.Duration;
 import java.util.List;
 
@@ -69,7 +70,7 @@ public class ProcessDockerTransport implements DockerTransport, DockerStreamTran
             ProcessOutcome outcome = settle(process);
             done = true;
             if (outcome.termination() == Termination.TIMED_OUT) {
-                throw new IOException("Docker transport timed out after " + timeoutMs + "ms");
+                throw new SocketTimeoutException("Docker transport timed out after " + timeoutMs + "ms");
             }
             if (response.length == 0) {
                 // AIDEV-NOTE: the ARGV must not appear here. HostProbe classifies this
@@ -84,7 +85,7 @@ public class ProcessDockerTransport implements DockerTransport, DockerStreamTran
             return response;
         } catch (IOException e) {
             if (!done && settle(process).termination() == Termination.TIMED_OUT) {
-                throw new IOException("Docker transport timed out after " + timeoutMs + "ms");
+                throw new SocketTimeoutException("Docker transport timed out after " + timeoutMs + "ms");
             }
             throw e;
         } finally {

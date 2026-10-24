@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
@@ -17,6 +18,7 @@ import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.IncusWorkloadType;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
+import be.elevenways.hohenheim.test.RecordedChanges;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -29,7 +31,10 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.net.SocketTimeoutException;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -162,7 +167,8 @@ class WorkspaceVolumeMountTest {
 
     /**
      * A command run from the Console tab starts in the workspace's home and sees it as HOME, as the workspace's own
-     * user: it ran in / with an empty HOME, so ~ never reached the files the workspace keeps.
+     * user: it ran in / with an empty HOME, so ~ never reached the files the workspace keeps. Each run is audited before
+     * it starts and again with how it ended, so a run that timed out is on the record too.
      */
     @Test
     void aCommandRunsInTheWorkspaceHomeAsItsUser() {
@@ -188,6 +194,28 @@ class WorkspaceVolumeMountTest {
                 .isEqualTo(WorkspaceKind.HOME_PATH);
             assertThat(options.env()).as("step 2: and HOME names that home")
                 .containsEntry("HOME", WorkspaceKind.HOME_PATH);
+
+            // 3. The run is on the record before it ran and with how it ended.
+            assertThat(execTrail(id)).as("step 3: the attempt, then its ending")
+                .containsExactly("exec pwd", "exec_ended pwd ok");
+
+            // 4. A command that exits non-zero ends as failed.
+            daemon.buildExitCode = 3;
+            try {
+                assertThat(new InstanceExec(service).run(id, "false").exitCode()).as("step 4: it exited 3")
+                    .isEqualTo(3);
+            } finally {
+                daemon.buildExitCode = 0;
+            }
+            assertThat(execTrail(id)).as("step 4: a non-zero exit ends as failed").endsWith("exec false",
+                "exec_ended false failed");
+
+            // 5. A run the deadline ended is refused, and still recorded: its attempt and that it timed out.
+            daemon.nextExecFailure = new SocketTimeoutException("Docker exec of 'sleep 600' did not finish");
+            assertThat(catchThrowable(() -> new InstanceExec(service).run(id, "sleep 600")))
+                .as("step 5: the timed-out run is refused").isInstanceOf(Violations.class);
+            assertThat(execTrail(id)).as("step 5: the attempt and its timeout are both on the record")
+                .endsWith("exec sleep 600", "exec_ended sleep 600 timed_out");
         });
     }
 
@@ -271,6 +299,23 @@ class WorkspaceVolumeMountTest {
 
     private static String handleOf(int instanceId) {
         return ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
+    }
+
+    /** The record's exec facts, oldest first, as "exec command" and "exec_ended command outcome". */
+    private static List<String> execTrail(int instanceId) {
+        List<String> trail = new ArrayList<>();
+        for (RecordedChanges.Recorded recorded : RecordedChanges.of(Models.get(InstanceModel.class), instanceId)) {
+            Map<String, Object> started = recorded.fact(HohenheimActivityAction.EXEC);
+            if (started != null) {
+                trail.add("exec " + started.get(HohenheimActivityAction.COMMAND_KEY));
+            }
+            Map<String, Object> ended = recorded.fact(HohenheimActivityAction.EXEC_ENDED);
+            if (ended != null) {
+                trail.add("exec_ended " + ended.get(HohenheimActivityAction.COMMAND_KEY) + " "
+                    + ended.get(HohenheimActivityAction.OUTCOME_KEY));
+            }
+        }
+        return trail;
     }
 
     /** A bare workspace on the fixture's host; no repository, so its deploy is the plain

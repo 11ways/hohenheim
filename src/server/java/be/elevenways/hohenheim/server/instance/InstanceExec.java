@@ -16,6 +16,8 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.IOException;
+import java.net.SocketTimeoutException;
+import java.util.Locale;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -40,6 +42,24 @@ public final class InstanceExec {
 
     /** Hard wall-clock cap on one exec run. */
     static final long EXEC_TIMEOUT_MS = 2 * 60 * 1000;
+
+    /** How one exec run ended, stored as {@link #token()} under {@link HohenheimActivityAction#OUTCOME_KEY}. */
+    public enum Ending {
+
+        /** The command exited zero. */
+        OK,
+
+        /** The command exited non-zero, or the runtime refused or lost it. */
+        FAILED,
+
+        /** The run outlasted {@link #EXEC_TIMEOUT_MS}; the command may still be running in the workload. */
+        TIMED_OUT;
+
+        /** @return the stored token, the variant the history sentence matches on */
+        public @NonNull String token() {
+            return this.name().toLowerCase(Locale.ROOT);
+        }
+    }
 
     /** Output beyond this is truncated before it reaches a page. */
     private static final int OUTPUT_TAIL_LIMIT = 16 * 1024;
@@ -87,6 +107,13 @@ public final class InstanceExec {
             throw HohenheimViolations.instanceRefusal("exec_unsupported", resolved.row(), null);
         }
 
+        // Recorded on the record, never only in a log line: an arbitrary command inside a tenant workload is exactly
+        // the act an audit trail exists for.
+        // AIDEV-NOTE: the attempt is recorded BEFORE the run and its ending after it, so a command that timed out or
+        // whose runtime failed still leaves both. A timeout is the transport's SocketTimeoutException (the Docker
+        // lane's deadline); any other refusal reads as FAILED.
+        record(instanceId, Change.fact(HohenheimActivityAction.EXEC,
+            Map.of(HohenheimActivityAction.COMMAND_KEY, command)));
         ExecSupport.ExecOutcome outcome;
         try {
             // The workload's own home, as its spec declares it (a workspace: its home volume); a kind declaring none
@@ -94,19 +121,29 @@ public final class InstanceExec {
             outcome = support.runExec(resolved.spec(), argv, ExecSupport.ExecOptions.inHome(resolved.spec().home()),
                 EXEC_TIMEOUT_MS);
         } catch (IOException e) {
+            recordEnding(instanceId, command, e instanceof SocketTimeoutException ? Ending.TIMED_OUT : Ending.FAILED);
             throw HohenheimViolations.instanceRefusal("exec_failed", resolved.row(), e);
+        } catch (RuntimeException e) {
+            recordEnding(instanceId, command, Ending.FAILED);
+            throw e;
         }
-
-        // Recorded on the record, never only in a log line: an arbitrary command inside a
-        // tenant workload is exactly the act an audit trail exists for.
-        History.event(Models.get(InstanceModel.class), instanceId,
-            Change.fact(HohenheimActivityAction.EXEC, Map.of(HohenheimActivityAction.COMMAND_KEY, command)));
+        recordEnding(instanceId, command, outcome.succeeded() ? Ending.OK : Ending.FAILED);
 
         String output = outcome.outputTail();
         if (output.length() > OUTPUT_TAIL_LIMIT) {
             output = output.substring(output.length() - OUTPUT_TAIL_LIMIT);
         }
         return new Run(command, outcome.exitCode(), output);
+    }
+
+    /** Records how the run of {@code command} ended. */
+    private static void recordEnding(int instanceId, @NonNull String command, @NonNull Ending ending) {
+        record(instanceId, Change.fact(HohenheimActivityAction.EXEC_ENDED, Map.of(
+            HohenheimActivityAction.COMMAND_KEY, command, HohenheimActivityAction.OUTCOME_KEY, ending.token())));
+    }
+
+    private static void record(int instanceId, @NonNull Change change) {
+        History.event(Models.get(InstanceModel.class), instanceId, change);
     }
 
     /**

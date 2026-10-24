@@ -6,6 +6,7 @@ import be.elevenways.protoblast.common.util.Closeables;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.net.StandardProtocolFamily;
 import java.net.UnixDomainSocketAddress;
 import java.nio.ByteBuffer;
@@ -68,7 +69,7 @@ public class UnixSocketDockerTransport implements DockerTransport, DockerStreamT
             }
             return readToEnd(channel, maxResponseBytes);
         } catch (ClosedChannelException e) {
-            throw new IOException("Docker request timed out after " + timeoutMs + "ms");
+            throw new SocketTimeoutException("Docker request timed out after " + timeoutMs + "ms");
         } finally {
             watchdog.cancel();
             Closeables.closeQuietly(channel);

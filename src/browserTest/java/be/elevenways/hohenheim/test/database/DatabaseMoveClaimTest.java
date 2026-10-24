@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
@@ -43,6 +45,8 @@ class DatabaseMoveClaimTest {
 
     private static final String NAME = "move-claim";
     private static final String SERIAL = "move-serial";
+    private static final String LANDING = "move-landing";
+    private static final String ROOT_PASSWORD = "Move.root-password-00004";
     private static final String OLD_PASSWORD = "Move.old-password-000001";
     private static final String NEW_PASSWORD = "Move.new-password-000002";
     private static final String NEWER_PASSWORD = "Move.newer-password-0003";
@@ -201,6 +205,72 @@ class DatabaseMoveClaimTest {
                 .isEqualTo(postgres.rotateEnv(NEW_PASSWORD, NEWER_PASSWORD));
             assertThat((String) databases.findById(recordId).get(DatabaseModel.DB_PASSWORD))
                 .as("step 4: the record names the engine's last password").isEqualTo(NEWER_PASSWORD);
+        } finally {
+            DockerClient.overrideLocalTransportForTest(null);
+            daemon.close();
+        }
+    }
+
+    /**
+     * A move that fails after it created the logical database on the shared engine drops that database again, so a
+     * retry is not refused by what the failed load left; a logical database that already existed there is never
+     * dropped. The fake engine cannot take a restore's stdin, so each move fails in its load, past the create.
+     */
+    @Test
+    void aFailedMoveDropsTheLogicalDatabaseItCreatedAndNeverOneThatExisted() throws Exception {
+        FakeDockerDaemon daemon = new FakeDockerDaemon();
+        DockerClient.overrideLocalTransportForTest(() -> daemon);
+        try {
+            DatabaseService service = new DatabaseService();
+            service.insertRecord(LANDING, ManagedDatabase.Engine.POSTGRES, null, "app", OLD_PASSWORD, "landdb", false,
+                ServerService.LOCAL_HOST_NAME, ResourceLimits.none(), DatabaseModel.STATUS_ACTIVE,
+                DatabaseModel.PLACEMENT_DEDICATED, null);
+            DatabaseModel databases = Models.get(DatabaseModel.class);
+            int recordId = databases.findByName(LANDING).get(DatabaseModel.ID);
+            daemon.seedRunning(EngineHandles.plant(recordId, LANDING, "postgres", InstanceModel.STATUS_RUNNING));
+            DatabaseEngineModel engines = Models.get(DatabaseEngineModel.class);
+            Row engine = engines.createEmptyRow();
+            engine.set(DatabaseEngineModel.NAME, LANDING + "-engine");
+            engine.set(DatabaseEngineModel.ENGINE, "postgres");
+            engine.set(DatabaseEngineModel.ROOT_USER, "root");
+            engine.set(DatabaseEngineModel.ROOT_PASSWORD, ROOT_PASSWORD);
+            engine.set(DatabaseEngineModel.SERVER_ID, ServerModel.localServerId());
+            engine.set(DatabaseEngineModel.STATUS, DatabaseModel.STATUS_ACTIVE);
+            engines.save(engine);
+            String shared = EngineHandles.plantEngine(engine.get(DatabaseEngineModel.ID), LANDING, "postgres",
+                InstanceModel.STATUS_RUNNING);
+            daemon.seedRunning(shared);
+            ManagedDatabase.Engine postgres = ManagedDatabase.Engine.POSTGRES;
+            List<String> objects = postgres.logicalObjectsCommand("root", "landdb");
+            List<String> drop = postgres.dropLogicalCommand("root", "landdb", "app", true);
+
+            // 1. The dump, the fingerprint, then the shared engine's probe answers that landdb is absent: the move
+            //    creates it, its load fails, and it drops the database it created, as the engine's root.
+            daemon.duringNextExec(() -> daemon.duringNextExec(() -> daemon.answerNextExec("absent")));
+            assertThatThrownBy(() -> service.moveToSharedEngine(LANDING)).as("step 1: the move failed in its load")
+                .isInstanceOf(IOException.class);
+            List<FakeDockerDaemon.Exec> first = daemon.execsOn(shared);
+            assertThat(first).extracting(FakeDockerDaemon.Exec::command)
+                .as("step 1: the probe, the create, and the drop of what it created last")
+                .startsWith(objects, postgres.createLogicalCommand("root", "landdb", "app"))
+                .endsWith(drop);
+            assertThat(first.get(first.size() - 1).env()).as("step 1: the drop runs as the engine's root")
+                .isEqualTo(postgres.logicalEnv(ROOT_PASSWORD, null));
+            Row afterFailure = databases.findById(recordId);
+            assertThat((String) afterFailure.get(DatabaseModel.PLACEMENT)).as("step 1: the record stays dedicated")
+                .isEqualTo(DatabaseModel.PLACEMENT_DEDICATED);
+            assertThat((String) afterFailure.get(DatabaseModel.STATUS)).as("step 1: and active")
+                .isEqualTo(DatabaseModel.STATUS_ACTIVE);
+
+            // 2. NEGATIVE CONTROL: a landdb that already existed (empty) when the move probed is never dropped.
+            daemon.duringNextExec(() -> daemon.duringNextExec(() -> daemon.answerNextExec("0")));
+            assertThatThrownBy(() -> service.moveToSharedEngine(LANDING)).as("step 2: the retry failed in its load")
+                .isInstanceOf(IOException.class);
+            List<FakeDockerDaemon.Exec> all = daemon.execsOn(shared);
+            List<FakeDockerDaemon.Exec> second = all.subList(first.size(), all.size());
+            assertThat(second).extracting(FakeDockerDaemon.Exec::command)
+                .as("step 2: the retry probed and created, and dropped nothing").startsWith(objects)
+                .doesNotContain(drop);
         } finally {
             DockerClient.overrideLocalTransportForTest(null);
             daemon.close();

@@ -84,7 +84,10 @@ public enum HohenheimActivityAction implements ActivityAction {
     PREVIEW_TRIGGERED("preview_triggered"),
     RESTORED_BACKUP("restored_backup"),
     RESTORED_SNAPSHOT("restored_snapshot"),
+    /** A command an operator asked to run in a workload, recorded before it runs. */
     EXEC("exec"),
+    /** How that command ended, under {@link #OUTCOME_KEY} ({@code InstanceExec.Ending}). */
+    EXEC_ENDED("exec_ended"),
     DRAINED("drained"),
     MIGRATED("migrated"),
     FILES_SAVE("files_save", Grouping.BATCHED),
@@ -163,6 +166,8 @@ public enum HohenheimActivityAction implements ActivityAction {
     public static final String HOSTNAMES_KEY = "hostnames";
     public static final String PREVIOUS_KEY = "previous";
     public static final String COMMAND_KEY = "command";
+    /** How a command ended, an {@code InstanceExec.Ending} token. */
+    public static final String OUTCOME_KEY = "outcome";
     public static final String ADDRESS_KEY = "address";
     public static final String HOSTNAME_KEY = "hostname";
     public static final String TRIGGER_KEY = "trigger";
@@ -392,6 +397,8 @@ public enum HohenheimActivityAction implements ActivityAction {
             case REISSUED -> FactShape.of(FactShape.key(HOSTNAMES_KEY, CoreTypes.LIST),
                 FactShape.optionalKey(PREVIOUS_KEY, CoreTypes.TEXT));
             case CONSOLE_COMMAND, EXEC -> FactShape.of(FactShape.key(COMMAND_KEY, CoreTypes.TEXT));
+            case EXEC_ENDED -> FactShape.of(FactShape.key(COMMAND_KEY, CoreTypes.TEXT),
+                FactShape.key(OUTCOME_KEY, CoreTypes.TEXT));
             case MEDIA_UPLOADED, MEDIA_DELETED, MEDIA_FETCHED -> FactShape.of(FactShape.key(NAME_KEY, CoreTypes.TEXT));
             case DYNDNS_UPDATE -> FactShape.of(FactShape.key(ADDRESS_KEY, CoreTypes.TEXT));
             case RELEASED_HOSTNAME_DISABLED, DOMAIN_ADDED, DOMAIN_REMOVED, QUARANTINE_LIFTED ->
@@ -504,7 +511,7 @@ public enum HohenheimActivityAction implements ActivityAction {
             case HTTPS_FORCED -> List.of(SiteDomainModel.MODEL_ID);
             case CONSOLE_COMMAND, DEVICE_ATTACHED, DEVICE_RESIZED, DEVICE_DETACHED, TEMPLATE_CAPTURED, VOLUME_DECLARED,
                  VOLUME_REDECLARED, APP_UPDATED, APP_UPDATE_FAILED, PREVIEW_TRIGGERED, RESTORED_SNAPSHOT, EXEC,
-                 MIGRATED, FILES_SAVE, FILES_UPLOAD, FILES_MKDIR, FILES_RENAME, FILES_DELETE, FILES_WRITE,
+                 EXEC_ENDED, MIGRATED, FILES_SAVE, FILES_UPLOAD, FILES_MKDIR, FILES_RENAME, FILES_DELETE, FILES_WRITE,
                  DELETED_DATA, SETTLED_INTERRUPTED, RECONCILED, BACKUP, BACKUP_FAILED, SNAPSHOT, SHELL_OPEN,
                  SHELL_CLOSE, WORKLOAD_EXITED, WORKLOAD_CRASH_LOOPED, WORKLOAD_START_FAILED,
                  WORKLOAD_ISOLATION_REFUSED, WORKLOAD_NEVER_READY, WORKLOAD_STOP_FAILED, WORKLOAD_REMOVE_FAILED,

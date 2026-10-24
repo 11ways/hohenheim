@@ -271,6 +271,11 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
         this.nextExecAnswer = new ExecAnswer(exitCode, "", stderr);
     }
 
+    /** The NEXT exec exits zero and prints {@code stdout}: an engine answering a probe. */
+    public void answerNextExec(@NonNull String stdout) {
+        this.nextExecAnswer = new ExecAnswer(0, stdout, "");
+    }
+
     /**
      * The NEXT exec runs {@code work} after it is recorded (the engine took the command) and before the daemon
      * answers, on the thread that started it: a slow engine another caller can race.

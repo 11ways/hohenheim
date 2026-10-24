@@ -18,6 +18,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -740,39 +741,65 @@ public class DockerClient {
         }
     }
 
-    /** Run a command inside a running container; see {@link #exec(String, List, List)}. */
+    /** Run a command inside a running container within this client's request deadline. */
     public ExecResult exec(String containerId, List<String> command) throws IOException {
         return exec(containerId, command, List.of());
     }
 
     /**
-     * Run a command inside a running container and block until it exits, capturing stdout and
-     * stderr separately plus the exit code. The basis of database backup/restore, which run
-     * {@code pg_dump}/{@code psql} (etc.) inside the engine's own container.
+     * {@link #exec(String, List, List, long)} within this client's own request deadline, the bound for a short
+     * probe (a readiness ping, a stat, a mkdir); anything that legitimately runs longer passes its own.
      *
      * @param env {@code "KEY=value"} entries set for the command (e.g. a dump password, which
      *            stays out of the captured stdout)
      */
     public ExecResult exec(String containerId, List<String> command, List<String> env) throws IOException {
-        return exec(containerId, command, env, null, null);
+        return exec(containerId, command, env, timeoutMillis);
     }
 
     /**
-     * {@link #exec(String, List, List)} run as an explicit user and/or in a directory.
+     * Run a command inside a running container and block until it exits or {@code timeoutMs} passes, capturing
+     * stdout and stderr separately plus the exit code.
      *
-     * @param user    the numeric uid (or user name) the command runs as, or null for the
-     *                container's own configured user
-     * @param workdir the working directory, or null for the image's
+     * @param env       {@code "KEY=value"} entries set for the command
+     * @param timeoutMs wall-clock bound on the whole output read
+     * @throws SocketTimeoutException naming the container and command when the deadline ends the read
      */
-    @SuppressWarnings("unchecked")
+    public ExecResult exec(String containerId, List<String> command, List<String> env, long timeoutMs)
+            throws IOException {
+        return exec(containerId, command, env, null, null, timeoutMs);
+    }
+
+    /**
+     * {@link #exec(String, List, List, long)} run as an explicit user and/or in a directory.
+     *
+     * AIDEV-NOTE: the deadline is the transport's own (the unix lane closes the channel, the ssh lane stops the
+     * bridge process), so a wedged command or a daemon that never answers the start ends at {@code timeoutMs}
+     * instead of pinning the caller; the old fixed LONG_OP bound let one readiness probe outlast its whole
+     * readiness wait. The Engine API has no exec kill, so a timed-out command may keep running in the container.
+     *
+     * @param user      the numeric uid (or user name) the command runs as, or null for the
+     *                  container's own configured user
+     * @param workdir   the working directory, or null for the image's
+     * @param timeoutMs wall-clock bound on the whole output read
+     * @throws SocketTimeoutException naming the container and command when the deadline ends the read
+     */
     public ExecResult exec(String containerId, List<String> command, List<String> env,
-                           String user, String workdir) throws IOException {
+                           @Nullable String user, @Nullable String workdir, long timeoutMs) throws IOException {
         String execId = this.createExec(containerId, command, env, false, user, workdir);
 
         // Detach=false streams the (multiplexed, non-TTY) output until the process exits and
-        // the daemon closes the connection; LONG_OP_TIMEOUT covers slow ops like a dump.
-        Http11.Raw stream = exchange("POST", DockerPaths.exec(execId) + "/start", execStartBody(),
-            "application/json", LONG_OP_TIMEOUT_MS);
+        // the daemon closes the connection.
+        Http11.Raw stream;
+        try {
+            stream = exchange("POST", DockerPaths.exec(execId) + "/start", execStartBody(),
+                "application/json", timeoutMs);
+        } catch (SocketTimeoutException timedOut) {
+            SocketTimeoutException named = new SocketTimeoutException("Docker exec of '" + describeCommand(command)
+                + "' in '" + containerId + "' did not finish within " + timeoutMs + "ms");
+            named.initCause(timedOut);
+            throw named;
+        }
 
         ByteArrayOutputStream stdout = new ByteArrayOutputStream();
         ByteArrayOutputStream stderr = new ByteArrayOutputStream();
@@ -783,6 +810,12 @@ public class DockerClient {
         return new ExecResult(exitCode,
             new String(stdout.toByteArray(), StandardCharsets.UTF_8),
             new String(stderr.toByteArray(), StandardCharsets.UTF_8));
+    }
+
+    /** @return the argv joined for an error message, cut at 120 characters (a {@code sh -c} script is long) */
+    private static String describeCommand(List<String> command) {
+        String joined = String.join(" ", command);
+        return joined.length() <= 120 ? joined : joined.substring(0, 117) + "...";
     }
 
     /** @return the start of a non-TTY exec that streams its multiplexed output until the process exits */

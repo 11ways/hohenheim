@@ -142,6 +142,16 @@ class InstanceFilesLiveTest {
                 assertThat(sizeOf(listing, "hello.txt"))
                     .as("step 2: the size is the daemon's, not a guess").isEqualTo(6);
 
+                // 2b. A directory of many entries lists in one pass, each parsed as before, a name with spaces whole.
+                inContainer(docker, handle, "mkdir -p /data/many && cd /data/many && for i in $(seq 1 300); do"
+                    + " : > \"f$i\"; done && printf 'abc' > 'with two spaces'");
+                InstanceFiles.Listing many = files.list(id, "/data/many");
+                assertThat(many.entries()).as("step 2b: every entry of a large directory is listed").hasSize(301);
+                assertThat(sizeOf(many, "with two spaces")).as("step 2b: a spaced name parses whole, with its size")
+                    .isEqualTo(3);
+                assertThat(kindOf(many, "f300")).as("step 2b: and each entry keeps its kind").isEqualTo("FILE");
+                inContainer(docker, handle, "rm -rf /data/many");
+
                 // 3. Read: the bytes are the file's, asserted against what the container
                 //    itself reports -- never against what we just wrote.
                 assertThat(files.readText(id, "/data/hello.txt"))

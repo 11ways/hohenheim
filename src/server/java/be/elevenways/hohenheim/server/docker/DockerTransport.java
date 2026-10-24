@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.docker;
 
 import java.io.IOException;
+import java.net.SocketTimeoutException;
 
 /**
  * Carries a single Docker Engine HTTP exchange to a daemon, regardless of how that daemon is
@@ -16,6 +17,8 @@ public interface DockerTransport {
     /**
      * Send {@code request} (a complete HTTP/1.1 request with {@code Connection: close}) and return
      * the entire raw response, bounded by {@code timeoutMs}.
+     *
+     * @throws SocketTimeoutException when {@code timeoutMs} ends the exchange, whatever lane carried it
      */
     byte[] roundTrip(byte[] request, long timeoutMs) throws IOException;
 

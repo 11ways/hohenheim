@@ -77,6 +77,9 @@ final class FakeWorkspaceDaemon implements InstanceRuntime, ExecSupport, VolumeS
     /** The exit code every exec that is not the checkout script answers with (the build command's). */
     int buildExitCode;
 
+    /** Consumed by the next exec: the failure it throws after recording the command, as a run the runtime lost. */
+    @Nullable IOException nextExecFailure;
+
     /** Every start fails, as a daemon that cannot bring the container back does. */
     boolean failStart;
 
@@ -213,6 +216,11 @@ final class FakeWorkspaceDaemon implements InstanceRuntime, ExecSupport, VolumeS
         requireReachable();
         this.execs.add(command.get(command.size() - 1));
         this.execOptions.add(options);
+        IOException failure = this.nextExecFailure;
+        this.nextExecFailure = null;
+        if (failure != null) {
+            throw failure;
+        }
         // The checkout script is the one that prints the commit marker; anything else is the build command.
         boolean checkout = command.get(command.size() - 1).contains("hohenheim-commit:");
         return new ExecSupport.ExecOutcome(checkout ? 0 : this.buildExitCode,

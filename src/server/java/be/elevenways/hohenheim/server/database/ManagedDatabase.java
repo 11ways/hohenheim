@@ -1404,7 +1404,7 @@ public class ManagedDatabase {
     public String backup(String handle, Engine engine, String user, String password,
                          String database) throws IOException {
         DockerClient.ExecResult result = docker.exec(handle,
-            engine.dumpCommand(user, database), engine.dumpEnv(password));
+            engine.dumpCommand(user, database), engine.dumpEnv(password), DockerClient.LONG_OP_TIMEOUT_MS);
         if (result.exitCode() != 0) {
             throw new IOException("Database backup of '" + handle + "' failed (exit "
                 + result.exitCode() + "): " + result.stderr().trim());
@@ -1491,7 +1491,8 @@ public class ManagedDatabase {
                     try {
                         String rdbPath = directory + "/dump.rdb";
                         DockerClient.ExecResult save = docker.exec(handle,
-                            List.of("redis-cli", "--rdb", rdbPath), engine.readyEnv(password));
+                            List.of("redis-cli", "--rdb", rdbPath), engine.readyEnv(password),
+                            DockerClient.LONG_OP_TIMEOUT_MS);
                         if (save.exitCode() != 0) {
                             throw new IOException("redis dump failed for '" + handle + "': "
                                 + save.stderr().trim());
@@ -1514,7 +1515,8 @@ public class ManagedDatabase {
                     try {
                         String archivePath = directory + "/dump.archive";
                         DockerClient.ExecResult dump = docker.exec(handle,
-                            engine.mongoDumpCommand(directory, user, database), engine.dumpEnv(password));
+                            engine.mongoDumpCommand(directory, user, database), engine.dumpEnv(password),
+                            DockerClient.LONG_OP_TIMEOUT_MS);
                         if (dump.exitCode() != 0) {
                             throw new IOException("mongodump failed for '" + handle + "': "
                                 + dump.stderr().trim());
@@ -1575,7 +1577,7 @@ public class ManagedDatabase {
         List<String> command = new ArrayList<>(List.of("rm", "-rf", directory));
         command.addAll(LEGACY_DUMP_PATHS);
         try {
-            DockerClient.ExecResult removed = docker.exec(handle, command);
+            DockerClient.ExecResult removed = docker.exec(handle, command, List.of(), DockerClient.LONG_OP_TIMEOUT_MS);
             if (removed.exitCode() != 0) {
                 Blast.log("DB: could not remove dump directory", directory, "in", handle, "-",
                     removed.stderr().trim());
@@ -1680,7 +1682,8 @@ public class ManagedDatabase {
 
         // "dump.rdb" in the data dir is the stock image's dbfilename/dir.
         DockerClient.ExecResult copy = docker.exec(handle,
-            List.of("cp", "/tmp/" + fileName, Engine.REDIS.dataPath + "/dump.rdb"));
+            List.of("cp", "/tmp/" + fileName, Engine.REDIS.dataPath + "/dump.rdb"), List.of(),
+            DockerClient.LONG_OP_TIMEOUT_MS);
         if (copy.exitCode() != 0) {
             throw new IOException("redis restore of '" + handle + "' failed copying the RDB into place: "
                 + copy.stderr().trim());
@@ -1735,6 +1738,9 @@ public class ManagedDatabase {
         throw new IOException("Timed out waiting for '" + handle + "' to stop for restore");
     }
 
+    /** The bound on one readiness probe: an engine client that cannot answer in this long is "not ready yet". */
+    private static final long READY_PROBE_TIMEOUT_MS = 15_000;
+
     /**
      * Block until the ENGINE reports it can serve queries, probing inside the container.
      *
@@ -1744,7 +1750,9 @@ public class ManagedDatabase {
      * lies with its exit code) demands a POSITIVE anchor in stdout as well. This is a
      * PRODUCT-tier gate on purpose: the instance contract answers "is the workload
      * running", never "can this engine serve queries" -- the same split that keeps the site
-     * tier's HTTP health probe in SiteReleases rather than in InstanceService.
+     * tier's HTTP health probe in SiteReleases rather than in InstanceService. Each probe is
+     * bounded by what is left of the wait (at most READY_PROBE_TIMEOUT_MS): a probe wedged in
+     * a starting engine once held a mongo create for the whole of a test run.
      *
      * @throws IOException naming the engine when it never became ready
      */
@@ -1759,7 +1767,8 @@ public class ManagedDatabase {
         IOException last = null;
         while (Now.millis() < deadline) {
             try {
-                DockerClient.ExecResult probe = docker.exec(handle, command, env);
+                long probeBound = Math.max(1, Math.min(READY_PROBE_TIMEOUT_MS, deadline - Now.millis()));
+                DockerClient.ExecResult probe = docker.exec(handle, command, env, probeBound);
                 lastOutput = probe.stdout();
                 if (probe.exitCode() == 0
                         && (anchor == null || probe.stdout().contains(anchor))) {

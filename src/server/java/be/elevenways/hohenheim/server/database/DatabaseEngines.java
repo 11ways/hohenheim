@@ -223,8 +223,9 @@ public final class DatabaseEngines {
             if (command == null || !ran.add(command)) {
                 continue;
             }
+            // The long-operation bound: Postgres's isolation script revokes on every database of the engine.
             DockerClient.ExecResult result = docker.exec(handle, command,
-                host.engine().logicalEnv(host.rootPassword(), null));
+                host.engine().logicalEnv(host.rootPassword(), null), DockerClient.LONG_OP_TIMEOUT_MS);
             if (result.exitCode() != 0) {
                 failures.add(name + ": exit " + result.exitCode() + ": "
                     + (result.stderr() + " " + result.stdout()).trim());

@@ -9,6 +9,8 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.checkerframework.checker.nullness.qual.Nullable;
+
 /**
  * A docker whose exec "succeeds", answers {@code stat} with the scripted dump's size, records every command with its
  * env, and serves the scripted bytes from any path: a managed-database dump's capture lanes without a daemon.
@@ -28,14 +30,10 @@ final class ScriptedDumpDocker extends DockerClient {
         this.dumpBytes = dumpBytes;
     }
 
+    /** The terminal overload: every shorter one, whatever deadline it passes, lands here. */
     @Override
-    public ExecResult exec(String containerId, List<String> command) throws IOException {
-        return exec(containerId, command, List.of());
-    }
-
-    @Override
-    public ExecResult exec(String containerId, List<String> command,
-                           List<String> env) throws IOException {
+    public ExecResult exec(String containerId, List<String> command, List<String> env,
+                           @Nullable String user, @Nullable String workdir, long timeoutMs) throws IOException {
         this.commands.add(List.copyOf(command));
         this.envs.add(List.copyOf(env));
         if (!command.isEmpty() && command.get(0).equals("stat")) {

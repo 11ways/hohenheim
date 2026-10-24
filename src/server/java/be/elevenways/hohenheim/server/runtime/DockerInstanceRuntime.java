@@ -541,9 +541,14 @@ public final class DockerInstanceRuntime
      * workload with a POSIX shell, and that refusal is named and loud (never an empty
      * listing). Read/write/stat deliberately stay on the archive API and work on a
      * STOPPED container.
+     *
+     * AIDEV-NOTE: the listing stats its entries in BATCHES ({@code -exec ... {} +}, POSIX and busybox alike; GNU's
+     * {@code -printf} has no raw st_mode, which the parser reads): one stat per entry made a large directory outlast
+     * the bound. The inner {@code exit 0} keeps an entry that vanished between find and stat from failing the
+     * whole listing, as one stat per entry never did; a missing or unreadable directory still fails through find.
      */
-    private static final String LIST_SCRIPT =
-        "find \"$HH_FM_PATH\" -maxdepth 1 -mindepth 1 -exec stat -c '%f %s %Y %n' {} \\;";
+    private static final String LIST_SCRIPT = "find \"$HH_FM_PATH\" -maxdepth 1 -mindepth 1"
+        + " -exec sh -c 'stat -c \"%f %s %Y %n\" \"$@\"; exit 0' hohenheim-list {} +";
     private static final String MKDIR_SCRIPT = "mkdir \"$HH_FM_PATH\"";
     private static final String RENAME_SCRIPT = "mv -- \"$HH_FM_PATH\" \"$HH_FM_TARGET\"";
     private static final String DELETE_SCRIPT = "rm -f -- \"$HH_FM_PATH\"";
@@ -570,7 +575,9 @@ public final class DockerInstanceRuntime
     @Override
     public @NonNull List<Entry> listDirectory(@NonNull String handle, @NonNull String path,
                                               int maxEntries) throws IOException {
-        String output = runFileScript(handle, LIST_SCRIPT, Map.of("HH_FM_PATH", path));
+        // The long-operation bound: a directory of a big tree (a game world's region files) lists for a while.
+        String output = runFileScript(handle, LIST_SCRIPT, Map.of("HH_FM_PATH", path),
+            DockerClient.LONG_OP_TIMEOUT_MS);
         List<Entry> entries = new ArrayList<>();
         String prefix = path.endsWith("/") ? path : path + "/";
         for (String line : output.split("\n")) {
@@ -742,8 +749,9 @@ public final class DockerInstanceRuntime
     public void delete(@NonNull String handle, @NonNull String path, boolean recursive,
                        @NonNull Map<String, String> ownerLabels) throws IOException {
         requireOurs(handle, ownerLabels, "delete a file in");
+        // A recursive delete walks a tree of any size, so it gets the long-operation bound.
         runFileScript(handle, recursive ? DELETE_TREE_SCRIPT : DELETE_SCRIPT,
-            Map.of("HH_FM_PATH", path));
+            Map.of("HH_FM_PATH", path), recursive ? DockerClient.LONG_OP_TIMEOUT_MS : FILE_SCRIPT_TIMEOUT_MS);
     }
 
     /** A workload that cannot be reached by exec right now (stopped, or shell-less). */
@@ -752,6 +760,9 @@ public final class DockerInstanceRuntime
             super(message);
         }
     }
+
+    /** The bound on one file-manager script (list, stat, chmod, rename): the client's own request deadline. */
+    private static final long FILE_SCRIPT_TIMEOUT_MS = DockerClient.DEFAULT_TIMEOUT_MS;
 
     /**
      * Run one of the CONSTANT scripts above with its paths supplied as environment
@@ -762,11 +773,17 @@ public final class DockerInstanceRuntime
      */
     private @NonNull String runFileScript(@NonNull String handle, @NonNull String script,
                                           @NonNull Map<String, String> paths) throws IOException {
+        return runFileScript(handle, script, paths, FILE_SCRIPT_TIMEOUT_MS);
+    }
+
+    /** {@link #runFileScript(String, String, Map)} within {@code timeoutMs}. */
+    private @NonNull String runFileScript(@NonNull String handle, @NonNull String script,
+                                          @NonNull Map<String, String> paths, long timeoutMs) throws IOException {
         List<String> env = new ArrayList<>();
         paths.forEach((name, value) -> env.add(name + "=" + value));
         DockerClient.ExecResult result;
         try {
-            result = this.docker.exec(handle, List.of("/bin/sh", "-c", script), env);
+            result = this.docker.exec(handle, List.of("/bin/sh", "-c", script), env, timeoutMs);
         } catch (DockerClient.ApiException e) {
             // 409 = not running; 404 on the exec create = no such container.
             throw new WorkloadNotBrowsableException("The workload '" + handle
@@ -813,7 +830,7 @@ public final class DockerInstanceRuntime
             // there usable at all.
             result = this.docker.exec(spec.handle(), command, env,
                 spec.runUser() == null ? null : String.valueOf(spec.runUser()),
-                options.workdir());
+                options.workdir(), timeoutMs);
         } catch (DockerClient.ApiException e) {
             // 409 = not running; 404 on the exec create = no such container. Named, so an
             // operator can tell "the workload refused" from "the daemon is gone".

@@ -10233,12 +10233,12 @@
       "scope": "instance"
     },
     {
-      "text": "Command executed",
+      "text": "Command started",
       "scope": "hohenheim",
       "target": "history_fact"
     },
     {
-      "text": "{$actor} ran a command in {$subject}",
+      "text": "{$actor} started a command in {$subject}",
       "scope": "hohenheim",
       "target": "happened"
     },
@@ -10251,6 +10251,24 @@
       "text": "run commands",
       "scope": "capability",
       "case": "sentence"
+    }
+  ],
+  "exec_ended": [
+    {
+      "text": "Command ended",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": ".match {$outcome :string}\nok {{{$command} finished}}\nfailed {{{$command} failed}}\ntimed_out {{{$command} did not finish within the time limit and may still be running}}\n* {{{$command} ended}}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_outcome": "true"
+    },
+    {
+      "text": "A command {$actor} started in {$subject} ended",
+      "scope": "hohenheim",
+      "target": "happened"
     }
   ],
   "run": [

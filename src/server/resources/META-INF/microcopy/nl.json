@@ -10233,12 +10233,12 @@
       "scope": "instance"
     },
     {
-      "text": "Opdracht uitgevoerd",
+      "text": "Opdracht gestart",
       "scope": "hohenheim",
       "target": "history_fact"
     },
     {
-      "text": "{$actor} voerde een commando uit in {$subject}",
+      "text": "{$actor} startte een commando in {$subject}",
       "scope": "hohenheim",
       "target": "happened"
     },
@@ -10251,6 +10251,24 @@
       "text": "opdrachten uitvoeren",
       "scope": "capability",
       "case": "sentence"
+    }
+  ],
+  "exec_ended": [
+    {
+      "text": "Opdracht afgelopen",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": ".match {$outcome :string}\nok {{{$command} is klaar}}\nfailed {{{$command} is mislukt}}\ntimed_out {{{$command} was niet klaar binnen de tijdslimiet en loopt mogelijk nog}}\n* {{{$command} is afgelopen}}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_outcome": "true"
+    },
+    {
+      "text": "Een commando dat {$actor} startte in {$subject} is afgelopen",
+      "scope": "hohenheim",
+      "target": "happened"
     }
   ],
   "run": [

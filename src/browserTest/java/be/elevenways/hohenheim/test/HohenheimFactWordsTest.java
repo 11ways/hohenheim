@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.instance.InstanceExec;
 import be.elevenways.hohenheim.server.instance.InstanceShell;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
@@ -141,6 +142,26 @@ class HohenheimFactWordsTest {
                 .hasSize(InstanceShell.EndReason.values().length);
             assertThat(detail(instances, instance, NL)).as("step 5: in Dutch too")
                 .isEqualTo("/bin/sh als uid 1000 gesloten: de workload stopte");
+
+            // 5b. A command's ending names the command and how it ended, for every ending there is.
+            Set<String> endings = new HashSet<>();
+            for (InstanceExec.Ending ending : InstanceExec.Ending.values()) {
+                String ended = said(instances, instance, HohenheimActivityAction.EXEC_ENDED, Map.of(
+                    HohenheimActivityAction.COMMAND_KEY, "df -h", HohenheimActivityAction.OUTCOME_KEY, ending.token()),
+                    EN);
+                assertThat(ended).as("step 5b: %s names the command", ending).startsWith("df -h ")
+                    .isNotEqualTo("df -h ended");
+                assertThat(detail(instances, instance, NL)).as("step 5b: %s in Dutch too", ending)
+                    .startsWith("df -h ").isNotEqualTo("df -h is afgelopen");
+                endings.add(ended);
+            }
+            assertThat(endings).as("step 5b: each ending in its own words")
+                .hasSize(InstanceExec.Ending.values().length);
+            assertThat(said(instances, instance, HohenheimActivityAction.EXEC_ENDED, Map.of(
+                    HohenheimActivityAction.COMMAND_KEY, "df -h",
+                    HohenheimActivityAction.OUTCOME_KEY, InstanceExec.Ending.TIMED_OUT.token()), EN))
+                .as("step 5b: a timeout says the command may still run")
+                .isEqualTo("df -h did not finish within the time limit and may still be running");
 
             // 6. A backup, a snapshot and a restore from either name the one they are.
             assertThat(said(instances, instance, HohenheimActivityAction.BACKUP,

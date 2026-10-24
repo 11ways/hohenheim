@@ -293,10 +293,16 @@ public class DatabaseService extends DatasourceScoped {
         return live.port();
     }
 
-    /** Run one logical-database command on an engine host and refuse a non-zero exit by name. */
+    /**
+     * Run one logical-database command on an engine host and refuse a non-zero exit by name.
+     *
+     * AIDEV-NOTE: logical DDL gets the long-operation bound: DROP DATABASE of a large database (and CREATE from a big
+     * template) can outlast the client's request deadline, and a cut-off drop leaves the record kept as destroy_failed.
+     */
     private void runLogical(EngineHost host, String handle, List<String> command,
                             List<String> env, String what) throws IOException {
-        DockerClient.ExecResult result = new ServerService().clientFor(host.serverId()).exec(handle, command, env);
+        DockerClient.ExecResult result = new ServerService().clientFor(host.serverId()).exec(handle, command, env,
+            DockerClient.LONG_OP_TIMEOUT_MS);
         if (result.exitCode() != 0) {
             throw new IOException("Could not " + what + " on engine '" + host.name() + "' (exit "
                 + result.exitCode() + "): " + (result.stderr() + " " + result.stdout()).trim());
@@ -1823,33 +1829,40 @@ public class DatabaseService extends DatasourceScoped {
                 String targetHandle = handleOf(current, target);
 
                 // 4. Logical database + user, restore, verify. A logical database already holding anything is
-                //    refused first: the dump carries --clean, so loading it would replace what is there.
-                requireLogicalEmpty(target, targetHandle, database);
-                runLogical(target, targetHandle, engine.createLogicalCommand(target.rootUser(),
-                    database, user), engine.logicalEnv(target.rootPassword(), password),
-                    "create logical database '" + database + "'");
-                managedFor(serverId).restoreFromFile(targetHandle, engine, target.rootUser(),
-                    target.rootPassword(), database, dump, user);
-                String after = fingerprint(target, targetHandle, database);
-                if (!before.equals(after)) {
-                    throw new IOException("Content fingerprint differs after the restore into engine '"
-                        + target.name() + "' (dedicated: " + before + "; shared: " + after
-                        + "); nothing was switched");
-                }
-                requireOwnedBy(target, targetHandle, database, user);
+                //    refused first: the dump carries --clean, so loading it there would replace what is there.
+                boolean created = requireLogicalEmpty(target, targetHandle, database);
+                try {
+                    runLogical(target, targetHandle, engine.createLogicalCommand(target.rootUser(),
+                        database, user), engine.logicalEnv(target.rootPassword(), password),
+                        "create logical database '" + database + "'");
+                    managedFor(serverId).restoreFromFile(targetHandle, engine, target.rootUser(),
+                        target.rootPassword(), database, dump, user);
+                    String after = fingerprint(target, targetHandle, database);
+                    if (!before.equals(after)) {
+                        throw new IOException("Content fingerprint differs after the restore into engine '"
+                            + target.name() + "' (dedicated: " + before + "; shared: " + after
+                            + "); nothing was switched");
+                    }
+                    requireOwnedBy(target, targetHandle, database, user);
 
-                // 5. Switch the record; a password change waiting on the claim now finds it shared.
-                exec(() -> {
-                    Row fresh = model().findById(recordId);
-                    fresh.set(DatabaseModel.PLACEMENT, DatabaseModel.PLACEMENT_SHARED);
-                    fresh.set(DatabaseModel.ENGINE_ID, engineId);
-                    fresh.set(DatabaseModel.DB_USER, user);
-                    fresh.set(DatabaseModel.MEMORY_LIMIT_MB, null);
-                    fresh.set(DatabaseModel.CPU_LIMIT, null);
-                    fresh.set(DatabaseModel.STATUS, DatabaseModel.STATUS_ACTIVE);
-                    fresh.set(DatabaseModel.FAILURE_REASON, null);
-                    model().save(fresh);
-                });
+                    // 5. Switch the record; a password change waiting on the claim now finds it shared.
+                    exec(() -> {
+                        Row fresh = model().findById(recordId);
+                        fresh.set(DatabaseModel.PLACEMENT, DatabaseModel.PLACEMENT_SHARED);
+                        fresh.set(DatabaseModel.ENGINE_ID, engineId);
+                        fresh.set(DatabaseModel.DB_USER, user);
+                        fresh.set(DatabaseModel.MEMORY_LIMIT_MB, null);
+                        fresh.set(DatabaseModel.CPU_LIMIT, null);
+                        fresh.set(DatabaseModel.STATUS, DatabaseModel.STATUS_ACTIVE);
+                        fresh.set(DatabaseModel.FAILURE_REASON, null);
+                        model().save(fresh);
+                    });
+                } catch (IOException | RuntimeException | Error failed) {
+                    if (created) {
+                        dropMoveTarget(target, targetHandle, database, user, failed);
+                    }
+                    throw failed;
+                }
                 return new Moved(old, target, dump);
             }));
             EngineHost old = moved.old();
@@ -2103,11 +2116,15 @@ public class DatabaseService extends DatasourceScoped {
         });
     }
 
-    /** One database's content fingerprint on one host, trimmed for comparison. */
+    /**
+     * One database's content fingerprint on one host, trimmed for comparison.
+     *
+     * AIDEV-NOTE: the long-operation bound: the fingerprint reads every row of every table, twice per move.
+     */
     private String fingerprint(EngineHost host, String handle, String database) throws IOException {
         DockerClient.ExecResult result = new ServerService().clientFor(host.serverId()).exec(handle,
             host.engine().fingerprintCommand(host.rootUser(), database),
-            host.engine().logicalEnv(host.rootPassword(), null));
+            host.engine().logicalEnv(host.rootPassword(), null), DockerClient.LONG_OP_TIMEOUT_MS);
         if (result.exitCode() != 0) {
             throw new IOException("Could not fingerprint '" + database + "' on engine '"
                 + host.name() + "' (exit " + result.exitCode() + "): " + result.stderr().trim());
@@ -2143,6 +2160,27 @@ public class DatabaseService extends DatasourceScoped {
                 + "' holding " + answer + " objects; a move never loads over existing contents, so nothing was"
                 + " switched (remove or rename that database on the engine first)");
         }
+        return false;
+    }
+
+    /**
+     * Drops the logical database and user a failed move created on its target engine, so a retry finds it absent.
+     *
+     * AIDEV-NOTE: only for a database the move's own probe found ABSENT: one that already existed (empty) is never
+     * dropped, whatever the failed load left in it. A drop that fails is logged and suppressed onto the move's own
+     * failure, which stays the one thrown; the record is still dedicated, so the leftover blocks only a retry.
+     */
+    private void dropMoveTarget(EngineHost target, String handle, String database, String user, Throwable failed) {
+        try {
+            runLogical(target, handle, target.engine().dropLogicalCommand(target.rootUser(), database, user, true),
+                target.engine().logicalEnv(target.rootPassword(), null),
+                "drop logical database '" + database + "' the failed move created");
+        } catch (IOException | RuntimeException dropFailed) {
+            failed.addSuppressed(dropFailed);
+            Blast.log("DB-MOVE: could not drop the logical database", database, "the failed move created on engine",
+                target.name(), "-", query(() -> ConsoleRedaction.reasonOf(target.ownerModel(), target.ownerId(),
+                    dropFailed)));
+        }
     }
 
     /**
@@ -2174,7 +2212,6 @@ public class DatabaseService extends DatasourceScoped {
                             + user + "'"))
                 + "; nothing was switched");
         }
-        return false;
     }
 
     /**
