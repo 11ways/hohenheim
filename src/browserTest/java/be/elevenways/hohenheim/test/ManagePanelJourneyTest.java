@@ -260,7 +260,7 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
         assertThat(page("/manage/instances/" + this.appId + "/page/overview"))
             .as("step 7b: Restart follows the POWER grant")
             .contains("hohenheim.restart_instance")
-            .contains("hohenheim.start_instance");
+            .contains("hohenheim.deploy_instance");
 
         // 8. The operator on /manage is offered Put something online from the landing.
         assertThat(adminGet("/manage/dashboard").body())

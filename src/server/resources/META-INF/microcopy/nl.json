@@ -894,10 +894,6 @@
       "scope": "notification_event"
     },
     {
-      "text": "De uitrol is mislukt; de reden staat op dit tabblad",
-      "scope": "deployments"
-    },
-    {
       "text": "De laatste deploy is mislukt",
       "scope": "app_health"
     },
@@ -5644,10 +5640,16 @@
     "text": "Maak of vervang de containers van de stack volgens de huidige configuratie",
     "scope": "stack"
   },
-  "deploy_confirm": {
-    "text": "Deze stack nu deployen? Gewijzigde services krijgen nieuwe containers.",
-    "scope": "stack"
-  },
+  "deploy_confirm": [
+    {
+      "text": "Deze stack nu deployen? Gewijzigde services krijgen nieuwe containers.",
+      "scope": "stack"
+    },
+    {
+      "text": "Nu uitrollen? Het loopt op de achtergrond en dit tabblad toont de voortgang.",
+      "scope": "deployments"
+    }
+  ],
   "purge_volumes": {
     "text": "Volumes wissen",
     "scope": "stack"
@@ -6246,10 +6248,6 @@
     }
   ],
   "deployed": [
-    {
-      "text": "Instantie {$name} draait",
-      "scope": "instance"
-    },
     {
       "text": "Uitgerold",
       "scope": "hohenheim",
@@ -8508,16 +8506,10 @@
       "scope": "help"
     }
   ],
-  "rollback_done": [
-    {
-      "text": "{$name} teruggedraaid naar de bewaarde release",
-      "scope": "site"
-    },
-    {
-      "text": "Teruggedraaid naar de bewaarde release",
-      "scope": "deployments"
-    }
-  ],
+  "rollback_done": {
+    "text": "Teruggedraaid naar de bewaarde release",
+    "scope": "deployments"
+  },
   "release_probe_failed": {
     "text": "De kandidaat-release gaf nooit een gezond HTTP-antwoord: {$reason}",
     "scope": "violations"
@@ -14509,12 +14501,16 @@
     "text": "Deze database naar de gedeelde engine van de host verplaatsen? Elke gekoppelde workload wordt gestopt zolang de dump en de restore lopen, het record staat ondertussen op Wordt aangemaakt, en de dump blijft onder het back-uppad bewaard als terugvalweg.",
     "scope": "database"
   },
-  "deploy_running": {
-    "text": "Uitrol gestart; de voortgang verschijnt op dit tabblad",
-    "scope": "deployments"
-  },
   "deploy_done": {
     "text": "Uitgerold",
+    "scope": "deployments"
+  },
+  "deploy_step": {
+    "text": "Uitrollen, achter de gezondheidscontrole waar een release serveert",
+    "scope": "deployments"
+  },
+  "deploy_in_progress": {
+    "text": "Er loopt al een uitrol; de voortgang staat op het tabblad Uitrollen",
     "scope": "deployments"
   },
   "enrolment_incomplete": {
@@ -16218,6 +16214,7 @@
   "delete_schedule": { "text": "{$actor} verwijderde schema {$subject}", "scope": "hohenheim", "target": "happened" },
   "delete_schedule_step": { "text": "{$actor} verwijderde schemastap {$subject}", "scope": "hohenheim", "target": "happened" },
   "start_instance": { "text": "{$actor} startte {$subject}", "scope": "hohenheim", "target": "happened" },
+  "deploy_instance": { "text": "{$actor} rolde {$subject} uit", "scope": "hohenheim", "target": "happened" },
   "stop_instance": { "text": "{$actor} stopte {$subject}", "scope": "hohenheim", "target": "happened" },
   "restart_instance": { "text": "{$actor} herstartte {$subject}", "scope": "hohenheim", "target": "happened" },
   "backup_instance": { "text": "{$actor} maakte een back-up van {$subject}", "scope": "hohenheim", "target": "happened" },

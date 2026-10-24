@@ -332,7 +332,7 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
         assertThat(InstanceParts.manage().actions().stream()
                 .map(PanelAction::id).map(Object::toString))
             .as("step 5: positive anchor -- the delegated surface still offers power")
-            .anyMatch(id -> id.contains("start_instance"));
+            .anyMatch(id -> id.contains("deploy_instance"));
     }
 
     /**

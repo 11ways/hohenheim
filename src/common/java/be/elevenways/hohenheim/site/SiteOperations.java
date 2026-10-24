@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.site;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
@@ -11,6 +12,7 @@ import be.elevenways.zenit.common.orm.command.CommandExecution;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.OperationInput;
+import be.elevenways.zenit.common.operation.OperationSteps;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.StringField;
@@ -98,7 +100,13 @@ public final class SiteOperations {
     public record CloneInput(@Nullable String name) {
     }
 
-    /** Rolls a Docker-backed site back to its application's retained release, through the forward health gate. */
+    /**
+     * Rolls a Docker-backed site back to its application's retained release, through the forward health gate.
+     *
+     * AIDEV-NOTE: a background run, like the application's own rollback (InstanceOperations.ROLLBACK): the gated swap
+     * boots and probes a candidate before the switch, so it never holds a request. The caller lands on the run's page,
+     * whose finished run opens the site. It spends the deploy lane's hh_deploy budget.
+     */
     public static final Operation<Row, Void, Void> ROLLBACK_RELEASE =
         Operation.declare(HohenheimIds.id("rollback_release"))
             .happened(OperationSentences.of("rollback_release"))
@@ -108,6 +116,9 @@ public final class SiteOperations {
             .gate(OperationGate.open())
             .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)
             .command(COMMAND.execution(CommandExecution.OUTSIDE_TRANSACTION))
+            .rateLimit(HohenheimEndpoints.DEPLOY_LIMIT)
+            .background(OperationSteps.of(
+                OperationSteps.step("switch", HohenheimMicrocopy.DEPLOYMENTS.of("rollback_step"))))
             .register();
 
     private SiteOperations() {

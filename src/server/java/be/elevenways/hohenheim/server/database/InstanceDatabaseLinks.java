@@ -12,6 +12,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
+import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -146,36 +147,68 @@ public final class InstanceDatabaseLinks {
      * and would race the deploy that is about to start the engine's own host anyway.
      */
     public static @Nullable Microcopy notReadyReason(int instanceId) {
+        return notReadyReasons(List.of(instanceId)).get(instanceId);
+    }
+
+    /**
+     * {@link #notReadyReason} for several instances, read in two queries however many are asked: what a placed
+     * deploy refuses a page of rows for before any run starts.
+     *
+     * @return per asked instance with a database that is not ready, the reason naming its first such database
+     */
+    public static @NonNull Map<Integer, Microcopy> notReadyReasons(@NonNull Collection<Integer> instanceIds) {
         DatabaseModel databases = Models.get(DatabaseModel.class);
         InstanceDatabaseModel links = Models.get(InstanceDatabaseModel.class);
-        if (databases == null || links == null) {
+        Map<Integer, Microcopy> reasons = new HashMap<>();
+        if (databases == null || links == null || instanceIds.isEmpty()) {
+            return reasons;
+        }
+        List<Row> linked = links.find().where(InstanceDatabaseModel.INSTANCE_ID.in(List.copyOf(instanceIds)))
+            .orderBy(InstanceDatabaseModel.ID, SortOrder.ASC).all();
+        Set<Integer> databaseIds = new LinkedHashSet<>();
+        for (Row link : linked) {
+            Integer databaseId = link.get(InstanceDatabaseModel.DATABASE_ID);
+            if (databaseId != null) {
+                databaseIds.add(databaseId);
+            }
+        }
+        Map<Integer, Row> databaseById = new HashMap<>();
+        if (!databaseIds.isEmpty()) {
+            for (Row database : databases.find().where(DatabaseModel.ID.in(List.copyOf(databaseIds))).all()) {
+                databaseById.put(database.get(DatabaseModel.ID), database);
+            }
+        }
+        for (Row link : linked) {
+            Integer instanceId = link.get(InstanceDatabaseModel.INSTANCE_ID);
+            Row database = databaseById.get(link.get(InstanceDatabaseModel.DATABASE_ID));
+            if (instanceId == null || database == null || reasons.containsKey(instanceId)) {
+                continue;
+            }
+            Microcopy reason = notReadyReasonOf(database);
+            if (reason != null) {
+                reasons.put(instanceId, reason);
+            }
+        }
+        return reasons;
+    }
+
+    /** @return why this database keeps a workload from deploying, or null when it is active */
+    private static @Nullable Microcopy notReadyReasonOf(@NonNull Row database) {
+        String status = database.get(DatabaseModel.STATUS);
+        if (DatabaseModel.STATUS_ACTIVE.equals(status)) {
             return null;
         }
-        for (Row link : links.findByInstanceId(instanceId)) {
-            Integer databaseId = link.get(InstanceDatabaseModel.DATABASE_ID);
-            Row database = databaseId == null ? null
-                : databases.find().where(DatabaseModel.ID.eq(databaseId)).first();
-            if (database == null) {
-                continue;
-            }
-            String status = database.get(DatabaseModel.STATUS);
-            if (DatabaseModel.STATUS_ACTIVE.equals(status)) {
-                continue;
-            }
-            String name = String.valueOf((Object) database.get(DatabaseModel.NAME));
-            String failure = database.get(DatabaseModel.FAILURE_REASON);
-            if (DatabaseModel.STATUS_FAILED.equals(status) && failure != null
-                    && !failure.isBlank()) {
-                return HohenheimMicrocopy.VIOLATIONS.of("database_not_ready")
-                    .withFilter("state", DatabaseModel.STATUS_FAILED)
-                    .withArg("name", name)
-                    .withArg("reason", failure);
-            }
+        String name = String.valueOf((Object) database.get(DatabaseModel.NAME));
+        String failure = database.get(DatabaseModel.FAILURE_REASON);
+        if (DatabaseModel.STATUS_FAILED.equals(status) && failure != null && !failure.isBlank()) {
             return HohenheimMicrocopy.VIOLATIONS.of("database_not_ready")
+                .withFilter("state", DatabaseModel.STATUS_FAILED)
                 .withArg("name", name)
-                .withArg("state", String.valueOf(status));
+                .withArg("reason", failure);
         }
-        return null;
+        return HohenheimMicrocopy.VIOLATIONS.of("database_not_ready")
+            .withArg("name", name)
+            .withArg("state", String.valueOf(status));
     }
 
     /**

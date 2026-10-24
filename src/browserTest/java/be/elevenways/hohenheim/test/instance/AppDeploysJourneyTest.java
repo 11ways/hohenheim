@@ -256,6 +256,8 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
         assertThat(overview).as("step 1: the strip links the overview").isGreaterThan(0);
         assertThat(deploys).as("step 1: Deploys follows the overview").isGreaterThan(overview);
         assertThat(console).as("step 1: and comes before the console").isGreaterThan(deploys);
+        assertThat(body).as("step 1: Deploy now is the placed deploy operation's own form")
+            .contains("data-hh-deploy").contains("/admin/instances/invoke/hohenheim.deploy_instance");
 
         // 2. The live band names the serving commit and its branch, and offers the one-step way back to the kept one.
         assertThat(body)
@@ -383,7 +385,9 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
         String deploying = adminGet(pageUrl()).body();
         assertThat(deploying)
             .as("step 6: a running deploy re-renders the tab live").contains("data-hh-deploys-live")
-            .as("step 6: watching the deploys feed").contains("instance_deploys_live");
+            .as("step 6: watching the deploys feed").contains("instance_deploys_live")
+            .as("step 6: and Deploy now is dead, saying a deploy already runs, before any run is started")
+            .contains("data-cms-page-action-unavailable").contains("A deploy is already running");
 
         // 7. A build is named as a deploy of its app, never by its commit nor its installation-wide id: that title is
         //    what every activity line about it says (mockup: "Staging API deploy started by a push"), and a hash

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -63,8 +64,8 @@ class SiteAccessControlTest extends HohenheimHttpTestBase {
         siteModel.save(siteB);
         siteBId = siteB.get(SiteModel.ID);
 
-        // Two instances for the instance-keyed deploy endpoint (the verb moved off the
-        // site when the release engine was re-keyed to the application).
+        // Two instances for the instance-keyed deploy (the placed deploy operation, invoked
+        // through the /manage panel since the Deploys tab lives on the application).
         var instanceModel = Models.get(InstanceModel.class);
         Row instanceA = instanceModel.createEmptyRow();
         instanceA.set(InstanceModel.NAME, "access-app-a");
@@ -91,6 +92,12 @@ class SiteAccessControlTest extends HohenheimHttpTestBase {
 
     private HttpResponse<String> limitedPost(String path) throws Exception {
         return httpPostForm(path, "", limitedSession, limitedCsrf);
+    }
+
+    /** The /manage panel's one invoke route of the placed deploy, over one instance row. */
+    private static String deployTarget(int instanceId) {
+        return "/manage/instances/invoke/" + InstanceOperations.DEPLOY.id().toString().replace(':', '.')
+            + "?ids=" + instanceId;
     }
 
     /**
@@ -126,8 +133,8 @@ class SiteAccessControlTest extends HohenheimHttpTestBase {
      */
     @Test
     void manageGrantJourney() throws Exception {
-        // 1. Per-instance endpoints refuse a principal holding no capability on the record.
-        assertAuthorizationRefusal(limitedPost("/instances/" + instanceAId + "/deploy"),
+        // 1. The per-instance deploy refuses a principal holding no capability on any record.
+        assertAuthorizationRefusal(limitedPost(deployTarget(instanceAId)),
             "step 1: deploy on an ungranted instance");
 
         // 2. Installation-scoped sensitive endpoints are admin-only.
@@ -160,16 +167,17 @@ class SiteAccessControlTest extends HohenheimHttpTestBase {
         RecordGrants.grant(GrantSubjectType.USER, limitedUserId, InstanceModel.MODEL_ID,
             instanceAId, HohenheimCapabilities.MANAGE, true);
 
-        // 5. Instance A passes authorization: no git source configured, so the handler
-        //    falls through to its redirect -- the point is it no longer 403s. This is also
-        //    the control for step 1: the SAME client, the SAME CSRF token, now accepted.
-        assertThat(limitedPost("/instances/" + instanceAId + "/deploy").statusCode())
+        // 5. Instance A passes authorization: the deploy answers at once with its run's page
+        //    (the run ends on its own; no image or host serves it here). This is also the
+        //    control for step 1: the SAME client, the SAME CSRF token, now accepted.
+        assertThat(limitedPost(deployTarget(instanceAId)).statusCode())
             .describedAs("step 5: deploy passes once the grant exists")
             .isIn(302, 303);
 
-        // 6. The grant is per RECORD: instance B stays refused.
-        assertAuthorizationRefusal(limitedPost("/instances/" + instanceBId + "/deploy"),
-            "step 6: a grant on instance A unlocks nothing on instance B");
+        // 6. The grant is per RECORD: instance B stays out of reach, concealed as missing.
+        assertThat(limitedPost(deployTarget(instanceBId)).statusCode())
+            .describedAs("step 6: a grant on instance A unlocks nothing on instance B")
+            .isEqualTo(404);
 
         // 7. The policy's principal-facing views agree with the wire.
         UserPrincipal principal = new UserPrincipal(limitedUserId, "Limited User");

@@ -60,6 +60,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -1115,6 +1116,23 @@ public final class ReleaseEngine {
             keeping.add(release.get(InstanceModel.GENERATED_FOR_ID));
         }
         return keeping;
+    }
+
+    /**
+     * What a rollback asked of each application would be refused for before it starts, read in one go: an
+     * application keeping no retained release has nowhere to go back to.
+     *
+     * @return per asked application that cannot roll back, {@link #NO_ROLLBACK_TARGET}; an application left out can
+     */
+    public static @NonNull Map<Integer, Microcopy> rollbackRefusals(@NonNull Collection<Integer> applicationIds) {
+        Set<Integer> kept = keepingRetired(applicationIds);
+        Map<Integer, Microcopy> refusals = new HashMap<>();
+        for (Integer applicationId : applicationIds) {
+            if (!kept.contains(applicationId)) {
+                refusals.put(applicationId, NO_ROLLBACK_TARGET);
+            }
+        }
+        return refusals;
     }
 
     // -- operation record plumbing -------------------------------------------

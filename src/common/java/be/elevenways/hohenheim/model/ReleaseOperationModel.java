@@ -22,6 +22,7 @@ import be.elevenways.zenit.common.ui.BadgeVariant;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -194,6 +195,16 @@ public class ReleaseOperationModel extends Model {
     /** Every operation of one owning record still claiming to be in flight. */
     public List<Row> findInFlight(String forModel, int forId) {
         return this.history(forModel, forId).where(STATUS.in(IN_FLIGHT_STATUSES)).all();
+    }
+
+    /** @return which of several owning records of one model have an operation still in flight, in one read */
+    public Set<Integer> inFlightAmong(String forModel, Collection<Integer> forIds) {
+        Set<Integer> inFlight = new HashSet<>();
+        for (Row operation : find().where(FOR_MODEL.eq(forModel)).where(FOR_ID.in(List.copyOf(forIds)))
+                .where(STATUS.in(IN_FLIGHT_STATUSES)).all()) {
+            inFlight.add(operation.get(FOR_ID));
+        }
+        return inFlight;
     }
 
     /** Keep the newest {@code keep} operations of one owning record and delete the rest. */

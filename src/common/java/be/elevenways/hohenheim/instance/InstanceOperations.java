@@ -68,6 +68,28 @@ public final class InstanceOperations {
         .command(POWER_FACET)
         .register();
 
+    /**
+     * Deploy an instance from the panel (its Deploy row action and its Deploys tab); POWER on the record.
+     *
+     * AIDEV-NOTE: a background run beside {@link #START}, not START itself: a deploy is health-gated and outlives any
+     * request, while START answers the API and a schedule step with the instance's status in the call
+     * ({@link PowerResult}), and an operation runs in the background on every surface or on none. Both reach the one
+     * funnel (InstanceService.deploy) with the trigger their surface declares, so a panel deploy records MANUAL. It
+     * spends the deploy lane's hh_deploy budget, the one the rollback and the PaaS routes spend.
+     */
+    public static final Operation<Row, Void, Void> DEPLOY = Operation.declare(HohenheimIds.id("deploy_instance"))
+        .happened(OperationSentences.of("deploy_instance"))
+        .label(HohenheimMicrocopy.INSTANCE.of("deploy").withFallback("Deploy"))
+        .icon(Icon.of("play"))
+        .one(INSTANCE)
+        .gate(gate(HohenheimCapabilities.POWER))
+        .facts(OperationFact.REACHES_OUTSIDE)
+        .command(POWER_FACET)
+        .rateLimit(HohenheimEndpoints.DEPLOY_LIMIT)
+        .background(OperationSteps.of(
+            OperationSteps.step("deploy", HohenheimMicrocopy.DEPLOYMENTS.of("deploy_step"))))
+        .register();
+
     public static final Operation<Row, Void, PowerResult> STOP = Operation.declare(HohenheimIds.id("stop_instance"))
         .happened(OperationSentences.of("stop_instance"))
         .label(HohenheimMicrocopy.POWER_OPERATION.of("stop").withFallback("Stop"))
@@ -185,7 +207,7 @@ public final class InstanceOperations {
      *
      * AIDEV-NOTE: a background run, as the gated swap outlives any request (a candidate boots and is probed before
      * the switch): the caller lands on the run's page and the Deploys tab shows the release it starts with its live
-     * log. It spends the deploy lane's own hh_deploy budget, the one the deploy form and the PaaS routes spend.
+     * log. It spends the deploy lane's own hh_deploy budget, the one the panel deploy and the PaaS routes spend.
      */
     public static final Operation<Row, Void, Void> ROLLBACK =
         Operation.declare(HohenheimIds.id("rollback_instance"))

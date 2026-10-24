@@ -279,12 +279,11 @@ final class SiteActions {
 
     /**
      * Roll a Docker site back to its retained release: one durable operation over the digest-pinned prior spec,
-     * through the same health gate as a forward release; the engine refuses with a toast when no target exists.
+     * through the same health gate as a forward release. A background run: it lands on the run's page, whose finished
+     * run opens the site; a site whose application keeps nothing to go back to is dead, with the engine's words.
      */
     private static @NonNull PanelAction<Row> rollbackAction() {
-        return PanelAction.<Row, Void>places(SiteOperations.ROLLBACK_RELEASE, ActionPlacement.ROW,
-                (request, result) -> CmsActionResult.refreshWithToast(
-                    HohenheimMicrocopy.SITE.of("rollback_done").withArg("name", request.subject().get(SiteModel.NAME))))
+        return PanelAction.<Row, Void>placesRun(SiteOperations.ROLLBACK_RELEASE, ActionPlacement.ROW)
             .inlineInRow(false)
             .description(HohenheimMicrocopy.SITE.of("rollback_hint"))
             .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.SITE.of("rollback"),

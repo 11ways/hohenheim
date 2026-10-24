@@ -232,10 +232,11 @@ class ReleasesTabJourneyTest extends HohenheimTestBase {
             assertThat(adminGet(url(shop) + "?page=2").body()).as("step 7: it is on the second")
                 .contains("data-hh-release-mark=\"kept\"").contains("kept release steps");
 
-            // 8. The rollback spends the deploy lane's own budget, the deploy form's very policy: ten a minute per
+            // 8. The rollback spends the deploy lane's own budget, the panel deploy's very policy: ten a minute per
             //    caller, refused ones included, and the eleventh is refused as rate-limited before anything is asked.
-            assertThat(InstanceOperations.ROLLBACK.rateLimit()).as("step 8: the deploy form's own policy")
-                .isSameAs(HohenheimEndpoints.INSTANCES_DEPLOY.getRateLimitPolicy());
+            assertThat(InstanceOperations.ROLLBACK.rateLimit()).as("step 8: the deploy lane's own policy")
+                .isSameAs(HohenheimEndpoints.DEPLOY_LIMIT)
+                .isSameAs(InstanceOperations.DEPLOY.rateLimit());
             for (String capability : List.of(HohenheimCapabilities.VIEW, HohenheimCapabilities.POWER)) {
                 RecordGrants.grant(GrantSubjectType.USER, limitedId, InstanceModel.MODEL_ID, other, capability, true);
             }

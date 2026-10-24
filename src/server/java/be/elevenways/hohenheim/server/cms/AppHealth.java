@@ -501,7 +501,7 @@ final class AppHealth {
                     facts.sites, delegated, viewer);
                 yield broken != null ? broken : RecordHealth.unknown(status.label())
                     .detail(HohenheimMicrocopy.APP_HEALTH.of("not_running_detail"))
-                    .fixedBy(InstanceOperations.START.id());
+                    .fixedBy(InstanceOperations.DEPLOY.id());
             }
             // Nobody deployed it yet: nothing went wrong, so it asks for nothing but its first deploy, and while the run
             // that created it is still starting it (put online), it is deploying.
@@ -510,7 +510,7 @@ final class AppHealth {
                     .detail(HohenheimMicrocopy.APP_HEALTH.of("first_start_detail"))
                 : RecordHealth.unknown(HohenheimMicrocopy.APP_HEALTH.of("not_deployed"))
                     .detail(HohenheimMicrocopy.APP_HEALTH.of("not_running_detail"))
-                    .fixedBy(InstanceOperations.START.id());
+                    .fixedBy(InstanceOperations.DEPLOY.id());
             // A destroy whose end failed too often waits for an operator's Delete (UnfinishedDestroys): it says why.
             case DESTROYING -> InstanceModel.stoppageCauseOf(runtime) == HohenheimActivityAction.DESTROY_UNFINISHED
                 ? destroyUnfinished(runtime, delegated, status) : RecordHealth.unknown(status.label());
@@ -559,7 +559,7 @@ final class AppHealth {
         }
         return RecordHealth.attention(Headline.CHANGES_NOT_LIVE.copy())
             .detail(HohenheimMicrocopy.APP_HEALTH.of("changes_not_live_detail"))
-            .fixedBy(InstanceOperations.START.id());
+            .fixedBy(InstanceOperations.DEPLOY.id());
     }
 
     // -- stacks ----------------------------------------------------------------------

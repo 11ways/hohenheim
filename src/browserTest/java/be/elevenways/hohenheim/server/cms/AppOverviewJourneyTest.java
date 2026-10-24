@@ -206,7 +206,7 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
                 .contains("Not deployed yet")
                 .doesNotContain(">Not running<");
             assertThat(created).as("step 1: Deploy is offered")
-                .contains("/invoke/hohenheim.start_instance");
+                .contains("/invoke/hohenheim.deploy_instance");
             assertThat(created).as("step 1: Restart is not")
                 .doesNotContain("/invoke/hohenheim.restart_instance");
             assertThat(statusFact(created)).as("step 1: the Details card's Status agrees with the band")

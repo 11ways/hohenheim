@@ -894,10 +894,6 @@
       "scope": "notification_event"
     },
     {
-      "text": "The deploy failed; the reason is recorded on this tab",
-      "scope": "deployments"
-    },
-    {
       "text": "Its last deploy failed",
       "scope": "app_health"
     },
@@ -5644,10 +5640,16 @@
     "text": "Create or replace the stack's containers from the current configuration",
     "scope": "stack"
   },
-  "deploy_confirm": {
-    "text": "Deploy this stack now? Changed services get their containers replaced.",
-    "scope": "stack"
-  },
+  "deploy_confirm": [
+    {
+      "text": "Deploy this stack now? Changed services get their containers replaced.",
+      "scope": "stack"
+    },
+    {
+      "text": "Deploy now? It runs in the background and this tab shows its progress.",
+      "scope": "deployments"
+    }
+  ],
   "purge_volumes": {
     "text": "Purge volumes",
     "scope": "stack"
@@ -6246,10 +6248,6 @@
     }
   ],
   "deployed": [
-    {
-      "text": "Instance {$name} is running",
-      "scope": "instance"
-    },
     {
       "text": "Deployed",
       "scope": "hohenheim",
@@ -8508,16 +8506,10 @@
       "scope": "help"
     }
   ],
-  "rollback_done": [
-    {
-      "text": "Rolled back {$name} to the retained release",
-      "scope": "site"
-    },
-    {
-      "text": "Rolled back to the retained release",
-      "scope": "deployments"
-    }
-  ],
+  "rollback_done": {
+    "text": "Rolled back to the retained release",
+    "scope": "deployments"
+  },
   "release_probe_failed": {
     "text": "The candidate release never answered a healthy HTTP response: {$reason}",
     "scope": "violations"
@@ -14509,12 +14501,16 @@
     "text": "Move this database onto the host's shared engine? Every attached workload is stopped while the dump and the restore run, the record reads Provisioning meanwhile, and the dump is kept under the backup path as a rollback.",
     "scope": "database"
   },
-  "deploy_running": {
-    "text": "Deploy started; its progress appears on this tab",
-    "scope": "deployments"
-  },
   "deploy_done": {
     "text": "Deployed",
+    "scope": "deployments"
+  },
+  "deploy_step": {
+    "text": "Deploy, behind the health gate where a release serves",
+    "scope": "deployments"
+  },
+  "deploy_in_progress": {
+    "text": "A deploy is already running; its progress shows on the Deploys tab",
     "scope": "deployments"
   },
   "enrolment_incomplete": {
@@ -16218,6 +16214,7 @@
   "delete_schedule": { "text": "{$actor} deleted schedule {$subject}", "scope": "hohenheim", "target": "happened" },
   "delete_schedule_step": { "text": "{$actor} deleted schedule step {$subject}", "scope": "hohenheim", "target": "happened" },
   "start_instance": { "text": "{$actor} started {$subject}", "scope": "hohenheim", "target": "happened" },
+  "deploy_instance": { "text": "{$actor} deployed {$subject}", "scope": "hohenheim", "target": "happened" },
   "stop_instance": { "text": "{$actor} stopped {$subject}", "scope": "hohenheim", "target": "happened" },
   "restart_instance": { "text": "{$actor} restarted {$subject}", "scope": "hohenheim", "target": "happened" },
   "backup_instance": { "text": "{$actor} backed up {$subject}", "scope": "hohenheim", "target": "happened" },

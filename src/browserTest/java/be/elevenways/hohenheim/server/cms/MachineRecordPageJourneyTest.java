@@ -91,20 +91,20 @@ class MachineRecordPageJourneyTest extends HohenheimHttpTestBase {
 
             // 2b. A running machine is not offered Start: it already runs, so Restart and Stop are its power verbs.
             //     Stopped, it is offered Start again. A running app keeps Deploy, which ships its code again.
-            assertThat(hidden(InstanceOperations.START.id(), vm)).as("step 2b: a running VM offers no Start")
+            assertThat(hidden(InstanceOperations.DEPLOY.id(), vm)).as("step 2b: a running VM offers no Start")
                 .isTrue();
             assertThat(hidden(InstanceOperations.RESTART.id(), vm)).as("step 2b: it offers Restart")
                 .isFalse();
             assertThat(hidden(InstanceOperations.STOP.id(), vm)).as("step 2b: and Stop").isFalse();
             Row stoppedVm = Models.get(InstanceModel.class).findById(vm.get(InstanceModel.ID));
             stoppedVm.set(InstanceModel.STATUS, InstanceModel.STATUS_STOPPED);
-            assertThat(hidden(InstanceOperations.START.id(), stoppedVm))
+            assertThat(hidden(InstanceOperations.DEPLOY.id(), stoppedVm))
                 .as("step 2b: a stopped VM offers Start").isFalse();
             assertThat(hidden(InstanceOperations.STOP.id(), stoppedVm))
                 .as("step 2b: and no Stop").isTrue();
-            assertThat(hidden(InstanceOperations.START.id(), app))
+            assertThat(hidden(InstanceOperations.DEPLOY.id(), app))
                 .as("step 2b: a running app still offers Deploy").isFalse();
-            assertThat(hidden(InstanceOperations.START.id(), box))
+            assertThat(hidden(InstanceOperations.DEPLOY.id(), box))
                 .as("step 2b: a running bare workspace is started, so it offers no Start either").isTrue();
 
             // 3. The machine's overview has a Network card, never the web-address card's promise.
@@ -229,7 +229,7 @@ class MachineRecordPageJourneyTest extends HohenheimHttpTestBase {
     }
 
     private static PanelAction<Row> startAction() {
-        return action(InstanceOperations.START.id());
+        return action(InstanceOperations.DEPLOY.id());
     }
 
     private static PanelAction<Row> action(Identifier id) {

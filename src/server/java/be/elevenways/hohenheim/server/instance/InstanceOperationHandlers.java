@@ -43,6 +43,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
 
 import be.elevenways.hohenheim.model.ServerModel;
@@ -122,10 +123,23 @@ public final class InstanceOperationHandlers {
             .applies(instance -> authored(instance)
                 && InstanceKinds.isReleaseManaged(instance.get(InstanceModel.KIND)))
             .availability(Availability.keyed((Row instance) -> instance.get(InstanceModel.ID),
-                InstanceOperationHandlers::withoutRollbackTarget))
+                ReleaseEngine::rollbackRefusals))
             .handle(call -> {
                 ReleaseEngine.rollback(instanceId(call), DeployTrigger.MANUAL);
                 call.reportStepDone(HohenheimMicrocopy.DEPLOYMENTS.of("rollback_done"));
+                return null;
+            });
+        // AIDEV-NOTE: the panel's deploy, a background run (START answers the API and a schedule in the call). What
+        // refuses it at once is asked here, before a run starts, for every asked instance in one go: an attached
+        // database that is not ready, or a deploy of it already under way. The funnel asks the admission again in
+        // the run, where a refusal ends the run REFUSED in its own words.
+        OperationHandlers.attach(InstanceOperations.DEPLOY).source(SUBJECTS)
+            .applies(InstanceOperationHandlers::authored)
+            .availability(Availability.keyed((Row instance) -> instance.get(InstanceModel.ID),
+                InstanceOperationHandlers::deployRefusals))
+            .handle(call -> {
+                new InstanceService().deploy(instanceId(call), triggerOf(call.surface()));
+                call.reportStepDone(HohenheimMicrocopy.DEPLOYMENTS.of("deploy_done"));
                 return null;
             });
         // One ISO per machine through its record: a drive that holds one is emptied (the detach) before another goes in.
@@ -283,14 +297,11 @@ public final class InstanceOperationHandlers {
         return instance.get(InstanceModel.GENERATED_BY) == null;
     }
 
-    /** @return per asked application keeping no retained release, the engine's refusal of its rollback */
-    private static @NonNull Map<Integer, Microcopy> withoutRollbackTarget(@NonNull Set<Integer> applicationIds) {
-        Set<Integer> kept = ReleaseEngine.keepingRetired(applicationIds);
-        Map<Integer, Microcopy> reasons = new HashMap<>();
-        for (Integer applicationId : applicationIds) {
-            if (!kept.contains(applicationId)) {
-                reasons.put(applicationId, ReleaseEngine.NO_ROLLBACK_TARGET);
-            }
+    /** @return per asked instance that cannot deploy right now, why: a database not ready, else a deploy under way */
+    private static @NonNull Map<Integer, Microcopy> deployRefusals(@NonNull Set<Integer> instanceIds) {
+        Map<Integer, Microcopy> reasons = new HashMap<>(InstanceDatabaseLinks.notReadyReasons(instanceIds));
+        for (Integer deploying : ApplicationReleases.deployingAmong(instanceIds)) {
+            reasons.putIfAbsent(deploying, HohenheimMicrocopy.DEPLOYMENTS.of("deploy_in_progress"));
         }
         return reasons;
     }

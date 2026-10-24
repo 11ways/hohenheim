@@ -1,25 +1,17 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.site.SiteOperations;
-import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.TestDatabases;
-import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.zenit.cms.common.action.ActionRequest;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
-import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
-import be.elevenways.zenit.cms.common.panel.PanelRegistry;
-import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.common.operation.Operation;
-import be.elevenways.zenit.common.operation.ResultStep;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.security.AccessContext;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -29,8 +21,8 @@ import java.util.Objects;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The two rollback verbs, on a site and on an application, ask the same way; the application's two placements, its
- * action band and its Deploys tab, answer the same way: as one background run.
+ * The two rollback verbs, on a site and on an application, ask the same way and answer the same way: as one
+ * background run, from the site's row, the application's action band and its Deploys tab alike.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -43,7 +35,7 @@ class RollbackActionsAgreeTest {
     }
 
     @Test
-    void bothRollbacksConfirmWithTheirVerbAndNameWhatTheyRolledBack() {
+    void bothRollbacksConfirmWithTheirVerbAndAnswerWithTheirRun() {
         PanelAction<Row> site = placed(SiteActions.operator(), SiteOperations.ROLLBACK_RELEASE);
         PanelAction<Row> application = placed(InstanceActions.placedOperator(), InstanceOperations.ROLLBACK);
 
@@ -58,37 +50,30 @@ class RollbackActionsAgreeTest {
                 .isEqualTo(ActionStyle.DESTRUCTIVE);
         }
 
-        // 2. The site's toast names the record it rolled back.
-        Row shop = Models.get(SiteModel.class).createEmptyRow();
-        shop.set(SiteModel.NAME, "shop");
-        assertThat(toast(site, shop).args().get("name")).as("step 2: the site's toast names the site")
-            .isEqualTo("shop");
-
-        // 3. The application's rollback is a background run, from its action band and its Deploys tab alike: no
-        //    toast step, and the finished run opens the Deploys tab, where the release it started shows.
+        // 2. Every rollback is a background run: no toast step. The site's finished run opens the site itself (it has
+        //    no Deploys tab), the application's the Deploys tab, where the release it started shows.
+        assertThat(site.result()).as("step 2: the site's rollback answers with its run, not a toast").isNull();
+        assertThat(site.runOpens()).as("step 2: its finished run opens the site's front door").isNull();
         PanelAction<Row> tab = placed(new InstanceDeploymentsPage().actions(), InstanceOperations.ROLLBACK);
         Row app = Models.get(InstanceModel.class).createEmptyRow();
         app.set(InstanceModel.NAME, "shop-app");
         for (PanelAction<Row> rollback : List.of(application, tab)) {
-            assertThat(rollback.result()).as("step 3: %s answers with its run, not a toast", rollback.placement())
+            assertThat(rollback.result()).as("step 2: %s answers with its run, not a toast", rollback.placement())
                 .isNull();
             assertThat(Objects.requireNonNull(rollback.runOpens()).slugFor(app))
-                .as("step 3: the %s run, once finished, opens the Deploys tab", rollback.placement())
+                .as("step 2: the %s run, once finished, opens the Deploys tab", rollback.placement())
                 .isEqualTo(HohenheimSlugs.Tab.DEPLOYMENTS);
+        }
+
+        // 3. All three spend the deploy lane's one budget.
+        for (PanelAction<Row> rollback : List.of(site, application, tab)) {
+            assertThat(Objects.requireNonNull(rollback.operation()).rateLimit())
+                .as("step 3: %s spends hh_deploy", rollback.id()).isSameAs(HohenheimEndpoints.DEPLOY_LIMIT);
         }
     }
 
     private static PanelAction<Row> placed(List<PanelAction<Row>> actions, Operation<?, ?, ?> operation) {
         return actions.stream().filter(action -> action.operation() == operation).findFirst()
             .orElseThrow(() -> new AssertionError("no action places " + operation.id()));
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Microcopy toast(PanelAction<Row> action, Row subject) {
-        PanelRequest request = new PanelRequest(Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN)),
-            TenantConduits.stubFor(null), AccessContext.anonymous(), null);
-        var step = (ResultStep<ActionRequest<Row>, Void, CmsActionResult>) Objects.requireNonNull(action.result());
-        var result = (CmsActionResult.Refresh) step.answer(new ActionRequest<>(request, List.of(subject), null), null);
-        return Objects.requireNonNull(result.toastMessage());
     }
 }

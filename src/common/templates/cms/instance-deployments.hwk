@@ -31,12 +31,8 @@
 {% declare pollFailed: Boolean = false %}
 {% declare pollFinding: String = "" %}
 {% declare pushes: List = null %}
-{% declare returnUrl: String = "" %}
-{#- ReturnTarget.PARAM, supplied by the page: ReturnTarget lives in zenit's SERVER
-    source set, so a common template cannot reach the constant (nor its
-    Zenit.Params.zenit.return_to identifier). Never spell "_return" here by hand. -#}
-{% declare returnParam: String %}
-{% declare deployTarget: RouteTarget %}
+{#- The placed deploy operation's own form over this record, set only where its offer stands for this reader. -#}
+{% declare deployForm: PageFormState = null %}
 {#- The placed rollback operation's own form over this record, set only where its offer stands for this reader. -#}
 {% declare rollbackForm: PageFormState = null %}
 {#- The history's page window: one page renders nothing. -#}
@@ -87,15 +83,12 @@
             {% else %}
             <pl-card-description>{{ t("history_description_workspace", scope: "deployments") }}</pl-card-description>
             {% /if %}
-            <pl-card-header-actions>
-                {#- _return: the framework return target (zenit ReturnTarget) --
-                    the handler redirects back to whichever panel rendered this
-                    page (/admin or /manage); forged values fall back to /admin. -#}
-                <form use:Zenit.form={% deployTarget %}>
-                    <input type="hidden" name={% returnParam %} value={% returnUrl %}>
-                    <pl-button variant={% "secondary" %} type={% "submit" %} disabled={% isDeploying %}>{{ t("deploy_now", scope: "deployments") }}</pl-button>
-                </form>
+            {% if deployForm != null %}
+            <pl-card-header-actions data-hh-deploy>
+                {#- The placed deploy operation: dead, with why, while a deploy runs or a database is not ready. -#}
+                {% render "zenitcms:form/page-action" var:page=deployForm %}
             </pl-card-header-actions>
+            {% /if %}
         </pl-card-header>
         <pl-card-content>
             {% if deployments %}

@@ -8,7 +8,6 @@ import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
-import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -16,6 +15,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.cms.InstanceBackupsPage;
 import be.elevenways.hohenheim.instance.InstanceAttachmentOperations;
+import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -33,10 +33,8 @@ import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
-import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
 import be.elevenways.zenit.server.operation.OperationPipeline;
@@ -48,6 +46,7 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 import java.util.Map;
@@ -71,8 +70,6 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
 
     private static final String PREFIX = "dbsurface-";
-
-    private static final Identifier DEPLOY = Identifier.of("hohenheim", "start_instance");
 
     private static Integer hostId;
     private static Integer instanceId;
@@ -315,13 +312,11 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
         link.set(InstanceDatabaseModel.DATABASE_ID, waitingDatabaseId);
         link.set(InstanceDatabaseModel.ENV_PREFIX, "WORDPRESS_DB");
         links.save(link);
-        PanelAction<Row> deploy = deployAction();
         AccessContext viewer = TenantConduits.operator();
         Model databases = Models.get(DatabaseModel.class);
 
-        // 1. Still provisioning: the button is DEAD, naming the database and its state.
-        Microcopy provisioning = deploy.disabledFor(Models.get(InstanceModel.class).findById(waitingInstanceId),
-            viewer);
+        // 1. Still provisioning: the placed deploy is DEAD before any run, naming the database and its state.
+        Microcopy provisioning = deployRefusal(viewer);
         assertThat(provisioning)
             .as("step 1: deploy is offered dead while the database provisions")
             .isNotNull();
@@ -344,7 +339,7 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
         database.set(DatabaseModel.STATUS, DatabaseModel.STATUS_FAILED);
         database.set(DatabaseModel.FAILURE_REASON, "image pull refused: no such tag");
         databases.save(database);
-        Microcopy failed = deploy.disabledFor(Models.get(InstanceModel.class).findById(waitingInstanceId), viewer);
+        Microcopy failed = deployRefusal(viewer);
         assertThat(failed).as("step 3: a failed database is still a dead deploy").isNotNull();
         assertThat(failed.key()).isEqualTo("database_not_ready");
         assertThat(String.valueOf(failed.args().get("reason")))
@@ -364,7 +359,7 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
         database.set(DatabaseModel.STATUS, DatabaseModel.STATUS_ACTIVE);
         database.set(DatabaseModel.FAILURE_REASON, null);
         databases.save(database);
-        assertThat(deploy.disabledFor(Models.get(InstanceModel.class).findById(waitingInstanceId), viewer))
+        assertThat(deployRefusal(viewer))
             .as("step 4: an active database refuses nothing")
             .isNull();
         Map<String, String> env = DatabaseEnvInjection.envForInstance(waitingInstanceId,
@@ -378,12 +373,11 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
 
     // -- fixtures -------------------------------------------------------------
 
-    /** The deploy action (the placed start operation), read off the resource rather than rebuilt here. */
-    private static PanelAction<Row> deployAction() {
-        return InstanceParts.admin().actions().stream()
-            .filter(action -> DEPLOY.equals(action.id()))
-            .findFirst()
-            .orElseThrow(() -> new AssertionError("the instances resource offers no deploy"));
+    /** Why the placed deploy (a background run) refuses the waiting instance before any run starts, or null. */
+    private static @Nullable Microcopy deployRefusal(AccessContext viewer) {
+        Row instance = Models.get(InstanceModel.class).findById(waitingInstanceId);
+        return OperationPipeline.offer(InstanceOperations.DEPLOY, viewer, instance)
+            instanceof OperationPipeline.Offer.Unavailable unavailable ? unavailable.reason() : null;
     }
 
     private static String violationKeys(Throwable thrown) {

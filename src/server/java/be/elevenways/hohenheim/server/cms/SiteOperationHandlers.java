@@ -20,6 +20,7 @@ import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.hohenheim.server.upstream.kinds.DevNamespaceUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
 import be.elevenways.hohenheim.site.SiteOperations;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.text.SlugText;
 import be.elevenways.zenit.cms.server.page.ResourcePageEndpoints;
 import be.elevenways.zenit.common.edit.FormSecrets;
@@ -35,6 +36,7 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.operation.Applicability;
+import be.elevenways.zenit.server.operation.Availability;
 import be.elevenways.zenit.server.operation.Authorizer;
 import be.elevenways.zenit.server.operation.OperationCall;
 import be.elevenways.zenit.server.operation.OperationHandlers;
@@ -43,6 +45,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -64,6 +67,9 @@ import java.util.Set;
  * @since  0.9.0
  */
 public final class SiteOperationHandlers {
+
+    /** The refusal of a rollback of a site that exposes no application. */
+    private static final Microcopy NO_INSTANCE = HohenheimMicrocopy.VIOLATIONS.of("site_exposes_no_instance");
 
     static {
         OperationHandlers.attach(SiteOperations.ENABLE)
@@ -88,10 +94,12 @@ public final class SiteOperationHandlers {
             .applies(SiteOperationHandlers::live)
             .authorize(administers())
             .handle(call -> cloneSite(call.subject(), Objects.requireNonNull(call.input(), "a clone has its input")));
-        // Only a site exposing an application through the instance upstream has a release to roll back.
+        // Only a site exposing an application through the instance upstream has a release to roll back. A background
+        // run: what refuses it at once (no application, nothing kept) is asked here, before any run starts.
         OperationHandlers.attach(SiteOperations.ROLLBACK_RELEASE)
             .applies(site -> live(site)
                 && InstanceUpstreamKind.ID.toString().equals(site.get(SiteModel.UPSTREAM_KIND)))
+            .availability(Availability.batch((sites, access) -> rollbackRefusals(sites)))
             .authorize(administers())
             .handle(SiteOperationHandlers::rollback);
         OperationHandlers.attach(SiteWrites.CREATE)
@@ -274,10 +282,29 @@ public final class SiteOperationHandlers {
     private static @Nullable Void rollback(@NonNull OperationCall<Row, Void> call) {
         Integer instanceId = call.subject().get(SiteModel.INSTANCE_ID);
         if (instanceId == null) {
-            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("site_exposes_no_instance"));
+            throw Violations.ofForm(NO_INSTANCE);
         }
         ReleaseEngine.rollback(instanceId, DeployTrigger.MANUAL);
+        call.reportStepDone(HohenheimMicrocopy.DEPLOYMENTS.of("rollback_done"));
         return null;
+    }
+
+    /** @return per site, in order, why its rollback cannot start (no application, or nothing kept), else null */
+    private static @NonNull List<@Nullable Microcopy> rollbackRefusals(@NonNull List<? extends Row> sites) {
+        Set<Integer> applicationIds = new LinkedHashSet<>();
+        for (Row site : sites) {
+            Integer instanceId = site.get(SiteModel.INSTANCE_ID);
+            if (instanceId != null) {
+                applicationIds.add(instanceId);
+            }
+        }
+        Map<Integer, Microcopy> refused = ReleaseEngine.rollbackRefusals(applicationIds);
+        List<Microcopy> reasons = new ArrayList<>(sites.size());
+        for (Row site : sites) {
+            Integer instanceId = site.get(SiteModel.INSTANCE_ID);
+            reasons.add(instanceId == null ? NO_INSTANCE : refused.get(instanceId));
+        }
+        return reasons;
     }
 
     /**

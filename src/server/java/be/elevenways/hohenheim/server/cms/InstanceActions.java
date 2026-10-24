@@ -12,7 +12,6 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.instance.InstanceAppUpdates;
 import be.elevenways.hohenheim.server.instance.InstanceInstalls;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
@@ -91,31 +90,25 @@ final class InstanceActions {
     }
 
     /**
-     * Deploy (the start operation), offered only where it means something: the record is not owned by a product
-     * tier, its KIND is one a person may power at all ({@link InstanceKinds#isUserDeployable}, which reads the
-     * kind's own {@code generatedOnly()} declaration), and a start would do something
-     * ({@link InstanceKinds#offersStart}: a running machine offers Restart and Stop instead). Dead, with the database
-     * and its state on screen, while an
-     * attached managed database is not active: the same words the handler refuses a direct POST with. Never on a
-     * record being destroyed ({@link InstanceModel#isTerminating}): no power action runs it, its Delete finishes it.
+     * Deploy (the placed deploy operation, a background run whose finished run opens the Deploys tab where the record
+     * has one), offered only where it means something: the record is not owned by a product tier, its KIND is one a
+     * person may power at all ({@link InstanceKinds#isUserDeployable}, which reads the kind's own
+     * {@code generatedOnly()} declaration), and a start would do something ({@link InstanceKinds#offersStart}: a
+     * running machine offers Restart and Stop instead). Dead, with the database and its state on screen, while an
+     * attached managed database is not active: the operation's own availability, the words a direct POST is refused
+     * with. Never on a record being destroyed ({@link InstanceModel#isTerminating}): no power action runs it, its
+     * Delete finishes it.
      *
      * AIDEV-NOTE: deliberately NOT ActionStyle.PRIMARY (reverted 2026-08-22): the style renders the button FILLED, a
      * solid accent Deploy beside the red Delete on every row; it already leads as the first declared verb.
      */
     private static @NonNull PanelAction<Row> deployAction(boolean delegated) {
-        return PanelAction.<Row, InstanceOperations.PowerResult>places(InstanceOperations.START, ActionPlacement.ROW,
-                (request, result) -> CmsActionResult.refreshWithToast(HohenheimMicrocopy.INSTANCE.of("deployed")
-                    .withArg("name", request.subject().get(InstanceModel.NAME))))
-            .label(HohenheimMicrocopy.INSTANCE.of("deploy"))
+        return PanelAction.<Row, Void>placesRun(InstanceOperations.DEPLOY, ActionPlacement.ROW)
+            .finishedRunOpens(Row.class, InstanceDeploymentsPage::tabOf)
             .dynamicLabel(row -> startWords("deploy", row))
-            .icon(Icon.of("play"))
             .hiddenWhen(row -> !InstanceKinds.isUserDeployable(row.get(InstanceModel.KIND))
                 || !InstanceKinds.offersStart(row) || InstanceModel.isTerminating(row))
-            .disabledWhen((row, access) -> {
-                Integer id = row.get(InstanceModel.ID);
-                Microcopy database = id == null ? null : InstanceDatabaseLinks.notReadyReason(id);
-                return database != null ? database : OwnedInstances.placementReasonOf(row, delegated, access);
-            })
+            .disabledWhen((row, access) -> OwnedInstances.placementReasonOf(row, delegated, access))
             .build();
     }
 

@@ -287,32 +287,18 @@ class ManagePanelTest extends HohenheimTestBase {
             .doesNotContain("data-webhook-secret")
             .doesNotContain("data-webhook-url");
 
-        // The manage-rendered page embeds ITS OWN URL as the _return target,
-        // so deploy actions bounce back to /manage, not /admin.
+        // The manage-rendered page's Deploy now is the placed deploy operation posting to
+        // the /manage panel's own invoke route, so the run it starts opens on /manage, never
+        // on /admin; the admin page posts to the admin panel's.
         assertThat(delegated.body())
-            .contains("name=\"_return\"")
-            .contains("value=\"/manage/instances/" + appAId + "/page/deployments\"");
+            .contains("/manage/instances/invoke/hohenheim.deploy_instance")
+            .doesNotContain("/admin/instances/invoke/hohenheim.deploy_instance");
 
         HttpResponse<String> admin = adminGet(
             "/admin/instances/" + appAId + "/page/deployments");
         assertThat(admin.statusCode()).isEqualTo(200);
-        assertThat(admin.body()).contains("private-webhook-secret").contains("data-webhook-secret");
-
-        // No proxy runs in this suite, so deploy is redirect-only: the handler
-        // finds no git handler and just answers with the return redirect.
-        String manageTarget = "/manage/instances/" + appAId + "/page/deployments";
-        HttpResponse<String> fromManage = operatorPost("/instances/" + appAId + "/deploy",
-            "_return=" + java.net.URLEncoder.encode(manageTarget, java.nio.charset.StandardCharsets.UTF_8));
-        assertThat(fromManage.statusCode()).isIn(302, 303);
-        assertThat(landingOf(fromManage)).isEqualTo(manageTarget);
-
-        // A forged _return can never open-redirect: unsafe values fall back
-        // to the admin page.
-        HttpResponse<String> forged = operatorPost("/instances/" + appAId + "/deploy",
-            "_return=" + java.net.URLEncoder.encode("https://evil.example/", java.nio.charset.StandardCharsets.UTF_8));
-        assertThat(forged.statusCode()).isIn(302, 303);
-        assertThat(landingOf(forged))
-            .isEqualTo("/admin/instances/" + appAId + "/page/deployments");
+        assertThat(admin.body()).contains("private-webhook-secret").contains("data-webhook-secret")
+            .contains("/admin/instances/invoke/hohenheim.deploy_instance");
         } finally {
             RecordGrants.revoke(GrantSubjectType.USER, operatorId, InstanceModel.MODEL_ID,
                 appAId, HohenheimCapabilities.MANAGE);
@@ -509,7 +495,8 @@ class ManagePanelTest extends HohenheimTestBase {
         assertThat(operatorGet("/manage").statusCode()).isEqualTo(403);
         // The deploy verb is instance-keyed now and answers to the POWER capability on
         // the record; a site grant confers nothing on it.
-        assertThat(operatorPost("/instances/" + appAId + "/deploy", "").statusCode()).isEqualTo(403);
+        assertThat(operatorPost("/manage/instances/invoke/hohenheim.deploy_instance?ids=" + appAId, "").statusCode())
+            .isEqualTo(403);
         UserPrincipal principal = new UserPrincipal(operatorId, "Site Operator");
         assertThat(HohenheimAccess.managedSiteIds(principal)).isEmpty();
         assertThat(HohenheimAccess.canManageSite(principal, siteAId)).isFalse();

@@ -48,7 +48,7 @@ class InstancePowerAvailabilityJourneyTest extends HohenheimHttpTestBase {
 
         // 2. The operator's Deploy and Restart are offered dead with exactly those words.
         AccessContext operator = TenantConduits.operator();
-        for (String verb : List.of(InstanceOperations.START.id().toString(), InstanceOperations.RESTART.id()
+        for (String verb : List.of(InstanceOperations.DEPLOY.id().toString(), InstanceOperations.RESTART.id()
                 .toString())) {
             PanelAction<Row> action = action(InstanceActions.placedOperator(), verb);
             assertThat(action.disabledFor(instance, operator))
@@ -58,7 +58,7 @@ class InstancePowerAvailabilityJourneyTest extends HohenheimHttpTestBase {
 
         // 3. On /manage the same Deploy is dead too, but its words never name the host: a tenant reads that the
         //    operator has to clear it.
-        PanelAction<Row> delegated = action(InstanceActions.placedDelegated(), InstanceOperations.START.id()
+        PanelAction<Row> delegated = action(InstanceActions.placedDelegated(), InstanceOperations.DEPLOY.id()
                 .toString());
         AccessContext tenant = AccessContext.of(TenantConduits.stubFor(new UserPrincipal(
             ApiSupport.user("power-availability-tenant@hohenheim.local", "Power Tenant"), "Power Tenant")));
@@ -82,7 +82,7 @@ class InstancePowerAvailabilityJourneyTest extends HohenheimHttpTestBase {
             Models.get(InstanceModel.class).save(instance);
             Row placed = Models.get(InstanceModel.class).findById(instance.get(InstanceModel.ID));
             assertThat(OwnedInstances.placementRefusal(placed)).as("step 4: an admitted host refuses nothing").isNull();
-            assertThat(action(InstanceActions.placedOperator(), InstanceOperations.START.id().toString())
+            assertThat(action(InstanceActions.placedOperator(), InstanceOperations.DEPLOY.id().toString())
                 .disabledFor(placed, operator)).as("step 4: Deploy is live").isNull();
         } finally {
             local.restore();

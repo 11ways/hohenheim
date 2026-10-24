@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.OperationStatus;
-import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
@@ -75,7 +74,6 @@ import be.elevenways.zenit.common.orm.history.HistoryText;
 import be.elevenways.zenit.common.orm.narration.FieldValueText;
 import be.elevenways.zenit.widget.common.data.WidgetBadge;
 import be.elevenways.zenit.common.ui.Icon;
-import be.elevenways.zenit.server.http.ReturnTarget;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -123,6 +121,21 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
     static final int PAGE_SIZE = 20;
 
     /**
+     * Deploy now: the placed deploy operation over this tab's own record, the same operation, gate, handler and
+     * background lane the record's Deploy row action runs. It answers with the run's page at once and refuses before
+     * any run while a deploy runs or a database is not ready (dead, with why); the release or build the run starts
+     * shows here with its live log.
+     */
+    private static final PanelAction<Row> DEPLOY = PanelAction.<Row, Void>placesRun(InstanceOperations.DEPLOY,
+            ActionPlacement.PAGE)
+        .finishedRunOpens(Row.class, InstanceDeploymentsPage::tabOf)
+        .label(HohenheimMicrocopy.DEPLOYMENTS.of("deploy_now"))
+        .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.DEPLOYMENTS.of("deploy_now"),
+            HohenheimMicrocopy.DEPLOYMENTS.of("deploy_confirm"), ActionStyle.DEFAULT))
+        .selectedByRoute(instance -> String.valueOf((Object) instance.get(InstanceModel.ID)))
+        .build();
+
+    /**
      * The one step to the kept release, back or forward: the placed rollback operation over this tab's own record,
      * the same operation, gate, handler and background lane the instance's action band runs. Its words name both
      * releases, and its confirmation names what the switch changes ({@link SpecSnapshots#diff}), a secret setting
@@ -156,10 +169,10 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
 
     @Override
     public @NonNull List<PanelAction<Row>> actions() {
-        return List.of(ROLLBACK);
+        return List.of(DEPLOY, ROLLBACK);
     }
 
-    /** @return the slug of this tab, which a finished rollback run opens on its application */
+    /** @return the slug of this tab, which a finished deploy or rollback run opens on its record */
     static @NonNull String tabOf(@NonNull Row application) {
         return HohenheimSlugs.Tab.DEPLOYMENTS;
     }
@@ -229,13 +242,10 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
             putAdminOnlyVars(vars, instance);
         }
 
-        // The deploy form echoes this as _return so its handler redirects back to whichever panel rendered this page.
-        vars.put("returnUrl", ReturnTarget.capture(conduit));
-        // AIDEV-NOTE: the hidden field NAME comes from the framework constant --
-        // ReturnTarget is server-only, so the common template cannot reach it.
-        vars.put("returnParam", ReturnTarget.PARAM);
-        vars.put("deployTarget", HohenheimEndpoints.INSTANCES_DEPLOY
-            .with(HohenheimEndpoints.INSTANCE_ID, instanceId));
+        // Deploy now is the placed deploy operation's own form, drawn only where its offer stands for this reader.
+        vars.put("deployForm", InstanceOperationHandlers.offered(InstanceOperations.DEPLOY, accessContext, instance)
+            && PageActions.open(request, this, instance, DEPLOY.id()) instanceof PageActions.Form form
+            ? form.state() : null);
         vars.put("head", recordHead(conduit));
         vars.put("timeWording", CmsSupport.timeWording(conduit));
 

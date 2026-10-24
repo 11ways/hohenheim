@@ -276,7 +276,7 @@ class ApplicationPushPolicyTest {
             try {
                 // 1. The panel's OWN placed deploy, run as its invoke route runs it: no HTTP, no markup.
                 PanelAction<Row> deploy = PlacedActionClicks.placed(
-                    InstanceParts.admin(), "start_instance");
+                    InstanceParts.admin(), "deploy_instance");
                 Row row = Models.get(InstanceModel.class).findById(applicationId);
                 UUID operatorId = TestAccessContexts.TEST_ACCOUNT;
                 Accountability.runAs(operator(operatorId), () -> PlacedActionClicks.click(deploy, row));

@@ -140,8 +140,8 @@ public class HohenheimEndpoints {
             .named("hh_media_view");
 
     /**
-     * The deploy lane's budget: the Deploys-tab deploy form, the PaaS deploy and rollback routes and the placed
-     * rollback operation (InstanceOperations.ROLLBACK) all spend the one hh_deploy bucket per caller.
+     * The deploy lane's budget: the PaaS deploy and rollback routes and the placed panel operations (the instance's
+     * deploy and rollback, the site's rollback) all spend the one hh_deploy bucket per caller.
      */
     public static final RateLimitPolicy DEPLOY_LIMIT =
         RateLimitPolicy.of(10, Duration.ofMinutes(1))
@@ -490,21 +490,6 @@ public class HohenheimEndpoints {
             .addDelimiter().addStatic("media").build())
         .requiresPermission(HohenheimSources.MEDIA_MANAGE)
         .rateLimit(MEDIA_VIEW_LIMIT)
-        .build();
-
-    // --- Deploy control (the form on the instance Deploys tab) ---
-    // AIDEV-NOTE: keyed by INSTANCE since the release engine was re-keyed to the
-    // application and the Deployments tab moved with it:
-    // the verb acts on the record that owns the releases, and an application no site
-    // exposes yet can still deploy. Rollback has no endpoint of its own: the tab places
-    // the rollback operation (InstanceOperations.ROLLBACK) through the cms invoke route.
-    public static final Endpoint<Object> INSTANCES_DEPLOY = Endpoint.<Object>builder()
-        .identifier(HohenheimIds.id("instances_deploy"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
-            .addDelimiter().addStatic("deploy").build())
-        .requiresLogin()
-        .rateLimit(DEPLOY_LIMIT)
         .build();
 
     // --- Automation API (znit_ bearer keys via zenit-auth) ---

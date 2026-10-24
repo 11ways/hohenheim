@@ -235,10 +235,14 @@ public class BuildOperationModel extends Model {
             LIFECYCLE.stored(OperationStatus.SUCCEEDED), forModel, forIds);
     }
 
-    /** Whether a build of one owning record is still running. */
-    public boolean building(String forModel, int forId) {
-        return this.history(forModel, forId).where(STATUS.eq(LIFECYCLE.stored(OperationStatus.RUNNING)))
-            .first() != null;
+    /** @return which of several owning records of one model have a build still running, in one read */
+    public Set<Integer> buildingAmong(String forModel, Collection<Integer> forIds) {
+        Set<Integer> building = new LinkedHashSet<>();
+        for (Row build : find().where(FOR_MODEL.eq(forModel)).where(FOR_ID.in(List.copyOf(forIds)))
+                .where(STATUS.eq(LIFECYCLE.stored(OperationStatus.RUNNING))).all()) {
+            building.add(build.get(FOR_ID));
+        }
+        return building;
     }
 
     static {

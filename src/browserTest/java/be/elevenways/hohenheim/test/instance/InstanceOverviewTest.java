@@ -98,7 +98,7 @@ class InstanceOverviewTest extends HohenheimTestBase {
             .contains("cms-record-actions");
         assertThat(page.body())
             .withFailMessage("step 3: the deploy action is not projected onto the page")
-            .contains("/invoke/hohenheim.start_instance");
+            .contains("/invoke/hohenheim.deploy_instance");
         assertThat(page.body())
             .withFailMessage("step 3: invoke targets do not carry _return, so a refresh"
                 + " result would leave the page the operator is on")
@@ -385,7 +385,7 @@ class InstanceOverviewTest extends HohenheimTestBase {
             //    host rather than about the operator's own authority.
             assertThat(blocked)
                 .as("step 4: the deploy control is still offered")
-                .contains("/invoke/hohenheim.start_instance");
+                .contains("/invoke/hohenheim.deploy_instance");
 
             // 5. THE DURABILITY: ask again, with no action in between. A toast is gone by
             //    now; this must not be.

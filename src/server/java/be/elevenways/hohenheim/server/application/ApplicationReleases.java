@@ -53,6 +53,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -401,9 +402,19 @@ public final class ApplicationReleases {
 
     /** Whether a deploy of the application is under way: a release operation in flight, or its build running. */
     public static boolean deploying(int applicationId) {
+        return deployingAmong(List.of(applicationId)).contains(applicationId);
+    }
+
+    /** @return which of these applications (or workspaces) have a deploy under way, read in two queries */
+    public static @NonNull Set<Integer> deployingAmong(@NonNull Collection<Integer> applicationIds) {
+        Set<Integer> deploying = new LinkedHashSet<>();
+        if (applicationIds.isEmpty()) {
+            return deploying;
+        }
         String owner = InstanceModel.MODEL_ID.toString();
-        return !Models.get(ReleaseOperationModel.class).findInFlight(owner, applicationId).isEmpty()
-            || Models.get(BuildOperationModel.class).building(owner, applicationId);
+        deploying.addAll(Models.get(ReleaseOperationModel.class).inFlightAmong(owner, applicationIds));
+        deploying.addAll(Models.get(BuildOperationModel.class).buildingAmong(owner, applicationIds));
+        return deploying;
     }
 
     /**

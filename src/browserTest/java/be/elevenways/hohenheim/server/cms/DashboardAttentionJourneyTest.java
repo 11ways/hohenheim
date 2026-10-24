@@ -1055,7 +1055,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
                 .contains(PREFIX + "held could not be started");
 
             // 4. The disabled Deploy carries the same reason through the framework's disabled-reason hint.
-            int deploy = page.indexOf("data-action-id=\"hohenheim:start_instance\"");
+            int deploy = page.indexOf("data-action-id=\"hohenheim:deploy_instance\"");
             assertThat(deploy).as("step 4: the heading offers Deploy").isNotNegative();
             String trigger = page.substring(deploy, page.indexOf("</pl-tooltip>", deploy));
             Matcher hint = Pattern.compile("<pl-tooltip-content id=\"([^\"]+)\"").matcher(trigger);

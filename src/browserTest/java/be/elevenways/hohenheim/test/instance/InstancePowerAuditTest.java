@@ -253,7 +253,7 @@ class InstancePowerAuditTest {
             int panelId = instanceRecord("audit-panel");
             var panel = PanelEntryViews.of(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCES);
             Row panelRow = Models.get(InstanceModel.class).findById(panelId);
-            PanelAction<Row> deployAction = PlacedActionClicks.placed(panel, "start_instance");
+            PanelAction<Row> deployAction = PlacedActionClicks.placed(panel, "deploy_instance");
             PanelAction<Row> stopAction = PlacedActionClicks.placed(panel, "stop_instance");
 
             Accountability.runAs(RecordedChanges.operator(PANEL_OPERATOR),

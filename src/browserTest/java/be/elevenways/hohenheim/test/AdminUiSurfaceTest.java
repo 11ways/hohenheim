@@ -192,7 +192,7 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
 
         // The power verb is not offered AND its invoke answers missing.
         HttpResponse<String> deploy = httpPostForm(
-            "/admin/instances/invoke/hohenheim.start_instance?ids=" + generatedDbInstanceId,
+            "/admin/instances/invoke/hohenheim.deploy_instance?ids=" + generatedDbInstanceId,
             "", sessionToken, csrfToken);
         assertThat(deploy.statusCode())
             .as("an operation that does not apply to a generated row answers 404 on the one invoke route")
@@ -504,13 +504,13 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
         //    offers Deploy, the generated database engine does not.
         assertThat(adminGet("/admin/instances?filter.name=ui-surface-workspace").body())
             .as("step 4: the control -- an authored workspace offers Deploy")
-            .contains("start_instance");
+            .contains("deploy_instance");
         String engine = adminGet("/admin/instances?filter.name=ui-surface-db-engine").body();
         assertThat(engine).as("step 4: the engine row is the one listed")
             .contains("ui-surface-db-engine");
         assertThat(engine)
             .as("step 4: an owner-managed kind is never offered Deploy")
-            .doesNotContain("start_instance");
+            .doesNotContain("deploy_instance");
     }
 
     /**
@@ -635,10 +635,10 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
         //    on every list row, next to the red Delete). The band never grows past its
         //    cap however many actions the resource declares.
         assertThat(inline).as("step 2: the leading verb is inline")
-            .contains("start_instance");
+            .contains("deploy_instance");
         int secondAction = inline.indexOf("data-action-id=",
             inline.indexOf("data-action-id=") + 1);
-        assertThat(inline.indexOf("start_instance"))
+        assertThat(inline.indexOf("deploy_instance"))
             .as("step 2: and it is the FIRST one, on declaration order alone")
             .isLessThan(secondAction < 0 ? inline.length() : secondAction);
         assertThat(countOf(inline, "data-action-id="))

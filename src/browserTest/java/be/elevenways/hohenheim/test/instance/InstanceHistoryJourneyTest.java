@@ -127,7 +127,7 @@ class InstanceHistoryJourneyTest {
             var panel = PanelEntryViews.of(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCES);
             Row panelRow = instances.findById(id);
             Accountability.runAs(operator(OPERATOR), () -> PlacedActionClicks.click(
-                PlacedActionClicks.placed(panel, "start_instance"), panelRow));
+                PlacedActionClicks.placed(panel, "deploy_instance"), panelRow));
             List<RecordedChanges.Recorded> deployed = RecordedChanges.withFact(instances, id,
                 HohenheimActivityAction.DEPLOYED);
             assertThat(deployed).as("step 4: the start recorded its fact").hasSize(1);
