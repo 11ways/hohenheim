@@ -1072,13 +1072,16 @@ public class DatabaseService extends DatasourceScoped {
     }
 
     private Path backupRowToFile(Row row, Path directory, String baseName) throws IOException {
-        return underCredentialClaim(row, (current, host) -> {
-            Files.createDirectories(directory);
-            Path target = directory.resolve(baseName + "." + host.engine().dumpExtension());
-            managedFor(host.serverId()).backupToFile(handleOf(current, host), host.engine(),
-                host.rootUser(), host.rootPassword(), current.get(DatabaseModel.DB_NAME), target);
-            return target;
-        });
+        return underCredentialClaim(row, (current, host) -> dumpToFile(current, host, directory, baseName));
+    }
+
+    /** The dump of {@link #backupRowToFile}, for a caller already holding {@link #underCredentialClaim}. */
+    private Path dumpToFile(Row current, EngineHost host, Path directory, String baseName) throws IOException {
+        Files.createDirectories(directory);
+        Path target = directory.resolve(baseName + "." + host.engine().dumpExtension());
+        managedFor(host.serverId()).backupToFile(handleOf(current, host), host.engine(),
+            host.rootUser(), host.rootPassword(), current.get(DatabaseModel.DB_NAME), target);
+        return target;
     }
 
     /**
@@ -1373,14 +1376,24 @@ public class DatabaseService extends DatasourceScoped {
         return row;
     }
 
-    /** The move itself, for a record {@link #claimMove} already flipped to provisioning. */
+    /** What a move switched between, for the work after its credential claim: the hosts and the dump kept. */
+    private record Moved(@NonNull EngineHost old, @NonNull EngineHost target, @NonNull Path dump) {
+    }
+
+    /**
+     * The move itself, for a record {@link #claimMove} already flipped to provisioning.
+     *
+     * AIDEV-NOTE: everything that reads the record's password, from the dump through the logical user created with it
+     * to the switch that makes the record shared, runs under {@link #underCredentialClaim} with the record re-read
+     * inside it: the claim a dedicated record's password change holds. A change running when the move starts finishes
+     * first and the move carries its password; a change asked for during the move waits, then finds the record shared
+     * and refuses, or (after a failed move) rotates the dedicated engine it still has. The claimed row's password was
+     * read before that wait, so it is never used.
+     */
     private void runMove(Row row) throws IOException {
         String name = row.get(DatabaseModel.NAME);
         int recordId = row.get(DatabaseModel.ID);
         ManagedDatabase.Engine engine = engineOf(row);
-        String storedUser = row.get(DatabaseModel.DB_USER);
-        String password = row.get(DatabaseModel.DB_PASSWORD);
-        String database = row.get(DatabaseModel.DB_NAME);
         int serverId = ServerModel.canonicalServerId(row.get(DatabaseModel.SERVER_ID));
 
         List<Integer> stopped = new ArrayList<>();
@@ -1394,70 +1407,84 @@ public class DatabaseService extends DatasourceScoped {
                 stopped.add(instanceId);
             }
 
-            // 2. Dump the dedicated engine; the file is the rollback.
+            // 2-5. Under the credential claim: dump, land on the shared engine, verify, switch the record.
             Path backupRoot = Path.of(Zenit.SETTINGS_VALUES.getValue(
                 HohenheimSettings.Database.BACKUP_PATH));
-            Path dump = backupRowToFile(row, backupRoot.resolve("moves").resolve(name),
-                UtcStamp.now());
-            EngineHost old = hostOf(row);
-            String oldHandle = handleOf(row, old);
-            String before = fingerprint(old, oldHandle, database);
+            Moved moved = underCredentialClaim(row, (current, old) -> {
+                String storedUser = current.get(DatabaseModel.DB_USER);
+                String password = current.get(DatabaseModel.DB_PASSWORD);
+                String database = current.get(DatabaseModel.DB_NAME);
+                query(() -> {
+                    requireLogicalIdentifiers(storedUser, password, database);
+                    return null;
+                });
 
-            // 3. The shared engine, up. Its reservation may exceed the host budget by what
-            //    the dedicated container below is about to give back: a full host must not
-            //    refuse the engine for the very memory this move frees.
-            Row oldInstance = query(() -> DatabaseInstances.ownedBy(old));
-            long releasing = oldInstance == null ? 0
-                : InstanceCapacity.bookedOfInstance(oldInstance.get(InstanceModel.ID));
-            Row engineRow = InstanceCapacity.withPendingRelease(serverId, releasing,
-                () -> query(() -> DatabaseEngines.findOrCreateShared(serverId, engine,
-                    row.get(DatabaseModel.IMAGE))));
-            int engineId = engineRow.get(DatabaseEngineModel.ID);
-            targetEngine[0] = engineId;
-            // The logical USER must be unique on the engine: MySQL and Postgres users are
-            // engine-global, so a dedicated record's "app" landing beside another
-            // record's "app" would re-credential that record and reach both databases
-            // (observed 2026-09-02, the two WordPress records on robbedoes). A taken user
-            // is renamed to the database name, which the name check above keeps unique.
-            String user = query(() -> isLogicalUserTaken(engineId, storedUser, recordId))
-                ? database : storedUser;
-            if (!user.equals(storedUser)) {
-                Blast.log("DB-MOVE:", name, "renames its user", storedUser, "to", user,
-                    "- another record on the engine already owns that user");
-            }
-            scoped(() -> {
-                DatabaseEngines.ensureRunning(engineId);
-                return null;
+                // 2. Dump the dedicated engine; the file is the rollback.
+                Path dump = dumpToFile(current, old, backupRoot.resolve("moves").resolve(name), UtcStamp.now());
+                String before = fingerprint(old, handleOf(current, old), database);
+
+                // 3. The shared engine, up. Its reservation may exceed the host budget by what
+                //    the dedicated container below is about to give back: a full host must not
+                //    refuse the engine for the very memory this move frees.
+                Row oldInstance = query(() -> DatabaseInstances.ownedBy(old));
+                long releasing = oldInstance == null ? 0
+                    : InstanceCapacity.bookedOfInstance(oldInstance.get(InstanceModel.ID));
+                Row engineRow = InstanceCapacity.withPendingRelease(serverId, releasing,
+                    () -> query(() -> DatabaseEngines.findOrCreateShared(serverId, engine,
+                        current.get(DatabaseModel.IMAGE))));
+                int engineId = engineRow.get(DatabaseEngineModel.ID);
+                targetEngine[0] = engineId;
+                // The logical USER must be unique on the engine: MySQL and Postgres users are
+                // engine-global, so a dedicated record's "app" landing beside another
+                // record's "app" would re-credential that record and reach both databases
+                // (observed 2026-09-02, the two WordPress records on robbedoes). A taken user
+                // is renamed to the database name, which the name check above keeps unique.
+                String user = query(() -> isLogicalUserTaken(engineId, storedUser, recordId))
+                    ? database : storedUser;
+                if (!user.equals(storedUser)) {
+                    Blast.log("DB-MOVE:", name, "renames its user", storedUser, "to", user,
+                        "- another record on the engine already owns that user");
+                }
+                scoped(() -> {
+                    DatabaseEngines.ensureRunning(engineId);
+                    return null;
+                });
+                EngineHost target = scoped(() -> EngineHost.ofEngine(DatabaseEngines.require(engineId)));
+                String targetHandle = handleOf(current, target);
+
+                // 4. Logical database + user, restore, verify.
+                runLogical(target, targetHandle, engine.createLogicalCommand(target.rootUser(),
+                    database, user), engine.logicalEnv(target.rootPassword(), password),
+                    "create logical database '" + database + "'");
+                managedFor(serverId).restoreFromFile(targetHandle, engine, target.rootUser(),
+                    target.rootPassword(), database, dump, user);
+                String after = fingerprint(target, targetHandle, database);
+                if (!before.equals(after)) {
+                    throw new IOException("Content fingerprint differs after the restore into engine '"
+                        + target.name() + "' (dedicated: " + before + "; shared: " + after
+                        + "); nothing was switched");
+                }
+                requireOwnedBy(target, targetHandle, database, user);
+
+                // 5. Switch the record; a password change waiting on the claim now finds it shared.
+                exec(() -> {
+                    Row fresh = model().findById(recordId);
+                    fresh.set(DatabaseModel.PLACEMENT, DatabaseModel.PLACEMENT_SHARED);
+                    fresh.set(DatabaseModel.ENGINE_ID, engineId);
+                    fresh.set(DatabaseModel.DB_USER, user);
+                    fresh.set(DatabaseModel.MEMORY_LIMIT_MB, null);
+                    fresh.set(DatabaseModel.CPU_LIMIT, null);
+                    fresh.set(DatabaseModel.STATUS, DatabaseModel.STATUS_ACTIVE);
+                    fresh.set(DatabaseModel.FAILURE_REASON, null);
+                    model().save(fresh);
+                });
+                return new Moved(old, target, dump);
             });
-            EngineHost target = scoped(() -> EngineHost.ofEngine(DatabaseEngines.require(engineId)));
-            String targetHandle = handleOf(row, target);
+            EngineHost old = moved.old();
+            EngineHost target = moved.target();
+            Path dump = moved.dump();
 
-            // 4. Logical database + user, restore, verify.
-            runLogical(target, targetHandle, engine.createLogicalCommand(target.rootUser(),
-                database, user), engine.logicalEnv(target.rootPassword(), password),
-                "create logical database '" + database + "'");
-            managedFor(serverId).restoreFromFile(targetHandle, engine, target.rootUser(),
-                target.rootPassword(), database, dump, user);
-            String after = fingerprint(target, targetHandle, database);
-            if (!before.equals(after)) {
-                throw new IOException("Content fingerprint differs after the restore into engine '"
-                    + target.name() + "' (dedicated: " + before + "; shared: " + after
-                    + "); nothing was switched");
-            }
-            requireOwnedBy(target, targetHandle, database, user);
-
-            // 5. Switch: the record, the old instance, the networks, the consumers.
-            exec(() -> {
-                Row fresh = model().findById(recordId);
-                fresh.set(DatabaseModel.PLACEMENT, DatabaseModel.PLACEMENT_SHARED);
-                fresh.set(DatabaseModel.ENGINE_ID, engineId);
-                fresh.set(DatabaseModel.DB_USER, user);
-                fresh.set(DatabaseModel.MEMORY_LIMIT_MB, null);
-                fresh.set(DatabaseModel.CPU_LIMIT, null);
-                fresh.set(DatabaseModel.STATUS, DatabaseModel.STATUS_ACTIVE);
-                fresh.set(DatabaseModel.FAILURE_REASON, null);
-                model().save(fresh);
-            });
+            // 6. The old instance, the networks, the consumers.
             try {
                 scoped(() -> {
                     DatabaseInstances.destroyFor(old, false);

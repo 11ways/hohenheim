@@ -299,7 +299,7 @@ public class ManagedDatabase {
          *
          * AIDEV-NOTE: Redis declares {@code REDIS_PASSWORD} even though the engine
          * ignores that variable: {@link #containerCommand()} reads it from the container's
-         * own environment and hands it to the server as configuration on stdin, never as an
+         * own environment and hands it to the server as a configuration file, never as an
          * argument. The key is deliberately NOT
          * {@code REDISCLI_AUTH} -- an ambient auth variable would make a bare
          * {@code redis-cli ping} inside the container succeed and turn every
@@ -335,24 +335,13 @@ public class ManagedDatabase {
          * AIDEV-NOTE: redis reads its password from no environment variable, and {@code --requirepass} on the command
          * line put it in the container's Cmd (docker inspect) and in every process table of the host. The command is a
          * shell that reads {@link #REDIS_PASSWORD} from the container's own environment and hands {@code redis-server}
-         * its configuration on STDIN ({@code redis-server -}), through the image's entrypoint where the image has one,
-         * so the server still drops to the redis user. Every create and every start of the container runs it again
-         * from the environment the container was created with: the instance's stored one.
+         * its configuration as a file ({@link #REDIS_START_SCRIPT}), through the image's entrypoint where the image has
+         * one, so the server still drops to the redis user. Every create and every start of the container runs it
+         * again from the environment the container was created with: the instance's stored one.
          */
         public @Nullable List<String> containerCommand() {
             return this == REDIS ? List.of("sh", "-c", REDIS_START_SCRIPT, "hohenheim-redis") : null;
         }
-
-        /**
-         * The redis container's {@code sh -c} body: the password in {@link #REDIS_PASSWORD}, written as a quoted
-         * config value (a backslash and a double quote escaped, the config grammar's only two) on the server's stdin.
-         */
-        static final String REDIS_START_SCRIPT =
-            "if command -v docker-entrypoint.sh >/dev/null 2>&1; then set -- docker-entrypoint.sh; else set --; fi\n"
-            + "pw=$(printf '%s' \"$" + REDIS_PASSWORD + "\" | sed 's/[\\\\\"]/\\\\&/g')\n"
-            + "exec \"$@\" redis-server - <<HOHENHEIM_REDIS\n"
-            + "requirepass \"$pw\"\n"
-            + "HOHENHEIM_REDIS";
 
         /**
          * The tool + args that dump this engine to stdout as text (SQL).
@@ -414,6 +403,29 @@ public class ManagedDatabase {
          */
         static final String PRIVATE_DIRECTORY = "d=$(mktemp -d) || exit 1; trap 'rm -rf \"$d\"' EXIT;"
             + " trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM;";
+
+        /**
+         * The redis container's {@code sh -c} body: the password in {@link #REDIS_PASSWORD}, written as a quoted
+         * config value (a backslash and a double quote escaped, the config grammar's only two) into a 0600 config
+         * file, which {@code redis-server} reads as {@code /dev/stdin}.
+         *
+         * AIDEV-NOTE: {@code redis-server -} (config on stdin) broke on redis 6: the official entrypoint rewrites
+         * {@code redis-server ARGS} to {@code redis-server [config file] --protected-mode no ARGS} unless its second
+         * argument is a REGULAR file naming {@code protected-mode}, and redis before 7 takes {@code -} only as its
+         * first argument. So the file names {@code protected-mode no} itself (what the entrypoint would have added),
+         * is opened as the shell's stdin and unlinked, its private directory with it, BEFORE the exec: the server and
+         * the entrypoint's check both reopen the deleted file through {@code /dev/stdin}, a regular file, and no path
+         * to it exists while the server runs. It belongs to the redis user where the entrypoint will drop to it,
+         * because a reopen checks the file's mode. DedicatedDatabasePasswordLiveTest proves it on redis 6 and 7.
+         */
+        static final String REDIS_START_SCRIPT = "umask 077; " + PRIVATE_DIRECTORY + "\n"
+            + "pw=$(printf '%s' \"$" + REDIS_PASSWORD + "\" | sed 's/[\\\\\"]/\\\\&/g')\n"
+            + "printf 'protected-mode no\\nrequirepass \"%s\"\\n' \"$pw\" > \"$d/redis.conf\" || exit 1\n"
+            + "if command -v docker-entrypoint.sh >/dev/null 2>&1; then set -- docker-entrypoint.sh; else set --; fi\n"
+            + "if [ \"$(id -u)\" = 0 ] && id redis >/dev/null 2>&1; then chown redis \"$d/redis.conf\" || exit 1; fi\n"
+            + "exec < \"$d/redis.conf\" || exit 1\n"
+            + "rm -rf \"$d\" || exit 1\n"
+            + "exec \"$@\" redis-server /dev/stdin";
 
         /**
          * The command dumping one Mongo database into {@code <directory>/dump.archive}: sh -c

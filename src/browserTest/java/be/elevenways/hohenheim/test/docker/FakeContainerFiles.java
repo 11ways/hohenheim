@@ -28,7 +28,7 @@ import java.util.TreeMap;
  * {@code DockerClient} and {@code DockerInstanceRuntime} run unmodified against it.
  *
  * AIDEV-NOTE: a separate fake from {@link FakeDockerDaemon} on purpose: that one models the
- * release tier's container lifecycle and has no archive, exec or streaming face; this one
+ * release tier's container lifecycle and streams no more than an exec's output; this one
  * models only what the file lane touches. Like the daemon it resolves an INTERMEDIATE
  * symlink component and reports the result as an ordinary file (the behaviour the
  * containment walk exists for), and it can be told to answer a read with a tar the

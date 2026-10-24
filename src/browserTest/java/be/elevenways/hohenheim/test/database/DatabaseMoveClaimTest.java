@@ -1,12 +1,19 @@
 package be.elevenways.hohenheim.test.database;
 
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
+import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
+import be.elevenways.protoblast.testsupport.thread.Racers;
+import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -15,6 +22,10 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -25,11 +36,16 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
  * provisioning stamp used to be two steps, so a double-submitted action started two moves of
  * one record. The claim is now a conditional update on "still active and dedicated", taken
  * synchronously, so the second submit is refused by name before any daemon work. No daemon
- * is contacted here: the refusal happens before one would be.
+ * is contacted by the first test: the refusal happens before one would be. The second runs a move and a password
+ * change of one dedicated database against a fake daemon, each racing the other.
  */
 class DatabaseMoveClaimTest {
 
     private static final String NAME = "move-claim";
+    private static final String SERIAL = "move-serial";
+    private static final String OLD_PASSWORD = "Move.old-password-000001";
+    private static final String NEW_PASSWORD = "Move.new-password-000002";
+    private static final String NEWER_PASSWORD = "Move.newer-password-0003";
 
     @BeforeAll
     static void setUp() throws Exception {
@@ -73,5 +89,131 @@ class DatabaseMoveClaimTest {
             .as("step 3: and it is still dedicated").isEqualTo(DatabaseModel.PLACEMENT_DEDICATED);
 
         Models.get(DatabaseModel.class).find().where(DatabaseModel.NAME.eq(NAME)).delete();
+    }
+
+    /**
+     * A move and a password change of one dedicated database run one after the other, whichever came first: each
+     * holds the engine instance's claim while it works with the password. A move asked for during a change waits
+     * for it and then dumps, fingerprints and would create the shared user with the NEW password, never the one it
+     * read when it claimed the record; a change asked for during a move waits until the move ended.
+     */
+    @Test
+    void aMoveAndAPasswordChangeOfOneDedicatedDatabaseRunOneAfterTheOther() throws Exception {
+        FakeDockerDaemon daemon = new FakeDockerDaemon();
+        DockerClient.overrideLocalTransportForTest(() -> daemon);
+        try {
+            DatabaseService service = new DatabaseService();
+            service.insertRecord(SERIAL, ManagedDatabase.Engine.POSTGRES, null, "app", OLD_PASSWORD, "appdb", false,
+                ServerService.LOCAL_HOST_NAME, ResourceLimits.none(), DatabaseModel.STATUS_ACTIVE,
+                DatabaseModel.PLACEMENT_DEDICATED, null);
+            DatabaseModel databases = Models.get(DatabaseModel.class);
+            int recordId = databases.findByName(SERIAL).get(DatabaseModel.ID);
+            String handle = EngineHandles.plant(recordId, SERIAL, "postgres", InstanceModel.STATUS_RUNNING);
+            int engineInstance = DatabaseInstances.owned(recordId).get(InstanceModel.ID);
+            daemon.seedRunning(handle);
+            InstanceOperationLock claims = InstanceOperationLock.production();
+            ManagedDatabase.Engine postgres = ManagedDatabase.Engine.POSTGRES;
+
+            // 1. A change sits in the engine; a move asked for now waits for its claim and runs nothing.
+            CountDownLatch changeInEngine = new CountDownLatch(1);
+            CountDownLatch releaseChange = new CountDownLatch(1);
+            daemon.duringNextExec(() -> park(changeInEngine, releaseChange));
+            try (Racers racers = Racers.named("a password change, then a move")) {
+                Racers.Running<Object> changing = racers.start("the change", () -> {
+                    service.changePassword(recordId, NEW_PASSWORD);
+                    return null;
+                });
+                assertThat(changeInEngine.await(30, TimeUnit.SECONDS))
+                    .as("step 1 anchor: the change reached the engine").isTrue();
+                Racers.Running<Object> moving = racers.start("the move", () -> {
+                    service.moveToSharedEngine(SERIAL);
+                    return null;
+                });
+                Poll.until("step 1: the move queued on the claim, or ended", Duration.ofSeconds(10),
+                    () -> claims.isQueued(engineInstance, moving.thread()) || !moving.isRunning());
+                assertThat(daemon.execsOn(handle)).as("step 1: the move ran nothing in the engine").hasSize(1);
+                assertThat(claims.isQueued(engineInstance, moving.thread()))
+                    .as("step 1: it waits for the change's claim").isTrue();
+
+                // 2. The change ends; the move dumps and fingerprints with the password the change stored. Its
+                //    fingerprint is refused, which ends the move there with the record back on its own engine.
+                daemon.duringNextExec(() -> daemon.refuseNextExec(1, "fingerprint refused"));
+                releaseChange.countDown();
+                assertThat(changing.await(Duration.ofSeconds(30)).failure()).as("step 2: the change succeeded")
+                    .isNull();
+                assertThat(moving.await(Duration.ofSeconds(30)).failure())
+                    .as("step 2: the move ended at its refused fingerprint").isInstanceOf(IOException.class);
+            }
+            List<FakeDockerDaemon.Exec> execs = daemon.execsOn(handle);
+            assertThat(execs).as("step 2: the change, the dump, the fingerprint").hasSize(3);
+            assertThat(execs.get(0).env()).as("step 2: the change first")
+                .isEqualTo(postgres.rotateEnv(OLD_PASSWORD, NEW_PASSWORD));
+            assertThat(execs.get(1).env()).as("step 2: the dump authenticated with the new password")
+                .containsExactly("PGPASSWORD=" + NEW_PASSWORD);
+            assertThat(execs.get(2).command()).as("step 2: the fingerprint")
+                .isEqualTo(postgres.fingerprintCommand("app", "appdb"));
+            assertThat(execs.get(2).env()).as("step 2: with the new password, not the one the move claimed with")
+                .isEqualTo(postgres.logicalEnv(NEW_PASSWORD, null));
+            Row afterMove = databases.findById(recordId);
+            assertThat((String) afterMove.get(DatabaseModel.DB_PASSWORD)).as("step 2: the record holds the new one")
+                .isEqualTo(NEW_PASSWORD);
+            assertThat((String) afterMove.get(DatabaseModel.PLACEMENT)).as("step 2: and is still dedicated")
+                .isEqualTo(DatabaseModel.PLACEMENT_DEDICATED);
+            assertThat((String) afterMove.get(DatabaseModel.STATUS)).as("step 2: and active")
+                .isEqualTo(DatabaseModel.STATUS_ACTIVE);
+
+            // 3. A move sits in its fingerprint, past the dump; a change asked for now waits for the move's claim.
+            CountDownLatch moveInEngine = new CountDownLatch(1);
+            CountDownLatch releaseMove = new CountDownLatch(1);
+            daemon.duringNextExec(() -> {
+                daemon.refuseNextExec(1, "fingerprint refused");
+                daemon.duringNextExec(() -> park(moveInEngine, releaseMove));
+            });
+            try (Racers racers = Racers.named("a move, then a password change")) {
+                Racers.Running<Object> moving = racers.start("the move", () -> {
+                    service.moveToSharedEngine(SERIAL);
+                    return null;
+                });
+                assertThat(moveInEngine.await(30, TimeUnit.SECONDS))
+                    .as("step 3 anchor: the move reached its fingerprint").isTrue();
+                Racers.Running<Object> changing = racers.start("the change", () -> {
+                    service.changePassword(recordId, NEWER_PASSWORD);
+                    return null;
+                });
+                Poll.until("step 3: the change queued on the claim, or ended", Duration.ofSeconds(10),
+                    () -> claims.isQueued(engineInstance, changing.thread()) || !changing.isRunning());
+                assertThat(daemon.execsOn(handle)).as("step 3: the change ran nothing in the engine").hasSize(5);
+                assertThat(claims.isQueued(engineInstance, changing.thread()))
+                    .as("step 3: it waits for the move's claim").isTrue();
+
+                // 4. The move ends (its fingerprint refused); then the change rotates the engine it still has.
+                releaseMove.countDown();
+                assertThat(moving.await(Duration.ofSeconds(30)).failure())
+                    .as("step 4: the move ended at its refused fingerprint").isInstanceOf(IOException.class);
+                assertThat(changing.await(Duration.ofSeconds(30)).failure()).as("step 4: then the change succeeded")
+                    .isNull();
+            }
+            List<FakeDockerDaemon.Exec> serialized = daemon.execsOn(handle);
+            assertThat(serialized).as("step 4: the move's dump and fingerprint, then the change").hasSize(6);
+            assertThat(serialized.get(5).command()).as("step 4: the change came last")
+                .isEqualTo(postgres.rotateOwnCommand("app"));
+            assertThat(serialized.get(5).env()).as("step 4: from the new password to the newer one")
+                .isEqualTo(postgres.rotateEnv(NEW_PASSWORD, NEWER_PASSWORD));
+            assertThat((String) databases.findById(recordId).get(DatabaseModel.DB_PASSWORD))
+                .as("step 4: the record names the engine's last password").isEqualTo(NEWER_PASSWORD);
+        } finally {
+            DockerClient.overrideLocalTransportForTest(null);
+            daemon.close();
+        }
+    }
+
+    /** Signals {@code reached}, then holds the calling engine command until {@code release} opens. */
+    private static void park(CountDownLatch reached, CountDownLatch release) {
+        reached.countDown();
+        try {
+            release.await(30, TimeUnit.SECONDS);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        }
     }
 }

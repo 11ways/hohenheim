@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.test.docker;
 
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.DockerStreamConnection;
+import be.elevenways.hohenheim.server.docker.DockerStreamTransport;
 import be.elevenways.hohenheim.server.docker.DockerTransport;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
@@ -22,6 +24,7 @@ import com.sun.net.httpserver.HttpServer;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetAddress;
@@ -59,7 +62,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * which is the daemon's {@code OOMKilled} the reuse lane refuses to reuse), a create
  * that refuses a foreign workload under our handle, a stop the daemon will not
  * settle ({@link #refuseStopOf}, the drain's stop-failure branch) and an exec the engine
- * refuses ({@link #refuseNextExec}) or answers slowly ({@link #duringNextExec}).
+ * refuses ({@link #refuseNextExec}) or answers slowly ({@link #duringNextExec}), a streamed exec (a database dump)
+ * included.
  *
  * AIDEV-NOTE: the stop-failure knob was DECLINED when this fake was written -- "a knob no
  * test uses is scaffolding" -- and it arrives now WITH the journey that consumes it
@@ -73,7 +77,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * and the kernel policy are NOT exercised here -- ApplicationReleaseLiveTest remains their
  * only proof, along with "zero dropped requests through a real proxy".
  */
-public final class FakeDockerDaemon implements DockerTransport {
+public final class FakeDockerDaemon implements DockerTransport, DockerStreamTransport {
 
     /** One fake container; its published port is a REAL loopback listener. */
     static final class Workload {
@@ -553,6 +557,50 @@ public final class FakeDockerDaemon implements DockerTransport {
         String query = target.contains("?") ? target.substring(target.indexOf('?') + 1) : "";
         String body = headEnd < 0 ? "" : text.substring(headEnd + 4);
         return dispatch(method, path, query, body);
+    }
+
+    /**
+     * The streaming face, for an exec whose output is streamed (a database dump): it answers what {@link #roundTrip}
+     * answers the same exec start, from a buffer. Any other stream is unhandled.
+     */
+    @Override
+    public @NonNull DockerStreamConnection openStream(byte @NonNull [] request, long connectTimeoutMs)
+            throws IOException {
+        String text = new String(request, StandardCharsets.ISO_8859_1);
+        String[] parts = text.substring(0, text.indexOf("\r\n")).split(" ");
+        String target = parts.length > 1 ? parts[1] : "/";
+        if (!"POST".equals(parts[0]) || !target.startsWith("/exec/") || !target.endsWith("/start")) {
+            throw new IOException("FakeDockerDaemon: unhandled stream " + parts[0] + " " + target);
+        }
+        ByteArrayInputStream answer = new ByteArrayInputStream(roundTrip(request, connectTimeoutMs));
+        return new DockerStreamConnection() {
+            private volatile boolean closed;
+
+            @Override
+            public int read(byte @NonNull [] buffer, int offset, int length) {
+                return answer.read(buffer, offset, length);
+            }
+
+            @Override
+            public void write(byte @NonNull [] data) throws IOException {
+                throw new IOException("FakeDockerDaemon: a streamed exec start takes no body");
+            }
+
+            @Override
+            public void close() {
+                this.closed = true;
+            }
+
+            @Override
+            public boolean isReleased() {
+                return this.closed;
+            }
+
+            @Override
+            public @NonNull String diagnostics() {
+                return "";
+            }
+        };
     }
 
     private byte[] dispatch(@NonNull String method, @NonNull String path,

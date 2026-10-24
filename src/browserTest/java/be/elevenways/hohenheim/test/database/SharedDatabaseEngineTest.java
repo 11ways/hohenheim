@@ -675,8 +675,8 @@ class SharedDatabaseEngineTest {
      * The private directory a credential script writes a password file into is gone however the script ends: the
      * legacy mongo shell's root password file and mongorestore's config file after a failing client and after the
      * script was terminated by a signal mid-run, and mongosh (which reads the password from its environment) never
-     * makes one. The redis container command hands redis-server its password as configuration on stdin, quoted, and
-     * never as an argument.
+     * makes one. The redis container command hands redis-server its password in a config file, quoted, never as an
+     * argument, past the redis 6 entrypoint's argument rewrite, and leaves no path to the file behind.
      */
     @Test
     void aCredentialScriptLeavesNoPasswordFileBehindAndRedisReadsItsPasswordOnStdin(@TempDir Path dir)
@@ -708,7 +708,7 @@ class SharedDatabaseEngineTest {
         // Only the stubs and the plain tools the scripts use: a host with a real mongosh on its PATH would otherwise
         // answer the legacy-shell journeys with it.
         Path tools = Files.createDirectories(dir.resolve("tools"));
-        for (String tool : List.of("sh", "bash", "mktemp", "rm", "sed", "cat", "ls", "tr", "grep", "head")) {
+        for (String tool : List.of("sh", "bash", "mktemp", "rm", "sed", "cat", "ls", "tr", "grep", "head", "id")) {
             Path found = Files.exists(Path.of("/usr/bin", tool)) ? Path.of("/usr/bin", tool) : Path.of("/bin", tool);
             Files.createSymbolicLink(tools.resolve(tool), found);
         }
@@ -752,8 +752,10 @@ class SharedDatabaseEngineTest {
         }
 
         // 4. Redis: the container command spells no password; its shell hands redis-server the password from the
-        //    container's environment as a quoted config line on stdin, through the image's entrypoint when there is
-        //    one, with a backslash and a double quote escaped.
+        //    container's environment as a quoted config line, a backslash and a double quote escaped, in a file it
+        //    reads as /dev/stdin, through the image's entrypoint when there is one. The entrypoint stub rewrites its
+        //    arguments the way redis 6's does (protected-mode inserted before them unless the second argument is a
+        //    regular file naming it), and the stub server reads its first argument as its config, as redis does.
         String password = "Redis\"pass\\word-0000000001";
         List<String> command = ManagedDatabase.Engine.REDIS.containerCommand();
         assertThat(command).as("step 4: redis declares its own command").isNotNull();
@@ -762,9 +764,13 @@ class SharedDatabaseEngineTest {
         Path redisBin = Files.createDirectories(dir.resolve("redis"));
         Files.writeString(redisBin.resolve("redis-server"), "#!/bin/sh\n"
             + "printf '%s\\n' \"${0##*/} $*\" >> \"$HH_STUB_LOG/argv\"\n"
-            + "cat >> \"$HH_STUB_LOG/stdin\"\n");
+            + "case \"$1\" in -*) cat >> \"$HH_STUB_LOG/stdin\" ;; *) cat \"$1\" >> \"$HH_STUB_LOG/stdin\" ;; esac\n"
+            + "ls -A \"$TMPDIR\" >> \"$HH_STUB_LOG/files\"\n");
         Files.writeString(redisBin.resolve("docker-entrypoint.sh"), "#!/bin/sh\n"
             + "printf '%s\\n' \"${0##*/} $*\" >> \"$HH_STUB_LOG/argv\"\n"
+            + "if [ \"$1\" = redis-server ] && ! { [ -f \"$2\" ] && grep -q '^protected-mode' \"$2\"; }; then\n"
+            + "  shift; set -- redis-server --protected-mode no \"$@\"\n"
+            + "fi\n"
             + "exec \"$@\"\n");
         for (String file : List.of("redis-server", "docker-entrypoint.sh")) {
             assertThat(redisBin.resolve(file).toFile().setExecutable(true)).as("anchor: %s is executable", file)
@@ -775,11 +781,16 @@ class SharedDatabaseEngineTest {
             secret.entrySet().stream().map(entry -> entry.getKey() + "=" + entry.getValue()).toList(), Map.of());
         assertThat(started.exitCode()).as("step 4: the command ran: %s", started.describe()).isZero();
         assertThat(Files.readString(redisLog.resolve("argv")).lines().toList())
-            .as("step 4: the entrypoint started redis-server reading its config from stdin, no password in argv")
-            .containsExactly("docker-entrypoint.sh redis-server -", "redis-server -");
+            .as("step 4: the entrypoint started redis-server on its config file unrewritten, no password in argv")
+            .containsExactly("docker-entrypoint.sh redis-server /dev/stdin", "redis-server /dev/stdin");
         assertThat(Files.readString(redisLog.resolve("stdin")))
-            .as("step 4: the config redis-server read names the password, quoted and escaped")
-            .isEqualTo("requirepass \"Redis\\\"pass\\\\word-0000000001\"\n");
+            .as("step 4: the config redis-server read names protected-mode and the password, quoted and escaped")
+            .isEqualTo("protected-mode no\nrequirepass \"Redis\\\"pass\\\\word-0000000001\"\n");
+        assertThat(Files.readString(redisLog.resolve("files")))
+            .as("step 4: no path to the config file existed while the server ran").isEmpty();
+        try (var left = Files.list(tmp)) {
+            assertThat(left.toList()).as("step 4: nor after it").isEmpty();
+        }
     }
 
     /**

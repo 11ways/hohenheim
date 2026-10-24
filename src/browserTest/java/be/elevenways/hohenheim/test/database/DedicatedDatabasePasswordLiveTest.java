@@ -32,7 +32,8 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -40,15 +41,16 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * A DEDICATED database's password change against a REAL daemon, one journey per engine: the engine's own reply admits
- * the new password and refuses the old one, before and after a restart of its container (which recreates it from the
- * engine instance's stored environment), no container command or process inside the engine spells its password, and
- * a workload attached to the postgres one reads as running behind the password until its own restart gives it the
- * new one.
+ * A DEDICATED database's password change against a REAL daemon, one journey per engine and image: the engine's own
+ * reply admits the new password and refuses the old one, before and after a restart of its container (which recreates
+ * it from the engine instance's stored environment), no container command or process inside the engine spells its
+ * password, and a workload attached to the postgres one reads as running behind the password until its own restart
+ * gives it the new one.
  *
  * AIDEV-NOTE: every refusal is preceded by the identical probe taken as a POSITIVE ANCHOR from the same container, the
  * SharedDatabaseEngineLiveTest discipline: "refused because the probe is broken" must never pass as "refused". Postgres
@@ -66,12 +68,15 @@ class DedicatedDatabasePasswordLiveTest {
     private static final String USER = "appuser";
     private static final String DATABASE = "appdb";
 
-    /** The image each engine is proven on: its own default. */
+    /** The image each engine is proven on: its own default, and redis 6 too, whose entrypoint rewrites arguments. */
     private static final Map<ManagedDatabase.Engine, String> IMAGES = Map.of(
         ManagedDatabase.Engine.POSTGRES, "postgres:17-alpine",
         ManagedDatabase.Engine.MYSQL, "mysql:8.0",
         ManagedDatabase.Engine.MONGO, "mongo:7",
         ManagedDatabase.Engine.REDIS, "redis:7-alpine");
+
+    /** An older redis an existing installation may still run: its entrypoint inserts arguments before ours. */
+    private static final String REDIS_6 = "redis:6-alpine";
 
     private static SqlDatasource datasource;
     private static PrivateNetns netns;
@@ -89,12 +94,19 @@ class DedicatedDatabasePasswordLiveTest {
         netns = null;
     }
 
-    @ParameterizedTest(name = "a dedicated {0} engine takes its new password and keeps it across a restart")
-    @EnumSource(ManagedDatabase.Engine.class)
-    void aDedicatedEngineTakesItsNewPasswordAndKeepsItAcrossARestart(ManagedDatabase.Engine engine) throws Exception {
+    static Stream<Arguments> engines() {
+        return Stream.concat(
+            Stream.of(ManagedDatabase.Engine.values()).map(engine -> Arguments.of(engine, IMAGES.get(engine))),
+            Stream.of(Arguments.of(ManagedDatabase.Engine.REDIS, REDIS_6)));
+    }
+
+    @ParameterizedTest(name = "a dedicated {0} engine on {1} takes its new password and keeps it across a restart")
+    @MethodSource("engines")
+    void aDedicatedEngineTakesItsNewPasswordAndKeepsItAcrossARestart(ManagedDatabase.Engine engine, String image)
+            throws Exception {
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET), "Docker socket not present");
         DockerClient docker = new DockerClient();
-        LiveLane.requireImage(docker, IMAGES.get(engine));
+        LiveLane.requireImage(docker, image);
         boolean withWorkload = engine == ManagedDatabase.Engine.POSTGRES;
         if (withWorkload) {
             LiveLane.requireImage(docker, TestImages.ALPINE);
@@ -103,14 +115,14 @@ class DedicatedDatabasePasswordLiveTest {
             "no private netns: the instance tier refuses to deploy unprotected");
         Db.run(datasource, () -> {
             try {
-                journey(docker, engine, withWorkload);
+                journey(docker, engine, image, withWorkload);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
         });
     }
 
-    private static void journey(DockerClient docker, ManagedDatabase.Engine engine, boolean withWorkload)
+    private static void journey(DockerClient docker, ManagedDatabase.Engine engine, String image, boolean withWorkload)
             throws Exception {
         HostFixtures.makeLocalPlaceable(16384);
         DatabaseService service = new DatabaseService(datasource);
@@ -118,7 +130,7 @@ class DedicatedDatabasePasswordLiveTest {
         Integer workloadId = null;
         try {
             // 1. A dedicated, volume-backed database answering its own client with the password it was created with.
-            service.create(name, engine, IMAGES.get(engine), USER, OLD_PASSWORD, DATABASE, false,
+            service.create(name, engine, image, USER, OLD_PASSWORD, DATABASE, false,
                 ServerService.LOCAL_HOST_NAME, ResourceLimits.none(), DatabaseModel.PLACEMENT_DEDICATED);
             DatabaseModel databases = Models.get(DatabaseModel.class);
             int databaseId = databases.findByName(name).get(DatabaseModel.ID);
@@ -199,7 +211,8 @@ class DedicatedDatabasePasswordLiveTest {
 
     /**
      * Asserts neither the container's command (docker inspect's Cmd, Path and Args) nor any process inside it spells
-     * {@code password}: redis's used to, through {@code --requirepass}.
+     * {@code password}: redis's used to, through {@code --requirepass}. Redis's server also still runs as its own
+     * user and no config file is left in the container's /tmp.
      */
     private static void assertNoPasswordInCommands(DockerClient docker, ManagedDatabase.Engine engine, String handle,
                                                    String password, String step) throws IOException {
@@ -224,6 +237,18 @@ class DedicatedDatabasePasswordLiveTest {
             .contains(server);
         assertThat(processes.stdout()).as("%s (%s): no process inside the container spells the password", step,
             engine).doesNotContain(password);
+        if (engine == ManagedDatabase.Engine.REDIS) {
+            DockerClient.ExecResult pidOne = docker.exec(handle, List.of("sh", "-c",
+                "tr '\\0' ' ' < /proc/1/cmdline; echo; stat -c %u /proc/1; ls -A /tmp"));
+            List<String> lines = pidOne.stdout().lines().toList();
+            assertThat(lines).as("%s (%s) anchor: the container's first process was read: %s", step, engine,
+                pidOne.stderr()).hasSizeGreaterThanOrEqualTo(2);
+            assertThat(lines.get(0)).as("%s (%s): the container's first process is the server itself", step, engine)
+                .startsWith("redis-server");
+            assertThat(lines.get(1)).as("%s (%s): which dropped to its own user", step, engine).isNotEqualTo("0");
+            assertThat(lines.subList(2, lines.size())).as("%s (%s): and no config file is left in /tmp", step, engine)
+                .noneMatch(entry -> entry.startsWith("tmp."));
+        }
     }
 
     /** Asserts the engine's own client, dialled as a consumer would, admits {@code password}. */
