@@ -716,6 +716,79 @@ class DatabasePasswordChangeJourneyTest extends HohenheimHttpTestBase {
                 .as("step 9: nothing ran in the engine").hasSize(execsBefore);
             assertThat(this.daemon.isRunning(handles.get(ManagedDatabase.Engine.POSTGRES)))
                 .as("step 9: which still runs").isTrue();
+
+            // 10. Neither password admitted: a drifted change left a pending password, and a failure that is no
+            //     credential stamp sits beside it. The engine refuses both the stored and the pending password, so a
+            //     change is refused by name with nothing stored: no rotation was asked for (it would authenticate
+            //     with the refused stored password), the pending password is still the one the engine may hold, and
+            //     the record, its generation, its failure reason and the stored environment are unchanged.
+            ManagedDatabase.Engine mongo = ManagedDatabase.Engine.MONGO;
+            int mongoId = dedicated.get(mongo).get(DatabaseModel.ID);
+            String mongoHandle = handles.get(mongo);
+            String foreign = "The nightly dump failed: no space left on device";
+            String mongoStranded = "Typed.stranded-0010";
+            Row planted = databases.findById(mongoId);
+            planted.set(DatabaseModel.PENDING_PASSWORD, mongoStranded);
+            planted.set(DatabaseModel.FAILURE_REASON, foreign);
+            databases.save(planted);
+            Row mongoBefore = databases.findById(mongoId);
+            String mongoKept = mongoBefore.get(DatabaseModel.DB_PASSWORD);
+            int mongoGeneration = DatabaseModel.credentialGenerationOf(mongoBefore);
+            int mongoEngine = DatabaseInstances.owned(mongoId).get(InstanceModel.ID);
+            Map<String, String> mongoEnvironment = new InstanceVariables().valuesFor(mongoEngine);
+            int beforeNeither = this.daemon.execsOn(mongoHandle).size();
+            this.daemon.refuseNextExec(1, "MongoServerError: Authentication failed.");
+            this.daemon.duringNextExec(() -> this.daemon.refuseNextExec(1, "MongoServerError: Authentication failed."));
+            String refusedChange = "Typed.refused-0010";
+            Violations neither = violationsIn(catchThrowable(() -> DatabaseWrites.changePassword(
+                databases.findById(mongoId), Secret.of(refusedChange))));
+            assertThat(String.valueOf(neither.all().get(0).message().args().asMap().get("reason")))
+                .as("step 10: the change is refused by name")
+                .contains("accepts neither the stored nor the pending password").contains("Manual recovery is needed")
+                .doesNotContain(refusedChange).doesNotContain(mongoStranded).doesNotContain(mongoKept);
+            List<FakeDockerDaemon.Exec> checks = this.daemon.execsOn(mongoHandle);
+            checks = checks.subList(beforeNeither, checks.size());
+            assertThat(checks).as("step 10: the two credential checks and no rotation").hasSize(2);
+            assertThat(checks.get(0).command()).as("step 10: the engine's own credential check")
+                .isEqualTo(mongo.credentialCheckCommand("appuser", "appdb", false));
+            assertThat(checks.get(0).env()).as("step 10: of the stored password, refused")
+                .isEqualTo(mongo.credentialCheckEnv(mongoKept));
+            assertThat(checks.get(1).env()).as("step 10: then of the pending one, refused")
+                .isEqualTo(mongo.credentialCheckEnv(mongoStranded));
+            Row neitherRow = databases.findById(mongoId);
+            assertThat((String) neitherRow.get(DatabaseModel.DB_PASSWORD)).as("step 10: the record keeps its password")
+                .isEqualTo(mongoKept);
+            assertThat((String) neitherRow.get(DatabaseModel.PENDING_PASSWORD))
+                .as("step 10: and the pending one the engine may hold, not the refused change's")
+                .isEqualTo(mongoStranded);
+            assertThat(DatabaseModel.credentialGenerationOf(neitherRow)).as("step 10: and its generation")
+                .isEqualTo(mongoGeneration);
+            assertThat((String) neitherRow.get(DatabaseModel.FAILURE_REASON)).as("step 10: and its failure reason")
+                .isEqualTo(foreign);
+            assertThat(new InstanceVariables().valuesFor(mongoEngine))
+                .as("step 10: the stored environment is unchanged").isEqualTo(mongoEnvironment);
+            assertThat(String.valueOf(RecordedChanges.of(databases, mongoId)))
+                .as("step 10: no recorded change of the record carries a password")
+                .doesNotContain(mongoStranded).doesNotContain(refusedChange);
+
+            // 11. The engine admits the stored password again: the change clears the pending password and rotates,
+            //     and the failure beside it stays, since only a credential stamp is the change's to clear.
+            String settledChange = "Typed.settled-0011";
+            DatabaseWrites.changePassword(databases.findById(mongoId), Secret.of(settledChange));
+            List<FakeDockerDaemon.Exec> settledExecs = this.daemon.execsOn(mongoHandle);
+            settledExecs = settledExecs.subList(beforeNeither + 2, settledExecs.size());
+            assertThat(settledExecs).as("step 11: the credential check, then the rotation").hasSize(2);
+            assertThat(settledExecs.get(1).env()).as("step 11: the rotation authenticates with the stored password")
+                .isEqualTo(mongo.rotateEnv(mongoKept, settledChange));
+            Row settledRow = databases.findById(mongoId);
+            assertThat((String) settledRow.get(DatabaseModel.DB_PASSWORD)).as("step 11: the change is stored")
+                .isEqualTo(settledChange);
+            assertThat((String) settledRow.get(DatabaseModel.PENDING_PASSWORD)).as("step 11: nothing is pending")
+                .isNull();
+            assertThat(DatabaseModel.credentialGenerationOf(settledRow)).as("step 11: one generation further")
+                .isEqualTo(mongoGeneration + 1);
+            assertThat((String) settledRow.get(DatabaseModel.FAILURE_REASON))
+                .as("step 11: the failure that is no credential stamp stays").isEqualTo(foreign);
         } finally {
             for (int i = cleanup.size() - 1; i >= 0; i--) {
                 cleanup.get(i).run();
@@ -723,6 +796,119 @@ class DatabasePasswordChangeJourneyTest extends HohenheimHttpTestBase {
             FakeDockerDaemon.restore();
             localBefore.restore();
         }
+    }
+
+    /**
+     * A dedicated redis engine whose stored environment names no password, which its start script refuses, is given
+     * one by the boot repair before its next start: the record's own when it has one, else a generated one through the
+     * rotation (a running engine) or stored with its environment (a stopped one); a repair that fails is raised on the
+     * dashboard.
+     */
+    @Test
+    void aRedisEngineStoredWithoutAPasswordIsGivenOneBeforeItsNextStart() {
+        List<Runnable> cleanup = new ArrayList<>();
+        this.daemon.installContainerKind();
+        Model databases = Models.get(DatabaseModel.class);
+        DatabaseService service = new DatabaseService();
+        ManagedDatabase.Engine redis = ManagedDatabase.Engine.REDIS;
+        Set<String> passwordKeys = redis.secretEnv("unused").keySet();
+        try {
+            // 1. The record has a password, its engine instance's stored environment none: the repair writes the
+            //    environment from the record again; nothing ran in the engine and the record is unchanged. A second
+            //    pass finds nothing to repair.
+            PlantedRedis kept = plantedRedis(cleanup, "kept", OLD_PASSWORD, true);
+            assertThat(new InstanceVariables().valuesFor(kept.instanceId()))
+                .as("step 1 anchor: the stored environment names no password").doesNotContainKeys(
+                    passwordKeys.toArray(String[]::new));
+            assertThat(service.repairRedisPassword(kept.databaseId())).as("step 1: repaired").isTrue();
+            Row keptRow = databases.findById(kept.databaseId());
+            assertThat(new InstanceVariables().valuesFor(kept.instanceId()))
+                .as("step 1: the stored environment is what a deploy writes from the record")
+                .isEqualTo(DatabaseInstances.engineEnvironment(EngineHost.dedicated(keptRow)))
+                .containsAllEntriesOf(redis.secretEnv(OLD_PASSWORD));
+            assertThat((String) keptRow.get(DatabaseModel.DB_PASSWORD)).as("step 1: the record keeps its password")
+                .isEqualTo(OLD_PASSWORD);
+            assertThat(DatabaseModel.credentialGenerationOf(keptRow)).as("step 1: and its generation").isZero();
+            assertThat(this.daemon.execsOn(kept.handle())).as("step 1: nothing ran in the engine").isEmpty();
+            assertThat(service.repairRedisPassword(kept.databaseId())).as("step 1: a second pass repairs nothing")
+                .isFalse();
+
+            // 2. A running engine whose record names only blanks: a generated password through the rotation, which
+            //    authenticates with nothing (a redis demanding no password takes it), stored on the record one
+            //    generation further and in the stored environment.
+            PlantedRedis blank = plantedRedis(cleanup, "blank", "   ", true);
+            assertThat(service.repairRedisPassword(blank.databaseId())).as("step 2: repaired").isTrue();
+            Row blankRow = databases.findById(blank.databaseId());
+            String generated = blankRow.get(DatabaseModel.DB_PASSWORD);
+            assertThat(generated).as("step 2: the record holds a generated password").matches("[A-Za-z0-9_-]{24}");
+            assertThat(DatabaseModel.credentialGenerationOf(blankRow)).as("step 2: one generation further")
+                .isEqualTo(1);
+            List<FakeDockerDaemon.Exec> rotation = this.daemon.execsOn(blank.handle());
+            assertThat(rotation).as("step 2: one command ran in the engine").hasSize(1);
+            assertThat(rotation.get(0).command()).as("step 2: its own rotation")
+                .isEqualTo(redis.rotateOwnCommand("appuser"));
+            assertThat(rotation.get(0).env()).as("step 2: authenticating with no password")
+                .isEqualTo(redis.rotateEnv("   ", generated))
+                .noneMatch(variable -> variable.startsWith("REDISCLI_AUTH="));
+            assertThat(new InstanceVariables().valuesFor(blank.instanceId()))
+                .as("step 2: the stored environment names it").containsAllEntriesOf(redis.secretEnv(generated));
+
+            // 3. A stopped engine whose record has no password: nothing can run in it, and a stopped redis holds its
+            //    password nowhere but its start configuration, so the generated one is stored with its environment.
+            PlantedRedis stopped = plantedRedis(cleanup, "stopped", "", false);
+            assertThat(service.repairRedisPassword(stopped.databaseId())).as("step 3: repaired").isTrue();
+            Row stoppedRow = databases.findById(stopped.databaseId());
+            String stored = stoppedRow.get(DatabaseModel.DB_PASSWORD);
+            assertThat(stored).as("step 3: the record holds a generated password").matches("[A-Za-z0-9_-]{24}");
+            assertThat(DatabaseModel.credentialGenerationOf(stoppedRow)).as("step 3: one generation further")
+                .isEqualTo(1);
+            assertThat(new InstanceVariables().valuesFor(stopped.instanceId()))
+                .as("step 3: the stored environment names it").containsAllEntriesOf(redis.secretEnv(stored));
+            assertThat(this.daemon.execsOn(stopped.handle())).as("step 3: nothing ran in the engine").isEmpty();
+
+            // 4. The rotation refused: the repair says so on the record, which the dashboard raises, and the stored
+            //    environment still names no password.
+            PlantedRedis refused = plantedRedis(cleanup, "refused", "", true);
+            this.daemon.refuseNextExec(1, "ERR unknown command 'CONFIG'");
+            assertThat(service.repairRedisPassword(refused.databaseId())).as("step 4: not repaired").isFalse();
+            assertThat((String) databases.findById(refused.databaseId()).get(DatabaseModel.FAILURE_REASON))
+                .as("step 4: the record says why").contains("has no password in its stored environment")
+                .contains("cannot start again");
+            assertThat(driftItems(PREFIX + "refused")).as("step 4: the dashboard raises it").hasSize(1);
+            assertThat(new InstanceVariables().valuesFor(refused.instanceId()))
+                .as("step 4: the stored environment still names no password")
+                .doesNotContainKeys(passwordKeys.toArray(String[]::new));
+        } finally {
+            for (int i = cleanup.size() - 1; i >= 0; i--) {
+                cleanup.get(i).run();
+            }
+            FakeDockerDaemon.restore();
+        }
+    }
+
+    /** A dedicated redis database and its planted engine instance. */
+    private record PlantedRedis(int databaseId, int instanceId, String handle) {
+    }
+
+    /** @return a dedicated redis record named {@code <prefix><name>} with its engine instance, running or stopped */
+    private PlantedRedis plantedRedis(List<Runnable> cleanup, String name, String password, boolean running) {
+        Row database = row(cleanup, Models.get(DatabaseModel.class), Map.of(DatabaseModel.NAME.getName(), PREFIX + name,
+            DatabaseModel.ENGINE.getName(), ManagedDatabase.Engine.REDIS.token(),
+            DatabaseModel.PLACEMENT.getName(), DatabaseModel.PLACEMENT_DEDICATED,
+            DatabaseModel.DB_NAME.getName(), "appdb", DatabaseModel.DB_USER.getName(), "appuser",
+            DatabaseModel.DB_PASSWORD.getName(), password,
+            DatabaseModel.SERVER_ID.getName(), ServerModel.localServerId(),
+            DatabaseModel.STATUS.getName(), DatabaseModel.STATUS_ACTIVE));
+        int databaseId = database.get(DatabaseModel.ID);
+        String handle = EngineHandles.plant(databaseId, PREFIX + name, ManagedDatabase.Engine.REDIS.token(),
+            running ? InstanceModel.STATUS_RUNNING : InstanceModel.STATUS_STOPPED);
+        int instanceId = DatabaseInstances.owned(databaseId).get(InstanceModel.ID);
+        cleanup.add(() -> OwnedInstances.inScopeUnchecked(DatabaseInstances.SOURCE, DatabaseModel.MODEL_ID,
+            databaseId, () -> InstanceRowCleanup.delete(instanceId)));
+        if (running) {
+            this.daemon.seedRunning(handle);
+        }
+        return new PlantedRedis(databaseId, instanceId, handle);
     }
 
     /** @return an instance's health as the operator reads it on its overview */

@@ -140,8 +140,9 @@ class DatabaseApiTest extends HohenheimHttpTestBase {
             .contains("\"engine_id\":" + engineId)
             .contains("\"server\":\"" + PREFIX + "host\"")
             .contains("\"attached\":1");
-        assertThat(list.body()).as("step 1: and never the stored credentials")
-            .doesNotContain("db_password").doesNotContain(PREFIX + "secret-pw");
+        assertThat(list.body()).as("step 1: and never the stored credentials, a pending password included")
+            .doesNotContain("db_password").doesNotContain(PREFIX + "secret-pw")
+            .doesNotContain("pending_password").doesNotContain(PREFIX + "pending-pw");
 
         // 2. A DELEGATE sees its own record with the /manage columns only. The engine a
         //    shared record lives on is another tenant's neighbour list, which is exactly
@@ -156,6 +157,9 @@ class DatabaseApiTest extends HohenheimHttpTestBase {
             .as("step 2: without the operator columns the /manage table drops")
             .doesNotContain("engine_id").doesNotContain("\"server\"")
             .doesNotContain("memory_limit_mb");
+        assertThat(tenantList.body()).as("step 2: and never a password, stored or pending")
+            .doesNotContain("db_password").doesNotContain(PREFIX + "secret-pw")
+            .doesNotContain("pending_password").doesNotContain(PREFIX + "pending-pw");
 
         // 3. ... and the two ADMIN-ONLY verbs are shut for it, because only the admin
         //    panel offers them at all (DatabaseParts#manage places no move,
@@ -273,6 +277,8 @@ class DatabaseApiTest extends HohenheimHttpTestBase {
         row.set(DatabaseModel.DB_NAME, "appdb");
         row.set(DatabaseModel.DB_USER, "appuser");
         row.set(DatabaseModel.DB_PASSWORD, PREFIX + "secret-pw");
+        // What a drifted password change leaves: a secret no surface may carry either.
+        row.set(DatabaseModel.PENDING_PASSWORD, PREFIX + "pending-pw");
         row.set(DatabaseModel.SERVER_ID, serverId);
         row.set(DatabaseModel.PLACEMENT, DatabaseModel.PLACEMENT_SHARED);
         row.set(DatabaseModel.ENGINE_ID, engineId);

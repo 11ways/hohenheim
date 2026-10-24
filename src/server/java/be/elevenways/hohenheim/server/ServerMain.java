@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.server.cli.OfflineBoot;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
+import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.database.TenantDatabases;
 import be.elevenways.hohenheim.server.dns.DnsNotifier;
@@ -151,8 +152,12 @@ public class ServerMain {
             // record predating it owns no instance, so it gets one and is re-deployed
             // onto its EXISTING data volume rather than being abandoned with a running
             // container nothing tracks. Idempotent, so it is a fast no-op once adopted.
-            // Virtual thread: it does live daemon work per record.
-            BOOT_RECOVERY.get().fireAndForget(DatabaseInstances::adoptExisting);
+            // Then every redis engine whose stored environment names no password gets one,
+            // which its next start demands. Virtual thread: it does live daemon work per record.
+            BOOT_RECOVERY.get().fireAndForget(() -> {
+                DatabaseInstances.adoptExisting();
+                new DatabaseService().repairRedisPasswords();
+            });
         } else {
             roleSkip(HohenheimRoles.Role.DATABASES,
                 "managed-database adoption skipped, no databases run here");

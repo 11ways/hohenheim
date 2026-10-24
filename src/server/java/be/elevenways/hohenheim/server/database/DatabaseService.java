@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.database;
 
 import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
+import be.elevenways.hohenheim.server.Secrets;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -17,6 +18,7 @@ import be.elevenways.hohenheim.server.docker.InstanceDatabaseNetworks;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
+import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
@@ -259,15 +261,17 @@ public class DatabaseService extends DatasourceScoped {
             if (handle == null) {
                 throw new IOException("Shared engine '" + host.name() + "' is up but owns no instance");
             }
+            // Settled first, under the lock a change holds: a drifted change's pending password the engine took is
+            // adopted before the re-credential, so the record and the engine end on the password the record stores.
             Row stored = recordId == null ? null : model().findById(recordId);
-            Row current = stored != null ? stored : row;
+            Row current = stored != null ? settlePending(stored).row() : row;
             runLogical(host, handle, host.engine().createLogicalCommand(host.rootUser(),
                 current.get(DatabaseModel.DB_NAME), current.get(DatabaseModel.DB_USER)),
                 host.engine().logicalEnv(host.rootPassword(), current.get(DatabaseModel.DB_PASSWORD)),
                 "create logical database '" + current.get(DatabaseModel.DB_NAME) + "'");
             if (recordId != null && current.get(DatabaseModel.PENDING_PASSWORD) != null) {
                 // The engine now holds the stored password, whatever a drifted change left it on.
-                clearPending(recordId, true, ConsoleRedaction.secretsOfOwner(DatabaseModel.MODEL_ID, recordId));
+                clearPending(recordId, ConsoleRedaction.secretsOfOwner(DatabaseModel.MODEL_ID, recordId));
             }
             return null;
         });
@@ -356,18 +360,13 @@ public class DatabaseService extends DatasourceScoped {
             throw new IOException("Managed database '" + row.get(DatabaseModel.NAME)
                 + "' is served by no engine instance yet; provision it before changing its password");
         }
-        try {
-            InstanceOperationLock.production().exclusive((Integer) instance.get(InstanceModel.ID),
-                InstanceOperationLock.Contention.QUEUE, () -> {
-                    try {
-                        rotateLocked(recordId, null, password);
-                    } catch (IOException failed) {
-                        throw new UncheckedIOException(failed);
-                    }
-                });
-        } catch (UncheckedIOException failed) {
-            throw failed.getCause();
-        }
+        underInstanceClaim(instance.get(InstanceModel.ID), () -> {
+            try {
+                rotateLocked(recordId, null, password);
+            } catch (IOException failed) {
+                throw new UncheckedIOException(failed);
+            }
+        });
     }
 
     /**
@@ -389,7 +388,15 @@ public class DatabaseService extends DatasourceScoped {
             requireNewOwnCredentials(engineOf(read), read.get(DatabaseModel.DB_USER), password);
         }
         // A change that failed half-way left its password pending: the engine may hold it instead of the stored one.
-        Row row = settlePending(read);
+        Settlement settled = settlePending(read);
+        if (!shared && settled.neitherAdmitted()) {
+            // A dedicated rotation authenticates with the stored password, which the engine just refused: asking it
+            // would fail, and storing this password as pending would replace the one the engine may hold.
+            throw new IOException("The engine of '" + name + "' accepts neither the stored nor the pending password,"
+                + " so no change can authenticate to it; nothing was changed or stored. Manual recovery is needed: set"
+                + " the engine's own password back to the stored one inside its container, then change it again");
+        }
+        Row row = settled.row();
         ConsoleRedaction.Secrets secrets = query(() -> ConsoleRedaction.secretsOfOwner(DatabaseModel.MODEL_ID,
             recordId)).and(credentialSecrets(password));
         EngineHost host;
@@ -448,7 +455,7 @@ public class DatabaseService extends DatasourceScoped {
                     + " until the record stores it. The record keeps it as pending: retrying the rotation, or the next"
                     + " use of the credential (a dump, a restore, a move), finds the engine admitting it and stores it");
             }
-            clearPending(recordId, false, secrets);
+            clearPending(recordId, secrets);
             throw new IOException("Changing the password of '" + name + "' failed while storing it (" + why
                 + "); the engine was set back to the password the record keeps, so nothing changed");
         }
@@ -458,18 +465,19 @@ public class DatabaseService extends DatasourceScoped {
      * Settle a record a password change left a pending password on, for a caller holding the claim that change holds:
      * the engine is asked whether it admits the stored password and, only when it refuses it, the pending one. The
      * stored one admitted clears the pending one (and the drift it left); the pending one admitted becomes the stored
-     * one through {@link #storeRotated}. Neither admitted, or no engine to ask, leaves the record as it is.
+     * one through {@link #storeRotated}. Neither admitted, or no engine to ask, leaves the record as it is; neither
+     * admitted is said in the result and logged with each check's answer, redacted.
      *
      * AIDEV-NOTE: only an admission is evidence. A refusal and a check that could not run look alike
      * ({@link ManagedDatabase.Engine#credentialCheckCommand}), so nothing is ever cleared or adopted on a failure.
      *
-     * @return the record as it stands after
+     * @return the record as it stands after, and whether the engine was asked and admitted neither password
      */
-    private Row settlePending(@NonNull Row row) throws IOException {
+    private Settlement settlePending(@NonNull Row row) throws IOException {
         String pending = row.get(DatabaseModel.PENDING_PASSWORD);
         Integer recordId = row.get(DatabaseModel.ID);
         if (pending == null || recordId == null) {
-            return row;
+            return new Settlement(row, false);
         }
         boolean shared = DatabaseModel.isShared(row);
         String stored = Objects.toString(row.get(DatabaseModel.DB_PASSWORD), "");
@@ -486,49 +494,68 @@ public class DatabaseService extends DatasourceScoped {
         } catch (RuntimeException unresolved) {
             Blast.log("DB: the pending password of", row.get(DatabaseModel.NAME), "could not be checked -",
                 ConsoleRedaction.redactWhole(HohenheimViolations.reasonOf(unresolved), secrets));
-            return row;
+            return new Settlement(row, false);
         }
         if (handle == null) {
-            return row;
+            return new Settlement(row, false);
         }
         DockerClient docker = new ServerService().clientFor(host.serverId());
-        if (admits(docker, handle, command, host.engine().credentialCheckEnv(stored))) {
-            clearPending(recordId, true, secrets);
-        } else if (admits(docker, handle, command, host.engine().credentialCheckEnv(pending))) {
-            try {
-                TenantWrites.inAuthorizedOperation(() -> exec(() -> model().getResolvedDatasource().withTransaction(
-                    transaction -> storeRotated(recordId, shared, pending))));
-            } catch (RuntimeException unstored) {
-                Blast.log("DB: the engine of", row.get(DatabaseModel.NAME),
-                    "admits the pending password of a failed change, but storing it failed -",
-                    ConsoleRedaction.redactWhole(HohenheimViolations.reasonOf(unstored), secrets));
-                return row;
-            }
-            Blast.log("DB: the engine of", row.get(DatabaseModel.NAME),
-                "admits the pending password of a failed change; the record stores it now");
-        } else {
-            return row;
+        String storedRefused = checkRefusal(docker, handle, command, host.engine().credentialCheckEnv(stored));
+        if (storedRefused == null) {
+            clearPending(recordId, secrets);
+            return new Settlement(requireRecord(recordId), false);
         }
-        return requireRecord(recordId);
+        String pendingRefused = checkRefusal(docker, handle, command, host.engine().credentialCheckEnv(pending));
+        if (pendingRefused != null) {
+            Blast.log("DB: the engine of", row.get(DatabaseModel.NAME),
+                "admits neither the stored nor the pending password - the stored one:",
+                ConsoleRedaction.redactWhole(storedRefused, secrets), "- the pending one:",
+                ConsoleRedaction.redactWhole(pendingRefused, secrets));
+            return new Settlement(row, true);
+        }
+        try {
+            TenantWrites.inAuthorizedOperation(() -> exec(() -> model().getResolvedDatasource().withTransaction(
+                transaction -> storeRotated(recordId, shared, pending))));
+        } catch (RuntimeException unstored) {
+            Blast.log("DB: the engine of", row.get(DatabaseModel.NAME),
+                "admits the pending password of a failed change, but storing it failed -",
+                ConsoleRedaction.redactWhole(HohenheimViolations.reasonOf(unstored), secrets));
+            return new Settlement(row, false);
+        }
+        Blast.log("DB: the engine of", row.get(DatabaseModel.NAME),
+            "admits the pending password of a failed change; the record stores it now");
+        return new Settlement(requireRecord(recordId), false);
     }
 
-    /** @return whether the engine answered the credential check with success; a check that could not run did not */
-    private static boolean admits(@NonNull DockerClient docker, @NonNull String handle, @NonNull List<String> command,
-                                  @NonNull List<String> env) {
+    /**
+     * What {@link #settlePending} found.
+     *
+     * @param neitherAdmitted whether the engine was asked and admitted neither the stored nor the pending password
+     */
+    private record Settlement(@NonNull Row row, boolean neitherAdmitted) {
+    }
+
+    /**
+     * @return null when the engine answered the credential check with success, else why not (the exit and what the
+     *         check printed, or why it could not run), unredacted
+     */
+    private static @Nullable String checkRefusal(@NonNull DockerClient docker, @NonNull String handle,
+                                                 @NonNull List<String> command, @NonNull List<String> env) {
         try {
-            return docker.exec(handle, command, env).exitCode() == 0;
+            DockerClient.ExecResult result = docker.exec(handle, command, env);
+            return result.exitCode() == 0 ? null
+                : "exit " + result.exitCode() + ": " + (result.stderr() + " " + result.stdout()).trim();
         } catch (IOException unasked) {
-            return false;
+            return "the check could not run: " + HohenheimViolations.reasonOf(unasked);
         }
     }
 
     /**
-     * Clear a record's pending password once the record and the engine agree; a clear that fails is logged, never
-     * masking the outcome it follows (the stored password is the one tried first, so a stale pending one is harmless).
-     *
-     * @param drift whether the drift a failed change stamped on an active record is cleared with it
+     * Clear a record's pending password once the record and the engine agree, and the drift a failed change stamped
+     * with it ({@link CredentialStamp}); a clear that fails is logged, never masking the outcome it follows (the stored
+     * password is the one tried first, so a stale pending one is harmless).
      */
-    private void clearPending(int recordId, boolean drift, ConsoleRedaction.@NonNull Secrets secrets) {
+    private void clearPending(int recordId, ConsoleRedaction.@NonNull Secrets secrets) {
         try {
             TenantWrites.inAuthorizedOperation(() -> exec(() -> {
                 Row fresh = model().findById(recordId);
@@ -536,9 +563,7 @@ public class DatabaseService extends DatasourceScoped {
                     return;
                 }
                 fresh.set(DatabaseModel.PENDING_PASSWORD, null);
-                if (drift && DatabaseModel.STATUS_ACTIVE.equals(fresh.get(DatabaseModel.STATUS))) {
-                    fresh.set(DatabaseModel.FAILURE_REASON, null);
-                }
+                CredentialStamp.clearFrom(fresh);
                 model().save(fresh);
             }));
         } catch (RuntimeException uncleared) {
@@ -560,9 +585,7 @@ public class DatabaseService extends DatasourceScoped {
         if (fresh.get(DatabaseModel.PENDING_PASSWORD) != null) {
             fresh.set(DatabaseModel.PENDING_PASSWORD, null);
         }
-        if (fresh.get(DatabaseModel.FAILURE_REASON) != null) {
-            fresh.set(DatabaseModel.FAILURE_REASON, null);
-        }
+        CredentialStamp.clearFrom(fresh);
         model.save(fresh);
         if (!shared) {
             EngineHost own = EngineHost.dedicated(fresh);
@@ -572,19 +595,54 @@ public class DatabaseService extends DatasourceScoped {
     }
 
     /**
-     * Stamp a password change's drift on the record as an active record's failure reason and hand back the refusal
-     * saying it; a stamp that fails too is logged, never masking the refusal.
+     * Stamp a password change's drift on the record as its failure reason ({@link CredentialStamp}) and hand back the
+     * refusal saying it; a stamp that fails too is logged, never masking the refusal.
      */
     private IOException drifted(int recordId, @NonNull Row row, ConsoleRedaction.@NonNull Secrets secrets,
                                 @NonNull String reason) {
+        String stamped = CredentialStamp.of(reason);
         try {
             TenantWrites.inAuthorizedOperation(() -> setStatus(recordId,
-                Objects.toString(row.get(DatabaseModel.STATUS), DatabaseModel.STATUS_ACTIVE), reason));
+                Objects.toString(row.get(DatabaseModel.STATUS), DatabaseModel.STATUS_ACTIVE), stamped));
         } catch (RuntimeException unstamped) {
             Blast.log("DB: the password drift of", row.get(DatabaseModel.NAME), "could not be stamped either -",
                 ConsoleRedaction.redactWhole(HohenheimViolations.reasonOf(unstamped), secrets));
         }
-        return new IOException(reason);
+        return new IOException(stamped);
+    }
+
+    /**
+     * THE failure reasons a record's credential leaves on it when it is not settled (a password change that drifted,
+     * a redis engine left without a password it could start with): the only failure reasons a credential that settles
+     * clears, so a provisioning or destroy failure stamped beside one survives a password change.
+     *
+     * AIDEV-NOTE: a stamp is recognised by its lead, which every credential stamp starts with and no other writer of
+     * {@link DatabaseModel#FAILURE_REASON} spells; redaction never reaches it, since it names no secret.
+     */
+    static final class CredentialStamp {
+
+        /** What every credential stamp starts with. */
+        static final String LEAD = "Password not settled: ";
+
+        private CredentialStamp() {
+        }
+
+        /** @return {@code reason} as a credential stamp */
+        static @NonNull String of(@NonNull String reason) {
+            return LEAD + reason;
+        }
+
+        /** @return whether a stored failure reason is a credential stamp */
+        static boolean is(@Nullable String failureReason) {
+            return failureReason != null && failureReason.startsWith(LEAD);
+        }
+
+        /** Clear the record's failure reason when it is a credential stamp; any other is left as it is. */
+        static void clearFrom(@NonNull Row record) {
+            if (is(record.get(DatabaseModel.FAILURE_REASON))) {
+                record.set(DatabaseModel.FAILURE_REASON, null);
+            }
+        }
     }
 
     /** @return a credential and its URL-encoded spelling as redactable secrets; a value too short to redact is left out */
@@ -917,6 +975,116 @@ public class DatabaseService extends DatasourceScoped {
     }
 
     /**
+     * Boot repair: give each dedicated redis engine whose stored environment names no usable password one before its
+     * next start, which its start script refuses without one ({@link ManagedDatabase.Engine#isUsablePassword}).
+     *
+     * AIDEV-NOTE: no known lane stored such an engine: every create since the first form demanded or generated a
+     * password, and every deploy writes the environment from the record. This is the guard behind that claim, for a
+     * record or a stored environment that an older controller or a hand edit left without one. A record with a
+     * password has its environment written from it again. A record without one gets a generated password: through
+     * the rotation when its engine runs (CONFIG SET, authenticating with nothing, which a redis demanding no password
+     * takes), stored with its environment when it does not, since a stopped redis holds its password nowhere but its
+     * start configuration. Either store is the record's own, one credential generation further, in its history. A
+     * repair that fails is stamped as the record's failure reason ({@link CredentialStamp}), which the dashboard raises.
+     *
+     * @return how many engines were repaired
+     */
+    public int repairRedisPasswords() {
+        int repaired = 0;
+        List<Row> redis = query(() -> model().find()
+            .where(DatabaseModel.ENGINE.eq(ManagedDatabase.Engine.REDIS.token())).all());
+        for (Row row : redis) {
+            Integer recordId = row.get(DatabaseModel.ID);
+            if (recordId != null && repairRedisPassword(recordId)) {
+                repaired++;
+            }
+        }
+        return repaired;
+    }
+
+    /**
+     * {@link #repairRedisPasswords} for one record; a repair that fails is stamped and logged, never thrown.
+     *
+     * @return whether the record is a dedicated redis whose served engine instance needed a password and got one
+     */
+    public boolean repairRedisPassword(int recordId) {
+        Row row = query(() -> model().findById(recordId));
+        if (row == null || DatabaseModel.isShared(row)
+                || !ManagedDatabase.Engine.REDIS.token().equals(row.get(DatabaseModel.ENGINE))) {
+            return false;
+        }
+        Row instance = query(() -> DatabaseInstances.owned(recordId));
+        if (instance == null) {
+            // Not served yet: its first deploy writes the environment from the record.
+            return false;
+        }
+        int instanceId = instance.get(InstanceModel.ID);
+        String stored = query(() -> new InstanceVariables().valuesFor(instanceId))
+            .get(ManagedDatabase.Engine.REDIS_PASSWORD);
+        if (ManagedDatabase.Engine.isUsablePassword(stored)) {
+            return false;
+        }
+        String name = row.get(DatabaseModel.NAME);
+        try {
+            repairRedisPassword(recordId, instanceId);
+            return true;
+        } catch (IOException | RuntimeException failed) {
+            ConsoleRedaction.Secrets secrets = query(() -> ConsoleRedaction.secretsOfOwner(DatabaseModel.MODEL_ID,
+                recordId));
+            String reason = CredentialStamp.of("The redis engine of '" + name + "' has no password in its stored"
+                + " environment, so it cannot start again, and giving it one failed ("
+                + ConsoleRedaction.redactWhole(HohenheimViolations.reasonOf(failed), secrets) + "). Change its"
+                + " password once the engine runs, or give the record one by hand");
+            try {
+                TenantWrites.inAuthorizedOperation(() -> setStatus(recordId,
+                    Objects.toString(row.get(DatabaseModel.STATUS), DatabaseModel.STATUS_ACTIVE), reason));
+            } catch (RuntimeException unstamped) {
+                Blast.log("DB: the failed redis password repair of", name, "could not be stamped either -",
+                    ConsoleRedaction.redactWhole(HohenheimViolations.reasonOf(unstamped), secrets));
+            }
+            Blast.log("DB:", reason);
+            return false;
+        }
+    }
+
+    /** The repair of {@link #repairRedisPassword(int)} for an engine instance whose stored environment names none. */
+    private void repairRedisPassword(int recordId, int instanceId) throws IOException {
+        Row row = requireRecord(recordId);
+        String name = row.get(DatabaseModel.NAME);
+        if (ManagedDatabase.Engine.isUsablePassword(row.get(DatabaseModel.DB_PASSWORD))) {
+            underInstanceClaim(instanceId, () -> TenantWrites.inAuthorizedOperation(() -> exec(() -> {
+                Row fresh = Objects.requireNonNull(model().findById(recordId), "the database record is gone");
+                ExecutionIdentity.runAsSystem(HohenheimSystemPurposes.DATABASE_PROVISION,
+                    () -> DatabaseInstances.storeEngineEnvironment(EngineHost.dedicated(fresh)));
+            })));
+            Blast.log("DB: the redis engine of", name,
+                "had no password in its stored environment; it names the record's again");
+            return;
+        }
+        String generated = Secrets.generatePassword();
+        if (query(() -> DatabaseInstances.liveStatus(recordId)).running()) {
+            changePassword(recordId, generated);
+        } else {
+            underInstanceClaim(instanceId, () -> TenantWrites.inAuthorizedOperation(() -> exec(() ->
+                model().getResolvedDatasource().withTransaction(transaction -> storeRotated(recordId, false,
+                    generated)))));
+        }
+        Blast.log("DB: the redis engine of", name, "had no password; it has a generated one now");
+    }
+
+    /**
+     * Run {@code work} holding the operation claim of an engine instance, queueing behind a running deploy or stop; an
+     * {@link UncheckedIOException} the work throws is rethrown as its cause.
+     */
+    private static void underInstanceClaim(int instanceId, @NonNull Runnable work) throws IOException {
+        try {
+            InstanceOperationLock.production().exclusive(instanceId, InstanceOperationLock.Contention.QUEUE, work);
+        } catch (UncheckedIOException failed) {
+            throw failed.getCause();
+        }
+    }
+
+    /**
      * Stamp the provisioning outcome; a reason is stored on failure and cleared otherwise. THE write of a database's
      * failure reason: daemon or engine text can quote its password or its engine's, so it is stored redacted.
      *
@@ -1163,14 +1331,14 @@ public class DatabaseService extends DatasourceScoped {
             Integer engineId = row.get(DatabaseModel.ENGINE_ID);
             Row current = recordId == null || engineId == null || row.get(DatabaseModel.PENDING_PASSWORD) == null
                 || !DatabaseModel.isShared(row) ? row
-                : DatabaseEngines.underLock(engineId, () -> settlePending(requireRecord(recordId)));
+                : DatabaseEngines.underLock(engineId, () -> settlePending(requireRecord(recordId)).row());
             return work.run(current, hostOf(current));
         }
         try {
             return InstanceOperationLock.production().exclusive((Integer) instance.get(InstanceModel.ID),
                 InstanceOperationLock.Contention.QUEUE, () -> {
                     try {
-                        Row current = settlePending(requireRecord(recordId));
+                        Row current = settlePending(requireRecord(recordId)).row();
                         return work.run(current, hostOf(current));
                     } catch (IOException failed) {
                         throw new UncheckedIOException(failed);

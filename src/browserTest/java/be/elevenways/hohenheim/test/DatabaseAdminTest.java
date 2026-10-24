@@ -64,6 +64,7 @@ class DatabaseAdminTest extends HohenheimTestBase {
         row.set(DatabaseModel.IMAGE, "postgres:17-alpine");
         row.set(DatabaseModel.DB_USER, "detailuser");
         row.set(DatabaseModel.DB_PASSWORD, "detailpass");
+        row.set(DatabaseModel.PENDING_PASSWORD, "detailpending-0001");
         row.set(DatabaseModel.DB_NAME, "detaildb");
         row.set(DatabaseModel.EPHEMERAL, false);
         row.set(DatabaseModel.STATUS, DatabaseModel.STATUS_FAILED);
@@ -80,7 +81,8 @@ class DatabaseAdminTest extends HohenheimTestBase {
                 .contains("PostgreSQL");
             assertThat(page.locator("[data-hh-database-password] hh-secret-reveal").count())
                 .as("step 1: the password is behind its reveal").isEqualTo(1);
-            assertThat(page.content()).as("step 1: and not in the page").doesNotContain("detailpass");
+            assertThat(page.content()).as("step 1: and not in the page").doesNotContain("detailpass")
+                .doesNotContain("detailpending-0001");
             assertThat(page.locator("[data-hh-restore-refused]").count())
                 .as("step 1: the restore says why it is not offered").isEqualTo(1);
             assertThat(page.locator("form[action='/databases/" + name + "/restore']").count())
@@ -94,6 +96,19 @@ class DatabaseAdminTest extends HohenheimTestBase {
             waitForHydration();
             BoundedAssertions.assertThat(page.locator(
                 "form[action='/databases/" + name + "/restore'] pl-file-upload input[type='file']")).hasCount(1);
+            assertThat(page.content()).as("step 2: a pending password is never in the page either")
+                .doesNotContain("detailpending-0001");
+
+            // 3. The record's own form and the databases list carry no pending password, as a value or a control.
+            navigateToApp("/admin/databases/" + id);
+            waitForHydration();
+            assertThat(page.locator("[name='pending_password']").count())
+                .as("step 3: no control names the pending password").isZero();
+            assertThat(page.content()).as("step 3: nor does the form carry it").doesNotContain("detailpending-0001");
+            navigateToApp("/admin/databases");
+            waitForHydration();
+            assertThat(page.content()).as("step 3: nor the list").doesNotContain("detailpending-0001")
+                .doesNotContain("detailpass");
         } finally {
             Model instances = Models.get(InstanceModel.class);
             GeneratedRows.sweeping("test", () -> {

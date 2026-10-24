@@ -793,10 +793,13 @@ class SharedDatabaseEngineTest {
             assertThat(left.toList()).as("step 4: nor after it").isEmpty();
         }
 
-        // 5. An empty or a missing password refuses to start: requirepass "" is a redis answering everyone. The
-        //    script exits non-zero before anything ran, the entrypoint and the server included, and writes no file.
+        // 5. An empty, a whitespace-only or a missing password refuses to start: requirepass "" is a redis answering
+        //    everyone. The script exits non-zero before anything ran, the entrypoint and the server included, and
+        //    writes no file.
         Map<String, List<String>> unauthenticated = Map.of(
             "empty", ManagedDatabase.Engine.REDIS.secretEnv("").entrySet().stream()
+                .map(entry -> entry.getKey() + "=" + entry.getValue()).toList(),
+            "blank", ManagedDatabase.Engine.REDIS.secretEnv(" \t ").entrySet().stream()
                 .map(entry -> entry.getKey() + "=" + entry.getValue()).toList(),
             "missing", List.of());
         for (Map.Entry<String, List<String>> env : unauthenticated.entrySet()) {
@@ -813,6 +816,40 @@ class SharedDatabaseEngineTest {
                 assertThat(left.toList()).as("step 5 (%s): and no config file was left", env.getKey()).isEmpty();
             }
         }
+
+        // 6. The redis login check against a stub redis-cli: a redis demanding no password answers PONG to any, so
+        //    the check refuses it, having asked without a password first; a redis demanding one admits only it.
+        Path cliBin = Files.createDirectories(dir.resolve("redis-cli"));
+        Files.writeString(cliBin.resolve("redis-cli"), "#!/bin/sh\n"
+            + "printf '%s\\n' \"$* ${REDISCLI_AUTH:+with-password}\" >> \"$HH_STUB_LOG/argv\"\n"
+            + "if [ \"$HH_REDIS_MODE\" = noauth ]; then echo PONG; exit 0; fi\n"
+            + "if [ -z \"$REDISCLI_AUTH\" ]; then echo 'NOAUTH Authentication required.'; exit 0; fi\n"
+            + "if [ \"$REDISCLI_AUTH\" = \"$HH_REDIS_PASSWORD\" ]; then echo PONG; exit 0; fi\n"
+            + "echo 'AUTH failed: WRONGPASS invalid username-password pair' >&2\n"
+            + "echo 'NOAUTH Authentication required.'\n");
+        assertThat(cliBin.resolve("redis-cli").toFile().setExecutable(true)).as("anchor: redis-cli is executable")
+            .isTrue();
+        ManagedDatabase.Engine redis = ManagedDatabase.Engine.REDIS;
+        List<String> check = redis.credentialCheckCommand("appuser", "appdb", false);
+        String right = "Redis-right-0000000006";
+        record Case(String mode, String typed, boolean admitted) {
+        }
+        for (Case scenario : List.of(new Case("noauth", right, false), new Case("auth", right, true),
+                new Case("auth", "Redis-wrong-0000000006", false))) {
+            String step = "step 6 (" + scenario.mode() + ", " + scenario.typed() + ")";
+            Path checkLog = Files.createDirectories(dir.resolve("check-" + scenario.mode() + "-" + scenario.admitted()));
+            ProcessOutcome checked = runShell(cliBin + ":" + tools, checkLog, null, check,
+                redis.credentialCheckEnv(scenario.typed()),
+                Map.of("HH_REDIS_MODE", scenario.mode(), "HH_REDIS_PASSWORD", right));
+            assertThat(checked.exitCode() == 0).as("%s: admitted: %s", step, checked.describe())
+                .isEqualTo(scenario.admitted());
+            assertThat(Files.readString(checkLog.resolve("argv")).lines().findFirst().orElse(""))
+                .as("%s: the first ping carries no password", step).isEqualTo("-p 6379 ping ");
+        }
+        Path noauthLog = dir.resolve("check-noauth-false");
+        assertThat(Files.readString(noauthLog.resolve("argv")).lines().toList())
+            .as("step 6: against a redis demanding no password the check stops after the unauthenticated ping")
+            .containsExactly("-p 6379 ping ");
     }
 
     /**

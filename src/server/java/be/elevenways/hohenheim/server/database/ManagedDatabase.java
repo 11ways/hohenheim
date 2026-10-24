@@ -330,6 +330,15 @@ public class ManagedDatabase {
         static final String REDIS_PASSWORD = "REDIS_PASSWORD";
 
         /**
+         * THE test of a password an engine may start or be dialled with: present and not only whitespace. Redis's start
+         * script holds the same rule ({@link #REDIS_START_SCRIPT}), since {@code requirepass} of blanks admits a client
+         * typing them and an empty one admits everyone.
+         */
+        public static boolean isUsablePassword(@Nullable String password) {
+            return password != null && !password.isBlank();
+        }
+
+        /**
          * The container command, or null to keep the image's own.
          *
          * AIDEV-NOTE: redis reads its password from no environment variable, and {@code --requirepass} on the command
@@ -418,12 +427,13 @@ public class ManagedDatabase {
          * to it exists while the server runs. It belongs to the redis user where the entrypoint will drop to it,
          * because a reopen checks the file's mode. DedicatedDatabasePasswordLiveTest proves it on redis 6 and 7.
          *
-         * AIDEV-NOTE: an empty or missing password FAILS the start: {@code requirepass ""} is a redis that answers
-         * everyone, so the script exits before any file is written or the server is started.
+         * AIDEV-NOTE: an empty, whitespace-only or missing password FAILS the start ({@link #isUsablePassword}):
+         * {@code requirepass ""} is a redis that answers everyone, so the script exits before any file is written or
+         * the server is started.
          */
         static final String REDIS_START_SCRIPT = "umask 077; " + PRIVATE_DIRECTORY + "\n"
-            + "[ -n \"$" + REDIS_PASSWORD + "\" ] || { echo 'hohenheim: no redis password in the environment' >&2;"
-            + " exit 1; }\n"
+            + "case \"$" + REDIS_PASSWORD + "\" in *[![:space:]]*) ;; *) echo 'hohenheim: no redis password in the"
+            + " environment' >&2; exit 1 ;; esac\n"
             + "pw=$(printf '%s' \"$" + REDIS_PASSWORD + "\" | sed 's/[\\\\\"]/\\\\&/g') || exit 1\n"
             + "printf 'protected-mode no\\nrequirepass \"%s\"\\n' \"$pw\" > \"$d/redis.conf\" || exit 1\n"
             + "if command -v docker-entrypoint.sh >/dev/null 2>&1; then set -- docker-entrypoint.sh; else set --; fi\n"
@@ -538,8 +548,7 @@ public class ManagedDatabase {
         public List<String> readyEnv(String password) {
             return switch (this) {
                 case MYSQL -> List.of("MYSQL_PWD=" + password);
-                case REDIS -> password != null && !password.isBlank()
-                    ? List.of("REDISCLI_AUTH=" + password) : List.of();
+                case REDIS -> isUsablePassword(password) ? List.of("REDISCLI_AUTH=" + password) : List.of();
                 case MONGO -> List.of(MONGO_PROBE_PASSWORD + "=" + password);
                 default -> List.of();
             };
@@ -552,9 +561,10 @@ public class ManagedDatabase {
          *
          * AIDEV-NOTE: postgres dials the container's own network address, and refuses to run without one: the image
          * trusts the local socket and loopback TCP without a password, so a check there admits ANY password. Redis's
-         * client exits zero on a NOAUTH reply, so its one success is the reply PONG. A shared mongo user lives in its
-         * own database, a dedicated one (the engine root) in admin. DedicatedDatabasePasswordLiveTest proves each
-         * admits the current password and refuses the old one.
+         * client exits zero on a NOAUTH reply, so its one success is the reply PONG, and a redis demanding no password
+         * answers PONG to any: the check first pings WITHOUT a password and goes on only when that is refused with
+         * NOAUTH. A shared mongo user lives in its own database, a dedicated one (the engine root) in admin.
+         * DedicatedDatabasePasswordLiveTest proves each admits the current password and refuses the old one.
          *
          * @param shared whether {@code user} is a logical database's user on a shared engine
          * @throws IllegalArgumentException for mongo, when the user or a shared database fails
@@ -634,8 +644,14 @@ public class ManagedDatabase {
         static final String MONGO_CHECK_SCRIPT = mongoScript("$3",
             mongoAnswer("db.getSiblingDB('$3').runCommand({ ping: 1 }).ok"));
 
-        /** sh -c body; $1 port; REDISCLI_AUTH via env. Prints the reply either way. */
-        static final String REDIS_CHECK_SCRIPT = "out=$(redis-cli -p \"$1\" ping 2>&1) || { printf '%s\\n' \"$out\";"
+        /**
+         * sh -c body; $1 port; REDISCLI_AUTH via env. Prints the reply either way. The unauthenticated ping runs in the
+         * command substitution's own subshell, the password unset there only.
+         */
+        static final String REDIS_CHECK_SCRIPT = "out=$(unset REDISCLI_AUTH; redis-cli -p \"$1\" ping 2>&1)\n"
+            + "case \"$out\" in *NOAUTH*) ;; *) printf 'hohenheim: redis answered a ping without a password with %s,"
+            + " not NOAUTH: it demands no password\\n' \"$out\"; exit 1 ;; esac\n"
+            + "out=$(redis-cli -p \"$1\" ping 2>&1) || { printf '%s\\n' \"$out\";"
             + " exit 1; }\n"
             + "printf '%s\\n' \"$out\"\n"
             + "[ \"$out\" = PONG ]";
