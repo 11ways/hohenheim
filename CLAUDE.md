@@ -183,8 +183,8 @@ test one end-to-end: inline `NotificationDispatcher` + `webhook://default` + a l
 
 ## Migrations
 
-The INSTALL schema starts from one baseline migration (appended migrations follow it, e.g.
-`M002_ReleaseAttribution`, `2026_10_23_000001`),
+The INSTALL schema starts from one baseline migration (followed by at most ONE unpublished migration,
+today `M002_AfterBaseline`, `2026_10_23_000001`),
 `src/common/java/be/elevenways/hohenheim/migration/M001_HohenheimBaseline.java`
 (version `2026_10_21_000001`, name `hohenheim_baseline`: the workspace's squash-baseline
 convention), GENERATED on 2026-10-21 by folding
@@ -222,14 +222,15 @@ those citations are history, not files you will find.
   paste. A deploy that applied migrations raises the mark and adds the pins
   (`tools/deploy-host.sh` reminds it); a pin is never regenerated to make a red
   build green. Comments and formatting are outside the digest.
-- A schema change APPENDS a migration (same package and stream, the next
-  class number `M002_...` onwards, with a LATER dated version such as
-  `2026_10_22_000001`: never `021`, which sorts before the baseline's version)
-  and may edit it only while it sits above the mark. Use
-  the ORM DSL (`alterTable` + `addColumn`/`dropColumn`), never raw SQL. Existing
-  rows are real, so a column added to a populated table is nullable or carries a
-  default, and a backfill is a `builder.data(...)` step -- never a hand-written
-  `execute(sql)`. A reversible appended migration's `down()` undoes its `up()`.
+- NEVER add a migration. A chain has at most ONE migration newer than its last
+  published (live-deployed) version: today `M002_AfterBaseline`, above the mark.
+  Every schema change edits that one migration until a live deploy publishes it
+  (raising the mark); only then may the next change create `M003_...`, with a
+  LATER dated version (never `021`, which sorts before the baseline's version).
+  Use the ORM DSL (`alterTable` + `addColumn`/`dropColumn`), never raw SQL.
+  Existing rows are real, so a column added to a populated table is nullable or
+  carries a default, and a backfill is a `builder.data(...)` step -- never a
+  hand-written `execute(sql)`. Its `down()` undoes its `up()`.
 - Default records are the `Seeder` SPI's job (SEED boot stage), never an
   INSERT in the migration -- `SpamserviceInstallationSeeder`, `RuntimeImageSeeder` and
   `LocalServerSeeder` are the examples.

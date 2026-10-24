@@ -55,8 +55,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class MigrationIntegrityTest {
 
-    /** The highest version every install that must keep booting has applied or adopted; see the class note. */
-    private static final String DEPLOYED_THROUGH = "2026_10_21_000001";
+    /** The highest version every install that must keep booting has applied or adopted: the chain's published fact. */
+    private static final String DEPLOYED_THROUGH = HohenheimMigration.PUBLISHED;
 
     /** The versions of the chain M001_HohenheimBaseline squashed, which the live installs recorded. */
     private static final List<String> SQUASHED_VERSIONS = List.of("001", "002", "003", "004", "006", "007", "008",
@@ -389,12 +389,9 @@ class MigrationIntegrityTest {
             .isNotEmpty()
             .allSatisfy(entry -> assertThat(entry).endsWith(" stream=" + HohenheimMigration.STREAM));
         assertThat(found)
-            .as("step 1: and the stream is the squashed baseline plus the migrations appended after it")
+            .as("step 1: and the stream is the published baseline plus the ONE migration after it")
             .containsExactly("M001_HohenheimBaseline stream=" + HohenheimMigration.STREAM,
-                "M002_ReleaseAttribution stream=" + HohenheimMigration.STREAM,
-                "M003_CredentialGenerations stream=" + HohenheimMigration.STREAM,
-                "M004_PendingPasswords stream=" + HohenheimMigration.STREAM,
-                "M005_BuildHooks stream=" + HohenheimMigration.STREAM);
+                "M002_AfterBaseline stream=" + HohenheimMigration.STREAM);
 
         // 2. The deployed high-water mark. Every migration at or below DEPLOYED_THROUGH is
         //    APPLIED somewhere, so its structural checksum is recorded in that install's
