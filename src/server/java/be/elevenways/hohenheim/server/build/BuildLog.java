@@ -84,7 +84,7 @@ public final class BuildLog {
      * Redact a text that is not output (a build's failure reason) through this log's secrets, as one whole stream of
      * its own: the log's stream and its held tail are untouched.
      *
-     * @return null for null; the placeholder for a non-empty text when this log masks (its owner's secrets unreadable)
+     * @return null for null; one placeholder per non-empty line when this log masks (its owner's secrets unreadable)
      */
     public @Nullable String redactedWhole(@Nullable String text) {
         return this.redactor.redactWhole(text);

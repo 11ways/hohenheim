@@ -146,7 +146,7 @@ public final class ConsoleRedaction {
      * redactor is fed all of it, then flushed, so a multi-line secret is matched across its lines and a secret the
      * text was cut off in is masked. Never call it per line of a text: a line alone never shows a multi-line value.
      *
-     * @return the redacted text; the placeholder for a non-empty text when the secrets could not be read
+     * @return the redacted text; one placeholder per non-empty line when the secrets could not be read
      */
     public static @NonNull String redactWhole(@NonNull String text, int instanceId) {
         return redactWhole(text, secretsOf(instanceId));

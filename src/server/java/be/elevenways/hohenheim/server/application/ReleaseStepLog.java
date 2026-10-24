@@ -106,8 +106,8 @@ final class ReleaseStepLog {
      * The operation's failure reason as it may be stored and shown: daemon or build text can quote a secret value, so
      * the whole reason is redacted as one stream through the owner's secrets ({@link ConsoleRedaction#redactWhole}).
      *
-     * @return null for no reason; the placeholder when the operation names no instance owner or its owner's secrets
-     *         could not be read (fail closed)
+     * @return null for no reason; the placeholder when the operation names no instance owner, one placeholder per line
+     *         when its owner's secrets could not be read (fail closed)
      */
     static @Nullable String redactedReason(@NonNull Row op, @Nullable String reason) {
         if (reason == null) {
