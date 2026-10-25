@@ -14,6 +14,7 @@ import be.elevenways.protoblast.common.i18n.MessageResolvers;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.Accountability;
+import be.elevenways.zenit.common.security.AccountabilityOrigin;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -60,11 +61,11 @@ public final class HostPostureAcknowledgement {
         Accountability who = Accountability.current();
         String actor = who.actor();
         PrincipalRef principal = who.actorReference();
-        if (principal == null || !principal.kind().account() || Accountability.ORIGIN_SYSTEM.equals(who.origin())) {
+        if (principal == null || !principal.kind().account() || who.origin() == AccountabilityOrigin.SYSTEM) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("posture_acknowledgement_needs_actor")
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
         }
-        String label = HistoryText.actorName(principal, actor, who.actorLabel(), who.origin())
+        String label = HistoryText.actorName(principal, actor, who.actorLabel(), who.origin().token())
             .resolve(LocaleChain.empty(), MessageResolvers.getDefault());
         String posture = server.get(ServerModel.POSTURE);
         server.set(ServerModel.ACKNOWLEDGED_POSTURE, posture);

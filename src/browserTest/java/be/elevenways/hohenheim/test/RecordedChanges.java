@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.security.Accountability;
+import be.elevenways.zenit.common.security.AccountabilityOrigin;
 import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.security.SystemPrincipal;
 import be.elevenways.zenit.common.security.SystemPurpose;
@@ -98,7 +99,7 @@ public final class RecordedChanges {
     /** @return an operator account acting from the web, for {@link Accountability#runAs} */
     public static @NonNull Accountability operator(@NonNull UUID id) {
         return new Accountability(id.toString(), PrincipalRef.account(id).storedKind(), "Operator " + id,
-            "10.0.0.1", "junit", Accountability.ORIGIN_WEB);
+            "10.0.0.1", "junit", AccountabilityOrigin.WEB);
     }
 
     /**
@@ -107,14 +108,14 @@ public final class RecordedChanges {
      */
     public static @NonNull Map<String, String> operatorWork(@NonNull UUID id) {
         return Map.of("actor", id.toString(), "actor_kind", PrincipalRef.account(id).storedKind(),
-            "origin", Accountability.ORIGIN_WEB);
+            "origin", AccountabilityOrigin.WEB.token());
     }
 
     /** @return what {@link Recorded#attribution} reads for system work declared under {@code purpose} */
     public static @NonNull Map<String, String> systemWork(@NonNull SystemPurpose purpose) {
         PrincipalRef system = SystemPrincipal.INSTANCE.reference();
         return Map.of("actor", String.valueOf(system.id()), "actor_kind", system.storedKind(),
-            "purpose", purpose.id().toString(), "origin", Accountability.ORIGIN_SYSTEM);
+            "purpose", purpose.id().toString(), "origin", AccountabilityOrigin.SYSTEM.token());
     }
 
     /** @return the record's latest UPDATE that changed {@code field}; fails naming what was recorded when none did */

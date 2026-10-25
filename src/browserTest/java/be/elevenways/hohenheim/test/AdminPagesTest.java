@@ -31,7 +31,7 @@ import be.elevenways.zenit.cms.common.ZenitCmsActivityAction;
 import be.elevenways.zenit.common.orm.history.ActionModel;
 import be.elevenways.zenit.common.orm.history.ChangeOp;
 import be.elevenways.zenit.common.orm.history.HistorySubjects;
-import be.elevenways.zenit.common.security.Accountability;
+import be.elevenways.zenit.common.security.AccountabilityOrigin;
 import be.elevenways.zenit.test.support.HistoryFixtureRows;
 import be.elevenways.zenit.test.support.HistoryTestSupport;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -1036,7 +1036,7 @@ class AdminPagesTest extends HohenheimTestBase {
 
         UUID actorId = ApiSupport.user("activity-actor@label.test", "Activity Label Actor");
         HistoryFixtureRows.Action action = HistoryFixtureRows.action(Models.get(ServerModel.class)
-                .getResolvedDatasource()).by(PrincipalRef.account(actorId)).origin(Accountability.ORIGIN_WEB)
+                .getResolvedDatasource()).by(PrincipalRef.account(actorId)).origin(AccountabilityOrigin.WEB.token())
             .change(ServerModel.MODEL_ID, "label-probe-1", ChangeOp.UPDATE).done();
         action.write();
 

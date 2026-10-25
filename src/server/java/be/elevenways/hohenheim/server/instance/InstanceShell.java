@@ -26,6 +26,7 @@ import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.Accountability;
+import be.elevenways.zenit.common.security.AccountabilityOrigin;
 import be.elevenways.zenit.common.security.Principal;
 import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.validation.Violations;
@@ -376,7 +377,7 @@ public final class InstanceShell {
     private static @NonNull Accountability accountabilityOf(@NonNull Principal principal) {
         PrincipalRef actor = principal.reference();
         return new Accountability(actor == null ? null : String.valueOf(actor.id()),
-            actor == null ? null : actor.storedKind(), principal.displayName(), null, null, Accountability.ORIGIN_WEB);
+            actor == null ? null : actor.storedKind(), principal.displayName(), null, null, AccountabilityOrigin.WEB);
     }
 
     private static void startSweeper() {

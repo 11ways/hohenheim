@@ -32,6 +32,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Accountability;
+import be.elevenways.zenit.common.security.AccountabilityOrigin;
 import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.security.SystemPrincipal;
 import be.elevenways.zenit.common.validation.Violations;
@@ -110,7 +111,7 @@ class HostPostureAcknowledgementTest {
     /** The accepting operator: an account principal, stored with its kind. */
     private static final Accountability OPERATOR = new Accountability(OPERATOR_ID.toString(),
         PrincipalRef.account(OPERATOR_ID).storedKind(), "Ada Operator", "203.0.113.9", "test-agent",
-        Accountability.ORIGIN_WEB);
+        AccountabilityOrigin.WEB);
 
     @BeforeAll
     static void setUp() throws Exception {
@@ -124,7 +125,7 @@ class HostPostureAcknowledgementTest {
             Row host = Models.get(ServerModel.class).findById(admittedSharedHost("system-probe"));
             Throwable refused = catchThrowable(() -> Accountability.runAs(
                 new Accountability(SystemPrincipal.ID.toString(), "zenit:system", "internal posture sweep", null, null,
-                    Accountability.ORIGIN_SYSTEM), () -> HostPostureAcknowledgement.record(host)));
+                    AccountabilityOrigin.SYSTEM), () -> HostPostureAcknowledgement.record(host)));
             assertThat(refused).as("step 1: an identified system actor is still not an accepting operator")
                 .isInstanceOf(Violations.class);
             assertThat(ServerModel.postureAcknowledged(Models.get(ServerModel.class).findById(

@@ -28,6 +28,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.security.Accountability;
+import be.elevenways.zenit.common.security.AccountabilityOrigin;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.security.PrincipalRef;
@@ -98,7 +99,7 @@ class StackAuditTest {
                 "trigger", String.valueOf(deployed.fact(HohenheimActivityAction.DEPLOYED)
                     .get(HohenheimActivityAction.TRIGGER_KEY))))
             .as("step 1: a settled deploy names the operator, the surface and the reason")
-            .isEqualTo(Map.of("actor", DEPLOY_OPERATOR.toString(), "origin", Accountability.ORIGIN_WEB,
+            .isEqualTo(Map.of("actor", DEPLOY_OPERATOR.toString(), "origin", AccountabilityOrigin.WEB.token(),
                 "trigger", "manual"));
 
         // 2. A rollback is its OWN verb, not a second deploy row: an operator reading the
@@ -153,7 +154,7 @@ class StackAuditTest {
                 "actor", String.valueOf(panelDeploy.actor()),
                 "origin", String.valueOf(panelDeploy.origin())))
             .as("step 4: the operator who clicked survived the queue and the worker thread")
-            .isEqualTo(Map.of("actor", String.valueOf(clicker), "origin", Accountability.ORIGIN_WEB));
+            .isEqualTo(Map.of("actor", String.valueOf(clicker), "origin", AccountabilityOrigin.WEB.token()));
 
         // 5. ORIGIN is what tells the surfaces apart, so an unattended caller (stack
         //    adoption, boot recovery) must record as system rather than borrow an actor.
@@ -174,7 +175,8 @@ class StackAuditTest {
             .as("step 5: unattended work is recorded as system work under the purpose that declared it"
                 + " (never the stack lane that raised it again), with its own trigger")
             .isEqualTo(Map.of("actor", String.valueOf(system.id()), "actor_kind", system.storedKind(),
-                "purpose", HohenheimSystemPurposes.STACK.id().toString(), "origin", Accountability.ORIGIN_SYSTEM,
+                "purpose", HohenheimSystemPurposes.STACK.id().toString(),
+                "origin", AccountabilityOrigin.SYSTEM.token(),
                 "trigger", "adoption"));
 
         // 6. A TENANT's request, whose attribution is its caller identity rather than an

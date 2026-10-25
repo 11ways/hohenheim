@@ -11,6 +11,7 @@ import be.elevenways.zenit.auth.server.ApiKeyService;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.common.security.AccountabilityOrigin;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -136,7 +137,7 @@ class GeneratedDnsRecordsTest extends HohenheimHttpTestBase {
         assertThat(history).describedAs("the generated write is recorded").isNotEmpty();
         assertThat(history.get(history.size() - 1).origin())
             .describedAs("a system write on a tenant's behalf attributes to the system")
-            .isEqualTo(GeneratedDnsRecords.ORIGIN_ACME);
+            .isEqualTo(AccountabilityOrigin.SYSTEM.token());
     }
 
     /**

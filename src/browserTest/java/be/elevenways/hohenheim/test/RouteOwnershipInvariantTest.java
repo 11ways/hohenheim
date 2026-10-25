@@ -29,6 +29,7 @@ import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Accountability;
+import be.elevenways.zenit.common.security.AccountabilityOrigin;
 import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
@@ -1125,7 +1126,7 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
 
         // 3. A stranger driving that site is refused: an empty claimant set is not a pass.
         assertThat(catchThrowable(() -> Accountability.runAs(
-                Accountability.ofActor(PrincipalRef.account(stranger), Accountability.ORIGIN_WEB),
+                Accountability.ofActor(PrincipalRef.account(stranger), AccountabilityOrigin.WEB),
                 () -> domainModel.save(claimRow(grantless, hostname)))))
             .as("step 3: a stranger acting through a grantless site is refused")
             .isInstanceOfSatisfying(Violations.class, violations ->
@@ -1144,7 +1145,7 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         //    back -- the case the quarantine exists to protect, not to block.
         Row reclaimed = claimRow(grantless, hostname);
         Accountability.runAs(
-            Accountability.ofActor(PrincipalRef.account(tenantA), Accountability.ORIGIN_WEB),
+            Accountability.ofActor(PrincipalRef.account(tenantA), AccountabilityOrigin.WEB),
             () -> domainModel.save(reclaimed));
         assertThat((String) domainModel.findById(reclaimed.get(SiteDomainModel.ID))
                 .get(SiteDomainModel.LIVE_ROUTE_KEY))

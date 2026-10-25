@@ -67,7 +67,7 @@ class DatabaseLimitPartialWriteTest extends HohenheimHttpTestBase {
     @AfterAll
     static void cleanUp() {
         Model instances = Models.get(InstanceModel.class);
-        GeneratedRows.sweeping("test", () -> {
+        GeneratedRows.sweeping(() -> {
             for (Row row : instances.find().where(InstanceModel.NAME.startsWith("db-" + PREFIX)).all()) {
                 InstanceRowCleanup.delete(row.get(InstanceModel.ID));
             }

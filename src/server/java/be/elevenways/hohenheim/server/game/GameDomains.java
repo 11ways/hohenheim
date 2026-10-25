@@ -450,7 +450,7 @@ public final class GameDomains {
             if (entries.isEmpty()) {
                 if (ours) {
                     Row doomed = existing;
-                    GeneratedRows.sweeping(SOURCE, () -> files.delete(doomed));
+                    GeneratedRows.sweeping(() -> files.delete(doomed));
                 }
             } else {
                 if (existing != null && !ours) {
@@ -621,7 +621,7 @@ public final class GameDomains {
             if (desiredZone == null || desired.isEmpty()) {
                 // Nothing to serve (disabled, no covering zone, proxy not publicly
                 // published): generated rows come down rather than dangle.
-                GeneratedRows.sweeping(SOURCE, () -> {
+                GeneratedRows.sweeping(() -> {
                     for (Row row : owned) {
                         records.delete(row);
                     }
@@ -688,7 +688,7 @@ public final class GameDomains {
             return;
         }
         Model records = Models.get(DnsRecordModel.class);
-        GeneratedRows.sweeping(SOURCE, () -> {
+        GeneratedRows.sweeping(() -> {
             for (Row row : owned) {
                 records.delete(row);
             }

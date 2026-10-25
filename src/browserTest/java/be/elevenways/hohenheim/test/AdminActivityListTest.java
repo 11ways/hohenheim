@@ -50,7 +50,6 @@ import be.elevenways.zenit.common.orm.history.HistoryEntry;
 import be.elevenways.zenit.common.orm.history.HistoryText;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.security.Accountability;
 import be.elevenways.zenit.common.security.AccountabilityOrigin;
 import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.security.SystemPrincipal;
@@ -98,9 +97,9 @@ class AdminActivityListTest extends HohenheimTestBase {
         UUID alphaId = TestAccounts.create("alpha-" + UUID.randomUUID() + "@example.com", "Alpha Actor " + suffix,
             true, true);
         String zelda = act(HistoryFixtureRows.action(datasource()).by(PrincipalRef.account(zeldaId))
-            .origin(Accountability.ORIGIN_WEB), ServerModel.MODEL_ID, host(first), ChangeOp.UPDATE);
+            .origin(AccountabilityOrigin.WEB.token()), ServerModel.MODEL_ID, host(first), ChangeOp.UPDATE);
         String alpha = act(HistoryFixtureRows.action(datasource()).by(PrincipalRef.account(alphaId))
-            .origin(Accountability.ORIGIN_WEB), ServerModel.MODEL_ID, host(second), ChangeOp.UPDATE);
+            .origin(AccountabilityOrigin.WEB.token()), ServerModel.MODEL_ID, host(second), ChangeOp.UPDATE);
         HttpResponse<String> response = adminGet("/admin/activity?filter.actor="
             + URLEncoder.encode(PrincipalRef.account(zeldaId).key(), StandardCharsets.UTF_8));
         assertThat(response.statusCode()).as("step 1: the actor-name filter renders").isEqualTo(200);
@@ -146,7 +145,7 @@ class AdminActivityListTest extends HohenheimTestBase {
             "hh-principal-fragment-twenty-one-" + suffix, PrincipalRef.account(twentyOne),
             "hh-principal-fragment-system-" + suffix, SystemPrincipal.INSTANCE.reference());
         for (var actor : actors.entrySet()) {
-            act(HistoryFixtureRows.action(datasource()).by(actor.getValue()).origin(Accountability.ORIGIN_WEB),
+            act(HistoryFixtureRows.action(datasource()).by(actor.getValue()).origin(AccountabilityOrigin.WEB.token()),
                 ServerModel.MODEL_ID, host(actor.getKey()), ChangeOp.UPDATE);
         }
         var first = adminGet("/admin/activity?filter.actor="
@@ -167,7 +166,7 @@ class AdminActivityListTest extends HohenheimTestBase {
         String record = "hh-system-actor-no-account-one-" + UUID.randomUUID().toString().substring(0, 8);
         int hostId = host(record);
         String action = act(HistoryFixtureRows.action(datasource()).by(SystemPrincipal.INSTANCE.reference())
-            .legacyLabel("work wait sweep").origin(Accountability.ORIGIN_SYSTEM), ServerModel.MODEL_ID, hostId,
+            .legacyLabel("work wait sweep").origin(AccountabilityOrigin.SYSTEM.token()), ServerModel.MODEL_ID, hostId,
             ChangeOp.UPDATE);
 
         // 1. The host preserves the core projection instead of resolving the system's id as a user.
@@ -226,17 +225,17 @@ class AdminActivityListTest extends HohenheimTestBase {
         int siteId = site(siteTitle);
         UUID unlinkableId = TestAccounts.create("unlinkable-" + suffix + "@example.com", unlinkableActor, true,
             false);
-        String operatorAction = act(HistoryFixtureRows.action(datasource()).origin(Accountability.ORIGIN_WEB),
+        String operatorAction = act(HistoryFixtureRows.action(datasource()).origin(AccountabilityOrigin.WEB.token()),
             ServerModel.MODEL_ID, operatorHost, ChangeOp.CREATE);
         String backgroundAction = act(HistoryFixtureRows.action(datasource())
-                .by(SystemPrincipal.INSTANCE.reference()).origin(Accountability.ORIGIN_SYSTEM),
+                .by(SystemPrincipal.INSTANCE.reference()).origin(AccountabilityOrigin.SYSTEM.token()),
             ServerModel.MODEL_ID, backgroundHost, ChangeOp.UPDATE);
-        String narrowedAction = act(HistoryFixtureRows.action(datasource()).origin(Accountability.ORIGIN_WEB),
+        String narrowedAction = act(HistoryFixtureRows.action(datasource()).origin(AccountabilityOrigin.WEB.token()),
             ServerModel.MODEL_ID, narrowedHost, ChangeOp.UPDATE);
-        String siteAction = act(HistoryFixtureRows.action(datasource()).origin(Accountability.ORIGIN_WEB),
+        String siteAction = act(HistoryFixtureRows.action(datasource()).origin(AccountabilityOrigin.WEB.token()),
             SiteModel.MODEL_ID, siteId, ChangeOp.UPDATE);
         act(HistoryFixtureRows.action(datasource()).by(PrincipalRef.account(unlinkableId))
-            .origin(Accountability.ORIGIN_WEB), SiteSessionModel.MODEL_ID, "hh-activity-unlinkable-" + suffix,
+            .origin(AccountabilityOrigin.WEB.token()), SiteSessionModel.MODEL_ID, "hh-activity-unlinkable-" + suffix,
             ChangeOp.UPDATE);
 
         // 3. The default list is what a PERSON did: the system-origin action is not on it.
@@ -287,7 +286,7 @@ class AdminActivityListTest extends HohenheimTestBase {
         //    default is a starting point and never a cage. (Each host's own creation is the test's system work, so the
         //    actions are told apart by their detail links, not by the hosts' names.)
         HttpResponse<String> systemList = adminGet("/admin/activity?filter.origin="
-            + Accountability.ORIGIN_SYSTEM);
+            + AccountabilityOrigin.SYSTEM.token());
         assertThat(systemList.statusCode()).as("step 4: the filtered list renders").isEqualTo(200);
         assertThat(systemList.body())
             .as("step 4: the origin filter reveals background activity")
@@ -328,11 +327,11 @@ class AdminActivityListTest extends HohenheimTestBase {
         //    id, nor a record whose id merely contains it. Rows are told apart by their detail links: the host
         //    picker beside the list still offers every host by its title. Both other records are real, so neither
         //    action names a missing record that one created later under its id would inherit.
-        String sameIdSite = act(HistoryFixtureRows.action(datasource()).origin(Accountability.ORIGIN_WEB),
+        String sameIdSite = act(HistoryFixtureRows.action(datasource()).origin(AccountabilityOrigin.WEB.token()),
             SiteModel.MODEL_ID, siteWithId(narrowedHost, "hh-activity-same-id-site-" + suffix), ChangeOp.UPDATE);
         // Ten times the id reads as the id followed by a zero: it contains the named id.
         int widerId = hostWithId(narrowedHost * 10, "hh-activity-wider-id-host-" + suffix);
-        String widerIdHost = act(HistoryFixtureRows.action(datasource()).origin(Accountability.ORIGIN_WEB),
+        String widerIdHost = act(HistoryFixtureRows.action(datasource()).origin(AccountabilityOrigin.WEB.token()),
             ServerModel.MODEL_ID, widerId, ChangeOp.UPDATE);
         HttpResponse<String> narrowed = adminGet("/admin/activity?filter." + AdminActivityResource.HOST_FILTER + "="
             + narrowedHost);
@@ -372,12 +371,12 @@ class AdminActivityListTest extends HohenheimTestBase {
             .doesNotContain("a class=\"cms-activity-sentence");
 
         // 11. Hohenheim's own operations tell what happened in their own words.
-        String putOnline = act(HistoryFixtureRows.action(datasource()).origin(Accountability.ORIGIN_WEB)
+        String putOnline = act(HistoryFixtureRows.action(datasource()).origin(AccountabilityOrigin.WEB.token())
             .command(PutOnline.PUT_ONLINE.id()), ServerModel.MODEL_ID, operatorHost, ChangeOp.UPDATE);
         assertThat(heading(putOnline, "en"))
             .as("step 11: putting something online reads as such")
             .isEqualTo("Someone not signed in put " + operatorTitle + " online");
-        String protect = act(HistoryFixtureRows.action(datasource()).origin(Accountability.ORIGIN_WEB)
+        String protect = act(HistoryFixtureRows.action(datasource()).origin(AccountabilityOrigin.WEB.token())
             .command(ProtectPath.OPERATION.id()), ServerModel.MODEL_ID, operatorHost, ChangeOp.UPDATE);
         assertThat(heading(protect, "nl"))
             .as("step 11: protecting a path reads as such, in Dutch too")
@@ -388,10 +387,10 @@ class AdminActivityListTest extends HohenheimTestBase {
     void theAppFilterNarrowsTheLogToWhatHappenedToOneApp() throws Exception {
         int alpha = instance("hh-app-filter-alpha-" + UUID.randomUUID().toString().substring(0, 8));
         int beta = instance("hh-app-filter-beta-" + UUID.randomUUID().toString().substring(0, 8));
-        act(HistoryFixtureRows.action(datasource()).origin(Accountability.ORIGIN_WEB), InstanceModel.MODEL_ID, alpha,
-            ChangeOp.UPDATE);
-        act(HistoryFixtureRows.action(datasource()).origin(Accountability.ORIGIN_WEB), InstanceModel.MODEL_ID, beta,
-            ChangeOp.UPDATE);
+        act(HistoryFixtureRows.action(datasource()).origin(AccountabilityOrigin.WEB.token()), InstanceModel.MODEL_ID,
+            alpha, ChangeOp.UPDATE);
+        act(HistoryFixtureRows.action(datasource()).origin(AccountabilityOrigin.WEB.token()), InstanceModel.MODEL_ID,
+            beta, ChangeOp.UPDATE);
 
         // 1. The filter is labelled as the app it picks, in both shipped locales.
         FilterSpec app = PartsLists.tableSpec(adminActivityResource()).filters().stream()
@@ -484,21 +483,22 @@ class AdminActivityListTest extends HohenheimTestBase {
         String unattributed = "hh-people-unattributed-" + suffix;
         int siteId = site("hh-people-site-" + suffix);
         String personAction = act(HistoryFixtureRows.action(datasource()).by(PrincipalRef.account(account(person)))
-            .origin(Accountability.ORIGIN_WEB), SiteModel.MODEL_ID, siteId, ChangeOp.UPDATE);
+            .origin(AccountabilityOrigin.WEB.token()), SiteModel.MODEL_ID, siteId, ChangeOp.UPDATE);
         String seededAction = act(HistoryFixtureRows.action(datasource()).by(PrincipalRef.account(account(seeded)))
             .origin(AccountabilityOrigin.SEED.token()), SiteModel.MODEL_ID, siteId, ChangeOp.UPDATE);
         UUID plumber = account(plumbing);
         String plumbingAction = act(HistoryFixtureRows.action(datasource()).by(PrincipalRef.account(plumber))
-            .origin(Accountability.ORIGIN_WEB), PortAllocationModel.MODEL_ID, "hh-people-port-" + suffix,
+            .origin(AccountabilityOrigin.WEB.token()), PortAllocationModel.MODEL_ID, "hh-people-port-" + suffix,
             ChangeOp.CREATE);
         String unattributedAction = act(HistoryFixtureRows.action(datasource())
-            .origin(Accountability.ORIGIN_UNATTRIBUTED), SiteModel.MODEL_ID, site(unattributed), ChangeOp.UPDATE);
+            .origin(AccountabilityOrigin.UNATTRIBUTED.token()), SiteModel.MODEL_ID, site(unattributed),
+            ChangeOp.UPDATE);
         // A sign-in is bookkeeping by its fact (core's LOGIN is internal): it reads "<who> signed in", so the marker is
         // the actor's name.
         String signedIn = "hh-people-signin-" + suffix;
         UUID signer = account(signedIn);
         HistoryFixtureRows.Action signIn = HistoryFixtureRows.action(datasource()).by(PrincipalRef.account(signer))
-            .origin(Accountability.ORIGIN_WEB).change(UserModel.MODEL_ID, signer, ChangeOp.EVENT)
+            .origin(AccountabilityOrigin.WEB.token()).change(UserModel.MODEL_ID, signer, ChangeOp.EVENT)
             .fact(ZenitActivityAction.LOGIN).done();
         signIn.write();
         String opening = adminGet("/admin/activity").body();

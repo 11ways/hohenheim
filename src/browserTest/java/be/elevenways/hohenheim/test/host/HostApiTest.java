@@ -67,7 +67,7 @@ class HostApiTest extends HohenheimHttpTestBase {
     @AfterAll
     static void cleanUp() {
         Model instances = Models.get(InstanceModel.class);
-        GeneratedRows.sweeping("test", () -> {
+        GeneratedRows.sweeping(() -> {
             for (Row row : instances.find().withTrashed().where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
                 HardDeletes.byId(instances, row.get(InstanceModel.ID));
             }

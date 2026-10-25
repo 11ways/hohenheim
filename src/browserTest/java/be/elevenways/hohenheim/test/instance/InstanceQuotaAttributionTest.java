@@ -87,7 +87,7 @@ class InstanceQuotaAttributionTest extends HohenheimHttpTestBase {
         Model instances = Models.get(InstanceModel.class);
         // Inside the sweeping scope: these rows carry generated attribution, which is
         // read-only (and undeletable) outside their owning tier's system scope.
-        GeneratedRows.sweeping("site", () -> {
+        GeneratedRows.sweeping(() -> {
             for (Row row : instances.find().withTrashed().where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
                 HardDeletes.byId(instances, row.get(InstanceModel.ID));
             }

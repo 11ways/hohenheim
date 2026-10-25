@@ -22,7 +22,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.test.RecordedChanges;
-import be.elevenways.zenit.common.security.Accountability;
+import be.elevenways.zenit.common.security.AccountabilityOrigin;
 import be.elevenways.zenit.common.security.ZenitPrincipalKind;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -120,7 +120,7 @@ class InstanceConsoleCrashRestartTest {
                     "origin", String.valueOf(restart.origin())))
                 .as("step 5: the restart is the system's action, never the viewer's")
                 .isEqualTo(Map.of("actorKind", ZenitPrincipalKind.SYSTEM.id().toString(),
-                    "origin", Accountability.ORIGIN_SYSTEM));
+                    "origin", AccountabilityOrigin.SYSTEM.token()));
         });
     }
 

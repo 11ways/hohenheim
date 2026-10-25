@@ -16,7 +16,6 @@ import be.elevenways.hohenheim.server.application.ApplicationUpstreams;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
-import be.elevenways.zenit.common.security.Accountability;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
@@ -738,7 +737,7 @@ public final class InstanceService {
      */
     static int trashFinishing(@NonNull QueryBuilder<Row> record) {
         int[] trashed = {0};
-        GeneratedRows.sweeping(Accountability.ORIGIN_SYSTEM, () -> trashed[0] = trash(record));
+        GeneratedRows.sweeping(() -> trashed[0] = trash(record));
         return trashed[0];
     }
 

@@ -186,7 +186,7 @@ class GameDomainIntegrityTest extends HohenheimHttpTestBase {
         assertThat((String) generated.get(InstanceFileModel.GENERATED_BY))
             .as("step 2: fixture: the first proxy's config is generated")
             .isEqualTo(GameDomains.SOURCE);
-        GeneratedRows.sweeping(GameDomains.SOURCE, () -> files.delete(generated));
+        GeneratedRows.sweeping(() -> files.delete(generated));
         Row handAuthored = files.createEmptyRow();
         handAuthored.set(InstanceFileModel.INSTANCE_ID, proxyId);
         handAuthored.set(InstanceFileModel.CONTAINER_PATH, VelocityConfigs.CONFIG_PATH);

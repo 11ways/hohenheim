@@ -111,7 +111,7 @@ class DatabaseAdminTest extends HohenheimTestBase {
                 .doesNotContain("detailpass");
         } finally {
             Model instances = Models.get(InstanceModel.class);
-            GeneratedRows.sweeping("test", () -> {
+            GeneratedRows.sweeping(() -> {
                 for (Row engine : instances.find().withTrashed()
                         .where(InstanceModel.GENERATED_FOR_MODEL.eq(DatabaseModel.MODEL_ID.toString()))
                         .where(InstanceModel.GENERATED_FOR_ID.eq(id)).all()) {

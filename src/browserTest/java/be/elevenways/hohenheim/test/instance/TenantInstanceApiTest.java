@@ -164,7 +164,7 @@ class TenantInstanceApiTest extends HohenheimHttpTestBase {
         Model instances = Models.get(InstanceModel.class);
         // The generated fixture is read-only OUTSIDE a system scope by design, so the
         // teardown enters the same sweep scope a product tier's own delete uses.
-        GeneratedRows.sweeping(GENERATED_SOURCE, () -> {
+        GeneratedRows.sweeping(() -> {
             for (Row row : instances.find().withTrashed().where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
                 HardDeletes.byId(instances, row.get(InstanceModel.ID));
             }

@@ -37,6 +37,7 @@ import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.security.Accountability;
+import be.elevenways.zenit.common.security.AccountabilityOrigin;
 import be.elevenways.zenit.common.security.PrincipalRef;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -514,7 +515,7 @@ class ApplicationReleaseTest {
 
                 // 2. A person pressing Deploy (SiteControlHandlers runs InstanceService.deploy MANUAL as its caller).
                 setSettings(applicationId, "v2");
-                Accountability.runAs(Accountability.ofActor(person, Accountability.ORIGIN_WEB),
+                Accountability.runAs(Accountability.ofActor(person, AccountabilityOrigin.WEB),
                     () -> new InstanceService().deploy(applicationId, DeployTrigger.MANUAL));
                 Row manual = latestOp(applicationId);
                 assertThat(manual.get(ReleaseOperationModel.TRIGGER))
@@ -526,7 +527,7 @@ class ApplicationReleaseTest {
                 // 3. The automation API (PaasApi.queueDeploy) deploys on a background thread; the key holder rides it.
                 setSettings(applicationId, "v3");
                 int beforeApi = latestOp(applicationId).get(ReleaseOperationModel.ID);
-                Accountability.runAs(Accountability.ofActor(keyHolder, Accountability.ORIGIN_WEB),
+                Accountability.runAs(Accountability.ofActor(keyHolder, AccountabilityOrigin.WEB),
                     () -> ApplicationDeploys.deployInBackground(applicationId, null, DeployTrigger.API));
                 await("step 3: the background deploy settles", () -> {
                     Row latest = latestOp(applicationId);
@@ -549,7 +550,7 @@ class ApplicationReleaseTest {
                 await("step 4: the push settles", () -> ReleaseSettling.settled(applicationId));
 
                 // 5. A rollback over the API (PaasApi) records the api trigger on a rollback operation.
-                Accountability.runAs(Accountability.ofActor(keyHolder, Accountability.ORIGIN_WEB),
+                Accountability.runAs(Accountability.ofActor(keyHolder, AccountabilityOrigin.WEB),
                     () -> ReleaseEngine.rollback(applicationId, DeployTrigger.API));
                 Row rollback = latestOp(applicationId);
                 assertThat(rollback.get(ReleaseOperationModel.KIND))

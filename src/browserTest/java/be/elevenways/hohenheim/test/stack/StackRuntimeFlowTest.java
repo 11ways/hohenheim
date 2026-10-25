@@ -26,6 +26,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.Accountability;
+import be.elevenways.zenit.common.security.AccountabilityOrigin;
 import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
 import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
@@ -266,7 +267,7 @@ class StackRuntimeFlowTest {
         UUID purger = Db.supply(datasource, () -> TestAccounts.create("purger@stack.test", "The purger", true, true));
         Accountability.runAs(new Accountability(purger.toString(), PrincipalRef.account(purger).storedKind(),
                 "The purger", null, "junit",
-                Accountability.ORIGIN_WEB), () -> {
+                AccountabilityOrigin.WEB), () -> {
             try {
                 runtime.purgeVolumes(stackId);
             } catch (IOException e) {

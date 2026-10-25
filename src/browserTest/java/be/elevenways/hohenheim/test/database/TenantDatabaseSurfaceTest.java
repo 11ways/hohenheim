@@ -164,7 +164,7 @@ class TenantDatabaseSurfaceTest extends HohenheimHttpTestBase {
             // their owning tier's system scope. Soft-deleted ones count too -- a host refuses removal while any row
             // still points at it. The shared engine's own instance rides the same sweep: it sits on this host too.
             // The tenants' application instances are found by name; their database links go with them.
-            GeneratedRows.sweeping("database", () -> {
+            GeneratedRows.sweeping(() -> {
                 List<Row> created = new ArrayList<>(instances.find().withTrashed()
                     .where(InstanceModel.NAME.startsWith(PREFIX)).all());
                 if (admittedHostId != null) {

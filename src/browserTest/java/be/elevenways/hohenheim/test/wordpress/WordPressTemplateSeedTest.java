@@ -73,7 +73,7 @@ class WordPressTemplateSeedTest extends HohenheimHttpTestBase {
             }
             // Engine rows carry generated attribution and are undeletable outside their
             // tier's system scope; the instance rows created from the template are plain.
-            GeneratedRows.sweeping("database", () -> {
+            GeneratedRows.sweeping(() -> {
                 for (Row instance : instances.find()
                         .where(InstanceModel.SERVER_ID.eq(hostId)).all()) {
                     InstanceRowCleanup.delete(instance.get(InstanceModel.ID));

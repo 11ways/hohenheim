@@ -33,6 +33,7 @@ import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.security.Accountability;
+import be.elevenways.zenit.common.security.AccountabilityOrigin;
 import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.test.support.OutboundFixture;
@@ -446,6 +447,6 @@ class ApplicationPushPolicyTest {
 
     private static Accountability operator(UUID id) {
         return new Accountability(id.toString(), PrincipalRef.account(id).storedKind(), "Operator " + id,
-            "10.0.0.1", "junit", Accountability.ORIGIN_WEB);
+            "10.0.0.1", "junit", AccountabilityOrigin.WEB);
     }
 }

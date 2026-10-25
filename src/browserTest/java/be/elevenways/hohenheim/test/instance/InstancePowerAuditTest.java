@@ -28,6 +28,7 @@ import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.Accountability;
+import be.elevenways.zenit.common.security.AccountabilityOrigin;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import org.junit.jupiter.api.BeforeAll;
@@ -233,7 +234,7 @@ class InstancePowerAuditTest {
                 .isEqualTo(SERVICE_OPERATOR.toString());
             assertThat(deployRow.origin())
                 .as("step 1: and the surface it came from")
-                .isEqualTo(Accountability.ORIGIN_WEB);
+                .isEqualTo(AccountabilityOrigin.WEB.token());
             assertThat(deployRow.fact(HohenheimActivityAction.DEPLOYED))
                 .as("step 1: and the daemon handle the operation settled against")
                 .containsEntry(HohenheimActivityAction.HANDLE_KEY, FakeNativeDaemons.handleOf(serviceId));
@@ -244,7 +245,7 @@ class InstancePowerAuditTest {
             assertThat(stopped).as("step 2: a settled stop records once").hasSize(1);
             assertThat(stopped.get(0).origin())
                 .as("step 2: with the same attribution the deploy carried")
-                .isEqualTo(Accountability.ORIGIN_WEB);
+                .isEqualTo(AccountabilityOrigin.WEB.token());
 
             // 3. THE HOLE THIS TEST EXISTS FOR: the admin panel's own row actions. They
             //    call the service and return a toast; before the fix they wrote nothing,

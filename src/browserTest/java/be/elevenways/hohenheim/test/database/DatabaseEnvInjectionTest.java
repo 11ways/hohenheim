@@ -51,7 +51,7 @@ class DatabaseEnvInjectionTest {
     void cleanRows() {
         // Generated rows are read-only outside a system scope, fixtures included -- the
         // sweeping scope is the lane that exists for "the declaring record is going away".
-        GeneratedRows.sweeping("test",
+        GeneratedRows.sweeping(
             () -> HardDeletes.where(Models.get(InstanceModel.class), InstanceModel.ID.isNotNull()));
         Models.get(InstanceDatabaseModel.class).find().delete();
         Models.get(DatabaseModel.class).find().delete();
@@ -298,7 +298,7 @@ class DatabaseEnvInjectionTest {
 
         // 4. NEGATIVE CONTROL: the same record with its engine's instance gone resolves to
         //    nothing at all -- an address is never guessed from the record's name.
-        GeneratedRows.sweeping("test", () -> Models.get(InstanceModel.class).find()
+        GeneratedRows.sweeping(() -> Models.get(InstanceModel.class).find()
             .where(InstanceModel.GENERATED_FOR_MODEL.eq(DatabaseEngineModel.MODEL_ID.toString()))
             .delete());
         assertThat(DatabaseEnvInjection.envForInstance(applicationId,

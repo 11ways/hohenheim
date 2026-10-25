@@ -39,9 +39,6 @@ public final class GeneratedDnsRecords {
     /** {@code generated_by} token for the game-domains materializer. */
     public static final String SOURCE_GAME_DOMAIN = "game_domain";
 
-    /** Accountability origin for the ACME writes this scope covers. */
-    public static final String ORIGIN_ACME = "acme";
-
     private static volatile boolean installed;
 
     private GeneratedDnsRecords() {
@@ -82,7 +79,7 @@ public final class GeneratedDnsRecords {
      * authority to write attribution, only to remove rows that already carry it.
      */
     public static void sweeping(@NonNull Runnable body) {
-        GeneratedRows.sweeping(ORIGIN_ACME, body);
+        GeneratedRows.sweeping(body);
     }
 
     /** @return true when a system scope over generated rows is active on this thread */

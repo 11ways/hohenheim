@@ -39,8 +39,8 @@ public final class GeneratedRows {
     /**
      * What a generated row is, and what declared it.
      *
-     * @param source   a token this codebase owns ({@code "acme"}, {@code "game_domain"});
-     *                 doubles as the Accountability origin of the scope
+     * @param source   a token this codebase owns ({@code "acme"}, {@code "game_domain"}), stamped on the row's own
+     *                 attribution columns; the scope's writes originate from the system
      * @param forModel model id of the DECLARING record, null when nothing declares it
      * @param forId    primary key of the declaring record
      */
@@ -64,7 +64,7 @@ public final class GeneratedRows {
      * {@code attribution}, whatever the caller staged.
      */
     public static void as(@NonNull Attribution attribution, @NonNull Body body) throws Exception {
-        enter(new Scope(attribution), attribution.source(), body);
+        enter(new Scope(attribution), body);
     }
 
     /**
@@ -72,9 +72,9 @@ public final class GeneratedRows {
      * container is going away and takes its generated rows with it. It grants no
      * authority to write attribution, only to remove rows that already carry it.
      */
-    public static void sweeping(@NonNull String origin, @NonNull Runnable body) {
+    public static void sweeping(@NonNull Runnable body) {
         try {
-            enter(new Scope(null), origin, body::run);
+            enter(new Scope(null), body::run);
         } catch (RuntimeException | Error unchecked) {
             throw unchecked;
         } catch (Exception impossible) {
@@ -85,14 +85,13 @@ public final class GeneratedRows {
     /**
      * AIDEV-NOTE: the scope is a ThreadLocal, so a generated write that hops threads must
      * re-enter it, exactly like {@link Accountability}. Entering it outside any act also enters the
-     * source's accountability origin, because a system write on a tenant's behalf must
+     * system origin, because a system write on a tenant's behalf must
      * attribute to the system and not to whoever happens to be logged in on another thread.
      * Inside an act (a running transaction or an outside-transaction command) the generated write is
      * part of that act: one action keeps one attribution (history v3 refuses a write attributed otherwise,
      * ATTRIBUTION_CHANGED), and the row's own attribution columns still say it was generated.
      */
-    private static void enter(@NonNull Scope scope, @NonNull String origin,
-                              @NonNull Body body) throws Exception {
+    private static void enter(@NonNull Scope scope, @NonNull Body body) throws Exception {
         Scope outer = ACTIVE.get();
         ACTIVE.set(scope);
         try {
@@ -101,7 +100,7 @@ public final class GeneratedRows {
                 return;
             }
             Exception[] failure = new Exception[1];
-            Accountability.runAs(new Accountability(null, null, null, null, null, origin), () -> {
+            Accountability.runAs(Accountability.SYSTEM, () -> {
                 try {
                     body.run();
                 } catch (Exception e) {

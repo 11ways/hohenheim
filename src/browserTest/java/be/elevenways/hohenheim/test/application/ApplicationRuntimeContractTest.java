@@ -54,7 +54,7 @@ class ApplicationRuntimeContractTest {
         // Hard deletes need the system scope (the guard under test refuses them
         // outside it); the remove-hook pairing releases any spent quota slot.
         Model instances = Models.get(InstanceModel.class);
-        GeneratedRows.sweeping(ApplicationReleases.SOURCE, () -> {
+        GeneratedRows.sweeping(() -> {
             for (Row row : instances.find().withTrashed()
                     .where(InstanceModel.NAME.startsWith("contract-")).all()) {
                 HardDeletes.byId(instances, row.get(InstanceModel.ID));

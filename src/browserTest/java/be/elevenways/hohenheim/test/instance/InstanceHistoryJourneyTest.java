@@ -193,7 +193,7 @@ class InstanceHistoryJourneyTest {
     private static void upload(int instanceId, @NonNull String path) {
         Accountability client = new Accountability(SFTP_WRITER.toString(),
             PrincipalRef.account(SFTP_WRITER).storedKind(), "SFTP writer", "10.0.0.2", "SSH-2.0-test",
-            AccountabilityOrigin.SFTP.token());
+            AccountabilityOrigin.SFTP);
         Accountability.runAs(client, () -> History.event(Models.get(InstanceModel.class), instanceId,
             Change.fact(HohenheimActivityAction.FILES_UPLOAD, Map.of(HohenheimActivityAction.PATH_KEY, path))));
     }
@@ -204,6 +204,6 @@ class InstanceHistoryJourneyTest {
 
     private static Accountability operator(@NonNull UUID id) {
         return new Accountability(id.toString(), PrincipalRef.account(id).storedKind(), "Operator " + id,
-            "10.0.0.1", "junit", Accountability.ORIGIN_WEB);
+            "10.0.0.1", "junit", AccountabilityOrigin.WEB);
     }
 }
