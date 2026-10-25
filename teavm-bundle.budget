@@ -22,5 +22,7 @@
 # 2026-10-15: templates link only where a reached class or the serving JVM reads their id constant (pl-thread and
 # pl-audio left; cell renderers are Identifier constants): master raw 8184761 -> 7928080, gzip 1956546 -> 1961657
 # against the earlier baseline (upstream growth since).
-cms.js.raw=8746324 measured=8329832
-cms.js.gzip=2179260 measured=2075485
+# 2026-10-25: the framework work since 2026-10-15 plus plumage's pl-one-time-secret (moved from zenit-auth): the
+# breach was 428 gzip bytes over; raw 8329832 -> 8720246, gzip 2075485 -> 2179688. Standard 5 percent headroom.
+cms.js.raw=9156258 measured=8720246
+cms.js.gzip=2288672 measured=2179688

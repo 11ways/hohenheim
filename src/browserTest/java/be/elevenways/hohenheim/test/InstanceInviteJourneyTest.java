@@ -72,7 +72,7 @@ class InstanceInviteJourneyTest extends HohenheimTestBase {
             submitSharing(AuthEndpoints.POST_SHARING_INVITE, "[data-sharing-invite-form] pl-button[type='submit']");
             page.waitForCondition(() -> mailed.size() == 1);
             page.waitForSelector("[data-sharing-invite-form]");
-            assertThat(page.locator("[data-sharing-invite] [data-secret-reveal]").count())
+            assertThat(page.locator("[data-sharing-invite] pl-one-time-secret").count())
                 .as("step 2: a mailed invitation is never shown to the operator").isZero();
             Row account = Models.get(UserModel.class).findFirst(UserModel.EMAIL, INVITEE);
             assertThat(account).as("step 2: the invitation made the account").isNotNull();
