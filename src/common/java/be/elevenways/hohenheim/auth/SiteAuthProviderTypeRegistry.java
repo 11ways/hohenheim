@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.auth;
 
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.registry.Registry;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -10,8 +9,8 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  * RegistryMemberField, the admin form's polymorphic schema, and the proxy engine's gate
  * construction. Populated by the autoload index through SiteAuthProviders (parallel to UpstreamKinds).
  *
- * AIDEV-NOTE: every read goes through {@link #registry()}; {@link #REGISTRY} itself is only for fields that hold
- * the registry object (a RegistryMemberField) and for the discovery hook's writes.
+ * AIDEV-NOTE: an autoloaded Registry: every read runs the index first, so {@link #REGISTRY} and {@link #registry()}
+ * are the same object and no accessor calls Blast.ensureAutoLoaded.
  *
  * @author Jelle De Loecker <jelle@elevenways.be>
  * @since 0.1.0
@@ -19,13 +18,12 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 public final class SiteAuthProviderTypeRegistry {
 
     public static final Registry<SiteAuthProviderType> REGISTRY =
-        Registry.create(HohenheimIds.id("site_auth_provider_type"));
+        Registry.autoLoaded(HohenheimIds.id("site_auth_provider_type"));
 
     private SiteAuthProviderTypeRegistry() {}
 
-    /** Runs the autoload index first so every discovered member is registered. */
+    /** @return the live registry */
     public static @NonNull Registry<SiteAuthProviderType> registry() {
-        Blast.ensureAutoLoaded();
         return REGISTRY;
     }
 }

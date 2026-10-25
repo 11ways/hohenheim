@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.registry.Registry;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -20,15 +19,9 @@ import java.util.List;
 public final class InstancePreStartHooks {
 
     private static final Registry<InstancePreStartHook> HOOKS =
-        Registry.create(HohenheimIds.id("instance_pre_start_hook"));
+        Registry.autoLoaded(HohenheimIds.id("instance_pre_start_hook"));
 
     private InstancePreStartHooks() {}
-
-    /** Runs the autoload index first so every discovered hook is registered. */
-    private static @NonNull Registry<InstancePreStartHook> registered() {
-        Blast.ensureAutoLoaded();
-        return HOOKS;
-    }
 
     /**
      * Compile-time discovery hook (BlastAutoLoadInit).
@@ -43,7 +36,7 @@ public final class InstancePreStartHooks {
     /** Every registered hook in DISPATCH order: ascending weight, ties broken on id. */
     public static @NonNull List<InstancePreStartHook> all() {
         List<InstancePreStartHook> hooks = new ArrayList<>();
-        registered().forEach(hooks::add);
+        HOOKS.forEach(hooks::add);
         hooks.sort(Comparator.comparingInt(InstancePreStartHook::weight)
             .thenComparing(hook -> hook.id().toString()));
         return List.copyOf(hooks);

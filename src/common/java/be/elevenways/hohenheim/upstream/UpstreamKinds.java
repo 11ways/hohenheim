@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.upstream;
 
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.registry.Registry;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -16,19 +15,18 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  * java, command, alchemy). The second question moved to the INSTANCE kind, so a site now has
  * exactly one typed upstream and no opinion about how the thing upstream is run.
  *
- * AIDEV-NOTE: every read goes through {@link #registry()}; {@link #REGISTRY} itself is only for fields that hold
- * the registry object (a RegistryMemberField) and for the discovery hook's writes.
+ * AIDEV-NOTE: an autoloaded Registry: every read runs the index first, so {@link #REGISTRY} and {@link #registry()}
+ * are the same object and no accessor calls Blast.ensureAutoLoaded.
  */
 public class UpstreamKinds {
 
     public static final Registry<UpstreamKindInfo> REGISTRY =
-        Registry.create(HohenheimIds.id("upstream_kind"));
+        Registry.autoLoaded(HohenheimIds.id("upstream_kind"));
 
     private UpstreamKinds() {}
 
-    /** Runs the autoload index first so every discovered member is registered. */
+    /** @return the live registry */
     public static @NonNull Registry<UpstreamKindInfo> registry() {
-        Blast.ensureAutoLoaded();
         return REGISTRY;
     }
 }
