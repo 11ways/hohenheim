@@ -152,7 +152,7 @@
             <pl-card-description>{{ t("previews_description", scope: "deployments") }}</pl-card-description>
             {% if previewCreateUrl != "" %}
             <pl-card-header-actions>
-                <pl-button variant={% "secondary" %} href={% previewCreateUrl %} icon="plus">{{ t("preview_branch", scope: "deployments") }}</pl-button>
+                <pl-button variant={% "secondary" %} href={% previewCreateUrl %}><pl-icon name="plus"></pl-icon>{{ t("preview_branch", scope: "deployments") }}</pl-button>
             </pl-card-header-actions>
             {% /if %}
         </pl-card-header>
