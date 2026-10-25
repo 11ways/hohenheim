@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.server.sitetype.ResponseMutator;
 import be.elevenways.hohenheim.server.sitetype.UpstreamTarget;
-import be.elevenways.protoblast.common.http.DefaultPorts;
+import be.elevenways.protoblast.server.request.RedirectRules;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.HeaderMap;
 import io.undertow.util.Headers;
@@ -89,7 +89,7 @@ final class ResponseMutations {
             return strippedPrefix + location;
         }
         if (!parsed.getHost().equalsIgnoreCase(upstream.getHost())
-                || effectivePort(parsed) != effectivePort(upstream)) {
+                || RedirectRules.effectivePort(parsed) != RedirectRules.effectivePort(upstream)) {
             return null;
         }
 
@@ -113,9 +113,5 @@ final class ResponseMutations {
             rewritten.append('#').append(parsed.getRawFragment());
         }
         return rewritten.toString();
-    }
-
-    private static int effectivePort(URI uri) {
-        return DefaultPorts.effective(uri.getScheme(), uri.getPort());
     }
 }

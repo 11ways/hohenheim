@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.network;
 
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.protoblast.common.util.BlastString;
 import org.junit.jupiter.api.BeforeAll;
 import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.security.NftRunner;
@@ -126,7 +127,7 @@ class WorkloadNetworkPolicyTest {
             String reapplied = netns.inHost("nft", "list", "chain", "inet",
                 WorkloadNetworkPolicy.table(), WorkloadNetworkPolicy.forwardChain(
                     WorkloadNetworkPolicy.chainKey(network.name()))).stdout();
-            assertThat(occurrences(reapplied,
+            assertThat(BlastString.countOccurrences(reapplied,
                 "ip saddr " + TENANT_SUBNET + " ip daddr 169.254.0.0/16 drop"))
                 .as("step 4: re-apply replaces the chain rather than appending a second copy")
                 .isEqualTo(1);
@@ -422,13 +423,5 @@ class WorkloadNetworkPolicyTest {
 
         netns.listen(peer, PEER_PORT);
         netns.listenInHost(HOST_SERVICE_PORT);
-    }
-
-    private static int occurrences(String haystack, String needle) {
-        int count = 0;
-        for (int at = haystack.indexOf(needle); at >= 0; at = haystack.indexOf(needle, at + 1)) {
-            count++;
-        }
-        return count;
     }
 }

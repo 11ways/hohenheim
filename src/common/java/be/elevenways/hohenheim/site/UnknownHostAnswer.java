@@ -7,7 +7,6 @@ import be.elevenways.zenit.common.orm.field.StoredEnum;
 import be.elevenways.zenit.common.setting.SettingDefinition;
 import be.elevenways.zenit.common.ui.BadgeColor;
 import be.elevenways.zenit.common.ui.BadgeVariant;
-import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -22,7 +21,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * @author Jelle De Loecker
  * @since  0.10.0
  */
-public enum UnknownHostAnswer implements StoredEnum {
+public enum UnknownHostAnswer implements StoredEnum.Presented<BadgeColor> {
 
     /** Hohenheim's own 404 page, carrying the operator's not-found message when one is set. */
     NOT_FOUND("not_found", "The 404 page", "circle-xmark", BadgeVariant.SECONDARY),
@@ -39,47 +38,26 @@ public enum UnknownHostAnswer implements StoredEnum {
     /** Close the connection without an answer (nginx's 444). */
     DROP("drop", "No response", "ban", BadgeVariant.WARNING);
 
-    private final @NonNull String storageKey;
-    private final @NonNull String label;
-    private final @NonNull Icon icon;
-    private final @NonNull BadgeVariant color;
+    private final StoredEnum.@NonNull Presentation<BadgeColor> presentation;
 
     UnknownHostAnswer(@NonNull String storageKey, @NonNull String label, @NonNull String iconName,
                       @NonNull BadgeVariant color) {
-        this.storageKey = storageKey;
-        this.label = label;
-        this.icon = Icon.of(iconName);
-        this.color = color;
+        this.presentation = StoredEnum.Presentation.of(storageKey, label, iconName, color);
     }
 
     @Override
-    public @NonNull String storageKey() {
-        return this.storageKey;
-    }
-
-    @Override
-    public @NonNull String label() {
-        return this.label;
+    public StoredEnum.@NonNull Presentation<BadgeColor> presentation() {
+        return this.presentation;
     }
 
     @Override
     public @NonNull Microcopy labelMicrocopy() {
-        return HohenheimMicrocopy.UNKNOWN_HOST_ANSWER.of(this.storageKey);
+        return HohenheimMicrocopy.UNKNOWN_HOST_ANSWER.of(this.storageKey());
     }
 
     @Override
     public @NonNull Microcopy description() {
-        return HohenheimMicrocopy.UNKNOWN_HOST_ANSWER.of(this.storageKey + "_detail");
-    }
-
-    @Override
-    public @NonNull Icon icon() {
-        return this.icon;
-    }
-
-    @Override
-    public @NonNull BadgeColor color() {
-        return this.color;
+        return HohenheimMicrocopy.UNKNOWN_HOST_ANSWER.of(this.storageKey() + "_detail");
     }
 
     /** @return the setting holding what this answer needs (an address, a URL, a site), or null when it needs none */

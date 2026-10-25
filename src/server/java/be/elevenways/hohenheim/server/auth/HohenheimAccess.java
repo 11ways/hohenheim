@@ -22,7 +22,6 @@ import be.elevenways.zenit.common.security.Permission;
 import be.elevenways.zenit.common.security.Principal;
 import be.elevenways.zenit.common.security.RecordCapabilityScope;
 import be.elevenways.zenit.common.validation.Violations;
-import be.elevenways.zenit.server.data.RecordSourceGate;
 import be.elevenways.zenit.server.operation.Authorizer;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -150,7 +149,7 @@ public final class HohenheimAccess {
      * Conduit convenience for HTTP handlers.
      */
     public static boolean canManageSite(@NonNull Conduit conduit, int siteId) {
-        return canManageSite(RecordSourceGate.accessContextOf(conduit), siteId);
+        return canManageSite(AccessContext.of(conduit), siteId);
     }
 
     /**
@@ -172,7 +171,7 @@ public final class HohenheimAccess {
 
     /** Conduit convenience for HTTP handlers. */
     public static boolean canManageInstance(@NonNull Conduit conduit, int instanceId) {
-        return canManageInstance(RecordSourceGate.accessContextOf(conduit), instanceId);
+        return canManageInstance(AccessContext.of(conduit), instanceId);
     }
 
     /**

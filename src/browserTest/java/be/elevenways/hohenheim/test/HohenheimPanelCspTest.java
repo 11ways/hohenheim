@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.cms.common.CmsSettings;
 import be.elevenways.zenit.common.Zenit;
 import org.junit.jupiter.api.Test;
@@ -53,17 +54,9 @@ class HohenheimPanelCspTest extends HohenheimTestBase {
         // 3. The admin shell bootstraps exactly once: one bundle boot script, no inline
         //    onload="main()" (the pre-fix shape that dies silently under the strict CSP).
         String adminHtml = adminGet("/admin/sites").body();
-        assertThat(countOccurrences(adminHtml, "/_hawkeye/boot.js"))
+        assertThat(BlastString.countOccurrences(adminHtml, "/_hawkeye/boot.js"))
             .as("exactly one CSP-safe bootstrap script").isEqualTo(1);
         assertThat(adminHtml).as("no inline onload bootstrap handler survives")
             .doesNotContain("onload=");
-    }
-
-    private static int countOccurrences(String haystack, String needle) {
-        int count = 0;
-        for (int i = haystack.indexOf(needle); i >= 0; i = haystack.indexOf(needle, i + needle.length())) {
-            count++;
-        }
-        return count;
     }
 }

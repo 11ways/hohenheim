@@ -31,6 +31,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.query.rules.RuleText;
 import be.elevenways.zenit.common.security.AccountabilityOrigin;
+import be.elevenways.zenit.common.security.WriteOrigins;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -63,7 +64,7 @@ public final class AdminActivityResource {
      * variable matches null as well as "".
      */
     private static final String HIDE_BACKGROUND_EXPRESSION = ActionModel.ORIGIN.getName() + " in "
-        + quotedList(AccountabilityOrigin.personTokens()) + " or " + ActionModel.ORIGIN.getName() + " is empty";
+        + quotedList(WriteOrigins.personTokens()) + " or " + ActionModel.ORIGIN.getName() + " is empty";
 
 
     /** The app filter's name, which keys its URL parameter ({@code filter.app=<instance id>}). */

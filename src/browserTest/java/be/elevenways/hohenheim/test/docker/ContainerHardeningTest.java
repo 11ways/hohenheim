@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.docker;
 
+import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.zenit.common.Zenit;
 import java.time.Duration;
@@ -936,15 +937,7 @@ class ContainerHardeningTest {
     /** How often the container's log carries {@code needle} right now. */
     private static int logOccurrences(DockerClient docker, String container, String needle)
             throws IOException {
-        return occurrences(docker.containerLogs(container, true, true, LOG_TAIL), needle);
-    }
-
-    private static int occurrences(String haystack, String needle) {
-        int count = 0;
-        for (int at = haystack.indexOf(needle); at >= 0; at = haystack.indexOf(needle, at + 1)) {
-            count++;
-        }
-        return count;
+        return BlastString.countOccurrences(docker.containerLogs(container, true, true, LOG_TAIL), needle);
     }
 
     /**
@@ -959,7 +952,7 @@ class ContainerHardeningTest {
             + " time(s)", Duration.ofSeconds(60), Duration.ofMillis(500), () -> {
                 try {
                     String logs = docker.containerLogs(container, true, true, LOG_TAIL);
-                    if (occurrences(logs, needle) >= times) {
+                    if (BlastString.countOccurrences(logs, needle) >= times) {
                         return true;
                     }
                     Object state = docker.inspectContainer(container).get("State");
