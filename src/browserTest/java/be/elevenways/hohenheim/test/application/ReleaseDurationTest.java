@@ -50,13 +50,14 @@ class ReleaseDurationTest extends HohenheimHttpTestBase {
             // 1. BUG FIXED: the first release took its build plus its switch, never the switch alone.
             assertThat(body).as("step 1: the first release took its build too, a minute in its largest unit")
                 .contains(">1 min<")
-                .as("step 1: never the switch time alone").doesNotContain(">548 ms<");
+                .as("step 1: never the switch time alone").doesNotContain(">0.5 s<");
 
             // 2. The second release took its own build, from the build's start to the switch's end.
             assertThat(body).as("step 2: the second release took 21 s").contains(">21 s<");
 
             // 3. The rollback built nothing: the first image's build belongs to the release that ran it.
-            assertThat(body).as("step 3: the rollback took its switch alone").contains(">700 ms<");
+            assertThat(body).as("step 3: the rollback took its switch alone, under a second in seconds")
+                .contains(">0.7 s<");
         } finally {
             Models.get(ReleaseOperationModel.class).find()
                 .where(ReleaseOperationModel.FOR_ID.eq(applicationId)).delete();

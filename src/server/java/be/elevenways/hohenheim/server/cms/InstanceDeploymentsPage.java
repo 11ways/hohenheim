@@ -1060,7 +1060,7 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         return value.length() > 8 ? value.substring(0, 8) : value;
     }
 
-    /** @return a stored run length in milliseconds as the request's reader words a span ("700 ms", "1 min"), else "" */
+    /** @return a stored run length in milliseconds as the request's reader words a span ("0,7 s", "1 min"), else "" */
     static @NonNull String durationLabel(@Nullable Object durationMs) {
         if (!(durationMs instanceof Number ms)) {
             return "";
