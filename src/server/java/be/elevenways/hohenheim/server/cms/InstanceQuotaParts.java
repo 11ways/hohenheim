@@ -35,6 +35,7 @@ import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.security.AccessContext;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -151,9 +152,11 @@ public final class InstanceQuotaParts {
                 owners.putIfAbsent(item.value(), HohenheimAccess.labelSubjects(item.value()));
             }
         }
+        // The reader names a declared role; the label shown is the subject's own all the same (labelSubjects).
+        AccessContext reader = context != null ? context.accessContext() : AccessContext.anonymous();
         for (Row group : Models.get(PermissionGroupModel.class).find()
                 .orderBy(PermissionGroupModel.ID, SortOrder.ASC).all()) {
-            DataItem item = SubjectLookup.groupItem(group);
+            DataItem item = SubjectLookup.groupItem(group, reader);
             if (item != null) {
                 owners.putIfAbsent(item.value(), HohenheimAccess.labelSubjects(item.value()));
             }
