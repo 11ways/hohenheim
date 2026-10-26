@@ -86,7 +86,8 @@
                     the controller's declared nameservers (dns.nameservers); the checkbox
                     submits "on" only when checked, which is the whole keep_ns protocol. -#}
                 <pl-field>
-                    <pl-checkbox name="keep_ns">{{ t("import_keep_nameservers", scope: "dns_zone") }}</pl-checkbox>
+                    <pl-checkbox name="keep_ns" inputId="dns-keep-ns" ariaLabel={% t("import_keep_nameservers", scope: "dns_zone") %}></pl-checkbox>
+                    <pl-label target="dns-keep-ns">{{ t("import_keep_nameservers", scope: "dns_zone") }}</pl-label>
                     <pl-field-description>{{ t("import_keep_nameservers_hint", scope: "dns_zone") }}</pl-field-description>
                 </pl-field>
             </pl-card-content>
