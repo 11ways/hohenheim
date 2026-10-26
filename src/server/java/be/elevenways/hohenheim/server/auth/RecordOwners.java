@@ -185,6 +185,8 @@ final class RecordOwners {
                 yield group == null ? null : firstNonBlank(group.get(PermissionGroupModel.TITLE),
                     group.get(PermissionGroupModel.SLUG));
             }
+            // Hohenheim ships no team source, so no team is named: the token itself is shown.
+            case TEAM -> null;
         };
         return label != null ? label : subject;
     }

@@ -152,6 +152,8 @@ public final class ProjectAdoption {
             switch (subject.type()) {
                 case USER -> Projects.addMember(saved, subject.id());
                 case GROUP -> Projects.addMemberGroup(saved, subject.id());
+                // Hohenheim ships no team source: a team token names nobody, so the adoption refuses it.
+                case TEAM -> throw new IllegalArgumentException("A team cannot own a project: " + token);
             }
         }
         return saved;
