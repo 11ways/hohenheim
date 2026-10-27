@@ -16,6 +16,7 @@ import be.elevenways.hohenheim.server.util.Http11;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.notifications.server.transport.DsnOrigin;
 import be.elevenways.zenit.notifications.server.transport.TransportTypes;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -82,7 +83,7 @@ class IsolationVisibilityTest {
         // Inline delivery, the CertExpiryAlertTest shape: the receiver's count is settled
         // by the time publish() returns, so no polling and no sleeping.
         Notifications.install(new NotificationDispatcher(Map.of(
-            DeliveryChannel.WEBHOOK, List.of(TransportTypes.create("webhook://default"))), 1, true));
+            DeliveryChannel.WEBHOOK, List.of(TransportTypes.create("webhook://default", DsnOrigin.OPERATOR))), 1, true));
 
         NotificationChannelModel channels = Models.get(NotificationChannelModel.class);
         Row channel = channels.createEmptyRow();

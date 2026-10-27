@@ -18,6 +18,7 @@ import be.elevenways.zenit.common.task.record.RecordScheduleStepModel;
 import be.elevenways.zenit.common.task.record.RunStatus;
 import be.elevenways.zenit.common.task.record.StepFailurePolicy;
 import be.elevenways.zenit.common.task.record.StepStatus;
+import be.elevenways.zenit.notifications.server.transport.DsnOrigin;
 import be.elevenways.zenit.notifications.server.transport.TransportTypes;
 import be.elevenways.zenit.notifications.DeliveryChannel;
 import be.elevenways.zenit.notifications.server.DeliveryModel;
@@ -88,7 +89,7 @@ class ScheduledBackupAlertTest {
             Models.get(NotificationChannelModel.class).find().delete();
             Models.get(DeliveryModel.class).find().delete();
             Notifications.install(new NotificationDispatcher(Map.of(
-                DeliveryChannel.WEBHOOK, List.of(TransportTypes.create("webhook://default"))), 1, true));
+                DeliveryChannel.WEBHOOK, List.of(TransportTypes.create("webhook://default", DsnOrigin.OPERATOR))), 1, true));
             NotificationChannelModel channels = Models.get(NotificationChannelModel.class);
             Row channel = channels.createEmptyRow();
             channel.set(NotificationChannelModel.NAME, "ops");

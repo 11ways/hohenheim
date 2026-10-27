@@ -35,6 +35,7 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.notifications.server.transport.DsnOrigin;
 import be.elevenways.zenit.notifications.server.transport.TransportTypes;
 import be.elevenways.zenit.notifications.DeliveryChannel;
 import be.elevenways.zenit.notifications.server.NotificationDispatcher;
@@ -278,7 +279,7 @@ class ApplicationReleaseContractTest {
         int port = receiver.getAddress().getPort();
         try (OutboundFixture destination = OutboundFixture.route("deploy-watch.example.test", port)) {
             Notifications.install(new NotificationDispatcher(Map.of(
-                DeliveryChannel.WEBHOOK, List.of(TransportTypes.create("webhook://default"))), 1, true));
+                DeliveryChannel.WEBHOOK, List.of(TransportTypes.create("webhook://default", DsnOrigin.OPERATOR))), 1, true));
             Db.run(datasource, () -> {
                 NotificationChannelModel channels = Models.get(NotificationChannelModel.class);
                 Row channel = channels.createEmptyRow();

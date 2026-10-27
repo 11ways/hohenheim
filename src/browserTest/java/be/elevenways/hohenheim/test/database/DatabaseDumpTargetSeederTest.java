@@ -29,6 +29,7 @@ import be.elevenways.zenit.notifications.server.DeliveryModel;
 import be.elevenways.zenit.notifications.server.NotificationDispatcher;
 import be.elevenways.zenit.notifications.server.NotificationInboxOwners;
 import be.elevenways.zenit.notifications.server.Notifications;
+import be.elevenways.zenit.notifications.server.transport.DsnOrigin;
 import be.elevenways.zenit.notifications.server.transport.TransportTypes;
 import be.elevenways.zenit.server.orm.seed.Seeds;
 import org.junit.jupiter.api.AfterEach;
@@ -159,7 +160,7 @@ class DatabaseDumpTargetSeederTest {
         UUID admin = ApiSupport.user("dump-seed-admin-" + UUID.randomUUID() + "@hohenheim.local", "Dump Seed Admin");
         GrantService.createDirectGrant(GrantSubjectType.USER, admin, HohenheimSources.ADMIN_ACCESS.value(), true);
         Notifications.install(new NotificationDispatcher(Map.of(
-            DeliveryChannel.WEBHOOK, List.of(TransportTypes.create("webhook://default"))), 1, true));
+            DeliveryChannel.WEBHOOK, List.of(TransportTypes.create("webhook://default", DsnOrigin.OPERATOR))), 1, true));
         try {
             // 1. The boot makes no target and leaves the setting unset.
             upgradeBoot();

@@ -27,6 +27,7 @@ import be.elevenways.protoblast.common.i18n.MessageResolvers;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.notifications.server.transport.DsnOrigin;
 import be.elevenways.zenit.notifications.server.transport.TransportTypes;
 import be.elevenways.zenit.notifications.DeliveryChannel;
 import be.elevenways.zenit.notifications.server.DeliveryModel;
@@ -113,7 +114,7 @@ class DnsFederationHealthTest {
     void inlineDispatcher() {
         Models.get(DeliveryModel.class).find().delete();
         Notifications.install(new NotificationDispatcher(Map.of(
-            DeliveryChannel.WEBHOOK, List.of(TransportTypes.create("webhook://default"))), 1, true));
+            DeliveryChannel.WEBHOOK, List.of(TransportTypes.create("webhook://default", DsnOrigin.OPERATOR))), 1, true));
     }
 
     @AfterEach

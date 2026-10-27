@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.notifications.server.transport.DsnOrigin;
 import be.elevenways.zenit.notifications.server.transport.TransportTypes;
 import be.elevenways.zenit.notifications.DeliveryChannel;
 import be.elevenways.zenit.notifications.server.NotificationDispatcher;
@@ -62,7 +63,7 @@ class CertExpiryAlertTest {
         try (OutboundFixture destination = OutboundFixture.route("expiry-watch.example.test", port)) {
             // Inline delivery so the receiver's hit count is settled when the sweep returns.
             Notifications.install(new NotificationDispatcher(Map.of(
-                DeliveryChannel.WEBHOOK, List.of(TransportTypes.create("webhook://default"))), 1, true));
+                DeliveryChannel.WEBHOOK, List.of(TransportTypes.create("webhook://default", DsnOrigin.OPERATOR))), 1, true));
 
             NotificationChannelModel channels = Models.get(NotificationChannelModel.class);
             Row channel = channels.createEmptyRow();

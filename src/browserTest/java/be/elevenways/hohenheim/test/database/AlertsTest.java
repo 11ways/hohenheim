@@ -24,6 +24,7 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantModel;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.notifications.server.transport.DsnOrigin;
 import be.elevenways.zenit.notifications.server.transport.TransportTypes;
 import be.elevenways.zenit.notifications.DeliveryChannel;
 import be.elevenways.zenit.notifications.NotificationRecipient;
@@ -92,7 +93,7 @@ class AlertsTest {
         Models.get(UserModel.class).find().delete();
         // Inline webhook-only dispatcher: assertions run right after send().
         Notifications.install(new NotificationDispatcher(Map.of(
-            DeliveryChannel.WEBHOOK, List.of(TransportTypes.create("webhook://default"))), 1, true));
+            DeliveryChannel.WEBHOOK, List.of(TransportTypes.create("webhook://default", DsnOrigin.OPERATOR))), 1, true));
     }
 
     @AfterEach

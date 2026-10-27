@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.zenit.notifications.server.transport.DsnOrigin;
 import be.elevenways.zenit.notifications.server.transport.TransportTypes;
 import be.elevenways.zenit.notifications.test.support.FakeTransport;
 import be.elevenways.zenit.notifications.DeliveryChannel;
@@ -63,7 +64,7 @@ class NotificationChannelTestToastTest {
     private static void installWebhookTransport(String dsn) {
         FakeTransport.install();
         Notifications.install(new NotificationDispatcher(Map.of(
-            DeliveryChannel.WEBHOOK, List.of(TransportTypes.create(dsn))), 1, true));
+            DeliveryChannel.WEBHOOK, List.of(TransportTypes.create(dsn, DsnOrigin.OPERATOR))), 1, true));
     }
 
     @Test

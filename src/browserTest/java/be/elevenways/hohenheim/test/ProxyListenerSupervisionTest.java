@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.task.SuperviseProxyListeners;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.task.DefaultTaskContext;
+import be.elevenways.zenit.notifications.server.transport.DsnOrigin;
 import be.elevenways.zenit.notifications.server.transport.TransportTypes;
 import be.elevenways.zenit.notifications.DeliveryChannel;
 import be.elevenways.zenit.notifications.server.NotificationDispatcher;
@@ -98,7 +99,7 @@ class ProxyListenerSupervisionTest {
         receiver.start();
         outbound = OutboundFixture.route("proxy-listener-alert.fixture", receiver.getAddress().getPort());
         Notifications.install(new NotificationDispatcher(Map.of(
-            DeliveryChannel.WEBHOOK, List.of(TransportTypes.create("webhook://default"))), 1, true));
+            DeliveryChannel.WEBHOOK, List.of(TransportTypes.create("webhook://default", DsnOrigin.OPERATOR))), 1, true));
         NotificationChannelModel channels = Models.get(NotificationChannelModel.class);
         Row channel = channels.createEmptyRow();
         channel.set(NotificationChannelModel.NAME, "listener-watch");
