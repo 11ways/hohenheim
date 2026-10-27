@@ -166,7 +166,8 @@ public final class SpamserviceSamplesResource {
                         SpamserviceRemoteStore.textFilter(applied, "client_id"),
                         SpamserviceRemoteStore.booleanFilter(applied, "spam"),
                         SpamserviceRemoteStore.booleanFilter(applied, "confirmed"),
-                        SpamserviceRemoteStore.textFilter(applied, "ip"))), HohenheimSources.SPAMSERVICE_SYSTEM_USERS)
+                        SpamserviceRemoteStore.textFilter(applied, "ip"))),
+                HohenheimSources.SPAMSERVICE_SYSTEM_USER_SOURCE.liveFeed())
                 .chrome(ListChrome.MINIMAL)
                 .notice(SpamserviceRemoteStore.notice(ID, clients))
                 .rowLinkToTab(HohenheimSlugs.Tab.ANALYSIS)

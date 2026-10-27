@@ -213,7 +213,7 @@ public final class SpamserviceClientKeysResource {
                         return clientId != null
                             ? client.keys(clientId.toString(), applied.page(), applied.schema().pageSize())
                             : new PageResult<>(List.of(), applied.page(), applied.schema().pageSize(), 0);
-                    }), HohenheimSources.SPAMSERVICE_SYSTEM_USERS)
+                    }), HohenheimSources.SPAMSERVICE_SYSTEM_USER_SOURCE.liveFeed())
                 .chrome(ListChrome.MINIMAL)
                 .notice(SpamserviceRemoteStore.notice(ID, clients))
                 .build())

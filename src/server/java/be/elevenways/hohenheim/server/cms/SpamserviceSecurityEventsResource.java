@@ -124,7 +124,7 @@ public final class SpamserviceSecurityEventsResource {
                             SpamserviceRemoteStore.textFilter(applied, "ip"),
                             days == null ? null : Texts.trimmedOrNull(days.from()),
                             days == null ? null : Texts.trimmedOrNull(days.to()));
-                    }), HohenheimSources.SPAMSERVICE_SYSTEM_USERS)
+                    }), HohenheimSources.SPAMSERVICE_SYSTEM_USER_SOURCE.liveFeed())
                 .chrome(ListChrome.MINIMAL)
                 .notice(SpamserviceRemoteStore.notice(ID, clients))
                 .build())

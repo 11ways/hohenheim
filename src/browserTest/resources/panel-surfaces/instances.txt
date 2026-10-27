@@ -32,10 +32,11 @@ tab stats at=8 landing=false view=false
 tab backups at=9 landing=false view=false
 tab provisioning at=10 landing=false view=false
 tab volumes at=11 landing=false view=false
-tab databases at=12 landing=false view=false
-tab migrate at=13 landing=false view=false
-tab history at=14 landing=false view=false
-tab access at=15 landing=false view=false
+tab build-hooks at=12 landing=false view=false
+tab databases at=13 landing=false view=false
+tab migrate at=14 landing=false view=false
+tab history at=15 landing=false view=false
+tab access at=16 landing=false view=false
 control CREATE%20kind at=0 kind=zenitforms:form/select input=select required=false readonly=false options=hohenheim:application,hohenheim:docker_container,hohenheim:static_site,hohenheim:system_container,hohenheim:vm,hohenheim:workspace binding=searchable:false,clearable:true,presentation:CARDS
 control CREATE%20name at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20server_id at=2 kind=zenitforms:form/select input=number required=false readonly=false options=1 binding=searchable:false,clearable:true,presentation:DEFAULT,judgedBy:kind+project_id+environment_id
@@ -547,8 +548,9 @@ tab stats at=7 landing=false view=false
 tab backups at=8 landing=false view=false
 tab provisioning at=9 landing=false view=false
 tab volumes at=10 landing=false view=false
-tab databases at=11 landing=false view=false
-tab access at=12 landing=false view=false
+tab build-hooks at=11 landing=false view=false
+tab databases at=12 landing=false view=false
+tab access at=13 landing=false view=false
 
 case manage.instances.tenant.failed-install manage instances tenant v2
 admission - verdict=admitted

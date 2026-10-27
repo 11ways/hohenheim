@@ -92,7 +92,7 @@ public final class SpamserviceWordsResource {
                 .title(entry -> Microcopy.literalOrNull(entry.word())))
             .list(ResourceList.store(table, SpamserviceRemoteStore.pages(ID, clients, FIELDS, List.of("word"),
                     (client, applied, access) -> client.spamWords(applied.page(), applied.schema().pageSize(),
-                        applied.searchTerm())), HohenheimSources.SPAMSERVICE_SYSTEM_USERS)
+                        applied.searchTerm())), HohenheimSources.SPAMSERVICE_SYSTEM_USER_SOURCE.liveFeed())
                 .search("word")
                 .chrome(ListChrome.MINIMAL)
                 .notice(SpamserviceRemoteStore.notice(ID, clients))

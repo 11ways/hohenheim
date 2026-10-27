@@ -46,7 +46,6 @@ import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.live.LiveFeed;
-import be.elevenways.zenit.common.live.LiveFeeds;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -146,15 +145,10 @@ public final class AppParts {
     }
 
     /** The feed the app lists hear: every model an app's row and its health read. */
-    private static final Identifier APPS_FEED = HohenheimIds.id("app_list");
-
-    private static @NonNull Identifier appsFeed() {
-        LiveFeeds.INSTANCE.registerOwned(APPS_FEED, LiveFeed.of(AccessContext::isAccount, InstanceModel.MODEL_ID,
-            SiteModel.MODEL_ID, SiteDomainModel.MODEL_ID, StackModel.MODEL_ID, StackServiceModel.MODEL_ID,
-            ServerModel.MODEL_ID, CertificateModel.MODEL_ID, ProtectedPathModel.MODEL_ID,
-            BuildOperationModel.MODEL_ID, ReleaseOperationModel.MODEL_ID));
-        return APPS_FEED;
-    }
+    private static final LiveFeed APPS_FEED = LiveFeed.of(AccessContext::isAccount, InstanceModel.MODEL_ID,
+        SiteModel.MODEL_ID, SiteDomainModel.MODEL_ID, StackModel.MODEL_ID, StackServiceModel.MODEL_ID,
+        ServerModel.MODEL_ID, CertificateModel.MODEL_ID, ProtectedPathModel.MODEL_ID,
+        BuildOperationModel.MODEL_ID, ReleaseOperationModel.MODEL_ID);
 
     private static PanelResource.@NonNull Builder<App> entry(@NonNull Identifier id, @NonNull String panelSlug,
                                                              boolean withHost) {
@@ -178,7 +172,7 @@ public final class AppParts {
                     access);
             }
         };
-        ResourceList.Builder<App> list = ResourceList.store(table(withHost), pages, appsFeed())
+        ResourceList.Builder<App> list = ResourceList.store(table(withHost), pages, APPS_FEED)
             .chrome(ListChrome.MINIMAL)
             .emptyDescription(HohenheimMicrocopy.APP_LIST.of("empty"));
         if (withHost) {

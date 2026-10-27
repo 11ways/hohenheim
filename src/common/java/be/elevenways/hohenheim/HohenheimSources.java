@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim;
 
+import be.elevenways.zenit.common.data.RecordSourceHandle;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -69,6 +70,10 @@ public final class HohenheimSources implements ZenitModule {
 
     public static final Identifier SPAMSERVICE_SYSTEM_USERS =
         HohenheimIds.id("spamservice_system_users");
+
+    /** The spamservice system user's source ({@link #SPAMSERVICE_SYSTEM_USERS}), bound by {@link #register()}. */
+    public static final RecordSourceHandle SPAMSERVICE_SYSTEM_USER_SOURCE =
+        RecordSourceHandle.declare(SPAMSERVICE_SYSTEM_USERS);
 
     private static volatile boolean registered = false;
 
@@ -146,15 +151,16 @@ public final class HohenheimSources implements ZenitModule {
             .permission(ADMIN_ACCESS)
             .build());
 
-        RecordSourceRegistry.INSTANCE.register(RecordSource.of(SystemUserModel.REF)
-            .id(SPAMSERVICE_SYSTEM_USERS)
-            .search(SystemUserModel.NAME)
-            .baseCriteria(() -> new CompositeCriteria(CompositeOperator.AND,
-                SystemUserModel.OBSOLETE.eq(false),
-                SystemUserModel.NAME.eq("spamservice"),
-                SystemUserModel.UID.gt(0)))
-            .permission(ADMIN_ACCESS)
-            .build());
+        RecordSourceRegistry.INSTANCE.registerOwned(SPAMSERVICE_SYSTEM_USER_SOURCE,
+            () -> RecordSource.of(SystemUserModel.REF)
+                .id(SPAMSERVICE_SYSTEM_USERS)
+                .search(SystemUserModel.NAME)
+                .baseCriteria(() -> new CompositeCriteria(CompositeOperator.AND,
+                    SystemUserModel.OBSOLETE.eq(false),
+                    SystemUserModel.NAME.eq("spamservice"),
+                    SystemUserModel.UID.gt(0)))
+                .permission(ADMIN_ACCESS)
+                .build());
 
         // The admin dashboard's recent-activity records widget: the shared
         // zenit-cms factory registers "zenit.activity" over the /admin panel.

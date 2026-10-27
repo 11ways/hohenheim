@@ -128,7 +128,7 @@ public final class SpamserviceClientsResource {
             .list(ResourceList.store(table, SpamserviceRemoteStore.pages(ID, clients, FIELDS, List.of("name"),
                     (client, applied, access) -> client.clients(applied.page(), applied.schema().pageSize(),
                         applied.searchTerm(), SpamserviceRemoteStore.booleanFilter(applied, "enabled"))),
-                    HohenheimSources.SPAMSERVICE_SYSTEM_USERS)
+                    HohenheimSources.SPAMSERVICE_SYSTEM_USER_SOURCE.liveFeed())
                 .search("name")
                 .chrome(ListChrome.MINIMAL)
                 .notice(SpamserviceRemoteStore.notice(ID, clients))
