@@ -2,7 +2,9 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.routing.RouteScope;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -62,7 +64,15 @@ public final class WithheldFailure {
 
     /** The rule for the panel this conduit is rendering. */
     static @NonNull WithheldFailure of(@NonNull Conduit conduit) {
-        boolean delegated = CmsSupport.isDelegatedPanel(conduit);
+        return of(CmsSupport.isDelegatedPanel(conduit), conduit);
+    }
+
+    /** The rule for the panel a request draws, its own or the one a live part re-reads (never the conduit's route). */
+    static @NonNull WithheldFailure of(@NonNull PanelRequest request) {
+        return of(HohenheimSlugs.MANAGE.equals(request.panelSlug()), request.conduit());
+    }
+
+    private static @NonNull WithheldFailure of(boolean delegated, @NonNull Conduit conduit) {
         String withheld = delegated
             ? HohenheimMicrocopy.DELEGATED.of("failure_withheld")
                 .asString(conduit)

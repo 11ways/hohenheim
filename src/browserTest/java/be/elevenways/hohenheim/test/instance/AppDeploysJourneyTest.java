@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hawkeye.common.Hawkeye;
 import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -372,8 +373,21 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
             .contains("Ignored: not the deployed branch and not a preview branch")
             .as("step 5: never the stored outcome token").doesNotContain(">ignored_branch<");
 
-        // 6. Nothing deploys, so the tab watches nothing; once a build runs, the open tab follows it without a reload.
-        assertThat(body).as("step 6: an idle tab keeps no live watch").doesNotContain("data-hh-deploys-live");
+        // 6. The tab is one live part. Another writer's push shows in place while the rollback's confirmation stays
+        //    open, and a deploy started elsewhere shows with its live log, all on the one page load.
+        assertThat(body).as("step 6: the tab is one live part").contains("<hh-instance-deploys")
+            .as("step 6: an idle tab follows no deploy log").doesNotContain("data-hh-deploy-live");
+        navigateToApp(pageUrl());
+        waitForHydration();
+        this.page.evaluate("name => { window.hhRenders = 0; document.addEventListener(name, () => window.hhRenders++); }",
+            Hawkeye.NAVIGATION_RENDERED_EVENT);
+        click("[data-hh-rollback] [data-cms-page-action-submit]");
+        assertIsVisible(".pl-alertdialog-modal[data-open]", "step 6: the rollback asks first");
+        delivery("elsewhere", WebhookOutcome.IGNORED_BRANCH);
+        waitForSelector("[data-hh-pushes] li:has-text('elsewhere')");
+        assertIsVisible(".pl-alertdialog-modal[data-open]", "step 6: the open confirmation held through the push");
+        assertThat(pageRenders()).as("step 6: the push rendered no page, the part redrew alone").isZero();
+        click("[data-cms-confirm-cancel]");
         Row running = Models.get(BuildOperationModel.class).createEmptyRow();
         running.set(BuildOperationModel.FOR_MODEL, InstanceModel.MODEL_ID.toString());
         running.set(BuildOperationModel.FOR_ID, applicationId);
@@ -382,10 +396,11 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
         running.set(BuildOperationModel.STARTED_AT, Instant.parse("2026-09-02T12:00:00Z"));
         Models.get(BuildOperationModel.class).save(running);
         buildIds.add(running.get(BuildOperationModel.ID));
+        waitForSelector("[data-hh-deploy-live] hh-deploy-log");
+        assertThat(pageRenders()).as("step 6: the started deploy rendered no page").isZero();
         String deploying = adminGet(pageUrl()).body();
         assertThat(deploying)
-            .as("step 6: a running deploy re-renders the tab live").contains("data-hh-deploys-live")
-            .as("step 6: watching the deploys feed").contains("instance_deploys_live")
+            .as("step 6: a running deploy follows its log").contains("data-hh-deploy-live")
             .as("step 6: and Deploy now is dead, saying a deploy already runs, before any run is started")
             .contains("data-cms-page-action-unavailable").contains("A deploy is already running");
 
@@ -400,6 +415,11 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
             .as("step 7: nor its id").doesNotContain("#");
     }
 
+
+    /** @return the page renders counted since the counter was set */
+    private int pageRenders() {
+        return ((Number) this.page.evaluate("() => window.hhRenders")).intValue();
+    }
     /** The history row carrying a release mark, up to the next row. */
     private static String markedRow(String body, String mark) {
         int start = body.indexOf("data-hh-release-mark=\"" + mark + "\"");

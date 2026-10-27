@@ -74,7 +74,7 @@ public final class HohenheimHandlers {
         DynamicDnsHandlers.init();
         DatabaseHandlers.init();
         ServerMediaHandlers.init();
-        InstanceDeploymentsPage.registerLiveFeed();
+        InstanceDeploymentsPage.registerPart();
         SiteControlHandlers.initInstanceConsole();
         SiteControlHandlers.initDevTunnel();
         initApi();

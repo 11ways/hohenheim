@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.instance.InstanceDeploys;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.ui.BadgeVariant;
 import be.elevenways.zenit.common.ui.ColorHue;
@@ -9,7 +10,6 @@ import org.junit.jupiter.api.Test;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -33,10 +33,10 @@ class DeploymentBadgeColorsTest {
         // 1. Both instance lanes use this row projection, preserving every shared coloring facet.
         for (String key : List.of("semantic", "hued", "automatic", "missing")) {
             WidgetBadge.Colors colors = WidgetBadge.colorsOf(statuses, key);
-            Map<String, Object> row = InstanceDeploymentsPage.entry(1, statuses, key, "", "", 0, "", null, "");
-            assertEquals(colors.variant(), row.get("statusVariant"), "step 1: semantic role for " + key);
-            assertEquals(colors.colorSet(), row.get("statusColorSet"), "step 1: categorical hue for " + key);
-            assertEquals(colors.known(), row.get("statusKnown"), "step 1: declared-key fact for " + key);
+            InstanceDeploys.Status row = InstanceDeploymentsPage.statusOf(statuses, key);
+            assertEquals(colors.variant(), row.variant(), "step 1: semantic role for " + key);
+            assertEquals(colors.colorSet(), row.colorSet(), "step 1: categorical hue for " + key);
+            assertEquals(colors.known(), row.known(), "step 1: declared-key fact for " + key);
         }
 
         // 2. The stack's fixed model field cannot substitute this fixture; pin its shared classifier and facet
@@ -52,11 +52,11 @@ class DeploymentBadgeColorsTest {
                 "step 2: no private classification copy");
 
         // 3. Both actual template sites carry the hue and leave an undeclared key as plain text.
-        for (String file : List.of("instance-deployments.hwk", "stack-deployments.hwk")) {
-            String template = Files.readString(Path.of("src/common/templates/cms", file));
-            assertTrue(template.contains("colorSet={% deploy.get(\"statusColorSet\") %}"), "step 3: hue on " + file);
-            assertTrue(template.contains("deploy.get(\"statusKnown\") == true"),
-                    "step 3: unknown-key honesty on " + file);
-        }
+        String instance = Files.readString(Path.of("src/common/templates/cms/hh-instance-deploys.hwk"));
+        assertTrue(instance.contains("colorSet={% deploy.status.colorSet %}"), "step 3: hue on the instance part");
+        assertTrue(instance.contains("{% elseif deploy.status.known %}"), "step 3: unknown-key honesty on the instance");
+        String stackTemplate = Files.readString(Path.of("src/common/templates/cms/stack-deployments.hwk"));
+        assertTrue(stackTemplate.contains("colorSet={% deploy.get(\"statusColorSet\") %}"), "step 3: hue on the stack");
+        assertTrue(stackTemplate.contains("deploy.get(\"statusKnown\") == true"), "step 3: unknown-key honesty");
     }
 }

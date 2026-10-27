@@ -1,0 +1,210 @@
+{% tag HhInstanceDeploys {
+    /* A record's Deploys tab as its live part (InstanceDeploymentsPage.PART): for an application the live release
+       and the one kept for rollback first, then the history with each release's log, the previews, and where the
+       deploys come from with what the last pushes did. Any build, release, preview or push write re-reads this part
+       alone for the reader, and the rows change in place (keyed, so the running deploy's log keeps following). */
+    public required part: Live<InstanceDeploys>
+    public required wording: RelativeTimeWording
+    private computed deploys: InstanceDeploys = part{:}.value
+
+    style {
+        display: contents;
+    }
+
+    @mount
+    function follow() {
+        Live.follow(this, &part)
+    }
+
+    template {
+        {% let shown = deploys{:} %}
+        {% let history = shown.history %}
+        {% if shown.band != null %}
+        {% let band = shown.band %}
+        {#- The live release first, as the record overview leads with its verdict: what serves
+            now, and the one-step way back when a previous release is kept. A workspace says in
+            words why it has no way back, rather than leaving the band out. -#}
+        <pl-alert class="cms-record-health" variant={% "success" %} data-hh-live-release>
+            <pl-alert-title>{% if band.branch != "" %}{{ t("live_from_branch", scope: "deployments", commit: band.currentCommit, branch: band.branch) }}{% else %}{{ t("live_commit", scope: "deployments", commit: band.currentCommit) }}{% /if %}</pl-alert-title>
+            <pl-alert-description>
+                {% if band.liveSinceIso != "" %}<span>{{ t("live_since", scope: "deployments") }} <pl-relative-time datetime={% band.liveSinceIso %} wording={% wording %} title={% band.liveSinceIso %}></pl-relative-time>.</span>{% /if %}
+                {% if !band.keepsReleases %}{{ t("live_workspace_no_rollback", scope: "deployments") }}{% elseif band.keptSameCommit %}{{ t("live_kept_same_commit", scope: "deployments", commit: band.keptCommit) }}{% elseif band.keptNewer %}{{ t("live_kept_newer", scope: "deployments", commit: band.keptCommit) }}{% elseif band.keptCommit != "" %}{{ t("live_kept", scope: "deployments", commit: band.keptCommit) }}{% else %}{{ t("live_nothing_kept", scope: "deployments") }}{% /if %}
+            </pl-alert-description>
+            {% if band.rollbackForm != null %}
+            {#- The placed rollback operation: its button names the kept release, its confirmation what the step changes. -#}
+            <div class="cms-record-health-fixes" data-hh-rollback>
+                {% render "zenitcms:form/page-action" var:page=band.rollbackForm %}
+            </div>
+            {% /if %}
+        </pl-alert>
+        {% /if %}
+
+        <pl-card data-hh-deploys-history>
+            <pl-card-header>
+                <pl-card-title>{% if history.showTrigger %}{{ t("releases_title", scope: "deployments") }}{% else %}{{ t("title", scope: "deployments") }}{% /if %}</pl-card-title>
+                {% if history.showTrigger %}
+                <pl-card-description>{{ t("history_description", scope: "deployments") }}</pl-card-description>
+                {% else %}
+                <pl-card-description>{{ t("history_description_workspace", scope: "deployments") }}</pl-card-description>
+                {% /if %}
+                {% if history.deployForm != null %}
+                <pl-card-header-actions data-hh-deploy>
+                    {#- The placed deploy operation: dead, with why, while a deploy runs or a database is not ready. -#}
+                    {% render "zenitcms:form/page-action" var:page=history.deployForm %}
+                </pl-card-header-actions>
+                {% /if %}
+            </pl-card-header>
+            <pl-card-content>
+                {% if history.deployments %}
+                <pl-table>
+                    <pl-table-header><pl-table-row>
+                        <pl-table-head>{{ t("commit", scope: "deployments") }}</pl-table-head>
+                        {% if history.showTrigger %}
+                        <pl-table-head>{{ t("trigger", scope: "deployments") }}</pl-table-head>
+                        {% /if %}
+                        <pl-table-head>{{ t("status", scope: "deployments") }}</pl-table-head>
+                        <pl-table-head>{{ t("started", scope: "deployments") }}</pl-table-head>
+                        <pl-table-head>{{ t("duration", scope: "deployments") }}</pl-table-head>
+                    </pl-table-row></pl-table-header>
+                    <pl-table-body>
+                        {% each history.deployments as deploy key deploy.key %}
+                        <pl-table-row data-hh-deploy-row={% deploy.key %} data-hh-release-mark={% deploy.mark %}>
+                            <pl-table-cell>{% if deploy.commit != "" %}<code>{{ deploy.commit }}</code>{% elseif deploy.ref != "" %}<span class="hh-deploys-ref" data-hh-deploy-ref>{{ t("no_commit_from", scope: "deployments", branch: deploy.ref) }}</span>{% /if %}</pl-table-cell>
+                            {% if history.showTrigger %}
+                            <pl-table-cell>{{ deploy.kindLabel }}{% if deploy.triggerText != "" %}<div class="hh-deploys-sub" data-hh-deploy-trigger={% deploy.trigger %}>{{ deploy.triggerText }}</div>{% /if %}</pl-table-cell>
+                            {% /if %}
+                            <pl-table-cell>
+                                {% if deploy.mark == "live" %}<pl-badge variant={% "success" %}>{{ deploy.status.label }}</pl-badge>{% elseif deploy.mark == "kept" %}<pl-badge variant={% "info" %}>{{ deploy.status.label }}</pl-badge>{% elseif deploy.mark == "replaced" %}<pl-badge variant={% "secondary" %}>{{ deploy.status.label }}</pl-badge>{% elseif deploy.status.known %}<pl-badge variant={% deploy.status.variant %} colorSet={% deploy.status.colorSet %}>{% if deploy.status.label != null %}{{ deploy.status.label }}{% else %}{{ deploy.status.value }}{% /if %}</pl-badge>{% else %}{{ deploy.status.value }}{% /if %}
+                            </pl-table-cell>
+                            <pl-table-cell class="hh-deploys-when">
+                                {% if deploy.startedAtIso != "" %}
+                                <pl-relative-time datetime={% deploy.startedAtIso %} wording={% wording %} title={% deploy.startedAtIso %}></pl-relative-time>
+                                {% /if %}
+                            </pl-table-cell>
+                            <pl-table-cell class="hh-deploys-when">{{ deploy.duration }}</pl-table-cell>
+                        </pl-table-row>
+                        {% if deploy.live != null %}
+                        {#- The deploy that runs now: its log follows the deploy as it is written. -#}
+                        <pl-table-row data-detail data-hh-deploy-live>
+                            <pl-table-detail-cell class="hh-deploy-detail">
+                                <hh-deploy-log instanceId={% shown.instanceId %} buildSeed={% deploy.live.buildSeed %} stepSeed={% deploy.live.stepSeed %} showSteps={% deploy.live.showsSteps %}></hh-deploy-log>
+                            </pl-table-detail-cell>
+                        </pl-table-row>
+                        {% else %}
+                        {#- A release row's own log is its release steps; the build that made its image rides beside it. -#}
+                        {% let logLabel = deploy.release ? t("release_log", scope: "deployments") : t("build_log", scope: "deployments") %}
+                        {% render "hohenheim:cms/deploy-detail" var:detail=deploy.detail var:logLabel=logLabel var:buildLogLabel=t("build_log", scope: "deployments") %}
+                        {% /if %}
+                        {% /each %}
+                    </pl-table-body>
+                </pl-table>
+                {% if history.pager != null %}<pl-pager pager={% history.pager %} label={% t("pagination", scope: "cms") %}></pl-pager>{% /if %}
+                {% else %}
+                <pl-empty-state icon="rocket">
+                    <pl-empty-state-title>{{ t("empty", scope: "deployments") }}</pl-empty-state-title>
+                    <pl-empty-state-description>{{ t("empty_description", scope: "deployments") }}</pl-empty-state-description>
+                </pl-empty-state>
+                {% /if %}
+            </pl-card-content>
+        </pl-card>
+
+        {% if shown.previews != null %}
+        {% let previews = shown.previews %}
+        <pl-card data-hh-previews>
+            <pl-card-header>
+                <pl-card-title>{{ t("previews", scope: "deployments") }}</pl-card-title>
+                <pl-card-description>{{ t("previews_description", scope: "deployments") }}</pl-card-description>
+                {% if previews.createUrl != "" %}
+                <pl-card-header-actions>
+                    <pl-button variant={% "secondary" %} href={% previews.createUrl %}><pl-icon name="plus"></pl-icon>{{ t("preview_branch", scope: "deployments") }}</pl-button>
+                </pl-card-header-actions>
+                {% /if %}
+            </pl-card-header>
+            <pl-card-content>
+                {% if previews.rows %}
+                <pl-table>
+                    <pl-table-body>
+                        {% each previews.rows as preview key preview.openUrl %}
+                        <pl-table-row data-hh-preview={% preview.ref %}>
+                            <pl-table-cell>
+                                <strong>{{ preview.ref }}</strong>
+                                {% if preview.pullRequest != "" %}<div class="hh-deploys-sub">{{ t("pull_request", scope: "deployments", number: preview.pullRequest) }}</div>{% /if %}
+                            </pl-table-cell>
+                            <pl-table-cell><pl-badge variant={% preview.statusVariant %} colorSet={% preview.statusColorSet %}>{{ preview.statusLabel }}</pl-badge></pl-table-cell>
+                            <pl-table-cell>
+                                {% if preview.running %}<a href={% preview.liveUrl %} target="_blank" rel="noopener">{{ preview.hostname }}</a>{% else %}{{ preview.hostname }}{% /if %}
+                                {% if preview.expiresIso != "" %}<div class="hh-deploys-sub">{{ t("preview_expires", scope: "deployments") }} <pl-relative-time datetime={% preview.expiresIso %} wording={% wording %} title={% preview.expiresIso %}></pl-relative-time></div>{% /if %}
+                            </pl-table-cell>
+                            <pl-table-cell class="hh-deploys-actions">
+                                <pl-button variant={% "ghost" %} href={% preview.openUrl %}>{{ t("preview_details", scope: "deployments") }}</pl-button>
+                                {% each preview.invokes as invoke %}
+                                {% render "zenitcms:action/invoke" var:action=invoke %}
+                                {% /each %}
+                            </pl-table-cell>
+                        </pl-table-row>
+                        {% /each %}
+                    </pl-table-body>
+                </pl-table>
+                {% else %}
+                <p class="hh-deploys-sub">{{ t("previews_empty", scope: "deployments") }}</p>
+                {% /if %}
+            </pl-card-content>
+        </pl-card>
+        {% /if %}
+
+        {% if shown.source != null %}
+        {% let source = shown.source %}
+        <pl-card class="hh-webhook-card" data-hh-automatic-deploys>
+            <pl-card-header>
+                <pl-card-title>{{ t("automatic_deploys", scope: "deployments") }}</pl-card-title>
+                {% if source.repository != "" %}
+                <pl-card-description>{% if source.branch != "" %}{{ t("source_line", scope: "deployments", repository: source.repository, branch: source.branch) }}{% else %}{{ source.repository }}{% /if %}</pl-card-description>
+                {% /if %}
+            </pl-card-header>
+            <pl-card-content>
+                <p>{% if source.autoDeploy %}{{ t("auto_deploy_on", scope: "deployments") }}{% else %}{{ t("auto_deploy_off", scope: "deployments") }}{% /if %}</p>
+                {% if source.pollMinutes > 0 %}
+                <p data-hh-poll>{{ t("poll_every", scope: "deployments", minutes: source.pollMinutes) }}</p>
+                {% if source.pollCheckedIso != "" %}
+                <p class="hh-deploys-sub" data-hh-poll-check data-hh-poll-failed={% source.pollFailed %}>
+                    {{ t("poll_last", scope: "deployments") }} <pl-relative-time datetime={% source.pollCheckedIso %} wording={% wording %} title={% source.pollCheckedIso %}></pl-relative-time>: {{ source.pollFinding }}
+                </p>
+                {% /if %}
+                {% /if %}
+                {% if source.webhook != null and source.webhook.secretReveal != null %}
+                <dl class="hh-webhook-fields">
+                    <dt>{{ t("payload_url", scope: "deployments") }}</dt>
+                    <dd>
+                        <code data-webhook-url>{{ source.webhook.url }}</code>
+                        <pl-copy-button value={% source.webhook.url %} ariaLabel={% t("copy_webhook_url", scope: "deployments") %}></pl-copy-button>
+                    </dd>
+                    <dt>{{ t("secret", scope: "deployments") }}</dt>
+                    <dd data-webhook-secret>
+                        <pl-secret-reveal secret={% source.webhook.secretReveal %}
+                                          copyLabel={% t("copy_webhook_secret", scope: "deployments") %}></pl-secret-reveal>
+                    </dd>
+                </dl>
+                {% if !source.webhook.autoDeploy %}
+                <pl-alert variant="warning">{{ t("auto_deploy_disabled", scope: "deployments") }}</pl-alert>
+                {% /if %}
+                {% /if %}
+                <h3 class="hh-deploys-heading">{{ t("recent_pushes", scope: "deployments") }}</h3>
+                {% if source.pushes %}
+                <ul class="hh-deploys-pushes" data-hh-pushes>
+                    {% each source.pushes as push %}
+                    <li data-hh-push-acted={% push.acted %}>
+                        <pl-icon name={% push.acted ? "circle-check" : "ban" %}></pl-icon>
+                        <span>{{ push.outcome }}</span>
+                        {% if push.event != "" %}<span class="hh-deploys-event">{{ push.event }}</span>{% /if %}
+                        {% if push.receivedIso != "" %}<pl-relative-time datetime={% push.receivedIso %} wording={% wording %} title={% push.receivedIso %}></pl-relative-time>{% /if %}
+                    </li>
+                    {% /each %}
+                </ul>
+                {% else %}
+                <p class="hh-deploys-sub">{{ t("pushes_empty", scope: "deployments") }}</p>
+                {% /if %}
+            </pl-card-content>
+        </pl-card>
+        {% /if %}
+    }
+} %}

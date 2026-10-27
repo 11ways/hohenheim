@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.instance.DeployDetail;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -61,12 +62,10 @@ public final class StackDeploymentsPage implements RecordTab.Rendered<Row> {
             entry.put("reasonLabel",
                 scopedLabel(row.get(StackDeploymentModel.REASON), HohenheimMicrocopy.STACK_DEPLOY_REASON));
             entry.put("duration", InstanceDeploymentsPage.durationLabel(row.get(StackDeploymentModel.DURATION_MS)));
-            entry.put("error", Objects.toString(row.get(StackDeploymentModel.ERROR), ""));
+            String log = row.get(StackDeploymentModel.LOG);
+            entry.put("detail", DeployDetail.of(Objects.toString(row.get(StackDeploymentModel.ERROR), ""), log, null));
             Instant startedAt = row.get(StackDeploymentModel.STARTED_AT);
             entry.put("startedAtIso", startedAt != null ? startedAt.toString() : "");
-            String log = row.get(StackDeploymentModel.LOG);
-            entry.put("log", log != null ? log : "");
-            entry.put("hasLog", log != null && !log.isBlank());
             deployments.add(entry);
         }
 

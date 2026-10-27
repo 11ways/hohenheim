@@ -1,15 +1,15 @@
 {#- The detail row under one deploy in a deploy history table (an instance's Deploys tab,
     a stack's Deployments tab): its failure reason, its captured log and, for a release, the
     output of the build that made its image.
-
     ONE partial for both histories: the stack copy had drifted into a hand-written
     <pre> with no height limit while the instance copy moved to pl-log-view. The CALLER
-    decides whether a row has detail and which text a reader of this panel may see (a
-    delegated panel gets a tenant-safe reason, never the daemon's own text); this only
-    draws it. The trigger is the collapsible's own ghost register, never a pl-button
-    nested inside it -- that was a button inside a button. The row's one cell is
-    pl-table-detail-cell, so the log spans every column of either table. -#}
-{% declare deploy: Map<String, Object> %}
+    decides which text a reader of this panel may see (a delegated panel gets a tenant-safe
+    reason, never the daemon's own text) and hands it over as one DeployDetail; this draws
+    it, and nothing for a deploy with nothing to show. The trigger is the collapsible's own
+    ghost register, never a pl-button nested inside it -- that was a button inside a button.
+    The row's one cell is pl-table-detail-cell, so the log spans every column of either
+    table. -#}
+{% declare detail: DeployDetail %}
 {% declare logLabel: Microcopy %}
 {% declare buildLogLabel: Microcopy = null %}
 {% snippet logView(label: Microcopy, text: Object) %}
@@ -23,19 +23,21 @@
     </pl-collapsible-content>
 </pl-collapsible>
 {% /snippet %}
+{% if detail.error != "" or detail.hasLog or detail.hasBuildLog %}
 <pl-table-row data-detail>
     <pl-table-detail-cell class="hh-deploy-detail">
-        {% if deploy.get("error") != "" %}
+        {% if detail.error != "" %}
         <div class="hh-deploy-error">
             <pl-icon name="triangle-exclamation"></pl-icon>
-            <span>{{ deploy.get("error") }}</span>
+            <span>{{ detail.error }}</span>
         </div>
         {% /if %}
-        {% if deploy.get("hasLog") == true %}
-        {% render logView(logLabel, deploy.get("log")) %}
+        {% if detail.hasLog %}
+        {% render logView(logLabel, detail.log) %}
         {% /if %}
-        {% if buildLogLabel != null and deploy.get("hasBuildLog") == true %}
-        <div data-hh-build-log>{% render logView(buildLogLabel, deploy.get("buildLog")) %}</div>
+        {% if buildLogLabel != null and detail.hasBuildLog %}
+        <div data-hh-build-log>{% render logView(buildLogLabel, detail.buildLog) %}</div>
         {% /if %}
     </pl-table-detail-cell>
 </pl-table-row>
+{% /if %}

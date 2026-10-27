@@ -168,6 +168,8 @@ class ReleasesTabJourneyTest extends HohenheimTestBase {
                 .as("step 4: never a secret value").doesNotContain(KEPT_SECRET).doesNotContain(LIVE_SECRET)
                 .as("step 4: nor its fingerprint").doesNotContain("hmac:");
             click("[data-cms-confirm-cancel]");
+            // The tab is one live part: its re-read answers the operator as the page does.
+            assertThat(adminGet(partUrl(shop)).statusCode()).as("step 4: the tab's live part re-reads").isEqualTo(200);
 
             // 5. The same operation refuses an application with nothing kept before any run starts: the operation's
             //    availability asks what the engine would refuse, so no run and no release operation is minted.
@@ -194,6 +196,8 @@ class ReleasesTabJourneyTest extends HohenheimTestBase {
                 .endsWith("/admin/instances/" + shop + "/page/" + HohenheimSlugs.Tab.DEPLOYMENTS + "?run=" + runId);
             assertThat(PutOnlineJourneyTest.ended(runId, operator, "step 5b").status())
                 .as("step 5b: and it ended on its own").isNotEqualTo(OperationRunStatus.RUNNING);
+            assertThat(adminGet(partUrl(shop)).statusCode()).as("step 5b: the part re-reads after the run")
+                .isEqualTo(200);
 
             // 6. A tenant reads its own application's releases, and nothing of another's.
             RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, shop,
@@ -214,7 +218,9 @@ class ReleasesTabJourneyTest extends HohenheimTestBase {
             assertThat(operationsOf(other)).as("step 6: and nothing ran").isEqualTo(otherOps);
 
             // 7. The page reads the same at 3 releases as at 30: everything a row shows beyond its own columns is read
-            //    once for the page, and the history pages at 20 rows.
+            //    once for the page, and the history pages at 20 rows. The open tab leaves first: its live part's own
+            //    re-reads would count in the probe.
+            this.page.navigate("about:blank");
             Map<String, Integer> few = measure(url(shop));
             for (int index = 0; index < 27; index++) {
                 // Replaced releases, each of its own image, whose instances were reclaimed long ago.
@@ -297,6 +303,11 @@ class ReleasesTabJourneyTest extends HohenheimTestBase {
         reads.put("build_operations", probe.queriesAgainst(BuildOperationModel.MODEL_ID));
         reads.put("instances", probe.queriesAgainst(InstanceModel.MODEL_ID));
         return reads;
+    }
+
+    /** @return the live read of the application's Deploys tab on the admin panel, its first history page */
+    private static String partUrl(int application) {
+        return "/zn/live/hohenheim.instance_deploys/admin," + application + ",1";
     }
 
     private static String url(int applicationId) {

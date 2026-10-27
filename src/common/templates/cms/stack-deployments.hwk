@@ -33,9 +33,7 @@
                 <pl-table-cell>{{ deploy.get("reasonLabel") }}</pl-table-cell>
                 <pl-table-cell>{{ deploy.get("duration") }}</pl-table-cell>
             </pl-table-row>
-            {% if deploy.get("error") != "" or deploy.get("hasLog") == true %}
-            {% render "hohenheim:cms/deploy-detail" var:deploy=deploy var:logLabel=t("deploy_log", scope: "stack_deployments") %}
-            {% /if %}
+            {% render "hohenheim:cms/deploy-detail" var:detail=deploy.get("detail") var:logLabel=t("deploy_log", scope: "stack_deployments") %}
             {% /each %}
         </pl-table-body>
     </pl-table>

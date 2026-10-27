@@ -34,8 +34,6 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.i18n.wording.Wording;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.live.LiveFeed;
-import be.elevenways.zenit.common.live.LiveFeeds;
-import be.elevenways.zenit.server.live.LiveServer;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.protoblast.common.key.IdentifierKey;
@@ -74,6 +72,20 @@ import be.elevenways.zenit.common.orm.history.HistoryText;
 import be.elevenways.zenit.common.orm.narration.FieldValueText;
 import be.elevenways.zenit.widget.common.data.WidgetBadge;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.hohenheim.instance.DeployDetail;
+import be.elevenways.hohenheim.instance.InstanceDeploys;
+import be.elevenways.zenit.cms.common.panel.PageAddress;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.render.CmsShellFunctions;
+import be.elevenways.zenit.cms.common.render.action.PageFormState;
+import be.elevenways.zenit.cms.server.panel.PanelGate;
+import be.elevenways.zenit.cms.server.panel.RecordTabGate;
+import be.elevenways.zenit.common.live.LiveRead;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
+import be.elevenways.zenit.common.routing.BoundEndpoint;
+import be.elevenways.zenit.server.live.LiveReads;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -112,10 +124,16 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
     @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_deployments"); }
 
     /**
-     * The feed an open Deploys tab watches while a deploy runs: every build, release-operation and release-role write
-     * re-renders the tab in place (cms-live-refresh), so a deploy's progress and its end appear without a reload.
+     * The tab's content as one live part, its parameter {@code panel,instanceId,page}: heard on every build, release,
+     * preview, push and record write, a piece of the record's Deploys subpage (a re-read passes that route's gates),
+     * read again through the panel's gate and this tab's own for the reader, so a deploy's progress, its end and a
+     * push redraw the part alone.
      */
-    static final Identifier LIVE_FEED = HohenheimIds.id("instance_deploys_live");
+    static final LiveRead<String, InstanceDeploys> PART =
+        LiveRead.of(HohenheimIds.id("instance_deploys"), String.class, InstanceDeploys.class)
+            .heard(part -> partAt(part) == null ? List.of() : List.of(LiveFeed.of(AccessContext::isAccount,
+                BuildOperationModel.MODEL_ID, ReleaseOperationModel.MODEL_ID, InstanceModel.MODEL_ID,
+                PreviewDeploymentModel.MODEL_ID, WebhookDeliveryModel.MODEL_ID)));
 
     /** History rows per page: a release row carries its logs, so one page stays a screen or two. */
     static final int PAGE_SIZE = 20;
@@ -159,10 +177,74 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
     private static final IdentifierKey<Map<Integer, Releases>> RELEASES =
         IdentifierKey.of("hohenheim", "instance_deployments_releases");
 
-    /** Register {@link #LIVE_FEED}; the tab's own record gates decide what a re-render shows. */
-    public static void registerLiveFeed() {
-        LiveFeeds.INSTANCE.registerOwned(LIVE_FEED, LiveFeed.of(AccessContext::isAccount,
-            BuildOperationModel.MODEL_ID, ReleaseOperationModel.MODEL_ID, InstanceModel.MODEL_ID));
+    /** Serve {@link #PART}; called once by HohenheimHandlers. */
+    public static void registerPart() {
+        InstanceDeploymentsPage tab = new InstanceDeploymentsPage();
+        LiveReads.serve(PART, InstanceDeploymentsPage::page, tab::partRead);
+    }
+
+    /** The decoded part parameter: the panel, the record and the history page it names. */
+    private record PartAt(@NonNull Panel panel, int instanceId, int page) {
+
+        /** @return the tab's route on this panel, the first history page */
+        @NonNull BoundEndpoint<?> route() {
+            return CmsRoutes.subpage(this.panel.slug(), HohenheimSlugs.INSTANCES, this.instanceId,
+                HohenheimSlugs.Tab.DEPLOYMENTS);
+        }
+
+        /** @return the tab's address on its history page */
+        @NonNull String target() {
+            return this.page > 1 ? this.route().with(CmsEndpoints.LIST_PAGE_PARAM, this.page).toUrl()
+                : this.route().toUrl();
+        }
+    }
+
+    static @NonNull String partOf(@NonNull String panelSlug, int instanceId, int page) {
+        return panelSlug + "," + instanceId + "," + page;
+    }
+
+    /** @return the tab the parameter names, null when it is not one panel slug, record id and page in canonical form */
+    private static @Nullable PartAt partAt(@NonNull String part) {
+        String[] at = part.split(",", -1);
+        Panel panel = at.length == 3 ? PanelRegistry.getBySlug(at[0]) : null;
+        if (panel == null) return null;
+        try {
+            int instanceId = Integer.parseInt(at[1]);
+            int page = Integer.parseInt(at[2]);
+            return page < 1 || !partOf(at[0], instanceId, page).equals(part) ? null
+                : new PartAt(panel, instanceId, page);
+        } catch (NumberFormatException notNumbers) {
+            return null;
+        }
+    }
+
+    /** @return the record subpage the part is a piece of, null for a parameter that names none */
+    private static LiveReads.@Nullable Page page(@NonNull String part) {
+        PartAt at = partAt(part);
+        // The canonical path, no locale prefix: what a route gate sees of the page's own request.
+        return at == null ? null : new LiveReads.Page(CmsEndpoints.RECORD_SUBPAGE,
+            CmsEndpoints.RECORD_SUBPAGE.toUrl(null, at.route().getParameters()));
+    }
+
+    /** The part's read: the panel's gate admits the reader to the instances, then this tab's gate to the record. */
+    private @NonNull InstanceDeploys partRead(@NonNull AccessContext access, @NonNull String part) {
+        PartAt at = partAt(part);
+        Conduit conduit = access.conduit();
+        PanelEntry entry = at == null ? null : at.panel().entryBySlug(HohenheimSlugs.INSTANCES);
+        if (at == null || entry == null || conduit == null) {
+            throw new DomainRefusal(ZenitRefusalReason.NOT_FOUND, "No such deploys tab");
+        }
+        PanelGate.Outcome.Admitted admitted = PanelGate.admitPart(access, at.panel(), entry);
+        CmsShellFunctions.pinPanel(conduit, at.panel());
+        String key = String.valueOf(at.instanceId());
+        PanelRequest request = new PanelRequest(at.panel(), conduit, admitted.request().access(), null,
+            PageAddress.at(at.target(), HohenheimSlugs.INSTANCES, key, HohenheimSlugs.Tab.DEPLOYMENTS));
+        RecordTabGate.OpenTab opened = RecordTabGate.admit(request, admitted.entry(), key,
+            HohenheimSlugs.Tab.DEPLOYMENTS);
+        if (opened == null || !(opened.offered().record() instanceof Row instance)) {
+            throw new DomainRefusal(ZenitRefusalReason.NOT_FOUND, "No such deploys tab");
+        }
+        return this.read(request, instance, at.page());
     }
 
     @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.DEPLOYMENTS.of("title"); }
@@ -192,70 +274,64 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
     @Override
     public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row instance) {
         Conduit conduit = request.conduit();
-        AccessContext accessContext = request.access();
-        Integer instanceId = instance.get(InstanceModel.ID);
-        // Stamped BEFORE the reads: a write between this render and the page's live watch is caught up at open.
-        long liveSince = LiveServer.INVALIDATIONS.stamp();
+        int instanceId = instance.get(InstanceModel.ID);
+        int page = FacetUrlState.readState(ListState.Shape.PLAIN, conduit::getQueryParams).page();
         Map<String, Object> vars = new HashMap<>();
         vars.put("title", CmsSupport.pageTitle(conduit, HohenheimMicrocopy.INSTANCE_DEPLOYMENTS,
             instance.get(InstanceModel.NAME)));
-        vars.put("instanceId", instanceId);
-        vars.put("instanceName", instance.get(InstanceModel.NAME));
-
-        boolean releaseManaged = InstanceKinds.isReleaseManaged(instance.get(InstanceModel.KIND));
-        // The trigger column is the release lane's own vocabulary (deploy/webhook/rollback);
-        // a workspace build operation records no such word, and a column of blanks reads as
-        // missing data rather than as "not applicable".
-        vars.put("showTrigger", releaseManaged);
-        // The live band leads both lanes; only a release lane keeps a release to go back to.
-        vars.put("keepsReleases", releaseManaged);
-
-        WithheldFailure failures = WithheldFailure.of(conduit);
-        int requestedPage = FacetUrlState.readState(ListState.Shape.PLAIN, conduit::getQueryParams).page();
-        History history;
-        if (releaseManaged) {
-            history = putReleaseVars(vars, instance, failures, accessContext, requestedPage);
-            putPreviewVars(vars, request, instance);
-            // The way back is the placed rollback operation's own form, drawn only where its offer stands for this
-            // reader (a stranger, a generated row or a workspace never gets one).
-            boolean offered = Boolean.TRUE.equals(vars.get("canRollback"))
-                && InstanceOperationHandlers.offered(InstanceOperations.ROLLBACK, accessContext, instance);
-            vars.put("rollbackForm", offered && PageActions.open(request, this, instance, ROLLBACK.id())
-                instanceof PageActions.Form form ? form.state() : null);
-        } else {
-            history = putWorkspaceVars(vars, instanceId, failures, requestedPage);
-        }
-        // One page of history needs no pager, and an undrawn one must not ride the hydration payload either.
-        String tabUrl = CmsRoutes.subpage(request.panelSlug(), HohenheimSlugs.INSTANCES, instanceId,
-            HohenheimSlugs.Tab.DEPLOYMENTS).toUrl();
-        vars.put("pager", history.window().pageCount() <= 1 ? null
-            : Pager.of(history.window(), history.total(), number -> number > 1
-                ? CmsRoutes.subpage(request.panelSlug(), HohenheimSlugs.INSTANCES, instanceId,
-                    HohenheimSlugs.Tab.DEPLOYMENTS).with(CmsEndpoints.LIST_PAGE_PARAM, number).toUrl()
-                : tabUrl));
-        putSourceVars(vars, instance);
-        if (history.deploying()) {
-            vars.put("liveFeed", LIVE_FEED.toString());
-            vars.put("liveSince", liveSince);
-            putLiveLog(vars, instanceId, releaseManaged && !failures.delegated());
-        }
-
-        if (HohenheimAccess.isAdmin(accessContext)) {
-            putAdminOnlyVars(vars, instance);
-        }
-
-        // Deploy now is the placed deploy operation's own form, drawn only where its offer stands for this reader.
-        vars.put("deployForm", InstanceOperationHandlers.offered(InstanceOperations.DEPLOY, accessContext, instance)
-            && PageActions.open(request, this, instance, DEPLOY.id()) instanceof PageActions.Form form
-            ? form.state() : null);
         vars.put("head", recordHead(conduit));
         vars.put("timeWording", CmsSupport.timeWording(conduit));
-
+        vars.put("part", LiveReads.at(PART, partOf(request.panelSlug(), instanceId, page),
+            () -> this.read(request, instance, page)));
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_DEPLOYMENTS, vars);
     }
 
-    /** The page of history a render shows, how many rows the whole history holds, and whether a deploy runs now. */
-    private record History(@NonNull PageWindow window, long total, boolean deploying) {
+    /** The tab's content for the request's reader, on the requested history page (clamped to the history). */
+    private @NonNull InstanceDeploys read(@NonNull PanelRequest request, @NonNull Row instance, int requestedPage) {
+        AccessContext reader = request.access();
+        int instanceId = instance.get(InstanceModel.ID);
+        boolean releaseManaged = InstanceKinds.isReleaseManaged(instance.get(InstanceModel.KIND));
+        WithheldFailure failures = WithheldFailure.of(request);
+        Lane lane = releaseManaged ? releaseLane(instance, failures, reader, requestedPage)
+            : workspaceLane(instanceId, failures, requestedPage);
+        // One page of history needs no pager, and an undrawn one must not ride the hydration payload either.
+        BoundEndpoint<?> tab = CmsRoutes.subpage(request.panelSlug(), HohenheimSlugs.INSTANCES, instanceId,
+            HohenheimSlugs.Tab.DEPLOYMENTS);
+        Pager pager = lane.window().pageCount() <= 1 ? null : Pager.of(lane.window(), lane.total(),
+            number -> number > 1 ? tab.with(CmsEndpoints.LIST_PAGE_PARAM, number).toUrl() : tab.toUrl());
+        List<InstanceDeploys.Deploy> deployments = lane.deploying()
+            ? withLiveLog(lane.deployments(), instanceId, releaseManaged && !failures.delegated())
+            : lane.deployments();
+        // Deploy now is the placed deploy operation's own form, drawn only where its offer stands for this reader.
+        PageFormState deployForm = InstanceOperationHandlers.offered(InstanceOperations.DEPLOY, reader, instance)
+            && PageActions.open(request, this, instance, DEPLOY.id()) instanceof PageActions.Form form
+            ? form.state() : null;
+        // The way back is the placed rollback operation's own form, drawn only where its offer stands for this
+        // reader (a stranger, a generated row or a workspace never gets one).
+        PageFormState rollbackForm = lane.canRollback()
+            && InstanceOperationHandlers.offered(InstanceOperations.ROLLBACK, reader, instance)
+            && PageActions.open(request, this, instance, ROLLBACK.id()) instanceof PageActions.Form form
+            ? form.state() : null;
+        Map<String, Object> settings = ApplicationReleases.storedSettings(instance);
+        InstanceDeploys.Band band = lane.currentCommit().isEmpty() ? null : new InstanceDeploys.Band(
+            lane.currentCommit(), Objects.toString(settings.get(GitSourceSchema.BRANCH), ""), lane.keptCommit(),
+            lane.liveSinceIso(), releaseManaged, lane.keptSameCommit(), lane.keptNewer(), rollbackForm);
+        return new InstanceDeploys(instanceId, band,
+            new InstanceDeploys.History(releaseManaged, deployments, deployForm, pager),
+            releaseManaged ? previewsOf(request, instance) : null,
+            // The trigger vocabulary and the push settings are the release lane's; a workspace build records none.
+            releaseManaged ? sourceOf(instance, settings, HohenheimAccess.isAdmin(reader) ? webhookOf(instance) : null)
+                : null);
+    }
+
+    /**
+     * One lane's page of history and what serves now: the page window, how many rows the whole history holds, whether
+     * a deploy runs now, and the band's facts (empty commits while nothing serves).
+     */
+    private record Lane(@NonNull List<InstanceDeploys.Deploy> deployments, @NonNull PageWindow window, long total,
+                        boolean deploying, @NonNull String currentCommit, @NonNull String keptCommit,
+                        @NonNull String liveSinceIso, boolean canRollback, boolean keptSameCommit,
+                        boolean keptNewer) {
     }
 
     /**
@@ -264,23 +340,20 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
      * stored only when it ends) and, where this panel shows it, the release's step log; the hh-deploy-log element
      * follows both over the deploy-log channel from there.
      */
-    private static void putLiveLog(Map<String, Object> vars, int instanceId, boolean showSteps) {
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> deployments = (List<Map<String, Object>>) vars.get("deployments");
-        Map<String, Object> live = deployments == null ? null : deployments.stream()
-            .filter(entry -> Boolean.TRUE.equals(entry.get("inFlight")))
-            .min(Comparator.comparing((Map<String, Object> entry) -> !Boolean.TRUE.equals(entry.get("release"))))
+    private static @NonNull List<InstanceDeploys.Deploy> withLiveLog(@NonNull List<InstanceDeploys.Deploy> deployments,
+                                                                     int instanceId, boolean showSteps) {
+        InstanceDeploys.Deploy live = deployments.stream()
+            .filter(InstanceDeploys.Deploy::inFlight)
+            .min(Comparator.comparing((InstanceDeploys.Deploy deploy) -> !deploy.release()))
             .orElse(null);
         if (live == null) {
-            return;
+            return deployments;
         }
-        live.put("live", true);
         BuildLog running = LiveBuildLogs.of(InstanceModel.MODEL_ID, instanceId);
-        boolean release = Boolean.TRUE.equals(live.get("release"));
-        vars.put("liveBuildSeed", running != null ? running.text()
-            : release ? "" : Objects.toString(live.get("log"), ""));
-        vars.put("liveStepSeed", release && showSteps ? Objects.toString(live.get("log"), "") : "");
-        vars.put("liveShowsSteps", release && showSteps);
+        boolean steps = live.release() && showSteps;
+        InstanceDeploys.LiveLog log = new InstanceDeploys.LiveLog(running != null ? running.text()
+            : live.release() ? "" : live.detail().log(), steps ? live.detail().log() : "", steps);
+        return deployments.stream().map(deploy -> deploy == live ? deploy.withLive(log) : deploy).toList();
     }
 
     /**
@@ -297,9 +370,8 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
      * Everything a row needs beyond its own columns is then read once for the page's rows, so a page costs the same
      * reads at 3 rows as at 30 (ReleasesTabJourneyTest measures it).
      */
-    private static @NonNull History putReleaseVars(Map<String, Object> vars, Row application,
-                                                   WithheldFailure failures, AccessContext reader,
-                                                   int requestedPage) {
+    private static @NonNull Lane releaseLane(@NonNull Row application, @NonNull WithheldFailure failures,
+                                             @NonNull AccessContext reader, int requestedPage) {
         int instanceId = application.get(InstanceModel.ID);
         long releaseCount = releasesOf(instanceId).count();
         long unreleasedCount = unreleasedOf(instanceId).count();
@@ -338,67 +410,58 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         // A kept release of the live release's own commit is no way back (a redeploy of one commit leaves one): going
         // "back" would deploy the very commit that serves now, so the band says so instead of offering it.
         boolean keptSameCommit = releases.keptSameCommit();
-        vars.put("canRollback", !inFlight && kept != null && serving != null && !keptSameCommit);
-        vars.put("keptSameCommit", keptSameCommit);
-        // The engine orders releases by their instance id (newestRetired): after a rollback the kept release is the
-        // newer one, so the one step goes forward to it, never "back".
-        vars.put("keptNewer", releases.keptNewer());
-        vars.put("currentCommit", serving == null ? "" : commitOf(serving));
-        vars.put("keptCommit", kept == null ? "" : commitOf(kept));
         Instant liveSince = serving == null ? null : serving.get(InstanceModel.CREATED_AT);
-        vars.put("liveSinceIso", liveSince == null ? "" : liveSince.toString());
         Integer servingId = serving == null ? null : serving.get(InstanceModel.ID);
         Integer keptId = kept == null ? null : kept.get(InstanceModel.ID);
 
         Map<Integer, String> commits = legacyCommits(operations);
         Map<PrincipalRef, String> triggerers = triggerers(operations, reader);
         Map<Object, Row> ranBuilds = buildsRun(operations, builds);
-        List<Map<String, Object>> deployments = new ArrayList<>();
+        List<InstanceDeploys.Deploy> deployments = new ArrayList<>();
         for (Row row : operations) {
             Integer candidate = row.get(ReleaseOperationModel.CANDIDATE_INSTANCE_ID);
             String ownCommit = row.get(ReleaseOperationModel.COMMIT_SHA);
-            Map<String, Object> entry = entry(row.get(ReleaseOperationModel.ID),
-                ReleaseOperationModel.STATUS, row.get(ReleaseOperationModel.STATUS),
-                Objects.toString(row.get(ReleaseOperationModel.KIND), ""),
-                ownCommit != null ? ownCommit : candidate == null ? null : commits.get(candidate),
-                releaseDurationMs(row, ranBuilds.get(row.get(ReleaseOperationModel.ID))),
-                failures.shown(row.get(ReleaseOperationModel.FAILURE_REASON)),
-                row.get(ReleaseOperationModel.STARTED_AT),
-                // The engine's step log carries daemon text (ReleaseEngine.reasonOf): operators
-                // only. A workspace BUILD log below stays visible -- it is the output of the
-                // tenant's own checkout and build, and without it they cannot fix a build.
-                failures.operatorOnly(row.get(ReleaseOperationModel.STEP_LOG)));
-            entry.put("kindLabel",
-                CmsSupport.enumLabel(ReleaseOperationModel.KIND, row.get(ReleaseOperationModel.KIND)));
-            entry.put("release", true);
-            entry.put("inFlight", ReleaseOperationModel.IN_FLIGHT_STATUSES
-                .contains(Objects.toString(row.get(ReleaseOperationModel.STATUS), "")));
-            putTrigger(entry, row, triggerers);
-            // The output of the build that made this release's image is the tenant's own build, visible like the
-            // log of a build row: without it a release that runs the wrong thing cannot be traced to its build.
-            Row build = builtImages.get(Objects.toString(row.get(ReleaseOperationModel.IMAGE_ID), ""));
-            String buildLog = build == null ? null : build.get(BuildOperationModel.LOG);
-            entry.put("buildLog", buildLog == null ? "" : buildLog);
-            entry.put("hasBuildLog", buildLog != null && !buildLog.isBlank());
             boolean succeeded = ReleaseOperationModel.LIFECYCLE.is(
                     row.get(ReleaseOperationModel.STATUS), OperationStatus.SUCCEEDED);
             ReleaseMark mark = !succeeded || candidate == null ? null
                 : candidate.equals(servingId) ? ReleaseMark.LIVE
                 : candidate.equals(keptId) ? ReleaseMark.KEPT
                 : ReleaseMark.REPLACED;
-            entry.put("mark", mark == null ? "" : mark.token);
-            if (mark != null) {
-                entry.put("statusLabel", CmsSupport.resolvedTextOrDefault(mark.label));
-            }
-            deployments.add(entry);
+            InstanceDeploys.Status status = statusOf(ReleaseOperationModel.STATUS,
+                row.get(ReleaseOperationModel.STATUS));
+            // The output of the build that made this release's image is the tenant's own build, visible like the
+            // log of a build row: without it a release that runs the wrong thing cannot be traced to its build.
+            Row build = builtImages.get(Objects.toString(row.get(ReleaseOperationModel.IMAGE_ID), ""));
+            Started started = startedBy(row, triggerers);
+            deployments.add(deploy("release-" + row.get(ReleaseOperationModel.ID),
+                mark == null ? status : new InstanceDeploys.Status(status.value(),
+                    CmsSupport.resolvedTextOrDefault(mark.label), status.variant(), status.colorSet(), status.known()),
+                ownCommit != null ? ownCommit : candidate == null ? null : commits.get(candidate),
+                releaseDurationMs(row, ranBuilds.get(row.get(ReleaseOperationModel.ID))),
+                row.get(ReleaseOperationModel.STARTED_AT),
+                Objects.toString(CmsSupport.enumLabel(ReleaseOperationModel.KIND, row.get(ReleaseOperationModel.KIND)),
+                    ""),
+                true,
+                ReleaseOperationModel.IN_FLIGHT_STATUSES
+                    .contains(Objects.toString(row.get(ReleaseOperationModel.STATUS), "")),
+                started, mark == null ? "" : mark.token,
+                // The engine's step log carries daemon text (ReleaseEngine.reasonOf): operators only. A workspace
+                // BUILD log stays visible -- it is the output of the tenant's own checkout and build, and without it
+                // they cannot fix a build.
+                DeployDetail.of(failures.shown(row.get(ReleaseOperationModel.FAILURE_REASON)),
+                    failures.operatorOnly(row.get(ReleaseOperationModel.STEP_LOG)),
+                    build == null ? null : build.get(BuildOperationModel.LOG))));
         }
         for (Row row : unreleased) {
-            deployments.add(buildEntry(row, failures));
+            deployments.add(buildDeploy(row, failures));
         }
-        deployments.sort(Comparator.comparing((Map<String, Object> entry) ->
-            Objects.toString(entry.get("startedAtIso"), "")).reversed());
-        vars.put("deployments", deployments);
-        return new History(window, releaseCount + unreleasedCount, inFlight);
+        deployments.sort(Comparator.comparing(InstanceDeploys.Deploy::startedAtIso).reversed());
+        // The engine orders releases by their instance id (newestRetired): after a rollback the kept release is the
+        // newer one, so the one step goes forward to it, never "back".
+        return new Lane(deployments, window, releaseCount + unreleasedCount, inFlight,
+            serving == null ? "" : commitOf(serving), kept == null ? "" : commitOf(kept),
+            liveSince == null ? "" : liveSince.toString(),
+            !inFlight && kept != null && serving != null && !keptSameCommit, keptSameCommit, releases.keptNewer());
     }
 
     /** One application's release operations, newest start first. */
@@ -622,32 +685,32 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         return named;
     }
 
+    /** What started a row, its trigger token and in words; a row that recorded none says nothing. */
+    private record Started(@NonNull String trigger, @NonNull String text) {
+        static final Started NONE = new Started("", "");
+    }
+
     /**
      * What started a release row, in words: "Manual by Jelle" when the trigger was pressed by its principal, "Build
      * hook Nightly" when the principal is the credential that asked, "System, requested by Jelle" when the principal
      * only caused it, the bare trigger without a principal; a legacy row that recorded no trigger says nothing.
      */
-    private static void putTrigger(@NonNull Map<String, Object> entry, @NonNull Row operation,
-                                   @NonNull Map<PrincipalRef, String> triggerers) {
+    private static @NonNull Started startedBy(@NonNull Row operation, @NonNull Map<PrincipalRef, String> triggerers) {
         String trigger = operation.get(ReleaseOperationModel.TRIGGER);
         if (trigger == null) {
-            entry.put("trigger", "");
-            entry.put("triggerText", "");
-            return;
+            return Started.NONE;
         }
-        String label = CmsSupport.enumLabel(ReleaseOperationModel.TRIGGER, trigger);
+        String label = Objects.toString(CmsSupport.enumLabel(ReleaseOperationModel.TRIGGER, trigger), "");
         PrincipalRef principal = ReleaseOperationModel.TRIGGERER.read(operation);
         String by = principal == null ? null : triggerers.get(principal);
-        entry.put("trigger", trigger);
         if (by == null) {
-            entry.put("triggerText", label);
-            return;
+            return new Started(trigger, label);
         }
         DeployTrigger started = DeployTrigger.of(trigger);
         Microcopy words = started.principalIsTrigger() ? HohenheimMicrocopy.DEPLOYMENTS.of("trigger_named")
             : started.pressedByPerson() ? HohenheimMicrocopy.DEPLOYMENTS.of("triggered_by")
             : HohenheimMicrocopy.DEPLOYMENTS.of("trigger_requested_by");
-        entry.put("triggerText", CmsSupport.resolvedTextOrDefault(
+        return new Started(trigger, CmsSupport.resolvedTextOrDefault(
             words.withArg("trigger", label).withArg("actor", by)));
     }
 
@@ -817,9 +880,10 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
 
     /**
      * The previews of this application, each with its own row actions (the preview entry's placed operations, offered
-     * as its list offers them), and the link that starts a new one.
+     * as its list offers them), and the link that starts a new one; null while previews are off and none stands.
      */
-    private static void putPreviewVars(Map<String, Object> vars, PanelRequest request, Row application) {
+    private static InstanceDeploys.@Nullable Previews previewsOf(@NonNull PanelRequest request,
+                                                                 @NonNull Row application) {
         int instanceId = application.get(InstanceModel.ID);
         Map<String, Object> settings = ApplicationReleases.storedSettings(application);
         boolean enabled = RawValues.isOn(settings, GitSourceSchema.PREVIEWS_ENABLED, false);
@@ -831,12 +895,12 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
                 previews.add(preview);
             }
         }
-        vars.put("previewsShown", enabled || !previews.isEmpty());
+        if (!enabled && previews.isEmpty()) {
+            return null;
+        }
         PanelEntry entry = request.panel().entryBySlug(HohenheimSlugs.PREVIEWS);
-        if (!(entry instanceof PanelResource<?>) || (!enabled && previews.isEmpty())) {
-            vars.put("previews", List.of());
-            vars.put("previewCreateUrl", "");
-            return;
+        if (!(entry instanceof PanelResource<?>)) {
+            return new InstanceDeploys.Previews(List.of(), "");
         }
         @SuppressWarnings("unchecked")
         PanelResource<Row> previewEntry = (PanelResource<Row>) entry;
@@ -844,31 +908,24 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
             HohenheimSlugs.Tab.DEPLOYMENTS).toUrl();
         Function<Row, List<RowOffer>> offers = PanelActionOffers.rowsForRender(request, previewEntry, null, previews,
             request.access(), ReturnPath.of(pageUrl));
-        List<Map<String, Object>> rows = new ArrayList<>();
+        List<InstanceDeploys.Preview> rows = new ArrayList<>();
         for (Row preview : previews) {
-            Map<String, Object> row = new HashMap<>();
             Object status = preview.get(PreviewDeploymentModel.STATUS);
             WidgetBadge.Colors colors = WidgetBadge.colorsOf(PreviewDeploymentModel.STATUS, status);
-            row.put("ref", Objects.toString(preview.get(PreviewDeploymentModel.GIT_REF), ""));
             Integer pr = preview.get(PreviewDeploymentModel.PR_NUMBER);
-            row.put("pullRequest", pr == null ? "" : String.valueOf(pr));
             String hostname = Objects.toString(preview.get(PreviewDeploymentModel.HOSTNAME), "");
-            row.put("hostname", hostname);
-            // A preview answers on its own generated name over plain HTTP until a certificate covers it.
-            row.put("liveUrl", hostname.isEmpty() ? "" : "http://" + hostname);
-            row.put("statusLabel", CmsSupport.enumLabel(PreviewDeploymentModel.STATUS, status));
-            row.put("statusVariant", colors.variant());
-            row.put("statusColorSet", colors.colorSet());
-            row.put("running", PreviewDeploymentModel.STATUS_RUNNING.equals(status));
             Instant expires = preview.get(PreviewDeploymentModel.EXPIRES_AT);
-            row.put("expiresIso", expires == null ? "" : expires.toString());
-            row.put("openUrl", CmsRoutes.open(request.panelSlug(), HohenheimSlugs.PREVIEWS,
-                preview.get(PreviewDeploymentModel.ID)).toUrl());
-            row.put("invokes", ActionStateTranslator.bandRowOffers(offers.apply(preview), 0).allInvokes());
-            rows.add(row);
+            rows.add(new InstanceDeploys.Preview(Objects.toString(preview.get(PreviewDeploymentModel.GIT_REF), ""),
+                pr == null ? "" : String.valueOf(pr), hostname,
+                // A preview answers on its own generated name over plain HTTP until a certificate covers it.
+                hostname.isEmpty() ? "" : "http://" + hostname,
+                CmsSupport.enumLabel(PreviewDeploymentModel.STATUS, status), colors.variant(), colors.colorSet(),
+                PreviewDeploymentModel.STATUS_RUNNING.equals(status), expires == null ? "" : expires.toString(),
+                CmsRoutes.open(request.panelSlug(), HohenheimSlugs.PREVIEWS, preview.get(PreviewDeploymentModel.ID))
+                    .toUrl(),
+                ActionStateTranslator.bandRowOffers(offers.apply(preview), 0).allInvokes()));
         }
-        vars.put("previews", rows);
-        vars.put("previewCreateUrl", enabled
+        return new InstanceDeploys.Previews(rows, enabled
             ? CmsRoutes.create(request.panelSlug(), HohenheimSlugs.PREVIEWS).toUrl()
                 + "?" + HohenheimParams.PREVIEW_APPLICATION.getName() + "=" + instanceId
             : "");
@@ -876,37 +933,33 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
 
     /**
      * Where the deploys come from and what the last pushes did: the source line every reader may see, and each recent
-     * delivery's outcome in words. The push address and secret stay admin-only (putAdminOnlyVars).
+     * delivery's outcome in words.
+     *
+     * @param webhook the push address and secret, only ever from {@link #webhookOf} behind the operator check
      */
-    private static void putSourceVars(Map<String, Object> vars, Row application) {
-        Map<String, Object> settings = ApplicationReleases.storedSettings(application);
-        vars.put("sourceRepository", Objects.toString(settings.get(GitSourceSchema.REPOSITORY_URL), "").isEmpty()
-            ? Objects.toString(settings.get(GitSourceSchema.REPOSITORY), "")
-            : Objects.toString(settings.get(GitSourceSchema.REPOSITORY_URL), ""));
-        vars.put("sourceBranch", Objects.toString(settings.get(GitSourceSchema.BRANCH), ""));
-        vars.put("autoDeploy", GitSourceSchema.autoDeploys(settings));
+    private static InstanceDeploys.@NonNull Source sourceOf(@NonNull Row application,
+                                                           @NonNull Map<String, Object> settings,
+                                                           InstanceDeploys.@Nullable Webhook webhook) {
+        String repositoryUrl = Objects.toString(settings.get(GitSourceSchema.REPOSITORY_URL), "");
         // The scheduled check: how often it asks, and what its last answer was since this process started.
         int pollSeconds = GitSourceSchema.pollSeconds(settings);
         GitSourcePolls.Check check = pollSeconds == 0 ? null
             : GitSourcePolls.lastCheck(application.get(InstanceModel.ID));
-        vars.put("pollMinutes", pollSeconds / 60);
-        vars.put("pollCheckedIso", check == null ? "" : check.at().toString());
-        vars.put("pollFailed", check != null && check.failed());
-        vars.put("pollFinding", check == null ? "" : CmsSupport.resolvedTextOrDefault(findingOf(check)));
-        List<Map<String, Object>> pushes = new ArrayList<>();
+        List<InstanceDeploys.Push> pushes = new ArrayList<>();
         for (Row delivery : Models.get(WebhookDeliveryModel.class).findRecent(application.get(InstanceModel.ID), 10)) {
-            Map<String, Object> push = new HashMap<>();
             WebhookOutcome outcome = WebhookOutcome.ofToken(delivery.get(WebhookDeliveryModel.ACTION));
-            push.put("event", Objects.toString(delivery.get(WebhookDeliveryModel.EVENT), ""));
-            push.put("outcome", outcome == null
-                ? CmsSupport.resolvedTextOrDefault(HohenheimMicrocopy.WEBHOOK_OUTCOME.of("received"))
-                : CmsSupport.resolvedTextOrDefault(outcome.label()));
-            push.put("acted", outcome != null && outcome.acted());
             Instant received = delivery.get(WebhookDeliveryModel.RECEIVED_AT);
-            push.put("receivedIso", received == null ? "" : received.toString());
-            pushes.add(push);
+            pushes.add(new InstanceDeploys.Push(Objects.toString(delivery.get(WebhookDeliveryModel.EVENT), ""),
+                outcome == null
+                    ? CmsSupport.resolvedTextOrDefault(HohenheimMicrocopy.WEBHOOK_OUTCOME.of("received"))
+                    : CmsSupport.resolvedTextOrDefault(outcome.label()),
+                outcome != null && outcome.acted(), received == null ? "" : received.toString()));
         }
-        vars.put("pushes", pushes);
+        return new InstanceDeploys.Source(repositoryUrl.isEmpty()
+                ? Objects.toString(settings.get(GitSourceSchema.REPOSITORY), "") : repositoryUrl,
+            Objects.toString(settings.get(GitSourceSchema.BRANCH), ""), GitSourceSchema.autoDeploys(settings),
+            pollSeconds / 60, check == null ? "" : check.at().toString(), check != null && check.failed(),
+            check == null ? "" : CmsSupport.resolvedTextOrDefault(findingOf(check)), pushes, webhook);
     }
 
     /** What a scheduled check found, in words: what it found about the commit it saw, or why it saw none. */
@@ -941,8 +994,7 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
      * volume, so there is no previous artifact to point back at -- offering the control
      * would be an affordance that can only refuse.
      */
-    private static @NonNull History putWorkspaceVars(Map<String, Object> vars, int instanceId,
-                                                     WithheldFailure failures, int requestedPage) {
+    private static @NonNull Lane workspaceLane(int instanceId, @NonNull WithheldFailure failures, int requestedPage) {
         BuildOperationModel model = Models.get(BuildOperationModel.class);
         long total = buildsOf(instanceId).count();
         PageWindow window = PageWindow.of(requestedPage, total, PAGE_SIZE, PageWindow.OutOfRange.CLAMP);
@@ -953,103 +1005,81 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         boolean deploying = buildsOf(instanceId)
             .where(BuildOperationModel.STATUS.eq(BuildOperationModel.LIFECYCLE.stored(OperationStatus.RUNNING)))
             .count() > 0;
-        vars.put("canRollback", false);
-
         Row latest = model.latestSuccess(InstanceModel.MODEL_ID.toString(), instanceId);
-        vars.put("currentCommit", latest == null ? ""
-            : shortSha(latest.get(BuildOperationModel.SOURCE_REF)));
         Instant liveSince = latest == null ? null : latest.get(BuildOperationModel.FINISHED_AT);
-        vars.put("liveSinceIso", liveSince == null ? "" : liveSince.toString());
-
-        List<Map<String, Object>> deployments = new ArrayList<>();
+        List<InstanceDeploys.Deploy> deployments = new ArrayList<>();
         for (Row row : operations) {
-            deployments.add(buildEntry(row, failures));
+            deployments.add(buildDeploy(row, failures));
         }
-        vars.put("deployments", deployments);
-        return new History(window, total, deploying);
+        return new Lane(deployments, window, total, deploying,
+            latest == null ? "" : shortSha(latest.get(BuildOperationModel.SOURCE_REF)), "",
+            liveSince == null ? "" : liveSince.toString(), false, false, false);
     }
 
     /**
      * One checkout-and-build row: its log is the output of the record's own checkout and build, which its owner needs
      * to fix a build, so it stays visible where a release's daemon step log does not.
      */
-    private static @NonNull Map<String, Object> buildEntry(@NonNull Row row, @NonNull WithheldFailure failures) {
-        Map<String, Object> entry = entry(row.get(BuildOperationModel.ID),
-            BuildOperationModel.STATUS, row.get(BuildOperationModel.STATUS), "",
-            row.get(BuildOperationModel.SOURCE_REF),
-            row.get(BuildOperationModel.DURATION_MS),
-            failures.shown(row.get(BuildOperationModel.FAILURE_REASON)),
+    private static InstanceDeploys.@NonNull Deploy buildDeploy(@NonNull Row row, @NonNull WithheldFailure failures) {
+        return deploy("build-" + row.get(BuildOperationModel.ID),
+            statusOf(BuildOperationModel.STATUS, row.get(BuildOperationModel.STATUS)),
+            row.get(BuildOperationModel.SOURCE_REF), row.get(BuildOperationModel.DURATION_MS),
             row.get(BuildOperationModel.STARTED_AT),
-            row.get(BuildOperationModel.LOG));
-        // The release lane's What column names each row; a build that has not (yet) become a release is a build.
-        entry.put("kindLabel", CmsSupport.resolvedTextOrDefault(HohenheimMicrocopy.DEPLOYMENTS.of("kind_build")));
-        entry.put("inFlight", BuildOperationModel.LIFECYCLE.stored(OperationStatus::inFlight)
-            .contains(Objects.toString(row.get(BuildOperationModel.STATUS), "")));
-        return entry;
+            // The release lane's What column names each row; a build that has not (yet) become a release is a build.
+            CmsSupport.resolvedTextOrDefault(HohenheimMicrocopy.DEPLOYMENTS.of("kind_build")), false,
+            BuildOperationModel.LIFECYCLE.stored(OperationStatus::inFlight)
+                .contains(Objects.toString(row.get(BuildOperationModel.STATUS), "")),
+            Started.NONE, "",
+            DeployDetail.of(failures.shown(row.get(BuildOperationModel.FAILURE_REASON)),
+                row.get(BuildOperationModel.LOG), null));
     }
 
-    /** One history row in the shape both lanes and the shared deploy-detail partial read. */
-    static @NonNull Map<String, Object> entry(@Nullable Object id, @NonNull EnumField statusField,
-                                                     @Nullable Object status, @NonNull String reason,
-                                                     @Nullable Object commit, @Nullable Object durationMs,
-                                                     @NonNull String failure, @Nullable Instant startedAt,
-                                                     @Nullable String log) {
-        Map<String, Object> entry = new HashMap<>();
-        entry.put("id", id);
-        entry.put("status", Objects.toString(status, ""));
-        // AIDEV-NOTE: forward the shared enum facets so semantic roles and categorical hues survive both lanes.
-        WidgetBadge.Colors colors = WidgetBadge.colorsOf(statusField, status);
-        entry.put("statusVariant", colors.variant());
-        entry.put("statusColorSet", colors.colorSet());
-        entry.put("statusKnown", colors.known());
-        entry.put("statusLabel", CmsSupport.enumLabel(statusField, status));
-        entry.put("reason", reason);
+    /**
+     * A status with the shared enum facets (WidgetBadge), the one projection both lanes use so semantic roles and
+     * categorical hues survive.
+     */
+    static InstanceDeploys.@NonNull Status statusOf(@NonNull EnumField field, @Nullable Object status) {
+        WidgetBadge.Colors colors = WidgetBadge.colorsOf(field, status);
+        return new InstanceDeploys.Status(Objects.toString(status, ""), CmsSupport.enumLabel(field, status),
+            colors.variant(), colors.colorSet(), colors.known());
+    }
+
+    /** One history row in the shape both lanes draw; its live log is set only on the deploy that runs now. */
+    private static InstanceDeploys.@NonNull Deploy deploy(@NonNull String key, InstanceDeploys.@NonNull Status status,
+                                                          @Nullable Object commit, @Nullable Object durationMs,
+                                                          @Nullable Instant startedAt, @NonNull String kindLabel,
+                                                          boolean release, boolean inFlight,
+                                                          @NonNull Started started, @NonNull String mark,
+                                                          @NonNull DeployDetail detail) {
         // A row that never reached a commit (a refused deploy, a failed checkout) stores the
         // branch it was asked for: it reads as that branch, never as its first eight letters.
         String source = Objects.toString(commit, "");
         boolean isCommit = COMMIT_SHA.matcher(source).matches();
-        entry.put("commit", isCommit ? shortSha(source) : "");
-        entry.put("ref", isCommit ? "" : source);
-        entry.put("duration", durationLabel(durationMs));
-        entry.put("error", failure);
-        entry.put("startedAtIso", startedAt != null ? startedAt.toString() : "");
-        entry.put("log", log != null ? log : "");
-        entry.put("hasLog", log != null && !log.isBlank());
-        // Only a release row carries a build beside its own log; it overrides these.
-        entry.put("release", false);
-        entry.put("buildLog", "");
-        entry.put("hasBuildLog", false);
-        // Only a release row records what started it.
-        entry.put("trigger", "");
-        entry.put("triggerText", "");
-        // Only the row of the deploy that runs now, and only while it runs (putLiveLog).
-        entry.put("inFlight", false);
-        entry.put("live", false);
-        return entry;
+        return new InstanceDeploys.Deploy(key, status, isCommit ? shortSha(source) : "", isCommit ? "" : source,
+            durationLabel(durationMs), startedAt != null ? startedAt.toString() : "", kindLabel, release, inFlight,
+            started.trigger(), started.text(), mark, detail, null);
     }
 
     /**
-     * The ONLY place admin-only template vars may be populated (the webhook push URL and the secret's reveal): every
-     * sensitive var must be added inside this method so the single isAdmin gate at the call site stays an allowlist.
+     * The ONLY place admin-only content may be read (the webhook push URL and the secret's reveal): every sensitive
+     * value must be added inside this method so the single isAdmin gate at the call site stays an allowlist.
      * The webhook endpoint is intercepted before hostname routing, so any hostname pointing at the proxy works; an
      * exposing site's first exact hostname is the copy-pastable choice.
      *
      * AIDEV-NOTE: the secret itself never enters the page: only the reference of its reveal
      * ({@link HohenheimSecrets#WEBHOOK_SECRET}), fetched per press through core's reveal route (admin-gated, recorded).
      */
-    private static void putAdminOnlyVars(Map<String, Object> vars, Row instance) {
+    private static InstanceDeploys.@NonNull Webhook webhookOf(@NonNull Row instance) {
         Integer instanceId = instance.get(InstanceModel.ID);
         Map<String, Object> settings = ApplicationReleases.storedSettings(instance);
-        vars.put("webhookSecretReveal", Objects.toString(settings.get(GitSourceSchema.WEBHOOK_SECRET), "").isEmpty()
-            ? null : HohenheimSecrets.WEBHOOK_SECRET.ref(instanceId));
-        vars.put("webhookAutoDeploy",
-            GitSourceSchema.autoDeploys(settings));
-
         // AIDEV-NOTE: the git webhook is intercepted by SiteDispatcher BEFORE the zenit
         // conduit chain, so it is deliberately outside the Endpoint framework and has no
         // RouteTarget. Referencing the handler's own PREFIX constant is what keeps this
         // display URL from drifting away from the route that actually answers.
-        vars.put("webhookUrl", HookUrls.forInstance(instanceId, GitWebhookHandler.PREFIX + instanceId));
+        return new InstanceDeploys.Webhook(HookUrls.forInstance(instanceId, GitWebhookHandler.PREFIX + instanceId),
+            Objects.toString(settings.get(GitSourceSchema.WEBHOOK_SECRET), "").isEmpty()
+                ? null : HohenheimSecrets.WEBHOOK_SECRET.ref(instanceId),
+            GitSourceSchema.autoDeploys(settings));
     }
 
     /** A git object name, full or abbreviated; anything else in a commit slot is a ref. */
