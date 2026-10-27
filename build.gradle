@@ -12,13 +12,10 @@ blastApp {
     mainClass 'be.elevenways.hohenheim.server.ServerMain'
     // The shell auto-injects the bundle from Hawkeye.clientScriptLocation; the host wiring points that at
     // /cms.js, so the bundle lands there.
-    bundle 'cms.js', mainClass: 'be.elevenways.hohenheim.ClientMain',
-            microcopyKeys: ['command_placeholder': 'hohenheim', 'back_to_list': 'zenit-cms']
+    bundle 'cms.js', mainClass: 'be.elevenways.hohenheim.ClientMain'
     serverJar(
             // dnsjava's Java 18 InetAddressResolverProvider exists only in META-INF/versions/18.
             multiRelease: true,
-            microcopyKeys: ['command_placeholder': 'hohenheim', 'back_to_list': 'zenit-cms'],
-            microcopyScopes: ['dyndns_token': 'hohenheim', 'back_to_list': 'zenit-cms'],
     )
     // The shell user menu (za-user-menu, contributed by AuthCmsBridge) and the admin inbox page's
     // <znt-inbox> hydrate, so zenit-auth and zenit-notifications ride the client bundle too; a VM's screen is
