@@ -47,7 +47,6 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -184,18 +183,31 @@ public final class ProjectMembershipParts {
         return kind.build();
     }
 
-    private static List<Membership> memberships(AccessContext access) {
-        List<Membership> rows = new ArrayList<>();
-        Map<String, String> labels = new LinkedHashMap<>();
+    /**
+     * Every direct membership of the projects the reader sees: a fixed number of reads (the projects, their groups,
+     * their grants, the members' labels), whatever the number of projects and members.
+     */
+    static List<Membership> memberships(AccessContext access) {
+        List<Row> projects = new ArrayList<>();
         for (Row project : Projects.visibleTo(access)) {
+            if (project.get(ProjectModel.ID) != null) projects.add(project);
+        }
+        // AIDEV-NOTE: nested groups stay as direct members; expanding them would disclose unrelated rosters.
+        List<List<SubjectTag>> members = Projects.directMembersOf(projects);
+        List<String> subjects = new ArrayList<>();
+        for (List<SubjectTag> projectMembers : members) {
+            for (SubjectTag member : projectMembers) subjects.add(member.token());
+        }
+        Map<String, String> labels = HohenheimAccess.subjectLabels(subjects);
+        List<Membership> rows = new ArrayList<>();
+        for (int i = 0; i < projects.size(); i++) {
+            Row project = projects.get(i);
             Integer id = project.get(ProjectModel.ID);
-            if (id == null) continue;
             String name = String.valueOf((Object) project.get(ProjectModel.NAME));
-            // AIDEV-NOTE: nested groups stay as direct members; expanding them would disclose unrelated rosters.
-            for (SubjectTag member : Projects.directMembersOf(project)) {
+            for (SubjectTag member : members.get(i)) {
                 String subject = member.token();
                 rows.add(new Membership(id + ":" + subject, id, name, member.type().key(), member.id(),
-                    labels.computeIfAbsent(subject, HohenheimAccess::subjectLabel)));
+                    labels.get(subject)));
             }
         }
         return rows;

@@ -12,6 +12,7 @@ import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.text.SlugText;
+import be.elevenways.protoblast.common.util.BlastCollection;
 import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
 import be.elevenways.zenit.auth.model.GrantModel;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -23,6 +24,7 @@ import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.auth.server.PermissionResolver;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.orm.OrmConstants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -35,8 +37,10 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -104,16 +108,41 @@ public final class Projects {
 
     /** The membership permission of a project's group ({@code group.<slug>}). */
     public static @NonNull String membershipPermissionOf(@NonNull Row project) {
-        UUID groupId = project.get(ProjectModel.GROUP_ID);
-        Row group = Models.get(PermissionGroupModel.class).findById(groupId);
-        String slug = group == null ? null : group.get(PermissionGroupModel.SLUG);
-        if (slug == null) {
-            throw new IllegalStateException("Project " + project.get(ProjectModel.ID)
-                + (group == null ? " references a missing permission group "
-                        : " references a slugless permission group ")
-                + groupId);
+        return membershipPermissionsOf(List.of(project)).getFirst();
+    }
+
+    /**
+     * {@link #membershipPermissionOf} of each project, in order: one read of their groups per key chunk.
+     *
+     * @throws IllegalStateException when a project's group is missing or slugless
+     */
+    public static @NonNull List<String> membershipPermissionsOf(@NonNull List<Row> projects) {
+        Set<UUID> groupIds = new LinkedHashSet<>();
+        for (Row project : projects) {
+            UUID groupId = project.get(ProjectModel.GROUP_ID);
+            if (groupId != null) groupIds.add(groupId);
         }
-        return GroupMembershipToken.of(slug);
+        Map<UUID, Row> groups = new HashMap<>();
+        for (List<UUID> chunk : BlastCollection.batches(new ArrayList<>(groupIds), OrmConstants.KEY_CHUNK)) {
+            for (Row group : Models.get(PermissionGroupModel.class).find()
+                    .where(PermissionGroupModel.ID.in(chunk)).all()) {
+                groups.put(group.get(PermissionGroupModel.ID), group);
+            }
+        }
+        List<String> permissions = new ArrayList<>(projects.size());
+        for (Row project : projects) {
+            UUID groupId = project.get(ProjectModel.GROUP_ID);
+            Row group = groupId == null ? null : groups.get(groupId);
+            String slug = group == null ? null : group.get(PermissionGroupModel.SLUG);
+            if (slug == null) {
+                throw new IllegalStateException("Project " + project.get(ProjectModel.ID)
+                    + (group == null ? " references a missing permission group "
+                            : " references a slugless permission group ")
+                    + groupId);
+            }
+            permissions.add(GroupMembershipToken.of(slug));
+        }
+        return permissions;
     }
 
     /**
@@ -295,15 +324,30 @@ public final class Projects {
      * subject type this build does not know is no member it can name, and is left out.
      */
     public static @NonNull List<SubjectTag> directMembersOf(@NonNull Row project) {
-        List<SubjectTag> members = new ArrayList<>();
-        for (Row grant : Models.get(GrantModel.class).find()
-                .where(GrantModel.PERMISSION.eq(membershipPermissionOf(project)))
-                .all()) {
-            GrantSubjectType type = GrantSubjectType.fromStored(grant.get(GrantModel.SUBJECT_TYPE));
-            UUID id = grant.get(GrantModel.SUBJECT_ID);
-            if (Boolean.TRUE.equals(grant.get(GrantModel.VALUE)) && type != null && id != null) {
-                members.add(new SubjectTag(type, id));
+        return directMembersOf(List.of(project)).getFirst();
+    }
+
+    /**
+     * {@link #directMembersOf(Row)} of each project, in order: one read of their groups and one of their membership
+     * grants per key chunk, never a read per project.
+     */
+    public static @NonNull List<List<SubjectTag>> directMembersOf(@NonNull List<Row> projects) {
+        List<String> permissions = membershipPermissionsOf(projects);
+        Map<String, List<SubjectTag>> byPermission = new HashMap<>();
+        for (List<String> chunk : BlastCollection.batches(new ArrayList<>(new LinkedHashSet<>(permissions)),
+                OrmConstants.KEY_CHUNK)) {
+            for (Row grant : Models.get(GrantModel.class).find().where(GrantModel.PERMISSION.in(chunk)).all()) {
+                GrantSubjectType type = GrantSubjectType.fromStored(grant.get(GrantModel.SUBJECT_TYPE));
+                UUID id = grant.get(GrantModel.SUBJECT_ID);
+                if (Boolean.TRUE.equals(grant.get(GrantModel.VALUE)) && type != null && id != null) {
+                    byPermission.computeIfAbsent(grant.get(GrantModel.PERMISSION), key -> new ArrayList<>())
+                        .add(new SubjectTag(type, id));
+                }
             }
+        }
+        List<List<SubjectTag>> members = new ArrayList<>(projects.size());
+        for (String permission : permissions) {
+            members.add(List.copyOf(byPermission.getOrDefault(permission, List.of())));
         }
         return members;
     }

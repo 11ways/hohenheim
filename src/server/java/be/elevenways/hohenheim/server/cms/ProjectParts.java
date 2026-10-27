@@ -17,6 +17,8 @@ import be.elevenways.zenit.auth.model.RecordGrantModel;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.common.CmsMicrocopy;
 import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
+import be.elevenways.zenit.auth.cms.SubjectTag;
+import be.elevenways.zenit.cms.common.resource.CellMapper;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
@@ -36,12 +38,19 @@ import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.server.operation.OperationHandlers;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -57,10 +66,10 @@ public final class ProjectParts {
     private static final SubjectType<Row> SUBJECT = SubjectType.record(ProjectModel.REF);
 
     /** The list's computed count columns. */
-    private static final String MEMBERS_COLUMN = "members";
-    private static final String OWNED_SITES_COLUMN = "owned_sites";
-    private static final String OWNED_INSTANCES_COLUMN = "owned_instances";
-    private static final String INSTANCE_QUOTA_COLUMN = "instance_quota";
+    static final String MEMBERS_COLUMN = "members";
+    static final String OWNED_SITES_COLUMN = "owned_sites";
+    static final String OWNED_INSTANCES_COLUMN = "owned_instances";
+    static final String INSTANCE_QUOTA_COLUMN = "instance_quota";
 
     public static final Operation<Row, Void, Integer> DELETE = Operation.declare(HohenheimIds.id("delete_project"))
         .happened(OperationSentences.of("delete_project"))
@@ -111,23 +120,60 @@ public final class ProjectParts {
             .description(CmsSupport.navHint(HohenheimMicrocopy.PROJECT))
             .navGroup(HohenheimPanel.DEPLOY_GROUP).navOrder(order).icon(Icon.of("folder-tree"))
             .list(list())
-            .reads(ResourceReads.rows());
+            .reads(ResourceReads.rows().pageBatch(ProjectParts::countsPage));
     }
 
-    /** The list: each count column reads its project's group, and a project without one counts nothing. */
+    /**
+     * The list: its count columns are read for the whole page at once ({@link #countsPage}); a one-record read asks
+     * the same batch for its one project.
+     */
     private static @NonNull ResourceList<Row> list() {
         TableSpec<Row> table = tableSpec();
-        return ResourceList.rows(table).chrome(ListChrome.MINIMAL)
-            .search(ProjectModel.NAME, ProjectModel.DESCRIPTION)
-            .computed(Objects.requireNonNull(table.column(MEMBERS_COLUMN)),
-                (row, request) -> groupOf(row) == null ? 0 : Projects.directMembersOf(row).size())
-            .computed(Objects.requireNonNull(table.column(OWNED_SITES_COLUMN)),
-                (row, request) -> ownedCount(groupOf(row), SiteModel.MODEL_ID))
-            .computed(Objects.requireNonNull(table.column(OWNED_INSTANCES_COLUMN)),
-                (row, request) -> ownedCount(groupOf(row), InstanceModel.MODEL_ID))
-            .computed(Objects.requireNonNull(table.column(INSTANCE_QUOTA_COLUMN)),
-                (row, request) -> quota(row, groupOf(row)))
-            .build();
+        ResourceList.Builder<Row> list = ResourceList.rows(table).chrome(ListChrome.MINIMAL)
+            .search(ProjectModel.NAME, ProjectModel.DESCRIPTION);
+        for (String name : List.of(MEMBERS_COLUMN, OWNED_SITES_COLUMN, OWNED_INSTANCES_COLUMN,
+                INSTANCE_QUOTA_COLUMN)) {
+            ColumnSpec column = Objects.requireNonNull(table.column(name));
+            list.computed(column, (project, request) -> countsPage(List.of(project), request.access())
+                .cell(project, column));
+        }
+        return list.build();
+    }
+
+    /**
+     * The page's count columns: each project's direct members, the sites and instances its group manages and its
+     * owner bucket's spend against its cap, read set-wise for every listed project; a project without a group counts
+     * nothing.
+     */
+    static @NonNull CellMapper<Row> countsPage(@NonNull List<Row> projects, @NonNull AccessContext access) {
+        List<Row> grouped = new ArrayList<>();
+        Set<UUID> groups = new LinkedHashSet<>();
+        Map<UUID, String> buckets = new LinkedHashMap<>();
+        for (Row project : projects) {
+            UUID group = groupOf(project);
+            if (group == null) continue;
+            grouped.add(project);
+            groups.add(group);
+            buckets.put(group, OwnerBudget.INSTANCES.bucketOf(
+                HohenheimAccess.packSubjects(Projects.ownerSubjectsOf(project))));
+        }
+        Map<UUID, Integer> members = new HashMap<>();
+        List<List<SubjectTag>> direct = Projects.directMembersOf(grouped);
+        for (int at = 0; at < grouped.size(); at++) members.put(groupOf(grouped.get(at)), direct.get(at).size());
+        Map<UUID, List<Row>> held = RecordGrants.liveAllowsHeldBy(GrantSubjectType.GROUP, groups);
+        Map<String, @Nullable Integer> limits = OwnerBudget.INSTANCES.limitsIn(buckets.values());
+        Map<String, Long> used = OwnerBudget.INSTANCES.usedIn(buckets.values());
+        return (project, column) -> {
+            UUID group = groupOf(project);
+            return switch (column.name()) {
+                case MEMBERS_COLUMN -> group == null ? 0 : members.getOrDefault(group, 0);
+                case OWNED_SITES_COLUMN -> ownedCount(held.get(group), SiteModel.MODEL_ID);
+                case OWNED_INSTANCES_COLUMN -> ownedCount(held.get(group), InstanceModel.MODEL_ID);
+                case INSTANCE_QUOTA_COLUMN -> group == null ? "-" : quota(limits.get(buckets.get(group)),
+                    used.getOrDefault(buckets.get(group), 0L));
+                default -> null;
+            };
+        };
     }
 
     static @NonNull FormSpec formSpec() {
@@ -150,21 +196,17 @@ public final class ProjectParts {
         return project.get(ProjectModel.GROUP_ID);
     }
 
-    /** @return the instances the project's owner bucket holds, worded against its limit or as having none */
-    private static Object quota(Row row, @Nullable UUID group) {
-        if (group == null) return "-";
-        String packed = HohenheimAccess.packSubjects(Projects.ownerSubjectsOf(row));
-        Integer limit = OwnerBudget.INSTANCES.limitFor(packed);
-        var used = OwnerBudget.INSTANCES.usedBy(packed);
+    /** @return the instances an owner bucket holds, worded against its limit or as having none */
+    private static @NonNull Object quota(@Nullable Integer limit, long used) {
         return limit == null ? HohenheimMicrocopy.PROJECT.of("quota_no_limit").withArg("used", used)
             : HohenheimMicrocopy.PROJECT.of("quota_used_of").withArg("used", used).withArg("limit", limit);
     }
 
-    private static long ownedCount(@Nullable UUID group, Identifier model) {
-        if (group == null) return 0;
-        return RecordGrants.listForSubject(GrantSubjectType.GROUP, group).stream()
+    /** @return how many records of the model the group's live grants let it manage */
+    private static long ownedCount(@Nullable List<Row> grants, Identifier model) {
+        if (grants == null) return 0;
+        return grants.stream()
             .filter(grant -> HohenheimCapabilities.MANAGE.equals(grant.get(RecordGrantModel.CAPABILITY))
-                && Boolean.TRUE.equals(grant.get(RecordGrantModel.VALUE))
                 && model.toString().equals(grant.get(RecordGrantModel.MODEL))).count();
     }
 }

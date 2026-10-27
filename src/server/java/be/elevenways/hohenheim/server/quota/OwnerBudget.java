@@ -11,6 +11,9 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.Collection;
+import java.util.Map;
+
 /**
  * THE vocabulary of per-owner quota budgets: each member declares its ledger prefix, its
  * per-owner override column, its global default and the violation a refusal names.
@@ -120,6 +123,11 @@ public enum OwnerBudget {
         return OwnerQuota.limitOf(this.prefix, bucket, this.overrideColumn, this.fallback);
     }
 
+    /** {@link #limitIn} of each bucket, their override rows read at once. */
+    public @NonNull Map<String, @Nullable Integer> limitsIn(@NonNull Collection<String> buckets) {
+        return OwnerQuota.limitsOf(this.prefix, buckets, this.overrideColumn, this.fallback);
+    }
+
     /** The override row of the owner behind one of this budget's buckets, or null when it has none. */
     public @Nullable Row overrideIn(@NonNull String bucket) {
         return OwnerQuota.overrideRowOf(this.prefix, bucket);
@@ -128,6 +136,11 @@ public enum OwnerBudget {
     /** How much of an owner's budget is spent (admin surfaces, tests). */
     public long usedBy(@NonNull String packedSubjects) {
         return Quotas.usedOf(this.bucketOf(packedSubjects));
+    }
+
+    /** {@link #usedBy} of each bucket, read in one statement. */
+    public @NonNull Map<String, Long> usedIn(@NonNull Collection<String> buckets) {
+        return Quotas.usedOf(buckets);
     }
 
     /**

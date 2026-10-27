@@ -19,6 +19,12 @@ import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -97,13 +103,28 @@ public final class OwnerQuota {
     public static @Nullable Integer limitOf(@NonNull String prefix, @NonNull String bucket,
                                             @Nullable IntegerField overrideColumn,
                                             @NonNull SettingDefinition<Integer> fallback) {
-        Row override = overrideColumn == null ? null : overrideRowOf(prefix, bucket);
-        Integer value = override != null ? override.get(overrideColumn) : null;
-        if (value != null) {
-            return value;
-        }
+        return limitsOf(prefix, List.of(bucket), overrideColumn, fallback).get(bucket);
+    }
+
+    /**
+     * {@link #limitOf} of each bucket: their override rows read at once, never a read per owner.
+     *
+     * @return bucket to its cap, null for uncapped, in the given order
+     */
+    public static @NonNull Map<String, @Nullable Integer> limitsOf(@NonNull String prefix,
+                                                                   @NonNull Collection<String> buckets,
+                                                                   @Nullable IntegerField overrideColumn,
+                                                                   @NonNull SettingDefinition<Integer> fallback) {
+        Map<String, Row> overrides = overrideColumn == null ? Map.of() : overrideRowsOf(prefix, buckets);
         Integer global = Zenit.SETTINGS_VALUES.getValue(fallback);
-        return global != null && global > 0 ? global : null;
+        Integer uncapped = global != null && global > 0 ? global : null;
+        Map<String, @Nullable Integer> limits = new LinkedHashMap<>();
+        for (String bucket : buckets) {
+            Row override = overrides.get(bucket);
+            Integer value = override != null && overrideColumn != null ? override.get(overrideColumn) : null;
+            limits.put(bucket, value != null ? value : uncapped);
+        }
+        return limits;
     }
 
     /**
@@ -136,24 +157,46 @@ public final class OwnerQuota {
      * @return the row, or null when the owner has none
      */
     public static @Nullable Row overrideRowOf(@NonNull String prefix, @NonNull String bucket) {
-        Model overrides = Models.get(InstanceQuotaModel.class);
-        if (!bucket.startsWith(prefix + FOLD_MARK)) {
-            Row override = overrides.find()
-                .where(InstanceQuotaModel.SUBJECTS.eq(packOf(prefix, bucket)))
-                .first();
-            return override != null && ownsBucket(override, prefix, bucket) ? override : null;
-        }
-        for (Row override : overrides.find().all()) {
-            if (ownsBucket(override, prefix, bucket)) {
-                return override;
-            }
-        }
-        return null;
+        return overrideRowsOf(prefix, List.of(bucket)).get(bucket);
     }
 
-    private static boolean ownsBucket(@NonNull Row override, @NonNull String prefix, @NonNull String bucket) {
-        String subjects = override.get(InstanceQuotaModel.SUBJECTS);
-        return subjects != null && bucketOf(prefix, subjects).equals(bucket);
+    /**
+     * {@link #overrideRowOf} of each bucket: the unfolded ones in one read by their packs, every override row once
+     * more only when a bucket is folded.
+     *
+     * @return bucket to its owner's override row; a bucket whose owner has none is absent
+     */
+    public static @NonNull Map<String, Row> overrideRowsOf(@NonNull String prefix,
+                                                           @NonNull Collection<String> buckets) {
+        Model overrides = Models.get(InstanceQuotaModel.class);
+        Set<String> packs = new LinkedHashSet<>();
+        boolean folded = false;
+        for (String bucket : buckets) {
+            if (bucket.startsWith(prefix + FOLD_MARK)) {
+                folded = true;
+            } else {
+                packs.add(packOf(prefix, bucket));
+            }
+        }
+        List<Row> candidates = new ArrayList<>();
+        if (!packs.isEmpty()) {
+            candidates.addAll(overrides.find().where(InstanceQuotaModel.SUBJECTS.in(new ArrayList<>(packs))).all());
+        }
+        if (folded) {
+            candidates.addAll(overrides.find().all());
+        }
+        // Each candidate's own bucket under this prefix, folded alike: a bucket's owner is the row spelling it.
+        Map<String, Row> byBucket = new LinkedHashMap<>();
+        for (Row override : candidates) {
+            String subjects = override.get(InstanceQuotaModel.SUBJECTS);
+            if (subjects != null) byBucket.putIfAbsent(bucketOf(prefix, subjects), override);
+        }
+        Map<String, Row> found = new LinkedHashMap<>();
+        for (String bucket : buckets) {
+            Row override = byBucket.get(bucket);
+            if (override != null) found.put(bucket, override);
+        }
+        return found;
     }
 
     /**

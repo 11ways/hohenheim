@@ -26,6 +26,8 @@ import be.elevenways.zenit.server.operation.Authorizer;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.Collection;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 
@@ -279,6 +281,11 @@ public final class HohenheimAccess {
     /** THE human label of ONE packed subject; see {@link RecordOwners#subjectLabel}. */
     public static @NonNull String subjectLabel(@NonNull String subject) {
         return RecordOwners.subjectLabel(subject);
+    }
+
+    /** {@link #subjectLabel} of many subjects in a fixed number of reads; see {@link RecordOwners#subjectLabels}. */
+    public static @NonNull Map<String, String> subjectLabels(@NonNull Collection<String> subjects) {
+        return RecordOwners.subjectLabels(subjects);
     }
 
     /**

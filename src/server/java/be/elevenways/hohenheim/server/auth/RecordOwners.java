@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.auth;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.util.BlastCollection;
 import be.elevenways.zenit.auth.cms.SubjectTag;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.PermissionGroupModel;
@@ -12,13 +13,20 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.auth.server.GrantAdministration;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.auth.server.ZenitAuth;
+import be.elevenways.zenit.common.orm.OrmConstants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.AccessContext;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
@@ -171,24 +179,53 @@ final class RecordOwners {
      * former owner is usually exactly that.
      */
     static @NonNull String subjectLabel(@NonNull String subject) {
-        SubjectTag parsed = SubjectTag.parse(subject);
-        if (parsed == null) {
-            return subject;
+        return subjectLabels(List.of(subject)).get(subject);
+    }
+
+    /**
+     * {@link #subjectLabel} of each subject: one read of the named users and one of the named groups per key chunk,
+     * never a read per subject.
+     *
+     * @return every asked subject's label, by subject, in asked order
+     */
+    static @NonNull Map<String, String> subjectLabels(@NonNull Collection<String> subjects) {
+        Set<UUID> userIds = new LinkedHashSet<>();
+        Set<UUID> groupIds = new LinkedHashSet<>();
+        for (String subject : subjects) {
+            SubjectTag parsed = SubjectTag.parse(subject);
+            if (parsed == null) continue;
+            switch (parsed.type()) {
+                case USER -> userIds.add(parsed.id());
+                case GROUP -> groupIds.add(parsed.id());
+                // Hohenheim ships no team source, so no team is named: the token itself is shown.
+                case TEAM -> { }
+            }
         }
-        String label = switch (parsed.type()) {
-            case USER -> {
-                Row user = Models.get(UserModel.class).findById(parsed.id());
-                yield user == null ? null : UserModel.personName(user);
+        Map<UUID, String> users = new HashMap<>();
+        for (List<UUID> chunk : BlastCollection.batches(new ArrayList<>(userIds), OrmConstants.KEY_CHUNK)) {
+            for (Row user : Models.get(UserModel.class).find().where(UserModel.ID.in(chunk)).all()) {
+                users.put(user.get(UserModel.ID), UserModel.personName(user));
             }
-            case GROUP -> {
-                Row group = Models.get(PermissionGroupModel.class).findById(parsed.id());
-                yield group == null ? null : firstNonBlank(group.get(PermissionGroupModel.TITLE),
-                    group.get(PermissionGroupModel.SLUG));
+        }
+        Map<UUID, String> groups = new HashMap<>();
+        for (List<UUID> chunk : BlastCollection.batches(new ArrayList<>(groupIds), OrmConstants.KEY_CHUNK)) {
+            for (Row group : Models.get(PermissionGroupModel.class).find().where(PermissionGroupModel.ID.in(chunk))
+                    .all()) {
+                groups.put(group.get(PermissionGroupModel.ID), firstNonBlank(group.get(PermissionGroupModel.TITLE),
+                    group.get(PermissionGroupModel.SLUG)));
             }
-            // Hohenheim ships no team source, so no team is named: the token itself is shown.
-            case TEAM -> null;
-        };
-        return label != null ? label : subject;
+        }
+        Map<String, String> labels = new LinkedHashMap<>();
+        for (String subject : subjects) {
+            SubjectTag parsed = SubjectTag.parse(subject);
+            String label = parsed == null ? null : switch (parsed.type()) {
+                case USER -> users.get(parsed.id());
+                case GROUP -> groups.get(parsed.id());
+                case TEAM -> null;
+            };
+            labels.put(subject, label != null ? label : subject);
+        }
+        return labels;
     }
 
     /**
@@ -197,14 +234,7 @@ final class RecordOwners {
      * @return the joined labels, empty for the operator-owned (empty) set
      */
     static @NonNull String labelSubjects(@Nullable Object packed) {
-        StringBuilder labels = new StringBuilder();
-        for (String subject : parseSubjects(packed)) {
-            if (labels.length() > 0) {
-                labels.append(", ");
-            }
-            labels.append(subjectLabel(subject));
-        }
-        return labels.toString();
+        return String.join(", ", subjectLabels(parseSubjects(packed)).values());
     }
 
     private static @Nullable String firstNonBlank(@Nullable String first, @Nullable String second) {
