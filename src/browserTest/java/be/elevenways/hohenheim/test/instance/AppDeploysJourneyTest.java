@@ -430,7 +430,7 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
                 if (request.url().contains("/zn/live/")) otherReads.add(request.url());
             });
             other.navigate(baseUrl() + pageUrl(otherAppId));
-            other.waitForFunction("() => window.__hawkeye_reactive_idle === true");
+            waitForReactiveIdle(other);
             delivery(applicationId, "only-mine", WebhookOutcome.IGNORED_BRANCH);
             waitForSelector("[data-hh-pushes] li:has-text('only-mine')");
             assertThat(otherReads).as("step 6b: another app's push never re-reads this tab").isEmpty();
