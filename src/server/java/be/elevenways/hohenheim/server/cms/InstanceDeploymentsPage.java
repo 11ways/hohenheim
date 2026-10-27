@@ -10,6 +10,8 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.DeployTrigger;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.WebhookDeliveryModel;
@@ -34,6 +36,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.i18n.wording.Wording;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.live.LiveFeed;
+import be.elevenways.zenit.common.live.Pin;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.protoblast.common.key.IdentifierKey;
@@ -124,16 +127,33 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
     @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_deployments"); }
 
     /**
-     * The tab's content as one live part, its parameter {@code panel,instanceId,page}: heard on every build, release,
-     * preview, push and record write, a piece of the record's Deploys subpage (a re-read passes that route's gates),
-     * read again through the panel's gate and this tab's own for the reader, so a deploy's progress, its end and a
-     * push redraw the part alone.
+     * The tab's content as one live part, its parameter {@code panel,instanceId,page}: heard on its own record's
+     * builds, releases, previews and pushes and on writes to the record or a release it owns, never another record's,
+     * a piece of the record's Deploys subpage (a re-read passes that route's gates), read again through the panel's
+     * gate and this tab's own for the reader, so a deploy's progress, its end and a push redraw the part alone.
      */
     static final LiveRead<String, InstanceDeploys> PART =
         LiveRead.of(HohenheimIds.id("instance_deploys"), String.class, InstanceDeploys.class)
-            .heard(part -> partAt(part) == null ? List.of() : List.of(LiveFeed.of(AccessContext::isAccount,
-                BuildOperationModel.MODEL_ID, ReleaseOperationModel.MODEL_ID, InstanceModel.MODEL_ID,
-                PreviewDeploymentModel.MODEL_ID, WebhookDeliveryModel.MODEL_ID)));
+            .heard(part -> {
+                PartAt at = partAt(part);
+                return at == null ? List.of() : heardFor(at.instanceId());
+            });
+
+    /**
+     * @return the feeds of one record's Deploys part, each keyed by that record but the databases': whether Deploy now
+     *         is open reads its attached databases' readiness, and a database's status write is rare enough to hear
+     *         whole (the tag answers an unchanged part)
+     */
+    static @NonNull List<LiveFeed> heardFor(int instanceId) {
+        return List.of(
+            LiveFeed.keyed(AccessContext::isAccount, instanceId, BuildOperationModel.MODEL_ID,
+                ReleaseOperationModel.MODEL_ID, PreviewDeploymentModel.MODEL_ID, WebhookDeliveryModel.MODEL_ID,
+                InstanceDatabaseModel.MODEL_ID),
+            LiveFeed.pinned(AccessContext::isAccount, InstanceModel.MODEL_ID, Pin.of(InstanceModel.ID, instanceId)),
+            LiveFeed.pinned(AccessContext::isAccount, InstanceModel.MODEL_ID,
+                Pin.of(InstanceModel.GENERATED_FOR_ID, instanceId)),
+            LiveFeed.of(AccessContext::isAccount, DatabaseModel.MODEL_ID));
+    }
 
     /** History rows per page: a release row carries its logs, so one page stays a screen or two. */
     static final int PAGE_SIZE = 20;

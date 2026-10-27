@@ -924,6 +924,10 @@ public class InstanceModel extends Model {
     @Override
     public Schema getSchema() { return SCHEMA; }
 
+    /** Keyed by the record itself and by the owner of a generated record, so an application hears its releases. */
+    @Override
+    public @NonNull List<Field<?, ?>> getChangeKeyFields() { return List.of(ID, GENERATED_FOR_ID); }
+
     /**
      * How long one actor's consecutive same-kind actions on a record read as one entry: an SFTP client's uploads
      * folded for as long as its run lasted, and the idle timeout is what ends a run.

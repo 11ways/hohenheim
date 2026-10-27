@@ -23,6 +23,7 @@ import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.PrincipalRef;
 import com.microsoft.playwright.Locator;
+import com.microsoft.playwright.Page;
 import be.elevenways.protoblast.testsupport.browser.BoundedAssertions;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -34,6 +35,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -59,6 +61,7 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
     private static Integer applicationId;
     private static Integer keptId;
     private static Integer liveId;
+    private static Integer otherAppId;
     private static final List<Integer> releaseIds = new ArrayList<>();
     private static final List<Integer> operationIds = new ArrayList<>();
     private static final List<Integer> buildIds = new ArrayList<>();
@@ -80,6 +83,13 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
         app.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);
         Models.get(InstanceModel.class).save(app);
         applicationId = app.get(InstanceModel.ID);
+        Row other = Models.get(InstanceModel.class).createEmptyRow();
+        other.set(InstanceModel.NAME, PREFIX + "other-app");
+        other.set(InstanceModel.KIND, ApplicationKind.ID.toString());
+        other.set(InstanceModel.SETTINGS, new LinkedHashMap<>(settings));
+        other.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);
+        Models.get(InstanceModel.class).save(other);
+        otherAppId = other.get(InstanceModel.ID);
 
         // Created in release order, as the engine creates them: its ids are the releases' own sequence.
         int replaced = release("replaced", REPLACED_SHA, null);
@@ -134,8 +144,8 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
         preview("feature/checkout", 42, PreviewDeploymentModel.STATUS_RUNNING);
         preview("old/branch", null, PreviewDeploymentModel.STATUS_DESTROYED);
 
-        delivery("push", WebhookOutcome.DEPLOY_QUEUED);
-        delivery("push", WebhookOutcome.IGNORED_BRANCH);
+        delivery(applicationId, "push", WebhookOutcome.DEPLOY_QUEUED);
+        delivery(applicationId, "push", WebhookOutcome.IGNORED_BRANCH);
     }
 
     @AfterAll
@@ -160,6 +170,9 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
                 }
             });
             HardDeletes.byId(Models.get(InstanceModel.class), applicationId);
+        }
+        if (otherAppId != null) {
+            HardDeletes.byId(Models.get(InstanceModel.class), otherAppId);
         }
     }
 
@@ -210,9 +223,9 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
         previewIds.add(row.get(PreviewDeploymentModel.ID));
     }
 
-    private static void delivery(String event, WebhookOutcome outcome) {
+    private static void delivery(int instanceId, String event, WebhookOutcome outcome) {
         Row row = Models.get(WebhookDeliveryModel.class).createEmptyRow();
-        row.set(WebhookDeliveryModel.INSTANCE_ID, applicationId);
+        row.set(WebhookDeliveryModel.INSTANCE_ID, instanceId);
         row.set(WebhookDeliveryModel.DELIVERY_KEY, PREFIX + deliveryIds.size() + "-" + outcome.token());
         row.set(WebhookDeliveryModel.EVENT, event);
         row.set(WebhookDeliveryModel.ACTION, outcome.token());
@@ -222,7 +235,11 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
     }
 
     private static String pageUrl() {
-        return "/admin/instances/" + applicationId + "/page/" + HohenheimSlugs.Tab.DEPLOYMENTS;
+        return pageUrl(applicationId);
+    }
+
+    private static String pageUrl(int instanceId) {
+        return "/admin/instances/" + instanceId + "/page/" + HohenheimSlugs.Tab.DEPLOYMENTS;
     }
 
     /** Point a stored release at another commit, as a redeploy of one commit leaves its kept release. */
@@ -383,7 +400,7 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
             Hawkeye.NAVIGATION_RENDERED_EVENT);
         click("[data-hh-rollback] [data-cms-page-action-submit]");
         assertIsVisible(".pl-alertdialog-modal[data-open]", "step 6: the rollback asks first");
-        delivery("elsewhere", WebhookOutcome.IGNORED_BRANCH);
+        delivery(applicationId, "elsewhere", WebhookOutcome.IGNORED_BRANCH);
         waitForSelector("[data-hh-pushes] li:has-text('elsewhere')");
         assertIsVisible(".pl-alertdialog-modal[data-open]", "step 6: the open confirmation held through the push");
         assertThat(pageRenders()).as("step 6: the push rendered no page, the part redrew alone").isZero();
@@ -403,6 +420,26 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
             .as("step 6: a running deploy follows its log").contains("data-hh-deploy-live")
             .as("step 6: and Deploy now is dead, saying a deploy already runs, before any run is started")
             .contains("data-cms-page-action-unavailable").contains("A deploy is already running");
+
+        // 6b. The part hears its own record only: a push to this app never wakes another app's open Deploys tab (not
+        //     one /zn/live/ read there), while that tab still follows a push to its own app.
+        Page other = this.page.context().newPage();
+        try {
+            List<String> otherReads = new CopyOnWriteArrayList<>();
+            other.onRequest(request -> {
+                if (request.url().contains("/zn/live/")) otherReads.add(request.url());
+            });
+            other.navigate(baseUrl() + pageUrl(otherAppId));
+            other.waitForFunction("() => window.__hawkeye_reactive_idle === true");
+            delivery(applicationId, "only-mine", WebhookOutcome.IGNORED_BRANCH);
+            waitForSelector("[data-hh-pushes] li:has-text('only-mine')");
+            assertThat(otherReads).as("step 6b: another app's push never re-reads this tab").isEmpty();
+            delivery(otherAppId, "theirs", WebhookOutcome.IGNORED_BRANCH);
+            other.waitForSelector("[data-hh-pushes] li:has-text('theirs')");
+            assertThat(otherReads).as("step 6b: its own app's push re-reads it, once").hasSize(1);
+        } finally {
+            other.close();
+        }
 
         // 7. A build is named as a deploy of its app, never by its commit nor its installation-wide id: that title is
         //    what every activity line about it says (mockup: "Staging API deploy started by a push"), and a hash

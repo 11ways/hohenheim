@@ -60,6 +60,7 @@ public class WebhookDeliveryModel extends Model {
     @Override public String getModelName() { return "WebhookDelivery"; }
     @Override public String getTableName() { return "webhook_deliveries"; }
     @Override public Schema getSchema() { return SCHEMA; }
+    @Override public List<Field<?, ?>> getChangeKeyFields() { return List.of(INSTANCE_ID); }
 
     /** Plumbing: recorded, kept out of people's feeds. */
     public static final HistoryBehaviour HISTORY =

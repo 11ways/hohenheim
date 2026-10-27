@@ -319,5 +319,14 @@ public class BuildOperationModel extends Model {
     @Override
     public Schema getSchema() { return SCHEMA; }
 
+    /**
+     * Keyed by the record a build is for, so a record's Deploys tab hears its own builds only.
+     *
+     * AIDEV-NOTE: the key is FOR_ID without FOR_MODEL (a change key is one field): two owners of different models with
+     * one id hear each other's builds. That only over-wakes a part, whose re-read then answers unchanged by its tag.
+     */
+    @Override
+    public @NonNull List<Field<?, ?>> getChangeKeyFields() { return List.of(FOR_ID); }
+
     public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.optional().changes());
 }

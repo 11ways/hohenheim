@@ -130,6 +130,10 @@ public class InstanceDatabaseModel extends Model {
     @Override
     public Schema getSchema() { return SCHEMA; }
 
+    /** Keyed by the instance a link attaches, so its Deploys tab hears its own databases' links only. */
+    @Override
+    public List<Field<?, ?>> getChangeKeyFields() { return List.of(INSTANCE_ID); }
+
     /** A database link's change is filed on its instance. */
     public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.optional().changes()
         .filedOn(InstanceModel.class, row -> row.get(INSTANCE_ID)));

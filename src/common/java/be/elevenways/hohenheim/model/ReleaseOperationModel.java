@@ -238,6 +238,10 @@ public class ReleaseOperationModel extends Model {
     @Override
     public Schema getSchema() { return SCHEMA; }
 
+    /** Keyed by the application a release is for (FOR_ID, as {@link BuildOperationModel#getChangeKeyFields}). */
+    @Override
+    public @NonNull List<Field<?, ?>> getChangeKeyFields() { return List.of(FOR_ID); }
+
     /** A release operation is itself the history surface: never recorded (it records nothing today either). */
     public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.untracked());
 }
