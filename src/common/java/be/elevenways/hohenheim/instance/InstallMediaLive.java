@@ -31,6 +31,12 @@ public final class InstallMediaLive {
     /** THE feed id; the server registers it over the fetch model, gated by the tab's own permission. */
     public static final @NonNull Identifier FEED = HohenheimIds.id("install_media_fetches");
 
+    /**
+     * An upload into the pool ended, taken or refused: the daemon holds the media, so no model write announces it,
+     * and the region's re-read carries the outcome's message.
+     */
+    public static final @NonNull Identifier POOL = HohenheimIds.id("install_media_pool");
+
     private InstallMediaLive() {
     }
 

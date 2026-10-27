@@ -16,6 +16,7 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.server.live.LiveServer;
 import be.elevenways.zenit.common.live.LiveFeed;
 import be.elevenways.zenit.common.live.LiveFeeds;
 import be.elevenways.zenit.common.orm.history.Change;
@@ -50,12 +51,12 @@ final class ServerMediaHandlers {
         InstallMedia media = new InstallMedia();
 
         // The tab's live region watches this feed: every committed write of a fetch row (a state, a
-        // stored fraction, an ending) pings it, and the region re-reads SERVERS_MEDIA_VIEW. Gated by
-        // the tab's own permission, so a viewer the tab refuses never hears a fetch move. Registered
-        // as its owner, because a test JVM runs this init once per server boot.
+        // stored fraction, an ending) and every upload into the pool pings it, and the region re-reads
+        // SERVERS_MEDIA_VIEW. Gated by the tab's own permission, so a viewer the tab refuses never hears a
+        // fetch move. Registered as its owner, because a test JVM runs this init once per server boot.
         LiveFeeds.INSTANCE.registerOwned(InstallMediaLive.FEED, LiveFeed.of(
             access -> access.hasPermission(HohenheimSources.MEDIA_MANAGE),
-            InstallMediaFetchModel.MODEL_ID));
+            InstallMediaFetchModel.MODEL_ID, InstallMediaLive.POOL));
 
         HohenheimEndpoints.SERVERS_MEDIA_VIEW.setHandler(conduit -> {
             Integer serverId = conduit.getParameter(HohenheimEndpoints.SERVER_ID);
@@ -148,8 +149,9 @@ final class ServerMediaHandlers {
             History.event(Models.get(ServerModel.class), serverId, Change.fact(HohenheimActivityAction.MEDIA_UPLOADED,
                 Map.of(HohenheimActivityAction.NAME_KEY, name)));
             HohenheimFlash.success(conduit, HohenheimMicrocopy.SERVER_MEDIA.of("media_uploaded").withArg("name", name));
-            // The uploader reloads the tab itself, so the answer is a bare status rather
-            // than a redirect: there is no form post to send back.
+            // The tab's live region hears the new medium and its re-read carries this message; the answer is a
+            // bare status rather than a redirect: there is no form post to send back.
+            LiveServer.INVALIDATIONS.changed(InstallMediaLive.POOL);
             conduit.setResponseStatus(200);
             conduit.endWithContentType("text/plain; charset=utf-8", "");
             return null;
@@ -186,6 +188,8 @@ final class ServerMediaHandlers {
     private static ActionResult<Object> uploadFailure(@NonNull Conduit conduit,
                                                       @NonNull Microcopy reason) {
         HohenheimFlash.error(conduit, reason);
+        // The tab's live region hears the upload end and its re-read carries this message.
+        LiveServer.INVALIDATIONS.changed(InstallMediaLive.POOL);
         conduit.setResponseStatus(422);
         conduit.endWithContentType("text/plain; charset=utf-8", "");
         return null;
