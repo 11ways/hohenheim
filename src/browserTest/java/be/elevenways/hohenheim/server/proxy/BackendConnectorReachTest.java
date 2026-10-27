@@ -101,7 +101,7 @@ class BackendConnectorReachTest {
                     throw new UnknownHostException(name);
                 }
                 return new InetAddress[] {known};
-            }, OutboundNetwork.DIRECT_ROUTE));
+            }, OutboundNetwork.DIRECT_ROUTE, previous.tls()));
             try {
                 assertThatThrownBy(() -> BackendConnector.connect("late_backend", port, 2000, 1, false))
                     .as("step 7: an unresolvable name fails the connection")
@@ -141,7 +141,7 @@ class BackendConnectorReachTest {
                 throw new UnknownHostException(name);
             }
             return new InetAddress[] {known};
-        }, OutboundNetwork.DIRECT_ROUTE));
+        }, OutboundNetwork.DIRECT_ROUTE, previous.tls()));
         try {
             // 1. The first lookup of a name that does not resolve yet is in flight.
             CompletableFuture<List<InetAddress>> first = BackendConnector.sharedLookup("retry_backend", false);
