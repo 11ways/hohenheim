@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.runtime.ImagePublishSupport;
 import be.elevenways.hohenheim.server.util.UtcStamp;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.text.SlugText;
+import be.elevenways.zenit.common.orm.RecordRef;
 import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -98,7 +99,7 @@ public final class InstanceTemplateCapture {
         int templateId = mintTemplate(resolved, instanceId, alias);
         History.event(Models.get(InstanceModel.class), instanceId, Change.fact(
             HohenheimActivityAction.TEMPLATE_CAPTURED, Map.of(HohenheimActivityAction.TEMPLATE_KEY,
-                new Change.Context(InstanceTemplateModel.MODEL_ID, String.valueOf(templateId)))));
+                new RecordRef(InstanceTemplateModel.MODEL_ID, String.valueOf(templateId)))));
         Blast.log("TEMPLATE: captured instance", InstanceModel.nameOf(resolved.row()), "as alias",
             alias, "-> template", templateId, "(unapproved)");
         return templateId;

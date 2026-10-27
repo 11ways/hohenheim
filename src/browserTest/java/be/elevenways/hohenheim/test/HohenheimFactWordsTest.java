@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.instance.InstanceExec;
 import be.elevenways.hohenheim.server.instance.InstanceShell;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.zenit.common.orm.RecordRef;
 import be.elevenways.zenit.common.orm.activity.FactShape;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -220,7 +221,7 @@ class HohenheimFactWordsTest {
                 .as("step 10: a plain disable").isEqualTo("Disabled");
             int copy = site("words-site-copy");
             assertThat(said(sites, copy, HohenheimActivityAction.CLONED, Map.of(HohenheimActivityAction.ORIGINAL_KEY,
-                    new Change.Context(SiteModel.MODEL_ID, String.valueOf(site))), EN))
+                    new RecordRef(SiteModel.MODEL_ID, String.valueOf(site))), EN))
                 .as("step 10: a copy names its original").isEqualTo("Copied from words-site");
 
             // 11. A re-pin tells the new fingerprint from the old one, and a posture acceptance labels both values.

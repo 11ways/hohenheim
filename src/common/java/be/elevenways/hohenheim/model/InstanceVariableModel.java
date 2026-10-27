@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.RecordRef;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
-import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
@@ -195,7 +195,7 @@ public class InstanceVariableModel extends Model {
     /** A variable's change is filed on the instance or the environment holding it; its value is never captured. */
     public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.optional().changes()
         .filedOn(row -> row.get(INSTANCE_ID) != null
-            ? new Change.Context(InstanceModel.MODEL_ID, String.valueOf(row.get(INSTANCE_ID)))
+            ? new RecordRef(InstanceModel.MODEL_ID, String.valueOf(row.get(INSTANCE_ID)))
             : row.get(ENVIRONMENT_ID) != null
-                ? new Change.Context(EnvironmentModel.MODEL_ID, String.valueOf(row.get(ENVIRONMENT_ID))) : null));
+                ? new RecordRef(EnvironmentModel.MODEL_ID, String.valueOf(row.get(ENVIRONMENT_ID))) : null));
 }

@@ -25,6 +25,7 @@ import be.elevenways.protoblast.common.text.SlugText;
 import be.elevenways.zenit.cms.server.page.ResourcePageEndpoints;
 import be.elevenways.zenit.common.edit.FormSecrets;
 import be.elevenways.zenit.common.edit.submit.SubmittedValueCoercion;
+import be.elevenways.zenit.common.orm.RecordRef;
 import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.datasource.DuplicateKeyException;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -342,7 +343,7 @@ public final class SiteOperationHandlers {
         clone.set(SiteModel.ACCESS_LIST_ID, site.get(SiteModel.ACCESS_LIST_ID));
         try {
             siteModel.save(clone, Change.fact(HohenheimActivityAction.CLONED, Map.of(
-                HohenheimActivityAction.ORIGINAL_KEY, new Change.Context(SiteModel.MODEL_ID,
+                HohenheimActivityAction.ORIGINAL_KEY, new RecordRef(SiteModel.MODEL_ID,
                     String.valueOf((Object) site.get(SiteModel.ID))))));
         } catch (DuplicateKeyException conflict) {
             if (!SiteModel.SLUG.getName().equals(conflict.getColumnName())) {
