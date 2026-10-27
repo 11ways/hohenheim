@@ -4,9 +4,6 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
-import be.elevenways.hohenheim.HohenheimSources;
-import be.elevenways.hohenheim.instance.InstallMediaLive;
-import be.elevenways.hohenheim.model.InstallMediaFetchModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.cms.HohenheimFlash;
 import be.elevenways.hohenheim.server.cms.ServerMediaTab;
@@ -16,15 +13,11 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.conduit.Conduit;
-import be.elevenways.zenit.server.live.LiveServer;
-import be.elevenways.zenit.common.live.LiveFeed;
-import be.elevenways.zenit.common.live.LiveFeeds;
 import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
-import be.elevenways.zenit.common.result.DryResult;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.http.HttpConduit;
@@ -39,8 +32,8 @@ import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * Install media on an Incus host: URL fetch (a background job, see InstallMediaFetches), upload
- * and delete forms of the server record's Install media tab, and the live re-read of its region. Every
- * endpoint declares the media permission; the service refuses non-Incus hosts by name.
+ * and delete forms of the server record's Install media tab. Every endpoint declares the media permission; the
+ * service refuses non-Incus hosts by name.
  */
 final class ServerMediaHandlers {
 
@@ -49,25 +42,6 @@ final class ServerMediaHandlers {
 
     static void init() {
         InstallMedia media = new InstallMedia();
-
-        // The tab's live region watches this feed: every committed write of a fetch row (a state, a
-        // stored fraction, an ending) and every upload into the pool pings it, and the region re-reads
-        // SERVERS_MEDIA_VIEW. Gated by the tab's own permission, so a viewer the tab refuses never hears a
-        // fetch move. Registered as its owner, because a test JVM runs this init once per server boot.
-        LiveFeeds.INSTANCE.registerOwned(InstallMediaLive.FEED, LiveFeed.of(
-            access -> access.hasPermission(HohenheimSources.MEDIA_MANAGE),
-            InstallMediaFetchModel.MODEL_ID, InstallMediaLive.POOL));
-
-        HohenheimEndpoints.SERVERS_MEDIA_VIEW.setHandler(conduit -> {
-            Integer serverId = conduit.getParameter(HohenheimEndpoints.SERVER_ID);
-            Row server = Models.get(ServerModel.class).findById(serverId);
-            // The same refusal the tab gives a host that has no ISO pool: not found.
-            if (server == null || !ServerModel.isIncus(server)) {
-                conduit.notFound();
-                return null;
-            }
-            return new DryResult<>(ServerMediaTab.view(server));
-        });
 
         HohenheimEndpoints.SERVERS_MEDIA_FETCH.setHandler(conduit -> {
             Integer serverId = conduit.getParameter(HohenheimEndpoints.SERVER_ID);
@@ -120,22 +94,22 @@ final class ServerMediaHandlers {
             try {
                 temp = Files.createTempFile("hohenheim-media-upload-", ".iso");
             } catch (IOException e) {
-                return uploadFailure(conduit, HohenheimMicrocopy.SERVER_MEDIA.of("upload_failed")
+                return uploadFailure(conduit, serverId, HohenheimMicrocopy.SERVER_MEDIA.of("upload_failed")
                     .withArg("name", name));
             }
             try {
                 long size = http.streamBodyTo(temp, InstallMedia.MAX_ISO_BYTES);
                 if (size == 0) {
-                    return uploadFailure(conduit, HohenheimMicrocopy.SERVER_MEDIA.of("upload_empty")
+                    return uploadFailure(conduit, serverId, HohenheimMicrocopy.SERVER_MEDIA.of("upload_empty")
                         .withArg("name", name));
                 }
                 media.importFrom(server, name, temp);
             } catch (Violations refused) {
-                return uploadFailure(conduit, HandlerSupport.violationMessage(refused));
+                return uploadFailure(conduit, serverId, HandlerSupport.violationMessage(refused));
             } catch (IOException | RuntimeException e) {
                 Blast.log("MEDIA: upload of", name, "to",
                     server.get(ServerModel.NAME), "failed -", e.getMessage());
-                return uploadFailure(conduit, HohenheimMicrocopy.SERVER_MEDIA.of("upload_failed")
+                return uploadFailure(conduit, serverId, HohenheimMicrocopy.SERVER_MEDIA.of("upload_failed")
                     .withArg("name", name));
             } finally {
                 try {
@@ -149,9 +123,9 @@ final class ServerMediaHandlers {
             History.event(Models.get(ServerModel.class), serverId, Change.fact(HohenheimActivityAction.MEDIA_UPLOADED,
                 Map.of(HohenheimActivityAction.NAME_KEY, name)));
             HohenheimFlash.success(conduit, HohenheimMicrocopy.SERVER_MEDIA.of("media_uploaded").withArg("name", name));
-            // The tab's live region hears the new medium and its re-read carries this message; the answer is a
-            // bare status rather than a redirect: there is no form post to send back.
-            LiveServer.INVALIDATIONS.changed(InstallMediaLive.POOL);
+            // The tab's live part hears the new medium; the answer is a bare status rather than a redirect: there is
+            // no form post to send back.
+            ServerMediaTab.poolChanged(serverId);
             conduit.setResponseStatus(200);
             conduit.endWithContentType("text/plain; charset=utf-8", "");
             return null;
@@ -175,6 +149,8 @@ final class ServerMediaHandlers {
             History.event(Models.get(ServerModel.class), serverId, Change.fact(HohenheimActivityAction.MEDIA_DELETED,
                 Map.of(HohenheimActivityAction.NAME_KEY, name)));
             HohenheimFlash.success(conduit, HohenheimMicrocopy.SERVER_MEDIA.of("media_deleted").withArg("name", name));
+            // Another reader's open tab redraws its part without the deleted medium.
+            ServerMediaTab.poolChanged(serverId);
             return HandlerSupport.redirect(tab);
         });
     }
@@ -185,11 +161,11 @@ final class ServerMediaHandlers {
      * through the one message lane this tab already has, in their own language, with
      * no second copy of the resolution machinery here.
      */
-    private static ActionResult<Object> uploadFailure(@NonNull Conduit conduit,
+    private static ActionResult<Object> uploadFailure(@NonNull Conduit conduit, int serverId,
                                                       @NonNull Microcopy reason) {
         HohenheimFlash.error(conduit, reason);
-        // The tab's live region hears the upload end and its re-read carries this message.
-        LiveServer.INVALIDATIONS.changed(InstallMediaLive.POOL);
+        // The tab's live part hears the upload end.
+        ServerMediaTab.poolChanged(serverId);
         conduit.setResponseStatus(422);
         conduit.endWithContentType("text/plain; charset=utf-8", "");
         return null;

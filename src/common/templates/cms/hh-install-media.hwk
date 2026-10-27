@@ -1,29 +1,19 @@
 {% tag HhInstallMedia {
-    /* The live region of an Incus host's Install media tab: the stored fetches with their progress,
-       and the pool's media with their delete forms. The server render seeds the view; while the
-       element is connected it watches the install-media live feed, and every change re-reads the
-       SAME view (InstallMediaLive.read, the viewer's own gated request) into this element alone.
-       No navigation happens: no history entry, no scroll jump, and the fetch and upload forms
-       beside the region are never re-rendered under the operator's hands.
-       The watch belongs to the MOUNTED element (Live.watch registers its own teardown on the
-       element's disconnect), never to a render expression -- hydration revives values without
-       re-running lets, so a render-time watch would not exist after a hard load. */
-    public required serverId: Integer
-    public view: InstallMediaView = null
+    /* The live part of an Incus host's Install media tab (ServerMediaTab.PART): the stored fetches with their
+       progress, and the pool's media with their delete forms. Any write to the host's fetch rows and any upload
+       into its pool re-reads this part alone for the reader, so the fetch and upload forms beside it are never
+       re-rendered under the operator's hands. */
+    public required part: Live<InstallMediaView>
     public deleteTarget: RouteTarget = null
+    private computed view: InstallMediaView = part{:}.value
 
     style {
         display: contents;
     }
 
     @mount
-    function connect() {
-        Live.watch(this, InstallMediaLive.feed(), () => { reread() })
-    }
-
-    function reread() {
-        let fresh = InstallMediaLive.read(serverId)
-        if fresh != null { view = fresh }
+    function follow() {
+        Live.follow(this, &part)
     }
 
     template {

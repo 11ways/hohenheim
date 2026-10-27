@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.instance.InstallMediaFetchState;
-import be.elevenways.hohenheim.instance.InstallMediaLive;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.instance.InstallMediaView;
 import be.elevenways.hohenheim.model.InstallMediaFetchModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -15,7 +15,7 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.channel.ChannelHub;
 import be.elevenways.zenit.common.live.LiveChannel;
 import be.elevenways.zenit.common.live.LiveFeed;
-import be.elevenways.zenit.common.live.LiveFeeds;
+import be.elevenways.zenit.common.orm.model.ModelChanges;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.lease.Lease;
 import be.elevenways.zenit.common.orm.lease.Leases;
@@ -28,6 +28,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -130,8 +132,8 @@ class InstallMediaFetchLaneTest extends HohenheimTestBase {
                     .isEqualTo(InstallMediaFetchState.READY.label());
                 assertThat(fetch.percent()).as("step 5: a settled fetch draws no bar").isNull();
             });
-        assertThat(adminGet("/servers/" + hostId + "/media").statusCode())
-            .as("step 5: the live re-read endpoint answers the admin").isEqualTo(200);
+        assertThat(adminGet("/admin/servers/" + hostId + "/page/install-media").statusCode())
+            .as("step 5: the page the live part is a piece of answers the admin").isEqualTo(200);
     }
 
     /** A failing transfer stores its reason; the cap refuses a third fetch; a corpse reads as interrupted. */
@@ -219,22 +221,31 @@ class InstallMediaFetchLaneTest extends HohenheimTestBase {
     }
 
     /**
-     * The live lane's server half: the feed watches the fetch model, refuses a viewer the tab refuses,
-     * and the re-read endpoint refuses a host without an ISO pool exactly like the tab does.
+     * The live part's server half: its feed hears the host's own fetch rows and pool behind the tab's own gate, and
+     * a host the tab refuses has no part to read.
      */
     @Test
-    void theTabsLiveFeedWatchesTheFetchModelBehindTheTabsOwnGate() throws Exception {
-        // 1. The feed is registered and a fetch row's write is what invalidates it.
-        LiveFeed feed = LiveFeeds.INSTANCE.resolve(InstallMediaLive.FEED);
-        assertThat(feed).as("step 1: the install-media feed is registered").isNotNull();
-        assertThat(feed.models()).as("step 1: over the fetch model")
-            .containsExactly(InstallMediaFetchModel.MODEL_ID);
+    void theTabsLivePartHearsItsOwnHostBehindTheTabsOwnGate() throws Exception {
+        // 1. The part's feed is the fetch model and the pool, keyed by this host.
+        LiveFeed feed = ServerMediaTab.PART.feedFor(partOf(hostId));
+        assertThat(feed).as("step 1: the install-media part has a feed").isNotNull();
+        assertThat(feed.models()).as("step 1: over the fetch model and the pool")
+            .contains(InstallMediaFetchModel.MODEL_ID);
+        assertThat(feed.changeKeys(InstallMediaFetchModel.MODEL_ID, AccessContext.anonymous()))
+            .as("step 1: heard for this host's fetch rows only")
+            .containsExactly(ModelChanges.keyOf(InstallMediaFetchModel.SERVER_ID, hostId));
+
+        // 1b. One host has one part: another spelling of its id names no part, so hears nothing.
+        assertThat(ServerMediaTab.PART.feedFor(HohenheimSlugs.ADMIN + ",0" + hostId + ",1"))
+            .as("step 1b: a zero-padded id names no part").isNull();
+        assertThat(ServerMediaTab.PART.feedFor(HohenheimSlugs.ADMIN + "," + hostId + ",0"))
+            .as("step 1b: page 0 names no part").isNull();
 
         // 2. A viewer the tab refuses never hears a fetch move.
         assertThat(feed.mayWatch(AccessContext.anonymous()))
             .as("step 2: an anonymous viewer may not watch").isFalse();
 
-        // 3. The re-read endpoint answers only for an Incus host, like the tab.
+        // 3. A Docker host has no Install media tab, so no page the part could be a piece of.
         Row docker = Models.get(ServerModel.class).createEmptyRow();
         docker.set(ServerModel.NAME, PREFIX + "docker");
         docker.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
@@ -243,8 +254,8 @@ class InstallMediaFetchLaneTest extends HohenheimTestBase {
         Models.get(ServerModel.class).save(docker);
         int dockerId = docker.get(ServerModel.ID);
         try {
-            assertThat(adminGet("/servers/" + dockerId + "/media").statusCode())
-                .as("step 3: a Docker host has no install media to re-read").isEqualTo(404);
+            assertThat(adminGet("/admin/servers/" + dockerId + "/page/install-media").statusCode())
+                .as("step 3: a Docker host's tab is not found, so is its part").isEqualTo(404);
         } finally {
             Models.get(ServerModel.class).delete(dockerId);
         }
@@ -282,10 +293,11 @@ class InstallMediaFetchLaneTest extends HohenheimTestBase {
             String urlBefore = page.url();
             page.fill("#media-name", "half-typed");
 
-            // 3. The region's watch reached the server: a subscriber on the fetch model's live topic.
-            Poll.until("step 3: the tab's live region subscribed to the fetch model", Duration.ofSeconds(10),
-                () -> ChannelHub.subscriberCount(LiveChannel.CHANNEL,
-                    LiveInvalidations.topicOf(InstallMediaFetchModel.MODEL_ID)) > 0);
+            // 3. The part's follow reached the server: a subscriber on this host's fetch rows.
+            Poll.until("step 3: the tab's live part subscribed to its host's fetch rows", Duration.ofSeconds(10),
+                () -> ChannelHub.subscriberCount(LiveChannel.CHANNEL, LiveInvalidations.topicOf(
+                    InstallMediaFetchModel.MODEL_ID,
+                    ModelChanges.keyOf(InstallMediaFetchModel.SERVER_ID, hostId))) > 0);
 
             // 4. The fetch finishes on the server; the open region follows it to its ending.
             release.countDown();
@@ -313,6 +325,64 @@ class InstallMediaFetchLaneTest extends HohenheimTestBase {
         }
     }
 
+    /**
+     * An upload into the host's pool redraws the open tab's part IN PLACE: the new medium appears while the document,
+     * the history, the forms beside the part and a half-typed fetch form stay exactly as they were.
+     */
+    @Test
+    void anUploadRedrawsTheOpenTabsMediaInPlace() throws Exception {
+        String name = "uploaded.iso";
+        Path iso = Files.createTempFile("hohenheim-upload-test-", ".iso");
+        Files.writeString(iso, "not really an iso");
+        try (FakeIncusSocket incus = FakeIncusSocket.start()) {
+            int socketHostId = socketHost(incus);
+            try {
+                // 1. Open the tab: the pool holds nothing yet.
+                String medium = "hh-install-media [data-medium-name=\"" + name + "\"]";
+                navigateToApp("/admin/servers/" + socketHostId + "/page/install-media");
+                waitForHydration();
+                assertThat(countElements(medium)).as("step 1: the pool holds no upload yet").isZero();
+
+                // 2. Pin the document, the history depth, the fetch form element and a half-typed fetch form.
+                page.evaluate("() => { window.__mediaTabProbe = 'alive';"
+                    + " document.querySelector('#media-fetch-form').__kept = 'kept'; }");
+                Object historyBefore = page.evaluate("() => history.length");
+                String urlBefore = page.url();
+                page.fill("#media-name", "half-typed");
+
+                // 3. The part's follow reached the server: a subscriber on this host's pool.
+                Poll.until("step 3: the tab's live part subscribed to its host's pool", Duration.ofSeconds(10),
+                    () -> ChannelHub.subscriberCount(LiveChannel.CHANNEL, LiveInvalidations.topicOf(
+                        InstallMediaFetchModel.MODEL_ID,
+                        ModelChanges.keyOf(InstallMediaFetchModel.SERVER_ID, socketHostId))) > 0);
+
+                // 4. Upload through the tab's own form: the daemon takes the medium and the part draws it.
+                page.fill("#media-upload-name", name);
+                page.setInputFiles("#media-upload-file", iso);
+                page.click("#media-upload-form pl-button[type=submit]");
+                waitForPageFunction("() => !!document.querySelector('" + medium + "')");
+                assertThat(incus.daemon.customVolumes).as("step 4: the daemon holds the upload").containsKey(name);
+                assertThat(countElements(medium)).as("step 4: the part draws the new medium").isEqualTo(1);
+
+                // 5. Only the part redrew: the same document, no new history entry, the URL, the fetch form element
+                //    and its typed value untouched.
+                assertThat(page.evaluate("() => window.__mediaTabProbe"))
+                    .as("step 5: the same document, no reload").isEqualTo("alive");
+                assertThat(page.evaluate("() => history.length"))
+                    .as("step 5: no history entry was pushed").isEqualTo(historyBefore);
+                assertThat(page.url()).as("step 5: the URL did not move").isEqualTo(urlBefore);
+                assertThat(page.evaluate("() => document.querySelector('#media-fetch-form').__kept"))
+                    .as("step 5: the fetch form beside the part was never re-rendered").isEqualTo("kept");
+                assertThat(page.inputValue("#media-name"))
+                    .as("step 5: the half-typed fetch form survived the update").isEqualTo("half-typed");
+            } finally {
+                Models.get(ServerModel.class).delete(socketHostId);
+            }
+        } finally {
+            Files.deleteIfExists(iso);
+        }
+    }
+
     // -- plumbing -------------------------------------------------------------
 
     /** A DOWNLOADING row written just now, as a job would have left it; no lease is taken for it. */
@@ -323,6 +393,25 @@ class InstallMediaFetchLaneTest extends HohenheimTestBase {
         row.set(InstallMediaFetchModel.STATE, InstallMediaFetchState.DOWNLOADING.token());
         Models.get(InstallMediaFetchModel.class).save(row);
         return row.get(InstallMediaFetchModel.ID);
+    }
+
+    /** @return the install-media part parameter of a host on the admin panel */
+    private static String partOf(int serverId) {
+        return HohenheimSlugs.ADMIN + "," + serverId + ",1";
+    }
+
+    /** A host whose daemon is the fake on a unix socket, reached through the production client lane. */
+    private static int socketHost(FakeIncusSocket incus) {
+        Row socketHost = Models.get(ServerModel.class).createEmptyRow();
+        socketHost.set(ServerModel.NAME, PREFIX + "socket-host");
+        socketHost.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
+        socketHost.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
+        socketHost.set(ServerModel.INCUS_URL, incus.url());
+        socketHost.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
+        socketHost.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
+        Models.get(ServerModel.class).save(socketHost);
+        HostFixtures.acknowledgePosture(socketHost);
+        return socketHost.get(ServerModel.ID);
     }
 
     /** The row as the tab reads it (settling included). */

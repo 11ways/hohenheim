@@ -11,6 +11,9 @@ import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.TextField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
+import org.checkerframework.checker.nullness.qual.NonNull;
+
+import java.util.List;
 
 /**
  * The stored status of one install-media fetch running off the request thread: what the Install media
@@ -57,6 +60,10 @@ public class InstallMediaFetchModel extends Model {
     @Override public String getModelName() { return "InstallMediaFetch"; }
     @Override public String getTableName() { return "install_media_fetches"; }
     @Override public Schema getSchema() { return SCHEMA; }
+
+    /** Keyed by the host, so a host's Install media part hears its own fetches only. */
+    @Override
+    public @NonNull List<Field<?, ?>> getChangeKeyFields() { return List.of(SERVER_ID); }
 
     /** Plumbing: recorded, kept out of people's feeds. */
     public static final HistoryBehaviour HISTORY =

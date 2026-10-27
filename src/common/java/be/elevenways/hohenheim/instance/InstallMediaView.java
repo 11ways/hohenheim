@@ -9,7 +9,7 @@ import java.util.List;
 /**
  * The live half of an Incus host's Install media tab: the pool's media and the fetches, read in one go.
  *
- * AIDEV-NOTE: ONE shape for the page render and for the live re-read ({@link InstallMediaLive#read}),
+ * AIDEV-NOTE: ONE shape for the page render and for the live re-read (the tab's live part),
  * so the region a fetch's progress updates in place can never draw differently from the page that
  * first rendered it. The forms around it are deliberately NOT part of it: a re-read must never touch
  * what the operator is typing.

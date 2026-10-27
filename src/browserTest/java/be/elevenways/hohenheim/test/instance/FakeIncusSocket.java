@@ -16,14 +16,17 @@ import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * A {@link FakeIncusTransport} served on a unix socket, so a host row whose {@code incus_url} names the socket is
  * addressed through the PRODUCTION client lane ({@code IncusClients.forServer}) instead of a substituted client.
  *
  * AIDEV-NOTE: one request per connection, answered with {@code Connection: close}: the shape the stream transport
- * speaks. It serves only {@link FakeIncusTransport#exchange}; an upload or websocket reaches no route here.
+ * speaks. A request naming its upload ({@code X-Incus-Name}) is served by {@link FakeIncusTransport#exchangeUpload},
+ * every other by {@link FakeIncusTransport#exchange}; a websocket reaches no route here.
  *
  * @author Jelle De Loecker
  * @since  0.9.0
@@ -71,14 +74,36 @@ final class FakeIncusSocket implements AutoCloseable {
     private void answer(@NonNull InputStream in, @NonNull OutputStream out) throws IOException {
         String[] requestLine = line(in).split(" ");
         int length = 0;
+        String contentType = "application/octet-stream";
+        Map<String, String> incusHeaders = new HashMap<>();
         for (String header = line(in); !header.isEmpty(); header = line(in)) {
             int colon = header.indexOf(':');
-            if (colon > 0 && header.substring(0, colon).trim().toLowerCase(Locale.ROOT).equals("content-length")) {
-                length = Integer.parseInt(header.substring(colon + 1).trim());
+            if (colon <= 0) continue;
+            String name = header.substring(0, colon).trim();
+            String value = header.substring(colon + 1).trim();
+            switch (name.toLowerCase(Locale.ROOT)) {
+                case "content-length" -> length = Integer.parseInt(value);
+                case "content-type" -> contentType = value;
+                case "x-incus-name" -> incusHeaders.put("X-Incus-Name", value);
+                case "x-incus-type" -> incusHeaders.put("X-Incus-Type", value);
+                default -> { }
             }
         }
-        String body = length == 0 ? null : new String(in.readNBytes(length), StandardCharsets.UTF_8);
-        Http11.Raw raw = this.daemon.exchange(requestLine[0], requestLine[1], body, 5_000);
+        byte[] bytes = in.readNBytes(length);
+        Http11.Raw raw;
+        if (incusHeaders.containsKey("X-Incus-Name")) {
+            Path upload = Files.createTempFile("fake-incus-upload-", ".bin");
+            try {
+                Files.write(upload, bytes);
+                raw = this.daemon.exchangeUpload(requestLine[0], requestLine[1], upload, contentType, incusHeaders,
+                    5_000);
+            } finally {
+                Files.deleteIfExists(upload);
+            }
+        } else {
+            raw = this.daemon.exchange(requestLine[0], requestLine[1],
+                length == 0 ? null : new String(bytes, StandardCharsets.UTF_8), 5_000);
+        }
         out.write(("HTTP/1.1 " + raw.status() + " Fake\r\nContent-Type: application/json\r\nContent-Length: "
             + raw.body().length + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
         out.write(raw.body());

@@ -19,6 +19,14 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.server.page.RecordTabPart;
+import be.elevenways.zenit.common.live.LiveFeed;
+import be.elevenways.zenit.common.live.LiveRead;
+import be.elevenways.zenit.common.orm.model.ModelChanges;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
+import be.elevenways.zenit.server.live.LiveReads;
+import be.elevenways.zenit.server.live.LiveServer;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.result.ActionResult;
@@ -45,6 +53,49 @@ import java.util.Map;
  */
 public final class ServerMediaTab implements RecordTab.Rendered<Row> {
 
+    /**
+     * An upload into or a delete from a host's pool ended: the daemon holds the media, so no model write announces
+     * it. Announced keyed by the host ({@link #poolChanged}).
+     */
+    private static final @NonNull Identifier POOL = HohenheimIds.id("install_media_pool");
+
+    /**
+     * The tab's media and fetches as one live part, its parameter {@code panel,serverId,page}: heard on its own host's
+     * fetch rows and pool changes, never another host's, a piece of the host's Install media subpage, read again
+     * through the panel's gate and this tab's own for the reader, so a fetch's progress, its end and an upload redraw
+     * the part alone and never the fetch and upload forms beside it.
+     */
+    public static final LiveRead<String, InstallMediaView> PART =
+        LiveRead.of(HohenheimIds.id("install_media"), String.class, InstallMediaView.class)
+            .heard(part -> {
+                RecordTabPart.At at = ServerMediaTab.TAB_PART.at(part);
+                return at == null ? List.of() : List.of(LiveFeed.keyed(
+                    access -> access.hasPermission(HohenheimSources.MEDIA_MANAGE), at.key(),
+                    InstallMediaFetchModel.MODEL_ID, POOL));
+            });
+
+    /** Where {@link #PART} lives: the Install media tab of a server record. */
+    private static final RecordTabPart TAB_PART = new RecordTabPart(HohenheimSlugs.SERVERS,
+        HohenheimSlugs.Tab.INSTALL_MEDIA);
+
+    /** Serve {@link #PART}; called once by HohenheimHandlers. */
+    public static void registerPart() {
+        LiveReads.serve(PART, TAB_PART::page, ServerMediaTab::partRead);
+    }
+
+    /** Tell the readers of one host's part that its pool changed. */
+    public static void poolChanged(int serverId) {
+        LiveServer.INVALIDATIONS.changed(POOL, ModelChanges.Keys.of(serverId));
+    }
+
+    /** The part's read: the panel's gate admits the reader to the servers, then this tab's gate to the host. */
+    private static @NonNull InstallMediaView partRead(@NonNull AccessContext access, @NonNull String part) {
+        if (!(TAB_PART.open(access, part).record() instanceof Row server)) {
+            throw new DomainRefusal(ZenitRefusalReason.NOT_FOUND, "No such install media tab");
+        }
+        return view(server);
+    }
+
     @Override public @NonNull Identifier id() { return HohenheimIds.id("server_media"); }
     @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.SERVER_MEDIA.of("tab"); }
     @Override public @NonNull String slug() { return HohenheimSlugs.Tab.INSTALL_MEDIA; }
@@ -67,18 +118,15 @@ public final class ServerMediaTab implements RecordTab.Rendered<Row> {
 
     @Override
     public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row server) {
-        return body(request.conduit(), server);
-    }
-
-    @NonNull ActionResult<?> body(@NonNull Conduit conduit, @NonNull Row server) {
+        Conduit conduit = request.conduit();
         Integer serverId = server.get(ServerModel.ID);
         Map<String, Object> vars = new HashMap<>();
         vars.put("title", CmsSupport.pageTitle(conduit, HohenheimMicrocopy.SERVER_MEDIA,
             server.get(ServerModel.NAME)));
-        vars.put("serverId", serverId);
         vars.put("serverName", server.get(ServerModel.NAME));
-        // The live region's first paint; the same view is what its live re-read answers.
-        vars.put("view", view(server));
+        // The live part's first paint; the same view is what its re-read answers.
+        vars.put("part", LiveReads.at(PART, TAB_PART.parameter(request.panelSlug(), serverId, 1),
+            () -> view(server)));
         vars.put("fetchTarget", HohenheimEndpoints.SERVERS_MEDIA_FETCH
             .with(HohenheimEndpoints.SERVER_ID, serverId));
         vars.put("deleteTarget", HohenheimEndpoints.SERVERS_MEDIA_DELETE
@@ -93,13 +141,12 @@ public final class ServerMediaTab implements RecordTab.Rendered<Row> {
     }
 
     /**
-     * THE install-media view of one Incus host, rendered by the tab and answered by its live re-read
-     * ({@code HohenheimEndpoints.SERVERS_MEDIA_VIEW}).
+     * THE install-media view of one Incus host, rendered by the tab and answered by its part's re-read
+     * ({@link #PART}).
      *
      * AIDEV-NOTE: the fetch lane runs in the background, so its stored rows are the only place a running
-     * download, its progress or its failure reason can be read. They render here, and the tab's region
-     * re-reads this view whenever a fetch row changes (the InstallMediaLive feed) instead of reloading
-     * the whole tab on a timer.
+     * download, its progress or its failure reason can be read. They render here, and the tab's part
+     * re-reads this view whenever one of its host's fetch rows changes instead of reloading the whole tab on a timer.
      */
     public static @NonNull InstallMediaView view(@NonNull Row server) {
         List<InstallMediumView> media = new ArrayList<>();

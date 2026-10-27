@@ -49,6 +49,7 @@ import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.cms.server.page.PageActions;
+import be.elevenways.zenit.cms.server.page.RecordTabPart;
 import be.elevenways.zenit.cms.server.panel.PanelActionOffers;
 import be.elevenways.zenit.cms.server.render.action.ActionStateTranslator;
 import be.elevenways.zenit.cms.server.render.action.RowOffer;
@@ -77,13 +78,7 @@ import be.elevenways.zenit.widget.common.data.WidgetBadge;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.hohenheim.instance.DeployDetail;
 import be.elevenways.hohenheim.instance.InstanceDeploys;
-import be.elevenways.zenit.cms.common.panel.PageAddress;
-import be.elevenways.zenit.cms.common.panel.Panel;
-import be.elevenways.zenit.cms.common.panel.PanelRegistry;
-import be.elevenways.zenit.cms.common.render.CmsShellFunctions;
 import be.elevenways.zenit.cms.common.render.action.PageFormState;
-import be.elevenways.zenit.cms.server.panel.PanelGate;
-import be.elevenways.zenit.cms.server.panel.RecordTabGate;
 import be.elevenways.zenit.common.live.LiveRead;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
@@ -135,9 +130,13 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
     static final LiveRead<String, InstanceDeploys> PART =
         LiveRead.of(HohenheimIds.id("instance_deploys"), String.class, InstanceDeploys.class)
             .heard(part -> {
-                PartAt at = partAt(part);
-                return at == null ? List.of() : heardFor(at.instanceId());
+                Integer instanceId = instanceIdOf(part);
+                return instanceId == null ? List.of() : heardFor(instanceId);
             });
+
+    /** Where {@link #PART} lives: the Deploys tab of an instance record. */
+    private static final RecordTabPart TAB_PART = new RecordTabPart(HohenheimSlugs.INSTANCES,
+        HohenheimSlugs.Tab.DEPLOYMENTS);
 
     /**
      * @return the feeds of one record's Deploys part, each keyed by that record but the databases': whether Deploy now
@@ -200,71 +199,26 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
     /** Serve {@link #PART}; called once by HohenheimHandlers. */
     public static void registerPart() {
         InstanceDeploymentsPage tab = new InstanceDeploymentsPage();
-        LiveReads.serve(PART, InstanceDeploymentsPage::page, tab::partRead);
+        LiveReads.serve(PART, TAB_PART::page, tab::partRead);
     }
 
-    /** The decoded part parameter: the panel, the record and the history page it names. */
-    private record PartAt(@NonNull Panel panel, int instanceId, int page) {
-
-        /** @return the tab's route on this panel, the first history page */
-        @NonNull BoundEndpoint<?> route() {
-            return CmsRoutes.subpage(this.panel.slug(), HohenheimSlugs.INSTANCES, this.instanceId,
-                HohenheimSlugs.Tab.DEPLOYMENTS);
-        }
-
-        /** @return the tab's address on its history page */
-        @NonNull String target() {
-            return this.page > 1 ? this.route().with(CmsEndpoints.LIST_PAGE_PARAM, this.page).toUrl()
-                : this.route().toUrl();
-        }
-    }
-
-    static @NonNull String partOf(@NonNull String panelSlug, int instanceId, int page) {
-        return panelSlug + "," + instanceId + "," + page;
-    }
-
-    /** @return the tab the parameter names, null when it is not one panel slug, record id and page in canonical form */
-    private static @Nullable PartAt partAt(@NonNull String part) {
-        String[] at = part.split(",", -1);
-        Panel panel = at.length == 3 ? PanelRegistry.getBySlug(at[0]) : null;
-        if (panel == null) return null;
+    /** @return the instance a part parameter names, null when it names none */
+    private static @Nullable Integer instanceIdOf(@NonNull String part) {
+        RecordTabPart.At at = TAB_PART.at(part);
         try {
-            int instanceId = Integer.parseInt(at[1]);
-            int page = Integer.parseInt(at[2]);
-            return page < 1 || !partOf(at[0], instanceId, page).equals(part) ? null
-                : new PartAt(panel, instanceId, page);
-        } catch (NumberFormatException notNumbers) {
+            return at == null ? null : Integer.valueOf(at.key());
+        } catch (NumberFormatException notInstance) {
             return null;
         }
     }
 
-    /** @return the record subpage the part is a piece of, null for a parameter that names none */
-    private static LiveReads.@Nullable Page page(@NonNull String part) {
-        PartAt at = partAt(part);
-        // The canonical path, no locale prefix: what a route gate sees of the page's own request.
-        return at == null ? null : new LiveReads.Page(CmsEndpoints.RECORD_SUBPAGE,
-            CmsEndpoints.RECORD_SUBPAGE.toUrl(null, at.route().getParameters()));
-    }
-
     /** The part's read: the panel's gate admits the reader to the instances, then this tab's gate to the record. */
     private @NonNull InstanceDeploys partRead(@NonNull AccessContext access, @NonNull String part) {
-        PartAt at = partAt(part);
-        Conduit conduit = access.conduit();
-        PanelEntry entry = at == null ? null : at.panel().entryBySlug(HohenheimSlugs.INSTANCES);
-        if (at == null || entry == null || conduit == null) {
+        RecordTabPart.Opened opened = TAB_PART.open(access, part);
+        if (!(opened.record() instanceof Row instance)) {
             throw new DomainRefusal(ZenitRefusalReason.NOT_FOUND, "No such deploys tab");
         }
-        PanelGate.Outcome.Admitted admitted = PanelGate.admitPart(access, at.panel(), entry);
-        CmsShellFunctions.pinPanel(conduit, at.panel());
-        String key = String.valueOf(at.instanceId());
-        PanelRequest request = new PanelRequest(at.panel(), conduit, admitted.request().access(), null,
-            PageAddress.at(at.target(), HohenheimSlugs.INSTANCES, key, HohenheimSlugs.Tab.DEPLOYMENTS));
-        RecordTabGate.OpenTab opened = RecordTabGate.admit(request, admitted.entry(), key,
-            HohenheimSlugs.Tab.DEPLOYMENTS);
-        if (opened == null || !(opened.offered().record() instanceof Row instance)) {
-            throw new DomainRefusal(ZenitRefusalReason.NOT_FOUND, "No such deploys tab");
-        }
-        return this.read(request, instance, at.page());
+        return this.read(opened.request(), instance, opened.page());
     }
 
     @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.DEPLOYMENTS.of("title"); }
@@ -301,7 +255,7 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
             instance.get(InstanceModel.NAME)));
         vars.put("head", recordHead(conduit));
         vars.put("timeWording", CmsSupport.timeWording(conduit));
-        vars.put("part", LiveReads.at(PART, partOf(request.panelSlug(), instanceId, page),
+        vars.put("part", LiveReads.at(PART, TAB_PART.parameter(request.panelSlug(), instanceId, page),
             () -> this.read(request, instance, page)));
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_DEPLOYMENTS, vars);
     }

@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.application.DeployLogHandler;
 import be.elevenways.hohenheim.server.cms.EnvironmentParts;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.cms.InstanceDeploymentsPage;
+import be.elevenways.hohenheim.server.cms.ServerMediaTab;
 import be.elevenways.hohenheim.server.cms.InstanceScheduleOperationHandlers;
 import be.elevenways.hohenheim.server.cms.PutOnline;
 import be.elevenways.hohenheim.server.cms.SiteOperationHandlers;
@@ -75,6 +76,7 @@ public final class HohenheimHandlers {
         DatabaseHandlers.init();
         ServerMediaHandlers.init();
         InstanceDeploymentsPage.registerPart();
+        ServerMediaTab.registerPart();
         SiteControlHandlers.initInstanceConsole();
         SiteControlHandlers.initDevTunnel();
         initApi();
