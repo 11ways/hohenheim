@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -91,7 +92,7 @@ public final class SpamserviceWordsResource {
                 .title(entry -> Microcopy.literalOrNull(entry.word())))
             .list(ResourceList.store(table, SpamserviceRemoteStore.pages(ID, clients, FIELDS, List.of("word"),
                     (client, applied, access) -> client.spamWords(applied.page(), applied.schema().pageSize(),
-                        applied.searchTerm())))
+                        applied.searchTerm())), HohenheimSources.SPAMSERVICE_SYSTEM_USERS)
                 .search("word")
                 .chrome(ListChrome.MINIMAL)
                 .notice(SpamserviceRemoteStore.notice(ID, clients))

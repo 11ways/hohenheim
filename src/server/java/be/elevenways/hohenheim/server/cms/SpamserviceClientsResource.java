@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.RawValues;
@@ -126,7 +127,8 @@ public final class SpamserviceClientsResource {
                 .title(client -> Microcopy.literalOrNull(client.name())))
             .list(ResourceList.store(table, SpamserviceRemoteStore.pages(ID, clients, FIELDS, List.of("name"),
                     (client, applied, access) -> client.clients(applied.page(), applied.schema().pageSize(),
-                        applied.searchTerm(), SpamserviceRemoteStore.booleanFilter(applied, "enabled"))))
+                        applied.searchTerm(), SpamserviceRemoteStore.booleanFilter(applied, "enabled"))),
+                    HohenheimSources.SPAMSERVICE_SYSTEM_USERS)
                 .search("name")
                 .chrome(ListChrome.MINIMAL)
                 .notice(SpamserviceRemoteStore.notice(ID, clients))

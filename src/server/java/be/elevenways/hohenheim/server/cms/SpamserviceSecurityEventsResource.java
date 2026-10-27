@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.typed.CoreTypes;
@@ -123,7 +124,7 @@ public final class SpamserviceSecurityEventsResource {
                             SpamserviceRemoteStore.textFilter(applied, "ip"),
                             days == null ? null : Texts.trimmedOrNull(days.from()),
                             days == null ? null : Texts.trimmedOrNull(days.to()));
-                    }))
+                    }), HohenheimSources.SPAMSERVICE_SYSTEM_USERS)
                 .chrome(ListChrome.MINIMAL)
                 .notice(SpamserviceRemoteStore.notice(ID, clients))
                 .build())

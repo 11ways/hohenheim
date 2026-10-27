@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.spamservice.client.SampleSummary;
@@ -165,7 +166,7 @@ public final class SpamserviceSamplesResource {
                         SpamserviceRemoteStore.textFilter(applied, "client_id"),
                         SpamserviceRemoteStore.booleanFilter(applied, "spam"),
                         SpamserviceRemoteStore.booleanFilter(applied, "confirmed"),
-                        SpamserviceRemoteStore.textFilter(applied, "ip"))))
+                        SpamserviceRemoteStore.textFilter(applied, "ip"))), HohenheimSources.SPAMSERVICE_SYSTEM_USERS)
                 .chrome(ListChrome.MINIMAL)
                 .notice(SpamserviceRemoteStore.notice(ID, clients))
                 .rowLinkToTab(HohenheimSlugs.Tab.ANALYSIS)

@@ -5,6 +5,9 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.ProjectModel;
+import be.elevenways.zenit.auth.model.GrantModel;
+import be.elevenways.zenit.common.live.LiveFeed;
+import be.elevenways.zenit.common.live.LiveFeeds;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -112,6 +115,15 @@ public final class ProjectMembershipParts {
             .build();
     }
 
+    /** The feed the member lists hear: a project or a membership grant written. */
+    private static final Identifier MEMBERS_FEED = HohenheimIds.id("project_member_list");
+
+    private static @NonNull Identifier membersFeed() {
+        LiveFeeds.INSTANCE.registerOwned(MEMBERS_FEED,
+            LiveFeed.of(AccessContext::isAccount, ProjectModel.MODEL_ID, GrantModel.MODEL_ID));
+        return MEMBERS_FEED;
+    }
+
     /** The identity, parent, list and reads both twins share. */
     private static PanelResource.@NonNull Builder<Membership> entry(@NonNull Identifier id) {
         return PanelResource.builder(id, HohenheimSlugs.PROJECT_MEMBERS,
@@ -132,7 +144,7 @@ public final class ProjectMembershipParts {
                     .defaultSort(SortSpec.asc("project")).build(), PAGES,
                     (projectKey, applied, access) -> PAGES.inMemory(applied, memberships(access).stream()
                         .filter(row -> String.valueOf(row.projectId()).equals(String.valueOf(projectKey)))
-                        .toList(), ProjectMembershipParts::cell, access))
+                        .toList(), ProjectMembershipParts::cell, access), membersFeed())
                 .chrome(ListChrome.MINIMAL).rowLink(ProjectMembershipParts::memberPage).build())
             .reads(ResourceReads.<Membership>typed(Membership::key)
                 .load((key, access) -> memberships(access).stream().filter(row -> row.key().equals(key))

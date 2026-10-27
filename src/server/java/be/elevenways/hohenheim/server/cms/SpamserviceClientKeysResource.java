@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.protoblast.common.key.IdentityKey;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.spamservice.client.CreatedClientKey;
@@ -212,7 +213,7 @@ public final class SpamserviceClientKeysResource {
                         return clientId != null
                             ? client.keys(clientId.toString(), applied.page(), applied.schema().pageSize())
                             : new PageResult<>(List.of(), applied.page(), applied.schema().pageSize(), 0);
-                    }))
+                    }), HohenheimSources.SPAMSERVICE_SYSTEM_USERS)
                 .chrome(ListChrome.MINIMAL)
                 .notice(SpamserviceRemoteStore.notice(ID, clients))
                 .build())
