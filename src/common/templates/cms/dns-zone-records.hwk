@@ -16,13 +16,7 @@
 {% declare searchValue: String = "" %}
 {% declare searchParam: String %}
 {% declare pager: Pager = null %}
-{% declare quickAddEnabled: Boolean = false %}
-{% declare quickAddForm: InlineCreateFormState = null %}
-{% declare quickAddValues: Map<String, Object> = null %}
-{% declare quickAddPresets: Map<String, Object> = null %}
-{% declare quickAddContext: Map<String, Object> = null %}
-{% declare quickAddRefreshUrl: String = "" %}
-{% declare quickAddCreateUrl: String = "" %}
+{% declare quickAdd: ResourceListState.QuickAdd = null %}
 {% declare addRecordTarget: RouteTarget = null %}
 {% declare head: RecordHeadState = null %}
 {% extend "zenitcms:shell" var:title=title %}
@@ -40,13 +34,13 @@
         {% /if %}
         {#- Quick add is the framework's header tool: a button opening the CREATE entries in a sheet. It adds
             INTO this zone: the zone rides along as a preset, so nothing asks which zone this is. -#}
-        {% if quickAddEnabled %}
-        <cms-quick-add createForm={% quickAddForm %}
-                       values={% quickAddValues %}
-                       presets={% quickAddPresets %}
-                       addContext={% quickAddContext %}
-                       refreshUrl={% quickAddRefreshUrl %}
-                       createUrl={% quickAddCreateUrl %}></cms-quick-add>
+        {% if quickAdd and quickAdd.quickAddEnabled %}
+        <cms-quick-add createForm={% quickAdd.quickAddForm %}
+                       values={% quickAdd.quickAddValues %}
+                       presets={% quickAdd.quickAddPresets %}
+                       addContext={% quickAdd.quickAddContext %}
+                       refreshUrl={% quickAdd.quickAddRefreshUrl %}
+                       createUrl={% quickAdd.quickAddCreateUrl %}></cms-quick-add>
         {% /if %}
         {% if addRecordTarget %}
         <pl-button variant="primary" use:Zenit.route={% addRecordTarget %} id="add-record-link">{{ t("add_record", scope: "dns_zone") }}</pl-button>

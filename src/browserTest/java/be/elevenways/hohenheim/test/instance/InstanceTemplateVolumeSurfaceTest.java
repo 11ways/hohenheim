@@ -29,8 +29,10 @@ import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.cms.common.panel.PageAddress;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.render.table.ResourceListState;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -333,12 +335,10 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
         PanelResource<Row> variableEntry = (PanelResource<Row>) registeredResource(VARIABLES);
         EndpointConduit list = operatorConduit().setParameter(CmsEndpoints.RESOURCE_PARAM, VARIABLES);
         list.setQueryParam(InstanceTemplateVariableModel.TEMPLATE_ID.getName(), String.valueOf(owner));
-        Map<String, Object> bar = new LinkedHashMap<>();
-        QuickAddState.putVars(bar, admin, variableEntry, AccessContext.of(list),
-            "/admin/" + VARIABLES + "?template_id=" + owner, "/admin/" + VARIABLES + "/new");
-        assertThat(bar.get("quickAddEnabled")).as("step 6: the filtered list offers its quick add").isEqualTo(true);
-        @SuppressWarnings("unchecked")
-        Map<String, Object> context = (Map<String, Object>) bar.get("quickAddContext");
+        ResourceListState.QuickAdd bar = QuickAddState.of(admin, variableEntry, AccessContext.of(list),
+            PageAddress.of(list), "/admin/" + VARIABLES + "?template_id=" + owner, "/admin/" + VARIABLES + "/new");
+        assertThat(bar.quickAddEnabled()).as("step 6: the filtered list offers its quick add").isTrue();
+        Map<String, Object> context = bar.quickAddContext();
         assertThat(context.get(CmsEndpoints.PARENT_PARAM.getName()))
             .as("step 6: the bar carries the preset template as the create's parent").isEqualTo(String.valueOf(owner));
         EndpointConduit add = operatorConduit()

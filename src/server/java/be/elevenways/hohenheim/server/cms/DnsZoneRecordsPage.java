@@ -27,6 +27,7 @@ import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.panel.PageAddress;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.render.table.TableState;
@@ -265,8 +266,8 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
         vars.put("head", recordHead(conduit));
         // Promoted seam: the framework's own quick-add builder. The zone preset it needs
         // is answered by the record entry's quick-create presets, which read THIS route.
-        QuickAddState.putVars(vars, panel, resource, accessContext, refreshUrl,
-            addRecordTarget == null ? null : addRecordTarget.toUrl());
+        vars.put("quickAdd", QuickAddState.of(panel, resource, accessContext, PageAddress.of(conduit), refreshUrl,
+            addRecordTarget == null ? null : addRecordTarget.toUrl()));
         return new RenderTemplateResult(TEMPLATE, vars);
     }
 
