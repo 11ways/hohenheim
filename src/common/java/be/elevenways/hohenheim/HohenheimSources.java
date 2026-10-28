@@ -75,7 +75,10 @@ public final class HohenheimSources implements ZenitModule {
     public static final RecordSourceHandle SPAMSERVICE_SYSTEM_USER_SOURCE =
         RecordSourceHandle.declare(SPAMSERVICE_SYSTEM_USERS);
 
-    private static volatile boolean registered = false;
+    private static final RecordSourceHandle CERTIFICATES = RecordSourceHandle.declare(CertificateModel.MODEL_ID);
+    private static final RecordSourceHandle ACCESS_LISTS = RecordSourceHandle.declare(AccessListModel.MODEL_ID);
+    private static final RecordSourceHandle DATABASES = RecordSourceHandle.declare(DatabaseModel.MODEL_ID);
+    private static final RecordSourceHandle SYSTEM_USERS = RecordSourceHandle.declare(SystemUserModel.MODEL_ID);
 
     @Override
     public void init() {
@@ -83,15 +86,10 @@ public final class HohenheimSources implements ZenitModule {
     }
 
     /**
-     * Idempotent registration; test bootstraps that skip module discovery
-     * call this directly after registering the models.
+     * Idempotent registration, run by every boot: a source the registry still holds is kept, one a restored registry
+     * lost is registered again.
      */
     public static synchronized void register() {
-        if (registered) {
-            return;
-        }
-        registered = true;
-
         // The SiteModel default source is registered server-side (ManagePanel):
         // its per-principal scope reads zenit-auth record grants, which common
         // code cannot see, and /manage tenants must reach it too.
@@ -116,19 +114,20 @@ public final class HohenheimSources implements ZenitModule {
         // domain ones, when the CertificateModel `view` capability shipped. This registration
         // is what the BROWSER registry keeps -- deliberately the narrower, admin-gated view;
         // registry membership is a server-authoritative question.
-        RecordSourceRegistry.INSTANCE.register(RecordSource.of(CertificateModel.REF)
-            .search(CertificateModel.NICE_NAME)
-            .baseCriteria(HohenheimSources::notTheAcmeAccountRow)
-            .permission(ADMIN_ACCESS)
-            .build());
+        RecordSourceRegistry.INSTANCE.registerOwned(CERTIFICATES,
+            () -> RecordSource.of(CertificateModel.REF)
+                .search(CertificateModel.NICE_NAME)
+                .baseCriteria(HohenheimSources::notTheAcmeAccountRow)
+                .permission(ADMIN_ACCESS)
+                .build());
 
-        RecordSourceRegistry.INSTANCE.register(RecordSource.of(AccessListModel.REF)
+        RecordSourceRegistry.INSTANCE.registerOwned(ACCESS_LISTS, () -> RecordSource.of(AccessListModel.REF)
             .search(AccessListModel.NAME)
             .permission(ADMIN_ACCESS)
             .build());
 
         // Feeds the site-database attachment picker.
-        RecordSourceRegistry.INSTANCE.register(RecordSource.of(DatabaseModel.REF)
+        RecordSourceRegistry.INSTANCE.registerOwned(DATABASES, () -> RecordSource.of(DatabaseModel.REF)
             .search(DatabaseModel.NAME)
             .permission(ADMIN_ACCESS)
             .build());
@@ -146,10 +145,11 @@ public final class HohenheimSources implements ZenitModule {
         // derived default lacks; they are declared server-side in AdminSources, where the
         // edit link and inline create can be spelled beside those facets.
 
-        RecordSourceRegistry.INSTANCE.register(RecordSource.of(SystemUserModel.REF)
-            .search(SystemUserModel.NAME)
-            .permission(ADMIN_ACCESS)
-            .build());
+        RecordSourceRegistry.INSTANCE.registerOwned(SYSTEM_USERS,
+            () -> RecordSource.of(SystemUserModel.REF)
+                .search(SystemUserModel.NAME)
+                .permission(ADMIN_ACCESS)
+                .build());
 
         RecordSourceRegistry.INSTANCE.registerOwned(SPAMSERVICE_SYSTEM_USER_SOURCE,
             () -> RecordSource.of(SystemUserModel.REF)

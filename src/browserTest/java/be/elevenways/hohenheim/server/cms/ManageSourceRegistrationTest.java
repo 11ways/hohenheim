@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.zenit.cms.common.panel.Panel;
@@ -113,6 +114,41 @@ class ManageSourceRegistrationTest extends HohenheimTestBase {
             RecordSourceRegistry.INSTANCE.restoreSnapshot(registered);
             // The memoization is process-wide: leave it claiming every panel again so a
             // later request never re-derives against the restored registry.
+            deriveFrameworkDefaults();
+        }
+    }
+
+    @Test
+    void hohenheimSourcesRegisterAgainOverARestoredRegistry() {
+
+        List<RecordSourceRegistry.Entry> registered = RecordSourceRegistry.INSTANCE.snapshot();
+        boolean strictBefore = RecordSourceRegistry.INSTANCE.isStrictRegistration();
+
+        try {
+            // 1. A registry restored to empty (test isolation, a second boot in one JVM) holds none of the
+            //    sources the first boot registered.
+            resetRegistry();
+            assertThat(RecordSourceRegistry.INSTANCE.byId(HohenheimSources.SPAMSERVICE_SYSTEM_USERS))
+                .as("step 1: the restored registry holds no spamservice user source").isNull();
+
+            // 2. Registering again installs them, and the handle reads the source installed.
+            HohenheimSources.register();
+            RecordSource<?> installed = RecordSourceRegistry.INSTANCE.byId(HohenheimSources.SPAMSERVICE_SYSTEM_USERS);
+            assertThat(installed)
+                .as("step 2: THE ASSERTION -- registering again installs the source over the restored registry")
+                .isNotNull();
+            assertThat(HohenheimSources.SPAMSERVICE_SYSTEM_USER_SOURCE.source())
+                .as("step 2: the handle reads the source the registry installed").isSameAs(installed);
+
+            // 3. A repeat registration keeps what it installed, even under the strict posture.
+            RecordSourceRegistry.INSTANCE.setStrictRegistration(true);
+            assertThatCode(HohenheimSources::register)
+                .as("step 3: registering twice is never refused").doesNotThrowAnyException();
+            assertThat(RecordSourceRegistry.INSTANCE.byId(HohenheimSources.SPAMSERVICE_SYSTEM_USERS))
+                .as("step 3: the installed source stays").isSameAs(installed);
+        } finally {
+            RecordSourceRegistry.INSTANCE.setStrictRegistration(strictBefore);
+            RecordSourceRegistry.INSTANCE.restoreSnapshot(registered);
             deriveFrameworkDefaults();
         }
     }
