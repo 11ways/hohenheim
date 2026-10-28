@@ -240,9 +240,9 @@ class ReleasesTabJourneyTest extends HohenheimTestBase {
 
             // 8. The rollback spends the deploy lane's own budget, the panel deploy's very policy: ten a minute per
             //    caller, refused ones included, and the eleventh is refused as rate-limited before anything is asked.
-            assertThat(InstanceOperations.ROLLBACK.rateLimit()).as("step 8: the deploy lane's own policy")
+            assertThat(InstanceOperations.ROLLBACK.rateLimit(operator)).as("step 8: the deploy lane's own policy")
                 .isSameAs(HohenheimEndpoints.DEPLOY_LIMIT)
-                .isSameAs(InstanceOperations.DEPLOY.rateLimit());
+                .isSameAs(InstanceOperations.DEPLOY.rateLimit(operator));
             for (String capability : List.of(HohenheimCapabilities.VIEW, HohenheimCapabilities.POWER)) {
                 RecordGrants.grant(GrantSubjectType.USER, limitedId, InstanceModel.MODEL_ID, other, capability, true);
             }

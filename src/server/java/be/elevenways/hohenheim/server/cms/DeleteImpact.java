@@ -52,7 +52,9 @@ import java.util.Set;
  * declares its own here as an {@code Availability.batch}. A list render asks the batch ONCE over the page's rows,
  * so each answer is one read narrowed to the asked keys ({@code countBy}, {@code KeyedRows}), never a query per row
  * and never a whole-table snapshot; a single subject (the record page, an invoke) is the batch of one. The
- * confirmations and the list cells below still read their tables once per request through {@link RouteScope#memo}.
+ * confirmations and the list cells below still read their tables once per request through {@link RouteScope#memo};
+ * the attached workloads a database destroy refuses on read through {@link RouteScope#memoUntilWrite}, so a link
+ * written since (also while the destroy waited for a lease) is seen.
  */
 public final class DeleteImpact {
 
@@ -273,7 +275,7 @@ public final class DeleteImpact {
     /** @return the live instance rows a database is attached to, in link order */
     static @NonNull List<Row> liveInstancesOf(@Nullable Integer databaseId) {
         return databaseId == null ? List.of()
-            : RouteScope.memo(ATTACHED, InstanceDatabaseLinks::liveInstancesByDatabase)
+            : RouteScope.memoUntilWrite(ATTACHED, InstanceDatabaseLinks::liveInstancesByDatabase)
             .getOrDefault(databaseId, List.of());
     }
 

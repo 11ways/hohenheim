@@ -38,6 +38,10 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.routing.RouteScope;
+import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.test.support.EndpointConduit;
+import be.elevenways.hohenheim.server.database.DatabaseWrites;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
@@ -51,6 +55,7 @@ import java.util.Objects;
 import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 /**
  * The Databases list and a database's overview say where each runs, which apps use it and when it
@@ -423,6 +428,36 @@ class DatabasesPageJourneyTest extends HohenheimHttpTestBase {
             assertThat(adminGet("/admin/" + HohenheimSlugs.DATABASES + "/" + dedicated.get(DatabaseModel.ID)
                 + "/page/overview").body()).as("step 6: its record menu carries the reason")
                 .contains("data-cms-action-reason").contains(cannotMove);
+        } finally {
+            for (int i = cleanup.size() - 1; i >= 0; i--) {
+                cleanup.get(i).run();
+            }
+        }
+    }
+
+    @Test
+    void aDestroyRefusesAnAppAttachedSinceItsRequestFirstLooked() {
+        List<Runnable> cleanup = new ArrayList<>();
+        try {
+            Row database = database(cleanup, "late-attach", false);
+            int databaseId = database.get(DatabaseModel.ID);
+            // 1. The request's delete confirmation reads the database free.
+            EndpointConduit request = new EndpointConduit();
+            RouteScope.run(request, () -> assertThat(DeleteImpact.workloadsHolding(databaseId))
+                .as("step 1: nothing holds it yet").isEmpty());
+
+            // 2. Another writer attaches an app meanwhile (as one would while the destroy waited for a lease): the
+            //    same request's destroy refuses it as in use, naming the app, instead of the free answer it read.
+            app(cleanup, PREFIX + "late-app", database);
+            RouteScope.run(request, () -> {
+                Violations refused = catchThrowableOfType(() -> DatabaseWrites.destroy(database), Violations.class);
+                assertThat((Throwable) refused).as("step 2: the destroy is refused").isNotNull();
+                assertThat(refused.all().get(0).message().key()).as("step 2: as in use")
+                    .isEqualTo("database_in_use");
+                assertThat(String.valueOf(refused.all().get(0).message().args().get("workloads")))
+                    .as("step 2: naming the app").contains(PREFIX + "late-app");
+            });
+            assertThat(Models.get(DatabaseModel.class).findById(databaseId)).as("step 2: the record stays").isNotNull();
         } finally {
             for (int i = cleanup.size() - 1; i >= 0; i--) {
                 cleanup.get(i).run();

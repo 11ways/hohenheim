@@ -113,10 +113,10 @@ class PanelDeployRunJourneyTest extends HohenheimTestBase {
 
             // 3. The deploy and the rollback spend ONE budget per caller, refused ones included: five deploys and five
             //    rollbacks fill it, and the eleventh asking of either is refused as rate-limited.
-            assertThat(InstanceOperations.DEPLOY.rateLimit()).as("step 3: the deploy spends hh_deploy")
+            assertThat(InstanceOperations.DEPLOY.rateLimit(operator)).as("step 3: the deploy spends hh_deploy")
                 .isSameAs(HohenheimEndpoints.DEPLOY_LIMIT)
-                .isSameAs(InstanceOperations.ROLLBACK.rateLimit())
-                .isSameAs(SiteOperations.ROLLBACK_RELEASE.rateLimit());
+                .isSameAs(InstanceOperations.ROLLBACK.rateLimit(operator))
+                .isSameAs(SiteOperations.ROLLBACK_RELEASE.rateLimit(operator));
             for (String capability : List.of(HohenheimCapabilities.VIEW, HohenheimCapabilities.POWER)) {
                 RecordGrants.grant(GrantSubjectType.USER, limitedId, InstanceModel.MODEL_ID, app, capability, true);
             }

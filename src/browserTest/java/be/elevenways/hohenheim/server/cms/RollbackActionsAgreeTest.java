@@ -13,6 +13,7 @@ import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.test.support.TestAccessContexts;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -76,7 +77,7 @@ class RollbackActionsAgreeTest {
 
         // 3. All three spend the deploy lane's one budget.
         for (PanelAction<Row> rollback : List.of(site, application, tab)) {
-            assertThat(Objects.requireNonNull(rollback.operation()).rateLimit())
+            assertThat(Objects.requireNonNull(rollback.operation()).rateLimit(TestAccessContexts.anonymous()))
                 .as("step 3: %s spends hh_deploy", rollback.id()).isSameAs(HohenheimEndpoints.DEPLOY_LIMIT);
         }
     }
