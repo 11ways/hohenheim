@@ -208,7 +208,7 @@ class AdminPagesTest extends HohenheimTestBase {
         waitForReactiveIdle();
         assertThat(page.locator(chips).count()).as("the removed chip is gone").isEqualTo(2);
 
-        page.click(".cms-settings-actions pl-button");
+        page.click("[data-cms-settings-save]");
         // The save's own outcome, never any toast: a toast an earlier write of the shared session left pending could
         // already show and pass a bare toast count before this save landed.
         page.waitForCondition(() -> Integer.valueOf(7).equals(Zenit.SETTINGS_VALUES.getValue(
@@ -252,7 +252,7 @@ class AdminPagesTest extends HohenheimTestBase {
             .as("the reset control is armed").isEqualTo("true");
         assertThat(page.locator(chips).count())
             .as("an armed reset leaves the editor untouched until save").isEqualTo(2);
-        page.click(".cms-settings-actions pl-button");
+        page.click("[data-cms-settings-save]");
         page.waitForCondition(() -> Zenit.SETTINGS_VALUES
             .getValue(HohenheimSettings.Security.NEVER_BAN).isEmpty());
         parsed = (Map<?, ?>) ((Map<?, ?>) Zenit.DRY.parse(Files.readString(settingsDry))).get("hohenheim");
