@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.proxy;
 
+import be.elevenways.zenit.server.http.HttpConduit;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.AttachmentKey;
 import io.undertow.util.URLUtils;
@@ -100,16 +101,7 @@ public final class RequestPath {
      * %3F a literal character instead of a query boundary.
      */
     public static @NonNull String rawPathOf(@NonNull HttpServerExchange exchange) {
-        String uri = exchange.getRequestURI();
-        if (uri == null || uri.isEmpty()) {
-            return "/";
-        }
-        if (exchange.isHostIncludedInRequestURI()) {
-            int authority = uri.indexOf("//");
-            int pathStart = authority < 0 ? -1 : uri.indexOf('/', authority + 2);
-            return pathStart < 0 ? "/" : uri.substring(pathStart);
-        }
-        return uri;
+        return HttpConduit.rawPathOf(exchange);
     }
 
     /**
