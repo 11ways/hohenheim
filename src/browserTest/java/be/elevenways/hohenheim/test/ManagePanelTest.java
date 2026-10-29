@@ -49,7 +49,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * through the Access tab unlocks exactly one site's safe edit/operate surface,
  * domains stay read-only, and effective group/negative grants drive eligibility.
  */
-class ManagePanelTest extends HohenheimTestBase {
+class ManagePanelTest extends HohenheimHttpTestBase {
 
     /** Hands every test its own tag, so fixtures of different tests never share a name. */
     private static final AtomicInteger FIXTURES = new AtomicInteger();

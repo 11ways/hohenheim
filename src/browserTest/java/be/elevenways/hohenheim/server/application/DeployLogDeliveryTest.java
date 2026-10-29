@@ -9,7 +9,7 @@ import be.elevenways.hohenheim.server.build.BuildLog;
 import be.elevenways.hohenheim.server.build.LiveBuildLogs;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.MonitorLink;
 import be.elevenways.protoblast.common.holder.Subscription;
 import be.elevenways.zenit.auth.model.GrantModel;
@@ -47,7 +47,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * @author Jelle De Loecker
  * @since 0.10.0
  */
-class DeployLogDeliveryTest extends HohenheimTestBase {
+class DeployLogDeliveryTest extends HohenheimHttpTestBase {
 
     private static final Duration BOUND = Duration.ofSeconds(10);
 

@@ -66,11 +66,13 @@ import static org.assertj.core.api.Assertions.*;
 class AdminPagesTest extends HohenheimTestBase {
 
     /**
-     * A moment ahead in words: "27 November 2026 12:55 pm", its zone when not the viewer's, then how far ahead; the
-     * gaps are any horizontal space, since a locale may set its day period apart with a narrow no-break space.
+     * A moment ahead in words, as a moment reads when nothing names its style (protoblast 9da86c7e): "Fri 27 Nov
+     * 12:55 pm", the year only outside this year ("Fri, 8 Jan 2027 12:55 pm"), its zone when not the viewer's, then
+     * how far ahead; the gaps are any horizontal space, since a locale may set its day period apart with a narrow
+     * no-break space.
      */
     private static final String WORDED_MOMENT_AHEAD =
-        "\\d{1,2}\\h\\p{L}+\\h\\d{4}\\h\\d{1,2}:\\d{2}(\\h?\\p{L}+)?(\\h\\([^)]+\\))?\\h\\(.+ from now\\)";
+        "\\p{L}+,?\\h\\d{1,2}\\h\\p{L}+(\\h\\d{4})?\\h\\d{1,2}:\\d{2}(\\h?\\p{L}+)?(\\h\\([^)]+\\))?\\h\\(.+ from now\\)";
 
     @BeforeAll
     static void seed() throws Exception {

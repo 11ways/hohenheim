@@ -18,6 +18,7 @@ import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.util.Map;
 import java.util.TimeZone;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -117,13 +118,15 @@ class CertificateDateColumnTest extends HohenheimHttpTestBase {
             TimeZone.setDefault(original);
         }
         assertThat(list.statusCode()).isEqualTo(200);
-        // A cookieless English reader: the office zone, which is not theirs, so the reading names it.
+        // A cookieless English reader: the office zone, which is not theirs, so the reading names it; the moment in
+        // the style a moment reads in when nothing names one (DateStyle.ofMoment, protoblast 9da86c7e).
         Reader reader = Reader.of(LocaleChain.ofTags("en"), Zenit.getMessageResolver());
+        DateStyle moment = DateStyle.ofMoment(Map.of());
         assertThat(reader.zoneIsReaders()).as("step 1: no stamp is no zone of the reader's own").isFalse();
         assertThat(list.body())
             .as("step 1: the expiry cell reads as a calendar day and time in the office zone, the zone named")
-            .contains(Wording.moment(reader, EARLY_EXPIRY, DateStyle.LONG))
-            .contains(Wording.moment(reader, LATE_EXPIRY, DateStyle.LONG))
+            .contains(Wording.moment(reader, EARLY_EXPIRY, moment))
+            .contains(Wording.moment(reader, LATE_EXPIRY, moment))
             .contains(Wording.time(reader, EARLY_WALL) + " (" + OFFICE_ZONE.getId() + ")")
             .contains(Wording.time(reader, LATE_WALL) + " (" + OFFICE_ZONE.getId() + ")");
 

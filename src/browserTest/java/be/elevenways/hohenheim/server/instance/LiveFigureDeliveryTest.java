@@ -8,7 +8,7 @@ import be.elevenways.hohenheim.instance.StatusProbe;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.hohenheim.test.ApiSupport;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.MonitorLink;
 import be.elevenways.hohenheim.test.instance.FakeMinecraftServer;
 import be.elevenways.protoblast.common.time.Now;
@@ -50,7 +50,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Jelle De Loecker
  * @since  0.10.0
  */
-class LiveFigureDeliveryTest extends HohenheimTestBase {
+class LiveFigureDeliveryTest extends HohenheimHttpTestBase {
 
     private static final Duration WAIT = Duration.ofSeconds(15);
 

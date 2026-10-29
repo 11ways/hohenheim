@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hawkeye.testSupport.TestStrings;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
@@ -238,7 +239,9 @@ class AppsListJourneyTest extends HohenheimHttpTestBase {
             assertThat(redirectRow).as("step 9: the list draws its host cell as a dash")
                 .contains("class=\"cms-cell-absent\" aria-label=\"-\"").contains(">-</pb-microcopy></span>")
                 .as("step 9: never as None").doesNotContain(">None<");
-            assertThat(adminGet("/admin/apps?_search=" + PREFIX + "stack-site").body())
+            // The list is one live part (zenit-cms 814dddb2), so its cells carry reactive markers: the text is judged.
+            String stackSiteRow = adminGet("/admin/apps?_search=" + PREFIX + "stack-site").body();
+            assertThat(TestStrings.withoutReactiveMarkers(stackSiteRow))
                 .as("step 9: the served website's row names the host")
                 .containsPattern("data-column=\"host\"[^>]*>\\s*<div class=\"cms-cell-clamp\"[^>]*>\\s*" + host + "\\s*<");
 

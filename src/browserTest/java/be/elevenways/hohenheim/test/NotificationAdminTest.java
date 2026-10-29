@@ -1,15 +1,18 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.server.cms.NotificationChannelParts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.notifications.server.DeliveryModel;
+import be.elevenways.zenit.notifications.server.DeliveryStatus;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import be.elevenways.protoblast.testsupport.browser.BoundedAssertions;
@@ -125,12 +128,14 @@ class NotificationAdminTest extends HohenheimTestBase {
             .isEqualTo("failed");
 
         // The operator finds that failure without asking anyone: the delivery log in the system group lists the
-        // row, failed.
+        // row, its status in words (a labelled stored enum since zenit-notifications 6038f32).
         navigateToApp("/admin/deliveries");
         waitForHydration();
         String deliveryRow = page.locator("pl-table-row[data-row-key='" + delivery.get(DeliveryModel.ID) + "']")
             .innerText();
-        assertThat(deliveryRow).as("the delivery log lists the failed test send").contains("failed");
+        assertThat(deliveryRow).as("the delivery log lists the failed test send")
+            .contains(DeliveryStatus.FAILED.labelMicrocopy().resolve(LocaleChain.ofTags("en"),
+                Zenit.getMessageResolver()));
     }
 
     /**

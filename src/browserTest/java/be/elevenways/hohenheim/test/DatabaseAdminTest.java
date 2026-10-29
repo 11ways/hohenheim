@@ -5,6 +5,7 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.test.database.EngineHandles;
+import be.elevenways.hohenheim.test.database.DumpTargetFixture;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.database.DatabaseService;
@@ -54,7 +55,7 @@ class DatabaseAdminTest extends HohenheimTestBase {
      * dump upload (plumage's file control) while it serves; a database that does not serve says why instead.
      */
     @Test
-    void existingDatabaseDetailAndRestoreTab() {
+    void existingDatabaseDetailAndRestoreTab() throws Exception {
         // Insert a record directly (no real container) so the render test stays fast.
         DatabaseModel model = Models.get(DatabaseModel.class);
         String name = "detailtest";
@@ -88,16 +89,19 @@ class DatabaseAdminTest extends HohenheimTestBase {
             assertThat(page.locator("form[action='/databases/" + name + "/restore']").count())
                 .as("step 1: and offers no upload").isZero();
 
-            // 2. Once it serves, the upload is offered through plumage's file control.
+            // 2. Once it serves and a dump of it can be stored first (the in-place restore takes a fresh backup, so it
+            //    needs a backup target), the upload is offered through plumage's file control.
             row.set(DatabaseModel.STATUS, DatabaseModel.STATUS_ACTIVE);
             model.save(row);
             EngineHandles.plant(id, name, "postgres", InstanceModel.STATUS_RUNNING);
-            navigateToApp("/admin/databases/" + id + "/page/restore");
-            waitForHydration();
-            BoundedAssertions.assertThat(page.locator(
-                "form[action='/databases/" + name + "/restore'] pl-file-upload input[type='file']")).hasCount(1);
-            assertThat(page.content()).as("step 2: a pending password is never in the page either")
-                .doesNotContain("detailpending-0001");
+            try (DumpTargetFixture ignored = DumpTargetFixture.install("detailtest-dumps")) {
+                navigateToApp("/admin/databases/" + id + "/page/restore");
+                waitForHydration();
+                BoundedAssertions.assertThat(page.locator(
+                    "form[action='/databases/" + name + "/restore'] pl-file-upload input[type='file']")).hasCount(1);
+                assertThat(page.content()).as("step 2: a pending password is never in the page either")
+                    .doesNotContain("detailpending-0001");
+            }
 
             // 3. The record's own form and the databases list carry no pending password, as a value or a control.
             navigateToApp("/admin/databases/" + id);

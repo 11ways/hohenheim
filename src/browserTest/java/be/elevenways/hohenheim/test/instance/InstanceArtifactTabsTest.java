@@ -500,10 +500,10 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
 
     /**
      * @return a backup's title as a cookieless English reader reads it: the moment in the office zone, which is not
-     *         theirs, so the zone is named
+     *         theirs, so the zone is named, in the style a moment reads in when nothing names one
      */
     private static String taken(String iso) {
         Reader reader = Reader.of(LocaleChain.ofTags("en"), Zenit.getMessageResolver());
-        return Wording.moment(reader, Instant.parse(iso), DateStyle.LONG);
+        return Wording.moment(reader, Instant.parse(iso), DateStyle.ofMoment(Map.of()));
     }
 }

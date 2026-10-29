@@ -19,6 +19,7 @@ import be.elevenways.hohenheim.server.wordpress.WordPressTemplateSeeder;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.InstanceRowCleanup;
+import be.elevenways.hohenheim.test.database.ProvisioningSettle;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
@@ -65,6 +66,10 @@ class WordPressTemplateSeedTest extends HohenheimHttpTestBase {
         Model instances = Models.get(InstanceModel.class);
         InstanceDatabaseModel links = Models.get(InstanceDatabaseModel.class);
         if (hostId != null) {
+            // An instance made from the template allocates its database on the provisioning pool: the host's rows are
+            // swept only once every such job settled.
+            ProvisioningSettle.await(databases.find().where(DatabaseModel.SERVER_ID.eq(hostId)).all().stream()
+                .map(row -> (Integer) row.get(DatabaseModel.ID)).toList());
             for (Row row : databases.find().where(DatabaseModel.SERVER_ID.eq(hostId)).all()) {
                 Integer id = row.get(DatabaseModel.ID);
                 for (Row link : links.findByDatabaseId(id)) {

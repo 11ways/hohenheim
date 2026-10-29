@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.server.game;
 import be.elevenways.hohenheim.instance.StatusProbe;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Jelle De Loecker
  * @since  0.10.0
  */
-class StatusProbeSeedTest extends HohenheimTestBase {
+class StatusProbeSeedTest extends HohenheimHttpTestBase {
 
     @Test
     void onlyStartersStillAtTheirSeededSettingsGainTheStatusProbe() {

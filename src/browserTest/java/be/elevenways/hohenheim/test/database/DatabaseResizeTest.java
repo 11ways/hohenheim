@@ -66,6 +66,8 @@ class DatabaseResizeTest extends HohenheimHttpTestBase {
 
     @AfterAll
     static void cleanUp() {
+        // The resize recreates the engine on the provisioning pool: its rows are swept only once that job settled.
+        ProvisioningSettle.await(List.of(databaseId, crampedDatabaseId));
         Model instances = Models.get(InstanceModel.class);
         GeneratedRows.sweeping(() -> {
             for (Row row : instances.find().where(InstanceModel.NAME.startsWith("db-" + PREFIX))
