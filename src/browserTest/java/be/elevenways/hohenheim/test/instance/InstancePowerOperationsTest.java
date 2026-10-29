@@ -1,8 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
-import java.lang.reflect.InvocationHandler;
 import be.elevenways.zenit.test.support.LeaseObservations;
-import be.elevenways.zenit.test.support.TestAccessContexts;
+import be.elevenways.zenit.test.support.EndpointConduit;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimRefusalReason;
 import be.elevenways.hohenheim.instance.InstanceOperations;
@@ -36,9 +35,8 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
-import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.conduit.ConduitAttributes;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationResult;
 import be.elevenways.zenit.common.operation.PlacementSurface;
@@ -72,7 +70,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Proxy;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -124,10 +121,10 @@ class InstancePowerOperationsTest {
     @Test
     void anInProgressRefusalKeepsTheCoreEdgeAnswer() {
         DomainRefusal refusal = new DomainRefusal(ZenitRefusalReason.IN_PROGRESS, "another command is running");
-        int[] status = {0};
-        assertThatThrownBy(() -> ApiConduits.refusal(answering(status), refusal))
+        EndpointConduit conduit = answering();
+        assertThatThrownBy(() -> ApiConduits.refusal(conduit, refusal))
             .as("an unmapped core refusal reaches core unchanged").isSameAs(refusal);
-        assertThat(status[0]).as("the frozen API adapter writes no replacement status").isZero();
+        assertThat(conduit.statusWrites).as("the frozen API adapter writes no replacement status").isEmpty();
     }
 
     @Test
@@ -172,10 +169,10 @@ class InstancePowerOperationsTest {
                 assertThat(refused.get()).as("step 2: a live deploy is contention, not a crash")
                     .isInstanceOfSatisfying(DomainRefusal.class, refusal -> assertThat(refusal.reason())
                         .isEqualTo(ZenitRefusalReason.IN_PROGRESS));
-                int[] status = {0};
-                String body = Json.stringify(ApiConduits.refusal(answering(status),
+                EndpointConduit conduit = answering();
+                String body = Json.stringify(ApiConduits.refusal(conduit,
                         (DomainRefusal) refused.get(), row).get());
-                assertThat(status[0]).as("step 2: the instance wire remains a 422 refusal").isEqualTo(422);
+                assertThat(conduit.status).as("step 2: the instance wire remains a 422 refusal").isEqualTo(422);
                 assertThat(body).as("step 2: backup during deploy has the byte-identical instance in-progress body")
                     .isEqualTo(
                     "{\"status\":422,\"code\":\"instance_operation_in_progress\",\"message\":\"Another operation on "
@@ -301,10 +298,10 @@ class InstancePowerOperationsTest {
                 .isInstanceOfSatisfying(Violations.class, violations -> assertThat(violations.all())
                     .anySatisfy(violation -> assertThat(violation.message().key())
                         .isEqualTo("instance_operation_in_progress")));
-            int[] refusedStatus = {0};
-            String refusedBody = Json.stringify(ApiConduits.refusal(answering(refusedStatus),
+            EndpointConduit refusedConduit = answering();
+            String refusedBody = Json.stringify(ApiConduits.refusal(refusedConduit,
                 (Violations) rival.get()).get());
-            assertThat(refusedStatus[0]).as("step 3: the frozen /api/v1 adapter still answers 422").isEqualTo(422);
+            assertThat(refusedConduit.status).as("step 3: the frozen /api/v1 adapter still answers 422").isEqualTo(422);
             assertThat(refusedBody).as("step 3: start during restart keeps the byte-identical /api/v1 refusal body")
                 .isEqualTo(
                 "{\"status\":422,\"code\":\"instance_operation_in_progress\",\"message\":\"Another operation on "
@@ -373,12 +370,12 @@ class InstancePowerOperationsTest {
                     assertThat(refusal.is(HohenheimRefusalReason.DATABASE_NOT_READY)).isTrue();
                     assertThat(refusal.reason().retriable()).isTrue();
                 });
-            int[] adapterStatus = {0};
-            int[] serviceStatus = {0};
-            ActionResult<Object> adapted = ApiConduits.refusal(answering(adapterStatus), (DomainRefusal) refused);
-            ActionResult<Object> service = ApiConduits.refusal(answering(serviceStatus), Violations.ofForm(notReady));
-            assertThat(adapterStatus[0]).as("step 6: the API answers 422, as before").isEqualTo(422)
-                .isEqualTo(serviceStatus[0]);
+            EndpointConduit adapterConduit = answering();
+            EndpointConduit serviceConduit = answering();
+            ActionResult<Object> adapted = ApiConduits.refusal(adapterConduit, (DomainRefusal) refused);
+            ActionResult<Object> service = ApiConduits.refusal(serviceConduit, Violations.ofForm(notReady));
+            assertThat(adapterConduit.status).as("step 6: the API answers 422, as before").isEqualTo(422)
+                .isEqualTo(serviceConduit.status);
             assertThat(adapted.get()).as("step 6: with the very body the service's refusal wrote")
                 .isEqualTo(service.get());
             assertThat(String.valueOf(((Map<?, ?>) adapted.get()).get("code")))
@@ -454,23 +451,8 @@ class InstancePowerOperationsTest {
         links.save(link);
     }
 
-    /** A conduit that answers in English and records the status a refusal sets. */
-    private static Conduit answering(int[] status) {
-        return (Conduit) Proxy.newProxyInstance(InstancePowerOperationsTest.class.getClassLoader(),
-            new Class<?>[] { Conduit.class }, (proxy, method, args) -> TestAccessContexts.isRequestMemo(method)
-                ? InvocationHandler.invokeDefault(proxy, method, args) : switch (method.getName()) {
-                case "setResponseStatus" -> {
-                    status[0] = (int) args[0];
-                    yield null;
-                }
-                case "getLocales" -> LocaleChain.ofTags("en");
-                case "getMessageResolver" -> Zenit.getMessageResolver();
-                // Its reader is the conduit's own: the language above, no stamped zone.
-                case "getReader" -> InvocationHandler.invokeDefault(proxy, method, args);
-                case "equals" -> proxy == args[0];
-                case "hashCode" -> System.identityHashCode(proxy);
-                case "toString" -> "answering conduit";
-                default -> method.getReturnType() == boolean.class ? Boolean.FALSE : null;
-            });
+    /** A full-page request answering in English, recording the status a refusal writes. */
+    private static EndpointConduit answering() {
+        return EndpointConduit.fullPageRequest().withAttribute(ConduitAttributes.LOCALES, LocaleChain.ofTags("en"));
     }
 }

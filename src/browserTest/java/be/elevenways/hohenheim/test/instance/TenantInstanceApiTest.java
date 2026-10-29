@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
-import be.elevenways.zenit.test.support.TestAccessContexts;
+import be.elevenways.zenit.test.support.EndpointConduit;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
@@ -406,7 +406,7 @@ class TenantInstanceApiTest extends HohenheimHttpTestBase {
 
         // 3. And a key can never be MINTED beyond what its owner holds: tenant B holds
         //    no snapshots grant anywhere, so the interactive mint path refuses.
-        AccessContext actorB = AccessContext.of(stubConduit(new UserPrincipal(tenantBId, "Api Tenant B")),
+        AccessContext actorB = AccessContext.of(EndpointConduit.fullPageRequest(),
             new UserPrincipal(tenantBId, "Api Tenant B"), PermissionChecker.DENY_ALL);
         Throwable refusedMint = catchThrowable(() -> ApiKeyService.create(actorB, tenantBId,
             PREFIX + "b-snapshots",
@@ -588,44 +588,5 @@ class TenantInstanceApiTest extends HohenheimHttpTestBase {
             .isEqualTo(200);
         assertThat(storedVariable(instanceAId, "GREETING"))
             .as("step 8: and the row is gone").isNull();
-    }
-
-    /** A conduit carrying nothing but an identity, for the interactive mint path. */
-    private static be.elevenways.zenit.common.conduit.Conduit stubConduit(UserPrincipal principal) {
-        return be.elevenways.zenit.common.conduit.Conduit.class.cast(
-            java.lang.reflect.Proxy.newProxyInstance(
-                TenantInstanceApiTest.class.getClassLoader(),
-                new Class<?>[] { be.elevenways.zenit.common.conduit.Conduit.class },
-                (proxy, method, args) -> TestAccessContexts.isRequestMemo(method)
-                    ? java.lang.reflect.InvocationHandler.invokeDefault(proxy, method, args)
-                    : switch (method.getName()) {
-                    case "getAttribute" -> null;
-                    case "equals" -> proxy == args[0];
-                    case "hashCode" -> System.identityHashCode(proxy);
-                    case "toString" -> "TenantInstanceApiTest.stub";
-                    default -> defaultValue(method.getReturnType());
-                }));
-    }
-
-    private static Object defaultValue(Class<?> type) {
-        if (!type.isPrimitive() || type == void.class) {
-            return null;
-        }
-        if (type == boolean.class) {
-            return Boolean.FALSE;
-        }
-        if (type == long.class) {
-            return 0L;
-        }
-        if (type == double.class) {
-            return 0d;
-        }
-        if (type == float.class) {
-            return 0f;
-        }
-        if (type == char.class) {
-            return (char) 0;
-        }
-        return 0;
     }
 }

@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim.test;
 
-import be.elevenways.zenit.test.support.TestAccessContexts;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantModel;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -9,21 +8,14 @@ import be.elevenways.zenit.auth.server.ZenitAuth;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
-import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.conduit.ConduitAttributes;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.routing.RouteScope;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Principal;
+import be.elevenways.zenit.test.support.EndpointConduit;
 import org.checkerframework.checker.nullness.qual.Nullable;
-
-import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
 
 /**
  * A request scope carrying nothing but an identity, so a test can drive a write straight at
@@ -34,19 +26,13 @@ import java.util.Set;
  * without touching a resource method, a form spec or an endpoint. Testing the freezes only
  * through /manage forms would prove the FORM drops fields, which is not the claim.
  *
- * AIDEV-NOTE: a dynamic proxy, not a hand-written 200-method stub. Everything the invariants
- * actually read is the principal attribute; every other Conduit method answers its type's
- * default, which is what a synthetic carrier legitimately looks like (AccessContext.of
- * documents that shape).
+ * AIDEV-NOTE: a full-page {@link EndpointConduit}, never a Conduit of its own: everything the invariants read is the
+ * principal attribute, and its page-address reads answer "/" as a request outside every panel does.
  */
 public final class TenantConduits {
 
     /** The test admin's sign-in, which every operator caller of the suite is. */
     public static final String OPERATOR_EMAIL = "test@hohenheim.local";
-
-    /** The conduit faces a resolution reads its reader from, answered by Conduit's own defaults. */
-    private static final Set<String> READER_FACES = Set.of("getReader", "getLocales", "requestedLocales",
-        "getMessageResolver");
 
     private TenantConduits() {
     }
@@ -141,62 +127,14 @@ public final class TenantConduits {
 
     private static Conduit stub(@Nullable Principal principal, @Nullable String origin, @Nullable String panelSlug,
                                 @Nullable String parentKey) {
-        Map<IdentifierKey<?>, Object> attributes = new HashMap<>();
-        if (principal != null) {
-            attributes.put(ConduitAttributes.PRINCIPAL, principal);
+        EndpointConduit conduit = EndpointConduit.fullPageRequest().setRequestOrigin(origin)
+            .withAttribute(ConduitAttributes.PRINCIPAL, principal);
+        if (panelSlug != null) {
+            conduit.setParameter(CmsEndpoints.PANEL_PARAM, panelSlug);
         }
-        Object[] self = new Object[1];
-        // A request's memos and its reader (language, catalog and the viewer's stamped zone) answer as a real conduit
-        // does: from the attributes this stub holds.
-        InvocationHandler handler = (proxy, method, args) -> TestAccessContexts.isRequestMemo(method)
-            || READER_FACES.contains(method.getName())
-            ? InvocationHandler.invokeDefault(proxy, method, args) : switch (method.getName()) {
-            case "getAttribute" -> attributes.get(args[0]);
-            case "setAttribute" -> {
-                if (args[1] == null) {
-                    attributes.remove(args[0]);
-                } else {
-                    attributes.put((IdentifierKey<?>) args[0], args[1]);
-                }
-                yield null;
-            }
-            case "getRequestOrigin" -> origin;
-            case "getParameter" -> args.length == 1 && args[0] == CmsEndpoints.PANEL_PARAM ? panelSlug
-                : defaultValue(method);
-            case "getQueryParam" -> args.length == 1 && CmsEndpoints.PARENT_PARAM.getName().equals(args[0])
-                ? parentKey : defaultValue(method);
-            case "getConduit" -> self[0];
-            case "equals" -> proxy == args[0];
-            case "hashCode" -> System.identityHashCode(proxy);
-            case "toString" -> "TenantConduits.stub";
-            default -> defaultValue(method);
-        };
-        Conduit conduit = (Conduit) Proxy.newProxyInstance(
-            TenantConduits.class.getClassLoader(), new Class<?>[] { Conduit.class }, handler);
-        self[0] = conduit;
+        if (parentKey != null) {
+            conduit.setQueryParam(CmsEndpoints.PARENT_PARAM.getName(), parentKey);
+        }
         return conduit;
-    }
-
-    private static @Nullable Object defaultValue(Method method) {
-        Class<?> type = method.getReturnType();
-        if (!type.isPrimitive() || type == void.class) {
-            return null;
-        }
-        if (type == boolean.class) {
-            return Boolean.FALSE;
-        }
-        if (type == char.class) {
-            return (char) 0;
-        }
-        if (type == long.class) {
-            return 0L;
-        }
-        if (type == double.class) {
-            return 0d;
-        }
-        if (type == float.class) {
-            return 0f;
-        }
-        return 0;
     }
 }
