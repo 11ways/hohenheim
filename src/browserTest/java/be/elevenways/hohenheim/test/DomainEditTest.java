@@ -136,11 +136,10 @@ class DomainEditTest extends HohenheimTestBase {
         assertThat(page.locator("body").textContent()).as("the tab lists the hostname")
             .contains(f.hostname());
         // The hostname's row is the domain child list's own: its edit opens the form and its remove detaches it,
-        // each bound back to this tab. Both sit in the row's menu, whose content the client portals out of the
-        // section: read them off the served page.
+        // each bound back to this tab. Both sit in the row's menu, which draws them when it opens.
         var section = page.locator("[data-cms-child-list='domains']");
         assertThat(section.count()).as("the tab embeds the domains section").isEqualTo(1);
-        String html = adminGet("/admin/sites/" + siteId + "/page/domains").body();
+        String html = openedRowMenu("/admin/sites/" + siteId + "/page/domains", String.valueOf(domainId));
         Matcher edit = Pattern.compile("href=\"(/admin/domains/" + domainId + "\\?[^\"]*)\"[^>]*"
             + "data-action-id=\"zenit:edit\"").matcher(html);
         assertThat(edit.find()).as("the row's menu carries an edit link to the domain's form").isTrue();
@@ -151,11 +150,11 @@ class DomainEditTest extends HohenheimTestBase {
     }
 
     /**
-     * @return the formaction of the Domains tab's remove submit for the domain, as the server rendered it
-     * @throws AssertionError when the tab renders none
+     * @return the formaction of the Domains tab's remove submit for the domain, as its opened row menu draws it
+     * @throws AssertionError when the tab offers none
      */
     private String removeTarget(int siteId, int domainId) throws Exception {
-        String html = adminGet("/admin/sites/" + siteId + "/page/domains").body();
+        String html = openedRowMenu("/admin/sites/" + siteId + "/page/domains", String.valueOf(domainId));
         Matcher remove = Pattern.compile("formaction=\"([^\"]*/admin/domains/" + domainId + "/delete[^\"]*)\"[^>]*"
             + "data-action-id=\"zenit:delete\"").matcher(html);
         assertThat(remove.find()).as("the tab renders the domain's remove submit").isTrue();

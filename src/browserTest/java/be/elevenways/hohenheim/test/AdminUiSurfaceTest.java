@@ -363,12 +363,15 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
             .isEqualTo(applicationId);
     }
 
-    /** The sites list keeps its verbs: the placed switch, the synthesized edit and the placed delete operation. */
+    /**
+     * The sites list keeps its verbs: the placed switch, the synthesized edit and the placed delete operation, in the
+     * row menu that draws them when it opens.
+     */
     @Test
     void sitesListOffersItsRowActions() throws Exception {
-        String list = adminGet("/admin/sites").body();
-        assertThat(list).as("the site switch renders").containsAnyOf("hohenheim:enable_site", "hohenheim:disable_site");
-        assertThat(list).as("the delete operation renders").contains("data-action-id=\"hohenheim:delete_site\"");
+        String menu = openedRowMenu("/admin/sites", null);
+        assertThat(menu).as("the site switch renders").containsAnyOf("hohenheim:enable_site", "hohenheim:disable_site");
+        assertThat(menu).as("the delete operation renders").contains("data-action-id=\"hohenheim:delete_site\"");
     }
 
     /**

@@ -7,6 +7,7 @@ import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.panel.PartsReads;
 import be.elevenways.zenit.cms.server.panel.PartsLists;
 import be.elevenways.zenit.cms.server.panel.PanelGate;
+import be.elevenways.zenit.cms.test.support.PanelSurfaces;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -199,9 +200,15 @@ class ManagePanelTest extends HohenheimHttpTestBase {
         assertThat(list.body()).contains("Manage Site A");
         assertThat(list.body()).doesNotContain("Manage Site B");
         assertThat(list.body()).doesNotContain("data-column=\"upstream_kind\"");
-        // Safe row actions only: the switch (enable or disable, whichever the site's state offers), never a clone.
-        assertThat(list.body()).containsAnyOf("hohenheim:enable_site", "hohenheim:disable_site");
-        assertThat(list.body()).doesNotContain("clone_site");
+        // Safe row actions only: the switch (enable or disable, whichever the site's state offers), never a clone. A row
+        // menu draws its items when it opens, so the row's offers are read as the page's own readers answer them.
+        AccessContext operator = AccessContext.of(
+            TenantConduits.stubFor(new UserPrincipal(operatorId, "Site Operator")));
+        Panel manage = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.MANAGE));
+        String rowOffers = PanelSurfaces.capture(manage, HohenheimSlugs.SITES, operator, "operator",
+            String.valueOf(siteAId)).text();
+        assertThat(rowOffers).containsAnyOf("row hohenheim:enable_site ", "row hohenheim:disable_site ");
+        assertThat(rowOffers).doesNotContain("clone_site");
 
         // The delegated surface offers the SAME generic access tab (a manage
         // holder may delegate its delegable capability from /manage).

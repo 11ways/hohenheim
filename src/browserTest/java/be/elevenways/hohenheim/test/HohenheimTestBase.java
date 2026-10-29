@@ -530,4 +530,21 @@ public abstract class HohenheimTestBase extends ZenitBrowserTestBase {
         ));
         super.navigateToApp(path);
     }
+
+    /**
+     * Opens the ordinary menu of one list row on the page at {@code path} and answers the markup of its items: a row
+     * menu draws its items when it first opens, so the served HTML carries its trigger alone.
+     *
+     * @param rowKey the row's {@code data-row-key}, or null for the first row
+     */
+    protected String openedRowMenu(String path, String rowKey) {
+        navigateToApp(path);
+        waitForHydration();
+        String row = rowKey == null ? "pl-table-row[data-row-key]" : "pl-table-row[data-row-key='" + rowKey + "']";
+        page.locator(row + " .cms-row-action-more pl-dropdown-menu-trigger").first().evaluate("el => el.click()");
+        String openItems = "() => [...document.querySelectorAll('.pl-dropdown-menu-content__popup')]"
+            + ".filter(popup => popup.getClientRects().length > 0 && popup.querySelector('.cms-menu-action'))";
+        page.waitForCondition(() -> Boolean.TRUE.equals(page.evaluate("() => (" + openItems + ")().length > 0")));
+        return (String) page.evaluate("() => (" + openItems + ")().map(popup => popup.innerHTML).join('')");
+    }
 }

@@ -327,8 +327,8 @@ class DnsListEditingTest extends HohenheimTestBase {
         String tab = "/admin/dns-zones/" + zoneId + "/page/records";
         String body = adminGet(tab).body();
 
-        // 1. The action is offered on the row (address record + the dyndns capability).
-        String item = buttonCarrying(body, "dyndns_token");
+        // 1. The action is offered on the row (address record + the dyndns capability), in its menu.
+        String item = buttonCarrying(openedRowMenu(tab, String.valueOf(recordId)), "dyndns_token");
         assertThat(item).as("step 1: the tab offers the dyndns token action").isNotNull();
 
         // 2. It submits through a form that EXISTS on this page. A form= naming nothing is
@@ -370,10 +370,10 @@ class DnsListEditingTest extends HohenheimTestBase {
         int recordId = createRecord(zoneId, "gone", DnsRecordModel.TYPE_A, "192.0.2.51");
 
         String tab = "/admin/dns-zones/" + zoneId + "/page/records";
-        String body = adminGet(tab).body();
 
         // 1. The row's delete carrier names the tab as where to come back to.
-        String item = buttonCarrying(body, "/admin/dns-records/invoke/hohenheim.delete_dns_record?ids=" + recordId);
+        String item = buttonCarrying(openedRowMenu(tab, String.valueOf(recordId)),
+            "/admin/dns-records/invoke/hohenheim.delete_dns_record?ids=" + recordId);
         assertThat(item).as("step 1: the tab offers the delete").isNotNull();
         String target = attributeOf(item, "formaction");
         assertThat(target)
