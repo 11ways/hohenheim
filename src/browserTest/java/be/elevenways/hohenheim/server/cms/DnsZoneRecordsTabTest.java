@@ -3,24 +3,20 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
-import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.plumage.component.Pager;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.cms.common.render.table.TableState;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
-import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.conduit.ConduitAttributes;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.test.support.EndpointConduit;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Proxy;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -54,7 +50,7 @@ class DnsZoneRecordsTabTest extends HohenheimTestBase {
 
     @Test
     void theRecordsTabPagesTheZoneThroughTheResource() {
-        AccessContext operator = operator();
+        UserPrincipal operator = operator();
 
         // 1. The first page holds exactly one page of THIS zone's records, and the pager
         //    knows the whole zone's total.
@@ -102,41 +98,18 @@ class DnsZoneRecordsTabTest extends HohenheimTestBase {
     }
 
     @SuppressWarnings("unchecked")
-    private static Map<String, Object> render(AccessContext operator, Map<String, String> query) {
-        Conduit conduit = withQuery(operator.conduit(), query);
+    private static Map<String, Object> render(UserPrincipal operator, Map<String, String> query) {
+        EndpointConduit conduit = EndpointConduit.fullPageRequest().withAttribute(ConduitAttributes.PRINCIPAL, operator);
+        query.forEach(conduit::setQueryParam);
         Row zone = Models.get(DnsZoneModel.class).findById(zoneId);
         return (Map<String, Object>) new DnsZoneRecordsPage()
             .renderLocal(conduit, AccessContext.of(conduit), zone, DnsRecordParts.admin()).get();
     }
 
-    /** The stub carrier, additionally answering the given query string parameters. */
-    private static Conduit withQuery(Conduit base, Map<String, String> query) {
-        InvocationHandler handler = (proxy, method, args) -> {
-            if ("getQueryParam".equals(method.getName()) && args != null && args.length == 1) {
-                return query.get(String.valueOf(args[0]));
-            }
-            if ("getQueryParams".equals(method.getName()) && args != null && args.length == 1) {
-                String value = query.get(String.valueOf(args[0]));
-                return value == null ? List.of() : List.of(value);
-            }
-            if ("getConduit".equals(method.getName())) {
-                return proxy;
-            }
-            try {
-                return method.invoke(base, args);
-            } catch (InvocationTargetException thrown) {
-                throw thrown.getCause();
-            }
-        };
-        return (Conduit) Proxy.newProxyInstance(DnsZoneRecordsTabTest.class.getClassLoader(),
-            new Class<?>[] { Conduit.class }, handler);
-    }
-
-    private static AccessContext operator() {
+    private static UserPrincipal operator() {
         Row admin = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
-        return AccessContext.of(TenantConduits.stubFor(
-            new UserPrincipal(admin.get(UserModel.ID), "Test Admin")));
+        return new UserPrincipal(admin.get(UserModel.ID), "Test Admin");
     }
 
     private static int zone(String origin) {

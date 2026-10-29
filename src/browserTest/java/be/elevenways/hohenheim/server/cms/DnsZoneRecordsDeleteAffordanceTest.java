@@ -3,7 +3,6 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
-import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -12,9 +11,11 @@ import be.elevenways.zenit.cms.common.render.table.TableState;
 import be.elevenways.zenit.cms.server.render.table.TableStateTranslator;
 import be.elevenways.zenit.server.operation.OperationHandlers;
 import be.elevenways.zenit.server.operation.OperationTestSupport;
+import be.elevenways.zenit.common.conduit.ConduitAttributes;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.test.support.EndpointConduit;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -148,10 +149,11 @@ class DnsZoneRecordsDeleteAffordanceTest extends HohenheimHttpTestBase {
             .orElseThrow(() -> new AssertionError("row '" + name + "' offers no delete at all"));
     }
 
+    /** The test admin on a page request, as the tab is rendered for one. */
     private static AccessContext operator() {
         Row admin = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
-        return AccessContext.of(TenantConduits.stubFor(
+        return AccessContext.of(EndpointConduit.fullPageRequest().withAttribute(ConduitAttributes.PRINCIPAL,
             new UserPrincipal(admin.get(UserModel.ID), "Test Admin")));
     }
 

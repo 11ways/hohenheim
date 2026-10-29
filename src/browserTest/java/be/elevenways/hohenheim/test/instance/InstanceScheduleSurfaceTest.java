@@ -41,6 +41,8 @@ import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.conduit.ConduitAttributes;
+import be.elevenways.zenit.test.support.EndpointConduit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -372,7 +374,8 @@ class InstanceScheduleSurfaceTest extends HohenheimHttpTestBase {
 
             // 3. The schedule's Steps tab shows the same verdict for that run, and its start as the framework's
             //     datetime cell (a relative time, as every list reads one), never a raw ISO string.
-            Conduit conduit = TenantConduits.stubFor(new UserPrincipal(ownerId, "Schedule Owner"));
+            Conduit conduit = EndpointConduit.fullPageRequest().withAttribute(ConduitAttributes.PRINCIPAL,
+                new UserPrincipal(ownerId, "Schedule Owner"));
             PanelRequest request = new PanelRequest(Objects.requireNonNull(PanelRegistry
                 .getBySlug(HohenheimSlugs.MANAGE)),
                 conduit, AccessContext.of(conduit), null);
