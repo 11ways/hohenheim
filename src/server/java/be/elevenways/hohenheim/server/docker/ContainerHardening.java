@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.host.VolumeBackends;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
+import be.elevenways.protoblast.common.util.BlastCollection;
 import be.elevenways.protoblast.common.util.BlastString;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -136,7 +137,8 @@ public final class ContainerHardening {
      * {@code net.ipv4.ip_unprivileged_port_start=0} in every container, so it grants
      * nothing and a knob nobody can observe is theater.
      */
-    public static final Map<String, String> DECLARABLE = orderedMap(
+    public static final Map<String, String> DECLARABLE =
+        Collections.unmodifiableMap(BlastCollection.orderedStrings(
         "NET_RAW", "raw and packet sockets: ping, traceroute and DHCP clients in an"
             + " entrypoint. It is in Docker's own default set, and hohenheim's tenant-range"
             + " denies are DESTINATION-keyed, so a spoofed source address does not reach"
@@ -149,7 +151,7 @@ public final class ContainerHardening {
         "KILL", "signal a process owned by another uid: multi-uid supervisors (s6-overlay,"
             + " supervisord) need it to stop their children. Bounded by the pid namespace.",
         "AUDIT_WRITE", "write audit records: login/su in several base images refuse to run"
-            + " without it. In Docker's own default set.");
+            + " without it. In Docker's own default set."));
 
     /**
      * Refusal reasons for capabilities an operator is likely to reach for, so the error
@@ -257,7 +259,8 @@ public final class ContainerHardening {
      * against consistently. There is no spelling of the labels that grants a container
      * one record's ownership and another record's data.
      */
-    public static final Map<String, String> PERMITTED_BODY_KEYS = orderedMap(
+    public static final Map<String, String> PERMITTED_BODY_KEYS =
+        Collections.unmodifiableMap(BlastCollection.orderedStrings(
         "Image", "the image reference the authority resolved; the workload is the image.",
         "Labels", "the OwnerLabels attribution every managed resource must carry, and the"
             + " identity the bind rule derives volume permission from.",
@@ -286,14 +289,15 @@ public final class ContainerHardening {
             + " keeps the container off the default bridge for the window a post-hoc"
             + " connect would leave it there. Structurally constrained to that ONE network"
             + " below -- a second endpoint is the isolation bypass this gate closes.",
-        "HostConfig", "the host-side half, gated key by key by PERMITTED_KEYS above.");
+        "HostConfig", "the host-side half, gated key by key by PERMITTED_KEYS above."));
 
     /** {@link #PERMITTED_BODY_KEYS} folded once, for the same Go reason as below. */
     private static final Set<String> PERMITTED_BODY_FOLDED = PERMITTED_BODY_KEYS.keySet().stream()
         .map(ContainerHardening::fold)
         .collect(Collectors.toUnmodifiableSet());
 
-    public static final Map<String, String> PERMITTED_KEYS = orderedMap(
+    public static final Map<String, String> PERMITTED_KEYS =
+        Collections.unmodifiableMap(BlastCollection.orderedStrings(
         "NetworkMode", "the per-workload private network the caller just created;"
             + " the host and container: spellings are refused below, so what this can name"
             + " is a network, never a namespace share.",
@@ -305,7 +309,7 @@ public final class ContainerHardening {
             + " already claimed.",
         "Memory", "the operator-configured cgroup memory cap (ResourceLimits): a cap the"
             + " operator chooses, on top of policy the operator cannot weaken.",
-        "NanoCpus", "the operator-configured cgroup cpu cap (ResourceLimits).");
+        "NanoCpus", "the operator-configured cgroup cpu cap (ResourceLimits)."));
 
     /** {@link #PERMITTED_KEYS} folded once, because Go matches HostConfig fields case-insensitively. */
     private static final Set<String> PERMITTED_FOLDED = PERMITTED_KEYS.keySet().stream()
@@ -337,15 +341,6 @@ public final class ContainerHardening {
     private static final String JOIN_CONTAINER = "container:";
 
     private ContainerHardening() {}
-
-    /** Insertion-ordered map literal; {@link Map#of} would scramble the declared order. */
-    private static Map<String, String> orderedMap(String... pairs) {
-        Map<String, String> map = new LinkedHashMap<>();
-        for (int index = 0; index < pairs.length; index += 2) {
-            map.put(pairs[index], pairs[index + 1]);
-        }
-        return Collections.unmodifiableMap(map);
-    }
 
     /**
      * Build the profile a workload actually runs with from a BASE profile plus the

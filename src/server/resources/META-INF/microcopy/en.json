@@ -19104,7 +19104,7 @@
   "database_restore_failed_unchanged_detail": {"text": "The restore of {$name} failed and was rolled back: the database is as it was. {$reason}", "scope": "violations"},
   "database_restore_failed_mixed_detail": {"text": "The restore of {$name} failed part way: the database may now hold a mix of the restored backup and its previous contents. Restore the backup taken just before it, from {$before :datetime} (#{$dump}), to bring the database back. {$reason}", "scope": "violations"},
   "database_restore_new_cleanup_failed_detail": {"text": "The restore into the new database {$name} failed ({$reason}), and the half-restored database could not be removed ({$cleanup}); delete it before using the name again.", "scope": "violations"},
-  "database_busy": {"text": "Another backup or restore of this database is running; try again once it has finished.", "scope": "violations"},
+  "database_busy": {"text": "A backup, restore or provisioning of this database is running; try again once it has finished.", "scope": "violations"},
   "database_dump_whole_server": {"text": "A dump made with --create or pg_dumpall cannot be restored into one database.", "scope": "violations"},
   "database_dump_whole_server_detail": {"text": "The dump for {$name} creates or connects to a database of its own ({$statement}): a dump made with --create, pg_dumpall or mysqldump --databases cannot be restored into one database. Dump the one database without those options; nothing was changed.", "scope": "violations"},
   "database_staging_unsafe": {"text": "The dump staging directory cannot be restricted to its owner.", "scope": "violations"},

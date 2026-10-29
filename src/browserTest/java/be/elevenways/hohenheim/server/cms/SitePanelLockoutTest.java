@@ -18,7 +18,6 @@ import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.hohenheim.site.SiteOperations;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -34,6 +33,7 @@ import java.util.Objects;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.addDomain;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.setupInstanceSite;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.setupSite;
+import static be.elevenways.hohenheim.test.MicrocopyText.say;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -233,10 +233,6 @@ class SitePanelLockoutTest extends HohenheimHttpTestBase {
             HardDeletes.row(Models.get(SiteModel.class), siteRow(backed));
             HardDeletes.row(Models.get(InstanceModel.class), app);
         }
-    }
-
-    private static String say(Microcopy copy, LocaleChain locales) {
-        return copy.resolve(locales, Zenit.getMessageResolver());
     }
 
     /** A stopped container app on the local host, for a site to expose. */

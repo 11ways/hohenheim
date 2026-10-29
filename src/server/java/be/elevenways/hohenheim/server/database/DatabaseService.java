@@ -33,7 +33,9 @@ import be.elevenways.hohenheim.server.util.DatasourceScoped;
 import be.elevenways.hohenheim.server.util.UtcStamp;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.thread.ExecutionContext;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.protoblast.common.thread.JobRunnerGroup;
+import be.elevenways.zenit.common.bootstrap.RuntimeJobs;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.security.KnownValueRedactor;
 import be.elevenways.zenit.common.Zenit;
@@ -62,8 +64,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Lifecycle entry point for managed databases: ties the persisted {@link DatabaseModel}
@@ -80,27 +81,31 @@ import java.util.concurrent.Executors;
  */
 public class DatabaseService extends DatasourceScoped {
 
-    // Background pool for provisioning (image pull + container start can take tens of seconds);
-    // shared because handlers construct DatabaseService per request. Bounded to limit load.
-    // Its threads carry nothing: every task declares its own context through submit().
-    private static final ExecutorService PROVISION_EXECUTOR = Executors.newFixedThreadPool(2, runnable -> {
-        Thread thread = new Thread(runnable, "db-provision");
-        thread.setDaemon(true);
-        return thread;
-    });
+    /**
+     * The provisioning pool (image pull + container start can take tens of seconds), shared because handlers construct
+     * DatabaseService per request.
+     *
+     * AIDEV-NOTE: a runtime member, so the runtime's stop waits for a running job before it closes the datasources the
+     * job still writes. A job that converges ONE record takes that record's content lease and re-reads it inside
+     * ({@link #provisionInBackground}), so a destroy never runs beside it.
+     */
+    private static final JobRunnerGroup.Member PROVISIONING =
+        RuntimeJobs.GROUP.member("db-provision", JobRunnerGroup.StopMode.DRAIN);
 
     /**
      * Run {@code work} on the provisioning pool as system work on the submitting caller's behalf.
      *
-     * AIDEV-NOTE: the context is captured HERE, on the submitting thread, and raised to system
-     * authority on the pool: whoever asked was gated before the hand-off (an allocation, a move
-     * claim) and the engine containers it converges are operator-owned, but a tenant's
-     * allocation stays the tenant's action in the activity log. A pool thread declaring the
-     * identity itself recorded every such write as SYSTEM.
+     * AIDEV-NOTE: the runner carries the submitting thread's context and the job raises it to system authority:
+     * whoever asked was gated before the hand-off (an allocation, a move claim) and the engine containers it converges
+     * are operator-owned, but a tenant's allocation stays the tenant's action in the activity log. A pool thread
+     * declaring the identity itself recorded every such write as SYSTEM.
+     *
+     * @return done once the work ended, failed with what it threw
+     * @throws IllegalStateException when the runtime stopped
      */
-    static void submit(@NonNull Runnable work) {
-        PROVISION_EXECUTOR.submit(ExecutionContext.wrap(
-            () -> ExecutionIdentity.runAsSystem(HohenheimSystemPurposes.DATABASE_PROVISION, work)));
+    static @NonNull CompletableFuture<Void> submit(@NonNull Runnable work) {
+        return PROVISIONING.get().runAsync(
+            () -> ExecutionIdentity.runAsSystem(HohenheimSystemPurposes.DATABASE_PROVISION, work));
     }
 
     public DatabaseService() {
@@ -964,35 +969,55 @@ public class DatabaseService extends DatasourceScoped {
      * daemon, for callers ({@link TenantDatabases}) that persisted the record and reserved
      * its engine instance row themselves and only owe the container work.
      *
+     * AIDEV-NOTE: the job runs holding the record's content lease and reads the record inside it. A destroy takes the
+     * same lease: one that holds it first leaves the job to find the record gone, and one asked while the job runs is
+     * refused with {@code database_busy}, so a destroyed record never gets an engine instance on its host afterwards.
+     * The job queues behind whatever else holds the lease (a destroy, a move's dump); only the whole queue wait spent
+     * marks the record failed.
+     *
      * @param recordId the COMMITTED record; everything the container needs (engine,
      *                 credentials, limits) is read off the row on the pool thread
+     * @return done once the job ended, the record converged, failed or found gone
      */
-    public void provisionInBackground(int recordId) {
-        submit(() -> {
-            Row row = query(() -> model().findById(recordId));
-            if (row == null) {
-                // The one shape left that can miss: the record was committed and then
-                // deleted before the pool got to it. Loud, never a silent no-op.
-                Blast.log("DB: provisioning skipped, database record", recordId,
-                    "is gone before its container was provisioned");
-                return;
-            }
-            String name = row.get(DatabaseModel.NAME);
+    public @NonNull CompletableFuture<Void> provisionInBackground(int recordId) {
+        return submit(() -> {
             try {
-                provisionRuntime(row);
-                setStatus(recordId, DatabaseModel.STATUS_ACTIVE, null);
-            } catch (Exception | Error e) {
-                // TERMINAL and visible: the status is what the list badge, the detail
-                // page and DatabaseAttention.failedDatabases read; the reason rides the
-                // record so the operator learns WHY without the journal. An Error marks the record failed too (a record
-                // left "provisioning" is wedged for good), then propagates: the pool decides what an Error means.
-                String reason = setStatus(recordId, DatabaseModel.STATUS_FAILED, HohenheimViolations.reasonOf(e));
-                Blast.log("DB: provisioning failed for", name, "-", reason);
-                if (e instanceof Error error) {
-                    throw error;
-                }
+                DatabaseContentLock.exclusive(recordId, InstanceOperationLock.Contention.QUEUE, () -> {
+                    provisionStored(recordId);
+                    return null;
+                });
+            } catch (IOException | DomainRefusal refused) {
+                // The lease stayed taken for the whole queue wait: the record must not stay "provisioning" for good.
+                String reason = setStatus(recordId, DatabaseModel.STATUS_FAILED, HohenheimViolations.reasonOf(refused));
+                Blast.log("DB: provisioning of database record", recordId, "never got its turn -", reason);
             }
         });
+    }
+
+    /** The body of {@link #provisionInBackground}, run holding the record's content lease. */
+    private void provisionStored(int recordId) {
+        Row row = query(() -> model().findById(recordId));
+        if (row == null) {
+            // Destroyed before its turn: loud, never a silent no-op.
+            Blast.log("DB: provisioning skipped, database record", recordId,
+                "is gone before its container was provisioned");
+            return;
+        }
+        String name = row.get(DatabaseModel.NAME);
+        try {
+            provisionRuntime(row);
+            setStatus(recordId, DatabaseModel.STATUS_ACTIVE, null);
+        } catch (Exception | Error e) {
+            // TERMINAL and visible: the status is what the list badge, the detail
+            // page and DatabaseAttention.failedDatabases read; the reason rides the
+            // record so the operator learns WHY without the journal. An Error marks the record failed too (a record
+            // left "provisioning" is wedged for good), then propagates: the pool decides what an Error means.
+            String reason = setStatus(recordId, DatabaseModel.STATUS_FAILED, HohenheimViolations.reasonOf(e));
+            Blast.log("DB: provisioning failed for", name, "-", reason);
+            if (e instanceof Error error) {
+                throw error;
+            }
+        }
     }
 
     /**

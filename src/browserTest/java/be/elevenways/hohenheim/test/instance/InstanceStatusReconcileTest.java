@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.instance.InstanceStatusReconciler;
 import be.elevenways.hohenheim.server.instance.InstanceStatusReconciler.Verdict;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.protoblast.testsupport.time.Poll;
+import be.elevenways.hohenheim.test.RecordStatus;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -383,8 +384,8 @@ class InstanceStatusReconcileTest {
             assertThat(reconciler.reconcile(id).verdict())
                 .as("step 3: the third crash is still a correction")
                 .isEqualTo(Verdict.CORRECTED);
-            awaitStatus(id, InstanceModel.STATUS_ERROR,
-                "step 3: but flap protection suspends the restarts");
+            RecordStatus.await("step 3: but flap protection suspends the restarts", InstanceModel.class,
+                InstanceModel.STATUS, id, InstanceModel.STATUS_ERROR, Duration.ofSeconds(15), Poll.DEFAULT_INTERVAL);
             Row looped = Models.get(InstanceModel.class).findById(id);
             assertThat(InstanceModel.stoppageCauseOf(looped))
                 .as("step 3: the crash loop is the stored cause")
@@ -436,8 +437,9 @@ class InstanceStatusReconcileTest {
             assertThat(back.observed())
                 .as("step 2: on the daemon's own answer")
                 .isEqualTo(ContainerState.STOPPED);
-            awaitStatus(id, InstanceModel.STATUS_RUNNING,
-                "step 2: crash policy restart brings the workload back after the reboot");
+            RecordStatus.await("step 2: crash policy restart brings the workload back after the reboot",
+                InstanceModel.class, InstanceModel.STATUS, id, InstanceModel.STATUS_RUNNING, Duration.ofSeconds(15),
+                Poll.DEFAULT_INTERVAL);
             assertThat(FakeNativeDaemons.daemonOf(hostId).get(handle).running)
                 .as("step 2: the daemon runs the workload again")
                 .isTrue();
@@ -449,12 +451,6 @@ class InstanceStatusReconcileTest {
         });
     }
 
-    /** Bounded wait for an async redeploy (or an error settle) to stamp the column. */
-    private static void awaitStatus(int instanceId, String expected, String what) {
-        Poll.until(what + " (status " + expected + ")", Duration.ofSeconds(15),
-            () -> expected.equals(statusOf(instanceId)));
-    }
-
     /**
      * Waits until the crash restart's redeploy has stamped running AND left the record: the redeploy stamps the
      * column while it still holds the record's operation claim, and a sweep meeting a held claim answers SKIPPED.
@@ -463,7 +459,8 @@ class InstanceStatusReconcileTest {
      * operation arriving during the redeploy would; running is stamped inside the claim, so the claim is taken by then.
      */
     private static void awaitRedeployed(int instanceId, String what) {
-        awaitStatus(instanceId, InstanceModel.STATUS_RUNNING, what);
+        RecordStatus.await(what, InstanceModel.class, InstanceModel.STATUS, instanceId, InstanceModel.STATUS_RUNNING,
+            Duration.ofSeconds(15), Poll.DEFAULT_INTERVAL);
         InstanceOperationLock.production().exclusive(instanceId, InstanceOperationLock.Contention.QUEUE, () -> { });
     }
 

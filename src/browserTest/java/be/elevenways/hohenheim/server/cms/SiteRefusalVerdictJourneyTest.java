@@ -11,13 +11,10 @@ import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.StaleSiteRows;
 import be.elevenways.hohenheim.test.TenantConduits;
-import be.elevenways.protoblast.common.i18n.LocaleChain;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.cms.common.resource.HealthTone;
 import be.elevenways.zenit.cms.common.resource.RecordHealth;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -34,6 +31,7 @@ import static be.elevenways.hohenheim.test.ProxyTestSupport.httpPort;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.rawRequest;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.setupInstanceSite;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.startProxy;
+import static be.elevenways.hohenheim.test.MicrocopyText.say;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -46,7 +44,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SiteRefusalVerdictJourneyTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "site-refusal-";
-    private static final LocaleChain EN = LocaleChain.ofTags("en");
 
     @Test
     @Timeout(60)
@@ -138,9 +135,5 @@ class SiteRefusalVerdictJourneyTest extends HohenheimHttpTestBase {
     private static AccessContext operator() {
         Row admin = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         return AccessContext.of(TenantConduits.stubFor(new UserPrincipal(admin.get(UserModel.ID), "Test Admin")));
-    }
-
-    private static String say(Microcopy copy) {
-        return copy == null ? "" : copy.resolve(EN, Zenit.getMessageResolver());
     }
 }

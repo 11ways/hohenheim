@@ -79,6 +79,7 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static be.elevenways.hohenheim.test.MicrocopyText.say;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.addDomain;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.setupInstanceSite;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.setupSite;
@@ -98,7 +99,6 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
 class DashboardAttentionJourneyTest extends HohenheimTestBase {
 
     private static final String PREFIX = "attn-fold-";
-    private static final LocaleChain EN = LocaleChain.ofTags("en");
 
     /** Its own database: whether anything is online retires the checklist, and other classes leave live sites. */
     @BeforeAll
@@ -1269,9 +1269,5 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             InstanceModel.SERVER_ID.getName(), serverId).forEach(app::set);
         Models.get(InstanceModel.class).save(app);
         return app;
-    }
-
-    private static String say(Microcopy copy) {
-        return copy == null ? "" : copy.resolve(EN, Zenit.getMessageResolver());
     }
 }

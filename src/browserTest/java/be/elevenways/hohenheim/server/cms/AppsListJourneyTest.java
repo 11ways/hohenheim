@@ -24,7 +24,6 @@ import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
@@ -42,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import static be.elevenways.hohenheim.test.MicrocopyText.say;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -402,10 +402,6 @@ class AppsListJourneyTest extends HohenheimHttpTestBase {
     private static Row domainOf(Row site) {
         return Models.get(SiteDomainModel.class).find()
             .where(SiteDomainModel.SITE_ID.eq(site.get(SiteModel.ID))).first();
-    }
-
-    private static String say(Microcopy copy) {
-        return copy == null ? "" : copy.resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver());
     }
 
     private static Row site(List<Runnable> cleanup, String name, String kind, Map<String, Object> settings,

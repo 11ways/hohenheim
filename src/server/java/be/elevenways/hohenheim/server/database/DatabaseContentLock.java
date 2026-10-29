@@ -15,8 +15,9 @@ import java.io.IOException;
 import java.util.List;
 
 /**
- * THE serialization of one managed database's contents: every dump and every restore of a record runs holding its
- * lease, so a dump never captures a half-restored database and two restores never interleave.
+ * THE serialization of one managed database's contents: every dump, every restore and every background provisioning
+ * of a record runs holding its lease, so a dump never captures a half-restored database, two restores never
+ * interleave and a destroy never runs beside a provisioning.
  *
  * AIDEV-NOTE: the lease is core's {@link Leases} on the control-plane database, one key per database record, so it
  * excludes this controller's other threads and every rival controller, heartbeats while the work runs and expires
@@ -27,9 +28,9 @@ import java.util.List;
  * AIDEV-NOTE: lock order. This lease is taken BEFORE a dedicated record's instance claim and before an engine's
  * monitor, never while holding either; its key ranks before the instance keys ({@link LeaseKeys#RANK}, by name).
  *
- * AIDEV-NOTE: only the nightly task QUEUEs ({@link InstanceOperationLock.Contention}). Every other caller (an upload on
- * a request thread, Back up now and a move on the two-thread provisioning pool, a restore run) REFUSEs at once with
- * {@code database_busy}, so no request or pool thread is parked for the hour a queue may wait.
+ * AIDEV-NOTE: only the nightly task and a background provisioning QUEUE ({@link InstanceOperationLock.Contention}).
+ * Every other caller (an upload on a request thread, Back up now and a move on the provisioning pool, a restore run, a
+ * destroy) REFUSEs at once with {@code database_busy}, so no request thread is parked for the hour a queue may wait.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -79,9 +80,14 @@ public final class DatabaseContentLock {
         return leases().heldBy(KEYS.key(databaseId), Thread.currentThread()) != null;
     }
 
+    /** @return whether a thread of this process waits for the database's content lease; how a test finds a queued job */
+    static boolean isAwaited(int databaseId) {
+        return leases().isAwaited(KEYS.key(databaseId));
+    }
+
     private static @NonNull DomainRefusal busy(int databaseId) {
         return new DomainRefusal(HohenheimRefusalReason.DATABASE_BUSY,
-            "another dump or restore of managed database " + databaseId + " is running");
+            "another dump, restore or provisioning of managed database " + databaseId + " is running");
     }
 
     private static @NonNull Leases leases() {

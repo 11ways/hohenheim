@@ -510,8 +510,19 @@ public abstract class HohenheimTestBase extends ZenitBrowserTestBase {
         this.navigateToAppAs(path, sessionToken);
     }
 
-    /** {@link #navigateToApp} under another account's session, for a page as a delegate sees it. */
+    /**
+     * {@link #navigateToApp} under another account's session, for a page as a delegate sees it.
+     *
+     * AIDEV-NOTE: a session swap leaves the open page first, as signOutBrowser does: still signed in as the previous
+     * reader, it hears the session change (its live socket, a read refused) and reloads itself, which aborted this
+     * navigation (LiveFigureJourneyTest step 6, net::ERR_ABORTED).
+     */
     protected void navigateToAppAs(String path, String session) {
+        boolean swapped = page.context().cookies().stream()
+            .noneMatch(cookie -> SessionCookies.name().equals(cookie.name) && session.equals(cookie.value));
+        if (swapped && !page.url().startsWith("about:")) {
+            page.navigate("about:blank");
+        }
         page.context().addCookies(List.of(
             new Cookie(SessionCookies.name(), session)
                 .setDomain("localhost")

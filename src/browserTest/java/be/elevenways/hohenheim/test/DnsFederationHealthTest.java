@@ -22,9 +22,6 @@ import be.elevenways.hohenheim.server.dns.DnsServer;
 import be.elevenways.hohenheim.server.dns.DnsZoneSnapshot;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
-import be.elevenways.protoblast.common.i18n.LocaleChain;
-import be.elevenways.protoblast.common.i18n.MessageResolvers;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.notifications.server.transport.DsnOrigin;
@@ -66,6 +63,7 @@ import static be.elevenways.hohenheim.test.DnsFixtures.createZone;
 import static be.elevenways.hohenheim.test.DnsFixtures.linkZonePeer;
 import static be.elevenways.hohenheim.test.DnsFixtures.record;
 import static be.elevenways.hohenheim.test.DnsFixtures.transferPeer;
+import static be.elevenways.hohenheim.test.MicrocopyText.say;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -174,9 +172,9 @@ class DnsFederationHealthTest {
             List<AttentionItem> items = staleItems();
             assertThat(items).as("step 3: the stale secondary is an item").hasSize(1);
             assertThat(items.get(0).severity()).isEqualTo(AttentionSeverity.WARNING);
-            assertThat(en(items.get(0).title())).as("step 3: the item is worded at its root, the zone")
+            assertThat(say(items.get(0).title())).as("step 3: the item is worded at its root, the zone")
                 .isEqualTo("fresh-peer has an old copy of " + ORIGIN);
-            assertThat(en(items.get(0).detail())).as("step 3: its detail says why, with the serials")
+            assertThat(say(items.get(0).detail())).as("step 3: its detail says why, with the serials")
                 .isEqualTo("fresh-peer serves serial " + ourSerial + "; this server serves " + bumped + ".");
             assertThat(items.get(0).about()).as("step 3: the zone is the item's subject")
                 .isEqualTo(AttentionSubject.zone(zoneId));
@@ -611,10 +609,6 @@ class DnsFederationHealthTest {
         List<AttentionItem> items = new ArrayList<>();
         DnsAttention.staleDnsSecondaries(items);
         return items;
-    }
-
-    private static String en(Microcopy copy) {
-        return copy.resolve(LocaleChain.ofTags("en"), MessageResolvers.getDefault());
     }
 
     private static List<AttentionItem> delegationItems() {

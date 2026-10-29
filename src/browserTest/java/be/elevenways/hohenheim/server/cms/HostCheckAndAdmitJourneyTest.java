@@ -19,7 +19,6 @@ import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.RecordOverview;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -36,6 +35,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Stream;
 
+import static be.elevenways.hohenheim.test.MicrocopyText.say;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
@@ -201,10 +201,6 @@ class HostCheckAndAdmitJourneyTest extends HohenheimTestBase {
                     .contains("\"" + fact.label().key() + "\"");
             }
         }
-    }
-
-    private static String say(Microcopy copy, LocaleChain locales) {
-        return copy.resolve(locales, Zenit.getMessageResolver());
     }
 
     private static PanelAction<Row> action(String id) {

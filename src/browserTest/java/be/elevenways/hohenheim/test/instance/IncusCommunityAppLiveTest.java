@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
-import be.elevenways.protoblast.testsupport.time.Poll;
+import be.elevenways.hohenheim.test.RecordStatus;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.hohenheim.server.ControllerScope;
@@ -147,8 +147,8 @@ class IncusCommunityAppLiveTest {
                 assertThat(service.deploy(id).state())
                     .as("step 3: deploy starts the system container")
                     .isEqualTo(ContainerState.RUNNING);
-                awaitStatus(id, InstanceModel.STATUS_RUNNING, 60_000,
-                    "step 3: the readiness line flipped starting -> running");
+                RecordStatus.await("step 3: the readiness line flipped starting -> running", InstanceModel.class,
+                    InstanceModel.STATUS, id, InstanceModel.STATUS_RUNNING, Duration.ofSeconds(60), POLL_INTERVAL);
                 assertThat(execIn(handle, "test -x /opt/gotify/gotify-linux-amd64"
                         + " && echo deployed"))
                     .as("step 3: the release binary landed in the rootfs")
@@ -190,8 +190,8 @@ class IncusCommunityAppLiveTest {
                 Models.get(InstanceTemplateModel.class).save(template);
                 InstanceConsoles.overrideTimingsForTest(8_000L, null);
                 service.deploy(id);
-                awaitStatus(id, InstanceModel.STATUS_ERROR, 30_000,
-                    "step 6: an unobserved readiness line stamps ERROR");
+                RecordStatus.await("step 6: an unobserved readiness line stamps ERROR", InstanceModel.class,
+                    InstanceModel.STATUS, id, InstanceModel.STATUS_ERROR, Duration.ofSeconds(30), POLL_INTERVAL);
                 InstanceConsoles.overrideTimingsForTest(null, null);
 
                 // 7. Verified teardown: absent at the daemon, record soft-deleted.
@@ -364,23 +364,6 @@ class IncusCommunityAppLiveTest {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-    }
-
-    /** Poll the RECORD's status (the fenced writes are async off the console pump). */
-    private static void awaitStatus(int instanceId, String expected, long timeoutMs,
-                                    String description) {
-        try {
-            Poll.until(description, Duration.ofMillis(timeoutMs), POLL_INTERVAL,
-                () -> expected.equals(statusOf(instanceId)));
-        } catch (AssertionError timedOut) {
-            // The status it was left in is the evidence; assert on it to name it.
-            assertThat(statusOf(instanceId)).as(description).isEqualTo(expected);
-            throw timedOut;
-        }
-    }
-
-    private static String statusOf(int instanceId) {
-        return Models.get(InstanceModel.class).findById(instanceId).get(InstanceModel.STATUS);
     }
 
     /** The container's bridge IPv4, read from the daemon's state object. */

@@ -7,7 +7,7 @@ import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.DeployTrigger;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
-import be.elevenways.protoblast.testsupport.time.Poll;
+import be.elevenways.hohenheim.test.RecordStatus;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.source.TestSources;
 import be.elevenways.hohenheim.HohenheimCapabilities;
@@ -163,7 +163,9 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
             // 3. The background build of the claim FAILS (no such repository) and the
             //    row records it -- a failed manual preview is visible, never silent.
             int firstId = first.get(PreviewDeploymentModel.ID);
-            awaitStatus(firstId, PreviewDeploymentModel.STATUS_FAILED);
+            RecordStatus.await("step 3: the claim's background build fails", PreviewDeploymentModel.class,
+                PreviewDeploymentModel.STATUS, firstId, PreviewDeploymentModel.STATUS_FAILED, Duration.ofSeconds(20),
+                Duration.ofMillis(100));
             Row failed = Models.get(PreviewDeploymentModel.class).findById(firstId);
             assertThat((String) failed.get(PreviewDeploymentModel.LAST_ERROR))
                 .as("step 3: the failure reason is recorded on the row").isNotBlank();
@@ -176,7 +178,9 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
                 InstanceVariableModel.KIND_SECRET, quoted);
             try {
                 PreviewDeployments.queue(applicationId, "manual-a", null, null, DeployTrigger.MANUAL);
-                awaitStatus(firstId, PreviewDeploymentModel.STATUS_FAILED);
+                RecordStatus.await("step 3b: the requeued build fails the same way", PreviewDeploymentModel.class,
+                    PreviewDeploymentModel.STATUS, firstId, PreviewDeploymentModel.STATUS_FAILED,
+                    Duration.ofSeconds(20), Duration.ofMillis(100));
                 assertThat((String) Models.get(PreviewDeploymentModel.class).findById(firstId)
                         .get(PreviewDeploymentModel.LAST_ERROR))
                     .as("step 3b: the stored reason carries the placeholder, never the secret value")
@@ -453,13 +457,5 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
 
     private static AccessContext contextOf(UUID userId, String name) {
         return AccessContext.of(TenantConduits.stubFor(new UserPrincipal(userId, name)));
-    }
-
-    private static void awaitStatus(int previewId, String status) {
-        Poll.until("preview " + previewId + " reaches status " + status, Duration.ofSeconds(20),
-            Duration.ofMillis(100), () -> {
-                Row row = Models.get(PreviewDeploymentModel.class).findById(previewId);
-                return row != null && status.equals(row.get(PreviewDeploymentModel.STATUS));
-            });
     }
 }

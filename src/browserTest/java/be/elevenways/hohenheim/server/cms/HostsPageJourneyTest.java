@@ -41,6 +41,7 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static be.elevenways.hohenheim.test.MicrocopyText.say;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -397,11 +398,7 @@ class HostsPageJourneyTest extends HohenheimHttpTestBase {
         }
     }
 
-    private static String say(Microcopy copy) {
-        return copy == null ? "" : copy.resolve(EN, Zenit.getMessageResolver());
-    }
-
-    /** @return a byte count as {@link #say} words a size */
+    /** @return a byte count worded as an English size */
     private static String size(long bytes) {
         return Wording.bytes(Reader.of(EN, Zenit.getMessageResolver()), bytes, Zenit.getMessageResolver());
     }

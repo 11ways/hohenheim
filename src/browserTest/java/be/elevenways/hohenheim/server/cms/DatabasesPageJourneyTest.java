@@ -26,7 +26,6 @@ import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
@@ -54,6 +53,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
+import static be.elevenways.hohenheim.test.MicrocopyText.say;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
@@ -72,7 +72,6 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
 class DatabasesPageJourneyTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "dbpage-";
-    private static final LocaleChain EN = LocaleChain.ofTags("en");
     private static final String OVERDUE = "the nightly backup has not written a newer one";
 
     @Test
@@ -546,9 +545,5 @@ class DatabasesPageJourneyTest extends HohenheimHttpTestBase {
     private static void deleteDump(Row dump) {
         Models.get(DatabaseDumpModel.class).find().where(DatabaseDumpModel.ID.eq(dump.get(DatabaseDumpModel.ID)))
             .delete();
-    }
-
-    private static String say(Microcopy copy) {
-        return copy == null ? "" : copy.resolve(EN, Zenit.getMessageResolver());
     }
 }

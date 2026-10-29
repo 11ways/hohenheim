@@ -19104,7 +19104,7 @@
   "database_restore_failed_unchanged_detail": {"text": "Het herstel van {$name} is mislukt en teruggedraaid: de database is zoals ze was. {$reason}", "scope": "violations"},
   "database_restore_failed_mixed_detail": {"text": "Het herstel van {$name} is halverwege mislukt: de database kan nu een mengeling bevatten van de herstelde back-up en haar vorige inhoud. Herstel de back-up van net ervoor, van {$before :datetime} (#{$dump}), om de database terug te zetten. {$reason}", "scope": "violations"},
   "database_restore_new_cleanup_failed_detail": {"text": "Het herstel in de nieuwe database {$name} is mislukt ({$reason}), en de half herstelde database kon niet verwijderd worden ({$cleanup}); verwijder ze voor je de naam opnieuw gebruikt.", "scope": "violations"},
-  "database_busy": {"text": "Er loopt al een back-up of herstel van deze database; probeer het opnieuw zodra die klaar is.", "scope": "violations"},
+  "database_busy": {"text": "Er loopt al een back-up, herstel of inrichting van deze database; probeer het opnieuw zodra die klaar is.", "scope": "violations"},
   "database_dump_whole_server": {"text": "Een dump gemaakt met --create of pg_dumpall kan niet in een enkele database hersteld worden.", "scope": "violations"},
   "database_dump_whole_server_detail": {"text": "De dump voor {$name} maakt of verbindt met een eigen database ({$statement}): een dump gemaakt met --create, pg_dumpall of mysqldump --databases kan niet in een enkele database hersteld worden. Dump die ene database zonder die opties; er werd niets gewijzigd.", "scope": "violations"},
   "database_staging_unsafe": {"text": "De tijdelijke map voor dumps kan niet tot haar eigenaar beperkt worden.", "scope": "violations"},

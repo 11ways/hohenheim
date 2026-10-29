@@ -13,7 +13,7 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StoredRows;
-import be.elevenways.protoblast.testsupport.time.Poll;
+import be.elevenways.hohenheim.test.RecordStatus;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.source.TestSources;
 import be.elevenways.hohenheim.HohenheimCapabilities;
@@ -205,7 +205,9 @@ class PreviewMechanicsTest extends HohenheimHttpTestBase {
                 .as("step 2: the redeploy claims the existing row").isEqualTo(existingId);
             assertThat((String) redeployed.get(PreviewDeploymentModel.HOSTNAME))
                 .as("step 2: and keeps the hostname it was minted with").isEqualTo(minted);
-            awaitStatus(existingId, PreviewDeploymentModel.STATUS_FAILED);
+            RecordStatus.await("step 2: the redeploy's build fails", PreviewDeploymentModel.class,
+                PreviewDeploymentModel.STATUS, existingId, PreviewDeploymentModel.STATUS_FAILED, Duration.ofSeconds(20),
+                Duration.ofMillis(100));
             assertThat((String) Models.get(PreviewDeploymentModel.class).findById(existingId)
                 .get(PreviewDeploymentModel.HOSTNAME)).as("step 2: still after the build ran").isEqualTo(minted);
             assertThat((String) generatedDomainOf(existingId).get(SiteDomainModel.HOSTNAME))
@@ -222,7 +224,9 @@ class PreviewMechanicsTest extends HohenheimHttpTestBase {
                 .as("step 3: a new preview gets the 2026-10 fold's name")
                 .isEqualTo("prev-mech--fix-giris.preview.test")
                 .isEqualTo(PreviewDeployments.hostnameFor("prev-mech", newRef, "preview.test"));
-            awaitStatus(freshId, PreviewDeploymentModel.STATUS_FAILED);
+            RecordStatus.await("step 3: the new preview's build fails", PreviewDeploymentModel.class,
+                PreviewDeploymentModel.STATUS, freshId, PreviewDeploymentModel.STATUS_FAILED, Duration.ofSeconds(20),
+                Duration.ofMillis(100));
 
             PreviewDeployments.destroy(existingId, "operator");
             PreviewDeployments.destroy(freshId, "operator");
@@ -632,14 +636,6 @@ class PreviewMechanicsTest extends HohenheimHttpTestBase {
             .where(DnsRecordModel.GENERATED_FOR_MODEL.eq(PreviewDeploymentModel.MODEL_ID.toString()))
             .where(DnsRecordModel.GENERATED_FOR_ID.eq(previewId))
             .all();
-    }
-
-    private static void awaitStatus(int previewId, String status) {
-        Poll.until("preview " + previewId + " reaches status " + status, Duration.ofSeconds(20),
-            Duration.ofMillis(100), () -> {
-                Row row = Models.get(PreviewDeploymentModel.class).findById(previewId);
-                return row != null && status.equals(row.get(PreviewDeploymentModel.STATUS));
-            });
     }
 
     private static Row generatedDomainOf(int previewId) {

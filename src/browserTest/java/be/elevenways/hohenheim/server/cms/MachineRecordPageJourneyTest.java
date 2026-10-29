@@ -13,13 +13,10 @@ import be.elevenways.hohenheim.server.runtime.WorkloadLane;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
-import be.elevenways.protoblast.common.i18n.LocaleChain;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.test.support.TestAccessContexts;
 import be.elevenways.zenit.cms.common.action.PanelAction;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.operation.OperationRunModel;
 import be.elevenways.zenit.common.operation.OperationRunStatus;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -32,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static be.elevenways.hohenheim.test.MicrocopyText.say;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -291,9 +289,5 @@ class MachineRecordPageJourneyTest extends HohenheimHttpTestBase {
         instances.save(row);
         cleanup.add(() -> HardDeletes.row(instances, row));
         return row;
-    }
-
-    private static String say(Microcopy copy) {
-        return copy == null ? "" : copy.resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver());
     }
 }

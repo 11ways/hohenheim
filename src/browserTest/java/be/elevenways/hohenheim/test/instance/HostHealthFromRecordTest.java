@@ -12,9 +12,6 @@ import be.elevenways.hohenheim.server.tls.RenewalFailure;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.HostFixtures;
-import be.elevenways.protoblast.common.i18n.LocaleChain;
-import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.history.ChangeFactModel;
 import be.elevenways.zenit.common.orm.history.ChangeModel;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -32,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import static be.elevenways.hohenheim.test.MicrocopyText.say;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
@@ -47,8 +45,6 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * @since  0.10.0
  */
 class HostHealthFromRecordTest {
-
-    private static final LocaleChain EN = LocaleChain.ofTags("en");
 
     private static SqlDatasource datasource;
     private static int hostId;
@@ -157,10 +153,6 @@ class HostHealthFromRecordTest {
     private static String itemOf(List<AttentionItem> items, int instanceId) {
         AttentionItem item = items.stream().filter(candidate -> candidate.target().toUrl()
             .contains("/instances/" + instanceId + "/")).findFirst().orElseThrow();
-        return text(item.title()) + " | " + text(item.detail()) + " | " + text(item.note());
-    }
-
-    private static String text(Microcopy words) {
-        return words == null ? "" : words.resolve(EN, Zenit.getMessageResolver());
+        return say(item.title()) + " | " + say(item.detail()) + " | " + say(item.note());
     }
 }
