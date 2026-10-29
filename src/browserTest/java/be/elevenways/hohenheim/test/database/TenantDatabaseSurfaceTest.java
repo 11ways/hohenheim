@@ -24,7 +24,6 @@ import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.protoblast.testsupport.thread.Racers;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.action.PanelAction;
@@ -153,10 +152,8 @@ class TenantDatabaseSurfaceTest extends HohenheimHttpTestBase {
         Model engines = Models.get(DatabaseEngineModel.class);
         try {
             if (admittedHostId != null) {
-                Poll.until("every database on " + PREFIX + "host finishing its provisioning", PROVISIONING_SETTLES,
-                    () -> databases.find()
-                        .where(DatabaseModel.SERVER_ID.eq(admittedHostId))
-                        .where(DatabaseModel.STATUS.eq(DatabaseModel.STATUS_PROVISIONING)).first() == null);
+                assertThat(DatabaseService.awaitProvisioningIdle(PROVISIONING_SETTLES))
+                    .as("every provisioning this fork handed over ended").isTrue();
             }
         } finally {
             // Swept even when the wait timed out: the timeout is still reported, the rows never stay behind for the
@@ -268,8 +265,8 @@ class TenantDatabaseSurfaceTest extends HohenheimHttpTestBase {
         String name = storedNameOf(tenant, label);
         Row database = databaseNamed(name);
         assertThat(database).as("fixture: the allocation of " + label + " is stored").isNotNull();
-        Poll.until("database " + name + " finishing its provisioning", PROVISIONING_SETTLES,
-            () -> !DatabaseModel.STATUS_PROVISIONING.equals(databaseNamed(name).get(DatabaseModel.STATUS)));
+        assertThat(DatabaseService.awaitProvisioningIdle(PROVISIONING_SETTLES))
+            .as("fixture: the provisioning of " + label + " ended").isTrue();
         Row settled = databaseNamed(name);
         assertThat((String) settled.get(DatabaseModel.STATUS))
             .as("fixture: the engine deploy of " + label + " was refused, so no engine container runs")

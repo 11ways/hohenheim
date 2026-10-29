@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.model.DeployTrigger;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -120,7 +120,7 @@ public final class InstanceResize {
     private static void deployNow(int instanceId) {
         // A SYSTEM deploy (the trigger says so): the resize write that asked for it was the gate,
         // and the recreate stays that writer's action (runAsSystem keeps its attribution).
-        JobRunner.startVirtualThread(() -> ExecutionIdentity.runAsSystem(
+        HandlerSupport.inBackground(() -> ExecutionIdentity.runAsSystem(
             HohenheimSystemPurposes.INSTANCE_RESIZE, () -> {
             try {
                 new InstanceService().deploy(instanceId, DeployTrigger.SYSTEM);

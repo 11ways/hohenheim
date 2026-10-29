@@ -12,10 +12,11 @@ import be.elevenways.hohenheim.ports.PublishedPort;
 import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.hohenheim.server.util.SerialOutbox;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.common.thread.JobRunnerGroup;
 import be.elevenways.protoblast.common.time.Backoff;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.time.Pace;
+import be.elevenways.zenit.common.bootstrap.RuntimeJobs;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
@@ -85,6 +86,13 @@ public final class InstanceFigures {
     private static final Semaphore PROBES = new Semaphore(MAX_PROBES);
 
     private static final Map<Integer, Session> SESSIONS = new ConcurrentHashMap<>();
+
+    /**
+     * The askings' threads: a runtime member whose CANCEL stop interrupts an asking still running, which ends its
+     * wait and its probe's socket read, as {@code stopLocked} does.
+     */
+    private static final JobRunnerGroup.Member ASKING =
+        RuntimeJobs.GROUP.member("hh-live-figures", JobRunnerGroup.StopMode.CANCEL);
 
     /**
      * Runs between a subscribe finding a session and attaching to it; the seam a test widens the attach/detach race
@@ -394,6 +402,14 @@ public final class InstanceFigures {
             if (this.stopped) {
                 return null;
             }
+            if (!this.started) {
+                // The asking serves every viewer, so it runs as the system, never as the one whose subscribe started
+                // it; on a virtual thread, whose interrupt also ends a probe's blocking socket read (stopLocked). It
+                // starts before the viewer is added: a stopped runtime refuses it and the subscribe fails whole.
+                ASKING.get().startThread(() -> ExecutionIdentity.runDetachedAsSystem(
+                    HohenheimSystemPurposes.LIVE_FIGURE, this::ask));
+                this.started = true;
+            }
             this.target = target;
             Attached attached = new Attached(this.instanceId, viewer, ended);
             Figure held = this.last;
@@ -401,13 +417,6 @@ public final class InstanceFigures {
                 attached.offer(held);
             }
             this.viewers.add(attached);
-            if (!this.started) {
-                this.started = true;
-                // The asking serves every viewer, so it runs as the system, never as the one whose subscribe started
-                // it; on a virtual thread, whose interrupt also ends a probe's blocking socket read (stopLocked).
-                JobRunner.startVirtualThread(() -> ExecutionIdentity.runDetachedAsSystem(
-                    HohenheimSystemPurposes.LIVE_FIGURE, this::ask));
-            }
             return attached;
         }
 

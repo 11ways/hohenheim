@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
-import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
@@ -13,7 +13,6 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.history.History;
-import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
@@ -316,12 +315,9 @@ public final class InstanceStatusReconciler {
     private void redeployCrashed(int instanceId, int serverId, String name) {
         Blast.log("INSTANCE RECONCILE: instance", instanceId,
             "died without an observed stop; crash policy restart -> redeploying");
-        // The datasource context does not cross threads on its own (the console watch
-        // captures it the same way).
-        var datasource = Db.currentOrDefault();
-        // Through JobRunner, which carries the reconciler's declared system identity onto the
-        // new thread; a raw virtual thread started the redeploy with no identity at all.
-        JobRunner.startVirtualThread(() -> Db.run(datasource, () -> {
+        // The background pool carries the reconciler's datasource and declared system identity, and a runtime stop
+        // waits for the redeploy before the datasources close.
+        HandlerSupport.inBackground(() -> {
             try {
                 // AIDEV-NOTE: the correction still holds this record's claim when it queues the restart. The new
                 // thread must wait for that claim to leave, then deploy re-entrantly under its own queued claim.
@@ -341,7 +337,7 @@ public final class InstanceStatusReconciler {
                 Blast.log("INSTANCE RECONCILE: crash restart of instance", name,
                     "refused:", refused.getMessage());
             }
-        }));
+        });
     }
 
     /**

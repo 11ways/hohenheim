@@ -13,7 +13,7 @@ import be.elevenways.hohenheim.server.stack.StackInstances;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
 import be.elevenways.hohenheim.server.task.ReclaimDockerImages;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.zenit.cms.common.CmsMicrocopy;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationFact;
@@ -197,10 +197,10 @@ public final class StackOperations {
 
     /**
      * A sweep visits every daemon and can remove multi-GB images, so it never runs on the request thread; the outcome
-     * lands in the server log exactly like the nightly task's.
+     * lands in the server log exactly like the nightly task's, and a runtime stop waits for a sweep under way.
      */
     private static void reclaimInBackground() {
-        JobRunner.startVirtualThread(() -> {
+        HandlerSupport.inBackground(() -> {
             Map<String, DockerReclaim.Outcome> outcomes = StackRuntime.get().reclaimImages(
                 ReclaimDockerImages.minimumAge(), HohenheimSettings.isOn(HohenheimSettings.Stacks.RECLAIM_UNTRACKED));
             DockerReclaim.Outcome total = outcomes.values().stream()

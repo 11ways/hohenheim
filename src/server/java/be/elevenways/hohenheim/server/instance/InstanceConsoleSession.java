@@ -111,14 +111,23 @@ final class InstanceConsoleSession {
         this.logSink = logSink;
         this.lastFlushAt = Now.millis();
         this.exitListener = exitListener;
-        // AIDEV-NOTE: the pump is the SYSTEM's watch of the workload, never the continuation of
-        // whoever opened the session. It outlives that request, and everything it does is a
-        // system reaction: the readiness stamp, the episode log and the exit policy (status,
-        // port release, crash-loop alert, crash restart). Carrying the opener made a
-        // CONSOLE-only viewer's session restart a crashed workload as that viewer, which the
-        // POWER gate refused, leaving it down. Viewer reads stay gated where they happen: the
-        // attach and the socket's revalidate, both on the viewer's own thread.
-        JobRunner.startVirtualThread(() -> ExecutionIdentity.runDetachedAsSystem(
+    }
+
+    /**
+     * Starts the pump on {@code pumps}, a thread of the hub's runtime member.
+     *
+     * AIDEV-NOTE: the pump is the SYSTEM's watch of the workload, never the continuation of
+     * whoever opened the session. It outlives that request, and everything it does is a
+     * system reaction: the readiness stamp, the episode log and the exit policy (status,
+     * port release, crash-loop alert, crash restart). Carrying the opener made a
+     * CONSOLE-only viewer's session restart a crashed workload as that viewer, which the
+     * POWER gate refused, leaving it down. Viewer reads stay gated where they happen: the
+     * attach and the socket's revalidate, both on the viewer's own thread.
+     *
+     * @throws IllegalStateException when the runtime stopped
+     */
+    void start(@NonNull JobRunner pumps) {
+        pumps.startThread(() -> ExecutionIdentity.runDetachedAsSystem(
             HohenheimSystemPurposes.INSTANCE_CONSOLE, this::pump));
     }
 

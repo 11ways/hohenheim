@@ -158,7 +158,7 @@ class DatabaseServiceTest {
             assertThat(service.detail(name).status()).isEqualTo(DatabaseModel.STATUS_PROVISIONING);
 
             // The background job flips it to "active" once the container is up and ready.
-            String status = awaitStatus(service, name, DatabaseModel.STATUS_ACTIVE, 60_000);
+            String status = settledStatus(service, name, 60_000);
             assertThat(status).isEqualTo(DatabaseModel.STATUS_ACTIVE);
             assertThat(service.detail(name).running()).isTrue();
         } finally {
@@ -242,7 +242,7 @@ class DatabaseServiceTest {
             }));
 
             // 2. After the commit the pool provisions: active, running, a real container.
-            assertThat(awaitStatus(service, name, DatabaseModel.STATUS_ACTIVE, 120_000))
+            assertThat(settledStatus(service, name, 120_000))
                 .as("step 2: the record turns active once the caller committed")
                 .isEqualTo(DatabaseModel.STATUS_ACTIVE);
             DatabaseService.Detail active = service.detail(name);
@@ -259,7 +259,7 @@ class DatabaseServiceTest {
             String doomedPassword = "hunter2doomedpw";
             service.createAsync(doomed, ManagedDatabase.Engine.POSTGRES,
                 "hohenheim-test/" + doomedPassword + ":never", "appuser", doomedPassword, "appdb", true);
-            assertThat(awaitStatus(service, doomed, DatabaseModel.STATUS_FAILED, 120_000))
+            assertThat(settledStatus(service, doomed, 120_000))
                 .as("step 3: an unpullable image is a terminal failure")
                 .isEqualTo(DatabaseModel.STATUS_FAILED);
             DatabaseService.Detail failed = service.detail(doomed);
@@ -293,12 +293,10 @@ class DatabaseServiceTest {
         }
     }
 
-    /** Wait for the record to reach {@code wanted}; the status it then reads. */
-    private static String awaitStatus(DatabaseService service, String name, String wanted,
-                                      long timeoutMs) {
-        Poll.until("database " + name + " reaching status " + wanted,
-            Duration.ofMillis(timeoutMs), Duration.ofMillis(500),
-            () -> wanted.equals(service.detail(name).status()));
+    /** Waits until the provisioning pool settled the record; the status it then reads. */
+    private static String settledStatus(DatabaseService service, String name, long timeoutMs) {
+        assertThat(DatabaseService.awaitProvisioningIdle(Duration.ofMillis(timeoutMs)))
+            .as("the provisioning of database " + name + " ended").isTrue();
         return service.detail(name).status();
     }
 

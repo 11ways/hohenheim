@@ -88,6 +88,10 @@ public final class HostnameReach {
 
     private static final Reach NOT_CHECKED = new Reach(Verdict.NOT_CHECKED, List.of(), false);
 
+    /** The lookups' threads: a process-global runner, since a resolver that never answers must not hold a stop. */
+    private static final JobRunner LOOKUPS = JobRunner.createProcessGlobal("hostname-reach",
+        JobRunner.CallerContext.DETACHED);
+
     private HostnameReach() {
     }
 
@@ -127,7 +131,7 @@ public final class HostnameReach {
             lookup = IN_FLIGHT.putIfAbsent(name, started);
             if (lookup == null) {
                 lookup = started;
-                JobRunner.startVirtualThread(() -> resolveInto(name, started));
+                LOOKUPS.startThread(() -> resolveInto(name, started));
             }
         }
         if (waitMs <= 0) {

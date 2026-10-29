@@ -19,16 +19,15 @@ import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.runtime.ConsoleStream;
 import be.elevenways.hohenheim.server.runtime.ConsoleStreamSupport;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.common.thread.JobRunnerGroup;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.protoblast.common.time.Pace;
-import java.time.Duration;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.common.bootstrap.RuntimeJobs;
 import be.elevenways.zenit.common.security.KnownValueRedactor;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -56,7 +55,7 @@ import java.util.function.Consumer;
  * AIDEV-NOTE: every status this hub stamps rides the SAME fenced write as the
  * synchronous operations ({@link InstanceOperationGuard#stamp}) -- a readiness flip is
  * a runtime outcome, and an async watcher is exactly the kind of stale controller the
- * fence exists to refuse. Callbacks run on virtual threads under the Db scope captured
+ * fence exists to refuse. Callbacks run on the console pool's threads under the Db scope captured
  * when the watch was armed, so test datasources and the production default both work.
  */
 public final class InstanceConsoles {
@@ -72,6 +71,13 @@ public final class InstanceConsoles {
 
     /** ... within this window stop the auto-restarts until the next manual deploy. */
     private static final long FLAP_WINDOW_MS = 60_000;
+
+    /**
+     * The pumps and readiness checks: a runtime member whose stop first closes every session as the hub's own close
+     * ({@link #closeAllAtStop}), so each pump writes its episode down and ends before the datasources close, and a
+     * readiness check still pending is cancelled.
+     */
+    private static final JobRunnerGroup.Member PUMPS = consolePool();
 
     // AIDEV-NOTE: every console registry is keyed by the workload's controller-scoped handle (key()), never the bare
     // record id: record #7 of another controller (every test class's fresh database in a shared JVM) is another
@@ -198,39 +204,80 @@ public final class InstanceConsoles {
             return;
         }
         armReadiness(watch, instanceId, session);
-        long deadline = readinessTimeoutMs;
-        final InstanceConsoleSession first = session;
-        JobRunner.startVirtualThread(() -> {
-            InstanceConsoleSession watching = first;
-            long until = Now.millis() + deadline;
-            // AIDEV-NOTE: a guest that reboots ends its console operation (an Alpine cloud VM resets ~30 s after its
-            // first start), so the console that watched for the line is gone before the line is printed. While the
-            // line is awaited, a deferred watch whose stream ended attaches again, seeded from the backlog.
-            while (!watching.readinessMatched() && Now.millis() < until) {
-                try {
-                    Pace.sleep(Duration.ofMillis(Math.min(READINESS_REATTACH_MS, Math.max(1, until - Now.millis()))));
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    return;
-                }
-                if (watching.isEnded() && !watching.readinessMatched() && watch.session() == null
-                        && isCurrent(watching) && !watching.closedByHub()) {
-                    watching = reattachForReadiness(watch, instanceId, watching);
-                }
-            }
-            if (watching.readinessMatched()) {
+        new ReadinessWatch(watch, instanceId, session, readinessTimeoutMs).start();
+    }
+
+    /**
+     * Watches an armed readiness line until its deadline as a chain of scheduled checks on the console pool: a
+     * runtime stop cancels the next check, so a stopping controller stamps nothing for a line it stopped awaiting.
+     *
+     * AIDEV-NOTE: a guest that reboots ends its console operation (an Alpine cloud VM resets ~30 s after its first
+     * start), so the console that watched for the line is gone before the line is printed. While the line is
+     * awaited, a deferred watch whose stream ended attaches again, seeded from the backlog. One check runs at a
+     * time (each schedules the next), so {@link #watching} has one writer.
+     */
+    private static final class ReadinessWatch implements Runnable {
+
+        private final @NonNull Watch watch;
+        private final int instanceId;
+        private final long deadlineMs;
+        private final long until;
+        private @NonNull InstanceConsoleSession watching;
+
+        ReadinessWatch(@NonNull Watch watch, int instanceId, @NonNull InstanceConsoleSession first, long deadlineMs) {
+            this.watch = watch;
+            this.instanceId = instanceId;
+            this.deadlineMs = deadlineMs;
+            this.until = Now.millis() + deadlineMs;
+            this.watching = first;
+        }
+
+        /** @throws IllegalStateException when the runtime stopped */
+        void start() {
+            if (this.watching.readinessMatched()) {
                 return;
             }
-            final InstanceConsoleSession given = watching;
-            HandlerSupport.inScope(watch.datasource(), () ->
-                stampIfStatus(watch.leases(), watch.serverId(), watch.instanceName(), instanceId,
+            long left = this.until - Now.millis();
+            if (left <= 0) {
+                PUMPS.get().schedule(this::giveUp, 0);
+            } else {
+                PUMPS.get().schedule(this, Math.min(READINESS_REATTACH_MS, left));
+            }
+        }
+
+        @Override
+        public void run() {
+            InstanceConsoleSession current = this.watching;
+            if (current.isEnded() && !current.readinessMatched() && this.watch.session() == null
+                    && isCurrent(current) && !current.closedByHub()) {
+                this.watching = reattachForReadiness(this.watch, this.instanceId, current);
+            }
+            if (this.watching.readinessMatched()) {
+                return;
+            }
+            long left = this.until - Now.millis();
+            if (left <= 0) {
+                this.giveUp();
+                return;
+            }
+            try {
+                PUMPS.get().schedule(this, Math.min(READINESS_REATTACH_MS, left));
+            } catch (IllegalStateException stopped) {
+                // The runtime stopped while this check ran: the line is no longer awaited by anyone.
+            }
+        }
+
+        private void giveUp() {
+            InstanceConsoleSession given = this.watching;
+            HandlerSupport.inScope(this.watch.datasource(), () ->
+                stampIfStatus(this.watch.leases(), this.watch.serverId(), this.watch.instanceName(), this.instanceId,
                     () -> isCurrent(given), InstanceModel.STATUS_STARTING, InstanceModel.STATUS_ERROR,
-                    "readiness line not observed within " + deadline + "ms",
+                    "readiness line not observed within " + this.deadlineMs + "ms",
                     HohenheimActivityAction.WORKLOAD_NEVER_READY, null));
             // Given up on: the line is no longer awaited, so an exclusive console is let go all the same.
             given.stopAwaitingReadiness();
             releaseIfIdle(given);
-        });
+        }
     }
 
     /**
@@ -612,12 +659,31 @@ public final class InstanceConsoles {
 
     /** Close and forget an instance's session (destroy, redeploy replacement). */
     static void closeSession(int instanceId) {
-        String key = key(instanceId);
+        closeKey(key(instanceId));
+    }
+
+    private static void closeKey(@NonNull String key) {
         GENERATIONS.merge(key, 1L, Long::sum);
         InstanceConsoleSession session = SESSIONS.remove(key);
         if (session != null) {
             session.close();
         }
+    }
+
+    /**
+     * The console pool's stop hook: every session ends as the hub's own close, so its pump writes the episode down
+     * and ends (no exit policy runs), and the bumped generations keep any late callback from stamping.
+     */
+    private static void closeAllAtStop() {
+        for (String key : List.copyOf(SESSIONS.keySet())) {
+            closeKey(key);
+        }
+    }
+
+    private static JobRunnerGroup.@NonNull Member consolePool() {
+        JobRunnerGroup.Member pool = RuntimeJobs.GROUP.member("hh-instance-console", JobRunnerGroup.StopMode.DRAIN);
+        pool.whenStopped(InstanceConsoles::closeAllAtStop);
+        return pool;
     }
 
     /** Test hook: every live session's count (the leak assertion's subject). */
@@ -662,6 +728,13 @@ public final class InstanceConsoles {
             (endedSession, termination, detail) -> handleStreamEnd(endedSession, instanceId,
                 serverId, name, support, leases, datasource, termination, detail));
         SESSIONS.put(key, session);
+        try {
+            session.start(PUMPS.get());
+        } catch (IllegalStateException stopped) {
+            SESSIONS.remove(key, session);
+            session.close();
+            throw stopped;
+        }
         return session;
     }
 

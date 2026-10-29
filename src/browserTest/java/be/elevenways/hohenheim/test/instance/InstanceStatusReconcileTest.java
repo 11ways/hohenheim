@@ -8,7 +8,7 @@ import be.elevenways.zenit.common.Zenit;
 import be.elevenways.hohenheim.server.cms.InstanceAttention;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.instance.InstanceService;
-import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
+import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.instance.InstanceStatusReconciler;
 import be.elevenways.hohenheim.server.instance.InstanceStatusReconciler.Verdict;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
@@ -437,9 +437,7 @@ class InstanceStatusReconcileTest {
             assertThat(back.observed())
                 .as("step 2: on the daemon's own answer")
                 .isEqualTo(ContainerState.STOPPED);
-            RecordStatus.await("step 2: crash policy restart brings the workload back after the reboot",
-                InstanceModel.class, InstanceModel.STATUS, id, InstanceModel.STATUS_RUNNING, Duration.ofSeconds(15),
-                Poll.DEFAULT_INTERVAL);
+            awaitRedeployed(id, "step 2: crash policy restart brings the workload back after the reboot");
             assertThat(FakeNativeDaemons.daemonOf(hostId).get(handle).running)
                 .as("step 2: the daemon runs the workload again")
                 .isTrue();
@@ -452,16 +450,13 @@ class InstanceStatusReconcileTest {
     }
 
     /**
-     * Waits until the crash restart's redeploy has stamped running AND left the record: the redeploy stamps the
-     * column while it still holds the record's operation claim, and a sweep meeting a held claim answers SKIPPED.
-     *
-     * AIDEV-NOTE: the wait queues behind that claim on the operation lock itself (Contention.QUEUE), exactly as an
-     * operation arriving during the redeploy would; running is stamped inside the claim, so the claim is taken by then.
+     * Waits until the crash restart's redeploy ended on the background pool, then reads the running it stamped: the
+     * job ends after the redeploy let go of the record's operation claim, so a sweep after this is never SKIPPED.
      */
     private static void awaitRedeployed(int instanceId, String what) {
-        RecordStatus.await(what, InstanceModel.class, InstanceModel.STATUS, instanceId, InstanceModel.STATUS_RUNNING,
-            Duration.ofSeconds(15), Poll.DEFAULT_INTERVAL);
-        InstanceOperationLock.production().exclusive(instanceId, InstanceOperationLock.Contention.QUEUE, () -> { });
+        assertThat(HandlerSupport.awaitBackgroundIdle(Duration.ofSeconds(15)))
+            .as(what + ": the redeploy ended").isTrue();
+        assertThat(statusOf(instanceId)).as(what).isEqualTo(InstanceModel.STATUS_RUNNING);
     }
 
     private static String statusOf(int instanceId) {

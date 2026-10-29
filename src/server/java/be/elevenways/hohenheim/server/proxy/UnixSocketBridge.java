@@ -48,6 +48,11 @@ public final class UnixSocketBridge {
     private static final Retry SPAWN_RACE = Retry.of(Backoff.fixed(Duration.ofMillis(100)), 3);
 
     private final UnixDomainSocketAddress upstream;
+    /**
+     * The upstream-bound halves of the splices; {@link #close} stops new ones and leaves those in flight to their
+     * peers, as the listener does with the connections it handed over.
+     */
+    private final JobRunner splices = JobRunner.create("unix-bridge-splice", JobRunner.CallerContext.DETACHED);
     private final SameUidListener listener;
 
     public UnixSocketBridge(String socketPath) throws IOException {
@@ -98,12 +103,22 @@ public final class UnixSocketBridge {
             Closeables.closeQuietly(tcp);
             return;
         }
-        // One virtual thread per direction; the first to see EOF/error closes both so the peer's
-        // copy loop unblocks. Untracked on purpose: closing the bridge leaves in-flight splices to their peers.
-        JobRunner.startVirtualThread(() -> { copy(tcp, unix); Closeables.closeQuietly(tcp);
-                Closeables.closeQuietly(unix); });
-        JobRunner.startVirtualThread(() -> { copy(unix, tcp); Closeables.closeQuietly(tcp);
-                Closeables.closeQuietly(unix); });
+        // One thread per direction; the first to see EOF/error closes both so the peer's copy loop unblocks. The
+        // upstream-bound half runs on this bridge's runner, the other on the listener's connection thread.
+        try {
+            this.splices.startThread(() -> {
+                copy(tcp, unix);
+                Closeables.closeQuietly(tcp);
+                Closeables.closeQuietly(unix);
+            });
+        } catch (IllegalStateException closed) {
+            Closeables.closeQuietly(tcp);
+            Closeables.closeQuietly(unix);
+            return;
+        }
+        copy(unix, tcp);
+        Closeables.closeQuietly(tcp);
+        Closeables.closeQuietly(unix);
     }
 
     private SocketChannel connectUpstream() throws IOException {
@@ -138,5 +153,6 @@ public final class UnixSocketBridge {
     /** Stop accepting and release the loopback listener. In-flight splices end when their peers close. */
     public void close() {
         listener.close();
+        splices.shutdown();
     }
 }

@@ -6,8 +6,10 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.upstream.kinds.DevNamespaceUpstreamKind;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.common.thread.JobRunnerGroup;
 import be.elevenways.protoblast.common.thread.ScheduledJob;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.bootstrap.RuntimeJobs;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -51,9 +53,11 @@ public final class DevTunnelServerHandler implements WebSocketHandler, TunnelTra
     /**
      * One shared scheduler for all connections' auth/idle timers: the endpoint is
      * unauthenticated until the register frame, so per-connection scheduler
-     * threads would let anonymous peers burn platform threads.
+     * threads would let anonymous peers burn platform threads. A runtime member: its stop
+     * cancels the pending timers (the runtime closed the sockets they guard first).
      */
-    private static final JobRunner TIMERS = JobRunner.create("dev-tunnel-timers");
+    private static final JobRunnerGroup.Member TIMERS =
+        RuntimeJobs.GROUP.member("dev-tunnel-timers", JobRunnerGroup.StopMode.DRAIN);
     private static final AtomicInteger PRE_AUTH_CONNECTIONS = new AtomicInteger();
 
     private final WebSocketSession session;
@@ -88,7 +92,7 @@ public final class DevTunnelServerHandler implements WebSocketHandler, TunnelTra
             return;
         }
         preAuthCounted = true;
-        timers.add(TIMERS.schedule(() -> {
+        timers.add(TIMERS.get().schedule(() -> {
             if (lease == null && !closed) {
                 // Transient: a slow registration round-trip must not permanently
                 // silence the client; it reconnects and retries.
@@ -96,7 +100,7 @@ public final class DevTunnelServerHandler implements WebSocketHandler, TunnelTra
                 teardown("no registration within " + (AUTH_TIMEOUT_MS / 1000) + "s", true);
             }
         }, AUTH_TIMEOUT_MS));
-        timers.add(TIMERS.scheduleRepeating(() -> {
+        timers.add(TIMERS.get().scheduleRepeating(() -> {
             if (!closed && Now.millis() - lastSeenAt > IDLE_TIMEOUT_MS) {
                 teardown("idle timeout", true);
             }
@@ -285,7 +289,7 @@ public final class DevTunnelServerHandler implements WebSocketHandler, TunnelTra
             // Off the receive lane: the old handler's send lock may be held by one
             // of its stream pumps, and this lane must not block behind it.
             DevTunnelServerHandler old = replaced.getHandler();
-            JobRunner.startVirtualThread(old::replacedBy);
+            TIMERS.get().fireAndForget(old::replacedBy);
         }
 
         sendControlQuietly(TunnelMessage.registered(origin));
@@ -484,7 +488,12 @@ public final class DevTunnelServerHandler implements WebSocketHandler, TunnelTra
             // Backstop: a peer that never completes the close handshake (or keeps
             // sending while refusing to read) would otherwise hold the channel —
             // and any blocked send — open indefinitely.
-            TIMERS.schedule(session::abort, 2_000);
+            try {
+                TIMERS.get().schedule(session::abort, 2_000);
+            } catch (IllegalStateException stopped) {
+                // The runtime stopped: nothing is left to wait for the peer's close.
+                session.abort();
+            }
         }
         else {
             // Transport already failed; make sure any blocked send is released.

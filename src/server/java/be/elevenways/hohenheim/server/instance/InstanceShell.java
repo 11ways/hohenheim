@@ -15,10 +15,11 @@ import be.elevenways.hohenheim.server.runtime.ConsoleText;
 import be.elevenways.hohenheim.server.runtime.PtySupport;
 import be.elevenways.hohenheim.server.util.Watchdog;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.common.thread.JobRunnerGroup;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.time.Pace;
 import java.time.Duration;
+import be.elevenways.zenit.common.bootstrap.RuntimeJobs;
 import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
@@ -110,6 +111,13 @@ public final class InstanceShell {
     private static final long START_SETTLE_MS = 250;
 
     private static final Map<Integer, List<Session>> LIVE = new ConcurrentHashMap<>();
+
+    /**
+     * The terminals' pumps and idle closes: a runtime member, so the stop (after the runtime closed the sockets, which
+     * ends every pump) waits for a close's activity entry before the datasources close.
+     */
+    private static final JobRunnerGroup.Member TERMINALS =
+        RuntimeJobs.GROUP.member("hh-instance-shell", JobRunnerGroup.StopMode.DRAIN);
 
     private static final AtomicBoolean SWEEPING = new AtomicBoolean();
 
@@ -390,8 +398,9 @@ public final class InstanceShell {
      * Close abandoned terminals and forget finished ones.
      *
      * AIDEV-NOTE: runs on the shared {@link Watchdog} threads, so the close itself (an
-     * activity-log write) goes to its own virtual thread; close is exactly-once, so a
-     * finished session still counted open by the next sweep is closed at most once.
+     * activity-log write) goes to the terminals' pool; close is exactly-once, so a
+     * finished session still counted open by the next sweep is closed at most once. Once the
+     * runtime stopped the pool refuses, and the stop's socket close already ended every terminal.
      */
     static void sweepIdle() {
         long now = Now.millis();
@@ -400,7 +409,11 @@ public final class InstanceShell {
             for (Session session : sessions) {
                 if (session instanceof LiveSession live && live.isOpen()
                         && now - live.lastInputAt() > IDLE_TIMEOUT_MS) {
-                    JobRunner.startVirtualThread(() -> live.close(EndReason.IDLE));
+                    try {
+                        TERMINALS.get().fireAndForget(() -> live.close(EndReason.IDLE));
+                    } catch (IllegalStateException stopped) {
+                        return;
+                    }
                 }
             }
             sessions.removeIf(session -> !session.isOpen());
@@ -451,7 +464,7 @@ public final class InstanceShell {
         }
 
         void start() {
-            JobRunner.startVirtualThread(this::pump);
+            TERMINALS.get().startThread(this::pump);
         }
 
         long lastInputAt() {

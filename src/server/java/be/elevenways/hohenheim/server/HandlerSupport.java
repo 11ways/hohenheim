@@ -39,7 +39,7 @@ import static be.elevenways.hohenheim.RawValues.trimmed;
  */
 public final class HandlerSupport {
 
-    /** The pool {@link #inBackground} runs request-authorized work on. */
+    /** The pool {@link #inBackground} runs caller-authorized work on. */
     private static final JobRunnerGroup.Member BACKGROUND =
         RuntimeJobs.GROUP.member("hh-request-background", JobRunnerGroup.StopMode.DRAIN);
 
@@ -167,7 +167,8 @@ public final class HandlerSupport {
     }
 
     /**
-     * Run request-authorized work on the request background pool, carrying the request's datasource.
+     * Run work its caller authorized (a request, or a system sweep under its declared identity) on the background
+     * pool, carrying the caller's datasource.
      *
      * AIDEV-NOTE: the caller's identity and accountability follow the work (zenit's
      * ExecutionIdentity and Accountability ride the JobRunner hop), so the service gates inside

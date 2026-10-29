@@ -37,9 +37,10 @@ import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.common.thread.JobRunnerGroup;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.time.Pace;
+import be.elevenways.zenit.common.bootstrap.RuntimeJobs;
 import java.time.Duration;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.history.Change;
@@ -110,6 +111,13 @@ public final class ReleaseEngine {
     /** Keys of {@code adjustPaths}-injected checkout paths: per-slot, never source identity. */
     private static final List<String> VOLATILE_SETTINGS =
         List.of("build_context", "working_directory", "script", "root_path");
+
+    /**
+     * The pool the drain windows elapse on: a DRAIN stop cancels a window still pending (boot recovery finishes its
+     * DRAINING operation) and lets a drain already running finish before the datasources close.
+     */
+    private static final JobRunnerGroup.Member DRAINS =
+        RuntimeJobs.GROUP.member("hh-release-drain", JobRunnerGroup.StopMode.DRAIN);
 
     private ReleaseEngine() {
     }
@@ -555,9 +563,9 @@ public final class ReleaseEngine {
     /**
      * After the drain window: stop the superseded release (it stays retained as the
      * rollback target), reclaim every OLDER retired release, prune superseded build
-     * artifacts, and stamp the operation succeeded. Runs on a virtual thread under the
-     * datasource captured at switch time; a controller crash before it runs is finished by
-     * {@link #recoverInterrupted()}.
+     * artifacts, and stamp the operation succeeded. Scheduled on the drain pool under the
+     * datasource captured at switch time; a controller stop or crash before it runs is
+     * finished by {@link #recoverInterrupted()}.
      *
      * AIDEV-NOTE: the drain is DETACHED system work, never the continuation of whoever
      * started the release. Stopping the superseded release is the engine's own convergence:
@@ -571,14 +579,7 @@ public final class ReleaseEngine {
         Integer seconds = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Releases.DRAIN_SECONDS);
         long waitMs = Math.max(0, (seconds != null ? seconds : 15) * 1000L);
-        JobRunner.startVirtualThread(() -> ExecutionIdentity.runDetachedAsSystem(
-            HohenheimSystemPurposes.RELEASE_DRAIN, () -> {
-            try {
-                Pace.sleep(Duration.ofMillis(waitMs));
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                return;
-            }
+        Runnable drain = () -> ExecutionIdentity.runDetachedAsSystem(HohenheimSystemPurposes.RELEASE_DRAIN, () -> {
             // The drain is an operation of the application like any other: it runs holding
             // the application's lock, QUEUED behind whatever is running, and re-reads its
             // operation under it -- a newer operation may already have completed it.
@@ -601,7 +602,13 @@ public final class ReleaseEngine {
                 Blast.log("RELEASE: drain of application", applicationId, "could not run -",
                     ConsoleRedaction.reasonOf(InstanceModel.MODEL_ID, applicationId, undrained));
             }
-        }));
+        });
+        try {
+            DRAINS.get().schedule(drain, waitMs);
+        } catch (IllegalStateException stopped) {
+            // The runtime stopped: the operation stays DRAINING and boot recovery finishes it.
+            Blast.log("RELEASE: drain of application", applicationId, "left to boot recovery -", stopped.getMessage());
+        }
     }
 
     /**

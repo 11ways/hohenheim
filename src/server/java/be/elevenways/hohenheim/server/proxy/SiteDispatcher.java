@@ -121,6 +121,8 @@ public class SiteDispatcher implements HttpHandler {
 
     private final JobRunner delayScheduler;
     private final JobRunner retirementRunner;
+    /** The upstream probe rounds: their own lane, since a round blocks on connects; ended by {@link #shutdown}. */
+    private final JobRunner probeRunner;
 
     // ACME service for Let's Encrypt challenge responses (nullable)
     private final AcmeService acmeService;
@@ -154,9 +156,10 @@ public class SiteDispatcher implements HttpHandler {
         this.proxySessionStore = proxySessionStore;
         this.delayScheduler = JobRunner.createDaemonSerial("site-dispatch-delay");
         this.retirementRunner = JobRunner.createDaemonSerial("site-dispatch-retirement");
+        this.probeRunner = JobRunner.createDaemonSerial("site-dispatch-probe", JobRunner.CallerContext.DETACHED);
         this.proxyClient = new UpstreamProxyClient();
-        // The round itself blocks on connects, so it runs on a virtual thread and never on the delay scheduler.
-        this.delayScheduler.scheduleRepeating(() -> JobRunner.startVirtualThread(this::probeUpstreams),
+        // The round itself blocks on connects, so it runs on the probe lane and never on the delay scheduler.
+        this.delayScheduler.scheduleRepeating(() -> this.probeRunner.offer(this::probeUpstreams),
             UPSTREAM_PROBE_INTERVAL_MS);
     }
 
@@ -235,7 +238,7 @@ public class SiteDispatcher implements HttpHandler {
         upstreamAnswered.clear();
         destroyIfUnused(previous, false);
         // A new or changed fixed upstream is checked now, not at the next tick.
-        JobRunner.startVirtualThread(this::probeUpstreams);
+        this.probeRunner.offer(this::probeUpstreams);
     }
 
     /**
@@ -894,5 +897,6 @@ public class SiteDispatcher implements HttpHandler {
             Thread.currentThread().interrupt();
         }
         delayScheduler.shutdownNow();
+        probeRunner.shutdownNow();
     }
 }

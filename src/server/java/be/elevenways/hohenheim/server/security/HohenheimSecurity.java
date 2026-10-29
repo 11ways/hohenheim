@@ -31,6 +31,12 @@ import java.util.regex.Pattern;
 public final class HohenheimSecurity {
 
     private static final ThreatScorer SCORER = new ThreatScorer();
+
+    /**
+     * Where a never_ban change re-resolves its hostnames, off the writer's thread: one lane, so refreshes run in
+     * order; a daemon one, since it only resolves names and a resolver that never answers must not hold a stop.
+     */
+    private static final JobRunner NEVER_BAN_REFRESH = JobRunner.createDaemonSerial("never-ban-refresh");
     private static volatile boolean booted = false;
 
     static {
@@ -60,7 +66,7 @@ public final class HohenheimSecurity {
             booted = true;
             SecurityEvents.addSink(HohenheimSecurity::acceptLocalEvent);
             HohenheimSettings.Security.NEVER_BAN.addChangeListener((context, next, previous) ->
-                JobRunner.startVirtualThread(NeverBanHostnames.INSTANCE::refresh));
+                NEVER_BAN_REFRESH.offer(NeverBanHostnames.INSTANCE::refresh));
             describeEventTypes();
         }
         // The own-public-IP ban guard reads these: populate them BEFORE enforcement starts, an empty list would leave
