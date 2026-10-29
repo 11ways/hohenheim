@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.database;
 
+import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.hohenheim.server.Secrets;
 import be.elevenways.hohenheim.HohenheimActivityAction;
@@ -12,6 +13,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.InstanceDatabaseNetworks;
@@ -57,6 +59,8 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -82,15 +86,26 @@ import java.util.concurrent.CompletableFuture;
 public class DatabaseService extends DatasourceScoped {
 
     /**
+     * How many provisioning-pool jobs run at once: the bound the pool's fixed two threads always had.
+     *
+     * AIDEV-NOTE: a constant, not a setting: the member is declared once per JVM, so a setting could only take effect
+     * at a restart, and no host has asked for another bound.
+     */
+    static final int PROVISIONING_CONCURRENCY = 2;
+
+    /**
      * The provisioning pool (image pull + container start can take tens of seconds), shared because handlers construct
      * DatabaseService per request.
      *
      * AIDEV-NOTE: a runtime member, so the runtime's stop waits for a running job before it closes the datasources the
      * job still writes. A job that converges ONE record takes that record's content lease and re-reads it inside
-     * ({@link #provisionInBackground}), so a destroy never runs beside it.
+     * ({@link #provisionInBackground}), so a destroy never runs beside it. Bounded by {@link #PROVISIONING_CONCURRENCY}:
+     * every job holds a host's daemon (an image pull, a dump) for its whole run. A job the stop cancels in the queue,
+     * or one still waiting for its lease when the datasources close, leaves its record provisioning for the next
+     * boot's {@link #recoverInterruptedProvisioning}.
      */
     private static final JobRunnerGroup.Member PROVISIONING =
-        RuntimeJobs.GROUP.member("db-provision", JobRunnerGroup.StopMode.DRAIN);
+        RuntimeJobs.GROUP.member("db-provision", JobRunnerGroup.StopMode.DRAIN, PROVISIONING_CONCURRENCY);
 
     /**
      * Run {@code work} on the provisioning pool as system work on the submitting caller's behalf.
@@ -100,12 +115,22 @@ public class DatabaseService extends DatasourceScoped {
      * are operator-owned, but a tenant's allocation stays the tenant's action in the activity log. A pool thread
      * declaring the identity itself recorded every such write as SYSTEM.
      *
-     * @return done once the work ended, failed with what it threw
+     * @return done once the work ended, failed with what it threw, cancelled when a stop took it off the queue
      * @throws IllegalStateException when the runtime stopped
      */
     static @NonNull CompletableFuture<Void> submit(@NonNull Runnable work) {
         return PROVISIONING.get().runAsync(
             () -> ExecutionIdentity.runAsSystem(HohenheimSystemPurposes.DATABASE_PROVISION, work));
+    }
+
+    /**
+     * Waits until no job handed to the provisioning pool is queued or running; a test's settle before its teardown
+     * removes what the jobs still write.
+     *
+     * @return false when a job was still in flight at the timeout
+     */
+    public static boolean awaitProvisioningIdle(@NonNull Duration timeout) {
+        return PROVISIONING.awaitIdle(timeout);
     }
 
     public DatabaseService() {
@@ -1003,6 +1028,12 @@ public class DatabaseService extends DatasourceScoped {
                 "is gone before its container was provisioned");
             return;
         }
+        if (!DatabaseModel.STATUS_PROVISIONING.equals(row.get(DatabaseModel.STATUS))) {
+            // Another job (a rival controller's, or the one a boot settle handed over beside it) converged it first.
+            Blast.log("DB: provisioning skipped, database record", recordId, "is", row.get(DatabaseModel.STATUS),
+                "already");
+            return;
+        }
         String name = row.get(DatabaseModel.NAME);
         try {
             provisionRuntime(row);
@@ -1018,6 +1049,47 @@ public class DatabaseService extends DatasourceScoped {
                 throw error;
             }
         }
+    }
+
+    /**
+     * Boot settle: hands every record a stopped controller left provisioning to the provisioning pool again, which
+     * converges it as the lost job would have (provisioning re-reads the record and replaces its serving container).
+     *
+     * AIDEV-NOTE: a stop leaves a record provisioning whenever its job did not end: a job the stop cancelled in the
+     * pool's queue, one still waiting for the content lease when the datasources closed under it, or one submitted
+     * after the pool stopped. {@link BootSettle}'s fences hold: a record this process wrote belongs to a live job, and
+     * one on a host a rival controller holds is that controller's to settle. The job takes the record's content lease
+     * and provisions only a record still provisioning, so a rival's job and this settle never both converge one.
+     *
+     * @return how many records were handed to the pool
+     */
+    public int recoverInterruptedProvisioning() {
+        List<Row> stuck = query(() -> model().find()
+            .where(DatabaseModel.STATUS.eq(DatabaseModel.STATUS_PROVISIONING)).all());
+        int handed = 0;
+        for (Row row : stuck) {
+            Instant written = row.get(DatabaseModel.UPDATED_AT);
+            if (written == null) {
+                written = row.get(DatabaseModel.CREATED_AT);
+            }
+            if (BootSettle.writtenByThisProcess(written)) {
+                continue;
+            }
+            int recordId = row.get(DatabaseModel.ID);
+            Integer serverId = row.get(DatabaseModel.SERVER_ID);
+            Runnable settle = () -> {
+                Blast.log("DB: database record", recordId, "was left provisioning by a stopped controller;"
+                    + " provisioning it again");
+                provisionInBackground(recordId);
+            };
+            if (serverId == null) {
+                settle.run();
+                handed++;
+            } else if (BootSettle.underBorrowedHostLease(HostLeases.production(), serverId, settle)) {
+                handed++;
+            }
+        }
+        return handed;
     }
 
     /**

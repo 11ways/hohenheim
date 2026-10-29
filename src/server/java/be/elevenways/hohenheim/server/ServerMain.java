@@ -154,8 +154,11 @@ public class ServerMain {
             // onto its EXISTING data volume rather than being abandoned with a running
             // container nothing tracks. Idempotent, so it is a fast no-op once adopted.
             // Then every redis engine whose stored environment names no password gets one,
-            // which its next start demands. Virtual thread: it does live daemon work per record.
+            // which its next start demands. First of all, every record a stopped controller
+            // left provisioning goes back to the provisioning pool, which adoption leaves alone.
+            // Virtual thread: it does live daemon work per record.
             BOOT_RECOVERY.get().fireAndForget(() -> {
+                new DatabaseService().recoverInterruptedProvisioning();
                 DatabaseInstances.adoptExisting();
                 new DatabaseService().repairRedisPasswords();
             });

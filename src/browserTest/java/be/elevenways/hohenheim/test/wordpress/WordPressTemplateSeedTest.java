@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.model.InstanceTemplateDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceTemplates;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
@@ -19,7 +20,6 @@ import be.elevenways.hohenheim.server.wordpress.WordPressTemplateSeeder;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.InstanceRowCleanup;
-import be.elevenways.hohenheim.test.database.ProvisioningSettle;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
@@ -34,6 +34,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -67,9 +68,9 @@ class WordPressTemplateSeedTest extends HohenheimHttpTestBase {
         InstanceDatabaseModel links = Models.get(InstanceDatabaseModel.class);
         if (hostId != null) {
             // An instance made from the template allocates its database on the provisioning pool: the host's rows are
-            // swept only once every such job settled.
-            ProvisioningSettle.await(databases.find().where(DatabaseModel.SERVER_ID.eq(hostId)).all().stream()
-                .map(row -> (Integer) row.get(DatabaseModel.ID)).toList());
+            // swept only once the pool settled.
+            assertThat(DatabaseService.awaitProvisioningIdle(Duration.ofSeconds(60)))
+                .as("the provisioning pool settled before the sweep").isTrue();
             for (Row row : databases.find().where(DatabaseModel.SERVER_ID.eq(hostId)).all()) {
                 Integer id = row.get(DatabaseModel.ID);
                 for (Row link : links.findByDatabaseId(id)) {

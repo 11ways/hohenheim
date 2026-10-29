@@ -47,7 +47,10 @@ public enum HohenheimRefusalReason implements DomainRefusal.Reason {
     DATABASE_DUMP_SOURCE_GONE("database_dump_source_gone", DomainRefusal.Recovery.NEVER,
         "The database this dump was taken from no longer exists"),
 
-    /** A dump, restore or provisioning of the database is already running; only the nightly backup queues behind one. */
+    /**
+     * A dump, restore, destroy, move or provisioning of the database is already running; only the nightly backup and
+     * a background provisioning queue behind one.
+     */
     DATABASE_BUSY("database_busy", DomainRefusal.Recovery.AFTER_WAIT,
         "A backup, restore or provisioning of this database is running"),
 

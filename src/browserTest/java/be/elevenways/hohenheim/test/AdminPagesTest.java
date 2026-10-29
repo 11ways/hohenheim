@@ -19,6 +19,8 @@ import be.elevenways.zenit.auth.cms.SubjectTag;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.time.OfficeZone;
+import be.elevenways.zenit.common.ui.Timezones;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.server.cms.HostAttention;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -51,7 +53,10 @@ import org.junit.jupiter.api.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -67,12 +72,27 @@ class AdminPagesTest extends HohenheimTestBase {
 
     /**
      * A moment ahead in words, as a moment reads when nothing names its style (protoblast 9da86c7e): "Fri 27 Nov
-     * 12:55 pm", the year only outside this year ("Fri, 8 Jan 2027 12:55 pm"), its zone when not the viewer's, then
-     * how far ahead; the gaps are any horizontal space, since a locale may set its day period apart with a narrow
-     * no-break space.
+     * 12:55 pm", the year exactly when the moment falls outside the viewer's current year ("Fri, 8 Jan 2027 12:55
+     * pm"), its zone when not the viewer's, then how far ahead; the gaps are any horizontal space, since a locale may
+     * set its day period apart with a narrow no-break space.
+     *
+     * @param viewer the zone the page reads in: the viewer's stamped one, the office zone without it
      */
-    private static final String WORDED_MOMENT_AHEAD =
-        "\\p{L}+,?\\h\\d{1,2}\\h\\p{L}+(\\h\\d{4})?\\h\\d{1,2}:\\d{2}(\\h?\\p{L}+)?(\\h\\([^)]+\\))?\\h\\(.+ from now\\)";
+    private static String wordedMomentAhead(Instant moment, ZoneId viewer) {
+        int year = moment.atZone(viewer).getYear();
+        String yearPart = year == Now.instant().atZone(viewer).getYear() ? "" : "\\h" + year;
+        return "\\p{L}+,?\\h\\d{1,2}\\h\\p{L}+" + yearPart
+            + "\\h\\d{1,2}:\\d{2}(\\h?\\p{L}+)?(\\h\\([^)]+\\))?\\h\\(.+ from now\\)";
+    }
+
+    /** @return the zone the open page reads moments in: the viewer's stamped zone cookie, else the office zone */
+    private ZoneId viewerZone() {
+        String stamped = page.context().cookies().stream()
+            .filter(cookie -> Timezones.COOKIE_NAME.equals(cookie.name))
+            .map(cookie -> URLDecoder.decode(cookie.value, StandardCharsets.UTF_8))
+            .findFirst().orElse(null);
+        return OfficeZone.viewer(stamped);
+    }
 
     @BeforeAll
     static void seed() throws Exception {
@@ -529,20 +549,23 @@ class AdminPagesTest extends HohenheimTestBase {
             cert.set(CertificateModel.EXPIRES_ON, expiry);
             cert.set(CertificateModel.CHALLENGE_TYPE, CertificateModel.CHALLENGE_DNS);
             cert.set(CertificateModel.DNS_PUBLISHER, CertificateModel.DNS_PUBLISHER_INTERNAL);
-            cert.set(CertificateModel.NEXT_ATTEMPT_AT, Now.instant().plus(Duration.ofHours(6)));
+            Instant nextAttempt = Now.instant().plus(Duration.ofHours(6));
+            cert.set(CertificateModel.NEXT_ATTEMPT_AT, nextAttempt);
             certModel.save(cert);
 
             navigateToApp("/admin/certificates/" + cert.get(CertificateModel.ID));
             waitForHydration();
             String dated = page.content();
             // The stamp is rendered in the VIEWER's zone, so the assertion is on the SHAPE (the moment in words, its
-            // zone named when it is not the viewer's, plus the relative wording), never on a zone-dependent day.
+            // zone named when it is not the viewer's, plus the relative wording), never on a zone-dependent day; the
+            // year is judged in that zone too.
+            ZoneId viewer = this.viewerZone();
             assertThat(readonlyEntry("expiry_display"))
                 .as("the expiry reads as an absolute moment plus the relative wording")
-                .matches(WORDED_MOMENT_AHEAD);
+                .matches(wordedMomentAhead(expiry, viewer));
             assertThat(readonlyEntry("next_attempt_display"))
                 .as("a scheduled retry replaces the absence sentence")
-                .matches(WORDED_MOMENT_AHEAD);
+                .matches(wordedMomentAhead(nextAttempt, viewer));
             assertThat(dated).as("the next attempt is no longer the absence sentence")
                 .doesNotContain("None due yet");
             assertThat(readonlyEntry("dns_publisher_display"))

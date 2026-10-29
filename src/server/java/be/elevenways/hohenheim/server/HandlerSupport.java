@@ -4,7 +4,8 @@ import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.common.thread.JobRunnerGroup;
+import be.elevenways.zenit.common.bootstrap.RuntimeJobs;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -20,6 +21,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.InputStream;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -36,6 +38,10 @@ import static be.elevenways.hohenheim.RawValues.trimmed;
  * a new handler in any package reaches for.
  */
 public final class HandlerSupport {
+
+    /** The pool {@link #inBackground} runs request-authorized work on. */
+    private static final JobRunnerGroup.Member BACKGROUND =
+        RuntimeJobs.GROUP.member("hh-request-background", JobRunnerGroup.StopMode.DRAIN);
 
     private HandlerSupport() {
     }
@@ -161,17 +167,30 @@ public final class HandlerSupport {
     }
 
     /**
-     * Run request-authorized work on a virtual thread, carrying the request's datasource.
+     * Run request-authorized work on the request background pool, carrying the request's datasource.
      *
      * AIDEV-NOTE: the caller's identity and accountability follow the work (zenit's
      * ExecutionIdentity and Accountability ride the JobRunner hop), so the service gates inside
      * judge the SAME caller they would have judged synchronously and the activity rows name who
      * asked. A caller still authorizes everything before handing off, so a refusal is answered
-     * to the request instead of lost in a log line.
+     * to the request instead of lost in a log line. The pool is a runtime member, never an
+     * untracked virtual thread: the runtime's stop waits for a running deploy before it closes
+     * the datasources, and a test settles on the work with {@link #awaitBackgroundIdle}.
+     *
+     * @throws IllegalStateException when the runtime stopped
      */
     public static void inBackground(@NonNull Runnable work) {
         Datasource datasource = Db.currentOrDefault();
-        JobRunner.startVirtualThread(() -> Db.run(datasource, work::run));
+        BACKGROUND.get().fireAndForget(() -> Db.run(datasource, work::run));
+    }
+
+    /**
+     * Waits until no work handed to {@link #inBackground} is queued or running.
+     *
+     * @return false when work was still in flight at the timeout
+     */
+    public static boolean awaitBackgroundIdle(@NonNull Duration timeout) {
+        return BACKGROUND.awaitIdle(timeout);
     }
 
     /** {@link #inBackground} for fire-and-forget work: a refusal is logged under {@code what}, never thrown. */

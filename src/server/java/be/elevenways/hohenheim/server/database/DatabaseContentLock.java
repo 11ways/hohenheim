@@ -44,8 +44,8 @@ public final class DatabaseContentLock {
     }
 
     /**
-     * Runs {@code work} holding the database's content lease, waiting behind a running dump or restore of it as
-     * {@code contention} says.
+     * Runs {@code work} holding the database's content lease, waiting behind whatever holds it (a dump, a restore, a
+     * destroy, a move or a provisioning) as {@code contention} says.
      *
      * @throws IOException   what the work throws
      * @throws DomainRefusal {@code database_busy} when the lease stayed taken for the whole wait

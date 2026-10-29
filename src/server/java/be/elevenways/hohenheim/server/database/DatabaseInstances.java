@@ -536,7 +536,10 @@ public final class DatabaseInstances {
         for (Row database : Models.get(DatabaseModel.class).find().all()) {
             Integer recordId = database.get(DatabaseModel.ID);
             String name = database.get(DatabaseModel.NAME);
+            // A provisioning record is its provisioning job's (a boot settle hands a stopped controller's one over
+            // again): deploying it here as well ran two deploys of one record, the adoption's without its lease.
             if (recordId == null || name == null || DatabaseModel.isShared(database)
+                    || DatabaseModel.STATUS_PROVISIONING.equals(database.get(DatabaseModel.STATUS))
                     || ownedBy(EngineHost.dedicated(database)) != null) {
                 continue;
             }

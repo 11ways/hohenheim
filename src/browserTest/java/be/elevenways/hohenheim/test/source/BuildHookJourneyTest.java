@@ -16,6 +16,7 @@ import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.cms.BuildHookParts;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
@@ -513,11 +514,19 @@ class BuildHookJourneyTest extends HohenheimHttpTestBase {
         }
     }
 
-    /** The build hook and release reads of one render of {@code path}, after a warm-up render. */
+    /**
+     * The build hook and release reads of one render of {@code path}, after a warm-up render.
+     *
+     * AIDEV-NOTE: the probe counts every thread's reads, so the background deploys the journey's hooks queued are
+     * waited out first: step 3's deploy still destroys its failed candidate instance after its release row ended,
+     * and those instance reads landing in the measured render were run 491's 20 against 18.
+     */
     private Map<String, Integer> measure(String path) throws Exception {
         DatasourceProbe probe = DatasourceProbe.on((SqlDatasource) Models.get(InstanceModel.class)
             .getResolvedDatasource());
         assertThat(adminGet(path).statusCode()).as("the warm-up render").isEqualTo(200);
+        assertThat(HandlerSupport.awaitBackgroundIdle(Duration.ofSeconds(30)))
+            .as("the queued background deploys ended before the count").isTrue();
         probe.reset();
         assertThat(adminGet(path).statusCode()).as("the measured render").isEqualTo(200);
         Map<String, Integer> reads = new TreeMap<>();
