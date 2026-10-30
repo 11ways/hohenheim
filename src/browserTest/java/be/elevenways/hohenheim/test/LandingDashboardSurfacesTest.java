@@ -15,11 +15,11 @@ import be.elevenways.zenit.auth.model.GrantModel;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
 import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.cms.common.panel.CmsSurfaceAddress;
-import be.elevenways.zenit.cms.common.panel.Panel;
-import be.elevenways.zenit.cms.common.panel.PanelEntry;
-import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.test.support.PanelSurfaces;
+import be.elevenways.zenit.cms.test.support.SurfaceBaselines;
+import be.elevenways.zenit.cms.test.support.SurfaceCase;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -31,9 +31,9 @@ import be.elevenways.zenit.common.orm.history.ChangeFactModel;
 import be.elevenways.zenit.common.orm.history.ChangeModel;
 import be.elevenways.zenit.common.orm.history.ChangeOp;
 import be.elevenways.zenit.test.support.HistoryFixtureRows;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.AccountabilityOrigin;
 import be.elevenways.zenit.common.security.SystemPrincipal;
-import be.elevenways.plumage.icon.IconRegistry;
 import be.elevenways.protoblast.common.time.Now;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -41,42 +41,31 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.UncheckedIOException;
 import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.UUID;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertAll;
 
 /**
- * The two landing dashboards answer every audience over HTTP exactly as they did as legacy dashboard peers.
+ * The two landing dashboards answer every audience over HTTP as their panels gate them, and each admitted audience's
+ * dashboard offers its stored surface.
  *
- * AIDEV-NOTE: {@code /panel-surfaces/landing-dashboards.txt} was captured once with AdminDashboard and ManageDashboard
- * extending the legacy DashboardPanelPeer; a failing
- * comparison is a changed landing surface, never a file to refresh. A missing resource writes the live set to
- * {@code build/panel-surfaces/} and fails, so recording is a deliberate copy. Per case it holds the status, the
- * redirect, the title, the dashboard nav links and the widget surface, with markup ids, digits, UUIDs, CSRF values
- * and relative times' hover titles masked and every tag's attributes in name order (HTML attribute order means
- * nothing): the data under the widgets
- * is not this conversion's subject. The declared differences are the surface address (a legacy peer answered to its
- * slug address, a PanelDashboard only to its id token, no slug alias), the /manage landing's surface, which
- * was redrawn on purpose ({@link #redrawn}), plumage's mark on a directional glyph ({@link #markDirectional}) and a
- * relative time's worded hover title ({@link #wordedMoments}).
+ * AIDEV-NOTE: {@code /panel-surfaces/landing-dashboards.txt} holds the typed captures of the admitted audiences
+ * (PanelSurfaces: heading, header links, the drawn widget tree with each widget's config and data shape, no markup and
+ * no data values). A failing comparison is a changed landing surface: read the difference first. Only a change that
+ * is deliberate and proven at its home is re-recorded, by copying the live set SurfaceBaselines wrote to
+ * {@code build/panel-surfaces/} over the file in the same commit; a missing resource records the same way. The status,
+ * redirect, title and dashboard link of every audience are {@link #LANDINGS}; what each widget draws is proven at its
+ * own journey (DashboardAttentionJourneyTest, OnboardingChecklistTest, DashboardRoleGatingTest, ManagePanelJourneyTest).
  *
- * AIDEV-NOTE: the fixture decides the operator's checklist and tiles. Its only site has no address and so serves
- * nobody: "Put your first app online" stays TODO with its Open link and the Apps tile reads "1 with a problem". Its
- * never-checked host makes the Hosts tile "1 waiting". The open admission and backups steps present the attention
- * items stating their stage, so the attention band, holding nothing else, is not drawn under the open checklist.
+ * AIDEV-NOTE: the fixture decides which widgets the operator's tree draws and how many items their data holds. Its
+ * only site has no address and so serves nobody: "Put your first app online" stays TODO with its Open link and the
+ * Apps tile reads "1 with a problem". Its never-checked host makes the Hosts tile "1 waiting". The open admission and
+ * backups steps present the attention items stating their stage, so the attention band, holding nothing else, is not
+ * drawn under the open checklist.
  *
  * AIDEV-NOTE: the attention widget reads JVM-global inputs other classes of a lane change (so: pin
  * every input the test does not own, never compare host state). {@link #pinAttentionInputs} sets the settings and
@@ -88,26 +77,50 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class LandingDashboardSurfacesTest extends HohenheimHttpTestBase {
 
-    private static final String RESOURCE = "landing-dashboards.txt";
-    private static final String CASE_PREFIX = "case ";
-    private static final List<String> PATHS = List.of("/admin", "/admin/dashboard", "/manage", "/manage/dashboard");
+    private static final String BASELINE = "/panel-surfaces/landing-dashboards.txt";
+    private static final String OPERATOR = "operator";
+    private static final String TENANT = "tenant";
+    private static final String OUTSIDER = "outsider";
+    private static final String ADMIN_DASHBOARD = "/admin/dashboard";
+    private static final String MANAGE_DASHBOARD = "/manage/dashboard";
+    private static final String ADMIN_TITLE = "Dashboard";
+    private static final String MANAGE_TITLE = "Your services";
 
-    private static final Pattern TITLE = Pattern.compile("<title>(.*?)</title>", Pattern.DOTALL);
-    private static final Pattern DASHBOARD_LINK = Pattern.compile("<a\\b[^>]*href=\"[^\"]*/dashboard\"[^>]*>");
-    private static final Pattern COMMENT = Pattern.compile("<!--.*?-->", Pattern.DOTALL);
-    private static final Pattern MARKUP_ID = Pattern.compile("\\b(he|pl-[a-z-]+)-\\d+\\b");
-    private static final Pattern UUID = Pattern.compile(
-        "\\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\b");
-    private static final Pattern CSRF = Pattern.compile("(name=\"_csrf\"[^>]*value=\")[^\"]*\"");
-    private static final Pattern DIGITS = Pattern.compile("\\d+");
-    private static final Pattern TIME_TITLE = Pattern.compile("(<time\\b[^>]*\\btitle=\")[^\"]*(\")");
-    private static final Pattern SPACE = Pattern.compile("\\s+");
-    private static final Pattern START_TAG =
-            Pattern.compile("<([a-z][a-z0-9-]*)((?:\\s+[^\\s=>\"]+(?:=\"[^\"]*\")?)+)\\s*>");
-    private static final Pattern ATTRIBUTE = Pattern.compile("[^\\s=>\"]+(?:=\"[^\"]*\")?");
-    private static final Pattern MANAGE_LANDING = Pattern.compile("case [a-z]+ /manage/dashboard\\b");
-    private static final Pattern SURFACE_LINE = Pattern.compile("(?m)^  surface .*$");
-    private static final Pattern ICON_TAG = Pattern.compile("<pl-icon ([^>]*\\bname=\"([^\"]+)\"[^>]*)>");
+    /** The one row the people-only Recent feeds draw from {@link #seedRecentActivity}'s mixed history. */
+    private static final String RECENT_ROW = ">Someone not signed in created landing-site<";
+
+    private static final List<Landing> LANDINGS = List.of(
+        Landing.redirect(OPERATOR, "/admin", ADMIN_DASHBOARD),
+        Landing.page(OPERATOR, ADMIN_DASHBOARD, ADMIN_TITLE),
+        Landing.redirect(OPERATOR, "/manage", MANAGE_DASHBOARD),
+        Landing.page(OPERATOR, MANAGE_DASHBOARD, MANAGE_TITLE),
+        Landing.refused(TENANT, "/admin"),
+        Landing.refused(TENANT, ADMIN_DASHBOARD),
+        Landing.redirect(TENANT, "/manage", MANAGE_DASHBOARD),
+        Landing.page(TENANT, MANAGE_DASHBOARD, MANAGE_TITLE),
+        Landing.refused(OUTSIDER, "/admin"),
+        Landing.refused(OUTSIDER, ADMIN_DASHBOARD),
+        Landing.refused(OUTSIDER, "/manage"),
+        Landing.refused(OUTSIDER, MANAGE_DASHBOARD));
+
+    /** What one audience gets from one path; a page carries its title, a redirect its location. */
+    private record Landing(@NonNull String audience, @NonNull String path, int status, @Nullable String location,
+                           @Nullable String title) {
+
+        static @NonNull Landing page(@NonNull String audience, @NonNull String path, @NonNull String title) {
+            return new Landing(audience, path, 200, null, title);
+        }
+
+        static @NonNull Landing redirect(@NonNull String audience, @NonNull String path, @NonNull String location) {
+            return new Landing(audience, path, 302, location, null);
+        }
+
+        static @NonNull Landing refused(@NonNull String audience, @NonNull String path) {
+            return new Landing(audience, path, 403, null, null);
+        }
+    }
+
+    private static UUID tenantId;
 
     private static TestSession tenant;
     private static TestSession outsider;
@@ -121,7 +134,7 @@ class LandingDashboardSurfacesTest extends HohenheimHttpTestBase {
     @BeforeAll
     static void seed() throws Exception {
         freshSeededDatabase();
-        UUID tenantId = ApiSupport.user("landing-tenant@hohenheim.local", "Landing Tenant");
+        tenantId = ApiSupport.user("landing-tenant@hohenheim.local", "Landing Tenant");
         UUID outsiderId = ApiSupport.user("landing-outsider@hohenheim.local", "Landing Outsider");
         Model sites = Models.get(SiteModel.class);
         Row site = sites.createEmptyRow();
@@ -211,165 +224,44 @@ class LandingDashboardSurfacesTest extends HohenheimHttpTestBase {
     }
 
     @Test
-    void everyAudienceGetsTheLandingDashboardsItGotAsLegacyPeers() throws Exception {
+    void everyAudienceGetsItsLandingDashboard() {
+        // Both proofs always run, so one run names every difference and a missing resource still gets its live set.
+        assertAll(this::everyAudienceIsAnsweredOverHttp, this::everyAdmittedAudienceOffersTheStoredSurface);
+    }
+
+    private void everyAudienceIsAnsweredOverHttp() throws Exception {
         // 1. Each audience asks both panels' index and dashboard route: the operator, a tenant managing one site and a
         //    signed-in principal holding nothing.
-        List<String> live = new ArrayList<>();
-        for (Map.Entry<String, String> audience : List.of(Map.entry("operator", sessionToken),
-                Map.entry("tenant", tenant.token()), Map.entry("outsider", outsider.token()))) {
-            for (String path : PATHS) {
-                live.add(capture(audience.getKey(), path, httpGet(path, audience.getValue())));
+        Map<String, String> sessions = Map.of(OPERATOR, sessionToken, TENANT, tenant.token(),
+            OUTSIDER, outsider.token());
+        for (Landing landing : LANDINGS) {
+            String asked = landing.audience() + " " + landing.path();
+            HttpResponse<String> response = httpGet(landing.path(), sessions.get(landing.audience()));
+            assertThat(response.statusCode()).as("step 1: %s status", asked).isEqualTo(landing.status());
+            assertThat(response.headers().firstValue("Location").orElse(null)).as("step 1: %s location", asked)
+                .isEqualTo(landing.location());
+            if (landing.title() != null) {
+                assertThat(response.body()).as("step 1: %s page", asked)
+                    .contains("<title>" + landing.title() + "</title>", "href=\"" + landing.path() + "\"",
+                        "<zn-widget-surface", RECENT_ROW)
+                    .doesNotContain("landing-fixture");
             }
         }
-        String current = String.join("\n", live) + "\n";
-
-        // 2. The live set equals the stored one exactly; without a stored set it is written for review and fails. The
-        //    live set is always written beside the build, so a changed surface can be compared against it.
-        Path written = Path.of("build", "panel-surfaces", RESOURCE);
-        Files.createDirectories(written.getParent());
-        Files.writeString(written, current, StandardCharsets.UTF_8);
-        String stored = stored();
-        if (stored == null) {
-            throw new AssertionError("step 2: no stored landing dashboards; the live set is at "
-                + written.toAbsolutePath());
-        }
-        // 3. The stored slug addresses read as the entries' id tokens, every other fact compared exactly.
-        for (String panelSlug : List.of(HohenheimSlugs.ADMIN, HohenheimSlugs.MANAGE)) {
-            stored = stored.replace("surface=\"cms:" + panelSlug + "/dashboard\"",
-                "surface=\"" + normalize(dashboardToken(panelSlug)) + "\"");
-        }
-        assertThat(redrawn(cases(current)))
-            .as("step 3: every audience's landing dashboards are the stored ones")
-            .containsExactlyElementsOf(redrawn(cases(wordedMoments(sortAttributes(markDirectional(stored))))));
     }
 
-    /**
-     * The declared difference the wording redesign made after the capture: a relative time's hover title words its
-     * moment for the reader ("17 October 2026 3:05 pm (Europe/Brussels)"), whose month name and clock half move with
-     * the day the suite runs, so the title's text is masked like a digit when captured, and on the stored side for a
-     * set recorded before; that it is there still is compared.
-     */
-    private static @NonNull String wordedMoments(@NonNull String surfaces) {
-        return TIME_TITLE.matcher(surfaces).replaceAll("$1<moment>$2");
-    }
+    private void everyAdmittedAudienceOffersTheStoredSurface() {
+        // 2. Each admitted audience's dashboard equals its stored capture, fact by fact.
+        SurfaceBaselines stored = SurfaceBaselines.load(LandingDashboardSurfacesTest.class, BASELINE);
+        AccessContext tenantAccess = AccessContext.of(TenantConduits.stubFor(
+            new UserPrincipal(tenantId, "Landing Tenant")));
+        stored.check(PanelSurfaces.capture(SurfaceCase.of(HohenheimSlugs.ADMIN, HohenheimSlugs.DASHBOARD, OPERATOR,
+            TenantConduits.operator())));
+        stored.check(PanelSurfaces.capture(SurfaceCase.of(HohenheimSlugs.MANAGE, HohenheimSlugs.DASHBOARD, OPERATOR,
+            TenantConduits.operator())));
+        stored.check(PanelSurfaces.capture(SurfaceCase.of(HohenheimSlugs.MANAGE, HohenheimSlugs.DASHBOARD, TENANT,
+            tenantAccess)));
 
-    /**
-     * The declared difference plumage made after the capture: a glyph drawn for a left-to-right reading
-     * ({@link IconRegistry#isDirectional}) carries {@code data-directional}, the mark its mirror rule reads.
-     */
-    private static @NonNull String markDirectional(@NonNull String stored) {
-        Matcher icon = ICON_TAG.matcher(stored);
-        StringBuilder marked = new StringBuilder();
-        while (icon.find()) {
-            String tag = IconRegistry.isDirectional(icon.group(2)) && !icon.group(1).contains("data-directional")
-                ? "<pl-icon data-directional=\"\" " + icon.group(1) + ">" : icon.group();
-            icon.appendReplacement(marked, Matcher.quoteReplacement(tag));
-        }
-        icon.appendTail(marked);
-        return marked.toString();
-    }
-
-    /**
-     * The declared difference: the /manage landing's widget surface was redrawn on purpose
-     * (the tenant's apps band, their verdicts in the attention band, the usage card), so its surface line is not
-     * compared; its status, title and nav still are. ManagePanelJourneyTest proves what the new surface shows.
-     */
-    private static @NonNull List<String> redrawn(@NonNull List<String> cases) {
-        List<String> declared = new ArrayList<>(cases.size());
-        for (String text : cases) {
-            boolean manageLanding = MANAGE_LANDING.matcher(text).lookingAt();
-            declared.add(manageLanding ? SURFACE_LINE.matcher(text).replaceAll("  surface redrawn on purpose") : text);
-        }
-        return declared;
-    }
-
-    /** @return the surface token the panel's dashboard entry answers to */
-    private static @NonNull String dashboardToken(@NonNull String panelSlug) {
-        Panel panel = Objects.requireNonNull(PanelRegistry.getBySlug(panelSlug), panelSlug);
-        PanelEntry dashboard = Objects.requireNonNull(panel.entryBySlug("dashboard"), panelSlug + " dashboard");
-        return new CmsSurfaceAddress(panel.id(), dashboard.id(), null).token();
-    }
-
-    /** One case: what {@code audience} got from {@code path}, each fact on its own line. */
-    private static @NonNull String capture(@NonNull String audience, @NonNull String path,
-                                           @NonNull HttpResponse<String> response) {
-        StringBuilder text = new StringBuilder(CASE_PREFIX).append(audience).append(' ').append(path).append('\n');
-        text.append("  status ").append(response.statusCode()).append('\n');
-        response.headers().firstValue("Location")
-            .ifPresent(location -> text.append("  location ").append(location).append('\n'));
-        if (response.statusCode() != 200) {
-            return text.toString();
-        }
-        String body = response.body();
-        Matcher title = TITLE.matcher(body);
-        if (title.find()) {
-            text.append("  title ").append(normalize(title.group(1))).append('\n');
-        }
-        Matcher link = DASHBOARD_LINK.matcher(body);
-        while (link.find()) {
-            text.append("  nav ").append(normalize(link.group())).append('\n');
-        }
-        int start = body.indexOf("<zn-widget-surface");
-        int end = body.lastIndexOf("</zn-widget-surface>");
-        if (start >= 0 && end > start) {
-            text.append("  surface ").append(normalize(body.substring(start, end))).append('\n');
-        }
-        return text.toString();
-    }
-
-    private static @NonNull String normalize(@NonNull String html) {
-        String text = COMMENT.matcher(html).replaceAll("");
-        text = CSRF.matcher(text).replaceAll("$1#\"");
-        text = UUID.matcher(text).replaceAll("<uuid>");
-        text = wordedMoments(text);
-        text = MARKUP_ID.matcher(text).replaceAll("$1-#");
-        text = DIGITS.matcher(text).replaceAll("#");
-        return sortAttributes(SPACE.matcher(text).replaceAll(" ").trim());
-    }
-
-    /** @return the text with every start tag's attributes in name order */
-    private static @NonNull String sortAttributes(@NonNull String html) {
-        Matcher tag = START_TAG.matcher(html);
-        StringBuilder sorted = new StringBuilder();
-        while (tag.find()) {
-            List<String> attributes = new ArrayList<>();
-            Matcher attribute = ATTRIBUTE.matcher(tag.group(2));
-            while (attribute.find()) {
-                attributes.add(attribute.group());
-            }
-            attributes.sort(null);
-            tag.appendReplacement(sorted, Matcher.quoteReplacement(
-                "<" + tag.group(1) + " " + String.join(" ", attributes) + ">"));
-        }
-        tag.appendTail(sorted);
-        return sorted.toString();
-    }
-
-    /** @return the cases of a set, one string each */
-    private static @NonNull List<String> cases(@NonNull String set) {
-        List<String> cases = new ArrayList<>();
-        StringBuilder current = null;
-        for (String line : set.split("\n")) {
-            if (line.startsWith(CASE_PREFIX)) {
-                if (current != null) {
-                    cases.add(current.toString());
-                }
-                current = new StringBuilder(line);
-            } else if (current != null && !line.isBlank()) {
-                current.append('\n').append(line);
-            }
-        }
-        if (current != null) {
-            cases.add(current.toString());
-        }
-        return cases;
-    }
-
-    private static @Nullable String stored() {
-        try (InputStream in = LandingDashboardSurfacesTest.class.getResourceAsStream("/panel-surfaces/" + RESOURCE)) {
-            return in == null ? null : new String(in.readAllBytes(), StandardCharsets.UTF_8);
-        } catch (IOException failure) {
-            throw new UncheckedIOException(failure);
-        }
+        // 3. Every stored case was captured and nothing else was.
+        stored.finish();
     }
 }

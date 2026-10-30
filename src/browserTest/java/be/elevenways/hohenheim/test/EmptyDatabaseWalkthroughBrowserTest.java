@@ -89,7 +89,7 @@ class EmptyDatabaseWalkthroughBrowserTest extends HawkeyeBrowserTestBase {
     private int visits;
 
     @Override
-    protected int startServer() throws Exception {
+    protected void startServer() throws Exception {
         // 1. A never-opened database runs the production declarations, migrations, modules and seeders.
         assertThat(ServerZenitRuntime.INSTANCE).as("step 1: start in a fresh JVM without a shared test server")
             .isNull();
@@ -122,7 +122,6 @@ class EmptyDatabaseWalkthroughBrowserTest extends HawkeyeBrowserTestBase {
             server.start();
             port = server.getPort();
         });
-        return port;
     }
 
     @Override
