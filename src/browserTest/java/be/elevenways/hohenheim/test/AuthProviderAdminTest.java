@@ -50,8 +50,8 @@ class AuthProviderAdminTest extends HohenheimTestBase {
         assertThat(picker.count()).isEqualTo(1);
         assertThat(picker.getAttribute("free-text")).isNotNull();
 
-        // Boot-registered and endpoint-declared permissions both feed it
-        // (options stay mounted while the popup is closed).
+        // Boot-registered and endpoint-declared permissions both feed it; the rows draw on the first open.
+        openPermissions();
         assertThat(page.locator("div[role='option'][data-value='hohenheim.admin.access']").count())
             .isEqualTo(1);
         assertThat(page.locator("div[role='option'][data-value='auth.admin.access']").count())
@@ -59,6 +59,7 @@ class AuthProviderAdminTest extends HohenheimTestBase {
         // Described permissions render their description line.
         assertThat(page.locator("div[role='option'][data-value='auth.admin.access'] .pl-select-subtitle")
             .innerText()).isEqualTo("Access the admin panel");
+        page.keyboard().press("Escape");
 
         // Each provider type reads as its words with its description line, and in Dutch as Dutch words: the type's
         // English display name printed in every language was an earlier bug.
@@ -130,6 +131,7 @@ class AuthProviderAdminTest extends HohenheimTestBase {
         page.locator("a[href='/admin/auth-providers/new']").first().click();
         page.waitForCondition(() ->
             page.locator("pl-select[name='required_permission']").count() == 1);
+        openPermissions();
 
         var subtitle = page.locator(
             "div[role='option'][data-value='auth.admin.access'] .pl-select-subtitle");
@@ -186,6 +188,12 @@ class AuthProviderAdminTest extends HohenheimTestBase {
     }
 
     @SuppressWarnings("unchecked")
+    /** Opens the known-permission combobox, whose rows draw on its first open. */
+    private void openPermissions() {
+        page.click("pl-select[name='required_permission'] .pl-select-field");
+        page.waitForSelector("he-bottom .pl-select-popup[data-open] div[role='option']");
+    }
+
     private static Map<String, String> storedCredentials() {
         Row row = Models.get(SiteAuthProviderModel.class).find()
             .where(SiteAuthProviderModel.NAME.eq("Staff Gate")).first();
@@ -238,6 +246,7 @@ class AuthProviderAdminTest extends HohenheimTestBase {
             assertThat(page.locator("pl-field[data-path='config.endpoint'] input[type='url']").count())
                 .isEqualTo(1);
 
+            openPermissions();
             assertThat(page.locator("div[role='option'][data-value='site.internal']").count())
                 .isEqualTo(1);
             assertThat(page.locator(
