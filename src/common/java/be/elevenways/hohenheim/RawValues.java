@@ -50,6 +50,13 @@ public final class RawValues {
         return coerced.ok() ? coerced.value() : null;
     }
 
+    /** @return the value as a Long by the {@link #parsedInt} rule, or null when it reads as absent */
+    public static @Nullable Long parsedLong(@Nullable Object raw) {
+        PrimitiveCoercion.Result<Long> coerced = PrimitiveCoercion.toLong(raw,
+            PrimitiveCoercion.NumberRule.EXACT_VALUE, PrimitiveCoercion.TextRule.TRIMMED_BLANK_IS_NULL);
+        return coerced.ok() ? coerced.value() : null;
+    }
+
     /** @return the {@link #parsedInt} value, or the fallback when it reads as absent */
     public static int intOr(@Nullable Object raw, int fallback) {
         return Objects.requireNonNullElse(parsedInt(raw), fallback);

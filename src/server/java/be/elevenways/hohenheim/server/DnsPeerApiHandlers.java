@@ -5,8 +5,10 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.hohenheim.dns.DnsApiErrorResponse;
 import be.elevenways.hohenheim.dns.DnsPeerKeyResponse;
+import be.elevenways.hohenheim.dns.DnsPeerMirrorResponse;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.server.dns.DnsFederationKeys;
+import be.elevenways.hohenheim.server.dns.DnsPeerMirrors;
 import be.elevenways.hohenheim.server.dns.DnsTsig;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -18,13 +20,14 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.xbill.DNS.TSIG;
 
+import java.util.List;
 import java.util.Map;
 
 import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
- * The receiving half of transfer-key negotiation: a peer that minted a shared TSIG
- * key installs its half here. API-key principals only.
+ * The receiving half of the peer API: transfer-key negotiation, where a peer that minted a shared TSIG key installs
+ * its half here, and mirroring, where a primary names every zone this side should keep. API-key principals only.
  *
  * AIDEV-NOTE: nothing in this file logs, echoes or toasts the secret. Both sides STORE
  * the key, so there is no human who needs to read it -- which is why there is no
@@ -74,6 +77,28 @@ final class DnsPeerApiHandlers {
             return new JsonResult<Object>(new DnsPeerKeyResponse("ok", keyName,
                 peer.get(DnsPeerModel.NAME), installed.transferHost(),
                 installed.transferPort(), installed.transferKept()));
+        });
+
+        HohenheimEndpoints.API_DNS_PEER_MIRROR.setHandler(conduit -> {
+            if (ApiConduits.requireKey(conduit) == null) {
+                return null;
+            }
+            Map<String, String> form = HandlerSupport.formMap(conduit);
+            String keyName = trimmed(form.get("key_name"));
+            Long signedAt = RawValues.parsedLong(form.get("signed_at"));
+            String signature = trimmed(form.get("signature"));
+            // The list is required, even empty: a request that lost it must never read as "keep nothing".
+            if (keyName.isEmpty() || signedAt == null || signature.isEmpty() || !form.containsKey("origins")) {
+                return refusal(conduit, "validation");
+            }
+            List<String> origins = form.get("origins").lines().map(String::trim)
+                .filter(origin -> !origin.isEmpty()).toList();
+            DnsPeerMirrorResponse adopted = DnsPeerMirrors.adopt(keyName, signedAt, signature, origins);
+            if (adopted == null) {
+                // One answer for an unknown key, a wrong signature and a stale one: none of them is an oracle.
+                return refusal(conduit, "unauthenticated");
+            }
+            return new JsonResult<Object>(adopted);
         });
     }
 

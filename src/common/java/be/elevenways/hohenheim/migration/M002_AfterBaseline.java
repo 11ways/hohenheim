@@ -8,8 +8,8 @@ import java.util.List;
 
 /**
  * Every schema change since the published baseline: release attribution, credential generations, pending passwords,
- * build hooks, the database dump ledger and the status probe backfill of the starter Minecraft servers
- * ({@link StatusProbeBackfill}).
+ * build hooks, the database dump ledger, the DNS peer that mirrors every zone, and the status probe backfill of the
+ * starter Minecraft servers ({@link StatusProbeBackfill}).
  *
  * AIDEV-NOTE: THE one migration after the last published version (M001, recorded on kuifje and robbedoes on
  * 2026-10-21). Until the next live deploy publishes it, every schema change edits THIS migration; never add an M003.
@@ -76,12 +76,15 @@ public final class M002_AfterBaseline extends HohenheimMigration {
             table.timestamps();
             table.addIndex("database_dumps_database_id_index", List.of("database_id"));
         });
+        builder.alterTable("dns_peers", table ->
+            table.addColumn("mirrors_all_zones", ColumnType.BOOLEAN, column -> column.nullable(true)));
         StatusProbeBackfill.up(builder);
     }
 
     @Override
     public void down(@NonNull MigrationBuilder builder) {
         StatusProbeBackfill.down(builder);
+        builder.alterTable("dns_peers", table -> table.dropColumn("mirrors_all_zones"));
         builder.dropTable("database_dumps");
         builder.dropTable("build_hooks");
         builder.alterTable("instance_databases", table -> table.dropColumn("deployed_generation"));

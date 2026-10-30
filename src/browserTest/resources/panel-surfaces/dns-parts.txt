@@ -198,7 +198,8 @@ control CREATE%20tsig_algorithm at=5 kind=zenitforms:control/string input=text r
 control CREATE%20tsig_secret at=6 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
 control CREATE%20base_url at=7 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20api_key at=8 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
-control CREATE%20enabled at=9 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20mirrors_all_zones at=9 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20enabled at=10 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control EDIT%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control EDIT%20peer_type at=1 kind=zenitforms:form/select input=select required=false readonly=false options=nameserver,hohenheim binding=searchable:false,clearable:true,presentation:DEFAULT
 control EDIT%20transfer_host at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
@@ -208,7 +209,8 @@ control EDIT%20tsig_algorithm at=5 kind=zenitforms:control/string input=text req
 control EDIT%20tsig_secret at=6 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
 control EDIT%20base_url at=7 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control EDIT%20api_key at=8 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
-control EDIT%20enabled at=9 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20mirrors_all_zones at=9 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20enabled at=10 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 
 case admin.dns-peers.operator.in-use admin dns-peers operator v2
 admission - verdict=admitted
@@ -237,7 +239,8 @@ control CREATE%20tsig_algorithm at=5 kind=zenitforms:control/string input=text r
 control CREATE%20tsig_secret at=6 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
 control CREATE%20base_url at=7 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20api_key at=8 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
-control CREATE%20enabled at=9 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20mirrors_all_zones at=9 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20enabled at=10 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control EDIT%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control EDIT%20peer_type at=1 kind=zenitforms:form/select input=select required=false readonly=false options=nameserver,hohenheim binding=searchable:false,clearable:true,presentation:DEFAULT
 control EDIT%20transfer_host at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
@@ -247,4 +250,5 @@ control EDIT%20tsig_algorithm at=5 kind=zenitforms:control/string input=text req
 control EDIT%20tsig_secret at=6 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
 control EDIT%20base_url at=7 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control EDIT%20api_key at=8 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
-control EDIT%20enabled at=9 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20mirrors_all_zones at=9 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20enabled at=10 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=

@@ -92,6 +92,7 @@ public final class DnsPeerParts {
         .add(DnsPeerModel.TSIG_SECRET)
         .add(DnsPeerModel.BASE_URL)
         .add(DnsPeerModel.API_KEY)
+        .add(DnsPeerModel.MIRRORS_ALL_ZONES)
         .add(DnsPeerModel.ENABLED)
         .build();
 
@@ -153,13 +154,7 @@ public final class DnsPeerParts {
     // WRITE time instead (see stripCredentialsOfNameserver), keyed on the type the submit
     // declares, which is the only thing both halves can agree on.
 
-    /**
-     * Exchanges a fresh shared TSIG key with a Hohenheim peer, writing both sides.
-     *
-     * AIDEV-NOTE: the minted secret is never toasted, logged or echoed -- unlike an API
-     * key, BOTH ends store this one, so there is no human who has to read it and a
-     * one-time disclosure would only be a place for it to leak.
-     */
+    /** Exchanges a fresh shared TSIG key with a Hohenheim peer (DnsFederationKeys.negotiate), told as a toast. */
     static @NonNull CmsActionResult negotiate(@NonNull Row peer) {
         DnsPeerApi api = DnsPeerApi.forPeer(peer);
         if (api == null) {
@@ -168,35 +163,21 @@ public final class DnsPeerParts {
             return CmsActionResult.errorToast(
                 HohenheimMicrocopy.DNS_PEER.of("negotiate_key_unsupported"));
         }
-        String localName = DnsFederationKeys.localName();
-        String peerName = String.valueOf(peer.get(DnsPeerModel.NAME));
-        String keyName = DnsFederationKeys.keyNameFor(localName, peerName);
-        String secret = DnsFederationKeys.mintSecret();
-
-        DnsPeerKeyResponse confirmation;
+        DnsFederationKeys.Negotiated negotiated;
         try {
-            confirmation = api.negotiateTransferKey(localName, keyName,
-                DnsFederationKeys.ALGORITHM, secret,
-                DnsFederationKeys.localTransferHost(), DnsFederationKeys.localTransferPort());
+            negotiated = DnsFederationKeys.negotiate(peer, api);
         }
         catch (DnsPeerApi.PeerApiException refused) {
             return CmsActionResult.errorToast(
                 HohenheimMicrocopy.DNS_PEER.of("negotiate_key_failed")
                     .withArg("reason", HohenheimViolations.reasonOf(refused)));
         }
-        if (!keyName.equals(confirmation.key_name())) {
-            // The peer stored the name IT was told; a different one back means the two
-            // sides would look each other up under different names and never transfer.
+        if (!negotiated.stored()) {
             return CmsActionResult.errorToast(
                 HohenheimMicrocopy.DNS_PEER.of("negotiate_key_mismatch"));
         }
-
-        peer.set(DnsPeerModel.TSIG_KEY_NAME, keyName);
-        peer.set(DnsPeerModel.TSIG_ALGORITHM, DnsFederationKeys.ALGORITHM);
-        peer.set(DnsPeerModel.TSIG_SECRET, secret);
-        Models.get(DnsPeerModel.class).save(peer);
-
-        String endpoint = endpointOf(confirmation);
+        String keyName = negotiated.keyName();
+        String endpoint = endpointOf(negotiated.confirmation());
         if (endpoint.isEmpty()) {
             return CmsActionResult.refreshWithToast(
                 HohenheimMicrocopy.DNS_PEER.of("negotiate_key_done")
@@ -205,7 +186,7 @@ public final class DnsPeerParts {
         // A kept endpoint is the one outcome the operator must act on: the key works, but
         // the peer still pulls from an address that is not the one we announced.
         return CmsActionResult.refreshWithToast(
-            HohenheimMicrocopy.DNS_PEER.of(Boolean.TRUE.equals(confirmation.transfer_kept())
+            HohenheimMicrocopy.DNS_PEER.of(Boolean.TRUE.equals(negotiated.confirmation().transfer_kept())
                     ? "negotiate_key_endpoint_kept" : "negotiate_key_done_endpoint")
                 .withArg("key", keyName)
                 .withArg("endpoint", endpoint));
@@ -323,9 +304,16 @@ public final class DnsPeerParts {
                     HohenheimMicrocopy.VIOLATIONS.of("dns_peer_api_key_required"));
             }
         }
-        else if (value(merged, DnsPeerModel.TRANSFER_HOST).isEmpty()) {
-            throw Violations.ofField("transfer_host", "",
-                HohenheimMicrocopy.VIOLATIONS.of("dns_peer_transfer_host_required"));
+        else {
+            if (value(merged, DnsPeerModel.TRANSFER_HOST).isEmpty()) {
+                throw Violations.ofField("transfer_host", "",
+                    HohenheimMicrocopy.VIOLATIONS.of("dns_peer_transfer_host_required"));
+            }
+            // Only a Hohenheim peer has the channel that tells it which zones to keep.
+            if (Boolean.TRUE.equals(merged.get(DnsPeerModel.MIRRORS_ALL_ZONES.getName()))) {
+                throw Violations.ofField(DnsPeerModel.MIRRORS_ALL_ZONES.getName(), true,
+                    HohenheimMicrocopy.VIOLATIONS.of("dns_peer_mirror_needs_hohenheim"));
+            }
         }
     }
 

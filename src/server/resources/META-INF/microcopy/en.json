@@ -1609,6 +1609,18 @@
       "target": "task_description"
     }
   ],
+  "mirror_dns_peers": [
+    {
+      "text": "Mirror zones to DNS peers",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Whether every peer that mirrors all zones holds exactly this host's zones",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
   "observe_instance_disk": [
     {
       "text": "Measure app disk use",
@@ -4153,6 +4165,16 @@
     },
     {
       "text": "Disabled peers are not contacted for transfers or forwarded edits.",
+      "scope": "help"
+    }
+  ],
+  "peer_mirrors_all_zones": [
+    {
+      "text": "Mirrors all zones",
+      "scope": "hohenheim_field"
+    },
+    {
+      "text": "Keep every zone this server is primary for on this peer as a secondary zone, including zones added later. Only a Hohenheim peer can be told which zones to keep.",
       "scope": "help"
     }
   ],
@@ -11847,6 +11869,10 @@
   },
   "dns_peer_api_key_required": {
     "text": "A Hohenheim peer needs an API key",
+    "scope": "violations"
+  },
+  "dns_peer_mirror_needs_hohenheim": {
+    "text": "Only a Hohenheim peer can mirror all zones",
     "scope": "violations"
   },
   "dns_peer_transfer_host_required": {

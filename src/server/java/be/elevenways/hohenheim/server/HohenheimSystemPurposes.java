@@ -37,6 +37,8 @@ public final class HohenheimSystemPurposes {
     public static final @NonNull SystemPurpose HOST_PROBE = declare("host_probe");
     /** The DNS server thread stamping a peer link's last transfer. */
     public static final @NonNull SystemPurpose DNS_FEDERATION = declare("dns_federation");
+    /** Bringing a peer that mirrors every zone up to date with this host's zones (DnsPeerMirrors). */
+    public static final @NonNull SystemPurpose DNS_MIRROR = declare("dns_mirror");
     /** The scan mirroring each host's /etc/passwd into system users. */
     public static final @NonNull SystemPurpose SYSTEM_USERS = declare("system_users");
 

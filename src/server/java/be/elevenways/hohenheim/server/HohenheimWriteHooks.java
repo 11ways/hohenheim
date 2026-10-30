@@ -19,6 +19,7 @@ import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.dns.DnsClaimReleases;
+import be.elevenways.hohenheim.server.dns.DnsPeerMirrors;
 import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
 import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.instance.ContainerFileRules;
@@ -134,6 +135,8 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // A hosted zone takes its records (generated ones swept, not authored) and its
         // zone-peer links with it, on every delete lane.
         DnsZoneCascades.install();
+        // A peer that mirrors every zone is brought up to date when it or a zone changes (DnsPeerMirrors).
+        DnsPeerMirrors.install();
         // A site auth provider still gating a live site or named by an access rule refuses
         // to go: a dangling reference fails the whole site closed at the next route load.
         SiteAuthProviderGuards.install();

@@ -1272,6 +1272,21 @@ public class HohenheimEndpoints {
         .csrfExempt()
         .build();
 
+    /**
+     * The receiving half of a peer that mirrors every zone: the primary names the transfer key the two share and every
+     * zone it is primary for, and this side keeps exactly those as secondary zones pulling from it. SYMMETRIC like
+     * {@link #API_DNS_PEER_KEY}, and csrfExempt for the same reason: the handler refuses every principal that is not
+     * an API key.
+     */
+    public static final Endpoint<Object> API_DNS_PEER_MIRROR = Endpoint.<Object>builder()
+        .identifier(HohenheimIds.id("api_dns_peer_mirror"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("dns").addDelimiter()
+            .addStatic("peer-mirror").build())
+        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
+        .csrfExempt()
+        .build();
+
     // --- Dynamic DNS (dyndns2 update protocol; public, token in HTTP Basic auth) ---
     // No requiresPermission: the token IS the credential, verified by the handler, so the
     // route authenticates itself and no login gate stands in front of it. That declaration

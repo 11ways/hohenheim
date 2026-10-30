@@ -84,6 +84,14 @@ public class DnsPeerModel extends Model {
     public static final BooleanField ENABLED = SCHEMA.addField(BooleanField.builder("enabled").defaultValue(true)
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("peer_enabled")).help(HohenheimMicrocopy.HELP.of("peer_enabled"))
         .build());
+    /**
+     * Whether this peer mirrors every zone this host is primary for: each one linked to it here and kept as a secondary
+     * zone there (DnsPeerMirrors). Only a Hohenheim peer can be told which zones to keep.
+     */
+    public static final BooleanField MIRRORS_ALL_ZONES = SCHEMA.addField(BooleanField.builder("mirrors_all_zones")
+        .defaultValue(false)
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("peer_mirrors_all_zones"))
+        .help(HohenheimMicrocopy.HELP.of("peer_mirrors_all_zones")).build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 
@@ -112,6 +120,12 @@ public class DnsPeerModel extends Model {
     /** @return true when the peer runs Hohenheim, so it also has the edit-forwarding channel */
     public static boolean isHohenheim(@NonNull Row peer) {
         return TYPE_HOHENHEIM.equals(typeOf(peer));
+    }
+
+    /** @return true when the peer is enabled, runs Hohenheim and mirrors every zone */
+    public static boolean mirrorsAllZones(@NonNull Row peer) {
+        return Boolean.TRUE.equals(peer.get(MIRRORS_ALL_ZONES)) && Boolean.TRUE.equals(peer.get(ENABLED))
+            && isHohenheim(peer);
     }
 
     @Override

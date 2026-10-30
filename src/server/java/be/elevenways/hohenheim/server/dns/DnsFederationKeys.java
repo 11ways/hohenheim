@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.dns;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.dns.DnsPeerKeyResponse;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -100,6 +101,39 @@ public final class DnsFederationKeys {
     /** What {@link #install} did with the announced transfer endpoint. */
     public record Installation(@NonNull Row peer, @Nullable String transferHost,
                                @Nullable Integer transferPort, boolean transferKept) {
+    }
+
+    /**
+     * What a negotiation ended in: the key name this side asked for and the peer's confirmation of it.
+     *
+     * @param stored whether the peer confirmed that same name, and the key was therefore stored here too
+     */
+    public record Negotiated(@NonNull String keyName, @NonNull DnsPeerKeyResponse confirmation, boolean stored) {
+    }
+
+    /**
+     * Exchanges a fresh shared TSIG key with a Hohenheim peer, writing it on the peer's side and then on its row here.
+     *
+     * AIDEV-NOTE: the minted secret is never logged or echoed: both ends store it, so no human has to read it. A peer
+     * that confirms ANOTHER key name stores nothing here, as the two sides would look each other up under different
+     * names and never transfer.
+     *
+     * @throws DnsPeerApi.PeerApiException when the peer cannot be reached or refuses
+     */
+    public static @NonNull Negotiated negotiate(@NonNull Row peer, @NonNull DnsPeerApi api) {
+        String localName = localName();
+        String keyName = keyNameFor(localName, String.valueOf((Object) peer.get(DnsPeerModel.NAME)));
+        String secret = mintSecret();
+        DnsPeerKeyResponse confirmation = api.negotiateTransferKey(localName, keyName, ALGORITHM, secret,
+            localTransferHost(), localTransferPort());
+        if (!keyName.equals(confirmation.key_name())) {
+            return new Negotiated(keyName, confirmation, false);
+        }
+        peer.set(DnsPeerModel.TSIG_KEY_NAME, keyName);
+        peer.set(DnsPeerModel.TSIG_ALGORITHM, ALGORITHM);
+        peer.set(DnsPeerModel.TSIG_SECRET, secret);
+        Models.get(DnsPeerModel.class).save(peer);
+        return new Negotiated(keyName, confirmation, true);
     }
 
     /**

@@ -151,9 +151,10 @@ table migration:be.elevenways.hohenheim@2026_10_21_000001
   replaces 018
   replaces 019
 table migration:be.elevenways.hohenheim@2026_10_23_000001
-  checksum 43fd62c58bfc7a480c60ab9ad8b1453c06ff71e24e6c13d27d4d4080f46f541d
+  checksum 2d40c03b08eb2637ae3dbfb0f591860b39973f1afd3a0ff306cb0ef4458397bc
   class be.elevenways.hohenheim.migration.M002_AfterBaseline
   name after_baseline
+  op add_column:dns_peers:mirrors_all_zones|boolean|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null
   op add_column:instance_databases:deployed_generation|integer|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null
   op add_column:managed_databases:credential_generation|integer|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null
   op add_column:managed_databases:pending_password|string|null=true|uniq=false|pk=false|auto=false|def=none|len=256|prec=null,null

@@ -1609,6 +1609,18 @@
       "target": "task_description"
     }
   ],
+  "mirror_dns_peers": [
+    {
+      "text": "Zones spiegelen naar DNS-peers",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Of elke peer die alle zones spiegelt precies de zones van deze host heeft",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
   "observe_instance_disk": [
     {
       "text": "Schijfgebruik van apps meten",
@@ -4153,6 +4165,16 @@
     },
     {
       "text": "Uitgeschakelde peers worden niet benaderd voor transfers of doorgestuurde bewerkingen.",
+      "scope": "help"
+    }
+  ],
+  "peer_mirrors_all_zones": [
+    {
+      "text": "Spiegelt alle zones",
+      "scope": "hohenheim_field"
+    },
+    {
+      "text": "Houd elke zone waarvoor deze server primair is als secundaire zone op deze peer, ook zones die later bijkomen. Alleen een Hohenheim-peer kan te horen krijgen welke zones hij moet houden.",
       "scope": "help"
     }
   ],
@@ -11847,6 +11869,10 @@
   },
   "dns_peer_api_key_required": {
     "text": "Een Hohenheim-peer heeft een API-sleutel nodig",
+    "scope": "violations"
+  },
+  "dns_peer_mirror_needs_hohenheim": {
+    "text": "Alleen een Hohenheim-peer kan alle zones spiegelen",
     "scope": "violations"
   },
   "dns_peer_transfer_host_required": {

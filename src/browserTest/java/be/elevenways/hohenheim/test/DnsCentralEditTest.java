@@ -5,9 +5,13 @@ import be.elevenways.hohenheim.dns.DnsRecordListResponse;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.model.DnsZonePeerModel;
 import be.elevenways.hohenheim.server.dns.DnsFederationKeys;
+import be.elevenways.hohenheim.server.cms.DnsPeerParts;
 import be.elevenways.hohenheim.server.cms.DnsZoneRecordsPage;
 import be.elevenways.hohenheim.server.dns.DnsPeerApi;
+import be.elevenways.hohenheim.server.dns.DnsPeerMirrors;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.ApiKeyService;
@@ -16,12 +20,14 @@ import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.test.support.EndpointConduit;
 import be.elevenways.zenit.common.conduit.ConduitAttributes;
 import be.elevenways.zenit.cms.common.render.action.CmsConfirmation;
+import java.util.LinkedHashMap;
 import java.util.UUID;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.validation.Violations;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -34,8 +40,10 @@ import java.net.URLEncoder;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import static be.elevenways.hohenheim.test.DnsFixtures.apiPeer;
@@ -62,6 +70,8 @@ class DnsCentralEditTest extends HohenheimTestBase {
         final List<StubCall> calls = new CopyOnWriteArrayList<>();
         volatile int status = 200;
         volatile String body = "{}";
+        /** Answers for one path, over {@link #body}: a caller that asks two endpoints in one go. */
+        final Map<String, String> bodies = new ConcurrentHashMap<>();
         private boolean closed;
 
         PeerStub() throws Exception {
@@ -72,7 +82,8 @@ class DnsCentralEditTest extends HohenheimTestBase {
                     exchange.getRequestURI().toString(),
                     exchange.getRequestHeaders().getFirst("Authorization"),
                     requestBody));
-                byte[] payload = body.getBytes(StandardCharsets.UTF_8);
+                byte[] payload = bodies.getOrDefault(exchange.getRequestURI().getPath(), body)
+                    .getBytes(StandardCharsets.UTF_8);
                 exchange.getResponseHeaders().set("Content-Type", "application/json");
                 exchange.sendResponseHeaders(status, payload.length);
                 try (OutputStream out = exchange.getResponseBody()) {
@@ -578,6 +589,119 @@ class DnsCentralEditTest extends HohenheimTestBase {
             .describedAs("no refused negotiation may leave a row behind").isNull();
     }
 
+    /**
+     * A peer that mirrors every zone, both halves: the endpoint this instance exposes keeps exactly the named zones as
+     * secondaries of the peer holding the transfer key, and the sending half negotiates a key when it has none, links
+     * every primary zone and tells the peer the full list, again whenever a mirroring peer or a zone changes.
+     */
+    @Test
+    void mirrorAllZonesJourney() throws Exception {
+        DnsPeerModel peers = Models.get(DnsPeerModel.class);
+        DnsZoneModel zones = Models.get(DnsZoneModel.class);
+
+        // 1. The receiving half: a primary that negotiated a key with this instance names four zones, signed with
+        //    that key. Two are made secondaries pulling from it; one this instance holds as primary and one it
+        //    replicates from another server are left alone and reported.
+        String secret = DnsFederationKeys.mintSecret();
+        Row primary = DnsFederationKeys.install("mirror-primary", "xfer-mirror-primary", DnsFederationKeys.ALGORITHM,
+            secret, "203.0.113.20", 53).peer();
+        int primaryId = primary.get(DnsPeerModel.ID);
+        createZone("held.example", DnsZoneModel.ROLE_PRIMARY, null);
+        int otherPeer = apiPeer("mirror-other", null);
+        Row other = peers.findById(otherPeer);
+        other.set(DnsPeerModel.TRANSFER_HOST, "198.51.100.30");
+        peers.save(other);
+        createZone("elsewhere.example", DnsZoneModel.ROLE_SECONDARY, otherPeer);
+        long now = Now.instant().getEpochSecond();
+        var adopted = apiPost("/api/dns/peer-mirror", mirrorBody("xfer-mirror-primary", secret, now,
+            List.of("one.example", "two.example", "held.example", "elsewhere.example", "not a zone!")));
+        assertThat(adopted.statusCode()).as("step 1: the mirror is accepted (%s)", adopted.body()).isEqualTo(200);
+        assertThat(adopted.body()).as("step 1: two zones made; two zones and an invalid name left alone")
+            .contains("\"created\":[\"one.example\",\"two.example\"]")
+            .contains("\"conflicts\":[\"not a zone!\",\"held.example\",\"elsewhere.example\"]");
+        Row one = zones.findByOrigin("one.example");
+        assertThat(DnsZoneModel.roleOf(one)).as("step 1: a secondary zone").isEqualTo(DnsZoneModel.ROLE_SECONDARY);
+        assertThat((Integer) one.get(DnsZoneModel.PRIMARY_PEER_ID)).as("step 1: pulling from the primary")
+            .isEqualTo(primaryId);
+        assertThat(DnsZoneModel.roleOf(zones.findByOrigin("held.example"))).as("step 1: our own zone stays ours")
+            .isEqualTo(DnsZoneModel.ROLE_PRIMARY);
+        assertThat((Integer) zones.findByOrigin("elsewhere.example").get(DnsZoneModel.PRIMARY_PEER_ID))
+            .as("step 1: a zone replicated from elsewhere keeps its primary").isEqualTo(otherPeer);
+
+        // 2. A zone the primary no longer names is removed; only that primary's mirrored zones ever are.
+        var narrowed = apiPost("/api/dns/peer-mirror", mirrorBody("xfer-mirror-primary", secret, now,
+            List.of("one.example")));
+        assertThat(narrowed.body()).as("step 2: the dropped zone goes").contains("\"removed\":[\"two.example\"]");
+        assertThat(zones.findByOrigin("two.example")).as("step 2: gone").isNull();
+        assertThat(zones.findByOrigin("elsewhere.example")).as("step 2: another primary's zone stays").isNotNull();
+
+        // 3. Falsification: an admin API key alone proves nothing. A key no peer here holds, the right key signed
+        //    with another secret, a signature from long ago and a request without its list are all refused, and a
+        //    session cookie cannot call it at all; none of them changes a zone.
+        String elsewhere = DnsFederationKeys.mintSecret();
+        for (String refused : List.of(
+                mirrorBody("xfer-nobody", secret, now, List.of("three.example")),
+                mirrorBody("xfer-mirror-primary", elsewhere, now, List.of("three.example")),
+                mirrorBody("xfer-mirror-primary", secret, now - 3600, List.of("three.example")),
+                mirrorBody("xfer-mirror-primary", secret, now, List.of()).replace("&origins=", "&other="))) {
+            assertThat(apiPost("/api/dns/peer-mirror", refused).statusCode())
+                .as("step 3: refused (%s)", refused).isEqualTo(422);
+        }
+        assertThat(adminPostForm("/api/dns/peer-mirror", mirrorBody("xfer-mirror-primary", secret, now,
+            List.of("three.example"))).statusCode()).as("step 3: no session cookie").isEqualTo(403);
+        assertThat(zones.findByOrigin("three.example")).as("step 3: nothing was made").isNull();
+        assertThat(zones.findByOrigin("one.example")).as("step 3: nothing was removed").isNotNull();
+
+        // 4. A nameserver peer cannot mirror: it has no channel to be told which zones to keep.
+        Map<String, Object> nameserver = new LinkedHashMap<>();
+        nameserver.put(DnsPeerModel.NAME.getName(), "mirror-nameserver");
+        nameserver.put(DnsPeerModel.PEER_TYPE.getName(), DnsPeerModel.TYPE_NAMESERVER);
+        nameserver.put(DnsPeerModel.TRANSFER_HOST.getName(), "198.51.100.31");
+        nameserver.put(DnsPeerModel.MIRRORS_ALL_ZONES.getName(), true);
+        assertThatThrownBy(() -> new DnsPeerParts().persistRow(nameserver, TenantConduits.operator()))
+            .as("step 4: refused by name").isInstanceOf(Violations.class)
+            .satisfies(thrown -> assertThat(((Violations) thrown).all()).anySatisfy(violation ->
+                assertThat(violation.message().key()).isEqualTo("dns_peer_mirror_needs_hohenheim")));
+
+        try (PeerStub stub = new PeerStub()) {
+            // 5. The sending half: a Hohenheim peer with no transfer key yet gets one negotiated, every enabled
+            //    primary zone linked to it, and the full list of them; secondary zones are never named.
+            int peerId = apiPeer("mirror-peer", stub.baseUrl());
+            String keyName = DnsFederationKeys.keyNameFor(DnsFederationKeys.localName(), "mirror-peer");
+            stub.bodies.put("/api/dns/peer-key", "{\"status\":\"ok\",\"key_name\":\"" + keyName + "\"}");
+            stub.bodies.put("/api/dns/peer-mirror",
+                "{\"status\":\"ok\",\"created\":[],\"removed\":[],\"conflicts\":[]}");
+            DnsPeerMirrors.mirror(peers.findById(peerId));
+            assertThat(stub.calls).extracting(StubCall::path).as("step 5: a key first, then the list")
+                .containsExactly("/api/dns/peer-key", "/api/dns/peer-mirror");
+            String named = formValue(stub.calls.get(1).body(), "origins");
+            assertThat(named.lines().toList()).as("step 5: every primary zone is named")
+                .contains("held.example").doesNotContain("one.example", "elsewhere.example");
+            assertThat(formValue(stub.calls.get(1).body(), "key_name")).as("step 5: under the negotiated key")
+                .isEqualTo(keyName);
+            assertThat((String) peers.findById(peerId).get(DnsPeerModel.TSIG_KEY_NAME))
+                .as("step 5: the key is stored here too").isEqualTo(keyName);
+            assertThat(Models.get(DnsZonePeerModel.class).find()
+                    .where(DnsZonePeerModel.ZONE_ID.eq(zoneIdOf("held.example")))
+                    .where(DnsZonePeerModel.PEER_ID.eq(peerId)).first())
+                .as("step 5: the zone is linked to the peer, so it may pull it and is notified").isNotNull();
+
+            // 6. Switched on, the peer is brought up to date without being asked, and again when a zone appears.
+            long mirroredBefore = mirrorCalls(stub);
+            Row peer = peers.findById(peerId);
+            peer.set(DnsPeerModel.MIRRORS_ALL_ZONES, true);
+            peers.save(peer);
+            assertThat(DnsPeerMirrors.awaitIdle(Duration.ofSeconds(20))).as("step 6: the round ended").isTrue();
+            assertThat(mirrorCalls(stub)).as("step 6: the switch told the peer").isGreaterThan(mirroredBefore);
+            assertThat(formValue(stub.calls.get(stub.calls.size() - 1).body(), "signature"))
+                .as("step 6: signed with the stored key").isNotBlank();
+            createZone("late.example", DnsZoneModel.ROLE_PRIMARY, null);
+            assertThat(DnsPeerMirrors.awaitIdle(Duration.ofSeconds(20))).as("step 6: the round ended").isTrue();
+            assertThat(formValue(stub.calls.get(stub.calls.size() - 1).body(), "origins").lines().toList())
+                .as("step 6: a new zone is mirrored at once").contains("late.example");
+        }
+    }
+
     // ------------------------------------------------------------------
     // Fixtures + plumbing
     // ------------------------------------------------------------------
@@ -640,5 +764,17 @@ class DnsCentralEditTest extends HohenheimTestBase {
     private static String invocation() {
         return CmsEndpoints.INVOCATION_PARAM.getName() + "=" + UUID.randomUUID() + "&"
             + CmsConfirmation.FIELD + "=1&" + CmsEndpoints.TAB_PARAM.getName() + "=records&";
+    }
+
+    /** A mirror request as a primary sends it, signed with {@code secret} at {@code signedAt}. */
+    private static String mirrorBody(String keyName, String secret, long signedAt, List<String> origins) {
+        return "key_name=" + URLEncoder.encode(keyName, StandardCharsets.UTF_8)
+            + "&signed_at=" + signedAt
+            + "&signature=" + DnsPeerMirrors.signature(secret, keyName, signedAt, origins)
+            + "&origins=" + URLEncoder.encode(String.join("\n", origins), StandardCharsets.UTF_8);
+    }
+
+    private static long mirrorCalls(PeerStub stub) {
+        return stub.calls.stream().filter(call -> call.path().equals("/api/dns/peer-mirror")).count();
     }
 }

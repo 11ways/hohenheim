@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.dns;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.dns.DnsRecordDto;
 import be.elevenways.hohenheim.dns.DnsPeerKeyResponse;
+import be.elevenways.hohenheim.dns.DnsPeerMirrorResponse;
 import be.elevenways.hohenheim.dns.DnsRecordListResponse;
 import be.elevenways.hohenheim.dns.DnsValidationErrorResponse;
 import be.elevenways.hohenheim.model.DnsPeerModel;
@@ -179,6 +180,28 @@ public final class DnsPeerApi {
             request("POST", HohenheimEndpoints.API_DNS_PEER_KEY.toUrl(), fields),
             DnsPeerKeyResponse.class);
         if (response == null || response.key_name() == null || response.key_name().isBlank()) {
+            throw new PeerApiException("Unexpected response from peer", null, null);
+        }
+        return response;
+    }
+    /**
+     * Tells the peer to keep exactly {@code origins} as secondary zones pulling from this instance, which it knows by
+     * the transfer key the two share; {@code signature} proves this side holds that key's secret
+     * (DnsPeerMirrors.signature).
+     *
+     * @return what the peer created, removed and left alone
+     */
+    public @NonNull DnsPeerMirrorResponse mirrorZones(@NonNull String keyName, long signedAt,
+                                                      @NonNull String signature, @NonNull List<String> origins) {
+        Map<String, String> fields = new LinkedHashMap<>();
+        fields.put("key_name", keyName);
+        fields.put("signed_at", String.valueOf(signedAt));
+        fields.put("signature", signature);
+        fields.put("origins", String.join("\n", origins));
+        DnsPeerMirrorResponse response = parseQuietly(
+            request("POST", HohenheimEndpoints.API_DNS_PEER_MIRROR.toUrl(), fields), DnsPeerMirrorResponse.class);
+        if (response == null || response.created() == null || response.removed() == null
+            || response.conflicts() == null) {
             throw new PeerApiException("Unexpected response from peer", null, null);
         }
         return response;
