@@ -18,8 +18,12 @@ import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -47,6 +51,9 @@ class CertificateDateColumnTest extends HohenheimHttpTestBase {
 
     private static final String EARLY_NAME = MARKER + "-early";
     private static final String LATE_NAME = MARKER + "-late";
+
+    /** A drawn list row: the order a reader sees is the order of these in the body. */
+    private static final Pattern ROW = Pattern.compile("<pl-table-row\\b[^>]*\\bdata-row-key=\"([^\"]*)\"");
 
     /** Whole minutes: the reading names the minute and must match exactly. */
     private static final Instant EARLY_EXPIRY = Instant.parse("2031-03-04T05:06:00Z");
@@ -102,6 +109,16 @@ class CertificateDateColumnTest extends HohenheimHttpTestBase {
         return adminGet("/admin/certificates?filter.nice_name=" + MARKER + extraQuery);
     }
 
+    /** @return the keys of the rows the list draws, top to bottom */
+    private static List<String> drawnRows(String body) {
+        List<String> keys = new ArrayList<>();
+        Matcher row = ROW.matcher(body);
+        while (row.find()) {
+            keys.add(row.group(1));
+        }
+        return keys;
+    }
+
     @Test
     void theListReadsExpiryAbsoluteFirstAndHonoursASortOnIt() throws Exception {
 
@@ -143,24 +160,27 @@ class CertificateDateColumnTest extends HohenheimHttpTestBase {
             .contains("sort=expires_on");
 
         // 4. The default order is "what expires next": expiry ascending, so the
-        //    soonest-expiring certificate leads although it was created first.
-        assertThat(list.body().indexOf(EARLY_NAME))
+        //    soonest-expiring certificate leads although it was created first. The rows are read as drawn: a name
+        //    can also occur outside its own row, which says nothing about the order a reader sees.
+        String early = String.valueOf(earlyId);
+        String late = String.valueOf(lateId);
+        assertThat(drawnRows(list.body()))
             .as("step 4: the default sort leads with the soonest-expiring certificate")
-            .isLessThan(list.body().indexOf(LATE_NAME));
+            .containsExactly(early, late);
 
         // 5. ?sort=-expires_on is HONOURED and reverses that order -- a crafted sort
         //    on a date column used to be dropped, because no date column was sortable.
         String descending = journeyList("&sort=-expires_on").body();
         assertThat(descending).as("step 5: both rows are listed").contains(EARLY_NAME, LATE_NAME);
-        assertThat(descending.indexOf(LATE_NAME))
+        assertThat(drawnRows(descending))
             .as("step 5: descending expiry puts the furthest certificate first")
-            .isLessThan(descending.indexOf(EARLY_NAME));
+            .containsExactly(late, early);
 
         // 6. Another date column's sort is honoured too: newest created first.
         String newest = journeyList("&sort=-created_at").body();
         assertThat(newest).as("step 6: both rows are listed").contains(EARLY_NAME, LATE_NAME);
-        assertThat(newest.indexOf(LATE_NAME))
+        assertThat(drawnRows(newest))
             .as("step 6: created_at descending puts the last-created certificate first")
-            .isLessThan(newest.indexOf(EARLY_NAME));
+            .containsExactly(late, early);
     }
 }
