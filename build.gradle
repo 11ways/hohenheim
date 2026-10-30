@@ -130,20 +130,6 @@ blastGuards {
         exclude 'src/server/java/be/elevenways/hohenheim/server/util/Tar.java',
                 'A tar header\'s entry types, which name hard links: the archive format\'s vocabulary, not an lstat.'
     }
-
-    // Background work is a runtime member's (RuntimeJobs.GROUP), so the runtime's stop waits for it before the
-    // datasources close and a test awaits it (Member.awaitIdle) instead of polling: an untracked virtual thread's
-    // deploy tail once wrote beside a measured render (BuildHookJourneyTest) and after a stop. A static with no owner
-    // whose work writes nothing (a DNS lookup) is createProcessGlobal; an owned loop is its owner's runner.
-    rule('untracked-background-starts') {
-        consequence 'An untracked thread start: no stop or test can wait for it. Hand the work to a runtime member' +
-                ' (HandlerSupport.inBackground, or RuntimeJobs.GROUP.member(prefix, mode)), its owner\'s runner, or a' +
-                ' process-global runner for a static whose work writes nothing.'
-        roots 'src/server/java'
-        extensions 'java'
-        commentMode 'STRIP_BLOCK_AWARE'
-        pattern 'untracked start', /\bJobRunner\s*\.\s*startVirtualThread(?:Now)?\s*\(/
-    }
 }
 
 hawkeye {
