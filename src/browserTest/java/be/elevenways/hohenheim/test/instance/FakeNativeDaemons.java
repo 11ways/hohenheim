@@ -980,12 +980,13 @@ final class FakeNativeDaemons {
         }
 
         @Override
-        public void connectToLinkNetwork(@NonNull String linkHandle,
-                                         @NonNull String containerHandle,
-                                         @NonNull List<String> aliases) throws IOException {
+        public boolean connectToLinkNetwork(@NonNull String linkHandle,
+                                            @NonNull String containerHandle,
+                                            @NonNull List<String> aliases) throws IOException {
             if (!this.linkNetworks.contains(linkHandle)) {
                 throw new IOException("no link network " + linkHandle);
             }
+            return false;
         }
 
         @Override

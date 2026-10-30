@@ -464,14 +464,17 @@ public class ManagedDatabase {
             + "exec \"$@\" redis-server /dev/stdin";
 
         /**
-         * The command dumping one Mongo database into {@code <directory>/dump.archive}: sh -c
-         * body, $1 the private directory (already created), $2 user, $3 database; the
-         * password via {@link #dumpEnv}.
+         * The command dumping one Mongo database as an archive on STDOUT: sh -c body, $1 the private directory (already
+         * created) holding only the credentials file, $2 user, $3 database; the password via {@link #dumpEnv}.
+         *
+         * AIDEV-NOTE: the archive streams out (backupToFile), never into the container: written under /tmp first, a
+         * dump needed twice its size on the host's disk, and on Robbedoes (2026-10-30) a 5 GB one filled the disk and
+         * took the shared engine down with it.
          */
         List<String> mongoDumpCommand(String directory, String user, String database) {
             return List.of("sh", "-c", "set -e; d=\"$1\"; " + MONGO_AUTH_FILE
                 + " exec mongodump --config=\"$d/auth.yaml\" --username \"$2\""
-                + " --authenticationDatabase admin --db \"$3\" --archive=\"$d/dump.archive\"",
+                + " --authenticationDatabase admin --db \"$3\" --archive",
                 "hohenheim-dump", directory, user, database);
         }
 
@@ -1456,20 +1459,18 @@ public class ManagedDatabase {
     }
 
     /**
-     * Back up any engine to a file, STREAMED end to end: SQL text dumps go exec-stdout to
-     * disk, binary dumps (Redis RDB, mongodump archive) go archive-API to disk -- controller
-     * heap never holds a dump (the 2026-08-31 nightly OOM class). The write lands in a
-     * {@code .part} sibling that is fsynced and then moved into place on success, so a
-     * failed or over-cap dump never leaves a file that could pass for a backup, and a crash
-     * right after the move never leaves a committed name over unwritten blocks.
+     * Back up any engine to a file, STREAMED end to end: SQL text dumps and mongodump archives go exec-stdout to disk,
+     * a Redis RDB goes archive-API to disk -- controller heap never holds a dump (the 2026-08-31 nightly OOM class),
+     * and only Redis stages a copy inside its container. The write lands in a {@code .part} sibling that is fsynced
+     * and then moved into place on success, so a failed or over-cap dump never leaves a file that could pass for a
+     * backup, and a crash right after the move never leaves a committed name over unwritten blocks.
      *
      * @throws IOException naming {@code database.max_dump_mb} when the dump exceeds the cap
      */
-    // AIDEV-NOTE: Binary dumps must land in the container's writable layer (/tmp), not on a
-    // mount: the Docker archive API (getArchiveFileTo) cannot read files inside a tmpfs (or
-    // volume) mount. So redis dumps via `--rdb` (not SAVE, which writes to the /data mount)
-    // and mongodump targets /tmp -- each into a PRIVATE directory of its own, see
-    // privateDumpDirectory.
+    // AIDEV-NOTE: an RDB must land in the container's writable layer (/tmp), not on a mount: the Docker archive API
+    // (getArchiveFileTo) cannot read files inside a tmpfs (or volume) mount. So redis dumps via `--rdb` (not SAVE,
+    // which writes to the /data mount) into a PRIVATE directory of its own, see privateDumpDirectory. Mongo's private
+    // directory holds only its credentials file.
     public void backupToFile(String handle, Engine engine, String user, String password,
                              String database, Path target) throws IOException {
         Path partial = target.resolveSibling(target.getFileName() + ".part");
@@ -1477,7 +1478,8 @@ public class ManagedDatabase {
             switch (engine) {
                 case POSTGRES, MYSQL -> {
                     DockerClient.ExecStreamResult result;
-                    try (var out = Files.newOutputStream(partial)) {
+                    try (var out = ReservedDiskOutput.onDiskOf(Files.newOutputStream(partial), partial, handle,
+                            DatabaseBackups.DUMP_FREE_RESERVE_BYTES)) {
                         result = docker.execStreamed(handle, engine.dumpCommand(user, database),
                             engine.dumpEnv(password), out, maxDumpBytes());
                     }
@@ -1513,16 +1515,15 @@ public class ManagedDatabase {
                 case MONGO -> {
                     String directory = privateDumpDirectory(handle);
                     try {
-                        String archivePath = directory + "/dump.archive";
-                        DockerClient.ExecResult dump = docker.exec(handle,
-                            engine.mongoDumpCommand(directory, user, database), engine.dumpEnv(password),
-                            DockerClient.LONG_OP_TIMEOUT_MS);
-                        if (dump.exitCode() != 0) {
-                            throw new IOException("mongodump failed for '" + handle + "': "
-                                + dump.stderr().trim());
+                        DockerClient.ExecStreamResult result;
+                        try (var out = ReservedDiskOutput.onDiskOf(Files.newOutputStream(partial), partial, handle,
+                                DatabaseBackups.DUMP_FREE_RESERVE_BYTES)) {
+                            result = docker.execStreamed(handle, engine.mongoDumpCommand(directory, user, database),
+                                engine.dumpEnv(password), out, maxDumpBytes());
                         }
-                        requireUnderCap(handle, archivePath);
-                        docker.getArchiveFileTo(handle, archivePath, partial, maxDumpBytes());
+                        if (result.exitCode() != 0) {
+                            throw new IOException("mongodump failed for '" + handle + "': " + result.stderr().trim());
+                        }
                     } finally {
                         removeDumpDirectory(handle, directory);
                     }

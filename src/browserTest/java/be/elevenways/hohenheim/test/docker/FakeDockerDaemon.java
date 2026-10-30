@@ -269,6 +269,11 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
         return Set.copyOf(this.linkMembers.getOrDefault(linkHandle, Set.of()));
     }
 
+    /** A container disconnected from a link network outside Hohenheim (an operator's docker command, a daemon). */
+    public void disconnectOutside(@NonNull String linkHandle, @NonNull String containerHandle) {
+        this.linkMembers.getOrDefault(linkHandle, new LinkedHashSet<>()).remove(containerHandle);
+    }
+
     /** The link networks one container is currently joined to. */
     public @NonNull Set<String> linkNetworksOf(@NonNull String containerHandle) {
         Set<String> joined = new LinkedHashSet<>();
@@ -352,15 +357,16 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
         }
 
         @Override
-        public void connectToLinkNetwork(@NonNull String linkHandle, @NonNull String containerHandle,
-                                         @NonNull List<String> aliases) throws IOException {
+        public boolean connectToLinkNetwork(@NonNull String linkHandle, @NonNull String containerHandle,
+                                            @NonNull List<String> aliases) throws IOException {
             if (!FakeDockerDaemon.this.linkNetworks.contains(linkHandle)) {
                 throw new IOException("no link network " + linkHandle);
             }
             require(containerHandle);
-            FakeDockerDaemon.this.linkMembers.computeIfAbsent(linkHandle, key -> new LinkedHashSet<>())
-                .add(containerHandle);
+            boolean joined = FakeDockerDaemon.this.linkMembers
+                .computeIfAbsent(linkHandle, key -> new LinkedHashSet<>()).add(containerHandle);
             FakeDockerDaemon.this.calls.add("link-connect:" + linkHandle + ":" + containerHandle);
+            return joined;
         }
 
         @Override

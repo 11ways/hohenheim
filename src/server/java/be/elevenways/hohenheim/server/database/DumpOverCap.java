@@ -10,7 +10,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.io.IOException;
 
 /**
- * A managed-database dump refused for exceeding {@code database.max_dump_mb}.
+ * A managed-database dump refused for its size: over {@code database.max_dump_mb}, or more than its disk has room for.
  *
  * AIDEV-NOTE: typed so a reader that gives the operator words (the BACKUP_FAILED alert) reads {@link #words()}, where
  * the sizes are values worded through :bytes in the reader's locale. The message stays the technical English the log,
@@ -51,6 +51,19 @@ public final class DumpOverCap extends IOException {
         return new DumpOverCap("Dump of '" + handle + "' exceeds the configured cap (setting database.max_dump_mb);"
             + " the partial file was deleted", HohenheimMicrocopy.ALERT.of("dump_cut_off").withArg("cap", capBytes),
             cause);
+    }
+
+    /**
+     * A dump refused before it started because its staging disk has too little room for it: the disk would fill, and a
+     * full disk takes the engines on it down with the dump.
+     *
+     * @param freeBytes   what the staging disk has free
+     * @param neededBytes what the dump needs there, the reserve kept free included
+     */
+    static @NonNull DumpOverCap noRoom(@NonNull String name, long freeBytes, long neededBytes) {
+        return new DumpOverCap("Dump of database '" + name + "' refused: its staging disk has too little free space"
+            + " for it (nothing was written)", HohenheimMicrocopy.ALERT.of("dump_no_room")
+            .withArg("free", freeBytes).withArg("needed", neededBytes), null);
     }
 
     /** @return the refusal in the operator's words, its sizes worded for the reader */

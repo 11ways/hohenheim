@@ -1609,6 +1609,18 @@
       "target": "task_description"
     }
   ],
+  "repair_database_links": [
+    {
+      "text": "Repair database links",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Whether every app is still connected to the databases attached to it, reconnecting any that is not",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
   "mirror_dns_peers": [
     {
       "text": "Mirror zones to DNS peers",
@@ -10407,6 +10419,24 @@
       "scope": "attention_detail"
     }
   ],
+  "database_backup": {
+    "text": "Backup of database {$name} failed",
+    "scope": "attention_title"
+  },
+  "database_backup_never": [
+    {
+      "text": "Database {$name} has never been backed up",
+      "scope": "attention_title"
+    },
+    {
+      "text": "The nightly backup covers it, but no completed dump exists.",
+      "scope": "attention_detail"
+    }
+  ],
+  "database_backup_stale": {
+    "text": "Backups of database {$name} are stale",
+    "scope": "attention_title"
+  },
   "instance_disk": [
     {
       "text": "Disk almost full on {$name}",
@@ -14712,6 +14742,10 @@
   },
   "dump_over_cap": {
     "text": "the dump is {$size :bytes}, more than the {$cap :bytes} the Max dump size setting allows; raise it to at least {$size :bytes}. Nothing was transferred.",
+    "scope": "alert"
+  },
+  "dump_no_room": {
+    "text": "the disk the dump is staged on has {$free :bytes} free, and the dump needs {$needed :bytes} there so the disk does not fill. Nothing was written; free some space or move old backups off this host.",
     "scope": "alert"
   },
   "dump_cut_off": {

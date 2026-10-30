@@ -30,8 +30,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Binary-backup integration tests: Redis (RDB snapshot) and Mongo (mongodump archive) produce
- * their native dump fetched out via the container archive API. Isolated SQLite + live Docker.
+ * Binary-backup integration tests: Redis (an RDB snapshot fetched out via the container archive API) and Mongo (a
+ * mongodump archive streamed out on stdout) produce their native dump. Isolated SQLite + live Docker.
  */
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class BinaryBackupTest {

@@ -4,21 +4,30 @@ import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.AttentionSubject;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.model.BackupStatus;
+import be.elevenways.hohenheim.model.DatabaseDumpModel;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.database.DatabaseBackups;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.KeyedRows;
+import be.elevenways.zenit.common.routing.RouteTarget;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -92,6 +101,64 @@ public final class DatabaseAttention {
                 HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_database")));
         }
         failedDatabaseEngines(items);
+    }
+
+    /**
+     * Databases the nightly backup covers whose backup is failing or has gone quiet: the newest attempt FAILED (in its
+     * own words), or no complete dump exists, or the newest is older than {@code backup.stale_after_days}. The
+     * instance tier's two collectors, for the database dumps; both may fire for one database (failing AND stale).
+     *
+     * AIDEV-NOTE: a failing dump used to surface only as the BACKUP_FAILED alert and the nightly task's failed run. On
+     * an install without a mail or chat transport the alert reached nobody, and invulassistent's dump failed every
+     * night from 2026-09-09 on Robbedoes unseen. Every database is judged in a fixed number of reads, never one per
+     * database. A database that does not serve (stopped, failed) is left to its own item ({@link #failedDatabases}):
+     * the nightly backup skips it, so "stale" would be a second alarm with nothing to act on.
+     */
+    public static void databaseBackups(List<AttentionItem> items) {
+        List<Row> active = Models.get(DatabaseModel.class).find()
+            .where(DatabaseModel.STATUS.eq(DatabaseModel.STATUS_ACTIVE))
+            .all().stream().filter(row -> !Boolean.TRUE.equals(row.get(DatabaseModel.EPHEMERAL))).toList();
+        Function<Row, DatabaseVerdict> verdicts = DatabaseVerdict.ofDatabases(active);
+        List<Row> covered = active.stream()
+            .filter(row -> verdicts.apply(row).state().attentionTitle(row.get(DatabaseModel.NAME)) == null).toList();
+        if (covered.isEmpty()) {
+            return;
+        }
+        List<Integer> ids = covered.stream().map(row -> (Integer) row.get(DatabaseModel.ID)).toList();
+        Map<Integer, Row> latest = DatabaseBackups.latestAttemptOf(ids);
+        Map<Integer, DatabaseBackups.Stored> newest = DatabaseBackups.newestOf(ids);
+        Integer days = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Backup.STALE_AFTER_DAYS);
+        Instant threshold = days == null || days <= 0 ? null : Now.instant().minus(Duration.ofDays(days));
+        for (Row database : covered) {
+            Integer id = database.get(DatabaseModel.ID);
+            String name = database.get(DatabaseModel.NAME);
+            RouteTarget backups = CmsRoutes.subpage(ADMIN, HohenheimSlugs.DATABASES, id, HohenheimSlugs.Tab.BACKUPS);
+            Row attempt = latest.get(id);
+            if (attempt != null && BackupStatus.FAILED.key().equals(attempt.get(DatabaseDumpModel.STATUS))) {
+                String error = attempt.get(DatabaseDumpModel.ERROR);
+                items.add(item(AttentionSeverity.ERROR, "box-archive",
+                    HohenheimMicrocopy.ATTENTION_TITLE.of("database_backup").withArg("name", name),
+                    error == null || error.isBlank() ? HohenheimMicrocopy.ATTENTION_DETAIL.of("last_run_failed")
+                        : Microcopy.literal(error),
+                    backups, HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_backups")));
+            }
+            if (threshold == null) {
+                continue;
+            }
+            DatabaseBackups.Stored good = newest.get(id);
+            if (good == null) {
+                items.add(item(AttentionSeverity.WARNING, "box-archive",
+                    HohenheimMicrocopy.ATTENTION_TITLE.of("database_backup_never").withArg("name", name),
+                    HohenheimMicrocopy.ATTENTION_DETAIL.of("database_backup_never"),
+                    backups, HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_backups")));
+            } else if (good.at().isBefore(threshold)) {
+                long age = Duration.between(good.at(), Now.instant()).toDays();
+                items.add(item(AttentionSeverity.WARNING, "box-archive",
+                    HohenheimMicrocopy.ATTENTION_TITLE.of("database_backup_stale").withArg("name", name),
+                    HohenheimMicrocopy.ATTENTION_DETAIL.of("instance_backup_stale").withArg("days", age),
+                    backups, HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_backups")));
+            }
+        }
     }
 
     /**

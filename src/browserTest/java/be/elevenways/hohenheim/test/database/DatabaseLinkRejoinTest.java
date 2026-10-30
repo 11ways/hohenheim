@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.database.EngineHost;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
+import be.elevenways.hohenheim.server.docker.InstanceDatabaseNetworks;
 import be.elevenways.hohenheim.server.instance.DockerContainerKind;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceStatusReconciler;
@@ -153,6 +154,18 @@ class DatabaseLinkRejoinTest {
             assertThat(daemon.linkMembersOf(link))
                 .as("step 4: the restarted engine is back on the workload's link network")
                 .containsExactlyInAnyOrder(appHandle, engineHandle);
+
+            // 5. The engine is dropped from the network outside any deploy lane: the repair sweep joins it again and
+            //    says it did, and a sweep over healthy networks joins nothing.
+            daemon.disconnectOutside(link, engineHandle);
+            assertThat(daemon.linkMembersOf(link)).as("step 5 anchor: the engine is off the network")
+                .containsExactly(appHandle);
+            assertThat(InstanceDatabaseNetworks.repairAll()).as("step 5: the sweep repaired one membership")
+                .isEqualTo(1);
+            assertThat(daemon.linkMembersOf(link)).as("step 5: the engine is back on the workload's link network")
+                .containsExactlyInAnyOrder(appHandle, engineHandle);
+            assertThat(InstanceDatabaseNetworks.repairAll()).as("step 5: a healthy network needs no repair")
+                .isZero();
         });
     }
 

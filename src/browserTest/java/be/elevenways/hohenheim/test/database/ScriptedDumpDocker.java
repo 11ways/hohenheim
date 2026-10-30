@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerTransport;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -48,6 +49,16 @@ final class ScriptedDumpDocker extends DockerClient {
         this.fetched.add(path);
         Files.write(outFile, this.dumpBytes);
         return this.dumpBytes.length;
+    }
+
+    /** Streams the scripted bytes as the dump's stdout, recording the command like {@link #exec}. */
+    @Override
+    public ExecStreamResult execStreamed(String containerId, List<String> command, List<String> env,
+                                         OutputStream out, long maxStdoutBytes) throws IOException {
+        this.commands.add(List.copyOf(command));
+        this.envs.add(List.copyOf(env));
+        out.write(this.dumpBytes);
+        return new ExecStreamResult(0, "", this.dumpBytes.length);
     }
 
     /** The directory argument of the {@code mkdir -m 700 <dir>} this capture ran. */

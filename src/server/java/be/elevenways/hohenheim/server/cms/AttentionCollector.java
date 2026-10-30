@@ -189,6 +189,7 @@ public final class AttentionCollector {
             DatabaseAttention.failedDatabases(items);
             DatabaseAttention.moveLeftovers(items);
             DatabaseAttention.unavailableAttachedDatabases(items);
+            DatabaseAttention.databaseBackups(items);
         }
         return items;
     }

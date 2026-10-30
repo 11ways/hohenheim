@@ -242,8 +242,8 @@ public final class DockerInstanceRuntime
     }
 
     @Override
-    public void connectToLinkNetwork(@NonNull String linkHandle, @NonNull String containerHandle,
-                                     @NonNull List<String> aliases) throws IOException {
+    public boolean connectToLinkNetwork(@NonNull String linkHandle, @NonNull String containerHandle,
+                                        @NonNull List<String> aliases) throws IOException {
         String network = WorkloadNetworks.networkName(linkHandle);
         for (String member : linkMembers(network)) {
             if (member.equals(containerHandle)) {
@@ -251,11 +251,12 @@ public final class DockerInstanceRuntime
                 // re-declaring them here would need a disconnect -- which re-allocates the
                 // member's published host port. A membership change that must revise
                 // aliases therefore goes through a recreate, which is what every deploy is.
-                return;
+                return false;
             }
         }
         this.docker.connectContainerToNetwork(network, containerHandle,
             aliases.isEmpty() ? null : List.copyOf(aliases));
+        return true;
     }
 
     @Override

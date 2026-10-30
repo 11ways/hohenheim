@@ -20,6 +20,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -194,7 +195,52 @@ public final class InstanceDatabaseNetworks {
      *         database's published port may have moved
      */
     public static boolean reattachForDatabase(int databaseId) {
+        return rejoin(databaseId, false).touched();
+    }
+
+    /**
+     * The repair sweep: every database with an attached workload has each of its link networks checked, and a
+     * database or workload container missing from one is joined to it again. Never throws.
+     *
+     * AIDEV-NOTE: the backstop behind the rejoin every deploy lane runs (DatabaseServingLinkHook). Robbedoes
+     * (2026-10-30): a crash restart recreated the shared Mongo engine on its own network only, and six apps could not
+     * resolve it for 8 hours; a lane that forgets the rejoin, or a container changed outside Hohenheim, now heals at
+     * the next sweep. Only workloads that run are checked: a stopped or undeployed one has no container to join.
+     *
+     * @return how many containers were joined to a link network they were missing from
+     */
+    public static int repairAll() {
+        Set<Integer> databases = new LinkedHashSet<>();
+        for (Row link : Models.get(InstanceDatabaseModel.class).find().all()) {
+            Integer databaseId = link.get(InstanceDatabaseModel.DATABASE_ID);
+            if (databaseId != null) {
+                databases.add(databaseId);
+            }
+        }
+        int joined = 0;
+        for (int databaseId : databases) {
+            int repaired = rejoin(databaseId, true).joined();
+            if (repaired > 0) {
+                Blast.log("DB-LINK: repaired", repaired, "missing link-network memberships of database", databaseId);
+            }
+            joined += repaired;
+        }
+        return joined;
+    }
+
+    /**
+     * What one rejoin did.
+     *
+     * @param touched whether at least one membership was (re)ensured
+     * @param joined  how many containers were missing from their link network and joined to it
+     */
+    private record Rejoin(boolean touched, int joined) {
+    }
+
+    /** @param runningOnly whether a workload that does not run is left alone, as the repair sweep asks */
+    private static @NonNull Rejoin rejoin(int databaseId, boolean runningOnly) {
         boolean touched = false;
+        int joined = 0;
         for (Row link : Models.get(InstanceDatabaseModel.class).findByDatabaseId(databaseId)) {
             Integer ownerId = link.get(InstanceDatabaseModel.INSTANCE_ID);
             if (ownerId == null) {
@@ -209,6 +255,9 @@ public final class InstanceDatabaseNetworks {
             try {
                 InstanceService.Resolved resolved = new InstanceService().resolve(instanceId);
                 if (!(resolved.runtime() instanceof LinkNetworkSupport support)) {
+                    continue;
+                }
+                if (runningOnly && !InstanceModel.STATUS_RUNNING.equals(resolved.row().get(InstanceModel.STATUS))) {
                     continue;
                 }
                 Row database = Models.get(DatabaseModel.class).find()
@@ -229,8 +278,17 @@ public final class InstanceDatabaseNetworks {
                 if (databaseHandle == null) {
                     continue;   // no engine instance: the next provision joins both sides
                 }
-                support.connectToLinkNetwork(handle, databaseHandle, List.of());
-                support.connectToLinkNetwork(handle, resolved.spec().handle(), List.of());
+                // The sweep repairs what runs: an absent or stopped engine container is its record's own problem
+                // (and a provisioning in progress joins both sides itself), never one to retry every five minutes.
+                if (runningOnly && !resolved.runtime().status(databaseHandle).running()) {
+                    continue;
+                }
+                if (support.connectToLinkNetwork(handle, databaseHandle, List.of())) {
+                    joined++;
+                }
+                if (support.connectToLinkNetwork(handle, resolved.spec().handle(), List.of())) {
+                    joined++;
+                }
                 DatabaseLinkNetworks.refreshDatabasePort(resolved.runtime()::status,
                     resolved.serverId(), databaseId, databaseHandle);
                 touched = true;
@@ -239,7 +297,7 @@ public final class InstanceDatabaseNetworks {
                     "database", databaseId, "-", e.getMessage());
             }
         }
-        return touched;
+        return new Rejoin(touched, joined);
     }
 
     /**

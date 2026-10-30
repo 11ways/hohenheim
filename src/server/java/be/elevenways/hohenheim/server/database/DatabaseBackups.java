@@ -208,6 +208,10 @@ public final class DatabaseBackups {
         String key = null;
         try {
             staging = stagingDirectory("dump-");
+            Stored previous = newest(databaseId);
+            // Estimated from the previous dump (the plain dump and its encrypted copy share the disk); the dump's own
+            // write keeps the reserve exactly (ReservedDiskOutput), and the encryption is judged on the real size.
+            requireRoom(staging, name, Math.multiplyExact(previous == null ? 0 : previous.bytes(), 2));
             String stamp = UtcStamp.now();
             Path plain = service.backupToFile(name, staging, stamp, contention);
             DurableFiles.restrictToOwner(plain);
@@ -217,6 +221,7 @@ public final class DatabaseBackups {
             key = ControllerIdentity.token() + "/database-" + name + "/" + stamp + "-"
                 + dump.get(DatabaseDumpModel.ID) + extension + ENCRYPTED_SUFFIX;
             Path encrypted = staging.resolve("dump" + ENCRYPTED_SUFFIX);
+            requireRoom(staging, name, Files.size(plain));
             BackupCipher.encrypt(MAGIC, plain, encrypted, FieldEncryption.requireKeyring());
             DurableFiles.restrictToOwner(encrypted);
             Files.delete(plain);
@@ -267,6 +272,37 @@ public final class DatabaseBackups {
     /** The image the database's engine runs, which a restore into a new database runs again. */
     private static @NonNull String servingImage(@NonNull Row database) {
         return EngineHost.serving(database).resolvedImage();
+    }
+
+    /** What a dump leaves free on its staging disk at the least: the disk the engines' data lives on, often. */
+    static final long DUMP_FREE_RESERVE_BYTES = 2L * 1024 * 1024 * 1024;
+
+    /**
+     * Refuses a dump step its staging disk has no room for: {@code bytes} plus {@link #DUMP_FREE_RESERVE_BYTES} must
+     * be free there.
+     *
+     * AIDEV-NOTE: on Robbedoes (2026-10-30) a 5 GB mongo dump filled the disk every night and finally took the shared
+     * engine down with it; a refusal here costs one night's dump of one database, in words, and nothing else. Asked
+     * twice: before the dump, with twice the previous dump as its estimate (a database never dumped is judged by the
+     * reserve alone), and before the encryption, with the plain dump's real size.
+     *
+     * @throws DumpOverCap naming what is free and what was needed
+     */
+    private static void requireRoom(@NonNull Path staging, @NonNull String name, long bytes) throws IOException {
+        judgeRoom(name, Files.getFileStore(staging).getUsableSpace(), bytes);
+    }
+
+    /**
+     * The DECISION half of {@link #requireRoom}, reachable without a disk to measure.
+     *
+     * @param bytes what the step writes, before the reserve
+     * @throws DumpOverCap naming what is free and what was needed
+     */
+    public static void judgeRoom(@NonNull String name, long freeBytes, long bytes) throws IOException {
+        long needed = Math.addExact(bytes, DUMP_FREE_RESERVE_BYTES);
+        if (freeBytes < needed) {
+            throw DumpOverCap.noRoom(name, freeBytes, needed);
+        }
     }
 
     /**
@@ -334,6 +370,12 @@ public final class DatabaseBackups {
             newest.put(first.getKey(), Stored.of(first.getValue()));
         }
         return newest;
+    }
+
+    /** @return each listed database's newest dump row whatever its status, in one read; one without any is absent */
+    public static @NonNull Map<Integer, Row> latestAttemptOf(@NonNull Collection<Integer> databaseIds) {
+        return FirstPerOwner.of(Models.get(DatabaseDumpModel.class).find().orderBy(DatabaseDumpModel.ID,
+            SortOrder.DESC), DatabaseDumpModel.DATABASE_ID, databaseIds);
     }
 
     private static @NonNull QueryBuilder<Row> completeNewestFirst() {

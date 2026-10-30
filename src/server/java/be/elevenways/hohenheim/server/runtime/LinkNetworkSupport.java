@@ -43,9 +43,10 @@ public interface LinkNetworkSupport {
      *        compose {@code service} name a sibling dials. Empty for a lane whose members
      *        already know each other's handles. An alias is scoped to one link network, so
      *        it can never make a workload resolvable to anything not connected to it.
+     * @return true when the container was connected now, false when it already was a member
      */
-    void connectToLinkNetwork(@NonNull String linkHandle, @NonNull String containerHandle,
-                              @NonNull List<String> aliases) throws IOException;
+    boolean connectToLinkNetwork(@NonNull String linkHandle, @NonNull String containerHandle,
+                                 @NonNull List<String> aliases) throws IOException;
 
     /**
      * Disconnect every member and remove the link network plus its kernel chains;

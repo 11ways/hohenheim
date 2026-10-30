@@ -104,15 +104,20 @@ class RedisDumpMagicTest {
             .as("step 3: a refused capture removes its directory too")
             .isTrue();
 
-        // 4. mongodump: same private directory, and the password never rides the argv --
-        //    it reaches mongodump through a --config file written from the env.
+        // 4. mongodump: the archive STREAMS out on stdout, so nothing is staged in the container (a 5 GB archive under
+        //    /tmp once filled Robbedoes' disk); its private directory holds only the credentials, and the password
+        //    never rides the argv -- it reaches mongodump through a --config file written from the env.
         ScriptedDumpDocker mongo = new ScriptedDumpDocker("archive".getBytes(StandardCharsets.US_ASCII));
+        Path archive = staging.resolve("four.archive");
         new ManagedDatabase(mongo).backupToFile("engine", ManagedDatabase.Engine.MONGO,
-            "root", "p4ssw0rd-secret", "tenantdb", staging.resolve("four.archive"));
+            "root", "p4ssw0rd-secret", "tenantdb", archive);
         String mongoDirectory = mongo.privateDirectory();
-        assertThat(mongo.fetched)
-            .as("step 4: the archive is fetched from the private directory")
-            .containsExactly(mongoDirectory + "/dump.archive");
+        assertThat(mongo.fetched).as("step 4: nothing is copied out of the container").isEmpty();
+        assertThat(Files.readAllBytes(archive)).as("step 4: the streamed archive is the backup")
+            .isEqualTo("archive".getBytes(StandardCharsets.US_ASCII));
+        assertThat(mongo.commands).as("step 4: mongodump writes its archive to stdout, not a file")
+            .anySatisfy(command -> assertThat(String.join(" ", command)).contains("mongodump")
+                .contains("--archive").doesNotContain("--archive="));
         assertThat(mongo.commands)
             .as("step 4: no command line carries the password")
             .allSatisfy(command -> assertThat(String.join(" ", command))
