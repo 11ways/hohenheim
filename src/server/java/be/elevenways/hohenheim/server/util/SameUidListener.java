@@ -27,6 +27,11 @@ import java.util.function.Consumer;
  */
 public final class SameUidListener {
 
+    /** Opens the unbound channel the constructor binds; replaceable for tests. */
+    interface ChannelOpener {
+        ServerSocketChannel open() throws IOException;
+    }
+
     private final ServerSocketChannel server;
     private final int port;
     private final AtomicBoolean closed = new AtomicBoolean(false);
@@ -48,16 +53,28 @@ public final class SameUidListener {
     public SameUidListener(@NonNull String threadName, @NonNull String bridge,
                            @NonNull BinaryOperator<Integer> peerOwner, @Nullable Integer selfUid,
                            @NonNull Consumer<SocketChannel> admitted) throws IOException {
+        this(threadName, bridge, peerOwner, selfUid, admitted, ServerSocketChannel::open);
+    }
+
+    /** @param opener opens the channel to bind, which every failure here closes */
+    SameUidListener(@NonNull String threadName, @NonNull String bridge,
+                    @NonNull BinaryOperator<Integer> peerOwner, @Nullable Integer selfUid,
+                    @NonNull Consumer<SocketChannel> admitted, @NonNull ChannelOpener opener) throws IOException {
         this.bridge = bridge;
         this.peerOwner = peerOwner;
         this.selfUid = selfUid;
         this.admitted = admitted;
-        this.server = ServerSocketChannel.open();
-        this.server.bind(new InetSocketAddress("127.0.0.1", 0));
-        this.port = ((InetSocketAddress) this.server.getLocalAddress()).getPort();
-        // DETACHED: no admitted connection runs as whoever opened the listener.
-        this.threads = JobRunner.create(threadName + port, JobRunner.CallerContext.DETACHED);
-        this.threads.startThread(this::acceptLoop);
+        this.server = opener.open();
+        try {
+            this.server.bind(new InetSocketAddress("127.0.0.1", 0));
+            this.port = ((InetSocketAddress) this.server.getLocalAddress()).getPort();
+            // DETACHED: no admitted connection runs as whoever opened the listener.
+            this.threads = JobRunner.create(threadName + port, JobRunner.CallerContext.DETACHED);
+            this.threads.startThread(this::acceptLoop);
+        } catch (Throwable failed) {
+            Closeables.closeQuietly(this.server);
+            throw failed;
+        }
     }
 
     /** The loopback TCP port a client dials. */

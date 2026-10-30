@@ -153,8 +153,13 @@ public final class PublicTcpListener implements AutoCloseable {
     public synchronized void start() throws IOException {
         if (running) return;
         ServerSocket created = serverSocketFactory.create();
-        created.setReuseAddress(true);
-        created.bind(new InetSocketAddress(InetAddress.getByName(bindAddress), port));
+        try {
+            created.setReuseAddress(true);
+            created.bind(new InetSocketAddress(InetAddress.getByName(bindAddress), port));
+        } catch (Throwable failed) {
+            Closeables.closeQuietly(created);
+            throw failed;
+        }
         listener = created;
         running = true;
         // AIDEV-NOTE: DETACHED, so no connection ever runs as whoever (re)started the listener (boot runs as system).

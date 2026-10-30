@@ -147,7 +147,7 @@ public final class InstanceStats {
         return samples.get(samples.size() - 1).memoryBytes() / ByteUnit.MEGABYTE.factor();
     }
 
-    /** Close every live stream; the boot/shutdown seam and the test cleanup hook. */
+    /** Close every live stream; ServerMain's shutdown step and the tests' cleanup hook. */
     public static void shutdown() {
         for (Session session : SESSIONS.values()) {
             session.stop();

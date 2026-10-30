@@ -31,6 +31,7 @@ import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceMigrations;
 import be.elevenways.hohenheim.server.instance.InstanceService;
+import be.elevenways.hohenheim.server.instance.InstanceStats;
 import be.elevenways.hohenheim.server.instance.InstanceSnapshots;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
@@ -406,6 +407,8 @@ public class ServerMain {
                 dnsServer.stop();
             }
         });
+        // No viewer subscribes once the ingress stopped; the daemon stats streams and their pumps end here.
+        shutdownStep("instance stats streams", InstanceStats::shutdown);
         shutdownStep("secondary zone replication", () -> {
             if (secondaryZoneService != null) {
                 secondaryZoneService.stop();
