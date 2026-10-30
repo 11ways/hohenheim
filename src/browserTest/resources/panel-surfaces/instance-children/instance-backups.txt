@@ -92,7 +92,8 @@ column instance_id at=4 shown=true hidden=false sortable=false filterable=false 
 column target_id at=5 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=true
 column size_bytes at=6 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
 column remote_key at=7 shown=false hidden=true sortable=false filterable=false copyable=true subtext= relation=false
-row zenit:delete at=0 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
+row hohenheim:restore_backup at=0 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:DEFAULT,title:restore_new%252Cscope%3Dinstance_backup,body:restore_new_confirm%252Cscope%3Dinstance_backup,confirm:restore_new%252Cscope%3Dinstance_backup,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:true target=/{panel}/{entry}/{record}/action/restore_backup
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 tab overview at=0 landing=true view=true
 control DETAIL%20remote_key at=0 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
 

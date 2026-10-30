@@ -22,15 +22,11 @@ import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.data.UsageData;
 import be.elevenways.zenit.widget.common.data.WidgetBadge;
-import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
-import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
-import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.cms.server.page.CmsActionResultTranslator;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.zenit.cms.common.resource.ResourceParent;
@@ -53,12 +49,12 @@ import java.util.List;
 
 /**
  * The backup entries from shared parts: the operator's on /admin and the tenant's on /manage. Backups are born from
- * the instance's backup action or the nightly task, restored TO A NEW INSTANCE and deleted here.
+ * the instance's backup action or the nightly task, restored to a new instance or in place, and deleted here.
  *
- * AIDEV-NOTE: restore-to-new is creative, not destructive (the source keeps running), so it confirms without the typed
- * phrase, and it stays OPERATOR-ONLY: it creates an instance outside the creation funnel (no create authority, no
- * placement, no creator grant, image from the archive manifest instead of an approved template), so the /manage twin
- * never places it and the operation refuses anyone else (InstanceBackupOperations).
+ * AIDEV-NOTE: both twins place the SAME two restores, both background runs (InstanceBackupOperations): restore-to-new
+ * is creative (the source keeps running), so it confirms without the typed phrase, while restore-in-place replaces
+ * the instance's data and confirms destructively, naming the fresh backup it takes first. Who may run each is the
+ * operation's authorizer and the service's own gates, never the placement.
  *
  * @author Jelle De Loecker
  * @since  0.9.0
@@ -73,7 +69,7 @@ public final class InstanceBackupParts {
     }
 
     /**
-     * The operator's backups: every backup, restore-to-new on a complete one, and the history tab.
+     * The operator's backups: every backup, both restores on a complete one, and the history tab.
      *
      * AIDEV-NOTE: a backup OUTLIVES its instance here (ResourceParent.survivingArchive): restoring a backup of a
      * deleted instance onto another host is the recovery restore-to-new exists for, so a trashed instance never makes
@@ -82,7 +78,7 @@ public final class InstanceBackupParts {
      */
     public static @NonNull PanelResource<Row> admin() {
         return base(HohenheimIds.id("instance_backup"), instanceParent().survivingArchive())
-            .actions(List.of(restore()))
+            .actions(restores())
             .tabs(ResourceTabs.<Row>of(List.of(overview())).withHistory().withContributions())
             .build();
     }
@@ -93,7 +89,7 @@ public final class InstanceBackupParts {
      * delegated surface, which also 404s its routes.
      */
     public static @NonNull PanelResource<Row> manage() {
-        return ManageTwin.reached(base(ManageTwin.id("instance_backup"), instanceParent()),
+        return ManageTwin.reached(base(ManageTwin.id("instance_backup"), instanceParent()).actions(restores()),
                 TenantScopes.INSTANCE_BACKUPS, ResourceTabs.<Row>of(List.of(overview())).withContributions())
             .build();
     }
@@ -243,7 +239,7 @@ public final class InstanceBackupParts {
     /** The instance backup ledger's list shape, beside the database dumps' (BackupLedgerList). */
     private static final BackupLedgerList LEDGER_LIST = new BackupLedgerList(InstanceBackupOperations.BACKUP,
         HohenheimSlugs.INSTANCE_BACKUPS, HohenheimMicrocopy.INSTANCE_BACKUP.of("plural"),
-        HohenheimMicrocopy.INSTANCE_BACKUP.of("singular"), 17, InstanceBackupParts::title,
+        HohenheimMicrocopy.INSTANCE_BACKUP.of("singular"), 17, InstanceBackupModel::title,
         InstanceBackupOperations.DELETE_BACKUP, InstanceBackupModel.CREATED_AT, InstanceBackupModel.STATUS,
         InstanceBackupModel.SIZE_BYTES, InstanceBackupModel.TARGET_ID, InstanceBackupModel.REMOTE_KEY);
 
@@ -269,48 +265,20 @@ public final class InstanceBackupParts {
                 .computed(hostVolumes, (backup, request) -> hostVolumesText(backup)));
     }
 
-    /**
-     * A backup is named by when it was taken; its archive key stays a field on its page (it is long, and the same
-     * instance prefix on every row of a list).
-     *
-     * AIDEV-NOTE: declared HERE and not as a schema display field, because a display field is also the derived record
-     * source's SEARCH field. The title never names the instance: the instance may be a trashed one this viewer cannot
-     * read (the instance column and card name it under the viewer's own read). The moment is typed copy, so each reader
-     * reads it on their own clock. It answers for every row, so no page falls back to the model's class name
-     * ("InstanceBackup #1").
-     */
-    static @NonNull Microcopy title(@NonNull Row backup) {
-        Instant taken = backup.get(InstanceBackupModel.CREATED_AT);
-        return taken != null ? HohenheimMicrocopy.INSTANCE_BACKUP.of("title_taken").withArg("at", taken)
-            : Microcopy.literal("#" + backup.get(InstanceBackupModel.ID));
+    /** Both restores, in the order a row's menu offers them. */
+    private static @NonNull List<PanelAction<Row>> restores() {
+        return List.of(restoreToNew(), restoreInPlace());
     }
 
     /**
-     * Restore-to-new, offered on a complete backup. It ends on the NEW instance with a toast naming it; a restore that
-     * could not bring everything back says so in that toast, at the moment the operator is looking: a bare "restored as
-     * #N" over a record missing its template, variables or config files is the silent degradation the manifest
-     * inventory exists to end.
-     *
-     * AIDEV-NOTE: a Refresh stayed on the backup page, which offered no way to the new record (walked on daystrom,
-     * round r2y); the toast is stashed for the page the redirect lands on, the destroyWithDataAction shape.
+     * Restore-to-new, offered on a complete backup: a run whose page leads to the NEW instance, its finished step
+     * naming it and whatever could not be brought back, at the moment the person is looking. A bare "restored as #N"
+     * over a record missing its template, variables or config files is the silent degradation the manifest inventory
+     * exists to end.
      */
-    private static @NonNull PanelAction<Row> restore() {
+    private static @NonNull PanelAction<Row> restoreToNew() {
         Microcopy verb = HohenheimMicrocopy.INSTANCE_BACKUP.of("restore_new");
-        return PanelAction.<Row, Restored>places(InstanceBackupOperations.RESTORE_BACKUP, ActionPlacement.ROW,
-                (request, outcome) -> {
-                    Microcopy told = outcome.missing() != null
-                        ? HohenheimMicrocopy.INSTANCE_BACKUP.of("restored_new_partial")
-                            .withArg("id", outcome.instanceId())
-                            .withArg("missing", outcome.missing())
-                        : HohenheimMicrocopy.INSTANCE_BACKUP.of("restored_new").withArg("id", outcome.instanceId());
-                    if (outcome.movedPorts() != null) {
-                        told = HohenheimMicrocopy.INSTANCE_BACKUP.of("restored_new_ports_moved").withArg("told", told)
-                            .withArg("ports", outcome.movedPorts());
-                    }
-                    CmsActionResultTranslator.stashSuccess(request.request().conduit(), told);
-                    return CmsActionResult.redirect(new Uri(CmsRoutes.subpage(request.request().panelSlug(),
-                        HohenheimSlugs.INSTANCES, outcome.instanceId(), RecordOverview.SLUG).toUrl()));
-                })
+        return PanelAction.<Row, Restored>placesRun(InstanceBackupOperations.RESTORE_BACKUP, ActionPlacement.ROW)
             .label(verb)
             .icon(Icon.of("clone"))
             // A rare verb in a list read by when and how each backup went: in the row's menu, so a phone keeps the
@@ -318,6 +286,24 @@ public final class InstanceBackupParts {
             .inlineInRow(false)
             .confirmation(ConfirmationSpec.verb(verb, HohenheimMicrocopy.INSTANCE_BACKUP.of("restore_new_confirm"),
                 ActionStyle.DEFAULT))
+            .build();
+    }
+
+    /** Restore in place: destructive, its confirmation naming the instance and the fresh backup taken first. */
+    private static @NonNull PanelAction<Row> restoreInPlace() {
+        Microcopy verb = HohenheimMicrocopy.INSTANCE_BACKUP.of("restore_in_place");
+        ConfirmationSpec confirm = ConfirmationSpec.verb(verb,
+            HohenheimMicrocopy.INSTANCE_BACKUP.of("restore_in_place_confirm_generic"), ActionStyle.DESTRUCTIVE);
+        return PanelAction.<Row, Integer>placesRun(InstanceBackupOperations.RESTORE_BACKUP_IN_PLACE,
+                ActionPlacement.ROW)
+            .label(verb)
+            .icon(Icon.of("clock-rotate-left"))
+            .style(ActionStyle.DESTRUCTIVE)
+            .inlineInRow(false)
+            .confirmation(confirm)
+            .dynamicConfirmation(backup -> confirm.withBody(HohenheimMicrocopy.INSTANCE_BACKUP.of(
+                    "restore_in_place_confirm")
+                .withArg("at", InstanceBackupModel.title(backup))))
             .build();
     }
 }

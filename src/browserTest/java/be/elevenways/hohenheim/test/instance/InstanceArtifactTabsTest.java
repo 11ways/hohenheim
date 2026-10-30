@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.InstanceSnapshotModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
+import be.elevenways.hohenheim.HohenheimRefusalReason;
 import be.elevenways.hohenheim.server.cms.InstanceBackupParts;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
@@ -17,6 +18,7 @@ import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.instance.InstanceBackupOperations;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.wording.DateStyle;
 import be.elevenways.protoblast.common.i18n.wording.Reader;
@@ -27,6 +29,7 @@ import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -223,14 +226,14 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
     }
 
     /**
-     * Restore-to-new stays OPERATOR-ONLY; building a per-instance view did not quietly
-     * widen it. The AUTHORITY is what this proves -- a surface probe alone would pass on
-     * a restore-to-new added as a subpage or a bulk action.
+     * Both restores are offered on the delegated surface too, and the AUTHORITY still decides: a delegate without
+     * BACKUPS on the instance is refused underneath every surface. A surface probe alone would pass on a restore
+     * reached as a subpage or a bulk action.
      */
     @Test
-    void restoreToNewRefusesTheTenantAndStaysOffTheDelegatedSurface() {
-        // 1. A resolvable target, so the tenant call reaches the authority instead of
-        //    dying on an unresolvable one -- the refusal must be the OPERATOR gate.
+    void restoreToNewRefusesADelegateWithoutBackupsWhileTheDelegatedSurfaceOffersIt() {
+        // 1. A resolvable target, so the delegate's call reaches the authority instead of
+        //    dying on an unresolvable one -- the refusal must be the capability gate.
         Row target = Models.get(BackupTargetModel.class).createEmptyRow();
         target.set(BackupTargetModel.NAME, "artifact-tab-target");
         target.set(BackupTargetModel.KIND, "hohenheim:filesystem");
@@ -241,36 +244,28 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
         backup.set(InstanceBackupModel.TARGET_ID, target.get(BackupTargetModel.ID));
         Models.get(InstanceBackupModel.class).save(backup);
         try {
-            // 2. THE CLAIM: the delegate drives restore-to-new directly, bypassing every
-            //    surface -- the authority refuses it BY NAME. Restore-to-new creates an
-            //    instance outside the creation funnel: no create authority, no placement
-            //    decision, no creator grant.
+            // 2. THE CLAIM: the delegate drives restore-to-new directly, bypassing every surface -- the service
+            //    refuses it in the instance tier's uniform words, before the target is even resolved.
             long instancesBefore = Models.get(InstanceModel.class).find().count();
             Throwable[] thrown = new Throwable[1];
             TenantConduits.as(new UserPrincipal(consoleUserId, "Console Only"),
                 () -> thrown[0] = catchThrowable(() ->
                     new InstanceBackups().restoreToNew(backupId, "not-yours", null)));
             assertThat(thrown[0])
-                .withFailMessage("step 2: a tenant-originated restore-to-new was not refused"
-                    + " by the authority -- the missing row action would be the ONLY thing"
-                    + " standing between a delegate and an off-funnel instance")
-                .isInstanceOf(Violations.class);
-            assertThat(((Violations) thrown[0]).all())
-                .as("step 2: and the refusal is the operator-only one, not an incidental"
-                    + " failure that happens to look like a gate")
-                .anyMatch(violation ->
-                    violation.message().key().equals("backup_restore_operator_only"));
+                .withFailMessage("step 2: a restore-to-new by a delegate without backups was not refused")
+                .isInstanceOf(DomainRefusal.class);
+            assertThat(((DomainRefusal) thrown[0]).reason())
+                .as("step 2: and the refusal is the capability gate, not an incidental failure that looks like one")
+                .isEqualTo(HohenheimRefusalReason.INSTANCE_NOT_PERMITTED);
             assertThat(Models.get(InstanceModel.class).find().count())
                 .as("step 2: STATE -- the refused restore created nothing")
                 .isEqualTo(instancesBefore);
 
-            // 3. Secondary anchor: the delegated resource offers no row action either, so the
-            //    tenant is never shown a button that could only fail.
-            assertThat(InstanceBackupParts.manage().actions())
-                .withFailMessage("step 3: the delegated backup resource declares a row action;"
-                    + " restore-to-new is refused underneath it, so a rendered button here"
-                    + " could only fail")
-                .isEmpty();
+            // 3. The delegated resource places both restores; who may run them is the authority's call above.
+            assertThat(InstanceBackupParts.manage().actions()).extracting(action -> action.id())
+                .as("step 3: the delegated backup resource places both restores")
+                .contains(InstanceBackupOperations.RESTORE_BACKUP.id(),
+                    InstanceBackupOperations.RESTORE_BACKUP_IN_PLACE.id());
         } finally {
             // Hand the shared backup row back untargeted, so the tab journeys never meet
             // a target this one introduced, whatever order they run in.

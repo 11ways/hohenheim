@@ -10,8 +10,8 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 /**
  * The refusals Hohenheim answers in its own words: the uniform "not permitted" that never names the missing
  * capability, a dependency that is not ready yet, a build hook shaped after it was revoked, a stored dump a
- * restore cannot use, a database a dump or restore already holds, an unsafe dump staging area, and a restore that
- * failed after it began.
+ * restore cannot use, a database a dump or restore already holds, an unsafe dump staging area, a restore that
+ * failed after it began, and an instance backup a restore cannot use where or how it was asked.
  *
  * AIDEV-NOTE: each {@link #code()} is today's {@code /api/v1} wire code, the violation key {@code ApiConduits.refusal}
  * writes, and each message is the same violations copy the service gates throw, so the API answers a refusal of the
@@ -67,7 +67,37 @@ public enum HohenheimRefusalReason implements DomainRefusal.Reason {
      * the pre-restore backup to recover from, or that the half-restored new database could not be removed.
      */
     DATABASE_RESTORE_FAILED("database_restore_failed", DomainRefusal.Recovery.NEVER,
-        "The restore failed");
+        "The restore failed"),
+
+    /** A restore needs the backup's instance, which no longer exists or which the caller can no longer reach. */
+    BACKUP_SOURCE_GONE("backup_source_gone", DomainRefusal.Recovery.NEVER,
+        "The instance this backup was taken from no longer exists"),
+
+    /**
+     * A tenant's restore-to-new is bound to its instance's approved template, and this instance or backup names none,
+     * or another one.
+     */
+    BACKUP_RESTORE_TEMPLATE_REQUIRED("backup_restore_template_required", DomainRefusal.Recovery.NEVER,
+        "This backup can only be restored by an operator: its instance has no approved template"),
+
+    /** A tenant's restore-to-new lands on its instance's own host, which cannot take it; the words say why. */
+    BACKUP_RESTORE_HOST_REFUSED("backup_restore_host_refused", DomainRefusal.Recovery.AFTER_WAIT,
+        "The host of this instance cannot take the restored copy right now"),
+
+    /** A whole-machine export, an application or a backup carrying host volumes restores only to a new instance. */
+    BACKUP_RESTORE_IN_PLACE_UNSUPPORTED("backup_restore_in_place_unsupported", DomainRefusal.Recovery.NEVER,
+        "This backup cannot be restored in place; restore it as a new instance instead"),
+
+    /** The backup carries a volume its instance no longer declares, so an in-place restore would put it nowhere. */
+    BACKUP_VOLUMES_CHANGED("backup_volumes_changed", DomainRefusal.Recovery.NEVER,
+        "The instance's volumes changed since this backup; restore it as a new instance instead"),
+
+    /**
+     * A restore's run was refused by one of the restore's own checks (the archive, the host, capacity, the create
+     * funnel): the run carries that check's words.
+     */
+    BACKUP_RESTORE_REFUSED("backup_restore_refused", DomainRefusal.Recovery.NEVER,
+        "The restore was refused");
 
     static {
         DomainRefusals.declare(values());

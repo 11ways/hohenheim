@@ -328,11 +328,24 @@ public final class InstanceSnapshots {
 
         InstanceStatus live = resolved.liveStatus();
         requirePresent(live, resolved);
-        boolean wasRunning = live.running();
+        replaceVolumes(this.instances, resolved, support, volumes, tars, credentials, live.running());
+        recordRestore(instanceId, Map.of(HohenheimActivityAction.SNAPSHOT_KEY, snapshotId));
+        Blast.log("SNAPSHOT: restored snapshot", snapshotId, "onto instance", instanceId);
+    }
 
-        // -- the point of no return --------------------------------------------
+    /**
+     * Replace the instance's volumes named in {@code tars} with their contents, the workload recreated around them: the
+     * in-place restore of a snapshot and of a backup. Everything is verified by then; this is the point of no return.
+     *
+     * @param credentials the attachments' credential generations, read before {@code resolved} derived its environment
+     * @throws Violations {@code instance_restore_failed}, the record held in error
+     */
+    static void replaceVolumes(@NonNull InstanceService instances, @NonNull Resolved resolved,
+                               @NonNull VolumeSnapshotSupport support, @NonNull Map<String, String> volumes,
+                               @NonNull Map<String, Path> tars, @NonNull Map<Integer, Integer> credentials,
+                               boolean wasRunning) {
         try {
-            InstanceMaintenanceWindow.run(this.instances, resolved, restoreWindow(wasRunning),
+            InstanceMaintenanceWindow.run(instances, resolved, restoreWindow(wasRunning),
                 () -> {
                     resolved.runtime().destroy(resolved.spec().handle());
                     support.removeVolumesForRestore(resolved.spec(), volumes, tars.keySet());
@@ -343,8 +356,6 @@ public final class InstanceSnapshots {
         } catch (IOException error) {
             throw HohenheimViolations.instanceRefusal("instance_restore_failed", resolved.row(), error);
         }
-        recordRestore(instanceId, Map.of(HohenheimActivityAction.SNAPSHOT_KEY, snapshotId));
-        Blast.log("SNAPSHOT: restored snapshot", snapshotId, "onto instance", instanceId);
     }
 
     /**

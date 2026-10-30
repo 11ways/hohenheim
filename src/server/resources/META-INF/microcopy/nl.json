@@ -6940,6 +6940,30 @@
     "text": "{$told}. Zijn vaste hostpoorten {$ports} waren op deze host al bezet, dus kreeg het vrije die de host kiest.",
     "scope": "instance_backup"
   },
+  "restore_new_step": {
+    "text": "Terugzetten naar een nieuwe instantie",
+    "scope": "instance_backup"
+  },
+  "restore_in_place": {
+    "text": "Ter plaatse terugzetten",
+    "scope": "instance_backup"
+  },
+  "restore_in_place_step": {
+    "text": "Back-up maken, dan terugzetten",
+    "scope": "instance_backup"
+  },
+  "restore_in_place_confirm_generic": {
+    "text": "Eerst wordt een nieuwe back-up van de instantie gemaakt; daarna worden haar volumes vervangen door die van deze back-up. Haar instellingen, variabelen en configuratiebestanden blijven zoals ze zijn.",
+    "scope": "instance_backup"
+  },
+  "restore_in_place_confirm": {
+    "text": "Eerst wordt een nieuwe back-up van de instantie gemaakt; daarna worden haar volumes vervangen door die van de back-up van {$at}. Haar instellingen, variabelen en configuratiebestanden blijven zoals ze zijn.",
+    "scope": "instance_backup"
+  },
+  "restored_in_place": {
+    "text": "De back-up van {$at} is teruggezet; de back-up die net ervoor werd gemaakt, is die van {$before}",
+    "scope": "instance_backup"
+  },
   "test_connection": [
     {
       "text": "Verbinding testen",
@@ -8087,12 +8111,32 @@
     "text": "Laat het leeg en er wordt een toegelaten host met plaats gekozen.",
     "scope": "instance_from_template"
   },
+  "backup_restore_refused": {
+    "text": "Het terugzetten werd geweigerd.",
+    "scope": "violations"
+  },
   "instance_create_not_permitted": {
     "text": "Je mag geen instanties aanmaken",
     "scope": "violations"
   },
-  "backup_restore_operator_only": {
-    "text": "Een back-up terugzetten naar een nieuwe instantie is een beheerdersactie",
+  "backup_source_gone": {
+    "text": "De instantie waarvan deze back-up komt, bestaat niet meer; vraag een beheerder om hem terug te zetten.",
+    "scope": "violations"
+  },
+  "backup_restore_template_required": {
+    "text": "Alleen een beheerder kan deze back-up terugzetten: de instantie heeft geen goedgekeurd sjabloon.",
+    "scope": "violations"
+  },
+  "backup_restore_host_refused": {
+    "text": "De host van deze instantie kan de teruggezette kopie nu niet aannemen.",
+    "scope": "violations"
+  },
+  "backup_restore_in_place_unsupported": {
+    "text": "Deze back-up kan niet ter plaatse worden teruggezet; zet hem terug als nieuwe instantie.",
+    "scope": "violations"
+  },
+  "backup_volumes_changed": {
+    "text": "De volumes van de instantie zijn veranderd sinds deze back-up; zet hem terug als nieuwe instantie.",
     "scope": "violations"
   },
   "unknown_power_action": {
@@ -16232,6 +16276,7 @@
   "attach_install_media": { "text": "{$actor} plaatste installatiemedia in {$subject}", "scope": "hohenheim", "target": "happened" },
   "detach_install_media": { "text": "{$actor} haalde de installatiemedia uit {$subject}", "scope": "hohenheim", "target": "happened" },
   "restore_backup": { "text": "{$actor} herstelde back-up {$subject}", "scope": "hohenheim", "target": "happened" },
+  "restore_backup_in_place": { "text": "{$actor} zette back-up {$subject} ter plaatse terug", "scope": "hohenheim", "target": "happened" },
   "delete_backup": { "text": "{$actor} verwijderde back-up {$subject}", "scope": "hohenheim", "target": "happened" },
   "detach_device": { "text": "{$actor} koppelde apparaat {$subject} los", "scope": "hohenheim", "target": "happened" },
   "delete_instance_database": { "text": "{$actor} koppelde database {$subject} los", "scope": "hohenheim", "target": "happened" },

@@ -6940,6 +6940,30 @@
     "text": "{$told}. Its fixed host ports {$ports} were already held on this host, so it got free ones the host picks.",
     "scope": "instance_backup"
   },
+  "restore_new_step": {
+    "text": "Restore to a new instance",
+    "scope": "instance_backup"
+  },
+  "restore_in_place": {
+    "text": "Restore in place",
+    "scope": "instance_backup"
+  },
+  "restore_in_place_step": {
+    "text": "Back up, then restore",
+    "scope": "instance_backup"
+  },
+  "restore_in_place_confirm_generic": {
+    "text": "A fresh backup of the instance is taken first; then its volumes are replaced with this backup's. Its settings, variables and config files stay as they are.",
+    "scope": "instance_backup"
+  },
+  "restore_in_place_confirm": {
+    "text": "A fresh backup of the instance is taken first; then its volumes are replaced with the backup from {$at}. Its settings, variables and config files stay as they are.",
+    "scope": "instance_backup"
+  },
+  "restored_in_place": {
+    "text": "Restored the backup from {$at}; the backup taken just before is the one from {$before}",
+    "scope": "instance_backup"
+  },
   "test_connection": [
     {
       "text": "Test connection",
@@ -8087,12 +8111,32 @@
     "text": "Leave it empty and an admitted host with room for it is picked.",
     "scope": "instance_from_template"
   },
+  "backup_restore_refused": {
+    "text": "The restore was refused.",
+    "scope": "violations"
+  },
   "instance_create_not_permitted": {
     "text": "You are not allowed to create instances",
     "scope": "violations"
   },
-  "backup_restore_operator_only": {
-    "text": "Restoring a backup into a new instance is an operator action",
+  "backup_source_gone": {
+    "text": "The instance this backup was taken from no longer exists; ask an operator to restore it.",
+    "scope": "violations"
+  },
+  "backup_restore_template_required": {
+    "text": "This backup can only be restored by an operator: its instance has no approved template.",
+    "scope": "violations"
+  },
+  "backup_restore_host_refused": {
+    "text": "The host of this instance cannot take the restored copy right now.",
+    "scope": "violations"
+  },
+  "backup_restore_in_place_unsupported": {
+    "text": "This backup cannot be restored in place; restore it as a new instance instead.",
+    "scope": "violations"
+  },
+  "backup_volumes_changed": {
+    "text": "The instance's volumes changed since this backup; restore it as a new instance instead.",
     "scope": "violations"
   },
   "unknown_power_action": {
@@ -16232,6 +16276,7 @@
   "attach_install_media": { "text": "{$actor} put install media in {$subject}", "scope": "hohenheim", "target": "happened" },
   "detach_install_media": { "text": "{$actor} took the install media out of {$subject}", "scope": "hohenheim", "target": "happened" },
   "restore_backup": { "text": "{$actor} restored backup {$subject}", "scope": "hohenheim", "target": "happened" },
+  "restore_backup_in_place": { "text": "{$actor} restored backup {$subject} in place", "scope": "hohenheim", "target": "happened" },
   "delete_backup": { "text": "{$actor} deleted backup {$subject}", "scope": "hohenheim", "target": "happened" },
   "detach_device": { "text": "{$actor} detached device {$subject}", "scope": "hohenheim", "target": "happened" },
   "delete_instance_database": { "text": "{$actor} detached database {$subject}", "scope": "hohenheim", "target": "happened" },

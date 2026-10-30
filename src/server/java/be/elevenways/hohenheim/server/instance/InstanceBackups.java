@@ -20,6 +20,7 @@ import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.HohenheimCapabilities;
+import be.elevenways.hohenheim.HohenheimRefusalReason;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
@@ -40,6 +41,7 @@ import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
 import be.elevenways.hohenheim.server.backup.UploadLedger;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
+import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.hohenheim.server.runtime.ImageIdentity;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
@@ -59,6 +61,8 @@ import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
 import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
@@ -546,22 +550,54 @@ public final class InstanceBackups {
     }
 
     /**
-     * The FIRST gate of every restore-to-new entry point, so a tenant learns nothing
-     * beyond the refusal itself.
-     *
-     * Restore-to-new CREATES an instance, and it does so outside the creation funnel
-     * (InstanceTemplates.createFromTemplate): no create authority, no placement
-     * decision, no creator grant, and an image taken from the archive's manifest
-     * rather than an approved template. Every one of those is a tenant-facing gate,
-     * so this path is OPERATOR-ONLY until it routes through the funnel -- refused
-     * loudly rather than quietly producing a record its creator cannot even see.
-     *
-     * @throws Violations when the write originates from a tenant
+     * What a tenant's restore-to-new is bound to: the caller, the source instance's host and environment, and the
+     * approved template the restored record must carry.
      */
-    private static void refuseTenantRestore() {
-        if (TenantWrites.isTenantOriginated()) {
-            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("backup_restore_operator_only"));
+    private record TenantRestore(@NonNull AccessContext ctx, int serverId, @Nullable Integer environmentId,
+                                 int templateId) {
+    }
+
+    /**
+     * The tenant half of restore-to-new, or null for an operator or the system: the create funnel's own gates over
+     * the backup's source instance, asked BEFORE anything of the backup's target resolves, so a tenant learns nothing
+     * of the control plane's backup configuration.
+     *
+     * AIDEV-NOTE: a tenant restores only a backup of an instance it still holds BACKUPS on, onto that instance's own
+     * host, into that instance's environment when it has one (Projects.createInto then pins the creation owner the
+     * quota charges and the manage grant names, as it does for a create into that environment), and only while the
+     * source's template is approved: the create authority, placement and approved-template gates createFromTemplate
+     * asks, the source standing in for the create form.
+     *
+     * @throws DomainRefusal INSTANCE_NOT_PERMITTED, BACKUP_SOURCE_GONE or BACKUP_RESTORE_TEMPLATE_REQUIRED
+     * @throws Violations {@code instance_create_not_permitted} or {@code template_not_approved}
+     */
+    private static @Nullable TenantRestore tenantRestore(@NonNull Row backup) {
+        if (TenantWrites.actsAsOperator()) {
+            return null;
         }
+        AccessContext ctx = TenantWrites.acting();
+        Integer sourceId = backup.get(InstanceBackupModel.INSTANCE_ID);
+        if (ctx == null || !HohenheimAccess.hasInstanceCapability(ctx, sourceId, HohenheimCapabilities.BACKUPS)) {
+            throw new DomainRefusal(HohenheimRefusalReason.INSTANCE_NOT_PERMITTED,
+                "restore-to-new of backup " + backup.get(InstanceBackupModel.ID) + " without backups on its instance");
+        }
+        Row source = Models.get(InstanceModel.class).findById(sourceId);
+        if (source == null) {
+            throw new DomainRefusal(HohenheimRefusalReason.BACKUP_SOURCE_GONE,
+                "backup " + backup.get(InstanceBackupModel.ID) + " names instance " + sourceId + ", which is gone");
+        }
+        if (!HohenheimAccess.canCreateInstances(ctx)) {
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("instance_create_not_permitted"));
+        }
+        Integer templateId = source.get(InstanceModel.TEMPLATE_ID);
+        Row template = templateId == null ? null : Models.get(InstanceTemplateModel.class).findById(templateId);
+        if (template == null) {
+            throw new DomainRefusal(HohenheimRefusalReason.BACKUP_RESTORE_TEMPLATE_REQUIRED,
+                "instance " + sourceId + " has no template a tenant restore could be bound to");
+        }
+        InstanceTemplates.requireSelectable(template, ctx);
+        return new TenantRestore(ctx, ServerModel.canonicalServerId(source.get(InstanceModel.SERVER_ID)),
+            source.get(InstanceModel.ENVIRONMENT_ID), templateId);
     }
 
     /**
@@ -636,21 +672,23 @@ public final class InstanceBackups {
      *
      * @param newName name for the new instance, or null for a derived one
      * @param serverSpelling target host (any canonical spelling), or null to let placement pick one; never the
-     *                       source host by default, because a restore elsewhere is the recovery for a dead one
+     *                       source host by default, because a restore elsewhere is the recovery for a dead one. A
+     *                       tenant's restore ignores it and lands on the source's own host ({@link #tenantRestore}).
      * @return the NEW instance, deployed and running, with whatever could not be restored
      * @throws Violations naming the refusal or failure
+     * @throws DomainRefusal a tenant gate's refusal, or BACKUP_RESTORE_HOST_REFUSED when the source's host cannot take
+     *                       a tenant's restore
      */
     public @NonNull Restored restoreToNew(int backupId, @Nullable String newName,
                                           @Nullable Object serverSpelling) {
-        // BEFORE resolving anything: a tenant must learn only that this lane is
-        // operator-only. Resolving the target first made a broken target answer
-        // backup_target_missing instead, which is a probe into control-plane state.
-        refuseTenantRestore();
         Row backup = Models.get(InstanceBackupModel.class).findById(backupId);
         if (backup == null || !InstanceBackupModel.isRestorable(backup)) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("backup_not_restorable")
                 .withArg("id", backupId));
         }
+        // BEFORE the target resolves: a broken target answering backup_target_missing to a tenant would be a probe
+        // into control-plane state.
+        tenantRestore(backup);
         BackupTarget target = BackupTargetKinds.targetFor(
             backup.get(InstanceBackupModel.TARGET_ID));
         return restoreToNew(backup, target, newName, serverSpelling);
@@ -660,31 +698,31 @@ public final class InstanceBackups {
     public @NonNull Restored restoreToNew(@NonNull Row backup, @NonNull BackupTarget target,
                                           @Nullable String newName,
                                           @Nullable Object serverSpelling) {
-        refuseTenantRestore();
         if (!InstanceBackupModel.isRestorable(backup)) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("backup_not_restorable")
                 .withArg("id", backup.get(InstanceBackupModel.ID)));
         }
-        String key = backup.get(InstanceBackupModel.REMOTE_KEY);
+        TenantRestore tenant = tenantRestore(backup);
+        if (tenant == null) {
+            return restoreToNewOwned(backup, target, newName, serverSpelling, null);
+        }
+        String environmentField = InstanceModel.ENVIRONMENT_ID.getName();
+        return Projects.createInto(null, tenant.environmentId(), tenant.ctx(), environmentField, environmentField,
+            () -> restoreToNewOwned(backup, target, newName, tenant.serverId(), tenant));
+    }
+
+    /** {@link #restoreToNew}'s body, run as the creation owner the restore charges. */
+    private @NonNull Restored restoreToNewOwned(@NonNull Row backup, @NonNull BackupTarget target,
+                                                @Nullable String newName, @Nullable Object serverSpelling,
+                                                @Nullable TenantRestore tenant) {
         String stamp = UtcStamp.now();
         Path staging = stagingRoot().resolve("restore-" + backup.get(InstanceBackupModel.ID)
             + "-" + stamp);
         BackupArchive.Opened opened = null;
         try {
             // -- verification, before ANYTHING exists --------------------------
-            Path archive = staging.resolve("archive.hib");
             try {
-                Files.createDirectories(staging);
-                target.retrieve(key, archive);
-                String recordedSha = backup.get(InstanceBackupModel.SHA256);
-                String actualSha = BackupArchive.sha256Of(archive);
-                if (recordedSha != null && !recordedSha.equals(actualSha)) {
-                    throw new IOException("Retrieved artifact does not match the recorded"
-                        + " sha256 (recorded " + recordedSha + ", retrieved " + actualSha
-                        + "). The backup is corrupt and is refused whole -- nothing was"
-                        + " restored from it");
-                }
-                opened = BackupArchive.openVerified(archive, staging, keyring());
+                opened = openVerified(backup, target, staging);
             } catch (IOException corrupt) {
                 throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("backup_corrupt")
                     .withArg("reason", HohenheimViolations.reasonOf(corrupt)));
@@ -695,6 +733,24 @@ public final class InstanceBackups {
                 throw Violations.ofField("kind", manifest.kind(),
                     HohenheimMicrocopy.VIOLATIONS.of("instance_kind_unknown").withArg("kind", manifest.kind()));
             }
+            // Everything the archive names but this controller cannot honour lands in notRestored (see Restored).
+            List<String> notRestored = new ArrayList<>();
+            InstanceProfile profile = manifest.profile();
+            if (profile == null) {
+                notRestored.add("this backup carries a version " + manifest.version()
+                    + " manifest, which predates the template/variable/config-file"
+                    + " inventory: the restored instance has no template binding, no"
+                    + " variables and no config files, and its crash policy fell back to"
+                    + " " + InstanceModel.CRASH_NONE);
+            }
+            // A tenant's binding is judged first of all the archive's facts: before the host, capacity and runtime
+            // image are asked about or bound, so a refused tenant learns nothing of them and leaves nothing behind.
+            Integer templateId = localTemplateId(profile, notRestored);
+            if (tenant != null && (templateId == null || templateId != tenant.templateId())) {
+                throw new DomainRefusal(HohenheimRefusalReason.BACKUP_RESTORE_TEMPLATE_REQUIRED,
+                    "the backup's template " + templateId + " is not its instance's approved "
+                        + tenant.templateId());
+            }
             Map<String, Object> settings = InstanceKindFields.typedNumbers(InstanceModel.SETTINGS, manifest.kind(),
                 manifest.restoredSettings(InstanceModel.SETTINGS.resolveSchemaForSiblingValue(manifest.kind())));
             int serverId = serverSpelling != null
@@ -704,6 +760,10 @@ public final class InstanceBackups {
             // A fixed host port the target host already holds (the original beside it) becomes one it picks.
             PortsOnCopy ports = PortsOnCopy.of(restoredKind, settings, serverId);
             Microcopy refused = destinationRefusal(serverId, restoredKind, ports.settings(), manifest.installMedia());
+            if (refused != null && tenant != null) {
+                throw new DomainRefusal(HohenheimRefusalReason.BACKUP_RESTORE_HOST_REFUSED,
+                    "the source's host " + serverId + " cannot take the restore", refused);
+            }
             if (refused != null) {
                 throw Violations.ofForm(refused);
             }
@@ -729,18 +789,7 @@ public final class InstanceBackups {
             // AIDEV-NOTE: the columns BESIDE name/kind/settings/host are set here, before
             // the save, not stamped afterwards: crash policy and template binding are
             // ordinary create-time facts, and a record that exists for even one write
-            // without them is a record whose hooks judged the wrong instance. Everything
-            // the archive named but this controller cannot honour lands in notRestored
-            // instead of being dropped -- see Restored.
-            List<String> notRestored = new ArrayList<>();
-            InstanceProfile profile = manifest.profile();
-            if (profile == null) {
-                notRestored.add("this backup carries a version " + manifest.version()
-                    + " manifest, which predates the template/variable/config-file"
-                    + " inventory: the restored instance has no template binding, no"
-                    + " variables and no config files, and its crash policy fell back to"
-                    + " " + InstanceModel.CRASH_NONE);
-            }
+            // without them is a record whose hooks judged the wrong instance.
             Row record = Models.get(InstanceModel.class).createEmptyRow();
             record.set(InstanceModel.NAME, newName != null && !newName.isBlank()
                 ? newName : manifest.instanceName() + "-restored-" + stamp);
@@ -750,14 +799,20 @@ public final class InstanceBackups {
             record.set(InstanceModel.RUNTIME_IMAGE_ID, runtimeImageId);
             record.set(InstanceModel.CRASH_POLICY, profile != null
                 ? profile.crashPolicy() : InstanceModel.CRASH_NONE);
-            record.set(InstanceModel.TEMPLATE_ID, localTemplateId(profile, notRestored));
+            record.set(InstanceModel.TEMPLATE_ID, templateId);
             record.set(InstanceModel.BACKUP_TARGET_ID, localTargetId(profile, notRestored));
             noteUnrestorableGrouping(profile, notRestored);
+            if (tenant != null) {
+                record.set(InstanceModel.ENVIRONMENT_ID, tenant.environmentId());
+            }
             // No game address, deliberately: the same name on this copy would take the players from the original
             // (GameAddresses); the operator points it here on the copy's Configuration when that is what they want.
             Models.get(InstanceModel.class).save(record);
             int newId = record.get(InstanceModel.ID);
             try {
+                // Before the variable and file writes, as the create funnel plants it: the creator owns the record
+                // from the moment it exists. An operator's restore plants nothing (RecordOwners.creationOwnerSubjects).
+                HohenheimAccess.grantCreatorManage(InstanceModel.MODEL_ID, newId, TenantWrites.acting());
                 return landRestore(backup, manifest, opened, staging, profile, application, record, newId,
                     notRestored, ports.moved());
             } catch (RuntimeException failed) {
@@ -878,11 +933,164 @@ public final class InstanceBackups {
             if (record != null && !InstanceVolumes.declaredFor(newId).isEmpty()) {
                 InstanceVolumes.destroyAll(newId, ServerModel.nameOf(record.get(InstanceModel.SERVER_ID)));
             }
+            // After the destroy, never before: the destroy asks for a capability the creator's manage implies. When
+            // the destroy fails the record stays, held in error and charged to its creator, who keeps the grant that
+            // lets them see it and delete it.
+            HohenheimAccess.revokeCreatorManage(InstanceModel.MODEL_ID, newId, TenantWrites.acting());
         } catch (RuntimeException cleanupFailed) {
             failure.addSuppressed(cleanupFailed);
             Blast.log("BACKUP: could not take back the record of a failed restore", newId, "-",
                 cleanupFailed.getMessage());
         }
+    }
+
+    /**
+     * Retrieve the backup's artifact into {@code staging} and open it, refusing an artifact whose sha256 differs from
+     * the recorded one or that does not authenticate.
+     *
+     * @throws IOException naming why the backup cannot be trusted; nothing was restored from it
+     */
+    private static BackupArchive.@NonNull Opened openVerified(@NonNull Row backup, @NonNull BackupTarget target,
+                                                              @NonNull Path staging) throws IOException {
+        Path archive = staging.resolve("archive.hib");
+        Files.createDirectories(staging);
+        target.retrieve(backup.get(InstanceBackupModel.REMOTE_KEY), archive);
+        String recordedSha = backup.get(InstanceBackupModel.SHA256);
+        String actualSha = BackupArchive.sha256Of(archive);
+        if (recordedSha != null && !recordedSha.equals(actualSha)) {
+            throw new IOException("Retrieved artifact does not match the recorded"
+                + " sha256 (recorded " + recordedSha + ", retrieved " + actualSha
+                + "). The backup is corrupt and is refused whole -- nothing was"
+                + " restored from it");
+        }
+        return BackupArchive.openVerified(archive, staging, keyring());
+    }
+
+    /**
+     * Restore a complete backup ONTO the instance it was taken from: the archive verified first, then a fresh backup
+     * of the instance taken, then its volumes replaced with the archive's (InstanceSnapshots.replaceVolumes).
+     *
+     * AIDEV-NOTE: DATA only, as a snapshot restore is: settings, variables and config files stay as they are now, and
+     * the confirmation says so. A whole-machine export, an application and a backup carrying host volumes are refused
+     * with BACKUP_RESTORE_IN_PLACE_UNSUPPORTED (restore-to-new is their way back): the first two replace more than
+     * volumes, and a host volume may be mounted by another instance. The fresh backup is taken under the same claim of
+     * the instance as the restore, so nothing is written between the two.
+     *
+     * @return the id of the backup taken just before the restore
+     * @throws DomainRefusal BACKUP_SOURCE_GONE, BACKUP_RESTORE_IN_PLACE_UNSUPPORTED or INSTANCE_NOT_PERMITTED
+     * @throws Violations naming the verification, pre-restore backup or restore failure
+     */
+    public int restoreInPlace(int backupId) {
+        Row backup = Models.get(InstanceBackupModel.class).findById(backupId);
+        if (backup == null || !InstanceBackupModel.isRestorable(backup)) {
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("backup_not_restorable")
+                .withArg("id", backupId));
+        }
+        Integer instanceId = backup.get(InstanceBackupModel.INSTANCE_ID);
+        if (instanceId == null) {
+            throw new DomainRefusal(HohenheimRefusalReason.BACKUP_SOURCE_GONE,
+                "backup " + backupId + " names no instance");
+        }
+        // Replacing the instance's data ends what it holds now, and the fresh backup taken first is a backup: the
+        // destroy authority and BACKUPS, asked before anything of the instance or the target is read. A trashed
+        // instance answers this refusal too.
+        HohenheimAccess.requireDestroyPermitted(instanceId);
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimCapabilities.BACKUPS);
+        if (Models.get(InstanceModel.class).findById(instanceId) == null) {
+            throw new DomainRefusal(HohenheimRefusalReason.BACKUP_SOURCE_GONE,
+                "backup " + backupId + " names instance " + instanceId + ", which is gone");
+        }
+        BackupTarget target = BackupTargetKinds.targetFor(backup.get(InstanceBackupModel.TARGET_ID));
+        return this.instances.operations().exclusive(instanceId, InstanceOperationLock.Contention.REFUSE,
+            () -> restoreInPlaceLocked(backup, instanceId, target));
+    }
+
+    /**
+     * Whether a backup can be restored in place, read from its non-sensitive summary as the offer asks it: a
+     * volume-lane payload of a kind that is no application, carrying no host volumes. {@link #restoreInPlace} asks
+     * the same of the opened archive.
+     */
+    public static boolean restorableInPlace(@NonNull Row backup) {
+        Map<String, Object> summary = RawValues.map((Object) backup.get(InstanceBackupModel.SUMMARY));
+        String kindId = RawValues.nonBlankString(summary.get("kind"));
+        return kindId != null && InstanceKinds.getHandler(kindId) != null && !InstanceKinds.isReleaseManaged(kindId)
+            && !BackupManifest.PAYLOAD_INSTANCE_EXPORT.equals(summary.get("payload"))
+            && InstanceBackupModel.hostVolumesOf(backup).isEmpty();
+    }
+
+    /** {@link #restoreInPlace}'s body; the caller holds the instance's operation lock. */
+    private int restoreInPlaceLocked(@NonNull Row backup, int instanceId, @NonNull BackupTarget target) {
+        int backupId = backup.get(InstanceBackupModel.ID);
+        Resolved resolved = this.instances.resolve(instanceId);
+        InstanceOperationGuard.requireOperable(resolved.row());
+        String kind = resolved.row().get(InstanceModel.KIND);
+        if (InstanceKinds.isReleaseManaged(kind) || resolved.runtime() instanceof NativeSnapshotSupport) {
+            throw unsupportedInPlace(backupId, "its instance is a " + kind);
+        }
+        Path staging = stagingRoot().resolve("restore-in-place-" + backupId + "-" + UtcStamp.now());
+        BackupArchive.Opened opened = null;
+        try {
+            // -- verification, BEFORE any live state changes ---------------------
+            try {
+                opened = openVerified(backup, target, staging);
+            } catch (IOException corrupt) {
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("backup_corrupt")
+                    .withArg("reason", HohenheimViolations.reasonOf(corrupt)));
+            }
+            BackupManifest manifest = opened.manifest();
+            if (!kind.equals(manifest.kind()) || BackupManifest.PAYLOAD_INSTANCE_EXPORT.equals(manifest.payload())) {
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("backup_payload_mismatch")
+                    .withArg("payload", manifest.payload())
+                    .withArg("kind", kind));
+            }
+            if (!manifest.hostVolumes().isEmpty()) {
+                throw unsupportedInPlace(backupId, "it carries host volumes");
+            }
+            VolumeSnapshotSupport support = InstanceSnapshots.requireSupport(resolved);
+            resolved.requireImage();
+            Map<String, String> volumes = InstanceSnapshots.logicalVolumes(resolved);
+            Map<String, Path> tars = BackupArchive.extractVolumes(opened, staging.resolve("volumes"));
+            if (!volumes.keySet().containsAll(tars.keySet())) {
+                throw new DomainRefusal(HohenheimRefusalReason.BACKUP_VOLUMES_CHANGED,
+                    "backup " + backupId + " carries volumes " + tars.keySet() + ", instance " + instanceId
+                        + " declares " + volumes.keySet());
+            }
+            RestoreCapacity.require(resolved.serverId(), manifest.totalVolumeBytes());
+            InstanceSnapshots.requirePresent(resolved.liveStatus(), resolved);
+
+            // -- the fresh backup, then the point of no return --------------------
+            int before = backupNow(instanceId);
+            // Read BEFORE resolve derives the environment (InstanceDatabaseLinks.credentialGenerations says why); the
+            // backup's cold capture redeployed the workload, so it is resolved again.
+            Map<Integer, Integer> credentials = InstanceDatabaseLinks.credentialGenerations(instanceId);
+            Resolved current = this.instances.resolve(instanceId);
+            InstanceStatus live = current.liveStatus();
+            InstanceSnapshots.requirePresent(live, current);
+            InstanceSnapshots.replaceVolumes(this.instances, current, support, volumes, tars, credentials,
+                live.running());
+            History.event(Models.get(InstanceModel.class), instanceId, Change.fact(
+                HohenheimActivityAction.RESTORED_BACKUP, Map.of(HohenheimActivityAction.BACKUP_KEY, backupId)));
+            Blast.log("BACKUP: restored backup", backupId, "in place onto instance", instanceId,
+                "after backup", before);
+            return before;
+        } catch (IOException unreadable) {
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("backup_corrupt")
+                .withArg("reason", HohenheimViolations.reasonOf(unreadable)));
+        } finally {
+            if (opened != null) {
+                try {
+                    Files.deleteIfExists(opened.zip());
+                } catch (IOException ignored) {
+                    // staging cleanup below covers it
+                }
+            }
+            FileTrees.deleteQuietly(staging);
+        }
+    }
+
+    private static @NonNull DomainRefusal unsupportedInPlace(int backupId, @NonNull String why) {
+        return new DomainRefusal(HohenheimRefusalReason.BACKUP_RESTORE_IN_PLACE_UNSUPPORTED,
+            "backup " + backupId + " cannot be restored in place: " + why);
     }
 
     /**

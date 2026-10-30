@@ -26,11 +26,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
 
 /**
- * "Restore to new instance" on a backup's page ends where the restore did: on the new instance, with a toast naming it.
+ * "Restore to new instance" on a backup's page is a background run: the operator lands on the run's page, which says
+ * when the restore finished, names the new instance and leads to it.
  *
  * AIDEV-NOTE: walked on daystrom 2026-10-13 (round r2y), the restore finished while the operator saw no feedback; the
- * result step answered a Refresh, which returns to the backup page and offers no way to the new instance.
- *
+ * result step answered a Refresh, which returns to the backup page and offers no way to the new instance. The run page
+ * is that feedback now, for a restore that may take minutes.
  * @author Jelle De Loecker
  * @since  0.1.0
  */
@@ -77,18 +78,17 @@ class BackupRestoreLandingTest extends HohenheimTestBase {
         page.waitForSelector(option);
         page.click(option);
 
-        // 2. Confirmed, the restore creates the new instance.
+        // 2. Confirmed, the restore runs in the background: the operator lands on its run page at once.
         page.click(DIALOG + " pl-button[data-cms-confirm-ok]");
+        awaitStep("step 2: the run page opens", () -> page.url().contains("/admin/instance-backups/run/"));
         awaitStep("step 2: the restore created a new instance", () -> newestInstanceId() > newestBefore);
         int newId = newestInstanceId();
 
-        // 3. The operator is told, by a toast naming the new instance.
-        awaitStep("step 3: a toast tells the restore finished", () -> page.locator("pl-toast").count() > 0);
-        assertThat(page.locator("pl-toast").first().textContent())
-            .as("step 3: the toast names the new instance").contains("#" + newId);
-
-        // 4. And lands on the new instance, the record the restore made.
-        awaitStep("step 4: the page is the new instance's", () -> page.url().contains("/admin/instances/" + newId));
+        // 3. The finished run names the new instance and leads to it.
+        awaitStep("step 3: the run page names the new instance",
+            () -> page.content().contains("#" + newId));
+        awaitStep("step 3: and leads to it", () -> page.locator("a[href*='/admin/instances/" + newId + "']")
+            .count() > 0);
     }
 
     private static int newestInstanceId() {

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
@@ -16,15 +17,15 @@ import be.elevenways.zenit.common.orm.query.SortOrder;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * One portable, encrypted instance export written to a {@link BackupTargetModel}:
  * config, variables and volume data in a single checksummed archive, restorable to a
- * NEW instance. Distinct from {@link InstanceSnapshotModel} by design -- a snapshot
+ * NEW instance or, as data only, in place. Distinct from {@link InstanceSnapshotModel} by design -- a snapshot
  * shares the instance's failure domain, a backup is what survives losing it.
- *
  * AIDEV-NOTE: only a row whose {@link BackupStatus} is restorable AND that names its committed key is restorable
  * ({@link #isRestorable}), and a row is stamped complete only after the target confirmed the committed artifact
  * byte-for-byte (stored sha read back from the target, never from memory) -- an interrupted upload leaves a failed
@@ -97,6 +98,19 @@ public class InstanceBackupModel extends Model {
      */
     public static boolean isRestorable(@NonNull Row backup) {
         return BackupStatus.restorable(backup.get(STATUS), backup.get(REMOTE_KEY));
+    }
+
+    /**
+     * A backup is named by when it was taken, read on each reader's own clock.
+     *
+     * AIDEV-NOTE: never by its instance, which may be a trashed one the reader cannot read; it answers for every row,
+     * so no page falls back to the model's class name ("InstanceBackup #1"). A plain method, not a schema display
+     * field, because a display field is also the derived record source's SEARCH field.
+     */
+    public static @NonNull Microcopy title(@NonNull Row backup) {
+        Instant taken = backup.get(CREATED_AT);
+        return taken != null ? HohenheimMicrocopy.INSTANCE_BACKUP.of("title_taken").withArg("at", taken)
+            : Microcopy.literal("#" + backup.get(ID));
     }
 
     /** The summary key naming the data disks a backup carries, written by the manifest's summary. */

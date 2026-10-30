@@ -11,15 +11,18 @@ import be.elevenways.hohenheim.server.instance.InstanceSnapshots;
 import be.elevenways.hohenheim.test.RecordedChanges;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.InstanceBackupOperations;
+import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.hohenheim.HohenheimCapabilities;
+import be.elevenways.hohenheim.HohenheimRefusalReason;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.backup.BackupTarget;
 import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
@@ -35,6 +38,7 @@ import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.util.Uuids;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.auth.model.GrantModel;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
@@ -43,18 +47,25 @@ import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.FormEntry;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.Select;
+import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.operation.OperationRunStatus;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Accountability;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.test.support.HistoryTestSupport;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.zenit.server.operation.OperationRequest;
+import be.elevenways.zenit.server.operation.OperationRun;
+import be.elevenways.zenit.server.operation.OperationRuns;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -268,40 +279,195 @@ class InstanceBackupsTest {
     }
 
     /**
-     * Restore-to-new is OPERATOR-ONLY: a tenant, even one holding {@code backups} on
-     * the source instance, is refused by name -- restore creates an instance outside
-     * the creation funnel, and every gate that funnel carries is tenant-facing.
+     * A tenant restores a backup to a new instance through the create funnel's own gates: BACKUPS on the instance,
+     * create authority and the instance's approved template, then the instance's own host and its creator owning the
+     * copy. Each gate refuses by name and creates nothing.
      */
     @Test
-    void restoreToNewRefusesTenantsByNameAndCreatesNothing() {
+    void aTenantRestoresToNewThroughTheCreateGatesAndOwnsTheCopy() {
         Db.run(datasource, () -> {
             InstanceService service = new InstanceService();
             InstanceBackups backups = new InstanceBackups();
-            int instanceId = instanceRecord("backup-operator-only", hostId);
+            Row template = Models.get(InstanceTemplateModel.class).createEmptyRow();
+            template.set(InstanceTemplateModel.NAME, "backup-tenant-template");
+            template.set(InstanceTemplateModel.KIND, FakeNativeDaemons.FakeNativeKind.ID.toString());
+            template.set(InstanceTemplateModel.APPROVED_AT, Now.instant());
+            // The image the instance runs: the tenant image policy admits a restored copy only on its template's image.
+            template.set(InstanceTemplateModel.SETTINGS, Map.of("image", "fake/image"));
+            Models.get(InstanceTemplateModel.class).save(template);
+            int instanceId = instanceRecord("backup-tenant-source", hostId);
+            Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(instanceId))
+                .assign(InstanceModel.TEMPLATE_ID, template.get(InstanceTemplateModel.ID)).updateAll();
             service.deploy(instanceId);
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 0);
-            int backupId = backups.backupNow(instanceId, targetId, target);
-            Row backup = Models.get(InstanceBackupModel.class).findById(backupId);
+            Row backup = Models.get(InstanceBackupModel.class).findById(backups.backupNow(instanceId, targetId,
+                target));
+            UUID tenantId = ApiSupport.user("tenant@backup-restore.test", "Restoring Tenant");
+            AccessContext tenant = AccessContext.of(TenantConduits.stubFor(new UserPrincipal(tenantId, "Tenant")));
+            List<Integer> restored = new ArrayList<>();
+            List<Row> grants = new ArrayList<>();
+            try {
+                // 1. Viewing the instance is not enough: the restore is refused in the instance tier's own words
+                //    before any run, and nothing is made.
+                RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, instanceId,
+                    HohenheimCapabilities.VIEW, true);
+                long before = Models.get(InstanceModel.class).find().count();
+                Throwable unpermitted = catchThrowable(() -> OperationPipeline.invoke(tenantRestore(backup, tenant)));
+                assertThat(unpermitted).as("step 1: refused").isInstanceOf(DomainRefusal.class);
+                assertThat(((DomainRefusal) unpermitted).reason()).as("step 1: as not permitted")
+                    .isEqualTo(HohenheimRefusalReason.INSTANCE_NOT_PERMITTED);
 
-            UUID managerId = ApiSupport.user("manager@backup-restore.test", "Manager");
-            RecordGrants.grant(GrantSubjectType.USER, managerId, InstanceModel.MODEL_ID, instanceId,
-                HohenheimCapabilities.MANAGE, true);
-            UserPrincipal manager = new UserPrincipal(managerId, "Manager");
+                // 2. With BACKUPS but no create authority, the run is refused by the create funnel's name.
+                RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, instanceId,
+                    HohenheimCapabilities.BACKUPS, true);
+                OperationRun noCreate = restoreRun(tenantRestore(backup, tenant), "step 2");
+                assertThat(noCreate.status()).as("step 2: refused").isEqualTo(OperationRunStatus.REFUSED);
+                assertThat(noCreate.outcome()).as("step 2: without create authority").isNotNull()
+                    .extracting(Microcopy::key).isEqualTo("instance_create_not_permitted");
 
-            long instancesBefore = Models.get(InstanceModel.class).find().count();
-            Throwable[] thrown = new Throwable[1];
-            TenantConduits.as(manager, () -> thrown[0] = catchThrowable(() ->
-                backups.restoreToNew(backup, target, "not-yours", null)));
-            assertThat(violationKeys(thrown[0]))
-                .as("step 1: the tenant restore is refused by name")
-                .isEqualTo("backup_restore_operator_only ");
-            assertThat(Models.get(InstanceModel.class).find().count())
-                .as("step 2: and no instance record was created by the refused attempt")
-                .isEqualTo(instancesBefore);
+                // 3. With create authority but the template unapproved, refused naming the template.
+                grants.add(GrantService.createDirectGrant(GrantSubjectType.USER, tenantId,
+                    HohenheimAccess.INSTANCES_CREATE.value(), true));
+                Models.get(InstanceTemplateModel.class).find()
+                    .where(InstanceTemplateModel.ID.eq(template.get(InstanceTemplateModel.ID)))
+                    .assign(InstanceTemplateModel.APPROVED_AT, (Instant) null).updateAll();
+                OperationRun unapproved = restoreRun(tenantRestore(backup, tenant), "step 3");
+                assertThat(unapproved.status()).as("step 3: refused").isEqualTo(OperationRunStatus.REFUSED);
+                assertThat(unapproved.outcome()).as("step 3: naming the unapproved template").isNotNull()
+                    .extracting(Microcopy::key).isEqualTo("template_not_approved");
+                assertThat(Models.get(InstanceModel.class).find().count())
+                    .as("step 1-3: no refused restore made a record").isEqualTo(before);
 
-            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 7);
-            service.destroy(instanceId);
+                // 4. Approved again, the tenant is offered no host and its restore lands on the instance's own host,
+                //    bound to the same template, owned by the tenant.
+                Models.get(InstanceTemplateModel.class).find()
+                    .where(InstanceTemplateModel.ID.eq(template.get(InstanceTemplateModel.ID)))
+                    .assign(InstanceTemplateModel.APPROVED_AT, Now.instant()).updateAll();
+                FormEntry pick = OperationPipeline.inputForm(tenantRestore(backup, tenant)).entries().stream()
+                    .filter(entry -> entry.name().equals("serverId")).findFirst().orElseThrow();
+                assertThat(((Select<?>) pick).options().resolve(EditContext.of(tenant)))
+                    .as("step 4: a tenant is offered no host").isEmpty();
+                int copy = restoredInstance(restoreRun(tenantRestore(backup, tenant), "step 4"), "step 4");
+                restored.add(copy);
+                Row copied = Models.get(InstanceModel.class).findById(copy);
+                assertThat((Integer) copied.get(InstanceModel.SERVER_ID))
+                    .as("step 4: on the instance's own host").isEqualTo(hostId);
+                assertThat((Integer) copied.get(InstanceModel.TEMPLATE_ID))
+                    .as("step 4: bound to the approved template").isEqualTo(template.get(InstanceTemplateModel.ID));
+                assertThat(HohenheimAccess.canManageInstance(tenant, copy))
+                    .as("step 4: and the tenant owns the copy").isTrue();
+            } finally {
+                Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 7);
+                restored.forEach(service::destroy);
+                service.destroy(instanceId);
+                grants.forEach(grant -> GrantService.deleteDirectGrant(GrantSubjectType.USER, tenantId,
+                    grant.get(GrantModel.ID)));
+                Models.get(InstanceTemplateModel.class).delete(template.get(InstanceTemplateModel.ID));
+            }
         });
+    }
+
+    /**
+     * Restore in place replaces the instance's volumes with the backup's (a REPLACE: what was written since is gone)
+     * after taking a fresh backup that holds exactly what it replaced. It needs DESTROY on the instance, and a
+     * whole-machine export is never offered it.
+     */
+    @Test
+    void restoreInPlaceTakesAFreshBackupFirstAndReplacesTheVolumes() throws Exception {
+        try (FakeIncusSocket daemon = FakeIncusSocket.start()) {
+        Db.run(datasource, () -> {
+            InstanceService service = new InstanceService();
+            InstanceBackups backups = new InstanceBackups();
+            // A host whose daemon answers its storage pool, which the restore's capacity check asks.
+            int volumeHost = HostFixtures.admittedIncusHost("in-place-host");
+            Models.get(ServerModel.class).find().where(ServerModel.ID.eq(volumeHost))
+                .assign(ServerModel.INCUS_URL, daemon.url()).updateAll();
+            int instanceId = volumeInstanceRecord("backup-in-place", volumeHost);
+            service.deploy(instanceId);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 0);
+            Map<String, String> data = FakeNativeDaemons.volumesOf(volumeHost)
+                .get(FakeNativeDaemons.handleOf(instanceId) + "-data").data;
+            int nativeId = instanceRecord("backup-in-place-native", hostId);
+            try {
+                data.put("note", "first");
+                Row backup = Models.get(InstanceBackupModel.class).findById(backups.backupNow(instanceId, targetId,
+                    target));
+                data.put("note", "second");
+                data.put("extra", "written later");
+
+                // 1. A tenant holding BACKUPS but not DESTROY, and one holding DESTROY but not BACKUPS (the fresh
+                //    backup is a backup), are each refused before anything is read or backed up.
+                long backupsBefore = backupCountOf(instanceId);
+                for (String held : List.of(HohenheimCapabilities.BACKUPS, HohenheimCapabilities.DESTROY)) {
+                    UUID tenantId = ApiSupport.user("tenant-" + held + "@backup-in-place.test", "Holds " + held);
+                    RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, instanceId, held,
+                        true);
+                    AccessContext tenant = AccessContext.of(TenantConduits.stubFor(new UserPrincipal(tenantId,
+                        "Tenant")));
+                    Throwable unpermitted = catchThrowable(() -> OperationPipeline.invoke(
+                        inPlaceRequest(backup, tenant)));
+                    assertThat(unpermitted).as("step 1 (%s only): refused", held).isInstanceOf(DomainRefusal.class);
+                    assertThat(((DomainRefusal) unpermitted).reason()).as("step 1 (%s only): as not permitted", held)
+                        .isEqualTo(HohenheimRefusalReason.INSTANCE_NOT_PERMITTED);
+                }
+                assertThat(backupCountOf(instanceId)).as("step 1: no backup was taken").isEqualTo(backupsBefore);
+                assertThat(data).as("step 1: the data is untouched").containsEntry("note", "second");
+
+                // 2. The fresh backup goes to the instance's own target: without one the restore is refused by name
+                //    and nothing is touched.
+                OperationRun untargeted = restoreRun(inPlaceRequest(backup, TenantConduits.operator()), "step 2");
+                assertThat(untargeted.status()).as("step 2: refused").isEqualTo(OperationRunStatus.REFUSED);
+                assertThat(untargeted.outcome()).as("step 2: naming the missing target").isNotNull()
+                    .extracting(Microcopy::key).isEqualTo("instance_backup_target_none");
+                assertThat(FakeNativeDaemons.volumesOf(volumeHost).get(FakeNativeDaemons.handleOf(instanceId) + "-data")
+                    .data).as("step 2: the data is untouched").containsEntry("note", "second");
+
+                // 3. With its target, the operator restores in place: the data is the backup's, and what was written
+                //    since is gone.
+                Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(instanceId))
+                    .assign(InstanceModel.BACKUP_TARGET_ID, targetId).updateAll();
+                OperationRun run = restoreRun(inPlaceRequest(backup, TenantConduits.operator()), "step 3");
+                assertThat(run.status()).as("step 3: the restore succeeded (%s)", run.outcome())
+                    .isEqualTo(OperationRunStatus.SUCCEEDED);
+                Map<String, String> restoredData = FakeNativeDaemons.volumesOf(volumeHost)
+                    .get(FakeNativeDaemons.handleOf(instanceId) + "-data").data;
+                assertThat(restoredData).as("step 3: the volume holds the backup's contents, replaced not merged")
+                    .isEqualTo(Map.of("note", "first"));
+
+                // 4. THE ASSERTION: the fresh backup taken first holds exactly what was replaced, so restoring it in
+                //    place brings that back.
+                Row fresh = Models.get(InstanceBackupModel.class).find()
+                    .where(InstanceBackupModel.INSTANCE_ID.eq(instanceId))
+                    .orderBy(InstanceBackupModel.ID, SortOrder.DESC).first();
+                assertThat((Integer) fresh.get(InstanceBackupModel.ID)).as("step 4: a fresh backup was taken")
+                    .isGreaterThan(backup.get(InstanceBackupModel.ID));
+                assertThat(InstanceBackupModel.isRestorable(fresh)).as("step 4: and it is complete").isTrue();
+                backups.restoreInPlace(fresh.get(InstanceBackupModel.ID));
+                assertThat(FakeNativeDaemons.volumesOf(volumeHost)
+                        .get(FakeNativeDaemons.handleOf(instanceId) + "-data")
+                        .data).as("step 4: restoring it brings back what the first restore replaced")
+                    .isEqualTo(Map.of("note", "second", "extra", "written later"));
+
+                // 5. A whole-machine export is never offered the in-place restore, and refuses it by name.
+                service.deploy(nativeId);
+                Row nativeBackup = Models.get(InstanceBackupModel.class).findById(backups.backupNow(nativeId,
+                    targetId, target));
+                assertThat(OperationPipeline.offer(InstanceBackupOperations.RESTORE_BACKUP_IN_PLACE,
+                        TenantConduits.operator(), nativeBackup))
+                    .as("step 5: not offered").isInstanceOf(OperationPipeline.Offer.Hidden.class);
+                Throwable unsupported = catchThrowable(() -> backups.restoreInPlace(
+                    nativeBackup.get(InstanceBackupModel.ID)));
+                assertThat(unsupported).as("step 5: refused").isInstanceOf(DomainRefusal.class);
+                assertThat(((DomainRefusal) unsupported).reason()).as("step 5: as unsupported in place")
+                    .isEqualTo(HohenheimRefusalReason.BACKUP_RESTORE_IN_PLACE_UNSUPPORTED);
+            } finally {
+                Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 7);
+                service.destroy(nativeId);
+                service.destroy(instanceId);
+                Models.get(ServerModel.class).delete(volumeHost);
+            }
+        });
+        }
     }
 
     /**
@@ -366,19 +532,18 @@ class InstanceBackupsTest {
                         null))))
                     .as("step 3: a new instance of the kind is not placed where its image is missing")
                     .isEqualTo("host_prepared_image_missing ");
-                InstanceBackupOperations.Restored picked = (InstanceBackupOperations.Restored) OperationPipeline
-                    .invoke(restoreRequest(backup).form(Map.of())).value();
-                restored.add(picked.instanceId());
-                assertThat((Integer) Models.get(InstanceModel.class).findById(picked.instanceId())
+                int picked = restoredInstance(restoreRun(restoreRequest(backup).form(Map.of()), "step 3"), "step 3");
+                restored.add(picked);
+                assertThat((Integer) Models.get(InstanceModel.class).findById(picked)
                         .get(InstanceModel.SERVER_ID))
                     .as("step 3: picked for you lands on the host that accepts it, not the dead source")
                     .isEqualTo(spareId);
 
                 // 4. Named explicitly through the form, the spare is honoured.
-                InstanceBackupOperations.Restored named = (InstanceBackupOperations.Restored) OperationPipeline
-                    .invoke(restoreRequest(backup).form(Map.of("serverId", spareId))).value();
-                restored.add(named.instanceId());
-                assertThat((Integer) Models.get(InstanceModel.class).findById(named.instanceId())
+                int named = restoredInstance(restoreRun(restoreRequest(backup).form(Map.of("serverId", spareId)),
+                    "step 4"), "step 4");
+                restored.add(named);
+                assertThat((Integer) Models.get(InstanceModel.class).findById(named)
                         .get(InstanceModel.SERVER_ID))
                     .as("step 4: the picked host is where the restore lands").isEqualTo(spareId);
             } finally {
@@ -720,22 +885,23 @@ class InstanceBackupsTest {
                 assertThat(Models.get(InstanceModel.class).find().count()).as("step 3: and nothing was created")
                     .isEqualTo(beforeFull);
 
-                // 3b. The same refusal through the operation, then the same invocation once the pool has room: a
-                //     refused restore leaves its invocation free, so pressing the dialog's submit again runs it.
+                // 3b. The same refusal through the operation: its background run ends REFUSED in the same words, and
+                //     once the pool has room the dialog's submit, asked again, runs the restore.
                 Row diskBackup = Models.get(InstanceBackupModel.class).findById(withDisk);
-                UUID invocation = UUID.randomUUID();
                 landing.daemon.poolTotalBytes = 2L * 1024 * 1024 * 1024;
-                assertThat(violationKeys(catchThrowable(() -> OperationPipeline.invoke(restoreRequest(diskBackup)
-                        .invocation(invocation).form(Map.of("serverId", landingId))))))
-                    .as("step 3b: the operation refuses for capacity").isEqualTo("restore_capacity ");
+                OperationRun noRoom = restoreRun(restoreRequest(diskBackup).form(Map.of("serverId", landingId)),
+                    "step 3b");
+                assertThat(noRoom.status()).as("step 3b: the operation's run is refused").isEqualTo(
+                    OperationRunStatus.REFUSED);
+                assertThat(noRoom.outcome()).as("step 3b: for capacity").isNotNull()
+                    .extracting(Microcopy::key).isEqualTo("restore_capacity");
                 landing.daemon.poolTotalBytes = 100L * 1024 * 1024 * 1024;
-                InstanceBackupOperations.Restored retried = (InstanceBackupOperations.Restored) OperationPipeline
-                    .invoke(restoreRequest(diskBackup).invocation(invocation).form(Map.of("serverId", landingId)))
-                    .value();
-                restored.add(retried.instanceId());
-                assertThat((Integer) Models.get(InstanceModel.class).findById(retried.instanceId())
+                int retried = restoredInstance(restoreRun(restoreRequest(diskBackup)
+                    .form(Map.of("serverId", landingId)), "step 3b"), "step 3b");
+                restored.add(retried);
+                assertThat((Integer) Models.get(InstanceModel.class).findById(retried)
                         .get(InstanceModel.SERVER_ID))
-                    .as("step 3b: the same invocation submitted again ran the restore").isEqualTo(landingId);
+                    .as("step 3b: asked again, the restore ran").isEqualTo(landingId);
 
                 // 4. A backup an older build wrote names the disk but carries no volume: the restore is refused naming
                 //    the disk, and it leaves no half-made record (one in error offered Restart) and no volume behind.
@@ -785,6 +951,57 @@ class InstanceBackupsTest {
     private static OperationRequest<Row, ?, ?> restoreRequest(Row backup) {
         return OperationRequest.of(InstanceBackupOperations.RESTORE_BACKUP, CmsPlacementSurface.ADMIN_ACTION)
             .caller(TenantConduits.operator()).subjects(List.of(backup));
+    }
+
+    /** A restore asked through its operation, waited until its background run ended. */
+    private static OperationRun restoreRun(OperationRequest<Row, ?, ?> request, String step) {
+        Long run = OperationPipeline.invoke(request).run();
+        assertThat(run).as(step + ": the restore is a background run").isNotNull();
+        return PutOnlineJourneyTest.ended(run, TenantConduits.operator(), step);
+    }
+
+    /**
+     * The instance a succeeded restore-to-new run made: the one record its finished step names, read as the newest.
+     */
+    private static int restoredInstance(OperationRun run, String step) {
+        assertThat(run.status()).as(step + ": the restore run succeeded (%s)", run.outcome())
+            .isEqualTo(OperationRunStatus.SUCCEEDED);
+        assertThat(OperationRuns.recentFor(InstanceOperations.INSTANCE, String.valueOf(newestInstanceId()), 5,
+                TenantConduits.operator())).extracting(OperationRun::id)
+            .as(step + ": the run is attached to the instance it made").contains(run.id());
+        return newestInstanceId();
+    }
+
+    private static int newestInstanceId() {
+        return Models.get(InstanceModel.class).find().orderBy(InstanceModel.ID, SortOrder.DESC).first()
+            .get(InstanceModel.ID);
+    }
+
+    /** Restore-to-new as the tenant, its form left blank as a tenant's offers nothing. */
+    private static OperationRequest<Row, ?, ?> tenantRestore(Row backup, AccessContext tenant) {
+        return OperationRequest.of(InstanceBackupOperations.RESTORE_BACKUP, CmsPlacementSurface.ADMIN_ACTION)
+            .caller(tenant).subjects(List.of(backup)).form(Map.of());
+    }
+
+    private static OperationRequest<Row, ?, ?> inPlaceRequest(Row backup, AccessContext caller) {
+        return OperationRequest.of(InstanceBackupOperations.RESTORE_BACKUP_IN_PLACE, CmsPlacementSurface.ADMIN_ACTION)
+            .caller(caller).subjects(List.of(backup));
+    }
+
+    private static long backupCountOf(int instanceId) {
+        return Models.get(InstanceBackupModel.class).find().where(InstanceBackupModel.INSTANCE_ID.eq(instanceId))
+            .count();
+    }
+
+    /** An instance of the VOLUME-lane fake kind, with one logical volume declared. */
+    private static int volumeInstanceRecord(String name, int serverId) {
+        Row row = Models.get(InstanceModel.class).createEmptyRow();
+        row.set(InstanceModel.NAME, name);
+        row.set(InstanceModel.KIND, FakeNativeDaemons.FakeVolumeSnapshotKind.ID.toString());
+        row.set(InstanceModel.SETTINGS, Map.of("image", "fake/image", "volumes", Map.of("data", "/var/data")));
+        row.set(InstanceModel.SERVER_ID, serverId);
+        Models.get(InstanceModel.class).save(row);
+        return row.get(InstanceModel.ID);
     }
 
     private static void stampLastSeen(int serverId, Instant at) {
