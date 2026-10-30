@@ -33,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class HostProbeImageTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final String FINGERPRINT = "0eed34fbcb0643ae1a08546f904a3329d75e7690638a582371edd3268a8b4e31";
 

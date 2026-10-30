@@ -52,7 +52,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class InstanceHistoryJourneyTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final UUID OPERATOR = Uuids.v7();
     private static final UUID SFTP_WRITER = Uuids.v7();

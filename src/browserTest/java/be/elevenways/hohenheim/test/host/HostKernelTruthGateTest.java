@@ -51,7 +51,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class HostKernelTruthGateTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final String SSH_KEY =
         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";

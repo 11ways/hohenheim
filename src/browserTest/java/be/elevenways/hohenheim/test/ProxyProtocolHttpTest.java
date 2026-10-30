@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ProxyProtocolHttpTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static boolean initialized;
     private ProxyServer proxy;

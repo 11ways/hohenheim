@@ -61,7 +61,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Browser test base for Hohenheim. Authenticates via zenit-auth: seeds an admin user and mints
  * a session, injected as the auth cookie so the (zenit-auth-gated) admin pages are reachable.
  *
- * AIDEV-NOTE: every class runs on zenit's served app ({@link HohenheimServedApp#served()}): a database of its own,
+ * AIDEV-NOTE: every class runs on zenit's served app ({@link HohenheimServedApp#app()}): a database of its own,
  * the JVM's one runtime and one server port (the browser's caches key the bundle by origin), and an admin session
  * seeded over each database, {@link #freshSeededDatabase()} included.
  */
@@ -71,7 +71,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 public abstract class HohenheimTestBase extends ZenitBrowserTestBase {
 
     @RegisterExtension
-    protected static final ServedApp APP = HohenheimServedApp.served().keepingServerForJvm().with(new AdminSession());
+    protected static final ServedApp APP = HohenheimServedApp.app().keepingServerForJvm().with(new AdminSession());
 
     protected static String sessionToken;
     protected static String csrfToken;

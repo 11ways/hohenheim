@@ -31,7 +31,7 @@ class VolumeBackendProbeTest {
 
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     @Test
     @DisplayName("the probe reads the filesystem, and an unrecognised one refuses")

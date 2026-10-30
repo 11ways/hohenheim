@@ -45,7 +45,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class DatabaseBackupAttentionTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final long GIB = 1024L * 1024 * 1024;
 

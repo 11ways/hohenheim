@@ -42,7 +42,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ProteusRealmGuardTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static OptInWatch watch() {
         return OptInWatch.install(HohenheimSettings.ProxyAuth.PROTEUS_ALLOW_PRIVATE_NETWORKS,

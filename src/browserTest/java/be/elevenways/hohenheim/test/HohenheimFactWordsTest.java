@@ -51,7 +51,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class HohenheimFactWordsTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final LocaleChain EN = LocaleChain.ofTags("en");
     private static final LocaleChain NL = LocaleChain.ofTags("nl");

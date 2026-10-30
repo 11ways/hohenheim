@@ -37,7 +37,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class UpstreamKindVocabularyTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     // The instance-link invariant is a write hook boot installs (HohenheimWriteHooks, after
     // TenantWrites), so the class boots instead of relying on an earlier class having done so.

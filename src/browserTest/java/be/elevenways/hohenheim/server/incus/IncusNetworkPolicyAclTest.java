@@ -29,7 +29,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class IncusNetworkPolicyAclTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     /** Names and labels are controller-namespaced, so this needs a real identity. */
 

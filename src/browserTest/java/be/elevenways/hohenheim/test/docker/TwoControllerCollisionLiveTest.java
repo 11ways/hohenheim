@@ -49,7 +49,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class TwoControllerCollisionLiveTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final Path SOCKET = Path.of("/var/run/docker.sock");
     private static final String IMAGE = TestImages.ALPINE;

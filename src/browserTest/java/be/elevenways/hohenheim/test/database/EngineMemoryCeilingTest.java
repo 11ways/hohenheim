@@ -59,7 +59,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class EngineMemoryCeilingTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     /**
      * A declared footprint must leave at least a fifth of itself spare at the measured

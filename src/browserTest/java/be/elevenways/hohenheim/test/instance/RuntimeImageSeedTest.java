@@ -34,7 +34,7 @@ class RuntimeImageSeedTest {
 
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     @Test
     void artifactCompositionPreservesPackagedRuntimeAndPinsStagingMetadata() throws Exception {

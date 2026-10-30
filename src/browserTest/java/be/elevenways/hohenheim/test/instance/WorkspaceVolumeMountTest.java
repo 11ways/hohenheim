@@ -60,7 +60,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class WorkspaceVolumeMountTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final String KIND = WorkspaceKind.ID.toString();
     private static final String DATA_PATH = "/srv/hoh-vol";

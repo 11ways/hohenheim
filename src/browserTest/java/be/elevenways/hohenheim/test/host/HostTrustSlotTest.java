@@ -39,7 +39,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class HostTrustSlotTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     /** A syntactically real known_hosts line; nothing here ever connects. */
     private static final String SSH_KEY =

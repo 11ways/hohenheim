@@ -36,7 +36,7 @@ class RollbackActionsAgreeTest {
 
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     @Test
     void bothRollbacksConfirmWithTheirVerbAndAnswerWithTheirRun() {

@@ -56,7 +56,7 @@ class DatabaseLinkRejoinTest {
     private static final String PREFIX = "rejoin-";
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static SqlDatasource datasource;
     private static FakeDockerDaemon daemon;

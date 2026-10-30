@@ -34,7 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class BanEnforcementTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final String KEY = "ban-enforce-test-key";
     private static boolean initialized = false;

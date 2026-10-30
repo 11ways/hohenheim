@@ -55,7 +55,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class DatabaseServiceTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static PrivateNetns netns;
 

@@ -45,7 +45,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DatabaseProvisionPoolTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final Duration BOUND = Duration.ofSeconds(20);
 

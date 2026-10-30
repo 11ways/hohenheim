@@ -60,7 +60,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * live-lane proof, not something this in-memory Docker runtime pretends to implement. */
 class ApplicationBackupRecoveryTest {
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final String IMAGE = "sha256:" + "a".repeat(64);
     private static final byte[] IMAGE_BYTES = "immutable exported image fixture".getBytes(StandardCharsets.UTF_8);

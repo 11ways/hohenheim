@@ -46,7 +46,7 @@ class InstanceKindOfferTest {
 
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static List<String> optionValues(FormEntry entry) {
         assertThat(entry).as("the kind entry is a Select").isInstanceOf(Select.class);

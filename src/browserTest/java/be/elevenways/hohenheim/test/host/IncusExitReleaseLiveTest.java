@@ -33,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class IncusExitReleaseLiveTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     // AIDEV-NOTE: unique per live class BY REQUIREMENT (see LiveIncusHost.authorizeKey).
     private static final String HOST = "live-exit-release";

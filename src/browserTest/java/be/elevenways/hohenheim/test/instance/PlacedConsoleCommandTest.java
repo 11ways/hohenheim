@@ -67,7 +67,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class PlacedConsoleCommandTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final Duration WAIT = Duration.ofSeconds(10);
     private static final String HOST = "placed-console-host";

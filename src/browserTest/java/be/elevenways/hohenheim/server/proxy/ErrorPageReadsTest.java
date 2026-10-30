@@ -31,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ErrorPageReadsTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final String UNKNOWN_HOST = "nobody.error-page.test";
 

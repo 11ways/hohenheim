@@ -45,7 +45,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class WorkspacePushPolicyTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static SqlDatasource datasource;
     private static int hostId;

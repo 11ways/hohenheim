@@ -44,7 +44,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ProxyAuthGateTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static boolean initialized = false;
     private static ProxyServer proxy;

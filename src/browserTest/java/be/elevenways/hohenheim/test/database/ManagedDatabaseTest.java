@@ -55,7 +55,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class ManagedDatabaseTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static PrivateNetns netns;
     private static SqlDatasource datasource;

@@ -50,7 +50,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class ControlPlaneBackupTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final String HOOK_URL = "https://hooks.example.com/services/cp-backup-token-X1";
 

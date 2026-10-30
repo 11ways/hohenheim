@@ -71,7 +71,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AlertsTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone().with(new LanWebhookAuthority());
+    static final ServedApp APP = HohenheimServedApp.app().with(new LanWebhookAuthority());
 
     /** The test host declares its LAN webhook authority before the runtime seals boot declarations. */
     private static final class LanWebhookAuthority implements ServedAppBinding {

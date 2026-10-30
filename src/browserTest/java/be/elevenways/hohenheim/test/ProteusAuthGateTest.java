@@ -52,7 +52,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ProteusAuthGateTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final String GATED = "hohenheim.site.gated";
     private static final String ADMIN = "hohenheim.site.admin";

@@ -33,7 +33,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class RestoreCapacityLiveTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final String HOST = "live-capacity-incus";
     private static final String CLIENT = "hohenheim-live-capacity";

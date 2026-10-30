@@ -43,7 +43,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class AccessListEnforcementTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static ProxyServer proxy;
     private static HttpServer upstream;

@@ -27,7 +27,7 @@ class HostTrustReleaseTest {
 
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     @Test
     void removingAnIncusHostGivesBackOnlyItsOwnTrustEntry() throws Exception {

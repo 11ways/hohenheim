@@ -69,7 +69,7 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
 class SoftDeleteJourneyTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final String PREFIX = "softdel-";
     private static final String SITE_BUCKET = OwnerBudget.SITES.bucketOf("");

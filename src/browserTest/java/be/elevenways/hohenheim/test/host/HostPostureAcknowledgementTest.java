@@ -84,7 +84,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class HostPostureAcknowledgementTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final String PREFIX = "ack-";
     private static final String BUCKET_A = "ack-tenant-a";

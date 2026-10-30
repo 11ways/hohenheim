@@ -37,7 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DisplayNameLocalizationTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     /** Where the browserTest source root's classes live; see {@link #ships}. */
     private static final String TEST_PACKAGE = "be.elevenways.hohenheim.test.";

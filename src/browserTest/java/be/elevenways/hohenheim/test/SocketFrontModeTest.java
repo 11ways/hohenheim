@@ -37,7 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SocketFrontModeTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final String KEY = "socket-front-test-key";
 

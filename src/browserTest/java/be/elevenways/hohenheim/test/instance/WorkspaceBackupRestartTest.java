@@ -41,7 +41,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class WorkspaceBackupRestartTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static BackupLaneFixture fixture;
     private static FakeWorkspaceDaemon daemon;

@@ -41,7 +41,7 @@ import static org.assertj.core.api.Assertions.tuple;
 class TenantUpstreamDialTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static ProxyServer proxy;
     private static HttpServer upstream;

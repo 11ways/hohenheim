@@ -23,7 +23,7 @@ class SpamserviceInstallationModelTest {
 
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     /**
      * The stub is SEEDED, not migrated (it moved out of M041 with the 2026-08-13 migration

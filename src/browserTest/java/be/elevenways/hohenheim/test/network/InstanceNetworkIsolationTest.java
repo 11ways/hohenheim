@@ -51,7 +51,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class InstanceNetworkIsolationTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
     private static final String CLIENT_IMAGE = TestImages.ALPINE;

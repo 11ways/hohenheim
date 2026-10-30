@@ -78,7 +78,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class UpstreamProtocolTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static boolean initialized = false;
     private ProxyServer proxy;

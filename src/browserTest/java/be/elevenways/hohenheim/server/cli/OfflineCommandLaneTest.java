@@ -6,7 +6,7 @@ import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.HohenheimRoles;
-import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.hohenheim.server.HohenheimHost;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.migration.InstallsAt;
@@ -43,6 +43,7 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -63,7 +64,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class OfflineCommandLaneTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
+
+    private static final HohenheimHost HOST = new HohenheimHost();
 
     private static final String EMAIL = "locked-out-admin@hohenheim.local";
     private static final String FORGOTTEN = "the forgotten password";
@@ -94,12 +97,12 @@ class OfflineCommandLaneTest {
         // 1. A normal boot pays for none of it: no discovery scan, no settings reload, no
         //    pool. The lane only engages when the invocation names an option.
         Datasource beforeAnything = Datasources.getDefault();
-        assertThat(OfflineBoot.runIfRequested(new String[0], line -> { }))
+        assertThat(offline(new String[0], line -> { }))
             .as("step 1: an argument-less boot must not claim the run")
             .isFalse();
-        assertThat(OfflineBoot.runIfRequested(new String[] {"serve"}, line -> { }))
-            .as("step 1: a non-option argument must not claim the run")
-            .isFalse();
+        assertThatThrownBy(() -> offline(new String[] {"serve"}, line -> { }))
+            .as("step 1: a non-option argument is refused, the gate's answer before anything opens")
+            .isInstanceOf(OfflineCommandException.class);
         assertThat(Datasources.getDefault())
             .as("step 1: a normal boot must not have opened a second datasource")
             .isSameAs(beforeAnything);
@@ -108,7 +111,7 @@ class OfflineCommandLaneTest {
         //    own migrated commands next to the framework's recovery command. This is the
         //    assertion that was impossible before ServerMain dispatched anything at all.
         List<String> help = new ArrayList<>();
-        assertThat(OfflineBoot.runIfRequested(new String[] {OfflineCommands.HELP_FLAG}, help::add))
+        assertThat(offline(new String[] {OfflineCommands.HELP_FLAG}, help::add))
             .as("step 2: --offline-help must claim the run")
             .isTrue();
         assertThat(String.join("\n", help))
@@ -132,7 +135,7 @@ class OfflineCommandLaneTest {
             .as("step 3: the fixture password must be installed before recovery")
             .isTrue();
 
-        assertThat(OfflineBoot.runIfRequested(new String[] {
+        assertThat(offline(new String[] {
             SetPasswordOfflineCommand.FLAG,
             SetPasswordOfflineCommand.EMAIL_OPTION, EMAIL,
             SetPasswordOfflineCommand.PASSWORD_OPTION, CHOSEN
@@ -157,7 +160,7 @@ class OfflineCommandLaneTest {
         Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET, "");
         Datasource beforeLane = Datasources.getDefault();
-        assertThatThrownBy(() -> OfflineBoot.runIfRequested(
+        assertThatThrownBy(() -> offline(
                 new String[] {ListControlPlaneBackupsCommand.FLAG}, line -> { }))
             .as("step 4: the command must reach the database-backed destination check")
             .isInstanceOf(IllegalStateException.class)
@@ -175,7 +178,7 @@ class OfflineCommandLaneTest {
         //    hohenheim's own per-command guards are DELETED: whichever command wins discovery
         //    decides, so one unguarded command (zenit-auth's --set-password) reopened the hole
         //    for every other, and a consumer could not close that from its own side.
-        assertThatThrownBy(() -> OfflineBoot.runIfRequested(new String[] {
+        assertThatThrownBy(() -> offline(new String[] {
                 RotateEncryptionKeyCommand.FLAG, ReencryptSecretsCommand.FLAG}, line -> { }))
             .as("step 5: two key-rotation steps in one invocation must refuse")
             .isInstanceOf(OfflineCommandException.class)
@@ -186,12 +189,12 @@ class OfflineCommandLaneTest {
         // 5b. The SAME trap across lanes, which is why a per-lane guard was never enough:
         //     a pair spanning two lanes is picked apart by the very same discovery-order
         //     dispatch. Whichever of these wins discovery, the invocation is refused.
-        assertThatThrownBy(() -> OfflineBoot.runIfRequested(new String[] {
+        assertThatThrownBy(() -> offline(new String[] {
                 PurgeHistorySecretsCommand.FLAG, RotateEncryptionKeyCommand.FLAG}, line -> { }))
             .as("step 5b: two commands from DIFFERENT lanes must refuse just as loudly")
             .isInstanceOf(OfflineCommandException.class)
             .hasMessageContaining("Exactly ONE runs per invocation");
-        assertThatThrownBy(() -> OfflineBoot.runIfRequested(new String[] {
+        assertThatThrownBy(() -> offline(new String[] {
                 HistorySecretSurveyCommand.FLAG, PurgeHistorySecretsCommand.FLAG}, line -> { }))
             .as("step 5b: survey plus purge is ambiguous and must never silently pick one")
             .isInstanceOf(OfflineCommandException.class)
@@ -200,7 +203,7 @@ class OfflineCommandLaneTest {
         // 5c. The gap a consumer could NOT close: --set-password never guarded anything, so
         //     if it won discovery the companion silently vanished. The framework refusal is
         //     the only thing that can cover it, and it does.
-        assertThatThrownBy(() -> OfflineBoot.runIfRequested(new String[] {
+        assertThatThrownBy(() -> offline(new String[] {
                 SetPasswordOfflineCommand.FLAG,
                 SetPasswordOfflineCommand.EMAIL_OPTION, EMAIL,
                 SetPasswordOfflineCommand.PASSWORD_OPTION, CHOSEN,
@@ -212,7 +215,7 @@ class OfflineCommandLaneTest {
 
         // 6. An option value is REQUIRED where the flag needs one, and the refusal names
         //    the flag instead of running against nothing.
-        assertThatThrownBy(() -> OfflineBoot.runIfRequested(
+        assertThatThrownBy(() -> offline(
                 new String[] {RestoreControlPlaneCommand.FLAG}, line -> { }))
             .as("step 6: restore without an archive pointer must refuse by name")
             .isInstanceOf(OfflineCommandException.class)
@@ -223,7 +226,7 @@ class OfflineCommandLaneTest {
         //     database, so it must neither boot a server on it nor touch it. Through the host
         //     console the refusal is a message and exit status 1, never a stack trace.
         Datasource beforeTypo = Datasources.getDefault();
-        assertThatThrownBy(() -> OfflineBoot.runIfRequested(new String[] {
+        assertThatThrownBy(() -> offline(new String[] {
                 "--restore-control-plan", "archive.zrec"}, line -> { }))
             .as("step 6b: an undeclared option is refused by name")
             .isInstanceOf(OfflineCommandException.class)
@@ -233,8 +236,8 @@ class OfflineCommandLaneTest {
             .isSameAs(beforeTypo);
         List<String> errors = new ArrayList<>();
         int[] exitStatus = {-1};
-        assertThat(OfflineBoot.runIfRequested(new String[] {"--restore-control-plan", "x"},
-                new HostConsole(line -> { }, errors::add, status -> exitStatus[0] = status)))
+        HostConsole typoConsole = new HostConsole(line -> { }, errors::add, status -> exitStatus[0] = status);
+        assertThat(ServerZenitRuntime.answerLanes(new String[] {"--restore-control-plan", "x"}, typoConsole, HOST))
             .as("step 6b: the host face claims the run so main never boots")
             .isTrue();
         assertThat(exitStatus[0]).as("step 6b: with exit status 1").isEqualTo(1);
@@ -253,10 +256,10 @@ class OfflineCommandLaneTest {
         //    application ENTRY POINT reaches it, which is the half that was missing. The
         //    same method main() calls, so no dispatch can exist in a test and not in the
         //    deployed jar -- and a normal boot still falls through it untouched.
-        assertThat(ServerMain.runCommandLineOnly(new String[] {OfflineCommands.HELP_FLAG}))
+        assertThat(ServerZenitRuntime.answerLanes(new String[] {OfflineCommands.HELP_FLAG}, HostConsole.SYSTEM, HOST))
             .as("step 8: the entry point must claim an offline invocation")
             .isTrue();
-        assertThat(ServerMain.runCommandLineOnly(new String[0]))
+        assertThat(ServerZenitRuntime.answerLanes(new String[0], HostConsole.SYSTEM, HOST))
             .as("step 8: the entry point must fall through to a normal boot without flags")
             .isFalse();
 
@@ -265,8 +268,8 @@ class OfflineCommandLaneTest {
         List<String> entryErrors = new ArrayList<>();
         int[] entryExit = {-1};
         Datasource beforeEntryTypo = Datasources.getDefault();
-        assertThat(ServerMain.runCommandLineOnly(new String[] {"--run-migrations", "--no-such-flag"},
-                new HostConsole(line -> { }, entryErrors::add, status -> entryExit[0] = status)))
+        assertThat(ServerZenitRuntime.answerLanes(new String[] {"--run-migrations", "--no-such-flag"},
+                new HostConsole(line -> { }, entryErrors::add, status -> entryExit[0] = status), HOST))
             .as("step 8b: the entry point claims the refused invocation so main never boots")
             .isTrue();
         assertThat(entryExit[0]).as("step 8b: with exit status 1").isEqualTo(1);
@@ -287,7 +290,7 @@ class OfflineCommandLaneTest {
         //    the exact invocation the broken lane effectively performed.
         Path live = ControlPlaneBackups.databaseFile();
         Datasource registered = Datasources.getDefault();
-        assertThatThrownBy(() -> OfflineBoot.runIfRequested(new String[] {
+        assertThatThrownBy(() -> offline(new String[] {
                 RehearseMigrationsCommand.FLAG, live.toString()}, line -> { }))
             .as("step 1: the live database is refused by file identity")
             .isInstanceOf(OfflineCommandException.class)
@@ -315,7 +318,7 @@ class OfflineCommandLaneTest {
         // 3. The rehearsal migrates THE COPY, under the strict posture a deploy boots with,
         //    and reports exactly that.
         List<String> out = new ArrayList<>();
-        InstallsAt.withIntegrityMode("fail", () -> assertThat(OfflineBoot.runIfRequested(new String[] {
+        InstallsAt.withIntegrityMode("fail", () -> assertThat(offline(new String[] {
                 RehearseMigrationsCommand.FLAG, copy.toString()}, out::add))
             .as("step 3: the rehearsal claims the run")
             .isTrue());
@@ -354,7 +357,7 @@ class OfflineCommandLaneTest {
         HohenheimRoles.resetForTesting();
         try {
             // 1. It answers with the stamps.
-            assertThat(OfflineBoot.runIfRequested(new String[] {BuildInfoCommand.FLAG}, out::add))
+            assertThat(offline(new String[] {BuildInfoCommand.FLAG}, out::add))
                 .as("step 1: --build-info claims the run").isTrue();
             assertThat(out).as("step 1: the stamps were printed").isNotEmpty();
 
@@ -368,6 +371,11 @@ class OfflineCommandLaneTest {
         } finally {
             HohenheimRoles.capture();
         }
+    }
+
+    /** The offline lane as the entry point dispatches it, keeping its refusal typed. */
+    private static boolean offline(String[] args, Consumer<String> out) {
+        return OfflineCommands.runIfRequested(args, out, HOST);
     }
 
     /** One integer scalar straight off a sqlite file, outside any pool. */

@@ -4,7 +4,6 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.zenit.common.security.Permissions;
 import be.elevenways.zenit.common.security.Permission;
-import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.protoblast.guard.NamedPattern;
 import be.elevenways.protoblast.guard.ScanResult;
 import be.elevenways.protoblast.guard.ScanRoot;
@@ -14,7 +13,6 @@ import be.elevenways.protoblast.guard.Violation;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -43,17 +41,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PermissionVocabularyTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     /** A permission literal at its DECLARATION site; group 1 is the permission string. */
     private static final Pattern DECLARED =
         Pattern.compile("Permission\\.declare\\(\"(hohenheim\\.[^\"]+)\"");
-
-    @BeforeAll
-    static void boot() {
-        // The boot step that installs the auth baselines, as ServerMain runs it.
-        ServerMain.installAuthBaselines();
-    }
 
     @Test
     void everyEnforcedPermissionIsOfferedByTheGrantsEditorAndDescribedInBothLocales()

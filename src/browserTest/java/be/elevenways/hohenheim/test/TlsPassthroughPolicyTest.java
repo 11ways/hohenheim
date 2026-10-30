@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class TlsPassthroughPolicyTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static boolean initialized;
 

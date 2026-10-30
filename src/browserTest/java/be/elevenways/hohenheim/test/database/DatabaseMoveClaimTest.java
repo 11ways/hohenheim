@@ -45,7 +45,7 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
 class DatabaseMoveClaimTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final String NAME = "move-claim";
     private static final String SERIAL = "move-serial";

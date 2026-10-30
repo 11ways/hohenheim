@@ -55,7 +55,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ProxyListenerSupervisionTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final long HALF_MINUTE = 30_000;
     private static final long ONE_HOUR = 60L * 60 * 1000;

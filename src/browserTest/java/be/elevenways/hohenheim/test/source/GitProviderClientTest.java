@@ -41,7 +41,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class GitProviderClientTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static HttpServer server;
     private static OutboundFixture outbound;

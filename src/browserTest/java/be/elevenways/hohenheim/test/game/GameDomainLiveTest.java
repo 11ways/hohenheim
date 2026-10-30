@@ -79,7 +79,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class GameDomainLiveTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
     private static final String VELOCITY_IMAGE = "dockcenter/velocity:latest";

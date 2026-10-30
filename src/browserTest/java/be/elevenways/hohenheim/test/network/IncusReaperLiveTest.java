@@ -50,7 +50,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class IncusReaperLiveTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final String HOST = "live-incus-reap";
     private static final Duration GRACE = Duration.ofHours(168);

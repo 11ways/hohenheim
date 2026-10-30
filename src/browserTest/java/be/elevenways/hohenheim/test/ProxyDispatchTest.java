@@ -35,7 +35,7 @@ import com.sun.net.httpserver.HttpServer;
 class ProxyDispatchTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static boolean initialized = false;
     private static ProxyServer proxy;

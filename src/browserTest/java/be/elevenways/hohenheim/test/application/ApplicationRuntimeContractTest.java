@@ -44,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class ApplicationRuntimeContractTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final String OPERATOR_BUCKET = OwnerBudget.INSTANCES.bucketOf("");
     private static final String OWNER_MODEL = InstanceModel.MODEL_ID.toString();

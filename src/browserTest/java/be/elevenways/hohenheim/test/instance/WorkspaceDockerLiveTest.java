@@ -75,7 +75,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class WorkspaceDockerLiveTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     /** Unique per live class: the authorized_keys sweep is keyed on this name. */
     private static final String HOST = "live-docker-workspace";

@@ -74,7 +74,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class IncusSnapshotBackupLiveTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final String HOST = "live-incus-snap";
 

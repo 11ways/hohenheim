@@ -64,7 +64,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DevTunnelTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final String TOKEN = "zdev_test_registration_token";
     private static final String BASE = "dev.example.test";

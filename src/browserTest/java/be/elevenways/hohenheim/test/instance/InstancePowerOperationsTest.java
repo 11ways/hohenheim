@@ -94,7 +94,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  */
 class InstancePowerOperationsTest {
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final SystemPurpose OTHER_SYSTEM_WORK = SystemPurpose.declare(
         Identifier.of("hohenheim_test", "other_power_work"));

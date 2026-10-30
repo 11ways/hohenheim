@@ -69,7 +69,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class InstanceScheduleLiveTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     /** The interval of every wait here: each probe is a daemon or database round trip. */
     private static final Duration POLL_INTERVAL = Duration.ofMillis(100);

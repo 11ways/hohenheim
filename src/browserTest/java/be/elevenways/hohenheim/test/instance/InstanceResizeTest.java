@@ -46,7 +46,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class InstanceResizeTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final String PREFIX = "resize-";
     private static final String DOCKER_KIND = "hohenheim:docker_container";

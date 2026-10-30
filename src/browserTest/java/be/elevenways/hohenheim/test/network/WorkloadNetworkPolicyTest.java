@@ -36,7 +36,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class WorkloadNetworkPolicyTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     /** nft table and container names are controller-namespaced, so this needs an identity. */
 

@@ -19,7 +19,8 @@ Reverse proxy / app manager. Routes hostnames to typed upstreams, supervises the
 - `src/common/templates` Hawkeye `.hwk` files, namespace `hohenheim`
 - `src/common/scss` styles
 - `src/client/java` browser code (TeaVM-compiled)
-- `src/server/java` Undertow-backed server, entry point `be.elevenways.hohenheim.server.ServerMain`
+- `src/server/java` Undertow-backed server, entry point `be.elevenways.hohenheim.server.ServerMain`: `ServerZenitRuntime.run`
+  over `HohenheimHost` (lanes and pre-boot, shared with every test boot), then its declared `bootSteps`; `stopSteps` is the stop
 - `src/browserTest/java` Playwright end-to-end tests
 - `docs/` design notes (see `architecture-upstream-kinds.md` for the upstream-kind registry
   and `shared-database-engines.md` for managed-database placement)

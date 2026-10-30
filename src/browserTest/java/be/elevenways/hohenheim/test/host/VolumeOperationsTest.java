@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class VolumeOperationsTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     /** A shell that records what it was asked and answers whatever the test decides. */
     private static final class FakeShell implements HostShell {

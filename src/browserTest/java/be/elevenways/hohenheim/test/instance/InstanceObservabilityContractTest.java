@@ -56,7 +56,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class InstanceObservabilityContractTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     /** Bounded wait: every stream here is pumped by a thread of its own. */
     private static final Duration WAIT = Duration.ofSeconds(10);

@@ -72,7 +72,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class DnsFederationTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final String KEY_SECRET = "c2VjcmV0LXRzaWcta2V5LWZvci1ob2hlbmhlaW0tdGVzdA==";
     private static final String KEY_NAME = "xfer-key";

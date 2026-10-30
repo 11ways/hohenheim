@@ -92,7 +92,7 @@ public final class HohenheimAccess {
      * instance-wide permission is declared NARROWED to the verbs it names ({@link #FILES_ALL}, through
      * {@code RecordCapabilityRules.typeLevelFor}). Do not copy this declaration onto another model.
      *
-     * Declared DELEGABLE (the owner's call of 2026-08-15, see ServerMain.installAuthBaselines): a
+     * Declared DELEGABLE (the owner's call of 2026-08-15, see HohenheimHost.installAuthBaselines): a
      * permission is a leaf, and holding it includes handing it on.
      */
     public static final Permission SITES_MANAGE_ALL = Permission.declare("hohenheim.sites.manage_all",

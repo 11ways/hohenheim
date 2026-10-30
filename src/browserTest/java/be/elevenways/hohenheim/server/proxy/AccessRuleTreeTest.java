@@ -45,7 +45,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AccessRuleTreeTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static int listId;
     private static final SessionStore SESSIONS = new InMemorySessionStore();

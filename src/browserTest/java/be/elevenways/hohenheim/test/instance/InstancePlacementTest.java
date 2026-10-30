@@ -72,7 +72,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class InstancePlacementTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final String PREFIX = "placement-";
     private static final String BUCKET = "placement-owner";

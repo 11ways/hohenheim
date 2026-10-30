@@ -44,7 +44,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class DatabaseDumpRestoreLiveTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
     private static final String PG_IMAGE = "postgres:17-alpine";

@@ -2,15 +2,14 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.server.HohenheimHost;
 import be.elevenways.hohenheim.server.HohenheimSettingsBoot;
-import be.elevenways.hohenheim.server.ServerMain;
-import be.elevenways.zenit.auth.AuthSettings;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
 import be.elevenways.zenit.common.websocket.WebSocketHandler;
 import be.elevenways.zenit.server.ServerZenitRuntime;
+import be.elevenways.zenit.server.cli.HostConsole;
 import be.elevenways.zenit.server.setting.ServerSettings;
 import be.elevenways.zenit.test.support.MigratedDatabase;
 import org.junit.jupiter.api.Tag;
@@ -49,17 +48,9 @@ class BootWiringWindowTest {
 
     @Test
     void everyRequestFacingWiringExistsWhenTheListenerAccepts() throws Exception {
-        // 1. Exactly ServerMain's pre-boot sequence, up to (not including) the
-        //    ServerZenitRuntime call that launches the boot stages.
+        // 1. The settings the host's pre-boot reads, and the class's own file as database.url.
         HohenheimSettingsBoot.load();
-
-        HohenheimEndpoints.init();
-        HohenheimServedApp.declareAccessModelsOnce();
         ServerSettings.VALUES.setValue(ServerSettings.Database.URL, DATABASE.location().url());
-        HohenheimDatabase.init();
-
-        Zenit.SETTINGS_VALUES.setValue(AuthSettings.CMS_AUTO_PANEL, false);
-        ServerMain.installAuthBaselines();
 
         // 2. Bind for real: this test is about what the listener serves, so the
         //    STARTHTTP stage must actually run. Pinned from a boot stage rather
@@ -125,7 +116,7 @@ class BootWiringWindowTest {
         }).setWeight(49);
 
         try {
-            ServerZenitRuntime.init().join();
+            ServerZenitRuntime.run(new String[0], HostConsole.SYSTEM, new HohenheimHost());
 
             assertThat(probeFailure.get())
                 .as("the probe itself must not blow up")

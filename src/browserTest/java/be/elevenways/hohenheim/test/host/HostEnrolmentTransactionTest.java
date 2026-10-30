@@ -50,7 +50,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class HostEnrolmentTransactionTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final String TOKEN = "enrol-token-one-use";
 

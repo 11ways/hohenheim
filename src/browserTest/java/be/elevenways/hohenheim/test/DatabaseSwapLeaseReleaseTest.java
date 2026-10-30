@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DatabaseSwapLeaseReleaseTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     /** A host id no fixture creates: the lease key needs no server row. */
     private static final int HOST_ID = 987_654;

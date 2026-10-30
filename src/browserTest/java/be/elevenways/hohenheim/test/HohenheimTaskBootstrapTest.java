@@ -62,7 +62,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class HohenheimTaskBootstrapTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     /** Only Hohenheim's own tasks are this suite's business; the catalog also holds framework ones. */
     private static final String TASK_PACKAGE = "be.elevenways.hohenheim.";

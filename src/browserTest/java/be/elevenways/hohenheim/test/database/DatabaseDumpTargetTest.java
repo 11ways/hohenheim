@@ -62,7 +62,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class DatabaseDumpTargetTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     @BeforeAll
     static void boot() throws Exception {

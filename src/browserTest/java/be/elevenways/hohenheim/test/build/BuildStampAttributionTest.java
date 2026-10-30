@@ -48,7 +48,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class BuildStampAttributionTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     /** The instance the builds run for; no row is needed, the claim and the history key on the id. */
     private static final int OWNER_ID = 977_301;

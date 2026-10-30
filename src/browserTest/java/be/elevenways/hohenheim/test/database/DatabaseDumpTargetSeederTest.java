@@ -58,7 +58,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DatabaseDumpTargetSeederTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private Path scratch;
     private String previousPath;

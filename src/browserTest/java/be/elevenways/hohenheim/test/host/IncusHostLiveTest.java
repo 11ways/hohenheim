@@ -49,7 +49,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class IncusHostLiveTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     // AIDEV-NOTE: unique per live class BY REQUIREMENT (see LiveIncusHost.authorizeKey);
     // this class installs no ssh key today, but the name staying unique keeps the

@@ -76,7 +76,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ApplicationReleaseTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static SqlDatasource datasource;
     private static FakeDockerDaemon daemon;

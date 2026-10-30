@@ -57,7 +57,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class SandboxedBuildLiveTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
 

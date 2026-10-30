@@ -67,7 +67,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class IncusKernelIsolationLiveTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final String HOST = "live-incus-kernel";
     private static final String IMAGE = "alpine/3.22";

@@ -60,7 +60,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class BackupTargetsTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     @TempDir
     Path tmp;

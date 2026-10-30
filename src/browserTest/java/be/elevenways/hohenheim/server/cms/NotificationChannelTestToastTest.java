@@ -34,7 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class NotificationChannelTestToastTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     @BeforeAll
     static void boot() throws Exception {

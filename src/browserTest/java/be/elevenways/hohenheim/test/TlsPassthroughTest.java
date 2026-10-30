@@ -53,7 +53,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class TlsPassthroughTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static boolean initialized;
     private final JobRunner jobs = JobRunner.create("tls-passthrough-test");

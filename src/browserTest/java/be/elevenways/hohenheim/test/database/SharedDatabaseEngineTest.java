@@ -62,7 +62,7 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
 class SharedDatabaseEngineTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     /**
      * The image {@code ManagedDatabase.Engine.MONGO} defaults to. Spelled here because the

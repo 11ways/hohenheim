@@ -42,7 +42,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class QuotaDimensionsReconcileTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final AtomicBoolean FAIL_NEXT_DATABASE_WRITE = new AtomicBoolean();
     private static final String STRANGER = new SubjectTag(GrantSubjectType.USER, Uuids.v7()).token();

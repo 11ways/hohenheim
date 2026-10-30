@@ -52,7 +52,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AttachedDatabaseAttentionTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final String PREFIX = "attdb-";
 

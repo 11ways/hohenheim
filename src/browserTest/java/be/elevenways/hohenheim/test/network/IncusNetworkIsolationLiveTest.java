@@ -49,7 +49,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class IncusNetworkIsolationLiveTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final String HOST = "live-incus-net";
     private static final String IMAGE = "alpine/3.22";

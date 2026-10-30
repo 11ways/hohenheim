@@ -43,7 +43,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ProxyRateLimitTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final String FRONT_KEY = "front-key-rate";
 

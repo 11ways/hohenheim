@@ -59,7 +59,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class IncusDataDiskBackupLiveTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final String HOST_A = "live-disk-a";
     private static final String HOST_B = "live-disk-b";

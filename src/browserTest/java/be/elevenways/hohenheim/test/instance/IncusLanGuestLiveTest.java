@@ -54,7 +54,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class IncusLanGuestLiveTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     // Unique across live classes: the product's authorized_keys comment is hohenheim-<name>.
     private static final String HOST = "live-incus-lan";

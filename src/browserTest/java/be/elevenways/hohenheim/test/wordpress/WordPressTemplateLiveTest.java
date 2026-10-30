@@ -57,7 +57,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class WordPressTemplateLiveTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
     private static final String WORDPRESS_IMAGE = WordPressPhp.IMAGE + ":" + WordPressPhp.recommended().tag();

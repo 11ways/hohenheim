@@ -60,7 +60,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class InstanceCapacityTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final String PREFIX = "capacity-";
     private static final String DOCKER_KIND = "hohenheim:docker_container";

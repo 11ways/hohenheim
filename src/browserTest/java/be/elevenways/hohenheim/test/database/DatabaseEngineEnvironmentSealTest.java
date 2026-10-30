@@ -52,7 +52,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DatabaseEngineEnvironmentSealTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final String LEGACY_USER = "legacy-root-user";
     private static final String STALE_PASSWORD = "stale-plaintext-password";

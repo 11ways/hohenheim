@@ -51,7 +51,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class InteractiveConsoleTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     /** Bounded wait: the console output and stdin are pumped by threads of their own. */
     private static final Duration WAIT = Duration.ofSeconds(10);

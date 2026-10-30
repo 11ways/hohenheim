@@ -34,7 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DatasourceDerivedCachesTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final String ZONE = "swap-derived.example";
     private static final String BANNED_IP = "198.51.100.77";

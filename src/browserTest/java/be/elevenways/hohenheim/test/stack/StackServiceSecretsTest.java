@@ -53,7 +53,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class StackServiceSecretsTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final String PASSWORD = "hunter2-stack-secret";
 

@@ -31,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class InstanceSpecDeclarationTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     /** OwnerLabels resolves the controller identity out of the database. */
 

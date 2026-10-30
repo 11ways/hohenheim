@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SniCertificateCacheTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     private static final String HOST = "sni-cache.test";
 

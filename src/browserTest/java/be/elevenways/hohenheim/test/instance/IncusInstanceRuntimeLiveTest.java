@@ -57,7 +57,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class IncusInstanceRuntimeLiveTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     // AIDEV-NOTE: unique per live class BY REQUIREMENT -- the authorized_keys sweep
     // is keyed on the comment hohenheim-<name>, so a name shared with another class

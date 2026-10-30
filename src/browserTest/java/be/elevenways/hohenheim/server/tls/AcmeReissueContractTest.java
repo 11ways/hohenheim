@@ -56,7 +56,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class AcmeReissueContractTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     /** Every hostname here ends in this, so no other class in the shared fork covers it. */
     private static final String ZONE = "reissue.test";

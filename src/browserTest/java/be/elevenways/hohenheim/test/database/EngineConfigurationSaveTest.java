@@ -39,7 +39,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class EngineConfigurationSaveTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     /** What runs inside the next instance write, between its load and its statement: the winning operation. */
     private static final AtomicReference<Runnable> DURING_WRITE = new AtomicReference<>();

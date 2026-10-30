@@ -56,7 +56,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class IncusCommunityAppLiveTest {
 
     @RegisterExtension
-    static final ServedApp APP = HohenheimServedApp.standalone();
+    static final ServedApp APP = HohenheimServedApp.app();
 
     /** The interval of every wait here: each probe is a daemon or database round trip. */
     private static final Duration POLL_INTERVAL = Duration.ofMillis(500);
