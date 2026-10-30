@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.instance;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -12,9 +15,7 @@ import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.HostFixtures;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.testsupport.thread.Racers;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
@@ -58,6 +59,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  */
 class InstanceCapacityTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final String PREFIX = "capacity-";
     private static final String DOCKER_KIND = "hohenheim:docker_container";
 
@@ -69,8 +73,7 @@ class InstanceCapacityTest {
     /** Its OWN database: a neighbour's live instance row would move every budget here. */
     @BeforeAll
     static void setUp() throws Exception {
-        datasource = TestDatabases.freshDatasource();
-        HohenheimTestRuntime.ensureBooted();
+        datasource = APP.database();
         Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Capacity.HOST_MEMORY_RESERVE_MB, 0);
         Zenit.SETTINGS_VALUES.setValue(

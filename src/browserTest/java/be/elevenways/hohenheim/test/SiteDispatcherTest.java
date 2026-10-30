@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -30,6 +33,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class SiteDispatcherTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static boolean initialized = false;
     private ProxyServer proxy;
     private HttpServer upstream;
@@ -39,7 +45,7 @@ class SiteDispatcherTest {
     static void initRuntime() throws Exception {
         if (initialized) return;
         initialized = true;
-        bootRuntime();
+        HohenheimEndpoints.init();
     }
 
     @AfterEach
@@ -106,7 +112,7 @@ class SiteDispatcherTest {
      */
     @Test
     void forwardedHeaderAliasFamilyIsStrippedAtUpstream() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         AtomicReference<com.sun.net.httpserver.Headers> captured = new AtomicReference<>();
         int upstreamPort = startHeaderCapturingUpstream(captured);
         setupSiteWithDomain("hohenheim:address", "alias.test", "exact",
@@ -153,7 +159,7 @@ class SiteDispatcherTest {
      */
     @Test
     void hopByHopHeadersAreNotForwardedToUpstream() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         AtomicReference<com.sun.net.httpserver.Headers> captured = new AtomicReference<>();
         int upstreamPort = startHeaderCapturingUpstream(captured);
         setupSiteWithDomain("hohenheim:address", "hop.test", "exact",
@@ -183,7 +189,7 @@ class SiteDispatcherTest {
      */
     @Test
     void websocketDisabledRefusesAnyUpgradeSpelling() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         int markerPort = startMarkerUpstream("forwarded-anyway");
         setupSiteWithDomain("hohenheim:address", "nows.test", "exact",
             Map.of("forward_host", "127.0.0.1", "forward_port", markerPort,
@@ -199,7 +205,7 @@ class SiteDispatcherTest {
 
     @Test
     void trustedKeyPropagatesTheRealClientIp() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS,
             List.of("front-key-1", "front-key-2"));
 
@@ -224,7 +230,7 @@ class SiteDispatcherTest {
 
     @Test
     void untrustedForwardingHeadersAreRejectedAndRegenerated() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS,
             List.of("front-key-1"));
 
@@ -250,7 +256,7 @@ class SiteDispatcherTest {
 
     @Test
     void trustedProxyCannotInstallANonLiteralClientIdentity() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS,
             List.of("front-key-1"));
         AtomicReference<ProxyHeaders> captured = new AtomicReference<>();
@@ -269,7 +275,7 @@ class SiteDispatcherTest {
 
     @Test
     void trustedRequestAppendsToExistingForwardedFor() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS,
             List.of("front-key-1"));
 
@@ -298,7 +304,7 @@ class SiteDispatcherTest {
 
     @Test
     void websocketUpgradeDefaultsToEnabledWhenSettingIsAbsent() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         setupSiteWithDomain("hohenheim:address", "websocket-default.test", "exact",
             Map.of("forward_host", "127.0.0.1", "forward_port", 1));
 
@@ -334,7 +340,7 @@ class SiteDispatcherTest {
      */
     @Test
     void exactAndWildcardSpellingsOfOneHostnameAreOneContestedRoute() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
 
         int wildcardUpstream = startMarkerUpstream("owned-by-wildcard-site");
         int exactUpstream = startMarkerUpstream("owned-by-exact-site");
@@ -409,7 +415,7 @@ class SiteDispatcherTest {
 
     @Test
     void globHostnamesRouteThroughTheDispatcher() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
 
         AtomicReference<ProxyHeaders> captured = new AtomicReference<>();
         int upstreamPort = startCapturingUpstream(captured);
@@ -430,7 +436,7 @@ class SiteDispatcherTest {
      */
     @Test
     void aDelayedRouteForwardsOnlyOnceItsDelayPassed() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         long delayMs = 300;
         AtomicLong reachedAt = new AtomicLong();
         upstream = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -466,7 +472,7 @@ class SiteDispatcherTest {
      */
     @Test
     void theProxyErrorPageDeclaresTheLanguageItsCopyResolvedIn() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         proxy = startProxy();
 
         // 1. A Dutch visitor to an unrouted host gets the localized 404...

@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.instance;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
@@ -22,9 +25,7 @@ import be.elevenways.hohenheim.server.runtime.NetworkPosture;
 import be.elevenways.hohenheim.server.runtime.PtySupport;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.ApiSupport;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.protoblast.testsupport.time.Poll;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.live.LiveLane;
@@ -94,6 +95,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 @Tag("slow") // live lane: needs a real Docker daemon; runs via `zenit-dev test --class`
 class InstanceShellLiveTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
 
     /** The non-root uid the workload -- and therefore its shell -- must run as. */
@@ -162,11 +166,9 @@ class InstanceShellLiveTest {
     @BeforeAll
     static void setUp() throws Exception {
         stallDumps = JobRunner.create("shell-live-stall-dump");
-        datasource = TestDatabases.freshDatasource();
+        datasource = APP.database();
         // BEFORE the boot: the grant below is on InstanceModel, and zenit-auth refuses a
         // grant on an undeclared model. Same order ServerMain uses.
-        HohenheimTestRuntime.declareAccessModelsOnce();
-        HohenheimTestRuntime.ensureBooted();
         LiveShellKind.register();
         netns = PrivateNetns.installEnforcing();
     }

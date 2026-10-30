@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.instance;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -9,8 +12,6 @@ import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.quota.QuotaReconciler;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
@@ -57,6 +58,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  */
 class QuotaDriftReconcileTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final String PREFIX = "drift-";
     private static final String DOCKER_KIND = "hohenheim:docker_container";
 
@@ -74,8 +78,7 @@ class QuotaDriftReconcileTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        datasource = TestDatabases.freshDatasource();
-        HohenheimTestRuntime.ensureBooted();
+        datasource = APP.database();
         Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Capacity.HOST_MEMORY_RESERVE_MB, 0);
         Zenit.SETTINGS_VALUES.setValue(

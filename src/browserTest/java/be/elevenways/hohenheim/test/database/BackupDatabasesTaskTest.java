@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.database;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.DatabaseDumpModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -8,8 +11,6 @@ import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.task.BackupDatabases;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.Zenit;
@@ -33,6 +34,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class BackupDatabasesTaskTest {
+
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
 
     private static PrivateNetns netns;
 
@@ -59,8 +63,7 @@ class BackupDatabasesTaskTest {
         DockerClient docker = new DockerClient();
         LiveLane.requireImage(docker, PG_IMAGE);
 
-        TestDatabases.freshDatabase();
-        HohenheimTestRuntime.ensureBooted();
+        APP.renewDatabase();
         DatabaseService service = new DatabaseService();
         Integer previousRetention = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.BACKUP_RETENTION);
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.BACKUP_RETENTION, 1);

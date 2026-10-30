@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.host;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.server.host.BtrfsVolumeOperations;
 import be.elevenways.hohenheim.server.host.DiskSpace;
@@ -30,6 +33,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * commands are the RIGHT commands on a real filesystem; neither half replaces the other.
  */
 class VolumeOperationsTest {
+
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
 
     /** A shell that records what it was asked and answers whatever the test decides. */
     private static final class FakeShell implements HostShell {

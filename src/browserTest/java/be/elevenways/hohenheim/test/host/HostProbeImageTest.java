@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.host;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.host.IncusPreflight;
 import be.elevenways.hohenheim.server.host.PreflightFinding;
@@ -28,6 +31,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * and this one needs no daemon at all.
  */
 class HostProbeImageTest {
+
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
 
     private static final String FINGERPRINT = "0eed34fbcb0643ae1a08546f904a3329d75e7690638a582371edd3268a8b4e31";
 

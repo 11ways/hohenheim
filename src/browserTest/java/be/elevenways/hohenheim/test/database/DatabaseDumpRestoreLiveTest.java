@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.database;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.BackupStatus;
 import be.elevenways.hohenheim.model.DatabaseDumpModel;
@@ -12,8 +15,6 @@ import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.util.FileTrees;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -42,6 +43,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class DatabaseDumpRestoreLiveTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
     private static final String PG_IMAGE = "postgres:17-alpine";
     private static final String PASSWORD = "secret123-dump";
@@ -51,8 +55,6 @@ class DatabaseDumpRestoreLiveTest {
     @BeforeAll
     static void boot() throws Exception {
         HohenheimEndpoints.init();
-        TestDatabases.freshDatabase();
-        HohenheimTestRuntime.ensureBooted();
         netns = PrivateNetns.installEnforcing();
         LiveLane.require(LiveLane.Need.NETNS, netns != null,
             "no private netns: record-backed provisioning refuses without an enforceable policy");

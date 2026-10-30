@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.application;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -27,10 +30,8 @@ import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.test.TenantConduits;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.hohenheim.test.host.HostFixtures;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -96,6 +97,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class ApplicationReleaseContractTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final String OWNER_MODEL = InstanceModel.MODEL_ID.toString();
 
     private static SqlDatasource datasource;
@@ -106,10 +110,9 @@ class ApplicationReleaseContractTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        datasource = TestDatabases.freshDatasource();
+        datasource = APP.database();
         // ONE registered database per class: the controller identity every daemon
         // resource name resolves through reads the CURRENT datasource.
-        HohenheimTestRuntime.ensureBooted();
         daemon = new FakeDockerDaemon();
         daemon.install();
         savedProbeTimeout = Zenit.SETTINGS_VALUES.getValue(

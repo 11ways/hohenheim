@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.test.database;
 
-import be.elevenways.hohenheim.test.TestDatabases;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -22,7 +24,6 @@ import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceService;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
@@ -68,6 +69,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class SharedDatabaseEngineLiveTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
     private static final String MONGO_IMAGE = "mongo:7";
     private static final String MYSQL_IMAGE = "mysql:8.0";
@@ -83,8 +87,7 @@ class SharedDatabaseEngineLiveTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        datasource = TestDatabases.freshDatasource();
-        HohenheimTestRuntime.ensureBooted();
+        datasource = APP.database();
         netns = PrivateNetns.installEnforcing();
         backupRoot = Files.createTempDirectory("hohenheim-shared-engine-backups");
         originalBackupPath = Zenit.SETTINGS_VALUES.getValue(

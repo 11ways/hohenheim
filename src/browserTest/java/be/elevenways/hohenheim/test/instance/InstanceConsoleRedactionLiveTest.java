@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.instance;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
@@ -9,9 +12,7 @@ import be.elevenways.hohenheim.server.instance.InstanceConsoles;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.protoblast.testsupport.time.Poll;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.live.LiveLane;
@@ -47,6 +48,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class InstanceConsoleRedactionLiveTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     /** The interval of every wait here: each probe is a daemon or database round trip. */
     private static final Duration POLL_INTERVAL = Duration.ofMillis(100);
 
@@ -63,8 +67,7 @@ class InstanceConsoleRedactionLiveTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        datasource = TestDatabases.freshDatasource();
-        HohenheimTestRuntime.ensureBooted();
+        datasource = APP.database();
         netns = PrivateNetns.installEnforcing();
     }
 

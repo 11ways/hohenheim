@@ -1,11 +1,12 @@
 package be.elevenways.hohenheim.server.security;
 
-import be.elevenways.hohenheim.test.TestDatabases;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.security.BanScope;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.testsupport.thread.Racers;
@@ -37,6 +38,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class BanServiceTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static boolean initialized = false;
 
     private final List<String> nftCommands = new ArrayList<>();
@@ -45,8 +49,6 @@ class BanServiceTest {
     static void initDb() throws Exception {
         if (initialized) return;
         initialized = true;
-        TestDatabases.freshDatabase();
-        HohenheimTestRuntime.ensureBooted();
     }
 
     @AfterEach

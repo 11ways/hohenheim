@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SystemUserModel;
@@ -28,6 +30,9 @@ import static org.assertj.core.api.Assertions.*;
  */
 class SystemUsersTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static boolean initialized = false;
 
     @BeforeAll
@@ -36,8 +41,6 @@ class SystemUsersTest {
         initialized = true;
 
         HohenheimEndpoints.init();
-        TestDatabases.freshDatabase();
-        HohenheimTestRuntime.ensureBooted();
 
         saveUser("hh-uid-test-user", 4242);
         saveUser("hh-uid-test-root", 0);

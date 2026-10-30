@@ -1,8 +1,10 @@
 package be.elevenways.hohenheim.test.instance;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
@@ -16,7 +18,6 @@ import be.elevenways.hohenheim.server.instance.InstanceDevices;
 import be.elevenways.hohenheim.server.instance.InstanceMigrations;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.hohenheim.test.RecordedChanges;
 import be.elevenways.zenit.test.support.HistoryTestSupport;
@@ -43,18 +44,20 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  */
 class InstanceMigrationTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static SqlDatasource datasource;
     private static int alphaId;
     private static int betaId;
 
     @BeforeAll
     static void setUp() throws Exception {
-        datasource = TestDatabases.freshDatasource();
+        datasource = APP.database();
         // ONE database per test class: the controller identity (and therefore every
         // daemon resource name) resolves through the CURRENT datasource, and a Db scope
         // is thread-local -- so a second, unregistered database would hand any
         // thread-hopping work a different controller's token than the records came from.
-        HohenheimTestRuntime.ensureBooted();
         FakeNativeDaemons.register();
         Db.run(datasource, () -> {
             // AIDEV-NOTE: the stored preflight report of these hosts is not decoration.

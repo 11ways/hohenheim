@@ -1,9 +1,10 @@
 package be.elevenways.hohenheim.server.auth.types;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.util.BlastLog;
 import be.elevenways.zenit.common.Zenit;
@@ -40,6 +41,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class ProteusRealmGuardTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static OptInWatch watch() {
         return OptInWatch.install(HohenheimSettings.ProxyAuth.PROTEUS_ALLOW_PRIVATE_NETWORKS,
             SiteAuthProviderModel.SCHEMA, ProteusRealmOptInTargets::targetsOf);
@@ -55,8 +59,6 @@ class ProteusRealmGuardTest {
     static void boot() throws Exception {
         if (initialized) return;
         initialized = true;
-        TestDatabases.freshDatabase();
-        HohenheimTestRuntime.ensureBooted();
     }
 
     @AfterEach

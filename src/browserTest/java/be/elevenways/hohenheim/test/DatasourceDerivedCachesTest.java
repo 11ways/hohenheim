@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BanModel;
@@ -31,15 +33,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class DatasourceDerivedCachesTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final String ZONE = "swap-derived.example";
     private static final String BANNED_IP = "198.51.100.77";
     private static final String HOST = "swap-derived-host";
 
-    @BeforeAll
-    static void boot() throws Exception {
-        TestDatabases.freshDatabase();
-        HohenheimTestRuntime.ensureBooted();
-    }
 
     @Test
     void aReplacedDatabaseLeavesNoZoneBanOrHostInService() throws Exception {
@@ -57,7 +57,7 @@ class DatasourceDerivedCachesTest {
             assertThat(hostName(serverId)).as("step 1: the host is offered").startsWith(HOST);
 
             // 2. A fresh database takes all three out of service without any reload call.
-            TestDatabases.freshDatabase();
+            APP.renewDatabase();
             assertThat(DnsZoneStore.INSTANCE.getZone(ZONE)).as("step 2: the old zone is not served").isNull();
             assertThat(DnsZoneStore.INSTANCE.zones()).as("step 2: no zone view of the old database")
                 .noneMatch(zone -> zone.getOriginString().equals(ZONE));

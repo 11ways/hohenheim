@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.build;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.OperationStatus;
@@ -9,9 +12,7 @@ import be.elevenways.hohenheim.server.build.BuildRequest;
 import be.elevenways.hohenheim.server.build.SandboxedBuilds;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.RecordedChanges;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.protoblast.common.util.Uuids;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -46,6 +47,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  */
 class BuildStampAttributionTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     /** The instance the builds run for; no row is needed, the claim and the history key on the id. */
     private static final int OWNER_ID = 977_301;
 
@@ -53,8 +57,7 @@ class BuildStampAttributionTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        datasource = TestDatabases.freshDatasource();
-        HohenheimTestRuntime.ensureBooted();
+        datasource = APP.database();
     }
 
     @Test

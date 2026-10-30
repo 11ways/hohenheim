@@ -1,9 +1,11 @@
 package be.elevenways.hohenheim.test.instance;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.protoblast.testsupport.time.Poll;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -22,7 +24,6 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceTemplates;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -57,6 +58,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  */
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class IncusVmLiveTest {
+
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
 
     /** The interval of every wait here: each probe is a daemon or database round trip. */
     private static final Duration POLL_INTERVAL = Duration.ofMillis(2000);
@@ -96,8 +100,7 @@ class IncusVmLiveTest {
         // daemon resource name) resolves through the CURRENT datasource, and a Db scope
         // is thread-local -- so a second, unregistered database would hand any
         // thread-hopping work a different controller's token than the records came from.
-        datasource = TestDatabases.freshDatasource();
-        HohenheimTestRuntime.ensureBooted();
+        datasource = APP.database();
 
         Db.run(datasource, () -> {
             enrolledFingerprint = remote.enrollThroughProduct(HOST, "hohenheim-live-vm");

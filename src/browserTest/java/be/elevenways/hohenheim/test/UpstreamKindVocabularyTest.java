@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
 import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
@@ -34,12 +36,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class UpstreamKindVocabularyTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     // The instance-link invariant is a write hook boot installs (HohenheimWriteHooks, after
     // TenantWrites), so the class boots instead of relying on an earlier class having done so.
-    @BeforeAll
-    static void bootRegistry() {
-        HohenheimTestRuntime.ensureBooted();
-    }
 
     private static List<Identifier> registeredIds() {
         List<Identifier> ids = new ArrayList<>();

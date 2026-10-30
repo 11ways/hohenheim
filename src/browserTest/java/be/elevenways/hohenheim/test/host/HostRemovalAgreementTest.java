@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.host;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimCounts;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -7,9 +10,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.cms.ServerParts;
 import be.elevenways.zenit.server.operation.OperationPipeline;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TenantConduits;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.testsupport.thread.Racers;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -34,12 +35,14 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  */
 class HostRemovalAgreementTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static SqlDatasource datasource;
 
     @BeforeAll
     static void setUp() throws Exception {
-        datasource = TestDatabases.freshDatasource();
-        HohenheimTestRuntime.ensureBooted();
+        datasource = APP.database();
     }
 
     /**

@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
@@ -19,10 +22,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import static be.elevenways.hohenheim.test.ProxyTestSupport.bootRuntime;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.httpPort;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.rawRequest;
-import static be.elevenways.hohenheim.test.ProxyTestSupport.resetDatabase;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.setupSite;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.startProxy;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -46,6 +47,9 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
  */
 class TrailingDotRouteTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static boolean initialized;
     private ProxyServer proxy;
     private final List<HttpServer> upstreams = new ArrayList<>();
@@ -59,7 +63,7 @@ class TrailingDotRouteTest {
             return;
         }
         initialized = true;
-        bootRuntime();
+        HohenheimEndpoints.init();
     }
 
     @AfterEach
@@ -107,7 +111,7 @@ class TrailingDotRouteTest {
 
     @Test
     void theDottedSpellingIsTheSameRouteAndCannotBeClaimedTwice() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
 
         // 1. The victim serves the hostname, and the proxy proves it.
         Row victim = proxySite("Dot Victim", "dot-victim", "victim-upstream");

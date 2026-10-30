@@ -1,11 +1,13 @@
 package be.elevenways.hohenheim.test.instance;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.server.instance.DockerContainerKind;
 import be.elevenways.hohenheim.server.instance.SystemContainerKind;
 import be.elevenways.hohenheim.server.instance.VmKind;
 import be.elevenways.hohenheim.instance.ImageOrigin;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -28,11 +30,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class InstanceSpecDeclarationTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     /** OwnerLabels resolves the controller identity out of the database. */
-    @BeforeAll
-    static void controllerIdentity() {
-        HohenheimTestRuntime.ensureDatasource();
-    }
 
     @Test
     void everyKindCarriesWhatItDeclaresAndTheTierDefaultForWhatItDoesNot() {

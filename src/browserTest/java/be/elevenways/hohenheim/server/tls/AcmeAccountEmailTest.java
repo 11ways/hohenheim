@@ -1,13 +1,14 @@
 package be.elevenways.hohenheim.server.tls;
 
-import be.elevenways.hohenheim.test.TestDatabases;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -26,6 +27,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class AcmeAccountEmailTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static boolean initialized = false;
 
     @BeforeAll
@@ -34,8 +38,6 @@ class AcmeAccountEmailTest {
         initialized = true;
 
         HohenheimEndpoints.init();
-        TestDatabases.freshDatabase();
-        HohenheimTestRuntime.ensureBooted();
     }
 
     @Test

@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -12,8 +15,6 @@ import org.junit.jupiter.api.Test;
 import java.util.Map;
 import java.util.List;
 
-import static be.elevenways.hohenheim.test.ProxyTestSupport.bootRuntime;
-import static be.elevenways.hohenheim.test.ProxyTestSupport.resetDatabase;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.setupSite;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -21,18 +22,21 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /** Pins passthrough invariants at the model write boundary, not only in CMS forms. */
 class TlsPassthroughPolicyTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static boolean initialized;
 
     @BeforeAll
     static void boot() throws Exception {
         if (initialized) return;
         initialized = true;
-        bootRuntime();
+        HohenheimEndpoints.init();
     }
 
     @Test
     void domainWriteNormalizesCertificateOwnershipFlags() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         Row site = passthroughSite();
         Row domain = Models.get(SiteDomainModel.class).createEmptyRow();
         domain.set(SiteDomainModel.SITE_ID, site.get(SiteModel.ID));
@@ -48,7 +52,7 @@ class TlsPassthroughPolicyTest {
 
     @Test
     void nonCmsDomainWritesCannotAddHttpOnlyOptions() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         Row site = passthroughSite();
         Row domain = Models.get(SiteDomainModel.class).createEmptyRow();
         domain.set(SiteDomainModel.SITE_ID, site.get(SiteModel.ID));
@@ -63,7 +67,7 @@ class TlsPassthroughPolicyTest {
 
     @Test
     void regexDomainNormalizationPreservesJavaRegexCaseAndEscapes() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         Row site = passthroughSite();
         SiteDomainModel domains = Models.get(SiteDomainModel.class);
         Row domain = domains.createEmptyRow();
@@ -77,7 +81,7 @@ class TlsPassthroughPolicyTest {
 
     @Test
     void siteTypeTransitionValidatesExistingDomains() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         Row site = setupSite("hohenheim:address", "HTTP site", "http-site",
             Map.of("forward_host", "127.0.0.1", "forward_port", 8080));
         Row domain = Models.get(SiteDomainModel.class).createEmptyRow();
@@ -96,7 +100,7 @@ class TlsPassthroughPolicyTest {
 
     @Test
     void validSiteTypeTransitionNormalizesExistingDomains() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         Row site = setupSite("hohenheim:address", "HTTP site", "http-site",
             Map.of("forward_host", "127.0.0.1", "forward_port", 8080));
         SiteDomainModel domains = Models.get(SiteDomainModel.class);
@@ -119,7 +123,7 @@ class TlsPassthroughPolicyTest {
 
     @Test
     void siteWriteRejectsHttpAccessControl() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         Row site = Models.get(SiteModel.class).createEmptyRow();
         site.set(SiteModel.NAME, "Invalid passthrough");
         site.set(SiteModel.SLUG, "invalid-passthrough");

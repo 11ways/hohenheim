@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.instance;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.zenit.test.support.TestAccessContexts;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
@@ -14,10 +17,8 @@ import be.elevenways.zenit.common.Zenit;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.instance.InstanceService;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.PlacedActionClicks;
 import be.elevenways.hohenheim.test.host.HostFixtures;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.hohenheim.test.RecordedChanges;
 import be.elevenways.zenit.common.orm.activity.ActivityAction;
@@ -59,6 +60,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  */
 class InstancePowerAuditTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static SqlDatasource datasource;
     private static int hostId;
     private static final UUID RESTART_OPERATOR = Uuids.v7();
@@ -68,10 +72,9 @@ class InstancePowerAuditTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        datasource = TestDatabases.freshDatasource();
+        datasource = APP.database();
         // ONE registered database per class: the controller identity every daemon
         // resource name resolves through reads the CURRENT datasource.
-        HohenheimTestRuntime.ensureBooted();
         FakeNativeDaemons.register();
         Db.run(datasource, () -> hostId = HostFixtures.admittedIncusHost("audit-host"));
     }

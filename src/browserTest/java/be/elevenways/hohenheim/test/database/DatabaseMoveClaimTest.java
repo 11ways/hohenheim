@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.database;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -11,8 +14,6 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.protoblast.testsupport.thread.Racers;
 import be.elevenways.protoblast.testsupport.time.Poll;
@@ -43,6 +44,9 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
  */
 class DatabaseMoveClaimTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final String NAME = "move-claim";
     private static final String SERIAL = "move-serial";
     private static final String LANDING = "move-landing";
@@ -51,15 +55,9 @@ class DatabaseMoveClaimTest {
     private static final String NEW_PASSWORD = "Move.new-password-000002";
     private static final String NEWER_PASSWORD = "Move.newer-password-0003";
 
-    @BeforeAll
-    static void setUp() throws Exception {
-        TestDatabases.freshDatabase();
-        HohenheimTestRuntime.ensureBooted();
-    }
 
     @AfterAll
     static void tearDown() throws Exception {
-        TestDatabases.freshDatabase();
     }
 
     @Test

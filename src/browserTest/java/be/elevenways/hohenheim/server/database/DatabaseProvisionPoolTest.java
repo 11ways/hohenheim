@@ -1,11 +1,13 @@
 package be.elevenways.hohenheim.server.database;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.HohenheimRefusalReason;
 import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.OperatorIdentity;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.thread.JobRunner;
@@ -42,15 +44,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class DatabaseProvisionPoolTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final Duration BOUND = Duration.ofSeconds(20);
 
     /** An image name no registry serves. */
     private static final String UNPULLABLE = "hohenheim-test/never-pulled:never";
 
-    @BeforeAll
-    static void boot() {
-        HohenheimTestRuntime.ensureBooted();
-    }
 
     @Test
     void poolWorkIsSystemAuthorityAttributedToWhoeverSubmittedIt() throws Exception {

@@ -1,7 +1,8 @@
 package be.elevenways.hohenheim.server.instance;
 
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.TestDatabases;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 
@@ -18,6 +19,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class CrashFlapClockTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     @AfterAll
     static void restoreTimings() {
         InstanceConsoles.overrideTimingsForTest(null, null);
@@ -26,15 +30,14 @@ class CrashFlapClockTest {
     @Test
     void anotherControllersCrashesNeverCountTowardsThisOnesLoop() throws Exception {
         InstanceConsoles.overrideTimingsForTest(null, null);
-        TestDatabases.freshDatabase();
-        HohenheimTestRuntime.ensureBooted();
+        APP.renewDatabase();
 
         // 1. Controller A's record #7 crashes twice: below the threshold, so no loop yet.
         assertThat(InstanceConsoles.flapExceeded(7)).as("step 1: the first crash is no loop").isFalse();
         assertThat(InstanceConsoles.flapExceeded(7)).as("step 1: nor the second").isFalse();
 
         // 2. A fresh database is another controller: its record #7 is another workload, whose first crash is a first.
-        TestDatabases.freshDatabase();
+        APP.renewDatabase();
         assertThat(InstanceConsoles.flapExceeded(7))
             .as("step 2: another controller's #7 starts its own count").isFalse();
 

@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -18,6 +21,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class StaticSiteTypeTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static boolean initialized = false;
     private ProxyServer proxy;
 
@@ -25,7 +31,7 @@ class StaticSiteTypeTest {
     static void initRuntime() throws Exception {
         if (initialized) return;
         initialized = true;
-        bootRuntime();
+        HohenheimEndpoints.init();
     }
 
     @AfterEach
@@ -38,7 +44,7 @@ class StaticSiteTypeTest {
 
     @Test
     void unconfiguredRootRespondsEmpty200() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         setupSiteWithDomain("hohenheim:static", "emptystatic.test", "exact", Map.of());
 
         proxy = startProxy();
@@ -51,7 +57,7 @@ class StaticSiteTypeTest {
 
     @Test
     void autoindexIsOnByDefault() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
 
         Path root = Files.createTempDirectory("hh-static-test");
         Files.writeString(root.resolve("hello.txt"), "hi");
@@ -69,7 +75,7 @@ class StaticSiteTypeTest {
 
     @Test
     void autoindexCanStillBeDisabled() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
 
         Path root = Files.createTempDirectory("hh-static-test");
         Files.writeString(root.resolve("hello.txt"), "hi");
@@ -86,7 +92,7 @@ class StaticSiteTypeTest {
 
     @Test
     void indexFileStillWinsOverTheListing() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
 
         Path root = Files.createTempDirectory("hh-static-test");
         Files.writeString(root.resolve("index.html"), "<h1>welcome</h1>");

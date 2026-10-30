@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.server.HohenheimRetiredNames;
@@ -39,6 +42,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class UnknownHostAnswerTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final String UNKNOWN = "nobody-serves.test";
 
     private ProxyServer proxy;
@@ -46,7 +52,7 @@ class UnknownHostAnswerTest {
 
     @BeforeAll
     static void initRuntime() throws Exception {
-        bootRuntime();
+        HohenheimEndpoints.init();
     }
 
     @AfterEach
@@ -68,7 +74,7 @@ class UnknownHostAnswerTest {
 
     @Test
     void eachAnswerMeetsAnUnknownHostAndAMissingTargetFailsClosed() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         int mainPort = startUpstream("main-site-upstream");
         int backendPort = startUpstream("fallback-backend");
         Row main = setupSite("hohenheim:address", "Main Site", "main-site", proxySettings(mainPort));

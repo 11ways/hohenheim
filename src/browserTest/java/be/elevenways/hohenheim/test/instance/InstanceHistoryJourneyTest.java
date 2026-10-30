@@ -1,15 +1,16 @@
 package be.elevenways.hohenheim.test.instance;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.instance.InstanceService;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.PanelEntryViews;
 import be.elevenways.hohenheim.test.PlacedActionClicks;
 import be.elevenways.hohenheim.test.RecordedChanges;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.time.Now;
@@ -50,6 +51,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class InstanceHistoryJourneyTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final UUID OPERATOR = Uuids.v7();
     private static final UUID SFTP_WRITER = Uuids.v7();
     private static final String PINNED = "sha256:pinned";
@@ -59,8 +63,7 @@ class InstanceHistoryJourneyTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        datasource = TestDatabases.freshDatasource();
-        HohenheimTestRuntime.ensureBooted();
+        datasource = APP.database();
         FakeNativeDaemons.register();
         Db.run(datasource, () -> hostId = HostFixtures.admittedIncusHost("history-host"));
     }

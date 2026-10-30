@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.HohenheimEndpoints;
@@ -29,6 +31,9 @@ import java.util.Date;
  */
 public class TlsCertificateTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static boolean initialized = false;
 
     @BeforeAll
@@ -37,8 +42,6 @@ public class TlsCertificateTest {
         initialized = true;
 
         HohenheimEndpoints.init();
-        TestDatabases.freshDatabase();
-        HohenheimTestRuntime.ensureBooted();
     }
 
     /**
@@ -51,7 +54,7 @@ public class TlsCertificateTest {
      */
     @BeforeEach
     void freshDatabasePerTest() throws Exception {
-        TestDatabases.freshDatabase();
+        APP.renewDatabase();
     }
 
     @Test

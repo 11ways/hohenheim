@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.docker;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.ControllerScope;
@@ -9,7 +12,6 @@ import be.elevenways.hohenheim.server.docker.DockerReconciler;
 import be.elevenways.hohenheim.server.docker.DockerReconciler.Bucket;
 import be.elevenways.hohenheim.server.docker.DockerReconciler.Finding;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -46,6 +48,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class TwoControllerCollisionLiveTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final Path SOCKET = Path.of("/var/run/docker.sock");
     private static final String IMAGE = TestImages.ALPINE;
 
@@ -65,7 +70,6 @@ class TwoControllerCollisionLiveTest {
 
         controllerA = freshController("a");
         controllerB = freshController("b");
-        HohenheimTestRuntime.ensureBooted();
     }
 
     @AfterAll
@@ -191,7 +195,7 @@ class TwoControllerCollisionLiveTest {
     /**
      * A second control-plane database beside the first.
      *
-     * AIDEV-NOTE: deliberately hand-rolled, not TestDatabases.freshDatasource(): the subject
+     * AIDEV-NOTE: deliberately hand-rolled, not the served app's class database: the subject
      * is TWO controllers alive at once over one daemon, and a swap closes the database it
      * replaces, so each controller keeps a file of its own.
      */

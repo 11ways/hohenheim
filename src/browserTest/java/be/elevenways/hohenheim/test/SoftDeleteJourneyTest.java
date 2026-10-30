@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.server.quota.OwnerBudget;
@@ -66,6 +68,9 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
  */
 class SoftDeleteJourneyTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final String PREFIX = "softdel-";
     private static final String SITE_BUCKET = OwnerBudget.SITES.bucketOf("");
 
@@ -73,8 +78,7 @@ class SoftDeleteJourneyTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        datasource = TestDatabases.freshDatasource();
-        HohenheimTestRuntime.ensureBooted();
+        datasource = APP.database();
     }
 
     @Test

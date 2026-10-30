@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.instance;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -50,6 +53,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class ScheduledBackupAlertTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final List<String> BODIES = new CopyOnWriteArrayList<>();
 
     private static SqlDatasource datasource;
@@ -61,7 +67,7 @@ class ScheduledBackupAlertTest {
     @BeforeAll
     static void boot() throws Exception {
         HohenheimEndpoints.init();
-        fixture = BackupLaneFixture.install();
+        fixture = BackupLaneFixture.install(APP.database());
         datasource = fixture.datasource;
     }
 

@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -21,10 +24,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import static be.elevenways.hohenheim.test.ProxyTestSupport.bootRuntime;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.httpPort;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.rawRequest;
-import static be.elevenways.hohenheim.test.ProxyTestSupport.resetDatabase;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.setupSite;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.startProxy;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -45,6 +46,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class ReleasedClaimRegexShadowTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static boolean initialized;
     private ProxyServer proxy;
     private final List<HttpServer> upstreams = new ArrayList<>();
@@ -58,7 +62,7 @@ class ReleasedClaimRegexShadowTest {
             return;
         }
         initialized = true;
-        bootRuntime();
+        HohenheimEndpoints.init();
     }
 
     @AfterEach
@@ -117,7 +121,7 @@ class ReleasedClaimRegexShadowTest {
 
     @Test
     void aRegexRowServesTheHostnameAnExactRowGaveUp() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.RELEASE_QUARANTINE_DAYS, 0);
 
         // 1. The victim serves the hostname on an exact row, and the proxy proves it.

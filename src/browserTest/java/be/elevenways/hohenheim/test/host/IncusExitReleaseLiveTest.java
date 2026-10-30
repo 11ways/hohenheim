@@ -1,8 +1,9 @@
 package be.elevenways.hohenheim.test.host;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.server.ControllerScope;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import org.junit.jupiter.api.AfterAll;
@@ -31,6 +32,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class IncusExitReleaseLiveTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     // AIDEV-NOTE: unique per live class BY REQUIREMENT (see LiveIncusHost.authorizeKey).
     private static final String HOST = "live-exit-release";
     /** The trust client name; also the comment the product mints on the host's ssh key ({@code hohenheim-<HOST>}). */
@@ -42,8 +46,7 @@ class IncusExitReleaseLiveTest {
     @BeforeAll
     static void setUp() throws Exception {
         remote = LiveIncusHost.requirePrimary();
-        datasource = TestDatabases.freshDatasource();
-        HohenheimTestRuntime.ensureBooted();
+        datasource = APP.database();
     }
 
     @AfterAll

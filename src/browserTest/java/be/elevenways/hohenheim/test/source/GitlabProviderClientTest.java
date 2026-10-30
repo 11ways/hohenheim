@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.source;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.server.source.GitlabProviderKind;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.server.source.GitProviderClient;
@@ -8,7 +11,6 @@ import be.elevenways.protoblast.common.dry.Dry;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.test.support.OutboundFixture;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -33,6 +35,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  */
 class GitlabProviderClientTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static HttpServer server;
     private static OutboundFixture outbound;
     private static String base;
@@ -44,7 +49,6 @@ class GitlabProviderClientTest {
 
     @BeforeAll
     static void startFakeGitlab() throws Exception {
-        HohenheimTestRuntime.ensureBooted();
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         // One root context dispatching on the RAW path, so the %2F-encoded project
         // path is asserted exactly as it rode the wire.

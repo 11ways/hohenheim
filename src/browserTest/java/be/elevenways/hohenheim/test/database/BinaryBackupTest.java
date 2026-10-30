@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.test.database;
 
-import be.elevenways.hohenheim.test.TestDatabases;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.runtime.NetworkPosture;
@@ -34,6 +36,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class BinaryBackupTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static PrivateNetns netns;
 
     @BeforeAll
@@ -63,7 +68,7 @@ class BinaryBackupTest {
         DockerClient docker = new DockerClient();
         LiveLane.requireImage(docker, REDIS_IMAGE);
 
-        DatabaseService service = new DatabaseService(TestDatabases.freshBootedDatasource());
+        DatabaseService service = new DatabaseService(APP.renewDatabase());
         String name = "redis" + System.nanoTime();
         Path dir = Files.createTempDirectory("hohenheim-redis-bk");
         try {
@@ -99,7 +104,7 @@ class BinaryBackupTest {
         DockerClient docker = new DockerClient();
         LiveLane.requireImage(docker, MONGO_IMAGE);
 
-        DatabaseService service = new DatabaseService(TestDatabases.freshBootedDatasource());
+        DatabaseService service = new DatabaseService(APP.renewDatabase());
         String name = "mongo" + System.nanoTime();
         Path dir = Files.createTempDirectory("hohenheim-mongo-bk");
         try {
@@ -133,7 +138,7 @@ class BinaryBackupTest {
         DockerClient docker = new DockerClient();
         LiveLane.requireImage(docker, REDIS_IMAGE);
 
-        DatabaseService service = new DatabaseService(TestDatabases.freshBootedDatasource());
+        DatabaseService service = new DatabaseService(APP.renewDatabase());
         String name = "redisrt" + System.nanoTime();
         Path dir = Files.createTempDirectory("hohenheim-redis-rt");
         try {
@@ -164,7 +169,7 @@ class BinaryBackupTest {
         DockerClient docker = new DockerClient();
         LiveLane.requireImage(docker, REDIS_IMAGE);
 
-        DatabaseService service = new DatabaseService(TestDatabases.freshBootedDatasource());
+        DatabaseService service = new DatabaseService(APP.renewDatabase());
         String name = "redisep" + System.nanoTime();
         Path dir = Files.createTempDirectory("hohenheim-redis-ep");
         try {

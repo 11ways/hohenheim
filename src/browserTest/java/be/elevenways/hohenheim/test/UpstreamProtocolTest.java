@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
@@ -74,6 +77,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class UpstreamProtocolTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static boolean initialized = false;
     private ProxyServer proxy;
     private HttpsServer httpsUpstream;
@@ -88,7 +94,7 @@ class UpstreamProtocolTest {
     static void initRuntime() throws Exception {
         if (initialized) return;
         initialized = true;
-        bootRuntime();
+        HohenheimEndpoints.init();
     }
 
     @AfterEach
@@ -154,7 +160,7 @@ class UpstreamProtocolTest {
 
     @Test
     void httpsUpstreamWithUntrustedCertificateIsRejected() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         KeyPair keyPair = generateKeyPair();
         int port = startHttpsUpstream(keyPair, selfSignedCert(keyPair, "127.0.0.1", true));
 
@@ -170,7 +176,7 @@ class UpstreamProtocolTest {
 
     @Test
     void httpsUpstreamWithTrustedAuthorityAndMatchingHostWorks() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         KeyPair keyPair = generateKeyPair();
         X509Certificate cert = selfSignedCert(keyPair, "127.0.0.1", true);
         int port = startHttpsUpstream(keyPair, cert);
@@ -187,7 +193,7 @@ class UpstreamProtocolTest {
 
     @Test
     void httpsUpstreamWithTrustedAuthorityButWrongHostIsRejected() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         KeyPair keyPair = generateKeyPair();
         // Chain will be trusted, but the SAN names a different host than the dial target.
         X509Certificate cert = selfSignedCert(keyPair, "other.internal", false);
@@ -205,7 +211,7 @@ class UpstreamProtocolTest {
 
     @Test
     void ignoreCertificatesStillBypassesValidation() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         KeyPair keyPair = generateKeyPair();
         int port = startHttpsUpstream(keyPair, selfSignedCert(keyPair, "unrelated.host", false));
 
@@ -220,7 +226,7 @@ class UpstreamProtocolTest {
 
     @Test
     void aTenantHttpsUpstreamIsDialedAtItsVettedAddressUnderItsOwnName() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         String upstreamHost = "tenant-upstream.test";
         KeyPair keyPair = generateKeyPair();
         X509Certificate cert = selfSignedCert(keyPair, upstreamHost, false);
@@ -256,7 +262,7 @@ class UpstreamProtocolTest {
 
     @Test
     void aTenantUpstreamFallsThroughARefusingAddressAndEveryNetworkJudgesItsOwn() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         String upstreamHost = "tenant-plain.test";
         int first = startPlainUpstream("plain-one", "http://" + upstreamHost + "/landing");
         com.sun.net.httpserver.HttpServer second = com.sun.net.httpserver.HttpServer.create(
@@ -381,7 +387,7 @@ class UpstreamProtocolTest {
 
     @Test
     void http1DownstreamReachesH2cUpstream() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         AtomicReference<String> seenProtocol = new AtomicReference<>();
         int port = startH2cUpstream(seenProtocol);
 
@@ -396,7 +402,7 @@ class UpstreamProtocolTest {
 
     @Test
     void h2DownstreamGetsGrpcTrailersFromH2cUpstream() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         AtomicReference<String> seenProtocol = new AtomicReference<>();
         int upstreamPort = startH2cUpstream(seenProtocol);
 
@@ -481,7 +487,7 @@ class UpstreamProtocolTest {
 
     @Test
     void http1UpstreamTrailersReachHttp1Downstream() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         // Same streaming upstream, dialed with plain HTTP/1.1: the chunked response
         // carries the trailers, and the downstream chunked response must too.
         int port = startH2cUpstream(null);
@@ -500,7 +506,7 @@ class UpstreamProtocolTest {
 
     @Test
     void requestTrailersAreForwardedToTheUpstream() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
 
         CompletableFuture<Object[]> upstreamSaw = new CompletableFuture<>();
         undertowUpstream = Undertow.builder()
@@ -622,7 +628,7 @@ class UpstreamProtocolTest {
      */
     @Test
     void shortRequestTimeoutKillsSlowExchangesButZeroMeansUnlimited() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         int port = startSlowUpstream(1500);
 
         Row limited = setupSite("hohenheim:address", "Limited Site", "limited-site", Map.of(
@@ -751,7 +757,7 @@ class UpstreamProtocolTest {
      */
     @Test
     void streamedResponseHeadersReachTheClientBeforeTheBody() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         long bodyDelayMs = 4000;
         int upstreamPort = startHeadersThenDelayedBodyUpstream(bodyDelayMs);
 
@@ -870,7 +876,7 @@ class UpstreamProtocolTest {
      */
     @Test
     void requestHeadersReachTheUpstreamWithoutARequestBody() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         int upstreamPort = startRecordingUpstream();
 
         setupSiteWithDomain("hohenheim:address", "bidi.test", "exact",
@@ -897,7 +903,7 @@ class UpstreamProtocolTest {
      */
     @Test
     void requestHeadersReachAnHttp1UpstreamWithoutARequestBody() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         int upstreamPort = startRecordingUpstream();
 
         setupSiteWithDomain("hohenheim:address", "bidi-h1.test", "exact", Map.of(
@@ -919,7 +925,7 @@ class UpstreamProtocolTest {
 
     @Test
     void grpcRequestsBypassCompressionWhileNormalRequestsStillCompress() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         plainUpstream = com.sun.net.httpserver.HttpServer.create(
             new InetSocketAddress("127.0.0.1", 0), 0);
         byte[] body = "x".repeat(2048).getBytes(StandardCharsets.UTF_8);

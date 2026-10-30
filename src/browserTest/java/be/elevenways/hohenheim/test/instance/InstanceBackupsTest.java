@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.instance;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.ports.PortLedger;
@@ -99,6 +102,9 @@ import static org.assertj.core.api.Assertions.fail;
  */
 class InstanceBackupsTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static SqlDatasource datasource;
     private static int hostId;
     private static Path targetRoot;
@@ -107,7 +113,7 @@ class InstanceBackupsTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        BackupLaneFixture fixture = BackupLaneFixture.install();
+        BackupLaneFixture fixture = BackupLaneFixture.install(APP.database());
         datasource = fixture.datasource;
         hostId = fixture.hostId;
         targetRoot = fixture.targetRoot;

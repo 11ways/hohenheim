@@ -6,7 +6,7 @@ import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.proxy.ProxyReloadHooks;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.test.DnsFixtures;
-import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.zenit.test.support.MigratedDatabase;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -100,7 +100,11 @@ class ShutdownOrderJourneyTest {
                         role == HohenheimRoles.Role.PROXY || role == HohenheimRoles.Role.DNS);
                 }
                 Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
-                TestDatabases.freshDatabase();
+                // ServerMain opens what database.url names, as on a host: here a migrated file the fork's exit leaves.
+                MigratedDatabase database = MigratedDatabase.sqliteFile("hohenheim.db");
+                database.beforeAll(null);
+                ServerSettings.VALUES.setValue(ServerSettings.Database.URL, database.location().url());
+                HohenheimDatabase.init();
                 ServerSettings.VALUES.setValue(ServerSettings.Network.AUTO_START_HTTP, false);
                 ExecutionIdentity.runAsSystem(HohenheimSystemPurposes.BOOT,
                     () -> secondaryZone(primary.getLocalPort()));

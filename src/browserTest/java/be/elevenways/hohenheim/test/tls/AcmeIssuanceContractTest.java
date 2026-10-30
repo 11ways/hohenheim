@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.tls;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -9,8 +12,6 @@ import be.elevenways.hohenheim.server.tls.CertificateAuthority;
 import be.elevenways.hohenheim.server.tls.CertificateStore;
 import be.elevenways.hohenheim.server.tls.DnsTxtPublishers;
 import be.elevenways.hohenheim.server.tls.DnsTxtRecord;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.time.Pace;
 import be.elevenways.zenit.common.Zenit;
@@ -65,6 +66,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class AcmeIssuanceContractTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static SqlDatasource datasource;
     private static FakeAcmeServer ca;
     private static AcmeService acme;
@@ -74,8 +78,7 @@ class AcmeIssuanceContractTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        datasource = TestDatabases.freshDatasource();
-        HohenheimTestRuntime.ensureBooted();
+        datasource = APP.database();
 
         ca = new FakeAcmeServer();
         savedDirectory = Zenit.SETTINGS_VALUES.getValue(

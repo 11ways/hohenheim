@@ -92,7 +92,8 @@ class ApiWireSitesTest extends HohenheimHttpTestBase {
 
     @BeforeAll
     static void seed() throws Exception {
-        TestDatabases.freshDatabase();
+        // The wire is captured over records numbered from 1: no seeded row (the local host) comes first.
+        APP.renewUnseededDatabase();
         daemon = new FakeDockerDaemon();
         daemon.install();
         savedProbeTimeout = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Releases.PROBE_TIMEOUT_SECONDS);

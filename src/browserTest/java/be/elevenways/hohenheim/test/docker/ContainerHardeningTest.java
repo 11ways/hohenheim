@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.docker;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.zenit.common.Zenit;
@@ -33,7 +36,6 @@ import be.elevenways.hohenheim.server.stack.StackRuntime;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -101,6 +103,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class ContainerHardeningTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
     private static final String TEST_IMAGE = TestImages.ALPINE;
     private static final String REDIS_IMAGE = "redis:7-alpine";
@@ -145,7 +150,6 @@ class ContainerHardeningTest {
 
     @BeforeAll
     static void bootRuntime() throws IOException {
-        HohenheimTestRuntime.ensureBooted();
         classNetns = PrivateNetns.installEnforcing();
     }
 

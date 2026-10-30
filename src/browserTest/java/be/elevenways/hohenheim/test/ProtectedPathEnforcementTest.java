@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
@@ -38,6 +40,9 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
  */
 class ProtectedPathEnforcementTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static ProxyServer proxy;
     private static HttpServer upstream;
     private static int port;
@@ -49,8 +54,6 @@ class ProtectedPathEnforcementTest {
     @BeforeAll
     static void boot() throws Exception {
         HohenheimEndpoints.init();
-        TestDatabases.freshDatabase();
-        HohenheimTestRuntime.ensureBooted();
 
         upstream = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         upstream.createContext("/", ex -> {

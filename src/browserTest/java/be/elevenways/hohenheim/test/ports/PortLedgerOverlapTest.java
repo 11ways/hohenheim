@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.ports;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -7,8 +10,6 @@ import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.ports.PortClaimFence;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.testsupport.thread.Racers;
 import be.elevenways.zenit.common.orm.OrmConstants;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -43,12 +44,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class PortLedgerOverlapTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static SqlDatasource datasource;
 
     @BeforeAll
     static void setUp() throws Exception {
-        datasource = TestDatabases.freshDatasource();
-        HohenheimTestRuntime.ensureBooted();
+        datasource = APP.database();
     }
 
     /**
@@ -249,7 +252,7 @@ class PortLedgerOverlapTest {
      */
     @Test
     void aDeleteAimedAtAnotherDatabaseParksOnlyThatDatabasesClaims() throws Exception {
-        // A second control-plane database of its own, migrated from empty: TestDatabases swaps the shared one.
+        // A second control-plane database of its own, migrated from empty, beside the class database the app serves.
         File file = File.createTempFile("hohenheim-colliding", ".db");
         file.delete();
         file.deleteOnExit();

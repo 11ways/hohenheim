@@ -1,5 +1,9 @@
 package be.elevenways.hohenheim.test.application;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.model.DeployTrigger;
 import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.model.StoredRows;
@@ -63,6 +67,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class ApplicationReleaseLiveTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
     private static final String OWNER_MODEL = InstanceModel.MODEL_ID.toString();
 
@@ -86,7 +93,7 @@ class ApplicationReleaseLiveTest {
     static void boot() throws Exception {
         if (!booted) {
             booted = true;
-            ProxyTestSupport.bootRuntime();
+            HohenheimEndpoints.init();
         }
         netns = PrivateNetns.installEnforcing();
         savedProbeTimeout = Zenit.SETTINGS_VALUES.getValue(

@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.database;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -17,8 +20,6 @@ import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.hohenheim.test.ApiSupport;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.common.Zenit;
@@ -56,14 +57,15 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class DatabaseDumpTargetSeederTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private Path scratch;
     private String previousPath;
 
     @BeforeAll
     static void boot() throws Exception {
         HohenheimEndpoints.init();
-        TestDatabases.freshDatabase();
-        HohenheimTestRuntime.ensureBooted();
     }
 
     @BeforeEach

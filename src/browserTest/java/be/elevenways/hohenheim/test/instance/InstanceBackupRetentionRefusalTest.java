@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.instance;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.server.backup.BackupTarget;
@@ -37,6 +40,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Tag("slow") // live lane: needs a non-root process (a filesystem that can refuse a delete)
 class InstanceBackupRetentionRefusalTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static SqlDatasource datasource;
     private static int hostId;
     private static Path targetRoot;
@@ -45,7 +51,7 @@ class InstanceBackupRetentionRefusalTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        BackupLaneFixture fixture = BackupLaneFixture.install();
+        BackupLaneFixture fixture = BackupLaneFixture.install(APP.database());
         datasource = fixture.datasource;
         hostId = fixture.hostId;
         targetRoot = fixture.targetRoot;

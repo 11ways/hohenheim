@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.quota;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -8,8 +11,6 @@ import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.quota.QuotaReconciler;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.util.Uuids;
 import be.elevenways.zenit.auth.cms.SubjectTag;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -40,13 +41,14 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  */
 class QuotaDimensionsReconcileTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final AtomicBoolean FAIL_NEXT_DATABASE_WRITE = new AtomicBoolean();
     private static final String STRANGER = new SubjectTag(GrantSubjectType.USER, Uuids.v7()).token();
 
     @BeforeAll
     static void setUp() throws Exception {
-        TestDatabases.freshDatabase();
-        HohenheimTestRuntime.ensureBooted();
         DatabaseModel.SCHEMA.addBeforeWriteHook(context -> {
             if (FAIL_NEXT_DATABASE_WRITE.getAndSet(false)) {
                 throw new IllegalStateException("simulated unique-index loss after the reservation");
@@ -57,7 +59,6 @@ class QuotaDimensionsReconcileTest {
     @AfterAll
     static void tearDown() throws Exception {
         FAIL_NEXT_DATABASE_WRITE.set(false);
-        TestDatabases.freshDatabase();
     }
 
     @Test

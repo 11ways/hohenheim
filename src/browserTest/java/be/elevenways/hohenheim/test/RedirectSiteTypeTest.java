@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -16,6 +19,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class RedirectSiteTypeTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static boolean initialized = false;
     private ProxyServer proxy;
 
@@ -23,7 +29,7 @@ class RedirectSiteTypeTest {
     static void initRuntime() throws Exception {
         if (initialized) return;
         initialized = true;
-        bootRuntime();
+        HohenheimEndpoints.init();
     }
 
     @AfterEach
@@ -36,7 +42,7 @@ class RedirectSiteTypeTest {
 
     @Test
     void redirectsWithConfiguredStatusAndTarget() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         setupSiteWithDomain("hohenheim:redirect", "redir.test", "exact", Map.of(
             "target_url", "https://target.example/landing",
             "http_status", "301"));
@@ -50,7 +56,7 @@ class RedirectSiteTypeTest {
 
     @Test
     void preservePathAppendsPathAndQuery() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         setupSiteWithDomain("hohenheim:redirect", "redirpath.test", "exact", Map.of(
             "target_url", "https://target.example",
             "preserve_path", true));
@@ -63,7 +69,7 @@ class RedirectSiteTypeTest {
 
     @Test
     void delaySettingPostponesTheRedirect() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         setupSiteWithDomain("hohenheim:redirect", "slowredir.test", "exact", Map.of(
             "target_url", "https://target.example/",
             "delay", 500));
@@ -81,7 +87,7 @@ class RedirectSiteTypeTest {
 
     @Test
     void invalidTargetSchemeIsRejected() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         setupSiteWithDomain("hohenheim:redirect", "badredir.test", "exact", Map.of(
             "target_url", "javascript:alert(1)"));
 

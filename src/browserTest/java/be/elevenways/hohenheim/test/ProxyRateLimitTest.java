@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -39,6 +42,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class ProxyRateLimitTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final String FRONT_KEY = "front-key-rate";
 
     private ProxyServer proxy;
@@ -46,7 +52,8 @@ class ProxyRateLimitTest {
 
     @BeforeEach
     void start() throws Exception {
-        ProxyTestSupport.bootRuntime();
+        HohenheimEndpoints.init();
+        APP.renewDatabase();
         RateLimitMiddleware.limiter().clear();
         this.previousKeys = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS);
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, List.of(FRONT_KEY));

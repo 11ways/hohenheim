@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.stack;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -17,8 +20,6 @@ import be.elevenways.hohenheim.server.stack.StackInstances;
 import be.elevenways.hohenheim.server.stack.StackServiceKind;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
 import be.elevenways.hohenheim.test.docker.TestImages;
-import be.elevenways.hohenheim.test.TestDatabases;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.protoblast.common.time.Now;
@@ -58,6 +59,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class StackInstancesTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
     private static final String TEST_IMAGE = TestImages.ALPINE;
 
@@ -72,8 +76,7 @@ class StackInstancesTest {
     static void setUp() throws Exception {
         FieldEncryption.installKeyring(EncryptionKeyring.loadOrCreate(
             Files.createTempDirectory("hh-stackinst-enc").resolve("keys.dry")));
-        datasource = TestDatabases.freshDatasource();
-        HohenheimTestRuntime.ensureBooted();
+        datasource = APP.database();
         netns = PrivateNetns.installEnforcing();
         docker = new DockerClient();
         runtime = new StackRuntime(docker, datasource);

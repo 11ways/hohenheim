@@ -1,7 +1,8 @@
 package be.elevenways.hohenheim.server.devtunnel;
 
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.TestDatabases;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.zenit.common.routing.ParameterDefinition;
 import be.elevenways.zenit.common.websocket.WebSocketSession;
 import org.junit.jupiter.api.BeforeAll;
@@ -29,13 +30,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class DevTunnelBridgeTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final int SELF = 4242;
 
-    @BeforeAll
-    static void boot() throws Exception {
-        TestDatabases.freshDatasource();
-        HohenheimTestRuntime.ensureBooted();
-    }
 
     @Test
     void onlyThisProcesssUidReachesTheTunnel() throws Exception {

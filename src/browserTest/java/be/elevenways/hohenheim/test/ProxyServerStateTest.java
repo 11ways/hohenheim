@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
@@ -19,6 +21,9 @@ import java.net.ServerSocket;
  */
 class ProxyServerStateTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static boolean initialized = false;
 
     @BeforeAll
@@ -27,11 +32,6 @@ class ProxyServerStateTest {
         initialized = true;
 
         HohenheimEndpoints.init();
-        TestDatabases.freshDatabase();
-        // Declare the full-node role set: this class boots the runtime without the
-        // HohenheimTestRuntime funnel, and the TASKS stage reads the role snapshot.
-        be.elevenways.hohenheim.server.HohenheimRoles.capture();
-        ServerZenitRuntime.init();
     }
 
     @Test

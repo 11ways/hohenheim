@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
@@ -30,6 +33,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class BanEnforcementTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final String KEY = "ban-enforce-test-key";
     private static boolean initialized = false;
     private ProxyServer proxy;
@@ -38,7 +44,7 @@ class BanEnforcementTest {
     static void initRuntime() throws Exception {
         if (initialized) return;
         initialized = true;
-        bootRuntime();
+        HohenheimEndpoints.init();
     }
 
     @AfterEach

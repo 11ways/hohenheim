@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.server.docker;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -7,8 +10,6 @@ import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.WorkloadLiveness;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import org.junit.jupiter.api.Test;
 
@@ -29,12 +30,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class DatabaseLinkPortRefreshTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final int OWNER = 987_001;
 
     @Test
     void theWholePublishedSetIsComparedAndRecorded() throws Exception {
-        TestDatabases.freshDatabase();
-        HohenheimTestRuntime.ensureBooted();
+        APP.renewDatabase();
         int serverId = ServerModel.localServerId();
 
         // 1. The deploy recorded two observed publications of one workload.

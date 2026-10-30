@@ -48,7 +48,8 @@ class ApiWireSharedRefusalsTest extends HohenheimHttpTestBase {
 
     @BeforeAll
     static void seed() throws Exception {
-        TestDatabases.freshDatabase();
+        // The wire is captured over records numbered from 1: no seeded row (the local host) comes first.
+        APP.renewUnseededDatabase();
         savedMaxUploadMb = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Builds.MAX_UPLOAD_MB);
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Builds.MAX_UPLOAD_MB, 1);
 

@@ -10,7 +10,6 @@ import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.ApiWire;
 import be.elevenways.hohenheim.test.ApiWire.Caller;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.live.LiveLane;
@@ -65,7 +64,8 @@ class ApiWireFilesLiveTest extends HohenheimTestBase {
 
     @BeforeAll
     static void seed() throws Exception {
-        TestDatabases.freshDatabase();
+        // The wire is captured over records numbered from 1: no seeded row (the local host) comes first.
+        APP.renewUnseededDatabase();
         netns = PrivateNetns.installEnforcing();
         HostFixtures.admitLocal();
 

@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.AccessListModel;
@@ -49,6 +51,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class ProteusAuthGateTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final String GATED = "hohenheim.site.gated";
     private static final String ADMIN = "hohenheim.site.admin";
     private static final Pattern RETURN_URL = Pattern.compile("\"return_url\"\\s*:\\s*\"([^\"]*)\"");
@@ -88,8 +93,6 @@ class ProteusAuthGateTest {
         initialized = true;
 
         HohenheimEndpoints.init();
-        TestDatabases.freshDatabase();
-        HohenheimTestRuntime.ensureBooted();
         RateLimitMiddleware.limiter().clear();
     }
 

@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.HohenheimEndpoints;
@@ -38,6 +40,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class ForceSslAvailabilityTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static ProxyServer proxy;
     private static HttpServer upstream;
     private static final AtomicInteger upstreamHits = new AtomicInteger();
@@ -45,8 +50,6 @@ class ForceSslAvailabilityTest {
     @BeforeAll
     static void boot() throws Exception {
         HohenheimEndpoints.init();
-        TestDatabases.freshDatabase();
-        HohenheimTestRuntime.ensureBooted();
 
         upstream = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         upstream.createContext("/", ex -> {

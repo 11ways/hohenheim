@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.incus;
 
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -26,11 +28,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class IncusNetworkPolicyAclTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     /** Names and labels are controller-namespaced, so this needs a real identity. */
-    @BeforeAll
-    static void controllerIdentity() {
-        HohenheimTestRuntime.ensureDatasource();
-    }
 
 
     /**

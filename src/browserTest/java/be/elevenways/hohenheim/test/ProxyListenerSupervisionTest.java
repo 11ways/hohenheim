@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.HohenheimEndpoints;
@@ -52,6 +54,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class ProxyListenerSupervisionTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final long HALF_MINUTE = 30_000;
     private static final long ONE_HOUR = 60L * 60 * 1000;
 
@@ -62,8 +67,6 @@ class ProxyListenerSupervisionTest {
     @BeforeAll
     static void boot() throws Exception {
         HohenheimEndpoints.init();
-        TestDatabases.freshDatabase();
-        HohenheimTestRuntime.ensureBooted();
     }
 
     @AfterAll

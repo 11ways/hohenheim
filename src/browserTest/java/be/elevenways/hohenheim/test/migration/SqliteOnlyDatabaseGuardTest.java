@@ -1,9 +1,11 @@
 package be.elevenways.hohenheim.test.migration;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.server.setting.ServerSettings;
 import org.junit.jupiter.api.Test;
@@ -24,6 +26,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class SqliteOnlyDatabaseGuardTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     @Test
     void bootRefusesNonSqliteEnginesAndResolvesOneUrlForEveryLane() throws Exception {
         String previousUrl = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.URL);
@@ -32,6 +37,8 @@ class SqliteOnlyDatabaseGuardTest {
         var datasourceBefore = HohenheimDatabase.datasource();
 
         try {
+            // The served class database's address (zenit's database.url) is put back below; step 1 names none.
+            ServerSettings.VALUES.setValue(ServerSettings.Database.URL, null);
             // 1. A PostgreSQL URL in the deprecated hohenheim key is refused with a message
             //    naming the concrete hazard.
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.URL,
@@ -92,7 +99,7 @@ class SqliteOnlyDatabaseGuardTest {
         }
 
         // 6. The SQLite path the tests and production actually use still boots.
-        TestDatabases.freshDatabase();
+        APP.renewDatabase();
         assertThat(HohenheimDatabase.datasource())
             .as("step 6: a sqlite database boots normally after the refusals")
             .isNotNull()

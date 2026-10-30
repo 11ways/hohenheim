@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
@@ -20,7 +23,6 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static be.elevenways.hohenheim.test.ProxyTestSupport.addDomain;
-import static be.elevenways.hohenheim.test.ProxyTestSupport.bootRuntime;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.httpPort;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.rawRequest;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.setupSite;
@@ -35,6 +37,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class ForwardedCredentialsTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static ProxyServer proxy;
     private static HttpServer upstream;
     private static final AtomicReference<String> seenAuthorization = new AtomicReference<>();
@@ -43,7 +48,7 @@ class ForwardedCredentialsTest {
 
     @BeforeAll
     static void boot() throws Exception {
-        bootRuntime();
+        HohenheimEndpoints.init();
         RateLimitMiddleware.limiter().clear();
         upstream = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         upstream.createContext("/", ex -> {

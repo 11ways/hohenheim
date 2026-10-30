@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.DnsPeerModel;
@@ -53,6 +55,9 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
  */
 class DnsHardeningTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final String ORIGIN = "dns-hardening.example";
 
     private static DnsServer server;
@@ -62,8 +67,6 @@ class DnsHardeningTest {
     @BeforeAll
     static void boot() throws Exception {
         HohenheimEndpoints.init();
-        TestDatabases.freshDatabase();
-        HohenheimTestRuntime.ensureBooted();
 
         zoneId = createZone(ORIGIN);
         record(zoneId, "www", DnsRecordModel.TYPE_A, "192.0.2.10");

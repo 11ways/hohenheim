@@ -59,7 +59,7 @@ class SettingsTasksMountTest extends HohenheimTestBase {
             .contains(TaskAdmin.SCHEDULES_SLUG, TaskAdmin.RUNS_SLUG);
 
         // 2. The schedule the real task reconcile stores for a declared task is listed, with Run now in its row. A
-        //    class running after another swapped the database finds the task service stopped (TestDatabases), so the
+        //    class running after another swapped the database finds the task service stopped (HohenheimServedApp), so the
         //    test starts one over its own database for its duration: initialize() is the boot's own reconcile.
         TaskService service = new TaskService(HohenheimDatabase.datasource());
         try {

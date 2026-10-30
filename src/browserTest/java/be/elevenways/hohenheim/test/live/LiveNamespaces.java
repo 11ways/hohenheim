@@ -28,7 +28,7 @@ import java.util.stream.Stream;
  *
  * The failure it removes is a false failure in an unrelated test: every live run mints
  * a fresh {@code ControllerIdentity} token per database (see
- * {@code TestDatabases.remintControllerIdentity}) and every PRIVATE-posture workload gets
+ * {@code HohenheimServedApp}'s FreshControllerIdentity) and every PRIVATE-posture workload gets
  * its own Docker network named {@code hohenheim-<token>-<kind>-<id>-net}. A test that
  * fails, or a worker JVM killed by a task timeout, never reaches the {@code destroy} that
  * would call {@link WorkloadNetworks#teardown}. Docker's default address pool subnets

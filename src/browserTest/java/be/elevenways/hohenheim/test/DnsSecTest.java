@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.DnsRecordModel;
@@ -47,6 +49,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class DnsSecTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static DnsServer server;
     private static int port;
     private static DNSKEYRecord dnsKey;
@@ -54,8 +59,6 @@ class DnsSecTest {
     @BeforeAll
     static void boot() throws Exception {
         HohenheimEndpoints.init();
-        TestDatabases.freshDatabase();
-        HohenheimTestRuntime.ensureBooted();
 
         int zoneId = createSignedZone("signed.example");
         record(zoneId, "@", DnsRecordModel.TYPE_NS, "ns1.signed.example");

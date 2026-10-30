@@ -1,12 +1,14 @@
 package be.elevenways.hohenheim.server.cms;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.site.SiteOperations;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
@@ -32,10 +34,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class RollbackActionsAgreeTest {
 
-    @BeforeAll
-    static void setUp() throws Exception {
-        TestDatabases.freshBootedDatasource();
-    }
+
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
 
     @Test
     void bothRollbacksConfirmWithTheirVerbAndAnswerWithTheirRun() {

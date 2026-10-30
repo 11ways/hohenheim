@@ -1,11 +1,12 @@
 package be.elevenways.hohenheim.server.tls;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.tls.FakeAcmeServer;
 import be.elevenways.hohenheim.test.tls.RecordingTxtPublisher;
 import be.elevenways.protoblast.common.thread.JobRunner;
@@ -54,6 +55,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class AcmeReissueContractTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     /** Every hostname here ends in this, so no other class in the shared fork covers it. */
     private static final String ZONE = "reissue.test";
 
@@ -66,8 +70,7 @@ class AcmeReissueContractTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        datasource = TestDatabases.freshDatasource();
-        HohenheimTestRuntime.ensureBooted();
+        datasource = APP.database();
 
         ca = new FakeAcmeServer();
         savedDirectory = Zenit.SETTINGS_VALUES.getValue(

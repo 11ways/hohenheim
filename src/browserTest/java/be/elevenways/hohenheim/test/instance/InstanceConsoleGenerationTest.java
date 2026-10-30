@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.instance;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.instance.ReadinessKind;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
@@ -8,9 +11,7 @@ import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.instance.InstanceConsoles;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.instance.InstanceService;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.protoblast.testsupport.time.Poll;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -46,6 +47,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class InstanceConsoleGenerationTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final String HOST = "console-generation-host";
 
     private static SqlDatasource datasource;
@@ -53,8 +57,7 @@ class InstanceConsoleGenerationTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        datasource = TestDatabases.freshDatasource();
-        HohenheimTestRuntime.ensureBooted();
+        datasource = APP.database();
         FakeNativeDaemons.register();
         Db.run(datasource, () -> hostId = HostFixtures.admittedIncusHost(HOST));
     }
@@ -226,7 +229,7 @@ class InstanceConsoleGenerationTest {
         });
 
         // 2. Controller B (a fresh database) asks for its record of the same id: there is no console of B's.
-        SqlDatasource other = TestDatabases.freshDatasource();
+        SqlDatasource other = APP.renewDatabase();
         Db.run(other, () -> assertThat(InstanceConsoles.peek(ids[0]))
             .as("step 2: B's record of the same id has no console; it never reads A's").isNull());
     }

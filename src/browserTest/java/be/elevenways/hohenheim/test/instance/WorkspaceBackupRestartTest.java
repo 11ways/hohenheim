@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.instance;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BuildOperationModel;
@@ -37,13 +40,16 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  */
 class WorkspaceBackupRestartTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static BackupLaneFixture fixture;
     private static FakeWorkspaceDaemon daemon;
     private static Integer savedUidBase;
 
     @BeforeAll
     static void setUp() throws Exception {
-        fixture = BackupLaneFixture.install();
+        fixture = BackupLaneFixture.install(APP.database());
         savedUidBase = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Storage.VOLUME_UID_BASE);
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.VOLUME_UID_BASE, 200000);
         daemon = FakeWorkspaceDaemon.install();

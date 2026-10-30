@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.docker;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
@@ -25,8 +28,6 @@ import be.elevenways.hohenheim.test.instance.ForwardingKindHandler;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.Zenit;
@@ -58,14 +59,16 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * The fixture is deliberately stateless: bind-volume bytes and kernel quota enforcement remain
  * live-lane proof, not something this in-memory Docker runtime pretends to implement. */
 class ApplicationBackupRecoveryTest {
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final String IMAGE = "sha256:" + "a".repeat(64);
     private static final byte[] IMAGE_BYTES = "immutable exported image fixture".getBytes(StandardCharsets.UTF_8);
 
     @Test
     void restoreSurvivesSourceAndImageLossAndFailedCaptureRestartsSameRelease(@TempDir Path tmp)
             throws Exception {
-        var datasource = TestDatabases.freshDatasource();
-        HohenheimTestRuntime.ensureBooted();
+        var datasource = APP.database();
         FakeDockerDaemon daemon = new FakeDockerDaemon();
         daemon.install();
         SnapshotRuntime runtime = new SnapshotRuntime(daemon.runtime());

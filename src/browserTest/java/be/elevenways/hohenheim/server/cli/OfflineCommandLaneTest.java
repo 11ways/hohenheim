@@ -1,13 +1,14 @@
 package be.elevenways.hohenheim.server.cli;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.hohenheim.test.ApiSupport;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.migration.InstallsAt;
 import be.elevenways.zenit.auth.server.PasswordService;
 import be.elevenways.zenit.auth.server.SetPasswordOfflineCommand;
@@ -61,6 +62,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class OfflineCommandLaneTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final String EMAIL = "locked-out-admin@hohenheim.local";
     private static final String FORGOTTEN = "the forgotten password";
     private static final String CHOSEN = "chosen offline password";
@@ -69,8 +73,6 @@ class OfflineCommandLaneTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        TestDatabases.freshDatabase();
-        HohenheimTestRuntime.ensureBooted();
         // The pool zenit-auth's models captured; the lane opens and closes its OWN, so this
         // one survives the whole class and must be released by hand at the end.
         fixtureDatasource = HohenheimDatabase.datasource();
@@ -80,7 +82,6 @@ class OfflineCommandLaneTest {
     static void tearDown() throws Exception {
         // The lane CLOSES the datasource it opened, which is correct for a process about to
         // exit and fatal for the next class in a shared JVM. Hand the fork a live one back.
-        TestDatabases.freshDatabase();
         if (fixtureDatasource != null) {
             fixtureDatasource.close();
         }

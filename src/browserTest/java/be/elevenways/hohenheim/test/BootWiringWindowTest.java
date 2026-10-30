@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.HohenheimSettingsBoot;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.zenit.auth.AuthSettings;
@@ -11,8 +12,10 @@ import be.elevenways.zenit.common.data.RecordSourceRegistry;
 import be.elevenways.zenit.common.websocket.WebSocketHandler;
 import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.server.setting.ServerSettings;
+import be.elevenways.zenit.test.support.MigratedDatabase;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -40,6 +43,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Tag("solo")
 class BootWiringWindowTest {
 
+    /** The class's own migrated file, which the boot opens through database.url as on a host. */
+    @RegisterExtension
+    static final MigratedDatabase DATABASE = MigratedDatabase.sqliteFile("boot-window.db");
+
     @Test
     void everyRequestFacingWiringExistsWhenTheListenerAccepts() throws Exception {
         // 1. Exactly ServerMain's pre-boot sequence, up to (not including) the
@@ -47,8 +54,9 @@ class BootWiringWindowTest {
         HohenheimSettingsBoot.load();
 
         HohenheimEndpoints.init();
-        HohenheimTestRuntime.declareAccessModelsOnce();
-        TestDatabases.freshDatabase();
+        HohenheimServedApp.declareAccessModelsOnce();
+        ServerSettings.VALUES.setValue(ServerSettings.Database.URL, DATABASE.location().url());
+        HohenheimDatabase.init();
 
         Zenit.SETTINGS_VALUES.setValue(AuthSettings.CMS_AUTO_PANEL, false);
         ServerMain.installAuthBaselines();

@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
@@ -22,7 +25,6 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static be.elevenways.hohenheim.test.ProxyTestSupport.addDomain;
-import static be.elevenways.hohenheim.test.ProxyTestSupport.bootRuntime;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.httpPort;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.rawRequest;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.setupSite;
@@ -38,13 +40,16 @@ import static org.assertj.core.api.Assertions.tuple;
  */
 class TenantUpstreamDialTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static ProxyServer proxy;
     private static HttpServer upstream;
     private static final AtomicInteger upstreamHits = new AtomicInteger();
 
     @BeforeAll
     static void boot() throws Exception {
-        bootRuntime();
+        HohenheimEndpoints.init();
         upstream = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         upstream.createContext("/", ex -> {
             upstreamHits.incrementAndGet();

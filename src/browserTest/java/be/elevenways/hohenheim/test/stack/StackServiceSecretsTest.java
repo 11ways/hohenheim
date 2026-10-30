@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.stack;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -11,8 +14,8 @@ import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.stack.StackInstances;
 import be.elevenways.hohenheim.server.stack.StackServiceKind;
 import be.elevenways.hohenheim.server.stack.StackSpec;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.server.setting.ServerSettings;
 import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -22,7 +25,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -50,17 +52,17 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  */
 class StackServiceSecretsTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final String PASSWORD = "hunter2-stack-secret";
 
     private static SqlDatasource datasource;
-    private static File databaseFile;
     private static FakeDockerDaemon daemon;
 
     @BeforeAll
     static void setUp() throws Exception {
-        databaseFile = TestDatabases.freshDatabase();
-        datasource = HohenheimDatabase.datasource();
-        HohenheimTestRuntime.ensureBooted();
+        datasource = APP.database();
         daemon = new FakeDockerDaemon();
         daemon.install();
     }
@@ -242,8 +244,9 @@ class StackServiceSecretsTest {
     /** The stored column exactly as it sits on disk, bypassing the ORM's decryption. */
     private static List<String> rawColumn(String sql, int id) throws Exception {
         List<String> values = new ArrayList<>();
+        // The class database's own address, which the served app hands the host as database.url.
         try (Connection connection = DriverManager.getConnection(
-                "jdbc:sqlite:" + databaseFile.getAbsolutePath());
+                Zenit.SETTINGS_VALUES.getValue(ServerSettings.Database.URL));
              PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setInt(1, id);
             try (ResultSet rows = statement.executeQuery()) {

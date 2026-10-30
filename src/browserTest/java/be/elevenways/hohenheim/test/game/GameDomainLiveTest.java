@@ -1,8 +1,10 @@
 package be.elevenways.hohenheim.test.game;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.test.docker.TestImages;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.protoblast.common.time.Now;
@@ -29,7 +31,6 @@ import be.elevenways.hohenheim.server.instance.InstanceConsoles;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceTemplates;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -77,6 +78,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class GameDomainLiveTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
     private static final String VELOCITY_IMAGE = "dockcenter/velocity:latest";
     private static final String BACKEND_IMAGE = "nginx:alpine";
@@ -95,15 +99,13 @@ class GameDomainLiveTest {
         // daemon resource name) resolves through the CURRENT datasource, and a Db scope
         // is thread-local -- so a second, unregistered database would hand any
         // thread-hopping work a different controller's token than the records came from.
-        datasource = TestDatabases.freshDatasource();
+        datasource = APP.database();
         // The keyring is installed BEFORE the boot: this class's database is now THE
         // default, so anything the boot encrypts into it must be encrypted with the
         // keyring the class will later read it back with.
         workRoot = Files.createTempDirectory("hohenheim-game-live-test");
         FieldEncryption.installKeyring(EncryptionKeyring.loadOrCreate(
             workRoot.resolve("test-keyring.keys")));
-        HohenheimTestRuntime.declareAccessModelsOnce();
-        HohenheimTestRuntime.ensureBooted();
         netns = PrivateNetns.installEnforcing();
     }
 

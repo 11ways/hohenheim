@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.test.instance;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.test.ApiSupport;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -15,7 +17,6 @@ import be.elevenways.hohenheim.server.files.InstanceFiles;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.InstanceFileSupport;
 import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
@@ -59,6 +60,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class InstanceFilesLiveTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
 
     /** The cap the bound counterfactual is measured against; small so the test stays cheap. */
@@ -74,12 +78,10 @@ class InstanceFilesLiveTest {
         // daemon resource name) resolves through the CURRENT datasource, and a Db scope
         // is thread-local -- so a second, unregistered database would hand any
         // thread-hopping work a different controller's token than the records came from.
-        datasource = TestDatabases.freshDatasource();
+        datasource = APP.database();
         // BEFORE the boot: the capability matrix below grants files.read/files.write, and
         // zenit-auth refuses a grant on an undeclared model -- while declaring one AFTER the
         // CMS contributions drained is itself a hard failure. Same order ServerMain uses.
-        HohenheimTestRuntime.declareAccessModelsOnce();
-        HohenheimTestRuntime.ensureBooted();
         previousMaxFileKb = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Files.MAX_FILE_KB);
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Files.MAX_FILE_KB, MAX_FILE_KB);
         netns = PrivateNetns.installEnforcing();

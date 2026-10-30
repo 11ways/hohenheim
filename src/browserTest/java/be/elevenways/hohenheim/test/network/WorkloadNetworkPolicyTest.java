@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.test.network;
 
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.protoblast.common.util.BlastString;
 import org.junit.jupiter.api.BeforeAll;
 import be.elevenways.hohenheim.server.runtime.Egress;
@@ -33,11 +35,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class WorkloadNetworkPolicyTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     /** nft table and container names are controller-namespaced, so this needs an identity. */
-    @BeforeAll
-    static void controllerIdentity() {
-        HohenheimTestRuntime.ensureDatasource();
-    }
 
 
     private static final String TENANT_SUBNET = "172.31.5.0/24";

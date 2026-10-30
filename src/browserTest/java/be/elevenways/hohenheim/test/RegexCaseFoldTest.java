@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.server.proxy.HostnamePatterns;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.proxy.RouteClaims;
@@ -27,13 +30,16 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class RegexCaseFoldTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static ProxyServer proxy;
     private static HttpServer firstUpstream;
     private static HttpServer secondUpstream;
 
     @BeforeAll
     static void boot() throws Exception {
-        ProxyTestSupport.bootRuntime();
+        HohenheimEndpoints.init();
     }
 
     @AfterAll

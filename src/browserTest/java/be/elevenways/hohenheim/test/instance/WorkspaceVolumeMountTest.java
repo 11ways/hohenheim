@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.instance;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -56,6 +59,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  */
 class WorkspaceVolumeMountTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final String KIND = WorkspaceKind.ID.toString();
     private static final String DATA_PATH = "/srv/hoh-vol";
 
@@ -67,7 +73,7 @@ class WorkspaceVolumeMountTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        BackupLaneFixture fixture = BackupLaneFixture.install();
+        BackupLaneFixture fixture = BackupLaneFixture.install(APP.database());
         datasource = fixture.datasource;
         hostId = fixture.hostId;
         savedDataPath = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);

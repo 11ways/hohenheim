@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.instance;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.database.DatabaseEngines;
 import be.elevenways.hohenheim.server.database.DatabaseWrites;
@@ -83,6 +86,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  */
 class InstanceOperationSerializationTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static SqlDatasource datasource;
     private static int hostId;
 
@@ -96,7 +102,7 @@ class InstanceOperationSerializationTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        BackupLaneFixture fixture = BackupLaneFixture.install();
+        BackupLaneFixture fixture = BackupLaneFixture.install(APP.database());
         datasource = fixture.datasource;
         hostId = fixture.hostId;
     }

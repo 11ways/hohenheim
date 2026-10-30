@@ -1,12 +1,13 @@
 package be.elevenways.hohenheim.server.security;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.protoblast.testsupport.time.Poll;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.protoblast.testsupport.thread.Racers;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.revision.RevisionModel;
@@ -32,6 +33,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class SecurityReportEnvTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static boolean initialized = false;
 
     /** One recorded ensure call: "name|trusted|rawKey". */
@@ -42,8 +46,6 @@ class SecurityReportEnvTest {
     static void initDb() throws Exception {
         if (initialized) return;
         initialized = true;
-        TestDatabases.freshDatabase();
-        HohenheimTestRuntime.ensureBooted();
     }
 
     @AfterEach

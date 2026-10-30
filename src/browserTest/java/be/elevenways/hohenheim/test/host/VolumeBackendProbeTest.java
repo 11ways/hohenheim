@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.host;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.VolumeBackends;
@@ -26,10 +29,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class VolumeBackendProbeTest {
 
-    @BeforeAll
-    static void bootDatasource() {
-        be.elevenways.hohenheim.test.HohenheimTestRuntime.ensureDatasource();
-    }
+
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
 
     @Test
     @DisplayName("the probe reads the filesystem, and an unrecognised one refuses")

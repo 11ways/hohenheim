@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.database;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
@@ -14,7 +17,6 @@ import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
@@ -47,6 +49,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class ControlPlaneBackupTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final String HOOK_URL = "https://hooks.example.com/services/cp-backup-token-X1";
 
     @BeforeAll
@@ -70,7 +75,7 @@ class ControlPlaneBackupTest {
 
         // 1. A migrated control-plane database with a real encrypted secret, under a real
         //    keyring file, marker recorded by the boot guard.
-        // AIDEV-NOTE: deliberately NOT TestDatabases.freshDatasource(): the subject is the
+        // AIDEV-NOTE: deliberately NOT the served app's class database: the subject is the
         // database FILE at a known location -- step 3 proves nothing was written beside it,
         // step 4 deletes it and step 5 restores it to the path the settings name -- so the
         // journey owns its file and migrates it from empty.
@@ -137,12 +142,15 @@ class ControlPlaneBackupTest {
         //    settings say they belong.
         String originalPath = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.PATH);
         String originalUrl = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.URL);
+        // The served class database's own address (database.url) wins over the hohenheim keys: step 5 names none.
+        String originalZenitUrl = ServerSettings.VALUES.getValue(ServerSettings.Database.URL);
         String originalKeyFile = ServerSettings.VALUES.getValue(
             ServerSettings.Database.Encryption.KEY_FILE);
         Path fetched = workspace.resolve("fetched.zrec");
         try {
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.PATH, dbFile.toString());
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.URL, "");
+            ServerSettings.VALUES.setValue(ServerSettings.Database.URL, null);
             ServerSettings.VALUES.setValue(
                 ServerSettings.Database.Encryption.KEY_FILE, keyringFile.toString());
             target.retrieve(archive.key(), fetched);
@@ -155,6 +163,7 @@ class ControlPlaneBackupTest {
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.PATH, originalPath);
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.URL,
                 originalUrl == null ? "" : originalUrl);
+            ServerSettings.VALUES.setValue(ServerSettings.Database.URL, originalZenitUrl);
             ServerSettings.VALUES.setValue(
                 ServerSettings.Database.Encryption.KEY_FILE, originalKeyFile);
         }
@@ -184,7 +193,7 @@ class ControlPlaneBackupTest {
     @Test
     void anUnconfiguredOrUnknownDestinationIsRefusedByName() throws Exception {
         Path workspace = Files.createTempDirectory("hh-cp-destination");
-        SqlDatasource datasource = TestDatabases.freshDatasource();
+        SqlDatasource datasource = APP.renewDatabase();
 
         String original = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET);
@@ -271,7 +280,10 @@ class ControlPlaneBackupTest {
     void databaseFileResolutionRefusesWhatRestoreCannotReplace() {
         String originalPath = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.PATH);
         String originalUrl = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.URL);
+        // The hohenheim key decides only without zenit's database.url, which the served class database sets.
+        String originalZenitUrl = ServerSettings.VALUES.getValue(ServerSettings.Database.URL);
         try {
+            ServerSettings.VALUES.setValue(ServerSettings.Database.URL, null);
             // A plain sqlite URL resolves to its file, query parameters stripped.
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.URL,
                 "jdbc:sqlite:/tmp/cp-test.db?foreign_keys=on");
@@ -295,6 +307,7 @@ class ControlPlaneBackupTest {
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.PATH, originalPath);
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.URL,
                 originalUrl == null ? "" : originalUrl);
+            ServerSettings.VALUES.setValue(ServerSettings.Database.URL, originalZenitUrl);
         }
     }
 

@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.database;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -12,8 +15,6 @@ import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -37,6 +38,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class EngineConfigurationSaveTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     /** What runs inside the next instance write, between its load and its statement: the winning operation. */
     private static final AtomicReference<Runnable> DURING_WRITE = new AtomicReference<>();
 
@@ -51,9 +55,8 @@ class EngineConfigurationSaveTest {
 
     @Test
     void configurationWritersLeaveTheWinningOperationsStatusAndFenceJourney() throws Exception {
-        TestDatabases.freshDatabase();
+        APP.renewDatabase();
         SqlDatasource datasource = HohenheimDatabase.datasource();
-        HohenheimTestRuntime.ensureBooted();
         Db.run(datasource, () -> HostFixtures.makeLocalPlaceable(16384));
         new DatabaseService(datasource).insertRecord("cfgsave", ManagedDatabase.Engine.MONGO, null,
             "cfguser", "cfgpassword-01", "cfgdb", false, ServerService.LOCAL_HOST_NAME,

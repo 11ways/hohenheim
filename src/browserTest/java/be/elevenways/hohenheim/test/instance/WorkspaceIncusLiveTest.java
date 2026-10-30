@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.instance;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.host.VolumeBackend;
@@ -23,8 +26,6 @@ import be.elevenways.hohenheim.server.instance.WorkspaceKind;
 import be.elevenways.hohenheim.server.instance.WorkspaceUids;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.Zenit;
@@ -73,6 +74,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Tag("slow") // live lane: needs a real Incus host; runs via `zenit-dev test --all`
 class WorkspaceIncusLiveTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     /** Unique per live class: the authorized_keys sweep is keyed on this name. */
     private static final String HOST = "live-incus-workspace";
 
@@ -104,8 +108,7 @@ class WorkspaceIncusLiveTest {
         remote = LiveIncusHost.requireSecondary();
         remoteA = LiveIncusHost.requirePrimary();
 
-        datasource = TestDatabases.freshDatasource();
-        HohenheimTestRuntime.ensureBooted();
+        datasource = APP.database();
 
         Db.run(datasource, () -> {
             enrolledFingerprint = remote.enrollThroughProduct(HOST, "hohenheim-live-workspace");

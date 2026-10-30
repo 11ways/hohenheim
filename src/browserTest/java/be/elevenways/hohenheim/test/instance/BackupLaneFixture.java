@@ -7,8 +7,6 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.backup.BackupTarget;
 import be.elevenways.hohenheim.server.backup.FilesystemBackupTarget;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -53,17 +51,12 @@ final class BackupLaneFixture {
     }
 
     /**
-     * Boot the lane: private database, booted runtime, staging + target directories, a
-     * keyring, the fake native kind, one admitted incus host and one target record.
+     * Install the lane over the class's database: staging + target directories, a keyring, the fake native kind,
+     * one admitted incus host and one target record.
+     *
+     * @param datasource the test class's served database
      */
-    static BackupLaneFixture install() throws Exception {
-        // TestDatabases, never a hand-rolled SqliteDatasource: it copies the migrated
-        // template instead of re-running the migration set, remints the controller
-        // identity and re-points the services that CAPTURE a datasource (zenit-auth's
-        // models and session store, the task service) -- the three things the hand-rolled
-        // shape skipped, and the reason a class can share a JVM at all.
-        SqlDatasource datasource = TestDatabases.freshDatasource();
-        HohenheimTestRuntime.ensureBooted();
+    static BackupLaneFixture install(SqlDatasource datasource) throws Exception {
 
         Path staging = Files.createTempDirectory("hohenheim-backup-staging");
         staging.toFile().deleteOnExit();

@@ -1,12 +1,13 @@
 package be.elevenways.hohenheim.test.instance;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.cms.ServerParts;
 import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusTrust;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -24,11 +25,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class HostTrustReleaseTest {
 
-    @BeforeAll
-    static void setUp() throws Exception {
-        TestDatabases.freshDatasource();
-        HohenheimTestRuntime.ensureBooted();
-    }
+
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
 
     @Test
     void removingAnIncusHostGivesBackOnlyItsOwnTrustEntry() throws Exception {

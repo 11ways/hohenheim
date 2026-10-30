@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.test.database;
 
-import be.elevenways.hohenheim.test.TestDatabases;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
@@ -55,6 +57,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class EngineMemoryCeilingTest {
+
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
 
     /**
      * A declared footprint must leave at least a fifth of itself spare at the measured
@@ -144,7 +149,7 @@ class EngineMemoryCeilingTest {
         DockerClient docker = new DockerClient();
         LiveLane.requireImage(docker, image);
 
-        DatabaseService service = new DatabaseService(TestDatabases.freshBootedDatasource());
+        DatabaseService service = new DatabaseService(APP.renewDatabase());
         String name = engine.token() + "mem" + System.nanoTime();
         try {
             // The real funnel, with no memory_limit_mb: the kind's per-engine default is

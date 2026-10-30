@@ -1,11 +1,12 @@
 package be.elevenways.hohenheim.server.spamservice;
 
-import be.elevenways.hohenheim.test.TestDatabases;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SpamserviceInstallationModel;
 import be.elevenways.hohenheim.model.SystemUserModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.validator.Range;
@@ -20,11 +21,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 /** Verifies the zero-row, typed RowSingleton backing contract. */
 class SpamserviceInstallationModelTest {
 
-    @BeforeAll
-    static void initDb() throws Exception {
-        TestDatabases.freshDatabase();
-        HohenheimTestRuntime.ensureBooted();
-    }
+
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
 
     /**
      * The stub is SEEDED, not migrated (it moved out of M041 with the 2026-08-13 migration

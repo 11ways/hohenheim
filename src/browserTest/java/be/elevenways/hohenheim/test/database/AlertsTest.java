@@ -1,8 +1,12 @@
 package be.elevenways.hohenheim.test.database;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.zenit.test.support.ServedAppBinding;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -12,7 +16,6 @@ import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.database.DatabaseBackups;
 import be.elevenways.hohenheim.server.database.DatabaseService;
@@ -67,19 +70,29 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Tag("solo")
 class AlertsTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone().with(new LanWebhookAuthority());
+
+    /** The test host declares its LAN webhook authority before the runtime seals boot declarations. */
+    private static final class LanWebhookAuthority implements ServedAppBinding {
+
+        @Override
+        public void beforeBoot(@NonNull SqlDatasource database) {
+            ExecutionIdentity.runDetachedAsSystem(HohenheimSystemPurposes.BOOT, () -> {
+                new DrySettingsWriter(ServerZenitRuntime.settingsFile(PrivateNetworkBoot.FILE))
+                    .setPath(NotificationSettings.Webhook.ALLOW_PRIVATE_NETWORKS.configurationPath(), true).persist();
+                NotificationSettings.Webhook.ALLOW_PRIVATE_NETWORKS.declareAtBoot(true);
+            });
+        }
+
+        @Override
+        public void bind(@NonNull SqlDatasource database) {
+        }
+    }
+
     @BeforeAll
-    static void boot() throws Exception {
-        // The test host declares its LAN webhook authority before runtime seals boot declarations.
-        ExecutionIdentity.runDetachedAsSystem(HohenheimSystemPurposes.BOOT, () -> {
-            new DrySettingsWriter(ServerZenitRuntime.settingsFile(PrivateNetworkBoot.FILE))
-                .setPath(NotificationSettings.Webhook.ALLOW_PRIVATE_NETWORKS.configurationPath(), true).persist();
-            NotificationSettings.Webhook.ALLOW_PRIVATE_NETWORKS.declareAtBoot(true);
-        });
-        // The shared browserTest runtime registers models and runs migrations
-        // (notifications tables included, via migration auto-discovery).
+    static void boot() {
         HohenheimEndpoints.init();
-        TestDatabases.freshDatabase();
-        HohenheimTestRuntime.ensureBooted();
     }
 
     @BeforeEach

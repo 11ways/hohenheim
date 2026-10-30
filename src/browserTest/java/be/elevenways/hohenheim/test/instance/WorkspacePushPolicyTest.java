@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.instance;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BuildOperationModel;
@@ -41,6 +44,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  */
 class WorkspacePushPolicyTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static SqlDatasource datasource;
     private static int hostId;
     private static FakeWorkspaceDaemon daemon;
@@ -48,7 +54,7 @@ class WorkspacePushPolicyTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        BackupLaneFixture fixture = BackupLaneFixture.install();
+        BackupLaneFixture fixture = BackupLaneFixture.install(APP.database());
         datasource = fixture.datasource;
         hostId = fixture.hostId;
         savedUidBase = Zenit.SETTINGS_VALUES.getValue(

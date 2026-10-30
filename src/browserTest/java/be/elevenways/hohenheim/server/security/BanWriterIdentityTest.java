@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.security;
 
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.util.Uuids;
@@ -30,10 +32,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class BanWriterIdentityTest {
 
-    @BeforeAll
-    static void boot() {
-        HohenheimTestRuntime.ensureBooted();
-    }
+
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
 
     @Test
     void aBanTrippedDuringATenantRequestIsTheSystemsOwnAction() throws Exception {

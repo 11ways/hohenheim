@@ -1,9 +1,11 @@
 package be.elevenways.hohenheim.server.instance;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -23,10 +25,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class TemplateSlugIdentityTest {
 
-    @BeforeAll
-    static void boot() {
-        HohenheimTestRuntime.ensureBooted();
-    }
+
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
 
     @Test
     void canonicalNewLabelsKeepTheStoredIdentityCasesByteIdentical() {

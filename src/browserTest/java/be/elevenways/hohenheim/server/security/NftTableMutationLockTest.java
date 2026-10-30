@@ -1,7 +1,8 @@
 package be.elevenways.hohenheim.server.security;
 
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.TestDatabases;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.protoblast.testsupport.thread.Racers;
 import be.elevenways.protoblast.testsupport.time.Poll;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -28,6 +29,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class NftTableMutationLockTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static boolean initialized = false;
 
     /** Opened per test: a Racers is single-use after close(). */
@@ -37,8 +41,6 @@ class NftTableMutationLockTest {
     static void initDb() throws Exception {
         if (initialized) return;
         initialized = true;
-        TestDatabases.freshDatabase();
-        HohenheimTestRuntime.ensureBooted();
     }
 
     @BeforeEach

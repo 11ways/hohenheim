@@ -58,7 +58,7 @@ class ApiWireInstancesTest extends HohenheimHttpTestBase {
 
     @BeforeAll
     static void seed() throws Exception {
-        BackupLaneFixture fixture = BackupLaneFixture.install();
+        BackupLaneFixture fixture = BackupLaneFixture.install(APP.database());
         FakeDeviceDaemon.Kind.register();
 
         UUID operatorId = ApiWire.operatorId();

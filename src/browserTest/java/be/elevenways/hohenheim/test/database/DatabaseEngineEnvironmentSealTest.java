@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.database;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -14,8 +17,8 @@ import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.server.setting.ServerSettings;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -48,15 +51,16 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class DatabaseEngineEnvironmentSealTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final String LEGACY_USER = "legacy-root-user";
     private static final String STALE_PASSWORD = "stale-plaintext-password";
     private static final String CURRENT_PASSWORD = "current-secret-password";
 
     @Test
     void theEngineEnvironmentLivesInSecretVariablesAndLegacyRowsAreSealed() throws Exception {
-        File databaseFile = TestDatabases.freshDatabase();
-        SqlDatasource datasource = HohenheimDatabase.datasource();
-        HohenheimTestRuntime.ensureBooted();
+        SqlDatasource datasource = APP.database();
         Db.run(datasource, () -> HostFixtures.makeLocalPlaceable(16384));
 
         // 1. A shared mongo record mints its engine and reserves the engine instance: the
@@ -137,11 +141,11 @@ class DatabaseEngineEnvironmentSealTest {
         });
 
         // 6. At rest neither the settings column nor the variable carrier holds the plaintext.
-        assertThat(rawColumn(databaseFile, "SELECT settings FROM instances WHERE id = ?", instanceId))
+        assertThat(rawColumn("SELECT settings FROM instances WHERE id = ?", instanceId))
             .as("step 6: no root user or password in instances.settings")
             .noneMatch(value -> value != null
                 && (value.contains(LEGACY_USER) || value.contains(STALE_PASSWORD)));
-        assertThat(rawColumn(databaseFile, "SELECT secret_value FROM instance_variables WHERE instance_id = ?",
+        assertThat(rawColumn("SELECT secret_value FROM instance_variables WHERE instance_id = ?",
                 instanceId))
             .as("step 6: the secret carrier is ciphertext")
             .isNotEmpty()
@@ -165,11 +169,11 @@ class DatabaseEngineEnvironmentSealTest {
         return ids;
     }
 
-    /** The stored column exactly as it sits on disk, bypassing the ORM's decryption. */
-    private static List<String> rawColumn(File databaseFile, String sql, int id) throws Exception {
+    /** The stored column exactly as it sits on disk (the class database's address), bypassing the ORM's decryption. */
+    private static List<String> rawColumn(String sql, int id) throws Exception {
         List<String> values = new ArrayList<>();
         try (Connection connection = DriverManager.getConnection(
-                "jdbc:sqlite:" + databaseFile.getAbsolutePath());
+                Zenit.SETTINGS_VALUES.getValue(ServerSettings.Database.URL));
              PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setInt(1, id);
             try (ResultSet rows = statement.executeQuery()) {

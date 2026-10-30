@@ -1,7 +1,8 @@
 package be.elevenways.hohenheim.test.database;
 
-import be.elevenways.hohenheim.test.TestDatabases;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.server.database.DatabaseBackups;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -50,6 +51,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class StreamingBackupTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static PrivateNetns netns;
 
     @BeforeAll
@@ -80,7 +84,7 @@ class StreamingBackupTest {
         DockerClient docker = new DockerClient();
         LiveLane.requireImage(docker, PG_IMAGE);
 
-        SqlDatasource datasource = TestDatabases.freshBootedDatasource();
+        SqlDatasource datasource = APP.renewDatabase();
         DatabaseService service = new DatabaseService(datasource);
         String name = "cap" + System.nanoTime();
         Path dir = Files.createTempDirectory("hohenheim-cap-bk");
@@ -145,8 +149,7 @@ class StreamingBackupTest {
      */
     @Test
     void oneFailingDatabaseDoesNotAbortTheNightlyLoop() throws Exception {
-        TestDatabases.freshDatabase();
-        HohenheimTestRuntime.ensureBooted();
+        APP.renewDatabase();
         try (DumpTargetFixture target = DumpTargetFixture.install("loop-dump-target")) {
             DumpTargetFixture.databaseRow("broken", DatabaseModel.ENGINE_POSTGRES);
             Row healthy = DumpTargetFixture.databaseRow("healthy", DatabaseModel.ENGINE_POSTGRES);

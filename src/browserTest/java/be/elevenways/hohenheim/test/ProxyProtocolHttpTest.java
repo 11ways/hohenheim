@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.server.proxy.ProxyProtocolV2;
@@ -25,13 +28,14 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static be.elevenways.hohenheim.test.ProxyTestSupport.addDomain;
-import static be.elevenways.hohenheim.test.ProxyTestSupport.bootRuntime;
-import static be.elevenways.hohenheim.test.ProxyTestSupport.resetDatabase;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.setupSite;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** The plain HTTP listener resolves PROXY v2 identity exactly like the TLS one. */
 class ProxyProtocolHttpTest {
+
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
 
     private static boolean initialized;
     private ProxyServer proxy;
@@ -42,7 +46,7 @@ class ProxyProtocolHttpTest {
     static void boot() throws Exception {
         if (initialized) return;
         initialized = true;
-        bootRuntime();
+        HohenheimEndpoints.init();
     }
 
     @AfterEach
@@ -55,7 +59,7 @@ class ProxyProtocolHttpTest {
 
     @Test
     void trustedHeaderBecomesTheForwardedClientIdentity() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Proxy.PROXY_PROTOCOL_TRUSTED_SOURCES, List.of("127.0.0.1/32"));
         startBackendAndProxy("ingress.example.test", null);
@@ -71,7 +75,7 @@ class ProxyProtocolHttpTest {
 
     @Test
     void directClientsStayValidWhileTheIngressFrontIsActive() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Proxy.PROXY_PROTOCOL_TRUSTED_SOURCES, List.of("127.0.0.1/32"));
         startBackendAndProxy("direct.example.test", null);
@@ -85,7 +89,7 @@ class ProxyProtocolHttpTest {
 
     @Test
     void untrustedPeerSendingAHeaderIsDisconnected() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Proxy.PROXY_PROTOCOL_TRUSTED_SOURCES, List.of("203.0.113.0/24"));
         startBackendAndProxy("refused.example.test", null);
@@ -100,7 +104,7 @@ class ProxyProtocolHttpTest {
 
     @Test
     void proxiedDestinationDrivesListenOnMatching() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Proxy.PROXY_PROTOCOL_TRUSTED_SOURCES, List.of("127.0.0.1/32"));
         startBackendAndProxy("bound.example.test", "203.0.113.7");
@@ -120,7 +124,7 @@ class ProxyProtocolHttpTest {
 
     @Test
     void withoutTrustedPeersThePublicPortStaysTheUndertowListener() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Proxy.PROXY_PROTOCOL_TRUSTED_SOURCES, List.of());
         startBackendAndProxy("plain.example.test", null);

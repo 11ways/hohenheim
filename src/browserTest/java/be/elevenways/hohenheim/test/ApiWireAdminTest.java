@@ -63,7 +63,8 @@ class ApiWireAdminTest extends HohenheimHttpTestBase {
 
     @BeforeAll
     static void seed() throws Exception {
-        TestDatabases.freshDatabase();
+        // The wire is captured over records numbered from 1: no seeded row (the local host) comes first.
+        APP.renewUnseededDatabase();
         savedNameservers = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Dns.NAMESERVERS);
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Dns.NAMESERVERS, List.of("ns1.wire.test", "ns2.wire.test"));
 

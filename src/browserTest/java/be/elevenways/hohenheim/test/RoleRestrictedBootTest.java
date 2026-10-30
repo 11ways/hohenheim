@@ -35,9 +35,11 @@ import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.server.http.SessionCookies;
 import be.elevenways.zenit.server.http.ZenitHttpServer;
 import be.elevenways.zenit.server.setting.ServerSettings;
+import be.elevenways.zenit.test.support.MigratedDatabase;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -66,6 +68,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Tag("solo")
 class RoleRestrictedBootTest {
 
+    /** The class's own migrated file, which the real ServerMain opens through database.url. */
+    @RegisterExtension
+    static final MigratedDatabase DATABASE = MigratedDatabase.sqliteFile("role-restricted.db");
+
     @Test
     void dnsOnlyApplianceBootsGreenWithEverythingElseHonestlyAbsent() throws Exception {
         // 1. Declare the appliance's role set BEFORE boot: dns on, everything
@@ -82,7 +88,7 @@ class RoleRestrictedBootTest {
         }
 
         // Private database; the admin listener is started manually on port 0.
-        TestDatabases.freshDatabase();
+        ServerSettings.VALUES.setValue(ServerSettings.Database.URL, DATABASE.location().url());
         ServerSettings.VALUES.setValue(ServerSettings.Network.AUTO_START_HTTP, false);
 
         // 2. The REAL production entry point, not a harness reconstruction.

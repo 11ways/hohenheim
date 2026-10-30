@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.model.AccessListModel;
@@ -24,7 +27,6 @@ import java.util.List;
 import java.util.Map;
 
 import static be.elevenways.hohenheim.test.ProxyTestSupport.addDomain;
-import static be.elevenways.hohenheim.test.ProxyTestSupport.bootRuntime;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.httpPort;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.rawRequest;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.setupSite;
@@ -38,11 +40,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class RoutingProblemsTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static ProxyServer proxy;
 
     @BeforeAll
     static void boot() throws Exception {
-        bootRuntime();
+        HohenheimEndpoints.init();
     }
 
     @AfterAll

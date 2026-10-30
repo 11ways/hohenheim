@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.test.database;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.test.docker.TestImages;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -52,12 +54,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class ManagedDatabaseTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static PrivateNetns netns;
     private static SqlDatasource datasource;
 
     @BeforeAll
     static void fixture() throws Exception {
-        datasource = TestDatabases.freshBootedDatasource();
+        datasource = APP.database();
         netns = PrivateNetns.installEnforcing();
     }
 

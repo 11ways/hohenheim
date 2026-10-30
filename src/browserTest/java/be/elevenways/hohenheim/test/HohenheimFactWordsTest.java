@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -48,6 +50,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class HohenheimFactWordsTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final LocaleChain EN = LocaleChain.ofTags("en");
     private static final LocaleChain NL = LocaleChain.ofTags("nl");
 
@@ -55,8 +60,7 @@ class HohenheimFactWordsTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        datasource = TestDatabases.freshDatasource();
-        HohenheimTestRuntime.ensureBooted();
+        datasource = APP.database();
     }
 
     @Test

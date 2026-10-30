@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.test.network;
 
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import org.junit.jupiter.api.BeforeAll;
 import be.elevenways.hohenheim.server.security.NftRunner;
 import be.elevenways.hohenheim.server.security.ProcessNetworkPolicy;
@@ -31,11 +33,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class ProcessNetworkIsolationTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     /** nft table and container names are controller-namespaced, so this needs an identity. */
-    @BeforeAll
-    static void controllerIdentity() {
-        HohenheimTestRuntime.ensureDatasource();
-    }
 
 
     /** The site's run-as uid: the identity the OUTPUT rules are keyed on. */

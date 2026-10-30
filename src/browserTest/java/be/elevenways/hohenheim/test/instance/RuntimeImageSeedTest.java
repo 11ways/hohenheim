@@ -1,9 +1,11 @@
 package be.elevenways.hohenheim.test.instance;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.server.instance.RuntimeImageSeeder;
 import be.elevenways.hohenheim.server.instance.RuntimeImages;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -30,10 +32,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class RuntimeImageSeedTest {
 
-    @BeforeAll
-    static void bootDatasource() {
-        HohenheimTestRuntime.ensureDatasource();
-    }
+
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
 
     @Test
     void artifactCompositionPreservesPackagedRuntimeAndPinsStagingMetadata() throws Exception {

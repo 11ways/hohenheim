@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.test.backup;
 
-import be.elevenways.hohenheim.test.TestDatabases;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BackupTargetModel;
@@ -11,7 +13,6 @@ import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
 import be.elevenways.hohenheim.server.backup.FilesystemBackupTarget;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostKeys;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.Sshd;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -58,6 +59,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class BackupTargetsTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     @TempDir
     Path tmp;
 
@@ -76,8 +80,7 @@ class BackupTargetsTest {
         // daemon resource name) resolves through the CURRENT datasource, and a Db scope
         // is thread-local -- so a second, unregistered database would hand any
         // thread-hopping work a different controller's token than the records came from.
-        datasource = TestDatabases.freshDatasource();
-        HohenheimTestRuntime.ensureBooted();
+        datasource = APP.database();
         sandbox = Files.createTempDirectory("hohenheim-backup-targets");
         sshd = Sshd.start(sandbox.resolve("sshd"));
     }
@@ -97,7 +100,6 @@ class BackupTargetsTest {
      */
     @BeforeEach
     void isolateTheSshStore() throws Exception {
-        HohenheimTestRuntime.ensureBooted();
         this.previousDataPath = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Storage.DATA_PATH);
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.DATA_PATH,

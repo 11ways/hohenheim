@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.dns.DnsRecordDto;
@@ -69,6 +71,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class DnsFederationTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final String KEY_SECRET = "c2VjcmV0LXRzaWcta2V5LWZvci1ob2hlbmhlaW0tdGVzdA==";
     private static final String KEY_NAME = "xfer-key";
 
@@ -79,8 +84,6 @@ class DnsFederationTest {
     @BeforeAll
     static void boot() throws Exception {
         HohenheimEndpoints.init();
-        TestDatabases.freshDatabase();
-        HohenheimTestRuntime.ensureBooted();
 
         // Primary zone this instance owns, plus a peer authorized to pull it.
         primaryZoneId = createZone("primary.example", DnsZoneModel.ROLE_PRIMARY, null);

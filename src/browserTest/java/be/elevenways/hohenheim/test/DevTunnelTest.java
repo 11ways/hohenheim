@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -61,6 +63,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class DevTunnelTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final String TOKEN = "zdev_test_registration_token";
     private static final String BASE = "dev.example.test";
 
@@ -99,13 +104,11 @@ class DevTunnelTest {
         if (!initialized) {
             initialized = true;
             HohenheimEndpoints.init();
-            TestDatabases.freshDatabase();
             // The discovered HohenheimHostWiring module installs the client script
             // location, every endpoint handler (including this endpoint's real
             // DevTunnelServerHandler factory) and both panels at the MODULES stage.
             // This test used to re-install the DEV_TUNNEL factory by hand because
             // production wired it after binding; nothing compensates any more.
-            HohenheimTestRuntime.ensureBooted();
         }
 
         createDevNamespace();

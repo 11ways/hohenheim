@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSubject;
@@ -74,6 +76,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class DnsFederationHealthTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final String ORIGIN = "health.example";
     private static final String PARENT = "example";
     private static final String KEY_SECRET = "c2VjcmV0LXRzaWcta2V5LWZvci1ob2hlbmhlaW0tdGVzdA==";
@@ -85,8 +90,6 @@ class DnsFederationHealthTest {
     @BeforeAll
     static void boot() throws Exception {
         HohenheimEndpoints.init();
-        TestDatabases.freshDatabase();
-        HohenheimTestRuntime.ensureBooted();
 
         zoneId = createZone(ORIGIN, DnsZoneModel.ROLE_PRIMARY, null);
         record(zoneId, "@", DnsRecordModel.TYPE_NS, "ns1." + ORIGIN);

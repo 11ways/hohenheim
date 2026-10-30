@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -19,13 +22,14 @@ import java.security.cert.X509Certificate;
 import java.util.Map;
 
 import static be.elevenways.hohenheim.test.ProxyTestSupport.addDomain;
-import static be.elevenways.hohenheim.test.ProxyTestSupport.bootRuntime;
-import static be.elevenways.hohenheim.test.ProxyTestSupport.resetDatabase;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.setupSite;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** Covers bidirectional HTTPS lifecycle reconciliation after route and certificate removal. */
 class TlsMultiplexerLifecycleTest {
+
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
 
     private static boolean initialized;
     private ProxyServer proxy;
@@ -35,7 +39,7 @@ class TlsMultiplexerLifecycleTest {
     static void boot() throws Exception {
         if (initialized) return;
         initialized = true;
-        bootRuntime();
+        HohenheimEndpoints.init();
     }
 
     @AfterEach
@@ -46,7 +50,7 @@ class TlsMultiplexerLifecycleTest {
 
     @Test
     void removingLastCertificateStopsUnusedPublicTlsListener() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         Row certificate = installCertificate("remove.example.test");
         startProxy();
         assertThat(proxy.getHttpsState()).isEqualTo(ProxyServer.State.RUNNING);
@@ -61,7 +65,7 @@ class TlsMultiplexerLifecycleTest {
 
     @Test
     void removingCertificateKeepsPassthroughButStopsLocalTermination() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         Row certificate = installCertificate("remove.example.test");
         backend = new ServerSocket(0, 10, InetAddress.getLoopbackAddress());
         Row site = setupSite(SiteModel.UPSTREAM_TLS_PASSTHROUGH,

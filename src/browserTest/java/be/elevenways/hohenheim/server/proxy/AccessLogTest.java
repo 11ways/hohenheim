@@ -1,5 +1,9 @@
 package be.elevenways.hohenheim.server.proxy;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
@@ -30,12 +34,15 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class AccessLogTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static ProxyServer proxy;
     private static HttpServer upstream;
 
     @BeforeAll
     static void boot() throws Exception {
-        ProxyTestSupport.bootRuntime();
+        HohenheimEndpoints.init();
         upstream = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         upstream.createContext("/", ex -> {
             byte[] body = "logged".getBytes(StandardCharsets.UTF_8);

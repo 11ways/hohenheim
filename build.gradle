@@ -436,7 +436,7 @@ task browserTestHttp(type: Test) {
 // AIDEV-NOTE: this task carried forkEvery = 1 until 2026-08-12 and it was the single
 // biggest cost in the whole suite. Measured on the 513s default lane: 137 classes, 1064s
 // of suite time of which only 321s was test bodies -- 743s was @BeforeAll paying for 136
-// REDUNDANT ServerZenitRuntime boots (ensureBooted is idempotent per JVM, and forkEvery=1
+// REDUNDANT ServerZenitRuntime boots (the runtime boots once per JVM, and forkEvery=1
 // gave every class its own JVM), plus 525s of JVM fork boot at ~3.8s a class. The sibling
 // shared-server lane proved the alternative at 0.86s of fixture per class against this
 // lane's 5.1s -- same kind of work, six times cheaper, purely because it shares a JVM.
@@ -445,8 +445,8 @@ task browserTestHttp(type: Test) {
 // out from under a live shared server") did not survive reading: NO class in this lane
 // starts a served app or touches Playwright. The real coupling was never the HTTP server,
 // it was two services that CAPTURE a datasource and keep it forever -- zenit-auth's models
-// and session store, and the task service's three handles. TestDatabases.freshDatabase now
-// re-points both on every swap, which is what makes sharing safe.
+// and session store, and the task service's three handles. zenit's ServedApp now
+// re-points both on every class database, which is what makes sharing safe.
 //
 // A class that genuinely cannot share a JVM declares @Tag("solo") and lands in
 // browserTestSolo, which keeps forkEvery = 1. BrowserTestLaneGuardTest enforces the

@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.zenit.common.security.Permissions;
 import be.elevenways.zenit.common.security.Permission;
 import be.elevenways.hohenheim.server.ServerMain;
@@ -40,13 +42,15 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class PermissionVocabularyTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     /** A permission literal at its DECLARATION site; group 1 is the permission string. */
     private static final Pattern DECLARED =
         Pattern.compile("Permission\\.declare\\(\"(hohenheim\\.[^\"]+)\"");
 
     @BeforeAll
     static void boot() {
-        HohenheimTestRuntime.ensureBooted();
         // The boot step that installs the auth baselines, as ServerMain runs it.
         ServerMain.installAuthBaselines();
     }

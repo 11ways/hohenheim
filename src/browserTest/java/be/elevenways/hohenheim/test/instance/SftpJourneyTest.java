@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.instance;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.sftp.server.SftpSessionInfo;
 import be.elevenways.hohenheim.HohenheimActivityAction;
@@ -18,8 +21,6 @@ import be.elevenways.hohenheim.server.security.HohenheimSecurity;
 import be.elevenways.hohenheim.server.security.NftService;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.test.ApiSupport;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.live.LiveLane;
@@ -91,6 +92,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 @Tag("slow") // live lane: needs a real daemon and image; runs via `zenit-dev test --all` or a class filter
 class SftpJourneyTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
     private static final Duration WAIT = Duration.ofSeconds(20);
     private static final String LOOPBACK = "127.0.0.1";
@@ -107,9 +111,7 @@ class SftpJourneyTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        datasource = TestDatabases.freshDatasource();
-        HohenheimTestRuntime.declareAccessModelsOnce();
-        HohenheimTestRuntime.ensureBooted();
+        datasource = APP.database();
         netns = PrivateNetns.installEnforcing();
         work = Files.createTempDirectory("hohenheim-sftp");
         // A booted host words refusals through its shipped catalogs; this class reads those words back.

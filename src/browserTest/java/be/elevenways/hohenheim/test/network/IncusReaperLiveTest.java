@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.network;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.ControllerScope;
@@ -9,8 +12,6 @@ import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
 import be.elevenways.hohenheim.server.incus.IncusReaper;
 import be.elevenways.hohenheim.server.task.ReapIncusControllers;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -48,6 +49,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class IncusReaperLiveTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final String HOST = "live-incus-reap";
     private static final Duration GRACE = Duration.ofHours(168);
 
@@ -66,8 +70,7 @@ class IncusReaperLiveTest {
 
         // ONE database per class: the controller identity every name is scoped by resolves
         // through the CURRENT datasource (IncusNetworkIsolationLiveTest's rule verbatim).
-        datasource = TestDatabases.freshDatasource();
-        HohenheimTestRuntime.ensureBooted();
+        datasource = APP.database();
 
         inScope(() -> {
             enrolledFingerprint = remote.enrollThroughProduct(HOST, "hohenheim-live-reap");

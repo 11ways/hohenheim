@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -42,14 +45,15 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static be.elevenways.hohenheim.test.ProxyTestSupport.addDomain;
-import static be.elevenways.hohenheim.test.ProxyTestSupport.bootRuntime;
-import static be.elevenways.hohenheim.test.ProxyTestSupport.resetDatabase;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.setupSite;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Wire-level coverage for mixed TLS termination, SNI passthrough, and PROXY v2 identity. */
 class TlsPassthroughTest {
+
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
 
     private static boolean initialized;
     private final JobRunner jobs = JobRunner.create("tls-passthrough-test");
@@ -64,7 +68,7 @@ class TlsPassthroughTest {
     static void boot() throws Exception {
         if (initialized) return;
         initialized = true;
-        bootRuntime();
+        HohenheimEndpoints.init();
     }
 
     @AfterEach
@@ -85,7 +89,7 @@ class TlsPassthroughTest {
 
     @Test
     void passthroughStartsWithoutCertificatesAndPreservesFragmentedClientHello() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         rawBackend = new ServerSocket(0, 10, InetAddress.getLoopbackAddress());
         CompletableFuture<Captured> captured = captureOneConnection(true);
         setupPassthrough("raw.example.test", "exact", rawBackend.getLocalPort(), true);
@@ -116,7 +120,7 @@ class TlsPassthroughTest {
 
     @Test
     void trustedIngressProxyHeaderIsPreservedAndUntrustedIngressIsRejected() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Proxy.PROXY_PROTOCOL_TRUSTED_SOURCES, List.of("127.0.0.1/32"));
         rawBackend = new ServerSocket(0, 10, InetAddress.getLoopbackAddress());
@@ -146,7 +150,7 @@ class TlsPassthroughTest {
         rawBackend = new ServerSocket(0, 10, InetAddress.getLoopbackAddress());
         Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Proxy.PROXY_PROTOCOL_TRUSTED_SOURCES, List.of());
-        resetDatabase();
+        APP.renewDatabase();
         setupPassthrough("rejected.example.test", "exact", rawBackend.getLocalPort(), true);
         startProxy();
 
@@ -162,7 +166,7 @@ class TlsPassthroughTest {
 
     @Test
     void exactTerminatingRouteWinsOverBroaderPassthroughWildcard() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         installCertificate("control.example.test");
         httpBackend = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         httpBackend.createContext("/", exchange -> {
@@ -201,7 +205,7 @@ class TlsPassthroughTest {
 
     @Test
     void clientHelloTimeoutIsAnAbsoluteDeadlineNotAnIdleTimeout() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Proxy.CONNECTION_PROLOGUE_TIMEOUT_SECONDS, 1);
         rawBackend = new ServerSocket(0, 10, InetAddress.getLoopbackAddress());
@@ -234,7 +238,7 @@ class TlsPassthroughTest {
 
     @Test
     void completedClientHelloRemovesTheHandshakeDeadlineFromTheRelay() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Proxy.CONNECTION_PROLOGUE_TIMEOUT_SECONDS, 1);
         rawBackend = new ServerSocket(0, 10, InetAddress.getLoopbackAddress());
@@ -280,7 +284,7 @@ class TlsPassthroughTest {
 
     @Test
     void activeConnectionLimitRejectsExcessTlsClients() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.MAX_PUBLIC_CONNECTIONS, 1);
         rawBackend = new ServerSocket(0, 10, InetAddress.getLoopbackAddress());
         CompletableFuture<Void> accepted = new CompletableFuture<>();
@@ -314,7 +318,7 @@ class TlsPassthroughTest {
 
     @Test
     void pendingHandshakeLimitRejectsExcessSlowClients() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.MAX_PENDING_CONNECTIONS, 1);
         rawBackend = new ServerSocket(0, 10, InetAddress.getLoopbackAddress());
         setupPassthrough("pending.example.test", "exact", rawBackend.getLocalPort(), false);
@@ -338,7 +342,7 @@ class TlsPassthroughTest {
 
     @Test
     void equivalentRegexRoutesWithDifferentTargetsFailClosed() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         rawBackend = new ServerSocket(0, 10, InetAddress.getLoopbackAddress());
         try (ServerSocket secondBackend = new ServerSocket(0, 10, InetAddress.getLoopbackAddress())) {
             setupPassthrough("conflict\\.example\\.test", "regex", rawBackend.getLocalPort(), false);
@@ -378,7 +382,7 @@ class TlsPassthroughTest {
 
     @Test
     void invalidPassthroughRegexDoesNotKeepAnOtherwiseUnusedTlsListenerRunning() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         rawBackend = new ServerSocket(0, 10, InetAddress.getLoopbackAddress());
         setupPassthrough("[invalid", "regex", rawBackend.getLocalPort(), false);
         startProxy();
@@ -389,7 +393,7 @@ class TlsPassthroughTest {
 
     @Test
     void passthroughTargetCannotLoopBackIntoThePublicTlsListener() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         int publicPort = FreePorts.tcpAndUdp();
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, publicPort);
         setupPassthrough("loop.example.test", "exact", publicPort, false);
@@ -408,7 +412,7 @@ class TlsPassthroughTest {
 
     @Test
     void unreachableExactPassthroughNeverFallsThroughToWildcard() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         int unusedPort = FreePorts.tcpAndUdp();
         setupPassthrough("exact.example.test", "exact", unusedPort, false);
         rawBackend = new ServerSocket(0, 10, InetAddress.getLoopbackAddress());
@@ -426,7 +430,7 @@ class TlsPassthroughTest {
 
     @Test
     void trustedProxyIdentityIsRestoredBeforeTerminatedHttpSecurityAndForwarding() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         installCertificate("identity.example.test");
         Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Proxy.PROXY_PROTOCOL_TRUSTED_SOURCES, List.of("127.0.0.1"));

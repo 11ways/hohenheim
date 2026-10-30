@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.migration;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimCounts;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -8,8 +11,6 @@ import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.cli.ForeignKeyOrphansCommand;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.hohenheim.server.task.CheckForeignKeys;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -37,19 +38,19 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
  */
 class ForeignKeyIntegrityTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final String SERVER = "fk-host";
 
     @BeforeAll
     static void setUp() throws Exception {
-        TestDatabases.freshDatabase();
-        HohenheimTestRuntime.ensureBooted();
         CheckForeignKeys.forgetTransitionStateForTest();
     }
 
     @AfterAll
     static void tearDown() throws Exception {
         CheckForeignKeys.forgetTransitionStateForTest();
-        TestDatabases.freshDatabase();
     }
 
     @Test

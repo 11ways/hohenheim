@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.test.database;
 
-import be.elevenways.hohenheim.test.TestDatabases;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
@@ -37,6 +39,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class DatabaseWorkloadLivenessLiveTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
     private static final String REDIS_IMAGE = "redis:7-alpine";
 
@@ -65,7 +70,7 @@ class DatabaseWorkloadLivenessLiveTest {
         DockerClient docker = new DockerClient();
         LiveLane.requireImage(docker, REDIS_IMAGE);
 
-        DatabaseService service = new DatabaseService(TestDatabases.freshBootedDatasource());
+        DatabaseService service = new DatabaseService(APP.renewDatabase());
         String name = "livenessdb" + System.nanoTime();
         try {
             service.create(name, ManagedDatabase.Engine.REDIS, REDIS_IMAGE,

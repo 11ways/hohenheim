@@ -149,7 +149,7 @@ executor self-guards. The genuinely node-agnostic tasks (`BackupControlPlane`,
 any more: zenit's own `ActivityPruneTask` reads `activity.retention_days`, which
 `HohenheimSettingsBoot.applyFrameworkDefaults` seeds to 90 days. Reading
 roles before `HohenheimSettingsBoot.load()` throws; tests get their snapshot
-from `HohenheimTestRuntime.ensureBooted()` unless they need a restricted set,
+from `HohenheimServedApp` (their served app's pre-boot) unless they need a restricted set,
 which they capture themselves before booting.
 
 Declaring a task obliges naming it in `HohenheimTaskBootstrapTest`: its `PINNED`

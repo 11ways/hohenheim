@@ -1,13 +1,8 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.zenit.browsertest.ZenitBrowserTestBase;
-import be.elevenways.hohenheim.HohenheimEndpoints;
-import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
-import be.elevenways.hohenheim.server.HohenheimSettingsBoot;
-import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.zenit.auth.AuthKeys;
-import be.elevenways.zenit.auth.AuthSettings;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ZenitAuth;
 import be.elevenways.zenit.common.secret.RevealableSecret;
@@ -43,31 +38,40 @@ import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import be.elevenways.zenit.test.support.FlashHandoff;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.zenit.test.support.ServedAppBinding;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.hawkeye.common.Hawkeye;
 import be.elevenways.zenit.server.flash.Flash;
 import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.IntSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Browser test base for Hohenheim. Authenticates via zenit-auth: seeds an admin user and mints
  * a session, injected as the auth cookie so the (zenit-auth-gated) admin pages are reachable.
+ *
+ * AIDEV-NOTE: every class runs on zenit's served app ({@link HohenheimServedApp#served()}): a database of its own,
+ * the JVM's one runtime and one server port (the browser's caches key the bundle by origin), and an admin session
+ * seeded over each database, {@link #freshSeededDatabase()} included.
  */
-// The tag is @Inherited: every subclass lands in the shared-server gradle bucket
-// (parallel forks, one server per JVM). Standalone classes -- which re-point the
-// global Database.PATH and re-init the runtime for themselves -- run in the
-// browserTestIsolated bucket with a fresh JVM per class, because doing that
-// beside a live shared server yanks the database out from under it.
+// The tag is @Inherited: every subclass lands in the shared-server gradle bucket (parallel forks, one runtime and one
+// server per JVM). Classes that boot the runtime themselves run in browserTestSolo, a JVM per class.
 @org.junit.jupiter.api.Tag("shared-server")
 public abstract class HohenheimTestBase extends ZenitBrowserTestBase {
+
+    @RegisterExtension
+    protected static final ServedApp APP = HohenheimServedApp.served().keepingServerForJvm().with(new AdminSession());
 
     protected static String sessionToken;
     protected static String csrfToken;
@@ -75,61 +79,26 @@ public abstract class HohenheimTestBase extends ZenitBrowserTestBase {
     private static final Set<String> MINTED_SESSIONS = ConcurrentHashMap.newKeySet();
 
     @Override
-    protected void bootHost() throws Exception {
-        // The shared harness DECLARES its role set instead of inheriting it by
-        // omission: every role on, the full-node shape this suite has always
-        // exercised. load() below snapshots these into HohenheimRoles.
-        HohenheimSettingsBoot.forceDefinitions();
-        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Roles.PROXY, true);
-        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Roles.DNS, true);
-        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Roles.FIREWALL, true);
-        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Roles.STACKS, true);
-        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Roles.DATABASES, true);
-
-        // Load the settings chain the way ServerMain does. The lane's zenit.settings.root
-        // points settings/local.dry into the build directory, so the settings page writes
-        // there and never into the developer's own file.
-        HohenheimSettingsBoot.load();
-
-        HohenheimEndpoints.init();
-        // Before the migrations, exactly as ServerMain does it: the declarations carry the
-        // per-model liveness definition zenit-auth's orphan-purge migration consults.
-        HohenheimTestRuntime.declareAccessModelsOnce();
-        // Claims the database path too, AFTER HohenheimSettingsBoot.load() so a loaded
-        // settings file can never point the suite at a developer's real database.
-        try {
-            TestDatabases.freshDatabase();
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to create the test database", e);
-        }
-
-        // zenit-auth installs itself exactly as in production: the discovered ZenitAuthModule
-        // at the MODULES stage, which HohenheimHostWiring runs after (ManagePanel wraps the
-        // permission checker zenit-auth installs, so that order must not invert). Production
-        // disables the module's default auth panel BEFORE boot (ServerMain does the same):
-        // the users/roles resources are wired into HohenheimPanel instead.
-        Zenit.SETTINGS_VALUES.setValue(AuthSettings.CMS_AUTO_PANEL, false);
-        ServerMain.installAuthBaselines();
-
-        // AIDEV-NOTE: ONE order, shared with production. Everything a request needs
-        // -- client script location, endpoint handlers (incl. the WebSocket handler
-        // factories), both panels, the security engine -- is installed by the
-        // discovered HohenheimHostWiring module at the MODULES stage inside this
-        // call. The harness used to hand-install those AFTER booting while
-        // ServerMain installed them after BINDING, so the suite was a second,
-        // safer truth and could never see production's pre-wiring window. The one
-        // test-owned choice is the bundle: the pages load what this lane serves.
-        HohenheimTestRuntime.ensureBooted();
-        serveLaneBundle();
-
-        // Every endpoint keeps its declared rate limit: ZenitBrowserTestBase empties every bucket before each test,
-        // so a budget only ever counts the calls of ONE test.
-        sessionToken = seedAuthenticatedAdmin();
+    protected IntSupplier servedPort() {
+        return APP::port;
     }
 
-    @Override
-    protected void afterServerStart() {
-        System.out.println("Hohenheim test server started on http://localhost:" + this.getServerPort());
+    /** The pages load the lane's bundle, and every class database gets the harness admin and its session. */
+    private static final class AdminSession implements ServedAppBinding {
+
+        @Override
+        public void bind(@NonNull SqlDatasource database) {
+            serveLaneBundle();
+            MINTED_SESSIONS.clear();
+            sessionToken = seedAuthenticatedAdmin();
+        }
+
+        @Override
+        public void unbind() {
+            MINTED_SESSIONS.clear();
+            sessionToken = null;
+            csrfToken = null;
+        }
     }
 
     /** The test admin ({@link TenantConduits#operatorUser}) and an active session for it; returns the session id.
@@ -145,11 +114,9 @@ public abstract class HohenheimTestBase extends ZenitBrowserTestBase {
         return session.token().secret();
     }
 
-    /** Reset a surface fixture's database and sessions while retaining the shared HTTP server. */
-    protected static void freshSeededDatabase() throws Exception {
-        TestDatabases.freshBootedDatasource();
-        MINTED_SESSIONS.clear();
-        sessionToken = seedAuthenticatedAdmin();
+    /** Moves the class onto a fresh database, seeded with the admin and its session, on the same server. */
+    protected static void freshSeededDatabase() {
+        APP.renewDatabase();
     }
 
 

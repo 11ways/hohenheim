@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.instance.InstanceKindInfo;
@@ -34,6 +36,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class DisplayNameLocalizationTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     /** Where the browserTest source root's classes live; see {@link #ships}. */
     private static final String TEST_PACKAGE = "be.elevenways.hohenheim.test.";
 
@@ -43,10 +48,6 @@ class DisplayNameLocalizationTest {
      */
     private static final int SHIPPED_KIND_FLOOR = 10;
 
-    @BeforeAll
-    static void boot() {
-        HohenheimTestRuntime.ensureBooted();
-    }
 
     /**
      * The half the scanner cannot see: every registered kind and site type actually HAS

@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
@@ -57,6 +59,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class HohenheimTaskBootstrapTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     /** Only Hohenheim's own tasks are this suite's business; the catalog also holds framework ones. */
     private static final String TASK_PACKAGE = "be.elevenways.hohenheim.";
 
@@ -106,7 +111,6 @@ class HohenheimTaskBootstrapTest {
 
         HohenheimEndpoints.init();
         // auto-discovery creates system_task + the M0xx tables
-        TestDatabases.freshDatabase();
 
         service = TaskBootstrap.start(HohenheimDatabase.datasource());
     }

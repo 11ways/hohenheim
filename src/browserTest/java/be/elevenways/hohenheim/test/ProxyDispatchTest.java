@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -32,6 +34,9 @@ import com.sun.net.httpserver.HttpServer;
  */
 class ProxyDispatchTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static boolean initialized = false;
     private static ProxyServer proxy;
 
@@ -41,8 +46,6 @@ class ProxyDispatchTest {
         initialized = true;
 
         HohenheimEndpoints.init();
-        File db = TestDatabases.freshDatabase();
-        HohenheimTestRuntime.ensureBooted();
     }
 
     @AfterAll
@@ -97,7 +100,7 @@ class ProxyDispatchTest {
     @Test
     void customHeadersModifyUpstreamRequest() throws Exception {
         // Reset DB
-        File db = TestDatabases.freshDatabase();
+        APP.renewDatabase();
 
         AtomicReference<String> seenHeader = new AtomicReference<>();
         AtomicReference<String> removedHeader = new AtomicReference<>("present");
@@ -155,7 +158,7 @@ class ProxyDispatchTest {
 
     @Test
     void hstsHeaderOnResponse() throws Exception {
-        File db = TestDatabases.freshDatabase();
+        APP.renewDatabase();
 
         // RFC 6797 §7.2: HSTS is emitted only over HTTPS, so this exercises a real TLS
         // connection. A cert must exist for the HTTPS listener to start; SNI resolves it.
@@ -228,7 +231,7 @@ class ProxyDispatchTest {
 
     @Test
     void websocketUpgradeBlockedWhenDisabled() throws Exception {
-        File db = TestDatabases.freshDatabase();
+        APP.renewDatabase();
 
         // Create site with websocket_upgrade=false
         setupSiteWithDomain("nows.test",
@@ -263,7 +266,7 @@ class ProxyDispatchTest {
 
     @Test
     void websocketUpgradeAllowedWhenEnabled() throws Exception {
-        File db = TestDatabases.freshDatabase();
+        APP.renewDatabase();
 
         // Create site with websocket_upgrade=true (default)
         setupSiteWithDomain("ws.test",
@@ -298,7 +301,7 @@ class ProxyDispatchTest {
 
     @Test
     void booleanSettingCanBeToggledOff() throws Exception {
-        File db = TestDatabases.freshDatabase();
+        APP.renewDatabase();
 
         // Verify that extractTypeSettings correctly handles unchecked booleans
         // by creating a site, then checking its settings persist correctly
@@ -325,7 +328,7 @@ class ProxyDispatchTest {
 
     @Test
     void regexRouteMatchesHostname() throws Exception {
-        File db = TestDatabases.freshDatabase();
+        APP.renewDatabase();
 
         AtomicReference<String> seenHost = new AtomicReference<>();
         CountDownLatch upstreamHit = new CountDownLatch(1);
@@ -393,7 +396,7 @@ class ProxyDispatchTest {
 
     @Test
     void locationHeaderRewrittenToPublicHost() throws Exception {
-        File db = TestDatabases.freshDatabase();
+        APP.renewDatabase();
 
         HttpServer upstream = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         int upstreamPort = upstream.getAddress().getPort();
@@ -430,7 +433,7 @@ class ProxyDispatchTest {
 
     @Test
     void locationRewriteCanBeDisabled() throws Exception {
-        File db = TestDatabases.freshDatabase();
+        APP.renewDatabase();
 
         HttpServer upstream = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         int upstreamPort = upstream.getAddress().getPort();
@@ -461,7 +464,7 @@ class ProxyDispatchTest {
 
     @Test
     void responseHeadersInjectedAndRemoved() throws Exception {
-        File db = TestDatabases.freshDatabase();
+        APP.renewDatabase();
 
         HttpServer upstream = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         upstream.createContext("/", ex -> {
@@ -498,7 +501,7 @@ class ProxyDispatchTest {
 
     @Test
     void httpsListenerNegotiatesH2() throws Exception {
-        File db = TestDatabases.freshDatabase();
+        APP.renewDatabase();
 
         var certModel = Models.get(CertificateModel.class);
         KeyPair keyPair = TlsCertificateTest.generateKeyPair();
@@ -547,7 +550,7 @@ class ProxyDispatchTest {
 
     @Test
     void listenOnBlocksMismatchedListenerAddress() throws Exception {
-        TestDatabases.freshDatabase();
+        APP.renewDatabase();
 
         setupSiteWithDomain("listen.test", Map.of("forward_host", "127.0.0.1", "forward_port", 9999),
             Map.of("listen_on", "192.0.2.25", "force_ssl", false));

@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.instance;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
@@ -19,10 +22,8 @@ import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstancePlacement;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestAccessContexts;
 import be.elevenways.hohenheim.test.host.HostFixtures;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.util.Uuids;
 import be.elevenways.zenit.auth.model.GrantModel;
@@ -70,6 +71,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  */
 class InstancePlacementTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final String PREFIX = "placement-";
     private static final String BUCKET = "placement-owner";
     private static final String OTHER_BUCKET = "placement-stranger";
@@ -89,12 +93,11 @@ class InstancePlacementTest {
      */
     @BeforeAll
     static void setUp() throws Exception {
-        datasource = TestDatabases.freshDatasource();
+        datasource = APP.database();
         // ONE database per test class: the controller identity (and therefore every
         // daemon resource name) resolves through the CURRENT datasource, and a Db scope
         // is thread-local -- so a second, unregistered database would hand any
         // thread-hopping work a different controller's token than the records came from.
-        HohenheimTestRuntime.ensureBooted();
         // The budget arithmetic is the SUBJECT here, so the two knobs that shape it are
         // pinned rather than inherited: bookable memory == the host's measured total.
         Zenit.SETTINGS_VALUES.setValue(

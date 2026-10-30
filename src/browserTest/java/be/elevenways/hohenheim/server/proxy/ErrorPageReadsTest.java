@@ -1,5 +1,9 @@
 package be.elevenways.hohenheim.server.proxy;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
@@ -26,6 +30,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class ErrorPageReadsTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final String UNKNOWN_HOST = "nobody.error-page.test";
 
     private static ProxyServer proxy;
@@ -33,7 +40,7 @@ class ErrorPageReadsTest {
 
     @BeforeAll
     static void boot() throws Exception {
-        ProxyTestSupport.bootRuntime();
+        HohenheimEndpoints.init();
         previousMessage = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.NOT_FOUND_MESSAGE);
         proxy = ProxyTestSupport.startProxy();
     }

@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.instance;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
@@ -14,8 +17,6 @@ import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceDevices;
 import be.elevenways.hohenheim.server.instance.InstanceMigrations;
 import be.elevenways.hohenheim.server.instance.InstanceService;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -57,6 +58,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class IncusDataDiskBackupLiveTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final String HOST_A = "live-disk-a";
     private static final String HOST_B = "live-disk-b";
     private static final String VM_IMAGE = "alpine/3.22/cloud";
@@ -78,8 +82,7 @@ class IncusDataDiskBackupLiveTest {
         remoteB = LiveIncusHost.requireSecondary();
         // ONE database per test class: the controller identity (and so every daemon resource name) resolves
         // through the current datasource.
-        datasource = TestDatabases.freshDatasource();
-        HohenheimTestRuntime.ensureBooted();
+        datasource = APP.database();
         Db.run(datasource, () -> {
             fingerprintA = remoteA.enrollThroughProduct(HOST_A, "hohenheim-live-disk-a");
             fingerprintB = remoteB.enrollThroughProduct(HOST_B, "hohenheim-live-disk-b");

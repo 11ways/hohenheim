@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
@@ -33,6 +36,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class SocketFrontModeTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final String KEY = "socket-front-test-key";
 
     private ProxyServer proxy;
@@ -40,7 +46,7 @@ class SocketFrontModeTest {
 
     @BeforeAll
     static void boot() throws Exception {
-        ProxyTestSupport.bootRuntime();
+        HohenheimEndpoints.init();
     }
 
     @AfterEach
@@ -60,7 +66,6 @@ class SocketFrontModeTest {
     @Test
     @Timeout(30)
     void socketModeRequiresTrustedProxyKeysAndHonoursForwardedIdentity() throws Exception {
-        TestDatabases.freshDatabase();
         Path sock = Files.createTempFile("hh-front-sock", ".sock");
         Files.delete(sock);
         sock.toFile().deleteOnExit();

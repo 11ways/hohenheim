@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.test.docker;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.server.ControllerIdentity;
-import be.elevenways.hohenheim.test.TestDatabases;
 import org.junit.jupiter.api.BeforeAll;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
@@ -19,11 +21,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class OwnerLabelsTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     /** Names and labels are controller-namespaced, so this needs a real identity. */
-    @BeforeAll
-    static void controllerIdentity() throws Exception {
-        TestDatabases.freshDatabase();
-    }
 
 
     @Test

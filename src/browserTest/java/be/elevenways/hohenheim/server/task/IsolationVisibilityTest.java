@@ -1,4 +1,7 @@
 package be.elevenways.hohenheim.server.task;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.zenit.notifications.DeliveryChannel;
 import be.elevenways.zenit.notifications.server.NotificationDispatcher;
 import be.elevenways.zenit.notifications.server.Notifications;
@@ -13,8 +16,6 @@ import be.elevenways.hohenheim.server.incus.IncusWebSocket;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.security.NftRunner;
 import be.elevenways.hohenheim.server.util.Http11;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.notifications.server.transport.DsnOrigin;
 import be.elevenways.zenit.notifications.server.transport.TransportTypes;
@@ -55,6 +56,9 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
  */
 class IsolationVisibilityTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final String HOST = "daystrom";
     private static final String HANDLE = "hoh-instance-7";
     private static final String LIVE_TAP = "tapc97b9701";
@@ -66,8 +70,6 @@ class IsolationVisibilityTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        TestDatabases.freshDatabase();
-        HohenheimTestRuntime.ensureBooted();
 
         receiver = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         receiver.createContext("/", exchange -> {
@@ -113,7 +115,6 @@ class IsolationVisibilityTest {
             Models.unregisterInstance(registeredHistory);
             registeredHistory = null;
         }
-        TestDatabases.freshDatabase();
     }
 
     @Test

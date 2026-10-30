@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.server.proxy;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.auth.SiteAuthDecision;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
@@ -13,8 +16,6 @@ import be.elevenways.zenit.common.session.InMemorySessionStore;
 import be.elevenways.zenit.common.session.SessionStore;
 import be.elevenways.zenit.server.http.RateLimitMiddleware;
 import be.elevenways.zenit.server.http.TrustedProxies;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.TestDatabases;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.Headers;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -43,13 +44,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class AccessRuleTreeTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static int listId;
     private static final SessionStore SESSIONS = new InMemorySessionStore();
 
     @BeforeAll
     static void boot() throws Exception {
-        TestDatabases.freshDatabase();
-        HohenheimTestRuntime.ensureBooted();
         Row list = Models.get(AccessListModel.class).createEmptyRow();
         list.set(AccessListModel.NAME, "Tree fixture");
         list.set(AccessListModel.SATISFY, AccessListModel.SATISFY_ANY);

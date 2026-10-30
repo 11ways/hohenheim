@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.wordpress;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
@@ -16,8 +19,6 @@ import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
 import be.elevenways.hohenheim.server.wordpress.WordPressPhp;
 import be.elevenways.hohenheim.server.wordpress.WordPressTemplateSeeder;
 import be.elevenways.protoblast.testsupport.time.Poll;
-import be.elevenways.hohenheim.test.TestDatabases;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
@@ -55,6 +56,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Tag("slow") // live lane: needs a real daemon and two real images; runs with the widening flag
 class WordPressTemplateLiveTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
     private static final String WORDPRESS_IMAGE = WordPressPhp.IMAGE + ":" + WordPressPhp.recommended().tag();
     private static final String MYSQL_IMAGE = "mysql:8.0";
@@ -66,8 +70,7 @@ class WordPressTemplateLiveTest {
     static void setUp() throws Exception {
         // One database per class: the controller identity resolves through the CURRENT
         // datasource and the provisioning pool thread reads the record on its own.
-        datasource = TestDatabases.freshDatasource();
-        HohenheimTestRuntime.ensureBooted();
+        datasource = APP.database();
         netns = PrivateNetns.installEnforcing();
     }
 

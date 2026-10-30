@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.instance;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -7,8 +10,6 @@ import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.files.InstanceFiles;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.docker.FakeContainerFiles;
 import be.elevenways.hohenheim.test.docker.TestTars;
 import be.elevenways.zenit.common.Zenit;
@@ -46,6 +47,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  */
 class InstanceFilesContainmentTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final int MAX_FILE_KB = 1;
 
     private static SqlDatasource datasource;
@@ -53,8 +57,7 @@ class InstanceFilesContainmentTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        datasource = TestDatabases.freshDatasource();
-        HohenheimTestRuntime.ensureBooted();
+        datasource = APP.database();
         previousMaxFileKb = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Files.MAX_FILE_KB);
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Files.MAX_FILE_KB, MAX_FILE_KB);
     }

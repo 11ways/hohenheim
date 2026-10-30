@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.application;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -11,7 +14,6 @@ import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -41,13 +43,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  */
 class ApplicationRuntimeContractTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final String OPERATOR_BUCKET = OwnerBudget.INSTANCES.bucketOf("");
     private static final String OWNER_MODEL = InstanceModel.MODEL_ID.toString();
 
-    @BeforeAll
-    static void bootRuntime() {
-        HohenheimTestRuntime.ensureBooted();
-    }
 
     @AfterEach
     void cleanUp() {

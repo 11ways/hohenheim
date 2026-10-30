@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import org.junit.jupiter.api.Test;
 
@@ -14,10 +16,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  * AIDEV-NOTE: the first requireFence after a swap finds a hold on the CLOSED datasource and
  * releases it. zenit Leases once read that closed datasource as lost storage and spent its 30s
  * storage-heal poll there -- the exact 30s that 15 default-lane tests each paid, hidden by a
- * release-before-close step in TestDatabases. Leases now drops a hold on a closed datasource
+ * release-before-close step in the old test-database swap. Leases now drops a hold on a closed datasource
  * at once. The bound below is far above the fast path and far below that poll.
  */
 class DatabaseSwapLeaseReleaseTest {
+
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
 
     /** A host id no fixture creates: the lease key needs no server row. */
     private static final int HOST_ID = 987_654;
@@ -28,9 +33,7 @@ class DatabaseSwapLeaseReleaseTest {
     @Test
     void aSwapReleasesTheHostLeaseSoTheNextOperationDoesNotWaitOnTheClosedDatabase()
             throws Exception {
-        // 1. A booted runtime on a private database takes the host's lease.
-        TestDatabases.freshDatabase();
-        HohenheimTestRuntime.ensureBooted();
+        // 1. A booted runtime on the class database takes the host's lease.
         HostLeases leases = HostLeases.production();
         long firstFence = leases.requireFence(HOST_ID);
         assertThat(firstFence).as("step 1: the lease was taken on the first database")
@@ -38,7 +41,7 @@ class DatabaseSwapLeaseReleaseTest {
         assertThat(leases.isHeld(HOST_ID)).as("step 1: and this controller holds it").isTrue();
 
         // 2. The swap closes that database; the hold must not survive it.
-        TestDatabases.freshDatabase();
+        APP.renewDatabase();
         long start = System.nanoTime();
         boolean stillHeld = leases.isHeld(HOST_ID);
         Duration lookup = Duration.ofNanos(System.nanoTime() - start);

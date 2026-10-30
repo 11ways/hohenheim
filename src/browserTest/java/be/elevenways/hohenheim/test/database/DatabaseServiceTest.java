@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.test.database;
 
-import be.elevenways.hohenheim.test.TestDatabases;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
@@ -52,6 +54,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class DatabaseServiceTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static PrivateNetns netns;
 
     @BeforeAll
@@ -82,7 +87,7 @@ class DatabaseServiceTest {
         DockerClient docker = new DockerClient();
         LiveLane.requireImage(docker, PG_IMAGE);
 
-        SqlDatasource datasource = TestDatabases.freshBootedDatasource();
+        SqlDatasource datasource = APP.renewDatabase();
         DatabaseService service = new DatabaseService(datasource);
 
         String name = "svc" + System.nanoTime();
@@ -148,7 +153,7 @@ class DatabaseServiceTest {
         DockerClient docker = new DockerClient();
         LiveLane.requireImage(docker, PG_IMAGE);
 
-        DatabaseService service = new DatabaseService(TestDatabases.freshBootedDatasource());
+        DatabaseService service = new DatabaseService(APP.renewDatabase());
         String name = "async" + System.nanoTime();
         try {
             service.createAsync(name, ManagedDatabase.Engine.POSTGRES, PG_IMAGE,
@@ -182,7 +187,7 @@ class DatabaseServiceTest {
         DockerClient docker = new DockerClient();
         LiveLane.requireImage(docker, PG_IMAGE);
 
-        SqlDatasource datasource = TestDatabases.freshBootedDatasource();
+        SqlDatasource datasource = APP.renewDatabase();
         DatabaseService service = new DatabaseService(datasource);
         String name = "aftercommit" + System.nanoTime();
         String doomed = "doomed" + System.nanoTime();
@@ -335,7 +340,7 @@ class DatabaseServiceTest {
         DockerClient docker = new DockerClient();
         LiveLane.requireImage(docker, PG_IMAGE);
 
-        SqlDatasource datasource = TestDatabases.freshBootedDatasource();
+        SqlDatasource datasource = APP.renewDatabase();
         DatabaseService service = new DatabaseService(datasource);
         String name = "ledger" + System.nanoTime();
         try {
@@ -394,7 +399,7 @@ class DatabaseServiceTest {
         DockerClient docker = new DockerClient();
         LiveLane.requireImage(docker, PG_IMAGE);
 
-        SqlDatasource datasource = TestDatabases.freshBootedDatasource();
+        SqlDatasource datasource = APP.renewDatabase();
         DatabaseService service = new DatabaseService(datasource);
 
         String name = "c6destroy" + System.nanoTime();

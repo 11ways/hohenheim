@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import org.junit.jupiter.api.AfterAll;
@@ -23,13 +26,16 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class WildcardSpecificityTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static ProxyServer proxy;
     private static HttpServer broadUpstream;
     private static HttpServer narrowUpstream;
 
     @BeforeAll
     static void boot() throws Exception {
-        ProxyTestSupport.bootRuntime();
+        HohenheimEndpoints.init();
     }
 
     @AfterAll

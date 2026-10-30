@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.instance;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.zenit.test.support.LeaseObservations;
 import be.elevenways.zenit.test.support.EndpointConduit;
 import be.elevenways.hohenheim.HohenheimActivityAction;
@@ -90,6 +93,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * {@code TenantInstanceApiTest}, which stays unchanged.
  */
 class InstancePowerOperationsTest {
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static final SystemPurpose OTHER_SYSTEM_WORK = SystemPurpose.declare(
         Identifier.of("hohenheim_test", "other_power_work"));
 
@@ -102,7 +108,7 @@ class InstancePowerOperationsTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        fixture = BackupLaneFixture.install();
+        fixture = BackupLaneFixture.install(APP.database());
         datasource = fixture.datasource;
         Db.run(datasource, () -> tenantId = ApiSupport.user("power-ops@surface.test", "Power Operator"));
     }

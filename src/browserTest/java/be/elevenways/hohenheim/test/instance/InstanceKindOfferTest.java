@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.instance;
 
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.hohenheim.instance.InstanceKindInfo;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
@@ -8,7 +11,6 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.cms.InstanceTemplateParts;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.edit.EditContext;
 import be.elevenways.zenit.common.edit.EditView;
@@ -42,12 +44,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class InstanceKindOfferTest {
 
-    @BeforeAll
-    static void bootRegistry() {
-        // The template part's contents tab is role-gated, and this class boots no runtime that would declare roles.
-        HohenheimTestRuntime.declareFullNodeRolesOnce();
-        HohenheimTestRuntime.ensureDatasource();
-    }
+
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
 
     private static List<String> optionValues(FormEntry entry) {
         assertThat(entry).as("the kind entry is a Select").isInstanceOf(Select.class);

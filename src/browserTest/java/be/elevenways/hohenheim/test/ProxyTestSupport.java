@@ -24,26 +24,12 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Shared plumbing for proxy dispatch tests: runtime boot, fresh DB per test, site+domain
- * fixtures, and raw-socket HTTP exchanges against a port-0 {@link ProxyServer}.
+ * Shared plumbing for proxy dispatch tests: site+domain fixtures and raw-socket HTTP exchanges against a port-0
+ * {@link ProxyServer}; the class database and the runtime are the test class's served app's.
  */
 public final class ProxyTestSupport {
 
     private ProxyTestSupport() {
-    }
-
-    /** One-time runtime boot for a test class; pair with a per-class initialized guard. */
-    public static void bootRuntime() throws Exception {
-        HohenheimEndpoints.init();
-        // resetDatabase() already points the runtime at a fresh database AND initializes
-        // it; the second HohenheimDatabase.init() this used to make was pure duplication.
-        resetDatabase();
-        HohenheimTestRuntime.ensureBooted();
-    }
-
-    /** Point the runtime at a fresh temp SQLite file and re-init. */
-    public static void resetDatabase() throws Exception {
-        TestDatabases.freshDatabase();
     }
 
     /** Persist an enabled site of the given type with one domain. */

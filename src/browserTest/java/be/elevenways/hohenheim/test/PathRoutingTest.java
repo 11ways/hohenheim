@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.site.UnknownHostAnswer;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
@@ -29,6 +32,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class PathRoutingTest {
 
+    @RegisterExtension
+    static final ServedApp APP = HohenheimServedApp.standalone();
+
     private static boolean initialized = false;
     private ProxyServer proxy;
     private final List<HttpServer> upstreams = new ArrayList<>();
@@ -37,7 +43,7 @@ class PathRoutingTest {
     static void initRuntime() throws Exception {
         if (initialized) return;
         initialized = true;
-        bootRuntime();
+        HohenheimEndpoints.init();
     }
 
     @AfterEach
@@ -77,7 +83,7 @@ class PathRoutingTest {
 
     @Test
     void sameHostnameRoutesByLongestPathPrefix() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
 
         int apiPort = startUpstream("api-upstream", null);
         int apiV2Port = startUpstream("api-v2-upstream", null);
@@ -107,7 +113,7 @@ class PathRoutingTest {
 
     @Test
     void knownHostnameWithoutMatchingPathIs404NotFallback() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
         int fallbackPort = startUpstream("fallback-upstream", null);
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.UNKNOWN_HOSTS_FORWARD,
             "http://127.0.0.1:" + fallbackPort);
@@ -136,7 +142,7 @@ class PathRoutingTest {
 
     @Test
     void stripPathRemovesThePrefixBeforeForwarding() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
 
         AtomicReference<String> seenPath = new AtomicReference<>();
         int port = startUpstream("strip-upstream", seenPath);
@@ -161,7 +167,7 @@ class PathRoutingTest {
      */
     @Test
     void stripPathForwardsTheRawEncodingAndRefusesControlCharacters() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
 
         AtomicReference<String> seenRawPath = new AtomicReference<>();
         AtomicReference<String> seenRawQuery = new AtomicReference<>();
@@ -222,7 +228,7 @@ class PathRoutingTest {
      */
     @Test
     void stripPathRedirectsKeepThePrefix() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
 
         HttpServer upstream = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         int upstreamPort = upstream.getAddress().getPort();
@@ -256,7 +262,7 @@ class PathRoutingTest {
 
     @Test
     void aSecondLiveSiteCannotTakeAnAlreadyClaimedRoute() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
 
         int firstPort = startUpstream("first-upstream", null);
         int secondPort = startUpstream("second-upstream", null);
@@ -290,7 +296,7 @@ class PathRoutingTest {
 
     @Test
     void wildcardHostsAlsoRouteByPath() throws Exception {
-        resetDatabase();
+        APP.renewDatabase();
 
         int apiPort = startUpstream("wild-api", null);
         int rootPort = startUpstream("wild-root", null);
