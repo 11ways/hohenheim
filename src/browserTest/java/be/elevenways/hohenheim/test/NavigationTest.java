@@ -49,7 +49,9 @@ class NavigationTest extends HohenheimTestBase {
 
         // The dashboard is the landing page and carries the shell chrome.
         assertThat(page.locator("pl-app-sidebar").count()).isEqualTo(1);
-        assertThat(page.content()).contains("Sites");
+        // A site is reached through Apps; the closed command palette draws no entry, so the served page names Sites
+        // nowhere visible.
+        assertThat(page.locator("pl-app-sidebar").textContent()).as("the sidebar's Apps entry").contains("Apps");
 
         // The pl-app-shell grid places the sidebar to the left of the content
         // (grid-areas "sidebar content"), so they sit on the same row.

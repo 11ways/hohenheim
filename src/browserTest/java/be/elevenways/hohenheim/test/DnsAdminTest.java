@@ -150,20 +150,18 @@ class DnsAdminTest extends HohenheimTestBase {
             .contains("Glue records missing at the parent");
         checked.set(DnsZoneModel.DELEGATION_STATUS, null);
         Models.get(DnsZoneModel.class).save(checked);
-        navigateToApp("/admin/dns-zones/" + zoneId + "/page/records");
-        waitForHydration();
         // The tab renders the record RESOURCE's own row surface, so the record is reachable
         // twice by design: the title cell links to it, and so does the synthesized Edit at the
-        // head of the row menu (the shape every generated list has). A row with no lane button
-        // draws no compact menu: its one menu already fits a narrow card. Every link carries
-        // this tab as its return target (a write's fallback is the GLOBAL record list), hence
-        // the prefix match.
+        // head of the row menu (the shape every generated list has), drawn when the menu opens.
+        // A row with no lane button draws no compact menu: its one menu already fits a narrow
+        // card. Every link carries this tab as its return target (a write's fallback is the
+        // GLOBAL record list), hence the prefix match.
+        openedRowMenu("/admin/dns-zones/" + zoneId + "/page/records", String.valueOf(recordId));
         assertThat(page.locator("a[href^='/admin/dns-records/" + recordId
             + "?']:not([data-cms-lane])").count())
-            .as("the title link plus the synthesized edit in the menu").isEqualTo(2);
-        assertThat(page.locator("a[href^='/admin/dns-records/" + recordId
-            + "?'][data-cms-lane='compact']").count())
-            .as("and no compact copy: the row has no lane to stand in for").isEqualTo(0);
+            .as("the title link plus the synthesized edit in the opened menu").isEqualTo(2);
+        assertThat(page.locator("pl-table-row[data-row-key='" + recordId + "'] .cms-row-action-compact").count())
+            .as("and no compact menu: the row has no lane to stand in for").isEqualTo(0);
         assertThat(page.locator("cms-inline-cell").count())
             .as("and its editable cells are offered in place").isGreaterThan(0);
         assertThat(page.locator("#add-record-link").count()).isEqualTo(1);
