@@ -161,6 +161,30 @@ public final class InstanceDatabaseNetworks {
     }
 
     /**
+     * Between container CREATE and START of an instance that SERVES managed databases: rejoin the fresh container
+     * to every link network of every database it serves, through {@link #reattachForDatabase}. Never throws, as that
+     * one does not -- a workload's broken link must not keep its database down.
+     *
+     * AIDEV-NOTE: this is the ONE home for "a database container was replaced, its links follow", for every lane
+     * that replaces it (the reconciler's and the console watch's crash restarts, an operator restart or deploy, a
+     * resize, a snapshot restore, the database tier's own provisioning). Robbedoes 2026-10-30: the shared Mongo
+     * engine's crash restart came back on its own network only, and six apps could not resolve it for 8 hours.
+     * Joined BEFORE start, so the published port the deploy records at start is already the final one and no
+     * refresh is owed (reattachForDatabase's own refresh is a no-op on a container that is not running yet).
+     */
+    public static void rejoinServedBeforeStart(InstanceService.@NonNull Resolved resolved) {
+        // The whole walk is guarded: reattachForDatabase reads its links outside its own per-link guard.
+        try {
+            for (int databaseId : DatabaseInstances.servedBy(resolved.row())) {
+                reattachForDatabase(databaseId);
+            }
+        } catch (RuntimeException unreadable) {
+            Blast.log("DB-LINK: could not rejoin the link networks of the databases instance",
+                resolved.row().get(InstanceModel.ID), "serves -", unreadable.getMessage());
+        }
+    }
+
+    /**
      * After a database container is (re)provisioned: rejoin every link network its
      * attached instances hold, because provisioning REPLACES the container and the fresh
      * one is only attached to its own workload network. Never throws -- provisioning must

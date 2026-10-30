@@ -248,12 +248,14 @@ public class DatabaseService extends DatasourceScoped {
     /**
      * Converge the record's runtime and hand back its connection details.
      *
-     * A dedicated record deploys its own engine instance. A shared record brings its
-     * engine up if needed (serialized per engine) and then creates -- idempotently -- its
-     * logical database and user inside it. Either way a deploy REPLACES the serving
-     * container, so every attached workload rejoins the link networks, and joining a
-     * running container re-allocates its published port, so the port is re-observed
-     * AFTER the joins and the returned connection carries the final number.
+     * A dedicated record deploys its own engine instance, and the deploy itself rejoins
+     * every attached workload's link network before the engine starts
+     * (DatabaseServingLinkHook). A shared record brings its engine up if needed
+     * (serialized per engine) and then creates -- idempotently -- its logical database
+     * and user inside it; an engine that was already serving never redeployed, so this
+     * record's attached workloads are joined here, and joining a running container
+     * re-allocates its published port, so the port is re-observed AFTER the joins and
+     * the returned connection carries the final number.
      */
     private ManagedDatabase.Connection provisionRuntime(Row row) throws IOException {
         Integer recordId = row.get(DatabaseModel.ID);
@@ -262,13 +264,13 @@ public class DatabaseService extends DatasourceScoped {
         String password = row.get(DatabaseModel.DB_PASSWORD);
         String database = row.get(DatabaseModel.DB_NAME);
         int port;
-        if (DatabaseModel.isShared(row)) {
-            port = scoped(() -> provisionLogical(row));
-        } else {
+        if (!DatabaseModel.isShared(row)) {
             ResourceLimits limits = ResourceLimits.of(row.get(DatabaseModel.MEMORY_LIMIT_MB),
                 row.get(DatabaseModel.CPU_LIMIT));
             port = scoped(() -> DatabaseInstances.deploy(row, limits));
+            return new ManagedDatabase.Connection(engine, "127.0.0.1", port, user, password, database);
         }
+        port = scoped(() -> provisionLogical(row));
         // Every attached consumer rejoins -- an application's serving release included,
         // which InstanceDatabaseNetworks resolves off the owning record. A rejoin can move
         // the published port, so the re-observation below runs when one touched something.

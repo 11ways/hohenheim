@@ -10,7 +10,6 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.Secrets;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.docker.DockerClient;
-import be.elevenways.hohenheim.server.docker.InstanceDatabaseNetworks;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.protoblast.common.Blast;
@@ -150,8 +149,8 @@ public final class DatabaseEngines {
     /**
      * Bring the engine's container up if it is not serving, and stamp the outcome on
      * the row. Serialized per engine, so concurrent databases provisioning onto a fresh
-     * engine deploy it once. Rejoins every attached workload's link network afterwards,
-     * because a (re)deploy replaces the container.
+     * engine deploy it once. The fresh container rejoins every attached workload's link
+     * network inside the deploy itself (DatabaseServingLinkHook), as on every other lane.
      *
      * @throws IOException when the engine cannot be brought up; the row reads failed
      *         with the reason
@@ -171,12 +170,6 @@ public final class DatabaseEngines {
             } catch (IOException e) {
                 setStatus(engineId, DatabaseModel.STATUS_FAILED, e.getMessage());
                 throw e;
-            }
-            for (Row database : databasesOn(engineId)) {
-                Integer databaseId = database.get(DatabaseModel.ID);
-                if (databaseId != null) {
-                    InstanceDatabaseNetworks.reattachForDatabase(databaseId);
-                }
             }
             reconcileIsolationLogged(engineId);
         }
@@ -251,7 +244,8 @@ public final class DatabaseEngines {
     /**
      * Recreate the engine container with the row's CURRENT ceilings: the resize lane,
      * run after the row and its reservation were written. Same recreate discipline as a
-     * dedicated database's resize; open connections drop until the engine is back.
+     * dedicated database's resize; open connections drop until the engine is back, and
+     * its link networks are rejoined inside the deploy (DatabaseServingLinkHook).
      */
     public static void redeploy(int engineId) throws IOException {
         synchronized (lockOf(engineId)) {
@@ -262,12 +256,6 @@ public final class DatabaseEngines {
             } catch (IOException e) {
                 setStatus(engineId, DatabaseModel.STATUS_FAILED, e.getMessage());
                 throw e;
-            }
-            for (Row database : databasesOn(engineId)) {
-                Integer databaseId = database.get(DatabaseModel.ID);
-                if (databaseId != null) {
-                    InstanceDatabaseNetworks.reattachForDatabase(databaseId);
-                }
             }
             reconcileIsolationLogged(engineId);
         }

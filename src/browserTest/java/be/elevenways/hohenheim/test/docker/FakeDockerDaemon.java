@@ -6,7 +6,9 @@ import be.elevenways.hohenheim.server.docker.DockerStreamTransport;
 import be.elevenways.hohenheim.server.docker.DockerTransport;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
+import be.elevenways.hohenheim.server.database.DatabaseContainerKind;
 import be.elevenways.hohenheim.server.instance.DockerContainerKind;
+import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.Egress;
@@ -106,6 +108,9 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
 
     /** The link networks the runtime face holds; see {@link FakeReleaseRuntime#ensureLinkNetwork}. */
     private final Set<String> linkNetworks = new LinkedHashSet<>();
+
+    /** link network -> the container handles joined to it; a recreate leaves every one of them. */
+    private final Map<String, Set<String>> linkMembers = new LinkedHashMap<>();
 
     /** Every daemon-facing act in order; the assertable half of "what actually happened". */
     private final List<String> calls = new ArrayList<>();
@@ -257,6 +262,25 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
     }
 
     /**
+     * The containers currently joined to one link network. A create REPLACES the container under its handle, and
+     * the replacement is joined to nothing, exactly as a real daemon's fresh container sits on its own network only.
+     */
+    public @NonNull Set<String> linkMembersOf(@NonNull String linkHandle) {
+        return Set.copyOf(this.linkMembers.getOrDefault(linkHandle, Set.of()));
+    }
+
+    /** The link networks one container is currently joined to. */
+    public @NonNull Set<String> linkNetworksOf(@NonNull String containerHandle) {
+        Set<String> joined = new LinkedHashSet<>();
+        this.linkMembers.forEach((network, members) -> {
+            if (members.contains(containerHandle)) {
+                joined.add(network);
+            }
+        });
+        return joined;
+    }
+
+    /**
      * Place a RUNNING container with no published port under this handle, as a controller's earlier deploy left it:
      * the engine an exec runs in when the test planted the engine's instance row without deploying it.
      */
@@ -334,12 +358,15 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
                 throw new IOException("no link network " + linkHandle);
             }
             require(containerHandle);
+            FakeDockerDaemon.this.linkMembers.computeIfAbsent(linkHandle, key -> new LinkedHashSet<>())
+                .add(containerHandle);
             FakeDockerDaemon.this.calls.add("link-connect:" + linkHandle + ":" + containerHandle);
         }
 
         @Override
         public void removeLinkNetwork(@NonNull String linkHandle) {
             FakeDockerDaemon.this.linkNetworks.remove(linkHandle);
+            FakeDockerDaemon.this.linkMembers.remove(linkHandle);
             FakeDockerDaemon.this.calls.add("link-remove:" + linkHandle);
         }
 
@@ -358,6 +385,7 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
                 }
                 unbind(existing);
                 FakeDockerDaemon.this.workloads.remove(spec.handle());
+                leaveLinkNetworks(spec.handle());
             }
             int containerPort = spec.publications().isEmpty()
                 ? 0 : spec.publications().get(0).containerPort();
@@ -408,6 +436,7 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
         @Override
         public void destroy(@NonNull String handle) {
             Workload workload = FakeDockerDaemon.this.workloads.remove(handle);
+            leaveLinkNetworks(handle);
             if (workload != null) {
                 unbind(workload);
             }
@@ -468,6 +497,11 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
         }
     }
 
+    /** The container is gone or replaced: whatever networks the old one had joined, it holds no more. */
+    private void leaveLinkNetworks(@NonNull String handle) {
+        this.linkMembers.values().forEach(members -> members.remove(handle));
+    }
+
     // -- the kind face --------------------------------------------------------
 
     /**
@@ -477,7 +511,7 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
      * {@link #restore()} puts the production pair back.
      */
     public void install() {
-        InstanceKinds.replace(new FakeReleaseKind(this));
+        InstanceKinds.replace(new FakeRuntimeKind(new ReleaseKind(), this));
         DockerClient.overrideLocalTransportForTest(() -> this);
     }
 
@@ -493,46 +527,38 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
      * points at DIRECTLY, whose host port really moves when the workload restarts.
      */
     public void installContainerKind() {
-        InstanceKinds.replace(new FakeContainerKind(this));
+        InstanceKinds.replace(new FakeRuntimeKind(new DockerContainerKind(), this));
     }
 
-    /** Undo {@link #install()} and {@link #installContainerKind()}; safe either way. */
+    /**
+     * ALSO point {@code hohenheim:database_container} at this fake, so a managed database's engine instance (a
+     * shared engine's or a dedicated record's) is deployed hermetically through the instance contract.
+     *
+     * AIDEV-NOTE: arrives with its first consumer ({@code DatabaseLinkRejoinTest}): the shape no other kind can
+     * produce is a database container REPLACED by a generic deploy while workloads hold link networks to it.
+     */
+    public void installDatabaseKind() {
+        InstanceKinds.replace(new FakeRuntimeKind(new DatabaseContainerKind(), this));
+    }
+
+    /** Undo {@link #install()}, {@link #installContainerKind()} and {@link #installDatabaseKind()}; safe either way. */
     public static void restore() {
         InstanceKinds.replace(new ReleaseKind());
         InstanceKinds.replace(new DockerContainerKind());
+        InstanceKinds.replace(new DatabaseContainerKind());
         DockerClient.overrideLocalTransportForTest(null);
     }
 
     /**
-     * The real docker-container kind with its runtime swapped: schema, spec derivation,
-     * publication shape, reach and footprint all come from production.
+     * A real kind with its runtime swapped for this fake: schema, spec derivation, publication shape, generated-only
+     * refusal, reach and footprint all come from production, so a spec bug still fails here.
      */
-    private static final class FakeContainerKind extends ForwardingKindHandler {
+    private static final class FakeRuntimeKind extends ForwardingKindHandler {
 
         private final FakeDockerDaemon daemon;
 
-        FakeContainerKind(@NonNull FakeDockerDaemon daemon) {
-            super(new DockerContainerKind());
-            this.daemon = daemon;
-        }
-
-        @Override
-        public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {
-            return this.daemon.runtime();
-        }
-    }
-
-    /**
-     * The real release kind in every respect but its runtime: schema, spec derivation,
-     * generated-only refusal and footprint all come from production, so a spec bug still
-     * fails here.
-     */
-    private static final class FakeReleaseKind extends ForwardingKindHandler {
-
-        private final FakeDockerDaemon daemon;
-
-        FakeReleaseKind(@NonNull FakeDockerDaemon daemon) {
-            super(new ReleaseKind());
+        FakeRuntimeKind(@NonNull InstanceKindHandler real, @NonNull FakeDockerDaemon daemon) {
+            super(real);
             this.daemon = daemon;
         }
 

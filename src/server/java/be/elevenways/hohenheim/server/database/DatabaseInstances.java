@@ -223,6 +223,41 @@ public final class DatabaseInstances {
                 instance.get(InstanceModel.ID));
     }
 
+    /**
+     * The inverse of {@link #owned(int)}: the managed databases this instance SERVES, its own dedicated record or
+     * every record on its shared engine, kept only where it is the instance {@link #owned(int)} answers.
+     *
+     * AIDEV-NOTE: the serving filter is load-bearing. An owner keeps a superseded instance (a move's held old engine,
+     * a destroy in flight) beside the one that serves, and a deploy of that one must not claim the databases.
+     *
+     * @return database ids in id order; empty for an instance no database tier owns
+     */
+    public static @NonNull List<Integer> servedBy(@NonNull Row instance) {
+        String ownerModel = instance.get(InstanceModel.GENERATED_FOR_MODEL);
+        Integer ownerId = instance.get(InstanceModel.GENERATED_FOR_ID);
+        Integer instanceId = instance.get(InstanceModel.ID);
+        if (ownerModel == null || ownerId == null || instanceId == null) {
+            return List.of();
+        }
+        List<Row> candidates;
+        if (DatabaseModel.MODEL_ID.toString().equals(ownerModel)) {
+            Row database = Models.get(DatabaseModel.class).findById(ownerId);
+            candidates = database == null ? List.of() : List.of(database);
+        } else if (DatabaseEngineModel.MODEL_ID.toString().equals(ownerModel)) {
+            candidates = DatabaseEngines.databasesOn(ownerId);
+        } else {
+            return List.of();
+        }
+        List<Integer> served = new ArrayList<>();
+        ownedAmong(candidates).forEach((databaseId, serving) -> {
+            if (instanceId.equals(serving.get(InstanceModel.ID))) {
+                served.add(databaseId);
+            }
+        });
+        served.sort(null);
+        return served;
+    }
+
     /** Live state of the instance serving a database; never throws (see {@link ContainerState}). */
     public static ManagedDatabase.@NonNull LiveStatus liveStatus(int databaseId) {
         return liveStatus(owned(databaseId));
