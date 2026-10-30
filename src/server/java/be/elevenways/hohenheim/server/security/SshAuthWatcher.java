@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.security;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.common.thread.JobRunnerGroup;
 import be.elevenways.protoblast.common.time.Backoff;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.time.Pace;
@@ -79,6 +80,9 @@ public final class SshAuthWatcher {
     /** A run that lasted this long is a healthy one; the next failure restarts the ladder. */
     private static final long HEALTHY_RUN_MS = 60_000;
 
+    /** How long {@link #stop} waits for the supervising thread to end. */
+    private static final long STOP_TIMEOUT_MS = 5_000L;
+
     /** How the watcher starts its child; injectable so tests never spawn journalctl. */
     public interface Journal {
         @NonNull RunningProcess start() throws IOException;
@@ -129,7 +133,12 @@ public final class SshAuthWatcher {
         Blast.slog("hohenheim.ssh_watch_started", Map.of("command", String.join(" ", COMMAND)));
     }
 
-    /** Stop supervising and destroy the child; idempotent. */
+    /**
+     * Stop supervising, destroy the child and return once the supervising thread ended; idempotent.
+     *
+     * AIDEV-NOTE: it WAITS: the shutdown drains the ban writer next, and a line the supervisor was still scoring
+     * would queue its ban after that drain.
+     */
     public synchronized void stop() {
         this.running = false;
         RunningProcess current = this.child;
@@ -137,10 +146,10 @@ public final class SshAuthWatcher {
             current.stop();
         }
         JobRunner runner = this.threads;
-        if (runner != null) {
-            runner.shutdownNow();
-        }
         this.threads = null;
+        if (runner != null && !runner.stop(JobRunnerGroup.StopMode.CANCEL, STOP_TIMEOUT_MS)) {
+            Blast.log("SSH WATCH: the supervisor still ran", STOP_TIMEOUT_MS, "ms after the stop");
+        }
     }
 
     /** What the firewall-role health surface reports. */
@@ -193,6 +202,10 @@ public final class SshAuthWatcher {
             return false;
         }
         this.child = process;
+        if (!this.running) {
+            // stop() ran while the child was spawning and found none to end: this run ends it.
+            process.stop();
+        }
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(process.stdout(), StandardCharsets.UTF_8))) {
             String line;

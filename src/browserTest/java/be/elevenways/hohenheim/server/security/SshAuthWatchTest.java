@@ -7,6 +7,8 @@ import be.elevenways.hohenheim.server.cms.FirewallAttention;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.server.process.RunningProcess;
+import be.elevenways.protoblast.server.process.Subprocess;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.SecurityEventTypes;
@@ -22,6 +24,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -260,6 +263,41 @@ class SshAuthWatchTest {
         assertThat(FirewallAttention.sshWatchIssue(watcher.snapshot()))
             .as("step 3: and it is visible where the firewall role reports health")
             .isNotNull();
+    }
+
+    /**
+     * A stop that lands while the child is spawning finds no child to end; the run that spawned it ends it, and
+     * the stop returns only once the supervisor did, so no journal follow outlives the watcher.
+     */
+    @Test
+    void aStopDuringTheSpawnStillEndsTheChildAndTheSupervisor() throws Exception {
+        CountDownLatch spawning = new CountDownLatch(1);
+        AtomicReference<RunningProcess> spawned = new AtomicReference<>();
+        SshAuthWatcher watcher = new SshAuthWatcher(() -> {
+            spawning.countDown();
+            try {
+                // The stop's interrupt arrives while the spawn is under way.
+                new CountDownLatch(1).await();
+            } catch (InterruptedException interrupted) {
+                // The spawn still completes, as a real one past its fork would.
+            }
+            RunningProcess child = Subprocess.of("sleep", "60").streamStdout().start();
+            spawned.set(child);
+            return child;
+        }, (type, ip) -> { });
+
+        // 1. The supervisor is inside the spawn when the stop runs.
+        watcher.start();
+        assertThat(spawning.await(5, TimeUnit.SECONDS)).as("step 1: the spawn began").isTrue();
+        watcher.stop();
+
+        // 2. The stop returned after the supervisor ended, and that run ended the child the stop never saw.
+        assertThat(spawned.get()).as("step 2: the child was spawned after the stop began").isNotNull();
+        assertThat(spawned.get().isAlive()).as("step 2: and it is not left running").isFalse();
+        assertThat(Thread.getAllStackTraces().keySet())
+            .as("step 2: no supervisor thread outlives the stop")
+            .noneMatch(thread -> thread.getName().startsWith("ssh-auth-watch") && thread.isAlive());
+        assertThat(watcher.snapshot().running()).as("step 2: the watcher reports itself stopped").isFalse();
     }
 
     // -----------------------------------------------------------------------
