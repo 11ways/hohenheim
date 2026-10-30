@@ -25,5 +25,8 @@
 # 2026-10-25: the framework work since 2026-10-15 plus plumage's pl-one-time-secret (moved from zenit-auth): the
 # breach was 428 gzip bytes over; re-measured with update-bundle-budget so teavm-bundle.sizes matches:
 # raw 8329832 -> 8725432, gzip 2075485 -> 2177992. Standard 5 percent headroom.
-cms.js.raw=9161704 measured=8725432
-cms.js.gzip=2286892 measured=2177992
+# 2026-10-30: the framework work since 2026-10-25 (zenit-cms's own resource list and list row templates in place
+# of Tpl_PagesResourceList, zenit-forms' fuzzy date input) plus the instance deploys tab: the breach was 735 gzip
+# bytes over; raw 8725432 -> 9123840, gzip 2177992 -> 2287627. Standard 5 percent headroom.
+cms.js.raw=9580032 measured=9123840
+cms.js.gzip=2402009 measured=2287627
