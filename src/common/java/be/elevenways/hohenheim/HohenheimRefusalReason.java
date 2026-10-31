@@ -21,7 +21,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  * @since  0.9.0
  */
 @BlastAutoLoad
-public enum HohenheimRefusalReason implements DomainRefusal.Reason {
+public enum HohenheimRefusalReason implements DomainRefusal.Explained {
 
     /** The caller lacks the instance capability; the same answer as for an instance it cannot see. */
     INSTANCE_NOT_PERMITTED("instance_not_permitted", DomainRefusal.Recovery.NEVER,
