@@ -20,10 +20,11 @@ The distribution is the fat server jar the standard build already produces:
     zenit-dev build            # in the hohenheim repo
     build/libs/hohenheim-0.1.0-SNAPSHOT-server.jar
 
-The jar carries migrations, templates, all module CSS and the settings
-defaults. It does NOT carry the TeaVM client bundle: `public/cms.js` (and its
-`.map`) must ship alongside, served from `<workdir>/public/` (the asset
-middleware reads disk first, then classpath -- the classpath has no cms.js).
+The jar carries migrations, templates, all module CSS, the settings defaults and
+the TeaVM client bundle with its source map (`public/cms.js`, `public/cms.js.map`):
+one jar is the whole deployable. A server whose jar lacks them refuses to boot. A
+file in `<workdir>/public/` never beats the jar's copy of the same path (the boot
+log names each one it ignored); it only adds what the jar does not carry.
 
 ## The installer
 
@@ -300,7 +301,7 @@ instance tier.
 
     /opt/hohenheim/
       hohenheim-server.jar     carries settings/default.dry (the shipped defaults, read first)
-      public/cms.js            (+ cms.js.map, optional)
+      public/                  optional: serves files the jar does not carry; the jar's own win
       settings/local.dry       every setting; the role + security declaration under
                                hohenheim, see below (GITIGNORED in the repo -- it is
                                per-deployment; start from settings/local.dry.example)

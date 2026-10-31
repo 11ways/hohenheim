@@ -253,14 +253,6 @@ tasks.named('serverJar') {
         def jarFile = archiveFile.get().asFile
         def jar = new java.util.jar.JarFile(jarFile)
         try {
-            // The deployable must be self-contained: a jar without the client bundle
-            // deploys an old front-end against a new server (the starfleet Aug 10/15
-            // version skew). The assembly lane packs these; this pins that it did.
-            ['public/cms.js', 'public/cms.js.map', 'public/hohenheim.css'].each { asset ->
-                if (jar.getEntry(asset) == null) {
-                    throw new GradleException("${jarFile.name} is missing ${asset} -- a jar-only deploy would strand the front-end")
-                }
-            }
             def nativeAccess = jar.manifest?.mainAttributes?.getValue('Enable-Native-Access')
             if (nativeAccess != 'ALL-UNNAMED') {
                 throw new GradleException("${jarFile.name} manifest lacks Enable-Native-Access: ALL-UNNAMED -- every offline command would print the JDK native-access warning again")
@@ -325,9 +317,9 @@ tasks.named('serverJar') {
 }
 
 // The Hawkeye template stage registers copyClientJs (dev serving: TeaVM JS into
-// the project public/ dir) and compileHawkeyeScss; the server jar no longer
-// depends on either by name -- the assembly lane packs generateJavaScript's
-// output and the scss packaging injects the css, each with its own task wiring.
+// the project public/ dir) and compileHawkeyeScss; the deployable lane packs
+// generateJavaScript's output, the scss packaging injects the css, and the lane
+// fails a jar missing either.
 
 // AIDEV-NOTE: ONE fork count for all three browser lanes. Gradle never runs two tasks of the
 // same project concurrently, so the lanes are strictly sequential and this number IS the
