@@ -7,6 +7,7 @@ import be.elevenways.hawkeye.common.lambda.LambdaReference1;
 import be.elevenways.hawkeye.common.render.RenderContext;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.util.BlastCollection;
 import be.elevenways.zenit.common.channel.ChannelLinks;
 import be.elevenways.zenit.widget.common.data.UsageData;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -97,12 +98,7 @@ public final class HohenheimStatsFunctions {
         }
 
         static @Nullable Metric byKey(@Nullable String key) {
-            for (Metric metric : values()) {
-                if (metric.key.equals(key)) {
-                    return metric;
-                }
-            }
-            return null;
+            return BlastCollection.first(values(), metric -> metric.key.equals(key));
         }
     }
 

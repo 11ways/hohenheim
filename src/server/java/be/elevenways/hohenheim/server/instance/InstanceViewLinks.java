@@ -1,12 +1,14 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimCapabilities;
+import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.common.channel.ChannelLink;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Principal;
 import be.elevenways.zenit.common.security.RecordCapabilityScope;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -45,6 +47,12 @@ public final class InstanceViewLinks {
             throw new DomainRefusal(ZenitRefusalReason.PERMISSION_DENIED, "Not permitted");
         }
         return instanceId;
+    }
+
+    /** @return whether the viewer is an operator, who may read the daemon's own words */
+    public static boolean isOperator(@NonNull ChannelLink<?, ?> link) {
+        Principal principal = link.getPrincipal();
+        return principal != null && AccessContext.detached(principal).hasPermission(HohenheimSources.ADMIN_ACCESS);
     }
 
     /**

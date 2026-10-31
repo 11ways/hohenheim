@@ -152,7 +152,7 @@ public final class InstanceOverview {
             WidgetInstance card = portsCard(HohenheimMicrocopy.INSTANCE_OVERVIEW.of(service ? "connect" : "endpoint"),
                 service && gameAddress != null
                     ? HohenheimMicrocopy.INSTANCE_OVERVIEW.of("connect_name").withArg("address", gameAddress)
-                    : service ? PortPurpose.connectLead(namedPorts(settingsOf(instance)).stream()
+                    : service ? PortPurpose.connectLead(namedPorts(InstanceModel.settingsOf(instance)).stream()
                         .map(PublishedPort::purpose).toList())
                     : HohenheimMicrocopy.INSTANCE_OVERVIEW.of("endpoint_hint"), ports, liveFigure(instance));
             // The game address is the operator's entry on the Configuration (InstanceParts.gameAddressAccess): the card
@@ -478,7 +478,7 @@ public final class InstanceOverview {
      */
     static @NonNull List<InstanceEndpointView> endpointsOf(int instanceId, boolean delegated) {
         Row instance = Models.get(InstanceModel.class).findById(instanceId);
-        List<PublishedPort> named = instance == null ? List.of() : namedPorts(settingsOf(instance));
+        List<PublishedPort> named = instance == null ? List.of() : namedPorts(InstanceModel.settingsOf(instance));
         InstanceStatus status = instance == null ? null : InstanceStatus.forToken(instance.get(InstanceModel.STATUS));
         return endpointsOf(InstanceModel.MODEL_ID, instanceId, named, status != null && status.servable(), delegated);
     }
@@ -573,11 +573,6 @@ public final class InstanceOverview {
         } catch (Violations unspelled) {
             return List.of();
         }
-    }
-
-    @SuppressWarnings("unchecked")
-    private static @NonNull Map<String, Object> settingsOf(@NonNull Row instance) {
-        return instance.get(InstanceModel.SETTINGS) instanceof Map<?, ?> map ? (Map<String, Object>) map : Map.of();
     }
 
     /** What a claim means to an operator, as a stable hook and in words; never the ledger's own status word. */

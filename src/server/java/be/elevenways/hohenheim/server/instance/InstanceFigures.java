@@ -162,7 +162,7 @@ public final class InstanceFigures {
          */
         static @Nullable Target of(@NonNull Row instance,
                                    @NonNull Function<@Nullable Integer, PublishedPortProbe> lanes) {
-            Map<String, Object> settings = settingsOf(instance);
+            Map<String, Object> settings = InstanceModel.settingsOf(instance);
             StatusProbe probe = StatusProbe.declaredIn(settings);
             if (probe == null) {
                 return null;
@@ -191,7 +191,7 @@ public final class InstanceFigures {
      * @return null for an instance that declares no status probe
      */
     public static @Nullable LiveFigureView viewOf(@NonNull Row instance) {
-        StatusProbe probe = StatusProbe.declaredIn(settingsOf(instance));
+        StatusProbe probe = StatusProbe.declaredIn(InstanceModel.settingsOf(instance));
         if (probe == null) {
             return null;
         }
@@ -329,11 +329,6 @@ public final class InstanceFigures {
     private static @NonNull Figure notRunning(int instanceId, @NonNull StatusProbe probe,
                                               @Nullable InstanceStatus status) {
         return new Figure(Now.millis(), instanceId, probe, LiveFigureState.NOT_RUNNING, 0, 0, status);
-    }
-
-    @SuppressWarnings("unchecked")
-    private static @NonNull Map<String, Object> settingsOf(@NonNull Row instance) {
-        return instance.get(InstanceModel.SETTINGS) instanceof Map<?, ?> map ? (Map<String, Object>) map : Map.of();
     }
 
     // -- one instance's asking ------------------------------------------------

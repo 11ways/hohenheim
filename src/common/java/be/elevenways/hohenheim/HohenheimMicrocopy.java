@@ -80,10 +80,7 @@ public enum HohenheimMicrocopy {
      * @throws IllegalStateException when the imported scope is not the one this constant's name spells
      */
     HohenheimMicrocopy(@NonNull MicrocopyScope imported) {
-        if (!imported.scope().equals(BlastString.lower(this.name()))) {
-            throw new IllegalStateException(this.name() + " imports scope '" + imported.scope() + "', not its own");
-        }
-        this.copy = imported;
+        this.copy = imported.importedAs(this.name());
     }
 
     /** @return the scope filter value this constant's catalog entries carry */

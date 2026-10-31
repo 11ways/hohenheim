@@ -101,8 +101,7 @@ public class GitWebhookHandler {
      * Check if the request is a POST to the webhook prefix.
      */
     public static boolean matches(HttpServerExchange exchange) {
-        return "POST".equals(exchange.getRequestMethod().toString())
-            && exchange.getRequestPath().startsWith(PREFIX);
+        return HookRequests.isPostTo(exchange, PREFIX);
     }
 
     /**
@@ -113,7 +112,7 @@ public class GitWebhookHandler {
         RateLimiter.Decision budget = ExchangeRateLimits.tryAcquire(exchange, POLICY, null);
         if (!budget.allowed()) {
             ExchangeRateLimits.stampRetryAfter(exchange, budget.retryAfterSeconds());
-            sendJson(exchange, 429, "{\"error\":\"rate limited\"}");
+            HookRequests.sendJson(exchange, 429, "{\"error\":\"rate limited\"}");
             return;
         }
 
@@ -187,7 +186,7 @@ public class GitWebhookHandler {
                     } catch (Exception e) {
                         Blast.log("GIT WEBHOOK: error processing webhook for slug", this.slug, "-",
                             e.getMessage());
-                        sendJson(exchange, 500, "{\"error\":\"internal error\"}");
+                        HookRequests.sendJson(exchange, 500, "{\"error\":\"internal error\"}");
                     }
                 });
             }
@@ -241,7 +240,7 @@ public class GitWebhookHandler {
 
     private static void processWebhook(HttpServerExchange exchange, String slug, String body) {
         if (body.length() > MAX_BODY_BYTES) {
-            sendJson(exchange, 413, "{\"error\":\"payload too large\"}");
+            HookRequests.sendJson(exchange, 413, "{\"error\":\"payload too large\"}");
             return;
         }
 
@@ -279,7 +278,7 @@ public class GitWebhookHandler {
         String event = eventOf(exchange);
         Row claimed = WebhookDeliveries.claim(applicationId, deliveryKey, event);
         if (claimed == null) {
-            sendJson(exchange, 200, "{\"status\":\"duplicate\"}");
+            HookRequests.sendJson(exchange, 200, "{\"status\":\"duplicate\"}");
             return;
         }
 
@@ -291,7 +290,7 @@ public class GitWebhookHandler {
         String boundRepo = boundRepositoryOf(sourceSettings);
         if (payloadRepo != null && boundRepo != null && !payloadRepo.equalsIgnoreCase(boundRepo)) {
             WebhookDeliveries.stampAction(claimed, WebhookOutcome.REPOSITORY_MISMATCH);
-            sendJson(exchange, 422, "{\"error\":\"repository mismatch\"}");
+            HookRequests.sendJson(exchange, 422, "{\"error\":\"repository mismatch\"}");
             return;
         }
 
@@ -324,7 +323,7 @@ public class GitWebhookHandler {
         // all three providers. An unmodelled event is ignored, loudly and idempotently.
         if (pushedRef.isEmpty()) {
             WebhookDeliveries.stampAction(claimed, WebhookOutcome.IGNORED_NOT_A_PUSH);
-            sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"not a push\"}");
+            HookRequests.sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"not a push\"}");
             return;
         }
 
@@ -342,11 +341,11 @@ public class GitWebhookHandler {
             if (!production && !branch.isEmpty() && hasLivePreview(applicationId, branch)) {
                 queuePreviewTeardown(applicationId, branch, "branch_deleted");
                 WebhookDeliveries.stampAction(claimed, WebhookOutcome.PREVIEW_TEARDOWN_QUEUED);
-                sendJson(exchange, 200, "{\"status\":\"preview_teardown_queued\"}");
+                HookRequests.sendJson(exchange, 200, "{\"status\":\"preview_teardown_queued\"}");
                 return;
             }
             WebhookDeliveries.stampAction(claimed, WebhookOutcome.IGNORED_DELETED_REF);
-            sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"deleted ref\"}");
+            HookRequests.sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"deleted ref\"}");
             return;
         }
 
@@ -354,7 +353,7 @@ public class GitWebhookHandler {
         // that is no ref at all) never reaches a checkout.
         if (!production && !branch.isEmpty() && !GitRefNames.isValid(branch)) {
             WebhookDeliveries.stampAction(claimed, WebhookOutcome.IGNORED_INVALID_REF);
-            sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"invalid ref\"}");
+            HookRequests.sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"invalid ref\"}");
             return;
         }
 
@@ -374,19 +373,19 @@ public class GitWebhookHandler {
                         DeployTrigger.WEBHOOK));
             recordPreview(applicationId, branch);
             WebhookDeliveries.stampAction(claimed, WebhookOutcome.PREVIEW_QUEUED);
-            sendJson(exchange, 200, "{\"status\":\"preview_queued\"}");
+            HookRequests.sendJson(exchange, 200, "{\"status\":\"preview_queued\"}");
             return;
         }
 
         if (!production) {
             WebhookDeliveries.stampAction(claimed, WebhookOutcome.IGNORED_BRANCH);
-            sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"branch\"}");
+            HookRequests.sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"branch\"}");
             return;
         }
 
         if (!GitSourceSchema.autoDeploys(sourceSettings)) {
             WebhookDeliveries.stampAction(claimed, WebhookOutcome.IGNORED_AUTO_DEPLOY);
-            sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"auto_deploy disabled\"}");
+            HookRequests.sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"auto_deploy disabled\"}");
             return;
         }
 
@@ -401,7 +400,7 @@ public class GitWebhookHandler {
         WebhookDeliveries.stampAction(claimed, WebhookOutcome.DEPLOY_QUEUED);
         Blast.log("GIT WEBHOOK: deploy queued for application",
             application.get(InstanceModel.NAME), "(id:", applicationId + ")");
-        sendJson(exchange, 200, "{\"status\":\"queued\"}");
+        HookRequests.sendJson(exchange, 200, "{\"status\":\"queued\"}");
     }
 
     /**
@@ -467,13 +466,13 @@ public class GitWebhookHandler {
                                           @Nullable String event) {
         if (!RawValues.isOn(sourceSettings, GitSourceSchema.PREVIEWS_ENABLED, false)) {
             WebhookDeliveries.stampAction(claimed, WebhookOutcome.IGNORED_PREVIEWS_DISABLED);
-            sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"previews disabled\"}");
+            HookRequests.sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"previews disabled\"}");
             return;
         }
         PreviewEvent previewEvent = previewEventOf(event, payload);
         if (previewEvent == null) {
             WebhookDeliveries.stampAction(claimed, WebhookOutcome.IGNORED_MALFORMED_PR);
-            sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"unrecognized payload\"}");
+            HookRequests.sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"unrecognized payload\"}");
             return;
         }
 
@@ -482,7 +481,7 @@ public class GitWebhookHandler {
         // A teardown runs no git and must still reach a preview whatever its ref says.
         if (previewEvent.intent() == PreviewIntent.DEPLOY && !GitRefNames.isValid(ref)) {
             WebhookDeliveries.stampAction(claimed, WebhookOutcome.IGNORED_INVALID_REF);
-            sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"invalid ref\"}");
+            HookRequests.sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"invalid ref\"}");
             return;
         }
         switch (previewEvent.intent()) {
@@ -494,18 +493,18 @@ public class GitWebhookHandler {
                             previewEvent.number(), DeployTrigger.WEBHOOK));
                 WebhookDeliveries.stampAction(claimed, WebhookOutcome.PREVIEW_QUEUED);
                 recordPreview(applicationId, ref);
-                sendJson(exchange, 200, "{\"status\":\"preview_queued\"}");
+                HookRequests.sendJson(exchange, 200, "{\"status\":\"preview_queued\"}");
             }
             case TEARDOWN -> {
                 HandlerSupport.inBackground(() ->
                     PreviewDeployments
                         .destroyForRefQuietly(applicationId, ref, "pr_closed"));
                 WebhookDeliveries.stampAction(claimed, WebhookOutcome.PREVIEW_TEARDOWN_QUEUED);
-                sendJson(exchange, 200, "{\"status\":\"preview_teardown_queued\"}");
+                HookRequests.sendJson(exchange, 200, "{\"status\":\"preview_teardown_queued\"}");
             }
             case IGNORE -> {
                 WebhookDeliveries.stampAction(claimed, WebhookOutcome.IGNORED_PR_ACTION);
-                sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"action\"}");
+                HookRequests.sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"action\"}");
             }
         }
     }
@@ -705,13 +704,7 @@ public class GitWebhookHandler {
     }
 
     private static void refuse(HttpServerExchange exchange) {
-        sendJson(exchange, 404, REFUSAL_BODY);
-    }
-
-    private static void sendJson(HttpServerExchange exchange, int status, String json) {
-        exchange.setStatusCode(status);
-        exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json");
-        exchange.getResponseSender().send(json);
+        HookRequests.sendJson(exchange, 404, REFUSAL_BODY);
     }
 
     /** Records the preview a delivery queued on its application, naming the branch or ref it builds. */

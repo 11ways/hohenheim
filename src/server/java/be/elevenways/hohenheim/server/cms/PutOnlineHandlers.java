@@ -459,16 +459,24 @@ final class PutOnlineHandlers {
         PutOnline.FromTemplate input = Objects.requireNonNull(call.input(), "put online has its input");
         Row template = call.subject();
 
-        // 1. The app: the template's own create funnel (quota, placement, databases, variables).
-        int instanceId = createApp(call, template, input.create());
+        Row instance = installedApp(call, template, input.create());
+        return goLive(call, instance, input.hostname(), input.httpsAnswer());
+    }
+
+    /**
+     * The app through the template's own create funnel (quota, placement, databases, variables), then its install
+     * step when the template declares one.
+     *
+     * @return the new instance, the call's subject
+     */
+    private static @NonNull Row installedApp(@NonNull OperationCall<Row, ?> call, @NonNull Row template,
+                                             InstanceTemplateOperations.@NonNull CreateFromTemplate create) {
+        int instanceId = createApp(call, template, create);
         Row instance = Objects.requireNonNull(Models.get(InstanceModel.class).findById(instanceId), "the new app");
         call.attachSubject(InstanceOperations.INSTANCE, instance);
         call.reportStepDone(appDone(templateName(template), instance));
-
-        // 2. Its install step, when the template declares one.
         installStep(call, template, instanceId);
-
-        return goLive(call, instance, input.hostname(), input.httpsAnswer());
+        return instance;
     }
 
     /**
@@ -508,11 +516,8 @@ final class PutOnlineHandlers {
     private static @NonNull Integer putServiceOnline(@NonNull OperationCall<Row, PutOnline.Service> call) {
         PutOnline.Service input = Objects.requireNonNull(call.input(), "put online has its input");
         Row template = call.subject();
-        int instanceId = createApp(call, template, input.create());
-        Row instance = Objects.requireNonNull(Models.get(InstanceModel.class).findById(instanceId), "the new app");
-        call.attachSubject(InstanceOperations.INSTANCE, instance);
-        call.reportStepDone(appDone(templateName(template), instance));
-        installStep(call, template, instanceId);
+        Row instance = installedApp(call, template, input.create());
+        int instanceId = instance.get(InstanceModel.ID);
         publishPorts(call, instance, chosenPorts(template, input.ports()));
         gameAddressStep(call, instanceId, input.game_address());
         firstStart(call, instanceId, null, null, null);

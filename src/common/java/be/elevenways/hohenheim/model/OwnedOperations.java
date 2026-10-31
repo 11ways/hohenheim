@@ -9,6 +9,7 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.Collection;
 import java.util.Map;
@@ -33,6 +34,24 @@ final class OwnedOperations {
             .where(forModelField.eq(forModel))
             .where(forIdField.eq(forId))
             .orderBy(idField, SortOrder.DESC);
+    }
+
+    /** @return the newest operation of {@code history} that succeeded, or null */
+    static @Nullable Row latestSuccess(@NonNull QueryBuilder<Row> history, @NonNull EnumField statusField,
+                                       @NonNull OperationLifecycle lifecycle) {
+        return history.where(statusField.eq(lifecycle.stored(OperationStatus.SUCCEEDED))).first();
+    }
+
+    /** @return per owning record, the succeeded operation {@link #lastFinishedAmong} answers */
+    static @NonNull Map<Integer, Row> lastSucceededAmong(@NonNull Model model, @NonNull StringField forModelField,
+                                                         @NonNull IntegerField forIdField,
+                                                         @NonNull DateTimeField finishedField,
+                                                         @NonNull EnumField statusField,
+                                                         @NonNull OperationLifecycle lifecycle,
+                                                         @NonNull String forModel,
+                                                         @NonNull Collection<Integer> forIds) {
+        return lastFinishedAmong(model, forModelField, forIdField, finishedField, statusField,
+            lifecycle.stored(OperationStatus.SUCCEEDED), forModel, forIds);
     }
 
     /**

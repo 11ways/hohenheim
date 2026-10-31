@@ -71,9 +71,9 @@ public final class DockerStatsFeed implements StatsFeed {
      */
     static @NonNull StatsReading readingOf(@NonNull Map<String, Object> current) {
         Map<String, Object> cpuStats = child(current, "cpu_stats");
-        long cores = Math.max(1, number(cpuStats, "online_cpus"));
+        long cores = Math.max(1, RawValues.longAt(cpuStats, "online_cpus"));
         StatsReading.CpuCounters cpu = new StatsReading.CpuCounters(
-            number(child(cpuStats, "cpu_usage"), "total_usage"), number(cpuStats, "system_cpu_usage"));
+            RawValues.longAt(child(cpuStats, "cpu_usage"), "total_usage"), RawValues.longAt(cpuStats, "system_cpu_usage"));
         Map<String, Object> memoryStats = child(current, "memory_stats");
         long rx = 0;
         long tx = 0;
@@ -81,13 +81,13 @@ public final class DockerStatsFeed implements StatsFeed {
         if (networks != null) {
             for (Object value : networks.values()) {
                 if (value instanceof Map<?, ?> iface) {
-                    rx += number(RawValues.map(iface), "rx_bytes");
-                    tx += number(RawValues.map(iface), "tx_bytes");
+                    rx += RawValues.longAt(RawValues.map(iface), "rx_bytes");
+                    tx += RawValues.longAt(RawValues.map(iface), "tx_bytes");
                 }
             }
         }
-        return new StatsReading(Now.millis(), cpu, (int) cores, number(memoryStats, "usage"),
-            number(memoryStats, "limit"), rx, tx);
+        return new StatsReading(Now.millis(), cpu, (int) cores, RawValues.longAt(memoryStats, "usage"),
+            RawValues.longAt(memoryStats, "limit"), rx, tx);
     }
 
     private static @Nullable Map<String, Object> parse(@NonNull String line) {
@@ -100,10 +100,5 @@ public final class DockerStatsFeed implements StatsFeed {
 
     private static @Nullable Map<String, Object> child(@Nullable Map<String, Object> parent, @NonNull String key) {
         return RawValues.mapOrNull(parent == null ? null : parent.get(key));
-    }
-
-    private static long number(@Nullable Map<String, Object> parent, @NonNull String key) {
-        Object value = parent == null ? null : parent.get(key);
-        return value instanceof Number n ? n.longValue() : 0;
     }
 }

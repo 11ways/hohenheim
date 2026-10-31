@@ -3,7 +3,6 @@ package be.elevenways.hohenheim.server.application;
 import be.elevenways.hohenheim.HohenheimChannels;
 import be.elevenways.hohenheim.HohenheimDeployFunctions;
 import be.elevenways.hohenheim.HohenheimDeployFunctions.Source;
-import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
@@ -17,8 +16,6 @@ import be.elevenways.zenit.common.channel.ChannelHandler;
 import be.elevenways.zenit.common.channel.ChannelLink;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.security.Principal;
 import be.elevenways.zenit.common.websocket.WebSocketSession;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -322,7 +319,6 @@ public final class DeployLogHandler implements ChannelHandler<Object, Object> {
 
     /** Whether the viewer is an operator, who may read the release's daemon-worded step log. */
     private boolean isOperator() {
-        Principal principal = this.link.getPrincipal();
-        return principal != null && AccessContext.detached(principal).hasPermission(HohenheimSources.ADMIN_ACCESS);
+        return InstanceViewLinks.isOperator(this.link);
     }
 }

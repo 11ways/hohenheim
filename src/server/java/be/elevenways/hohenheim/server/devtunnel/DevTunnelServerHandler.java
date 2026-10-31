@@ -390,13 +390,7 @@ public final class DevTunnelServerHandler implements WebSocketHandler, TunnelTra
     }
 
     private void withStream(@Nullable Integer streamId, java.util.function.Consumer<TunnelStream> action) {
-        if (streamId == null) {
-            return;
-        }
-        TunnelStream stream = streams.get(streamId);
-        if (stream != null) {
-            action.accept(stream);
-        }
+        TunnelStream.with(streams, streamId, action);
     }
 
     // ------------------------------------------------------------------

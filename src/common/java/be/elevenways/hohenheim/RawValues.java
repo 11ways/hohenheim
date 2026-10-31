@@ -91,6 +91,12 @@ public final class RawValues {
         return isOn(values, field.getName(), Boolean.TRUE.equals(field.getDefaultValue()));
     }
 
+    /** @return the number under {@code key}, 0 for no map, no such key or anything but a number */
+    public static long longAt(@Nullable Map<String, Object> parent, @NonNull String key) {
+        Object value = parent == null ? null : parent.get(key);
+        return value instanceof Number number ? number.longValue() : 0;
+    }
+
     /** @return the value itself (not a copy) as a string-keyed map, or an empty map when it is not a map */
     public static @NonNull Map<String, Object> map(@Nullable Object raw) {
         return Objects.requireNonNullElse(mapOrNull(raw), Map.of());

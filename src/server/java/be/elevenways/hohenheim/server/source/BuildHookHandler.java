@@ -18,7 +18,6 @@ import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.http.ExchangeRateLimits;
 import be.elevenways.zenit.server.http.RateLimitMiddleware;
 import io.undertow.server.HttpServerExchange;
-import io.undertow.util.Headers;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -85,8 +84,7 @@ public final class BuildHookHandler {
 
     /** @return whether the request is a POST to a hook's URL */
     public static boolean matches(@NonNull HttpServerExchange exchange) {
-        return "POST".equals(exchange.getRequestMethod().toString())
-            && exchange.getRequestPath().startsWith(PREFIX);
+        return HookRequests.isPostTo(exchange, PREFIX);
     }
 
     /**
@@ -103,7 +101,7 @@ public final class BuildHookHandler {
         // CI misconfigured to http learns it at once instead of deploying while its token crosses the wire in clear.
         // Asked before the lookup, for every token alike, so the refusal tells nothing about which hooks exist.
         if (!ProxyScheme.isEffectivelyHttps(exchange)) {
-            sendJson(exchange, 403, "{\"error\":\"https required\"}");
+            HookRequests.sendJson(exchange, 403, "{\"error\":\"https required\"}");
             return;
         }
         String token = exchange.getRequestPath().substring(PREFIX.length());
@@ -116,7 +114,7 @@ public final class BuildHookHandler {
                 answer(exchange, token);
             } catch (RuntimeException failed) {
                 Blast.log("BUILD HOOK: could not answer a hook POST -", failed.getMessage());
-                sendJson(exchange, 500, "{\"error\":\"internal error\"}");
+                HookRequests.sendJson(exchange, 500, "{\"error\":\"internal error\"}");
             }
         });
     }
@@ -148,7 +146,7 @@ public final class BuildHookHandler {
             return;
         }
         if (branch != null && !BuildHooks.allowsBranch(application, branch)) {
-            sendJson(exchange, 422, "{\"error\":\"branch not allowed\"}");
+            HookRequests.sendJson(exchange, 422, "{\"error\":\"branch not allowed\"}");
             return;
         }
         DeployStartGate start = BuildHooks.admit(hook);
@@ -170,7 +168,7 @@ public final class BuildHookHandler {
             ApplicationDeploys.deployInBackground(applicationId, branch, BuildHooks.attribution(hook), start);
             queued = true;
         } catch (Violations refused) {
-            sendJson(exchange, 409, "{\"error\":\"not deployable now\"}");
+            HookRequests.sendJson(exchange, 409, "{\"error\":\"not deployable now\"}");
             return;
         } finally {
             if (!queued) {
@@ -181,7 +179,7 @@ public final class BuildHookHandler {
         }
         Blast.log("BUILD HOOK: deploy queued for application", application.get(InstanceModel.NAME),
             "(id:", applicationId + ") by hook", hook.get(BuildHookModel.NAME));
-        sendJson(exchange, 202, "{\"status\":\"queued\"}");
+        HookRequests.sendJson(exchange, 202, "{\"status\":\"queued\"}");
     }
 
     /**
@@ -208,7 +206,7 @@ public final class BuildHookHandler {
     /** Answers a refused budget: 429 with when to retry. */
     private static void limited(@NonNull HttpServerExchange exchange, long retryAfterSeconds) {
         ExchangeRateLimits.stampRetryAfter(exchange, retryAfterSeconds);
-        sendJson(exchange, 429, "{\"error\":\"rate limited\"}");
+        HookRequests.sendJson(exchange, 429, "{\"error\":\"rate limited\"}");
     }
 
     /** @return the trimmed {@code branch} query parameter, null when absent or blank */
@@ -218,12 +216,6 @@ public final class BuildHookHandler {
     }
 
     private static void refuse(@NonNull HttpServerExchange exchange) {
-        sendJson(exchange, 404, REFUSAL_BODY);
-    }
-
-    private static void sendJson(@NonNull HttpServerExchange exchange, int status, @NonNull String json) {
-        exchange.setStatusCode(status);
-        exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json");
-        exchange.getResponseSender().send(json);
+        HookRequests.sendJson(exchange, 404, REFUSAL_BODY);
     }
 }

@@ -115,14 +115,14 @@ public final class IncusStatsFeed implements StatsFeed {
                     continue;
                 }
                 Map<String, Object> counters = RawValues.mapOrNull(iface.get("counters"));
-                rx += number(counters, "bytes_received");
-                tx += number(counters, "bytes_sent");
+                rx += RawValues.longAt(counters, "bytes_received");
+                tx += RawValues.longAt(counters, "bytes_sent");
             }
         }
         StatsReading.CpuCounters cpu;
         int cores;
         if (metrics == null) {
-            long usage = number(RawValues.mapOrNull(state.get("cpu")), "usage");
+            long usage = RawValues.longAt(RawValues.mapOrNull(state.get("cpu")), "usage");
             cores = this.limitCores;
             // The cgroup's nanoseconds against elapsed nanoseconds on every core the container may use.
             cpu = usage < 0 ? null : new StatsReading.CpuCounters(usage, at * 1_000_000d * cores);
@@ -159,11 +159,6 @@ public final class IncusStatsFeed implements StatsFeed {
                 cpu = new StatsReading.CpuCounters(busy, this.busyMovedAt / 1000d * cores);
             }
         }
-        return new StatsReading(at, cpu, cores, number(memory, "usage"), number(memory, "total"), rx, tx);
-    }
-
-    private static long number(@Nullable Map<String, Object> parent, @NonNull String key) {
-        Object value = parent == null ? null : parent.get(key);
-        return value instanceof Number n ? n.longValue() : 0;
+        return new StatsReading(at, cpu, cores, RawValues.longAt(memory, "usage"), RawValues.longAt(memory, "total"), rx, tx);
     }
 }

@@ -229,13 +229,13 @@ public class BuildOperationModel extends Model {
 
     /** The newest SUCCEEDED build of one owning record, or null. */
     public Row latestSuccess(String forModel, int forId) {
-        return this.history(forModel, forId).where(STATUS.eq(LIFECYCLE.stored(OperationStatus.SUCCEEDED))).first();
+        return OwnedOperations.latestSuccess(this.history(forModel, forId), STATUS, LIFECYCLE);
     }
 
     /** The last-finished succeeded build of each of several owning records of one model, in one grouped read. */
     public Map<Integer, Row> lastSucceededAmong(String forModel, Collection<Integer> forIds) {
-        return OwnedOperations.lastFinishedAmong(this, FOR_MODEL, FOR_ID, FINISHED_AT, STATUS,
-            LIFECYCLE.stored(OperationStatus.SUCCEEDED), forModel, forIds);
+        return OwnedOperations.lastSucceededAmong(this, FOR_MODEL, FOR_ID, FINISHED_AT, STATUS, LIFECYCLE, forModel,
+            forIds);
     }
 
     /**

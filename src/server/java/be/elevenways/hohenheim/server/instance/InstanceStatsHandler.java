@@ -1,14 +1,11 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimChannels;
-import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.channel.ChannelHandler;
 import be.elevenways.zenit.common.channel.ChannelLink;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
-import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.security.Principal;
 import be.elevenways.zenit.common.websocket.WebSocketSession;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -77,8 +74,7 @@ public final class InstanceStatsHandler implements ChannelHandler<Object, Object
 
     /** Whether the viewer is an operator, who may read the daemon's own failure text. */
     private boolean isOperator() {
-        Principal principal = this.link.getPrincipal();
-        return principal != null && AccessContext.detached(principal).hasPermission(HohenheimSources.ADMIN_ACCESS);
+        return InstanceViewLinks.isOperator(this.link);
     }
 
     @Override
