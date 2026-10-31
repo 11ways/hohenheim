@@ -22,7 +22,7 @@
 {% extend "zenitcms:shell" var:title=title %}
 
 {% block "main" %}
-<section class="cms-resource-list-page" data-cms-wide>
+<section class="cms-resource-list-page">
     {% if head != null %}{% render "zenitcms:record-head" var:head=head %}{% /if %}
     <div class="hh-tab-tools">
         {% if searchEnabled %}
