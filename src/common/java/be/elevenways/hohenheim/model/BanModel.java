@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.protoblast.common.i18n.wording.Noun;
+import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -22,6 +24,7 @@ import be.elevenways.zenit.common.ui.ColorHue;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.time.Instant;
+import java.util.Map;
 
 /**
  * An IP ban: auto-created by the threat scorer or the spamservice reputation
@@ -137,6 +140,12 @@ public class BanModel extends Model {
             .label(HohenheimMicrocopy.BAN.of("blocked_now"))
             .build();
     }
+
+    private static final Noun NOUN = new Noun(Map.of(
+        "en", new Noun.Forms("ban", "bans", Map.of(NounFact.ARTICLE, "a")),
+        "nl", new Noun.Forms("blokkade", "blokkades", Map.of(NounFact.GENDER, "common"))));
+
+    @Override public @NonNull Noun noun() { return NOUN; }
 
     @Override
     public Identifier getModelId() { return MODEL_ID; }

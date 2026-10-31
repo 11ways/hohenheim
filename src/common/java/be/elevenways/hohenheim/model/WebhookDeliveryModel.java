@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.protoblast.common.i18n.wording.Noun;
+import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -11,8 +13,10 @@ import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * The webhook replay ledger: one row per ACCEPTED (signature-verified) delivery, keyed
@@ -54,6 +58,12 @@ public class WebhookDeliveryModel extends Model {
             .limit(limit)
             .all();
     }
+
+    private static final Noun NOUN = new Noun(Map.of(
+        "en", new Noun.Forms("webhook delivery", "webhook deliveries", Map.of(NounFact.ARTICLE, "a")),
+        "nl", new Noun.Forms("webhookbezorging", "webhookbezorgingen", Map.of(NounFact.GENDER, "common"))));
+
+    @Override public @NonNull Noun noun() { return NOUN; }
 
     @Override public Identifier getModelId() { return MODEL_ID; }
     @Override public Field<?, ?> getPrimaryKeyField() { return ID; }

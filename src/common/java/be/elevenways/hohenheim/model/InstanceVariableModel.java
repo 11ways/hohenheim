@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.protoblast.common.i18n.wording.Noun;
+import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.RecordRef;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
@@ -21,6 +23,8 @@ import be.elevenways.zenit.common.validation.ValidationMicrocopy;
 import be.elevenways.zenit.common.validation.validator.Required;
 
 import java.util.List;
+import java.util.Map;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
@@ -176,6 +180,12 @@ public class InstanceVariableModel extends Model {
     public List<Row> findByEnvironmentId(int environmentId) {
         return find().where(ENVIRONMENT_ID.eq(environmentId)).orderBy(KEY, SortOrder.ASC).all();
     }
+
+    private static final Noun NOUN = new Noun(Map.of(
+        "en", new Noun.Forms("instance variable", "instance variables", Map.of(NounFact.ARTICLE, "an")),
+        "nl", new Noun.Forms("instantievariabele", "instantievariabelen", Map.of(NounFact.GENDER, "common"))));
+
+    @Override public @NonNull Noun noun() { return NOUN; }
 
     @Override
     public Identifier getModelId() { return MODEL_ID; }

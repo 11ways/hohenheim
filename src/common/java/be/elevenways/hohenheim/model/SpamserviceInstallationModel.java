@@ -2,6 +2,8 @@ package be.elevenways.hohenheim.model;
 
 import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 
+import be.elevenways.protoblast.common.i18n.wording.Noun;
+import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimIds;
@@ -16,7 +18,10 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import be.elevenways.zenit.common.validation.validator.Range;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+
+import java.util.Map;
 
 /** Stores the single local Spamservice runtime installation supervised by Hohenheim. */
 public class SpamserviceInstallationModel extends Model {
@@ -67,6 +72,13 @@ public class SpamserviceInstallationModel extends Model {
     public @Nullable Row installation() {
         return findById(SINGLETON_ID);
     }
+
+    private static final Noun NOUN = new Noun(Map.of(
+        "en", new Noun.Forms("Spamservice installation", "Spamservice installations", Map.of(NounFact.ARTICLE, "a")),
+        "nl", new Noun.Forms("Spamservice-installatie", "Spamservice-installaties",
+            Map.of(NounFact.GENDER, "common"))));
+
+    @Override public @NonNull Noun noun() { return NOUN; }
 
     @Override public Identifier getModelId() { return MODEL_ID; }
     @Override public Field<?, ?> getPrimaryKeyField() { return ID; }

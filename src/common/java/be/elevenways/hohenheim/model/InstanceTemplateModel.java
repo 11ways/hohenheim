@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.protoblast.common.i18n.wording.Noun;
+import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -18,8 +20,10 @@ import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.validation.Violations;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * An instance template (the Pterodactyl "egg" analogue): an operator-curated preset of
@@ -265,6 +269,12 @@ public class InstanceTemplateModel extends Model {
     public List<Row> findAll() {
         return find().orderBy(NAME, SortOrder.ASC).all();
     }
+
+    private static final Noun NOUN = new Noun(Map.of(
+        "en", new Noun.Forms("instance template", "instance templates", Map.of(NounFact.ARTICLE, "an")),
+        "nl", new Noun.Forms("instantiesjabloon", "instantiesjablonen", Map.of(NounFact.GENDER, "neuter"))));
+
+    @Override public @NonNull Noun noun() { return NOUN; }
 
     @Override
     public Identifier getModelId() { return MODEL_ID; }

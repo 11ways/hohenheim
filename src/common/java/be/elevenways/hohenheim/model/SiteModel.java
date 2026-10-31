@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.protoblast.common.i18n.wording.Noun;
+import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -23,6 +25,7 @@ import be.elevenways.zenit.common.ui.BadgeVariant;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -368,6 +371,12 @@ public class SiteModel extends Model {
             .orderBy(CREATED_AT, SortOrder.DESC)
             .all();
     }
+
+    private static final Noun NOUN = new Noun(Map.of(
+        "en", new Noun.Forms("site", "sites", Map.of(NounFact.ARTICLE, "a")),
+        "nl", new Noun.Forms("site", "sites", Map.of(NounFact.GENDER, "common"))));
+
+    @Override public @NonNull Noun noun() { return NOUN; }
 
     @Override
     public Identifier getModelId() { return MODEL_ID; }

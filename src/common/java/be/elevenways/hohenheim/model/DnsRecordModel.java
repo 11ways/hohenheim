@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.protoblast.common.i18n.wording.Noun;
+import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.HohenheimIds;
@@ -298,6 +300,12 @@ public class DnsRecordModel extends Model {
     public List<Row> findEnabledByZoneId(int zoneId) {
         return find().where(ZONE_ID.eq(zoneId)).and(ENABLED.eq(true)).all();
     }
+
+    private static final Noun NOUN = new Noun(Map.of(
+        "en", new Noun.Forms("DNS record", "DNS records", Map.of(NounFact.ARTICLE, "a")),
+        "nl", new Noun.Forms("DNS-record", "DNS-records", Map.of(NounFact.GENDER, "neuter"))));
+
+    @Override public @NonNull Noun noun() { return NOUN; }
 
     @Override
     public Identifier getModelId() { return MODEL_ID; }

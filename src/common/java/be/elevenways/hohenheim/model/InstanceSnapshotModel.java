@@ -2,6 +2,8 @@ package be.elevenways.hohenheim.model;
 
 import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 
+import be.elevenways.protoblast.common.i18n.wording.Noun;
+import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -14,6 +16,8 @@ import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.ui.ColorHue;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+
+import java.util.Map;
 
 /**
  * A driver-level snapshot of one instance's volumes: a point-in-time copy stored on
@@ -139,6 +143,12 @@ public class InstanceSnapshotModel extends Model {
         // search field -- the note-less fallback lives on the resource instead.
         SCHEMA.setDisplayFields(NOTE);
     }
+
+    private static final Noun NOUN = new Noun(Map.of(
+        "en", new Noun.Forms("instance snapshot", "instance snapshots", Map.of(NounFact.ARTICLE, "an")),
+        "nl", new Noun.Forms("instantiesnapshot", "instantiesnapshots", Map.of(NounFact.GENDER, "common"))));
+
+    @Override public @NonNull Noun noun() { return NOUN; }
 
     @Override public Identifier getModelId() { return MODEL_ID; }
     @Override public Field<?, ?> getPrimaryKeyField() { return ID; }

@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.protoblast.common.i18n.wording.Noun;
+import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.hohenheim.HohenheimIds;
@@ -10,9 +12,11 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -93,6 +97,12 @@ public class StackDeploymentModel extends Model {
     private static QueryBuilder<Row> rollbackTargets(QueryBuilder<Row> deployments) {
         return deployments.where(STATUS.eq(LIFECYCLE.stored(OperationStatus.SUCCEEDED))).where(SPEC.isNotNull());
     }
+
+    private static final Noun NOUN = new Noun(Map.of(
+        "en", new Noun.Forms("stack deployment", "stack deployments", Map.of(NounFact.ARTICLE, "a")),
+        "nl", new Noun.Forms("stackimplementatie", "stackimplementaties", Map.of(NounFact.GENDER, "common"))));
+
+    @Override public @NonNull Noun noun() { return NOUN; }
 
     @Override
     public Identifier getModelId() { return MODEL_ID; }

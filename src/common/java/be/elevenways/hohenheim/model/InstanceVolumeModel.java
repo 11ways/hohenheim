@@ -2,6 +2,8 @@ package be.elevenways.hohenheim.model;
 
 import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 
+import be.elevenways.protoblast.common.i18n.wording.Noun;
+import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -13,8 +15,10 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * One Hohenheim-owned host directory mounted into an instance -- THE volume mechanism,
@@ -105,6 +109,12 @@ public class InstanceVolumeModel extends Model {
     public List<Row> findByInstanceId(int instanceId) {
         return find().where(INSTANCE_ID.eq(instanceId)).orderBy(NAME, SortOrder.ASC).all();
     }
+
+    private static final Noun NOUN = new Noun(Map.of(
+        "en", new Noun.Forms("instance volume", "instance volumes", Map.of(NounFact.ARTICLE, "an")),
+        "nl", new Noun.Forms("instantievolume", "instantievolumes", Map.of(NounFact.GENDER, "neuter"))));
+
+    @Override public @NonNull Noun noun() { return NOUN; }
 
     @Override
     public Identifier getModelId() { return MODEL_ID; }

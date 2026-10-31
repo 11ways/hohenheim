@@ -1,11 +1,16 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.protoblast.common.i18n.wording.Noun;
+import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
+import org.checkerframework.checker.nullness.qual.NonNull;
+
+import java.util.Map;
 
 /**
  * Persisted proxy-auth session row. Backs the optional DbSessionStore drop-in; the default proxy
@@ -21,6 +26,12 @@ public class SiteSessionModel extends Model {
     public static final SchemaField DATA = SCHEMA.addField(SchemaField.builder("data").build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField EXPIRES_AT = SCHEMA.addField(DateTimeField.builder().name("expires_at").build());
+
+    private static final Noun NOUN = new Noun(Map.of(
+        "en", new Noun.Forms("site session", "site sessions", Map.of(NounFact.ARTICLE, "a")),
+        "nl", new Noun.Forms("sitesessie", "sitesessies", Map.of(NounFact.GENDER, "common"))));
+
+    @Override public @NonNull Noun noun() { return NOUN; }
 
     @Override
     public Identifier getModelId() { return MODEL_ID; }

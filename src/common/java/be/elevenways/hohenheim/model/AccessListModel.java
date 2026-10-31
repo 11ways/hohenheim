@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.protoblast.common.i18n.wording.Noun;
+import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -12,6 +14,9 @@ import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.validation.Violations;
+import org.checkerframework.checker.nullness.qual.NonNull;
+
+import java.util.Map;
 
 /**
  * A named, attachable access policy: the list row IS the implicit ROOT group of an
@@ -91,6 +96,12 @@ public class AccessListModel extends Model {
             }
         });
     }
+
+    private static final Noun NOUN = new Noun(Map.of(
+        "en", new Noun.Forms("access list", "access lists", Map.of(NounFact.ARTICLE, "an")),
+        "nl", new Noun.Forms("toegangslijst", "toegangslijsten", Map.of(NounFact.GENDER, "common"))));
+
+    @Override public @NonNull Noun noun() { return NOUN; }
 
     @Override
     public Identifier getModelId() { return MODEL_ID; }

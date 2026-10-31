@@ -2,6 +2,8 @@ package be.elevenways.hohenheim.model;
 
 import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 
+import be.elevenways.protoblast.common.i18n.wording.Noun;
+import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -17,6 +19,9 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.validation.Violations;
+import org.checkerframework.checker.nullness.qual.NonNull;
+
+import java.util.Map;
 
 /**
  * One attached instance device: an extra disk (a daemon-side custom volume), an
@@ -138,6 +143,12 @@ public class InstanceDeviceModel extends Model {
             }
         });
     }
+
+    private static final Noun NOUN = new Noun(Map.of(
+        "en", new Noun.Forms("instance device", "instance devices", Map.of(NounFact.ARTICLE, "an")),
+        "nl", new Noun.Forms("instantieapparaat", "instantieapparaten", Map.of(NounFact.GENDER, "neuter"))));
+
+    @Override public @NonNull Noun noun() { return NOUN; }
 
     @Override public Identifier getModelId() { return MODEL_ID; }
     @Override public Field<?, ?> getPrimaryKeyField() { return ID; }

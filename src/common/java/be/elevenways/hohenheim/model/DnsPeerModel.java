@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.protoblast.common.i18n.wording.Noun;
+import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -16,6 +18,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Another Hohenheim (or plain nameserver) this instance federates with: a DNS
@@ -127,6 +130,12 @@ public class DnsPeerModel extends Model {
         return Boolean.TRUE.equals(peer.get(MIRRORS_ALL_ZONES)) && Boolean.TRUE.equals(peer.get(ENABLED))
             && isHohenheim(peer);
     }
+
+    private static final Noun NOUN = new Noun(Map.of(
+        "en", new Noun.Forms("DNS peer", "DNS peers", Map.of(NounFact.ARTICLE, "a")),
+        "nl", new Noun.Forms("DNS-partner", "DNS-partners", Map.of(NounFact.GENDER, "common"))));
+
+    @Override public @NonNull Noun noun() { return NOUN; }
 
     @Override
     public Identifier getModelId() { return MODEL_ID; }

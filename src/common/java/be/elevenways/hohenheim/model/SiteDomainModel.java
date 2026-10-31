@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.protoblast.common.i18n.wording.Noun;
+import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -402,6 +404,12 @@ public class SiteDomainModel extends Model {
     public List<Row> findBySiteId(int siteId) {
         return findAll(SITE_ID, siteId);
     }
+
+    private static final Noun NOUN = new Noun(Map.of(
+        "en", new Noun.Forms("site domain", "site domains", Map.of(NounFact.ARTICLE, "a")),
+        "nl", new Noun.Forms("sitedomein", "sitedomeinen", Map.of(NounFact.GENDER, "neuter"))));
+
+    @Override public @NonNull Noun noun() { return NOUN; }
 
     @Override
     public Identifier getModelId() { return MODEL_ID; }

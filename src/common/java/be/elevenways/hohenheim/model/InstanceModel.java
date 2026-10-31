@@ -2,6 +2,8 @@ package be.elevenways.hohenheim.model;
 
 import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 
+import be.elevenways.protoblast.common.i18n.wording.Noun;
+import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hawkeye.common.annotation.HawkeyeFunction;
 import be.elevenways.hohenheim.HohenheimActivityAction;
@@ -908,6 +910,12 @@ public class InstanceModel extends Model {
         // withTrashed: an updateAll is scoped by the find hooks too, and these rows ARE trashed.
         model.find().withTrashed().where(ID.in(trashed)).assign(reference, null).updateAll();
     }
+
+    private static final Noun NOUN = new Noun(Map.of(
+        "en", new Noun.Forms("instance", "instances", Map.of(NounFact.ARTICLE, "an")),
+        "nl", new Noun.Forms("instantie", "instanties", Map.of(NounFact.GENDER, "common"))));
+
+    @Override public @NonNull Noun noun() { return NOUN; }
 
     @Override
     public Identifier getModelId() { return MODEL_ID; }

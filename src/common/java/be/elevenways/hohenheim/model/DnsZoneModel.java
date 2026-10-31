@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.protoblast.common.i18n.wording.Noun;
+import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -13,9 +15,11 @@ import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import be.elevenways.zenit.common.ui.ColorHue;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * An authoritative DNS zone hosted by Hohenheim.
@@ -224,6 +228,12 @@ public class DnsZoneModel extends Model {
         // picker must say, and the only value here that is not a timer or a diagnostic.
         SCHEMA.setDisplayFields(ORIGIN);
     }
+
+    private static final Noun NOUN = new Noun(Map.of(
+        "en", new Noun.Forms("DNS zone", "DNS zones", Map.of(NounFact.ARTICLE, "a")),
+        "nl", new Noun.Forms("DNS-zone", "DNS-zones", Map.of(NounFact.GENDER, "common"))));
+
+    @Override public @NonNull Noun noun() { return NOUN; }
 
     @Override
     public Identifier getModelId() { return MODEL_ID; }

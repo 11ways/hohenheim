@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.protoblast.common.i18n.wording.Noun;
+import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -13,6 +15,9 @@ import be.elevenways.zenit.common.orm.field.TextField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
+import org.checkerframework.checker.nullness.qual.NonNull;
+
+import java.util.Map;
 
 /**
  * THE released-claim ledger: one immutable row per route claim a site GAVE UP, carrying
@@ -92,6 +97,12 @@ public class ReleasedRouteClaimModel extends Model {
         // The hostname is what the claim reserves and what an operator searches for.
         SCHEMA.setDisplayFields(HOSTNAME);
     }
+
+    private static final Noun NOUN = new Noun(Map.of(
+        "en", new Noun.Forms("released route claim", "released route claims", Map.of(NounFact.ARTICLE, "a")),
+        "nl", new Noun.Forms("vrijgegeven routeclaim", "vrijgegeven routeclaims", Map.of(NounFact.GENDER, "common"))));
+
+    @Override public @NonNull Noun noun() { return NOUN; }
 
     @Override
     public Identifier getModelId() { return MODEL_ID; }

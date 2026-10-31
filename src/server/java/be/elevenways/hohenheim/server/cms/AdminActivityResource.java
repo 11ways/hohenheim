@@ -226,8 +226,8 @@ public final class AdminActivityResource {
             return ActivityAdmin.sentenceCell(entry, reader, AdminRecordLinks.detailForToken(model, record));
         }
         if (ActionModel.SUBJECT_MODEL.getName().equals(name)) {
-            String humanized = HistoryText.humanizeModelToken(action.get(ActionModel.SUBJECT_MODEL));
-            return humanized.isEmpty() ? null : humanized;
+            String model = action.get(ActionModel.SUBJECT_MODEL);
+            return model == null || model.isBlank() ? null : HistoryText.modelNoun(model);
         }
         return null;
     }

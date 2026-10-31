@@ -6,6 +6,8 @@ import be.elevenways.protoblast.common.i18n.MessageResolvers;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 
+import be.elevenways.protoblast.common.i18n.wording.Noun;
+import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
@@ -307,6 +309,12 @@ public class BuildOperationModel extends Model {
         return DEPLOY_TITLE.withArg("app", owner).resolve(chain != null ? chain : reader.locales(),
             resolver != null ? resolver : MessageResolvers.getDefault());
     }
+
+    private static final Noun NOUN = new Noun(Map.of(
+        "en", new Noun.Forms("build operation", "build operations", Map.of(NounFact.ARTICLE, "a")),
+        "nl", new Noun.Forms("buildbewerking", "buildbewerkingen", Map.of(NounFact.GENDER, "common"))));
+
+    @Override public @NonNull Noun noun() { return NOUN; }
 
     @Override
     public Identifier getModelId() { return MODEL_ID; }

@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.protoblast.common.i18n.wording.Noun;
+import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimCounts;
 import be.elevenways.hohenheim.HohenheimIds;
@@ -19,6 +21,8 @@ import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
+
+import java.util.Map;
 
 /**
  * A configured destination for instance backup exports (the target seam's data half):
@@ -169,6 +173,12 @@ public class BackupTargetModel extends Model {
                 .updateAll();
         });
     }
+
+    private static final Noun NOUN = new Noun(Map.of(
+        "en", new Noun.Forms("backup target", "backup targets", Map.of(NounFact.ARTICLE, "a")),
+        "nl", new Noun.Forms("back-upbestemming", "back-upbestemmingen", Map.of(NounFact.GENDER, "common"))));
+
+    @Override public @NonNull Noun noun() { return NOUN; }
 
     @Override public Identifier getModelId() { return MODEL_ID; }
     @Override public Field<?, ?> getPrimaryKeyField() { return ID; }

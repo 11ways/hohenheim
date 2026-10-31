@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.i18n.wording.Noun;
+import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -109,6 +111,12 @@ public class EnvironmentModel extends Model {
         }
         return titles;
     }
+
+    private static final Noun NOUN = new Noun(Map.of(
+        "en", new Noun.Forms("environment", "environments", Map.of(NounFact.ARTICLE, "an")),
+        "nl", new Noun.Forms("omgeving", "omgevingen", Map.of(NounFact.GENDER, "common"))));
+
+    @Override public @NonNull Noun noun() { return NOUN; }
 
     @Override public Identifier getModelId() { return MODEL_ID; }
     @Override public Field<?, ?> getPrimaryKeyField() { return ID; }

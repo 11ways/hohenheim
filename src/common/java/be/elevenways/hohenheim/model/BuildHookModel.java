@@ -2,6 +2,8 @@ package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.protoblast.common.i18n.wording.Noun;
+import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
@@ -11,6 +13,9 @@ import be.elevenways.zenit.common.orm.field.UuidField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
+import org.checkerframework.checker.nullness.qual.NonNull;
+
+import java.util.Map;
 
 /**
  * A build hook: a named secret URL that deploys its application when POSTed.
@@ -78,6 +83,12 @@ public class BuildHookModel extends Model {
         // The owner's name is the only human-readable thing on a hook: the digest is secret, the preview a fragment.
         SCHEMA.setDisplayFields(NAME);
     }
+
+    private static final Noun NOUN = new Noun(Map.of(
+        "en", new Noun.Forms("build hook", "build hooks", Map.of(NounFact.ARTICLE, "a")),
+        "nl", new Noun.Forms("buildhook", "buildhooks", Map.of(NounFact.GENDER, "common"))));
+
+    @Override public @NonNull Noun noun() { return NOUN; }
 
     @Override public Identifier getModelId() { return MODEL_ID; }
     @Override public UuidField getPrimaryKeyField() { return ID; }

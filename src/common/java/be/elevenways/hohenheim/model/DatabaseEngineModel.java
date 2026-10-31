@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.protoblast.common.i18n.wording.Noun;
+import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
@@ -16,6 +18,9 @@ import be.elevenways.zenit.common.orm.field.TextField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
+import org.checkerframework.checker.nullness.qual.NonNull;
+
+import java.util.Map;
 
 /**
  * A RUNNING database engine process on one host that serves many managed databases
@@ -103,6 +108,12 @@ public class DatabaseEngineModel extends Model {
     public Row findOnHost(int serverId, String engineToken) {
         return find().where(SERVER_ID.eq(serverId)).where(ENGINE.eq(engineToken)).first();
     }
+
+    private static final Noun NOUN = new Noun(Map.of(
+        "en", new Noun.Forms("database engine", "database engines", Map.of(NounFact.ARTICLE, "a")),
+        "nl", new Noun.Forms("database-engine", "database-engines", Map.of(NounFact.GENDER, "common"))));
+
+    @Override public @NonNull Noun noun() { return NOUN; }
 
     @Override
     public Identifier getModelId() { return MODEL_ID; }

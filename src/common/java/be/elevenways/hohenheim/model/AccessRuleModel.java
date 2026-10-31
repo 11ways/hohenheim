@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.protoblast.common.i18n.wording.Noun;
+import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.zenit.common.orm.model.ModelRef;
@@ -379,6 +381,12 @@ public class AccessRuleModel extends Model {
         query = parentId == null ? query.and(PARENT_ID.isNull()) : query.and(PARENT_ID.eq(parentId));
         return query.orderBy(SORT, SortOrder.ASC).orderBy(ID, SortOrder.ASC).all();
     }
+
+    private static final Noun NOUN = new Noun(Map.of(
+        "en", new Noun.Forms("access rule", "access rules", Map.of(NounFact.ARTICLE, "an")),
+        "nl", new Noun.Forms("toegangsregel", "toegangsregels", Map.of(NounFact.GENDER, "common"))));
+
+    @Override public @NonNull Noun noun() { return NOUN; }
 
     @Override
     public Identifier getModelId() { return MODEL_ID; }
