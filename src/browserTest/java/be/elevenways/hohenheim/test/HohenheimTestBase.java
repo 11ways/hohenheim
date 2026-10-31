@@ -407,8 +407,7 @@ public abstract class HohenheimTestBase extends ZenitBrowserTestBase {
     protected HttpResponse<String> revealSecret(@NonNull RevealableSecret secret, int recordId,
                                                 @NonNull String session, @NonNull String csrf) throws Exception {
         SecretRef ref = secret.ref(recordId);
-        return httpPostForm(SecretReveals.ENDPOINT.with(SecretReveals.SECRET, ref.secret())
-            .with(SecretReveals.RECORD, ref.record()).with(SecretReveals.FIELD, ref.field()).toUrl(), "", session,
+        return httpPostForm(SecretReveals.urlOf(ref), "", session,
             csrf);
     }
 
