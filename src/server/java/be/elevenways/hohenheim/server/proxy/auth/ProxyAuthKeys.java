@@ -6,7 +6,7 @@ import java.util.List;
 
 /**
  * Cookie names and proxy-auth session attribute keys. Distinct from the admin auth keys
- * ({@code zenit_sid}) so proxy auth stays fully decoupled from admin auth.
+ * ({@code SessionCookies.name()}) so proxy auth stays fully decoupled from admin auth.
  *
  * @author Jelle De Loecker <jelle@elevenways.be>
  * @since 0.1.0
