@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.zenit.auth.model.UserModel;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
@@ -60,28 +61,29 @@ class AccountShellTest extends HohenheimHttpTestBase {
             .contains(NAMED_BLOCK)
             .containsPattern(CARD);
 
-        // 3. Revoking one session is a confirm page first, reached from the sessions list
-        //    by its own link. This is the navigation the 2026-08-28 pass saw change the
-        //    URL and the title while leaving the sessions list on screen.
-        Matcher link = Pattern.compile("/account/sessions/[^\"']+/revoke")
-            .matcher(sessions.body());
-        assertThat(link.find()).as("step 3: the list offers a revoke link").isTrue();
+        // 3. Signing out another browser is asked in its own row first, reached from the sessions list by its own
+        //    link. This is the navigation the 2026-08-28 pass saw change the URL and the title while leaving the
+        //    sessions list on screen.
+        sessionFor(TenantConduits.operatorUser().get(UserModel.ID));
+        HttpResponse<String> listed = adminGet("/account/sessions");
+        Matcher link = Pattern.compile("href=\"(\\?signout=[^\"&]+)\"").matcher(listed.body());
+        assertThat(link.find()).as("step 3: the list offers the other browser's sign-out link").isTrue();
 
-        HttpResponse<String> revoke = adminGet(link.group());
-        assertThat(revoke.statusCode()).as("step 3: the revoke confirm page renders").isEqualTo(200);
-        assertThat(revoke.body())
-            .as("step 3: the page that link soft-navigates to anchors the same block")
+        HttpResponse<String> asking = adminGet("/account/sessions" + link.group(1));
+        assertThat(asking.statusCode()).as("step 3: the row asking renders").isEqualTo(200);
+        assertThat(asking.body())
+            .as("step 3: the page that link soft-navigates to anchors the same block and asks in the row")
             .contains(NAMED_BLOCK)
+            .contains("data-auth-session-confirm")
             .contains("data-auth-session-revoke-submit");
 
-        // 4. Signing out everywhere is a confirm page first; a GET revokes nothing.
-        HttpResponse<String> confirm = adminGet("/account/logout-everywhere");
-        assertThat(confirm.statusCode()).as("step 4: the confirm page renders").isEqualTo(200);
-        assertThat(confirm.body())
-            .as("step 4: the confirm page explains and asks")
+        // 4. Signing out everywhere is asked in a dialog of the sessions page; a GET revokes nothing.
+        assertThat(asking.body())
+            .as("step 4: the dialog explains and asks")
+            .contains("data-auth-logout-everywhere-dialog")
             .contains("data-auth-logout-everywhere");
         assertThat(adminGet("/account").statusCode())
-            .as("step 4: the admin session survived the GET")
+            .as("step 4: the admin session survived the GETs")
             .isEqualTo(200);
     }
 }
