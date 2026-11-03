@@ -56,6 +56,7 @@ import be.elevenways.hohenheim.server.util.UtcStamp;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.history.History;
@@ -617,11 +618,11 @@ public final class InstanceBackups {
      */
     public static @NonNull List<Destination> destinationsFor(@NonNull Row backup) {
         Map<String, Object> summary = RawValues.map((Object) backup.get(InstanceBackupModel.SUMMARY));
-        String kindId = RawValues.nonBlankString(summary.get("kind"));
+        String kindId = Texts.stringOrNull(summary.get("kind"));
         InstanceKindHandler kind = InstanceKinds.getHandler(kindId);
         List<String> installMedia = new ArrayList<>();
         for (Object medium : RawValues.list(summary.get("install_media"))) {
-            String name = RawValues.nonBlankString(medium);
+            String name = Texts.stringOrNull(medium);
             if (name != null) {
                 installMedia.add(name);
             }
@@ -1012,7 +1013,7 @@ public final class InstanceBackups {
      */
     public static boolean restorableInPlace(@NonNull Row backup) {
         Map<String, Object> summary = RawValues.map((Object) backup.get(InstanceBackupModel.SUMMARY));
-        String kindId = RawValues.nonBlankString(summary.get("kind"));
+        String kindId = Texts.stringOrNull(summary.get("kind"));
         return kindId != null && InstanceKinds.getHandler(kindId) != null && !InstanceKinds.isReleaseManaged(kindId)
             && !BackupManifest.PAYLOAD_INSTANCE_EXPORT.equals(summary.get("payload"))
             && InstanceBackupModel.hostVolumesOf(backup).isEmpty();

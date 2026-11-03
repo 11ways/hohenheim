@@ -9,12 +9,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.ImageOrigin;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
 import be.elevenways.hohenheim.server.util.Sha256;
 import be.elevenways.hohenheim.source.GitSourceSchema;
+import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.zenit.common.orm.model.Schema;
 
 /**
@@ -430,7 +430,7 @@ public record BackupManifest(int version,
             throw new IOException("Backup manifest has no 'instance.settings' map");
         }
         String imageReference = imageReferenceOf(instance.get("image_reference"), settings);
-        String imageId = instance.get("image_id") instanceof String id && !id.isBlank() ? id : null;
+        String imageId = Texts.stringOrNull(instance.get("image_id"));
         List<String> installMedia = new ArrayList<>();
         if (instance.get("install_media") != null) {
             if (!(instance.get("install_media") instanceof List<?> media)) {
@@ -584,7 +584,7 @@ public record BackupManifest(int version,
             throws IOException {
         ImageOrigin origin;
         try {
-            origin = ImageOrigin.fromKey(RawValues.nonBlankString(settings.get(ImageOrigin.SETTING)));
+            origin = ImageOrigin.fromKey(Texts.stringOrNull(settings.get(ImageOrigin.SETTING)));
         } catch (IllegalArgumentException unknown) {
             throw new IOException("Backup manifest settings declare an unknown image origin: "
                 + unknown.getMessage(), unknown);
@@ -592,7 +592,7 @@ public record BackupManifest(int version,
         if (origin.carriesImage()) {
             return requireText(value, "instance.image_reference");
         }
-        return RawValues.nonBlankString(value);
+        return Texts.stringOrNull(value);
     }
 
     private static Map<String, Object> payloadMap(PayloadEntry payload) {
@@ -666,8 +666,8 @@ public record BackupManifest(int version,
         }
         String crashPolicy = instance.get("crash_policy") instanceof String policy
                 && !policy.isBlank() ? policy : "none";
-        String environment = RawValues.nonBlankString(instance.get("environment"));
-        String backupTarget = RawValues.nonBlankString(instance.get("backup_target"));
+        String environment = Texts.stringOrNull(instance.get("environment"));
+        String backupTarget = Texts.stringOrNull(instance.get("backup_target"));
         Map<String, Object> runtimeImage = null;
         if (instance.get("runtime_image") instanceof Map<?, ?> runtime) {
             requireText(runtime.get("name"), "instance.runtime_image.name");
@@ -701,7 +701,7 @@ public record BackupManifest(int version,
                 String content = entry.get("content") instanceof String text ? text : "";
                 String mode = entry.get("mode") instanceof String text && !text.isBlank()
                     ? text : "0644";
-                files.add(new FileEntry(path, content, mode, RawValues.nonBlankString(entry.get("generated_by"))));
+                files.add(new FileEntry(path, content, mode, Texts.stringOrNull(entry.get("generated_by"))));
             }
         }
         return new InstanceProfile(template, crashPolicy, environment, backupTarget,

@@ -7,6 +7,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import be.elevenways.hohenheim.instance.DeviceType;
+import be.elevenways.zenit.common.text.Texts;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -306,8 +307,7 @@ final class IncusDeviceLane {
     /** @return the pool a device of the definition names, or null when it names none */
     static @Nullable String poolOf(@NonNull Map<String, Object> instance, @NonNull String deviceName) {
         return instance.get("devices") instanceof Map<?, ?> devices
-                && devices.get(deviceName) instanceof Map<?, ?> device
-                && device.get("pool") instanceof String pool && !pool.isBlank() ? pool : null;
+                && devices.get(deviceName) instanceof Map<?, ?> device ? Texts.stringOrNull(device.get("pool")) : null;
     }
 
     /** Stamp the root disk's boot priority ABOVE the media's (see ensureCdrom's note). */

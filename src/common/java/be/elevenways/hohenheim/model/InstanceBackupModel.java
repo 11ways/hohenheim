@@ -5,6 +5,7 @@ import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 
 import be.elevenways.protoblast.common.i18n.wording.Noun;
 import be.elevenways.protoblast.common.i18n.wording.NounFact;
+import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.RawValues;
@@ -146,7 +147,7 @@ public class InstanceBackupModel extends Model {
     private static @NonNull List<String> summaryNamesOf(@NonNull Row backup, @NonNull String key) {
         List<String> names = new ArrayList<>();
         for (Object value : RawValues.list(RawValues.map((Object) backup.get(SUMMARY)).get(key))) {
-            String name = RawValues.nonBlankString(value);
+            String name = Texts.stringOrNull(value);
             if (name != null) {
                 names.add(name);
             }

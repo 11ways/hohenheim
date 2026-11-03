@@ -59,8 +59,6 @@ class RawValuesTest {
         assertThat(RawValues.map("text")).as("step 6: a non-map reads as an empty map").isEmpty();
         assertThat(RawValues.mapOrNull(List.of())).as("step 6: a non-map reads as null").isNull();
         assertThat(RawValues.list(Map.of())).as("step 6: a non-list reads as an empty list").isEmpty();
-        assertThat(RawValues.nonBlankString("  ")).as("step 6: blank text is absent").isNull();
-        assertThat(RawValues.nonBlankString(" a ")).as("step 6: text is kept untrimmed").isEqualTo(" a ");
     }
 
     @Test

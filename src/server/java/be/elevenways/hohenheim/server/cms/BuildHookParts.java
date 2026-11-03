@@ -53,7 +53,6 @@ import be.elevenways.zenit.common.ui.BadgeVariant;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.server.operation.OperationCall;
 import be.elevenways.zenit.server.operation.OperationHandlers;
-import be.elevenways.hohenheim.model.FirstPerOwner;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -272,10 +271,9 @@ public final class BuildHookParts {
         for (Row hook : hooks) {
             ids.add(hook.get(BuildHookModel.ID));
         }
-        Map<UUID, Row> newest = FirstPerOwner.of(Models.get(ReleaseOperationModel.class).find()
-                .where(ReleaseOperationModel.TRIGGERED_BY_KIND.eq(HohenheimPrincipalKind.BUILD_HOOK.id().toString()))
-                .orderBy(ReleaseOperationModel.ID, SortOrder.DESC),
-            ReleaseOperationModel.TRIGGERED_BY, ids);
+        Map<UUID, Row> newest = Models.get(ReleaseOperationModel.class).find()
+            .where(ReleaseOperationModel.TRIGGERED_BY_KIND.eq(HohenheimPrincipalKind.BUILD_HOOK.id().toString()))
+            .orderBy(ReleaseOperationModel.ID, SortOrder.DESC).firstOfEach(ReleaseOperationModel.TRIGGERED_BY, ids);
         return (hook, column) -> {
             if (!LAST_DEPLOY_COLUMN.equals(column.name())) {
                 return null;

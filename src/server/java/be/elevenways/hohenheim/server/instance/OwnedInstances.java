@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
-import be.elevenways.hohenheim.model.FirstPerOwner;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -176,9 +175,9 @@ public final class OwnedInstances {
      */
     public static @NonNull Map<Integer, Row> soleOwnedAmong(@NonNull Identifier model,
                                                            @NonNull Collection<Integer> recordIds) {
-        return FirstPerOwner.of(Models.get(InstanceModel.class).find()
+        return Models.get(InstanceModel.class).find()
             .where(InstanceModel.GENERATED_FOR_MODEL.eq(model.toString()))
-            .orderBy(InstanceModel.ID, SortOrder.DESC), InstanceModel.GENERATED_FOR_ID, recordIds);
+            .orderBy(InstanceModel.ID, SortOrder.DESC).firstOfEach(InstanceModel.GENERATED_FOR_ID, recordIds);
     }
 
     /**

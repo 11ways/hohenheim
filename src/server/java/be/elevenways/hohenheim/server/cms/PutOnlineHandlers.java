@@ -323,10 +323,10 @@ final class PutOnlineHandlers {
         for (int index = 0; index < input.ports().size(); index++) {
             Map<String, Object> row = input.ports().get(index);
             String at = PutOnline.PORTS + "." + index + ".";
-            PortPurpose purpose = PortPurpose.forName(RawValues.nonBlankString(
+            PortPurpose purpose = PortPurpose.forName(Texts.stringOrNull(
                 row.get(PutOnline.PORT_PURPOSE.getName())));
             boolean named = purpose == PortPurpose.OTHER;
-            String name = named ? RawValues.nonBlankString(row.get(PutOnline.PORT_NAME.getName())) : purpose.token();
+            String name = named ? Texts.stringOrNull(row.get(PutOnline.PORT_NAME.getName())) : purpose.token();
             String nameField = at + (named ? PutOnline.PORT_NAME : PutOnline.PORT_PURPOSE).getName();
             if (name == null) {
                 throw new DomainRefusal(ZenitRefusalReason.INVALID, "an Other port has no name", nameField,

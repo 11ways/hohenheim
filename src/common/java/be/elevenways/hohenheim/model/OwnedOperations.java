@@ -70,10 +70,10 @@ final class OwnedOperations {
                                                         @NonNull EnumField statusField, @NonNull String status,
                                                         @NonNull String forModel,
                                                         @NonNull Collection<Integer> forIds) {
-        return FirstPerOwner.of(model.find()
+        return model.find()
             .where(forModelField.eq(forModel))
             .where(statusField.eq(status))
             .where(finishedField.isNotNull())
-            .orderBy(finishedField, SortOrder.DESC), forIdField, forIds);
+            .orderBy(finishedField, SortOrder.DESC).firstOfEach(forIdField, forIds);
     }
 }

@@ -31,11 +31,6 @@ public final class RawValues {
         return text == null ? "" : text;
     }
 
-    /** @return the value when it is a String with non-whitespace content (untrimmed), else null */
-    public static @Nullable String nonBlankString(@Nullable Object raw) {
-        return raw instanceof String text && !text.isBlank() ? text : null;
-    }
-
     /**
      * The value as an Integer: a whole number of any Number type or text, never a truncated fraction.
      *

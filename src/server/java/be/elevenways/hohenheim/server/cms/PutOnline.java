@@ -27,6 +27,7 @@ import be.elevenways.hohenheim.upstream.UpstreamKindInfo;
 import be.elevenways.hohenheim.upstream.UpstreamKinds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.zenit.common.edit.FieldFormEntryDefaults;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FieldOption;
@@ -808,8 +809,8 @@ public final class PutOnline {
 
     /** @return one Ports row as the port it publishes, null while its name or its container port is missing */
     static @Nullable PublishedPort rowPort(@NonNull Map<String, Object> row) {
-        PortPurpose purpose = PortPurpose.forName(RawValues.nonBlankString(row.get(PORT_PURPOSE.getName())));
-        String name = purpose == PortPurpose.OTHER ? RawValues.nonBlankString(row.get(PORT_NAME.getName()))
+        PortPurpose purpose = PortPurpose.forName(Texts.stringOrNull(row.get(PORT_PURPOSE.getName())));
+        String name = purpose == PortPurpose.OTHER ? Texts.stringOrNull(row.get(PORT_NAME.getName()))
             : purpose.token();
         Integer container = RawValues.parsedInt(row.get(PORT_CONTAINER.getName()));
         if (name == null || container == null) {

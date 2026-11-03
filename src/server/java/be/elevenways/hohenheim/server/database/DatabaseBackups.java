@@ -8,7 +8,6 @@ import be.elevenways.hohenheim.model.BackupStatus;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.DatabaseDumpModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.FirstPerOwner;
 import be.elevenways.hohenheim.model.Retention;
 import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.ControllerIdentity;
@@ -365,7 +364,7 @@ public final class DatabaseBackups {
     /** @return each listed database's newest complete dump, in one read; a database without one is absent */
     public static @NonNull Map<Integer, Stored> newestOf(@NonNull Collection<Integer> databaseIds) {
         Map<Integer, Stored> newest = new HashMap<>();
-        for (Map.Entry<Integer, Row> first : FirstPerOwner.of(completeNewestFirst(), DatabaseDumpModel.DATABASE_ID,
+        for (Map.Entry<Integer, Row> first : completeNewestFirst().firstOfEach(DatabaseDumpModel.DATABASE_ID,
                 databaseIds).entrySet()) {
             newest.put(first.getKey(), Stored.of(first.getValue()));
         }
@@ -374,8 +373,8 @@ public final class DatabaseBackups {
 
     /** @return each listed database's newest dump row whatever its status, in one read; one without any is absent */
     public static @NonNull Map<Integer, Row> latestAttemptOf(@NonNull Collection<Integer> databaseIds) {
-        return FirstPerOwner.of(Models.get(DatabaseDumpModel.class).find().orderBy(DatabaseDumpModel.ID,
-            SortOrder.DESC), DatabaseDumpModel.DATABASE_ID, databaseIds);
+        return Models.get(DatabaseDumpModel.class).find().orderBy(DatabaseDumpModel.ID, SortOrder.DESC)
+            .firstOfEach(DatabaseDumpModel.DATABASE_ID, databaseIds);
     }
 
     private static @NonNull QueryBuilder<Row> completeNewestFirst() {

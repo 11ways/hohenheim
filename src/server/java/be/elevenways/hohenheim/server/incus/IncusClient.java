@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.server.util.Http11;
 import be.elevenways.hohenheim.server.util.Json;
 import be.elevenways.protoblast.common.dry.Dry;
+import be.elevenways.zenit.common.text.Texts;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -184,7 +185,7 @@ public class IncusClient {
     public @Nullable String imageFingerprintForAlias(@NonNull String alias) throws IOException {
         Map<String, Object> metadata = metadataOrNull("/1.0/images/aliases/" + alias);
         Object target = metadata != null ? metadata.get("target") : null;
-        return target instanceof String fingerprint && !fingerprint.isBlank() ? fingerprint : null;
+        return Texts.stringOrNull(target);
     }
 
     /**
