@@ -26,8 +26,7 @@ import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityAction;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.history.ChangeOp;
-import be.elevenways.zenit.common.orm.history.HistoryRefusalReason;
-import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.orm.history.HistoryMisuse;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -126,16 +125,16 @@ class SoftDeleteJourneyTest {
             assertThat(deletes.get(0).op())
                 .as("step 2: on the soft delete's own update").isEqualTo(ChangeOp.UPDATE);
 
-            // 3. A set-based update of a site's content is refused outright: every content field is a revision
-            //    snapshot field, so no revision would hold the value and each record must be saved on its own.
-            //    What a set-based update may still assign (the reporting key, kept out of revisions and history)
-            //    is scoped like a find: neither reaches the trashed row.
-            DomainRefusal refused = catchThrowableOfType(DomainRefusal.class, () -> sites.find()
+            // 3. A set-based update of a site's content is a programming error outright: every content field is a
+            //    revision snapshot field, so no revision would hold the value and each record must be saved on its
+            //    own. What a set-based update may still assign (the reporting key, kept out of revisions and
+            //    history) is scoped like a find: neither reaches the trashed row.
+            HistoryMisuse refused = catchThrowableOfType(HistoryMisuse.class, () -> sites.find()
                 .where(SiteModel.ID.eq(siteId)).assign(SiteModel.DESCRIPTION, "touched").bypassBehaviours()
                 .updateAll());
             assertThat(refused).as("step 3: a set-based update of a snapshot field is refused").isNotNull();
-            assertThat(refused.reason())
-                .as("step 3: as a snapshot assignment").isEqualTo(HistoryRefusalReason.SNAPSHOT_ASSIGNMENT);
+            assertThat(refused.kind())
+                .as("step 3: as a snapshot assignment").isEqualTo(HistoryMisuse.Kind.SNAPSHOT_ASSIGNMENT);
             assertThat(StoredRows.byId(sites, siteId).get(SiteModel.DESCRIPTION))
                 .as("step 3: and the refused update wrote nothing").isNotEqualTo("touched");
             assertThat(sites.find().where(SiteModel.ID.eq(siteId)).count())

@@ -17,9 +17,9 @@ import java.util.Objects;
  * Writes a stored site column raw in the bound datasource, as an older release or build left the row.
  *
  * AIDEV-NOTE: these are shapes today's rules refuse, so no save can write them, and since history v3 a set-based
- * assignment of a site's snapshot field is refused (SNAPSHOT_ASSIGNMENT) even past the behaviours. The row is written
- * through the frozen table instead, which is what such data is: no revision or change of today's ever held it. The
- * site model's query cache is dropped after, as its own write paths do.
+ * assignment of a site's snapshot field is a HistoryMisuse (SNAPSHOT_ASSIGNMENT) even past the behaviours. The row
+ * is written through the frozen table instead, which is what such data is: no revision or change of today's ever held
+ * it. The site model's query cache is dropped after, as its own write paths do.
  *
  * @author Jelle De Loecker
  * @since 0.10.0

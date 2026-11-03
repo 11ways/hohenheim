@@ -88,8 +88,8 @@ public final class GeneratedRows {
      * system origin, because a system write on a tenant's behalf must
      * attribute to the system and not to whoever happens to be logged in on another thread.
      * Inside an act (a running transaction or an outside-transaction command) the generated write is
-     * part of that act: one action keeps one attribution (history v3 refuses a write attributed otherwise,
-     * ATTRIBUTION_CHANGED), and the row's own attribution columns still say it was generated.
+     * part of that act: one action keeps one attribution (history v3 throws a HistoryMisuse for a write attributed
+     * otherwise, ATTRIBUTION_CHANGED), and the row's own attribution columns still say it was generated.
      */
     private static void enter(@NonNull Scope scope, @NonNull Body body) throws Exception {
         Scope outer = ACTIVE.get();
