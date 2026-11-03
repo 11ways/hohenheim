@@ -170,23 +170,22 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
     }
 
     /**
-     * Wait until {@code writer} is blocked OPENING its write transaction, i.e. queued on the
-     * database write lock another transaction holds.
+     * Wait until {@code writer} is blocked OPENING its write transaction, i.e. queued behind
+     * the write transaction another thread holds.
      *
      * AIDEV-NOTE: this replaced a fixed 150ms sleep followed by isAlive(), which proved
      * nothing: a thread that has not even been scheduled yet is also alive, and a writer that
      * only starts AFTER the winner commits trivially sees its claim, so the race was never
-     * exercised. SqliteDatasource.withTransaction opens every write with
-     * Connection.setAutoCommit(false), which issues BEGIN IMMEDIATE and waits on busy_timeout
-     * (5s) while another connection holds the lock; seeing the writer inside that sqlite-jdbc
+     * exercised. SqliteDatasource.withTransaction queues every write transaction at its writer
+     * gate (WriterGate.enter) while another thread holds it; seeing the writer inside that
      * frame IS the queueing, observed rather than hoped for. The wait stays well inside
-     * busy_timeout so the queued writer never gives up with SQLITE_BUSY.
+     * busy_timeout, after which a writer queued behind a parked holder gives up as busy.
      */
     private static void awaitQueuedOnWriteLock(Thread writer, String what) {
         Poll.until(what, Duration.ofSeconds(3), () -> {
             for (StackTraceElement frame : writer.getStackTrace()) {
-                if ("setAutoCommit".equals(frame.getMethodName())
-                        && frame.getClassName().startsWith("org.sqlite.")) {
+                if ("enter".equals(frame.getMethodName())
+                        && "be.elevenways.zenit.server.orm.WriterGate".equals(frame.getClassName())) {
                     return true;
                 }
             }

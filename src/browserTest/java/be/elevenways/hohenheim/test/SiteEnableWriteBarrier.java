@@ -19,10 +19,10 @@ import java.util.concurrent.TimeUnit;
  * MUST null it out (clear()) or it parks unrelated site writes in the shared-server JVM.
  * The park happens INSIDE the write's transaction. Since the SQLite datasource rework
  * (per-transaction dedicated connections, BEGIN IMMEDIATE), a parked worker HOLDS the
- * database's single write lock: a concurrent site write queues behind it on busy_timeout
- * (5s) instead of interleaving into its transaction, so the scan a parked worker already
- * ran can no longer go stale. Release the held worker promptly or queued writers time out
- * with SQLITE_BUSY.
+ * database's single write lock: a concurrent site write queues behind it at the
+ * datasource's writer gate instead of interleaving into its transaction, so the scan a
+ * parked worker already ran can no longer go stale. A parked worker makes no progress, so
+ * release it promptly: queued writers give up as busy after busy_timeout (5s).
  */
 final class SiteEnableWriteBarrier {
 

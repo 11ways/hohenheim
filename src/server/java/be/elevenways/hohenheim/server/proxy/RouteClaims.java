@@ -37,8 +37,8 @@ import java.util.Set;
  * out of the write transaction. The UNIQUE index on this
  * column stays as the equality backstop: identical keys are
  * refused by storage itself even if a future writer bypasses the transaction discipline.
- * Route-claim transactions must stay well under SQLite's 5s busy_timeout or queued rivals
- * fail with SQLITE_BUSY. The scans also produce the specific, localized refusal an
+ * Queued rivals wait for a route-claim transaction as long as it makes progress (zenit's
+ * SQLite writer gate). The scans also produce the specific, localized refusal an
  * operator can act on: they are diagnosis AND, under serialization, the overlap guarantee.
  *
  * AIDEV-NOTE: the port ledger (PortLedger/port_allocations) deliberately did NOT reuse
