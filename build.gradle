@@ -141,8 +141,6 @@ hawkeye {
     }
 }
 
-// The declaration bucket is separate from the resolved path: build facts record bucket edges only, and zenit-dev
-// publishes spamservice-server for this build only when a bucket names it.
 def spamserviceDistributionBucket = configurations.dependencyScope('spamserviceDistribution')
 configurations.resolvable('spamserviceDistributionPath') {
     extendsFrom(spamserviceDistributionBucket.get())
