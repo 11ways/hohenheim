@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.DataDirectory;
 import be.elevenways.hohenheim.server.SystemUsers;
 import be.elevenways.hohenheim.server.host.PrivilegedHelper;
 import be.elevenways.hohenheim.server.security.SecurityReportEnv;
+import be.elevenways.protoblast.diagnostic.AtomicFiles;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.thread.ScheduledJob;
 import be.elevenways.protoblast.common.time.Backoff;
@@ -40,7 +41,6 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermission;
 import java.security.MessageDigest;
@@ -61,6 +61,8 @@ import static be.elevenways.hohenheim.RawValues.trimmed;
 public final class SpamserviceManager {
 
     public static final String ARTIFACT_RESOURCE = "managed-services/spamservice-server.jar";
+    /** The name every extracted artifact starts with, ending in its SHA-256 and ".jar". */
+    static final String ARTIFACT_PREFIX = "spamservice-server-";
     public static final String INSTALLATION_EXTERNAL_ID = "hohenheim:installation";
     public static final String SITE_EXTERNAL_ID_PREFIX = "hohenheim:site:";
     public static final String EVENTS_PATH = "/v1/events";
@@ -710,11 +712,11 @@ public final class SpamserviceManager {
     static @NonNull ExtractedArtifact extractArtifact(@NonNull ArtifactSource source,
                                                        @NonNull Path executableDirectory) throws Exception {
         createDirectoriesNoSymlinks(executableDirectory);
-        Path temporary = Files.createTempFile(executableDirectory, ".spamservice-server-", ".jar.part");
         MessageDigest digest = SecureTokens.sha256();
-        try {
+        Path nominal = executableDirectory.resolve(ARTIFACT_PREFIX + "staged.jar");
+        try (AtomicFiles.Staged staged = AtomicFiles.stage(nominal)) {
             try (InputStream input = source.open();
-                 FileChannel channel = FileChannel.open(temporary, StandardOpenOption.WRITE,
+                 FileChannel channel = FileChannel.open(staged.path(), StandardOpenOption.WRITE,
                      StandardOpenOption.TRUNCATE_EXISTING, LinkOption.NOFOLLOW_LINKS);
                  OutputStream output = Channels.newOutputStream(channel)) {
                 byte[] buffer = new byte[64 * 1024];
@@ -729,16 +731,15 @@ public final class SpamserviceManager {
                 channel.force(true);
             }
             String hash = SecureTokens.hex(digest.digest());
-            Path target = executableDirectory.resolve("spamservice-server-" + hash + ".jar");
+            Path target = executableDirectory.resolve(ARTIFACT_PREFIX + hash + ".jar");
             if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
                 if (Files.isSymbolicLink(target) || !Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS)
                         || !hash.equals(sha256(target))) {
                     throw new IOException("Existing Spamservice artifact is not the expected regular file: " + target);
                 }
-                Files.deleteIfExists(temporary);
             } else {
                 try {
-                    Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE);
+                    staged.commitAs(target);
                 } catch (AtomicMoveNotSupportedException e) {
                     throw new IOException("Atomic Spamservice artifact installation is unsupported for "
                         + executableDirectory, e);
@@ -747,8 +748,6 @@ public final class SpamserviceManager {
             Files.setPosixFilePermissions(target, READ_ONLY);
             cleanupOldArtifacts(executableDirectory, target);
             return new ExtractedArtifact(target, hash);
-        } finally {
-            Files.deleteIfExists(temporary);
         }
     }
 
@@ -964,7 +963,7 @@ public final class SpamserviceManager {
         try (var files = Files.list(directory)) {
             for (Path path : files.toList()) {
                 String name = path.getFileName().toString();
-                if (!path.equals(current) && name.startsWith("spamservice-server-") && name.endsWith(".jar")
+                if (!path.equals(current) && name.startsWith(ARTIFACT_PREFIX) && name.endsWith(".jar")
                         && Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
                     Files.deleteIfExists(path);
                 }

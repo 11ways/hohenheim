@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.WorkloadLiveness;
 import be.elevenways.hohenheim.server.util.Http11;
 import be.elevenways.hohenheim.server.util.Tar;
+import be.elevenways.protoblast.diagnostic.AtomicFiles;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.time.Pace;
@@ -23,7 +24,6 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -1461,9 +1461,9 @@ public class ManagedDatabase {
     /**
      * Back up any engine to a file, STREAMED end to end: SQL text dumps and mongodump archives go exec-stdout to disk,
      * a Redis RDB goes archive-API to disk -- controller heap never holds a dump (the 2026-08-31 nightly OOM class),
-     * and only Redis stages a copy inside its container. The write lands in a {@code .part} sibling that is fsynced
-     * and then moved into place on success, so a failed or over-cap dump never leaves a file that could pass for a
-     * backup, and a crash right after the move never leaves a committed name over unwritten blocks.
+     * and only Redis stages a copy inside its container. The write lands in a staged sibling ({@link AtomicFiles})
+     * that is fsynced and then committed into place on success, so a failed or over-cap dump never leaves a file that
+     * could pass for a backup, and a crash right after the commit never leaves a committed name over unwritten blocks.
      *
      * @throws IOException naming {@code database.max_dump_mb} when the dump exceeds the cap
      */
@@ -1473,8 +1473,8 @@ public class ManagedDatabase {
     // directory holds only its credentials file.
     public void backupToFile(String handle, Engine engine, String user, String password,
                              String database, Path target) throws IOException {
-        Path partial = target.resolveSibling(target.getFileName() + ".part");
-        try {
+        try (AtomicFiles.Staged staged = AtomicFiles.stage(target)) {
+            Path partial = staged.path();
             switch (engine) {
                 case POSTGRES, MYSQL -> {
                     DockerClient.ExecStreamResult result;
@@ -1530,12 +1530,10 @@ public class ManagedDatabase {
                 }
             }
             DurableFiles.forceFile(partial);
-            Files.move(partial, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            staged.commit();
             DurableFiles.forceDirectory(target.getParent());
         } catch (Http11.BodyCapExceededException overCap) {
             throw capRefusal(handle, overCap);
-        } finally {
-            Files.deleteIfExists(partial);
         }
     }
 

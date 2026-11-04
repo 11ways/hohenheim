@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.backup;
 
+import be.elevenways.protoblast.diagnostic.AtomicFiles;
 import be.elevenways.zenit.server.io.DurableFiles;
 import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -13,22 +14,19 @@ import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Stream;
 
 /**
- * Backup target over a directory: staging {@code .part} write, fsync, atomic rename.
+ * Backup target over a directory: a staged write ({@link AtomicFiles}), fsync, atomic rename.
  * OFF-HOST HONESTY: a directory on the controller (or a combined control+compute
  * host) is NOT a different failure domain -- this kind is the floor for a mounted
  * remote filesystem or a directory that is itself backed up off-host, and its admin
  * help says so.
  */
 public final class FilesystemBackupTarget implements BackupTarget {
-
-    static final String STAGING_SUFFIX = ".part";
 
     private final @NonNull Path root;
 
@@ -51,36 +49,28 @@ public final class FilesystemBackupTarget implements BackupTarget {
     @Override
     public void store(@NonNull String key, @NonNull Path file) throws IOException {
         Path committed = resolve(key);
-        Path staging = stagingOf(committed);
-        try {
+        try (AtomicFiles.Staged staged = stage(committed)) {
             try (InputStream in = Files.newInputStream(file);
-                 OutputStream out = openStaging(staging)) {
-                copyBounded(in, out);
+                 OutputStream out = Files.newOutputStream(staged.path())) {
+                in.transferTo(out);
             }
-            DurableFiles.forceFile(staging);
-            Files.move(staging, committed,
-                StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            DurableFiles.forceFile(staged.path());
+            staged.commit();
             DurableFiles.forceDirectory(committed.getParent());
-        } catch (IOException error) {
-            try {
-                Files.deleteIfExists(staging);
-            } catch (IOException ignored) {
-                // best effort; the suffix marks it as never-committed either way
-            }
-            throw error;
         }
     }
 
-    /** Opens the staging name, recreating its folder while a concurrent {@link #delete} prunes it in between. */
-    private static @NonNull OutputStream openStaging(@NonNull Path staging) throws IOException {
+    /**
+     * Stages the replacement beside the committed name, recreating its folder while a concurrent {@link #delete}
+     * prunes it in between.
+     */
+    private static AtomicFiles.@NonNull Staged stage(@NonNull Path committed) throws IOException {
         for (int attempt = 1; ; attempt++) {
             try {
-                Files.createDirectories(staging.getParent());
-                return Files.newOutputStream(staging,
-                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+                return AtomicFiles.stage(committed);
             } catch (NoSuchFileException | FileAlreadyExistsException pruned) {
-                // NoSuchFile: the folder went before the open; FileAlreadyExists: createDirectories found it, then
-                // saw it gone when it checked that it is a directory.
+                // NoSuchFile: the folder went before the staged file was made in it; FileAlreadyExists:
+                // createDirectories found it, then saw it gone when it checked that it is a directory.
                 if (attempt >= CREATE_ATTEMPTS) {
                     throw pruned;
                 }
@@ -120,7 +110,7 @@ public final class FilesystemBackupTarget implements BackupTarget {
                     continue;
                 }
                 String key = base.relativize(path).toString();
-                if (key.startsWith(prefix) && !key.endsWith(STAGING_SUFFIX)) {
+                if (key.startsWith(prefix) && !AtomicFiles.isStaged(path)) {
                     keys.add(key);
                 }
             }
@@ -132,7 +122,7 @@ public final class FilesystemBackupTarget implements BackupTarget {
     public void delete(@NonNull String key) throws IOException {
         Path committed = resolve(key);
         Files.deleteIfExists(committed);
-        Files.deleteIfExists(stagingOf(committed));
+        AtomicFiles.discardStaged(committed);
         String namespace = BackupTarget.namespaceOf(key);
         if (namespace == null) {
             return;
@@ -165,18 +155,6 @@ public final class FilesystemBackupTarget implements BackupTarget {
             throw new IOException("Backup key '" + key + "' escapes the target directory");
         }
         return resolved;
-    }
-
-    private static Path stagingOf(Path committed) {
-        return committed.resolveSibling(committed.getFileName() + STAGING_SUFFIX);
-    }
-
-    private static void copyBounded(InputStream in, OutputStream out) throws IOException {
-        byte[] buffer = new byte[64 * 1024];
-        int read;
-        while ((read = in.read(buffer)) >= 0) {
-            out.write(buffer, 0, read);
-        }
     }
 
 }

@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.diagnostic.AtomicFiles;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BackupTargetModel;
@@ -380,8 +381,8 @@ class InstanceSnapshotBackupLiveTest {
                 Path artifact = targetDir.resolve(key);
                 assertThat(Files.isRegularFile(artifact))
                     .as("step 2: the committed artifact exists at the target").isTrue();
-                assertThat(Files.exists(Path.of(artifact + ".part")))
-                    .as("step 2: no staging debris at the target").isFalse();
+                assertThat(run(() -> AtomicFiles.staged(artifact)))
+                    .as("step 2: no staged file beside it at the target").isEmpty();
                 assertThat(service.liveStatus(id).state())
                     .as("step 2: the source instance runs again after the capture")
                     .isEqualTo(ContainerState.RUNNING);
@@ -550,13 +551,12 @@ class InstanceSnapshotBackupLiveTest {
                 }
                 @Override public void store(String key, Path file) throws IOException {
                     attemptedKey.set(key);
-                    // Simulate a network death mid-upload: the staging name gets
-                    // half the bytes, then the transfer dies.
+                    // Simulate a network death mid-upload: the staged replacement gets
+                    // half the bytes, then the transfer dies without closing it.
                     Path committed = targetDir.resolve(key);
-                    Files.createDirectories(committed.getParent());
                     byte[] bytes = Files.readAllBytes(file);
-                    Files.write(Path.of(committed + ".part"),
-                        java.util.Arrays.copyOf(bytes, bytes.length / 2));
+                    AtomicFiles.Staged dying = AtomicFiles.stage(committed);
+                    Files.write(dying.path(), java.util.Arrays.copyOf(bytes, bytes.length / 2));
                     throw new IOException("simulated network failure mid-upload");
                 }
                 @Override public String storedSha256(String key) throws IOException {
@@ -603,8 +603,8 @@ class InstanceSnapshotBackupLiveTest {
                 assertThat(key).as("step 3: the upload was attempted").isNotNull();
                 assertThat(Files.exists(targetDir.resolve(key)))
                     .as("step 3: no committed artifact").isFalse();
-                assertThat(Files.exists(Path.of(targetDir.resolve(key) + ".part")))
-                    .as("step 3: the partial staging file was removed").isFalse();
+                assertThat(run(() -> AtomicFiles.staged(targetDir.resolve(key))))
+                    .as("step 3: the partial staged file was removed").isEmpty();
 
                 // 4. A restore of the failed row REFUSES.
                 Throwable refusal = catchThrowable(() -> backups.restoreToNew(

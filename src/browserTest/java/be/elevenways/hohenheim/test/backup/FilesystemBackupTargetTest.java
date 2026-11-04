@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.backup;
 
 import be.elevenways.hohenheim.server.backup.BackupTarget;
 import be.elevenways.hohenheim.server.backup.FilesystemBackupTarget;
+import be.elevenways.protoblast.diagnostic.AtomicFiles;
 import be.elevenways.protoblast.testsupport.thread.Racers;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -43,8 +44,8 @@ class FilesystemBackupTargetTest {
         target.store("instance-1/a.hib", file);
         assertThat(target.exists("instance-1/a.hib"))
             .as("step 1: committed key exists after store").isTrue();
-        assertThat(Files.exists(tmp.resolve("store/instance-1/a.hib.part")))
-            .as("step 1: no staging debris survives a clean store").isFalse();
+        assertThat(AtomicFiles.staged(tmp.resolve("store/instance-1/a.hib")))
+            .as("step 1: no staged file survives a clean store").isEmpty();
 
         // 2. The stored sha is computed from the TARGET's own bytes.
         String sha = target.storedSha256("instance-1/a.hib");
@@ -55,9 +56,15 @@ class FilesystemBackupTargetTest {
         target.retrieve("instance-1/a.hib", back);
         assertThat(Files.readString(back)).as("step 3: retrieved bytes").isEqualTo("artifact-bytes");
 
-        // 4. Delete removes committed AND staging names.
+        // 4. Delete removes the committed name and what a dead store staged beside it.
+        AtomicFiles.Staged dead = AtomicFiles.stage(tmp.resolve("store/instance-1/a.hib"));
+        Files.writeString(dead.path(), "half");
+        assertThat(target.list("instance-1")).as("step 4: a listing skips a staged file")
+            .containsExactly("instance-1/a.hib");
         target.delete("instance-1/a.hib");
         assertThat(target.exists("instance-1/a.hib")).as("step 4: gone after delete").isFalse();
+        assertThat(AtomicFiles.staged(tmp.resolve("store/instance-1/a.hib")))
+            .as("step 4: and what was staged for it").isEmpty();
 
         // 5. Traversal refusal: a key cannot escape the root.
         Throwable escape = catchThrowable(() -> target.store("../escape.hib", file));

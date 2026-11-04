@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.model.InstanceSnapshotModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.protoblast.diagnostic.AtomicFiles;
 import be.elevenways.hohenheim.server.backup.BackupTarget;
 import be.elevenways.hohenheim.server.backup.FilesystemBackupTarget;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
@@ -359,10 +360,9 @@ class IncusSnapshotBackupLiveTest {
                     @Override public void store(String storeKey, Path file) throws IOException {
                         attemptedKey.set(storeKey);
                         Path committed = interruptedDir.resolve(storeKey);
-                        Files.createDirectories(committed.getParent());
                         byte[] half = read(file);
-                        Files.write(Path.of(committed + ".part"),
-                            java.util.Arrays.copyOf(half, half.length / 2));
+                        AtomicFiles.Staged dying = AtomicFiles.stage(committed);
+                        Files.write(dying.path(), java.util.Arrays.copyOf(half, half.length / 2));
                         throw new IOException("simulated network failure mid-upload");
                     }
                     @Override public String storedSha256(String storeKey) throws IOException {
@@ -398,8 +398,8 @@ class IncusSnapshotBackupLiveTest {
                 assertThat(attempted).as("step 9: the upload was attempted").isNotNull();
                 assertThat(Files.exists(interruptedDir.resolve(attempted)))
                     .as("step 9: no committed artifact").isFalse();
-                assertThat(Files.exists(Path.of(interruptedDir.resolve(attempted) + ".part")))
-                    .as("step 9: the partial staging file was removed").isFalse();
+                assertThat(stagedBeside(interruptedDir.resolve(attempted)))
+                    .as("step 9: the partial staged file was removed").isEmpty();
                 assertThat(catchThrowable(() -> backups.restoreToNew(
                         failed.get(0), real, "never-born", null)))
                     .as("step 9: the failed row is not restorable")
@@ -490,6 +490,14 @@ class IncusSnapshotBackupLiveTest {
     private static byte[] read(Path file) {
         try {
             return Files.readAllBytes(file);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static List<Path> stagedBeside(Path file) {
+        try {
+            return AtomicFiles.staged(file);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

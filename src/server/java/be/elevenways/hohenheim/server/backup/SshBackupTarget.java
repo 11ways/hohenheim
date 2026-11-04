@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.server.util.PosixPaths;
 import be.elevenways.hohenheim.server.util.Sha256;
+import be.elevenways.protoblast.diagnostic.AtomicFiles;
 import be.elevenways.protoblast.server.process.ProcessOutcome;
 import be.elevenways.protoblast.server.process.Subprocess;
 import be.elevenways.protoblast.server.process.Termination;
@@ -25,8 +26,6 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -173,16 +172,12 @@ public final class SshBackupTarget implements BackupTarget {
 
     @Override
     public void retrieve(@NonNull String key, @NonNull Path destination) throws IOException {
-        Path staging = destination.resolveSibling(destination.getFileName() + ".retrieving");
-        try (OutputStream out = Files.newOutputStream(staging,
-                StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
-            runStreaming("cat " + HostShell.quote(remotePath(key)), null, out);
-        } catch (IOException error) {
-            Files.deleteIfExists(staging);
-            throw error;
+        try (AtomicFiles.Staged staged = AtomicFiles.stage(destination)) {
+            try (OutputStream out = Files.newOutputStream(staged.path())) {
+                runStreaming("cat " + HostShell.quote(remotePath(key)), null, out);
+            }
+            staged.commit();
         }
-        Files.move(staging, destination,
-            StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
     }
 
     /**

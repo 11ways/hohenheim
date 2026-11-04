@@ -78,7 +78,7 @@ class SpamserviceManagerTest {
 
         assertThat(first).isEqualTo(second);
         assertThat(first.path().getFileName().toString())
-            .isEqualTo("spamservice-server-" + first.sha256() + ".jar");
+            .isEqualTo(SpamserviceManager.ARTIFACT_PREFIX + first.sha256() + ".jar");
         assertThat(Files.readAllBytes(first.path())).isEqualTo(artifact);
         assertThat(Files.getPosixFilePermissions(first.path())).noneMatch(permission ->
             permission == java.nio.file.attribute.PosixFilePermission.OWNER_WRITE
