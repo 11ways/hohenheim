@@ -141,12 +141,12 @@ hawkeye {
     }
 }
 
-configurations {
-    spamserviceDistribution {
-        canBeConsumed = false
-        canBeResolved = true
-        transitive = false
-    }
+// The declaration bucket is separate from the resolved path: build facts record bucket edges only, and zenit-dev
+// publishes spamservice-server for this build only when a bucket names it.
+def spamserviceDistributionBucket = configurations.dependencyScope('spamserviceDistribution')
+configurations.resolvable('spamserviceDistributionPath') {
+    extendsFrom(spamserviceDistributionBucket.get())
+    transitive = false
 }
 
 dependencies {
@@ -241,7 +241,7 @@ tasks.named('serverJar') {
     }
 
     // Captured at configuration time: Task.project read while the task runs is refused from Gradle 10.
-    def spamserviceDistribution = project.configurations.spamserviceDistribution
+    def spamserviceDistribution = project.configurations.spamserviceDistributionPath
     def serverClassDirs = project.sourceSets.server.output.classesDirs
     from({ spamserviceDistribution.singleFile }) {
         into 'managed-services'
