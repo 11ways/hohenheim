@@ -352,7 +352,7 @@ public final class DockerReclaim {
     }
 
     private static @NonNull String shortId(@NonNull String id) {
-        String bare = id.startsWith("sha256:") ? id.substring("sha256:".length()) : id;
+        String bare = ImageIds.bare(id);
         return bare.length() > 12 ? bare.substring(0, 12) : bare;
     }
 }

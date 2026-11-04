@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.server.build;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BuildOperationModel;
-import be.elevenways.hohenheim.server.util.FileTrees;
+import be.elevenways.protoblast.diagnostic.FileTrees;
 import be.elevenways.hohenheim.server.util.Json;
 import be.elevenways.hohenheim.server.util.Tar;
 import be.elevenways.protoblast.common.dry.Dry;

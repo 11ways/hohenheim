@@ -7,7 +7,7 @@ import be.elevenways.hohenheim.server.docker.DockerTransport;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
-import be.elevenways.hohenheim.server.util.FileTrees;
+import be.elevenways.protoblast.diagnostic.FileTrees;
 import be.elevenways.hohenheim.server.util.PermissionBits;
 import be.elevenways.zenit.server.io.FilesystemNodeKind;
 

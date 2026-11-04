@@ -19,7 +19,7 @@ import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
-import be.elevenways.hohenheim.server.util.Sha256;
+import be.elevenways.protoblast.diagnostic.DigestAlgorithm;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.history.Change;
@@ -201,7 +201,7 @@ public final class ArtifactDeploys {
     }
 
     private static Path artifactPath(Path applicationDirectory, String digest) {
-        if (!Sha256.isHex(digest)) throw new IllegalArgumentException("Invalid artifact identity");
+        if (!DigestAlgorithm.SHA_256.isHex(digest)) throw new IllegalArgumentException("Invalid artifact identity");
         return applicationDirectory.resolve("sha256").resolve(digest).resolve("app.jar");
     }
 

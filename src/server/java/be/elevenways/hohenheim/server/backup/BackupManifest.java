@@ -12,7 +12,7 @@ import java.util.Map;
 import be.elevenways.hohenheim.instance.ImageOrigin;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
-import be.elevenways.hohenheim.server.util.Sha256;
+import be.elevenways.protoblast.diagnostic.DigestAlgorithm;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.zenit.common.orm.model.Schema;
@@ -472,7 +472,7 @@ public record BackupManifest(int version,
                 volumes.add(new VolumeEntry(volumeName, path, file, sha, size.longValue()));
                 requireSegment(volumeName, "volume name");
                 requireSegment(file, "volume file");
-                if (size.longValue() < 0 || !Sha256.isHex(sha)
+                if (size.longValue() < 0 || !DigestAlgorithm.SHA_256.isHex(sha)
                         || volumes.stream().filter(v -> v.name().equals(volumeName)
                             || v.file().equals(file)).count() > 1) {
                     throw new IOException("Invalid or duplicate backup volume inventory");
@@ -606,7 +606,7 @@ public record BackupManifest(int version,
         String file = requireText(map.get("file"), "application payload file");
         requireSegment(file, "application payload file");
         String sha = requireText(map.get("sha256"), "application payload checksum");
-        if (size.longValue() < 0 || !Sha256.isHex(sha)) {
+        if (size.longValue() < 0 || !DigestAlgorithm.SHA_256.isHex(sha)) {
             throw new IOException("Invalid application backup payload inventory");
         }
         return new PayloadEntry(file, sha, size.longValue());

@@ -18,7 +18,7 @@ import be.elevenways.hohenheim.server.backup.UploadLedger;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
-import be.elevenways.hohenheim.server.util.FileTrees;
+import be.elevenways.protoblast.diagnostic.FileTrees;
 import be.elevenways.hohenheim.server.util.UtcStamp;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -472,9 +472,13 @@ public final class DatabaseBackups {
             if (BootSettle.writtenByThisProcess(written)) {
                 continue;
             }
-            IOException failed = FileTrees.delete(entry);
-            Blast.log("DUMP: swept staging entry", entry, "an earlier process left",
-                failed == null ? "" : "- not fully removed: " + failed.getMessage());
+            String leftover = "";
+            try {
+                FileTrees.delete(entry);
+            } catch (IOException failed) {
+                leftover = "- not fully removed: " + failed.getMessage();
+            }
+            Blast.log("DUMP: swept staging entry", entry, "an earlier process left", leftover);
         }
     }
 

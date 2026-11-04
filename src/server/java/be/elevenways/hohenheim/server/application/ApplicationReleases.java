@@ -17,6 +17,7 @@ import be.elevenways.hohenheim.server.build.BuildRequest;
 import be.elevenways.hohenheim.server.build.SandboxedBuilds;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.ImageIds;
 import be.elevenways.hohenheim.server.docker.InstanceDatabaseNetworks;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
@@ -182,7 +183,7 @@ public final class ApplicationReleases {
     /** {@link #restore}'s body; the caller holds the application's operation lock. */
     private static @NonNull Release restoreLocked(int applicationId, @NonNull String verifiedImageId,
                                                   InstanceService.@NonNull RestoreVolumes restoreVolumes) {
-        if (ownedServing(applicationId) != null || !verifiedImageId.startsWith("sha256:")) {
+        if (ownedServing(applicationId) != null || !ImageIds.isContentAddressed(verifiedImageId)) {
             throw new IllegalStateException("Restore requires a new application and an imported image digest");
         }
         Row application = requireApplication(applicationId);
@@ -729,7 +730,7 @@ public final class ApplicationReleases {
             // RIGHT NOW (pulling once when absent). A retag at the daemon or the registry
             // surfaces as a CHANGED spec (a deliberate release), never as a silent
             // difference between what the record says and what runs.
-            if (!ref.startsWith("sha256:")) {
+            if (!ImageIds.isContentAddressed(ref)) {
                 desired.put(InstanceKindFields.IMAGE, resolveImageDigest(docker, ref));
                 desired.put("image_ref", ref);
             } else {

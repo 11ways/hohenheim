@@ -28,6 +28,7 @@ import be.elevenways.hohenheim.server.application.ArtifactDeploys;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.ImageIds;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.source.SiteSources;
 import be.elevenways.hohenheim.server.backup.BackupArchive;
@@ -50,8 +51,7 @@ import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
 import be.elevenways.hohenheim.server.runtime.PortPublication;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.ports.PublishedPort;
-import be.elevenways.hohenheim.server.util.FileTrees;
-import be.elevenways.hohenheim.server.util.Sha256;
+import be.elevenways.protoblast.diagnostic.FileTrees;
 import be.elevenways.hohenheim.server.util.UtcStamp;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -1291,7 +1291,7 @@ public final class InstanceBackups {
         if (!digest.equals(BackupArchive.sha256Of(artifact))) {
             throw new IOException("Accepted artifact changed during backup capture");
         }
-        if (!Sha256.isImageId(image.id())) {
+        if (!ImageIds.isImageId(image.id())) {
             throw new IOException("Serving application has no immutable runtime image identity");
         }
         Path imageTar = applicationDirectory.resolve("runtime-image.tar");
@@ -1357,7 +1357,7 @@ public final class InstanceBackups {
         BackupManifest.ApplicationEntry app = manifest.application();
         if (app == null || manifest.profile() == null
                 || !BackupManifest.PAYLOAD_VOLUME_TARS.equals(manifest.payload())
-                || !Sha256.isImageId(manifest.imageId())) {
+                || !ImageIds.isImageId(manifest.imageId())) {
             throw new IllegalStateException("Application backup lacks recoverable source/image inventory");
         }
         Map<String, String> declared = new LinkedHashMap<>();

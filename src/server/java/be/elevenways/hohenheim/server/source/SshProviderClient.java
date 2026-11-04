@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.server.source;
 
 import be.elevenways.hohenheim.server.DataDirectory;
 import be.elevenways.hohenheim.server.host.HostShell;
-import be.elevenways.hohenheim.server.util.FileTrees;
+import be.elevenways.protoblast.diagnostic.FileTrees;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -146,7 +146,7 @@ final class SshProviderClient implements GitProviderClient {
 
         @Override
         public void close() {
-            FileTrees.delete(this.directory);
+            FileTrees.deleteQuietly(this.directory);
         }
 
         /**

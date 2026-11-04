@@ -8,7 +8,7 @@ import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.server.util.PosixPaths;
-import be.elevenways.hohenheim.server.util.Sha256;
+import be.elevenways.protoblast.diagnostic.DigestAlgorithm;
 import be.elevenways.protoblast.diagnostic.AtomicFiles;
 import be.elevenways.protoblast.server.process.ProcessOutcome;
 import be.elevenways.protoblast.server.process.Subprocess;
@@ -164,7 +164,7 @@ public final class SshBackupTarget implements BackupTarget {
             StandardCharsets.UTF_8).trim();
         int space = output.indexOf(' ');
         String sha = space > 0 ? output.substring(0, space) : output;
-        if (!Sha256.isHex(sha)) {
+        if (!DigestAlgorithm.SHA_256.isHex(sha)) {
             throw new IOException("Remote sha256sum answered unexpectedly: " + output);
         }
         return sha;

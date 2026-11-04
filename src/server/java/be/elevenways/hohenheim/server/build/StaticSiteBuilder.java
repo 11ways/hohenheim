@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.server.build;
 
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.server.docker.PinnedImages;
-import be.elevenways.hohenheim.server.util.FileTrees;
+import be.elevenways.protoblast.diagnostic.FileTrees;
 import be.elevenways.hohenheim.server.util.Json;
 import org.checkerframework.checker.nullness.qual.NonNull;
 

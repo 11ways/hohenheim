@@ -11,7 +11,7 @@ import be.elevenways.hohenheim.server.database.DatabaseBackups;
 import be.elevenways.hohenheim.server.database.DatabaseContentLock;
 import be.elevenways.hohenheim.server.database.DatabaseRestores;
 import be.elevenways.hohenheim.server.database.DatabaseService;
-import be.elevenways.hohenheim.server.util.FileTrees;
+import be.elevenways.protoblast.diagnostic.FileTrees;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.util.Closeables;

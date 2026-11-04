@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.source.GitRefNames;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.hohenheim.server.DataDirectory;
-import be.elevenways.hohenheim.server.util.FileTrees;
+import be.elevenways.protoblast.diagnostic.FileTrees;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.validation.Violations;
@@ -170,8 +170,9 @@ public final class GitCheckout {
         if (directory == null) {
             return;
         }
-        IOException failure = FileTrees.delete(directory.toPath());
-        if (failure != null) {
+        try {
+            FileTrees.delete(directory.toPath());
+        } catch (IOException failure) {
             Blast.log("CHECKOUT: could not remove", directory.getAbsolutePath(), "-",
                 failure.getMessage());
         }

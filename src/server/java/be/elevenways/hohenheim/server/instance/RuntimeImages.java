@@ -12,7 +12,7 @@ import be.elevenways.hohenheim.server.build.SandboxedBuilds;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostShell;
-import be.elevenways.hohenheim.server.util.FileTrees;
+import be.elevenways.protoblast.diagnostic.FileTrees;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -463,8 +463,9 @@ public final class RuntimeImages {
 
     /** Remove a materialized context; a leftover would keep a whole image tree on disk. */
     private static void deleteTree(@NonNull Path directory) {
-        IOException failure = FileTrees.delete(directory);
-        if (failure != null) {
+        try {
+            FileTrees.delete(directory);
+        } catch (IOException failure) {
             Blast.log("RUNTIME IMAGE: could not clean up", directory.toString(),
                 "-", failure.getMessage());
         }

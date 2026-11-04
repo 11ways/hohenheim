@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.server.docker;
 
 import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.hohenheim.RawValues;
-import be.elevenways.hohenheim.server.util.FileTrees;
+import be.elevenways.protoblast.diagnostic.FileTrees;
 import be.elevenways.hohenheim.server.util.Http11;
 import be.elevenways.hohenheim.server.util.Json;
 import be.elevenways.hohenheim.server.util.PermissionBits;
@@ -322,7 +322,7 @@ public class DockerClient {
         // sandboxed build's output is pinned by. It is verified present and NEVER pulled:
         // treating it as repo "sha256" with a tag would send the digest to a registry as
         // a tag name and fail with an unreadable 404 on every deploy of a built site.
-        if (image.startsWith("sha256:")) {
+        if (ImageIds.isContentAddressed(image)) {
             for (Object entry : listImages()) {
                 if (entry instanceof Map<?, ?> local && image.equals(local.get("Id"))) {
                     return;

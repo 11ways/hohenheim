@@ -18,7 +18,7 @@ import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
 import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
 import be.elevenways.hohenheim.server.util.EnvVars;
-import be.elevenways.hohenheim.server.util.FileTrees;
+import be.elevenways.protoblast.diagnostic.FileTrees;
 import be.elevenways.hohenheim.server.util.UtcStamp;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.Zenit;
@@ -474,14 +474,14 @@ public final class InstanceSnapshots {
             String directory = row.get(InstanceSnapshotModel.DIRECTORY);
             if (directory != null && !directory.isBlank()
                     && Files.exists(Path.of(directory))) {
-                IOException undeletable = FileTrees.delete(Path.of(directory));
-                if (undeletable != null) {
+                try {
+                    FileTrees.delete(Path.of(directory));
+                    Blast.log("SNAPSHOT: reclaimed interrupted capture", id,
+                        "payload at", directory);
+                } catch (IOException undeletable) {
                     Blast.log("SNAPSHOT: could not reclaim interrupted capture", id,
                         "payload at", directory, "- retried at the next boot:",
                         HohenheimViolations.reasonOf(undeletable));
-                } else {
-                    Blast.log("SNAPSHOT: reclaimed interrupted capture", id,
-                        "payload at", directory);
                 }
             }
             String nativeName = row.get(InstanceSnapshotModel.NATIVE_NAME);
@@ -574,8 +574,9 @@ public final class InstanceSnapshots {
      * @throws Violations {@code snapshot_delete_failed} naming the IO error
      */
     private static void requireRemoved(@NonNull Path root, @NonNull String label) {
-        IOException failure = FileTrees.delete(root);
-        if (failure != null) {
+        try {
+            FileTrees.delete(root);
+        } catch (IOException failure) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("snapshot_delete_failed")
                 .withArg("snapshot", label)
                 .withArg("reason", HohenheimViolations.reasonOf(failure)));
