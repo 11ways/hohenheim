@@ -122,7 +122,7 @@ public final class HohenheimSftp {
         PrincipalRef viewer = access.principal().reference();
         boolean operator = HohenheimAccess.isAdmin(access);
         List<SftpSessionInfo> shown = new ArrayList<>();
-        for (SftpSessionInfo session : server.sessions().open()) {
+        for (SftpSessionInfo session : server.sessions().open(access)) {
             if (mount.equals(session.mountName()) && (operator || session.account().equals(viewer))) {
                 shown.add(session);
             }
