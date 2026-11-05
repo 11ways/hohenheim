@@ -12,8 +12,11 @@
 
     <pl-alert variant="warning">{{ t("approval_note", scope: "template_import") }}</pl-alert>
 
-    <pl-card><pl-card-content>
-        <h2>{{ t("catalog_title", scope: "template_import") }}</h2>
+    <pl-card>
+        <pl-card-header>
+            <pl-card-title headingLevel="2">{{ t("catalog_title", scope: "template_import") }}</pl-card-title>
+        </pl-card-header>
+        <pl-card-content>
         <p>{{ t("catalog_help", scope: "template_import") }} <code>{{ catalogRevision }}</code></p>
         <ul class="cms-catalog-apps">
             {% each catalogApps as appKey %}
@@ -25,7 +28,8 @@
                 </li>
             {% /each %}
         </ul>
-    </pl-card-content></pl-card>
+        </pl-card-content>
+    </pl-card>
 
     <form use:Zenit.form={% Zenit.Endpoints.hohenheim.instance_templates_import %}>
         <pl-card><pl-card-content><zf-form-scope><div class="zf-entries">
