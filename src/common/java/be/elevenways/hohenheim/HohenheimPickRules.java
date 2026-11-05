@@ -12,6 +12,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -37,6 +38,17 @@ public final class HohenheimPickRules {
 
     /** Sentinel; constructing each record from common code defeats TeaVM DCE. */
     public static final boolean LOADED = touch();
+
+    private static final Microcopy RUNTIME_IMAGE_NOT_APPLICABLE =
+        HohenheimMicrocopy.INSTANCE.of("runtime_image_not_applicable");
+    private static final Microcopy NO_INCUS_RUNTIME_IMAGE = HohenheimMicrocopy.INSTANCE.of("no_incus_runtime_image");
+    private static final Microcopy NO_ENABLED_RUNTIME_IMAGE =
+        HohenheimMicrocopy.INSTANCE.of("no_enabled_runtime_image");
+    private static final Microcopy NO_EXPOSABLE_INSTANCE = HohenheimMicrocopy.SITE.of("no_exposable_instance");
+    private static final Microcopy INSTANCE_UPSTREAM_NOT_APPLICABLE =
+        HohenheimMicrocopy.SITE.of("instance_upstream_not_applicable");
+    private static final Microcopy ENVIRONMENT_EMPTY_CHOSEN_PROJECT =
+        HohenheimMicrocopy.INSTANCE.of("environment_empty_chosen_project");
 
     private HohenheimPickRules() {}
 
@@ -147,15 +159,15 @@ public final class HohenheimPickRules {
             if (kind == null) {
                 return null;
             }
-            String key;
             if (!this.imageKinds.contains(kind)) {
-                key = "runtime_image_not_applicable";
-            } else if (this.incusOnlyKinds.contains(kind)) {
-                key = "no_incus_runtime_image";
-            } else {
-                key = "no_enabled_runtime_image";
+                return RUNTIME_IMAGE_NOT_APPLICABLE;
             }
-            return HohenheimMicrocopy.INSTANCE.of(key);
+            return this.incusOnlyKinds.contains(kind) ? NO_INCUS_RUNTIME_IMAGE : NO_ENABLED_RUNTIME_IMAGE;
+        }
+
+        @Override
+        public @NonNull Collection<Microcopy> reasons() {
+            return List.of(RUNTIME_IMAGE_NOT_APPLICABLE, NO_INCUS_RUNTIME_IMAGE, NO_ENABLED_RUNTIME_IMAGE);
         }
     }
 
@@ -200,10 +212,12 @@ public final class HohenheimPickRules {
             if (kind == null) {
                 return null;
             }
-            String key = this.instanceKindValue.equals(kind)
-                ? "no_exposable_instance"
-                : "instance_upstream_not_applicable";
-            return HohenheimMicrocopy.SITE.of(key);
+            return this.instanceKindValue.equals(kind) ? NO_EXPOSABLE_INSTANCE : INSTANCE_UPSTREAM_NOT_APPLICABLE;
+        }
+
+        @Override
+        public @NonNull Collection<Microcopy> reasons() {
+            return List.of(NO_EXPOSABLE_INSTANCE, INSTANCE_UPSTREAM_NOT_APPLICABLE);
         }
     }
 
@@ -232,8 +246,12 @@ public final class HohenheimPickRules {
         /** One branch: a chosen project that has no environment yet; an unchosen one leaves the context's reason. */
         @Override
         public @Nullable Microcopy reasonNothingQualifies(@NonNull Map<String, Object> siblingValues) {
-            return chosen(siblingValues, this.projectSibling) == null ? null
-                : HohenheimMicrocopy.INSTANCE.of("environment_empty_chosen_project");
+            return chosen(siblingValues, this.projectSibling) == null ? null : ENVIRONMENT_EMPTY_CHOSEN_PROJECT;
+        }
+
+        @Override
+        public @NonNull Collection<Microcopy> reasons() {
+            return List.of(ENVIRONMENT_EMPTY_CHOSEN_PROJECT);
         }
     }
 }

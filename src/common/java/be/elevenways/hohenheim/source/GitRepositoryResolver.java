@@ -10,6 +10,8 @@ import be.elevenways.zenit.forms.common.edit.SiblingProviderResolver;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -19,6 +21,8 @@ import java.util.Map;
  */
 @HawkeyeClass(alwaysBundle = true)
 public record GitRepositoryResolver() implements SiblingProviderResolver, EmptyNarrowingReason {
+
+    private static final Microcopy NO_REPOSITORIES = HohenheimMicrocopy.GIT_PROVIDER.of("no_repositories");
 
     @Override
     public @Nullable DataProvider resolve(@NonNull Map<String, Object> siblingValues) {
@@ -32,6 +36,11 @@ public record GitRepositoryResolver() implements SiblingProviderResolver, EmptyN
      */
     @Override
     public @Nullable Microcopy reasonNothingQualifies(@NonNull Map<String, Object> siblingValues) {
-        return HohenheimMicrocopy.GIT_PROVIDER.of("no_repositories");
+        return NO_REPOSITORIES;
+    }
+
+    @Override
+    public @NonNull Collection<Microcopy> reasons() {
+        return List.of(NO_REPOSITORIES);
     }
 }
