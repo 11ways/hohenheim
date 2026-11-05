@@ -172,18 +172,20 @@
                 {% /if %}
                 {% /if %}
                 {% if source.webhook != null and source.webhook.secretReveal != null %}
-                <dl class="hh-webhook-fields">
-                    <dt>{{ t("payload_url", scope: "deployments") }}</dt>
-                    <dd>
-                        <code data-webhook-url>{{ source.webhook.url }}</code>
-                        <pl-copy-button value={% source.webhook.url %} ariaLabel={% t("copy_webhook_url", scope: "deployments") %}></pl-copy-button>
-                    </dd>
-                    <dt>{{ t("secret", scope: "deployments") }}</dt>
-                    <dd data-webhook-secret>
-                        <pl-secret-reveal secret={% source.webhook.secretReveal %}
-                                          copyLabel={% t("copy_webhook_secret", scope: "deployments") %}></pl-secret-reveal>
-                    </dd>
-                </dl>
+                <pl-property-list class="hh-webhook-fields" variant="grid">
+                    <pl-property label={% t("payload_url", scope: "deployments") %}>
+                        <span class="hh-webhook-value">
+                            <code data-webhook-url>{{ source.webhook.url }}</code>
+                            <pl-copy-button value={% source.webhook.url %} ariaLabel={% t("copy_webhook_url", scope: "deployments") %}></pl-copy-button>
+                        </span>
+                    </pl-property>
+                    <pl-property label={% t("secret", scope: "deployments") %}>
+                        <span class="hh-webhook-value" data-webhook-secret>
+                            <pl-secret-reveal secret={% source.webhook.secretReveal %}
+                                              copyLabel={% t("copy_webhook_secret", scope: "deployments") %}></pl-secret-reveal>
+                        </span>
+                    </pl-property>
+                </pl-property-list>
                 {% if !source.webhook.autoDeploy %}
                 <pl-alert variant="warning">{{ t("auto_deploy_disabled", scope: "deployments") }}</pl-alert>
                 {% /if %}

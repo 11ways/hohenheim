@@ -435,34 +435,25 @@
         }
     }
 
-    // Push-webhook config card (site Deployments tab)
+    // Push-webhook config card (site Deployments tab): plumage's facts grid; a value is its code chip and its copy
+    // button on one line.
     .hh-webhook-fields {
-        display: grid;
-        grid-template-columns: max-content 1fr;
-        gap: var(--pl-space-sm) var(--pl-space-lg);
+        margin-block-end: var(--pl-space-md);
+    }
+
+    .hh-webhook-value {
+        display: flex;
         align-items: center;
-        margin: 0 0 var(--pl-space-md);
+        gap: var(--pl-space-sm);
+        min-width: 0;
 
-        dt {
-            font-weight: var(--pl-font-weight-medium);
-            font-size: var(--pl-font-size-sm);
-        }
-
-        dd {
-            display: flex;
-            align-items: center;
-            gap: var(--pl-space-sm);
-            margin: 0;
-            min-width: 0;
-
-            code {
-                font-size: var(--pl-font-size-xs);
-                background: var(--pl-color-surface);
-                border: 1px solid var(--pl-color-border);
-                border-radius: var(--pl-radius-sm);
-                padding: var(--pl-space-2xs, 0.125rem) var(--pl-space-xs);
-                overflow-wrap: anywhere;
-            }
+        code {
+            font-size: var(--pl-font-size-xs);
+            background: var(--pl-color-surface);
+            border: 1px solid var(--pl-color-border);
+            border-radius: var(--pl-radius-sm);
+            padding: var(--pl-space-2xs, 0.125rem) var(--pl-space-xs);
+            overflow-wrap: anywhere;
         }
     }
 

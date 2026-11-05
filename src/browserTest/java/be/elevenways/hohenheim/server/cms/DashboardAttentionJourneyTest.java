@@ -1046,9 +1046,10 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             assertThat(page).as("step 3: the band reads the verdict in proper sentences")
                 .contains("data-cms-record-health=\"attention\"").contains("Cannot start yet").contains(refusal)
                 .doesNotContain("yet; Check").doesNotContain("Could not start");
-            int status = page.indexOf("widget-facts-term\">Status</dt>");
-            assertThat(status).as("step 3: Details has a Status").isNotNegative();
-            assertThat(page.substring(status, page.indexOf("</dd>", status)))
+            Matcher status = Pattern.compile("class=\"label\"[^>]*>(?:<!--[^>]*-->)*Status(?:<!--[^>]*-->)*</span>")
+                .matcher(page);
+            assertThat(status.find()).as("step 3: Details has a Status").isTrue();
+            assertThat(page.substring(status.start(), page.indexOf("</pl-property>", status.start())))
                 .as("step 3: the Status is the band's verdict in its one word, not the stored error")
                 .contains("Needs attention").doesNotContain("Error");
             assertThat(page).as("step 3: Recent still lists the old failed start")

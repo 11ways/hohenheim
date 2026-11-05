@@ -57,6 +57,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -527,7 +529,7 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
             status(id, InstanceModel.STATUS_RUNNING);
             started(id);
             assertThat(adminGet("/admin/instances/" + id + "/page/overview").body())
-                .as("step 1: its last start is named").contains(STARTED_FACT);
+                .as("step 1: its last start is named").containsPattern(STARTED_FACT);
 
             // 2. Its next start fails: the stored status says error, the verdict reads a start that failed with why,
             //    and Started names no older start beside it.
@@ -544,7 +546,7 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
             status(id, InstanceModel.STATUS_RUNNING);
             assertThat(adminGet("/admin/instances/" + id + "/page/overview").body())
                 .as("step 2: no start is named after a failed one, even for a stale running claim")
-                .doesNotContain(STARTED_FACT);
+                .doesNotContainPattern(STARTED_FACT);
 
             // 3. Hohenheim correcting a stored status is bookkeeping: its rows stay out of Recent (the full log lists
             //    them through the internal filter), so Recent reads what happened, the failed start.
@@ -594,7 +596,7 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
             assertThat(down).as("step 4: the band says visitors get an error page because of the database")
                 .contains("Visitors get an error page")
                 .contains("Its database app-journey-verdict-db is not running.");
-            assertThat(down).as("step 4: it started, so Started names that start").contains(STARTED_FACT);
+            assertThat(down).as("step 4: it started, so Started names that start").containsPattern(STARTED_FACT);
         } finally {
             for (int i = cleanup.size() - 1; i >= 0; i--) {
                 cleanup.get(i).run();
@@ -874,12 +876,16 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
             TenantConduits.operator()).headline().key();
     }
 
-    /** @return the Details card's Status fact of an overview page, its term through its value */
+    /** @return the Details card's Status fact of an overview page, its label through its value */
     private static String statusFact(String page) {
-        int status = page.indexOf("widget-facts-term\">Status</dt>");
-        assertThat(status).as("the overview draws a Status fact").isNotNegative();
-        return page.substring(status, page.indexOf("</dd>", status));
+        Matcher status = STATUS_FACT.matcher(page);
+        assertThat(status.find()).as("the overview draws a Status fact").isTrue();
+        return page.substring(status.start(), page.indexOf("</pl-property>", status.start()));
     }
+
+    /** The Details card's Status fact: the facts grid row's label. */
+    private static final Pattern STATUS_FACT =
+        Pattern.compile("class=\"label\"[^>]*>(?:<!--[^>]*-->)*Status(?:<!--[^>]*-->)*</span>");
 
     /** @return a put-online run of this record left open, as one still starting it leaves it */
     private static Row openRun(int instanceId) {
@@ -900,8 +906,9 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
             .assign(InstanceModel.STATUS, status).bypassBehaviours().updateAll();
     }
 
-    /** The Details card's Started fact, drawn only while a start is known. */
-    private static final String STARTED_FACT = "widget-facts-term\">Started</dt>";
+    /** The Details card's Started fact, drawn only while a start is known: a pattern over the page. */
+    private static final String STARTED_FACT =
+        "class=\"label\"[^>]*>(?:<!--[^>]*-->)*Started(?:<!--[^>]*-->)*</span>";
 
     /** Stamps a start on the record now, as a deploy's outcome stamp does. */
     private static void started(int instanceId) {
