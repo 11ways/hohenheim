@@ -595,7 +595,7 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
         // AIDEV-NOTE: the split is positional because the menu's items are PORTALLED to
         // the end of the document (he-bottom) while the strip's anchors stay in place.
         // The load-bearing half is therefore what is NOT in the strip window.
-        int more = page.indexOf("cms-record-tabs-more");
+        int more = page.indexOf("pl-nav-more");
         assertThat(more).as("step 1: the strip renders its More disclosure").isGreaterThan(-1);
         String strip = page.substring(page.indexOf("cms-record-tabs"), more);
         String menu = page.substring(more);

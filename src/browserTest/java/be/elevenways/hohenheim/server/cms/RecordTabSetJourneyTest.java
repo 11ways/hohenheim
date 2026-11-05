@@ -40,7 +40,7 @@ class RecordTabSetJourneyTest extends HohenheimHttpTestBase {
         try {
             // 1. The strip keeps the daily tabs in view, in order, and folds the housekeeping into More.
             String overview = adminGet(record + "/page/overview").body();
-            int more = overview.indexOf("cms-record-tabs-more");
+            int more = overview.indexOf("pl-nav-more");
             assertThat(more).as("step 1: the strip renders its More menu").isGreaterThan(-1);
             String strip = overview.substring(overview.indexOf("cms-record-tabs"), more);
             InOrder.assertThat(strip).as("step 1: overview, console, files, metrics and backups stay on the strip")
@@ -148,7 +148,7 @@ class RecordTabSetJourneyTest extends HohenheimHttpTestBase {
             String overview = adminGet(siteRecord + "/page/overview").body();
             // Bounded to the strip itself: the command palette later in the page names the Domains cluster.
             int stripStart = overview.indexOf("cms-record-tabs");
-            String strip = overview.substring(stripStart, overview.indexOf("</pl-scroll-nav>", stripStart));
+            String strip = overview.substring(stripStart, overview.indexOf("</pl-nav>", stripStart));
             InOrder.assertThat(strip).as("step 2: overview, addresses and protection, in that order")
                 .contains(siteRecord + "/page/overview", siteRecord + "/page/" + SiteParts.DOMAINS_TAB,
                     siteRecord + "/page/" + HohenheimSlugs.PROTECTED_PATHS);
