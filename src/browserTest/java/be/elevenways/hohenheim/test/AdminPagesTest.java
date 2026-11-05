@@ -82,7 +82,7 @@ class AdminPagesTest extends HohenheimTestBase {
         int year = moment.atZone(viewer).getYear();
         String yearPart = year == Now.instant().atZone(viewer).getYear() ? "" : "\\h" + year;
         return "\\p{L}+,?\\h\\d{1,2}\\h\\p{L}+" + yearPart
-            + "\\h\\d{1,2}:\\d{2}(\\h?\\p{L}+)?(\\h\\([^)]+\\))?\\h\\(.+ from now\\)";
+            + "\\h\\d{1,2}:\\d{2}(\\h?\\p{L}+)?(\\h\\([^)]+\\))?\\h\\(in .+\\)";
     }
 
     /** @return the zone the open page reads moments in: the viewer's stamped zone cookie, else the office zone */

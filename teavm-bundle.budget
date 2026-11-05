@@ -28,5 +28,8 @@
 # 2026-10-30: the framework work since 2026-10-25 (zenit-cms's own resource list and list row templates in place
 # of Tpl_PagesResourceList, zenit-forms' fuzzy date input) plus the instance deploys tab: the breach was 735 gzip
 # bytes over; raw 8725432 -> 9123840, gzip 2177992 -> 2287627. Standard 5 percent headroom.
-cms.js.raw=9580032 measured=9123840
-cms.js.gzip=2402009 measured=2287627
+# 2026-11-05: the framework work since 2026-10-30 plus plumage cards for settings groups and sharing rows: the
+# breach was 60943 raw bytes over (gzip under); raw 9123840 -> 9640922, gzip 2287627 -> 2330939. Standard 5 percent
+# headroom.
+cms.js.raw=10122969 measured=9640922
+cms.js.gzip=2447486 measured=2330939
