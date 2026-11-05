@@ -60,6 +60,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleStepModel;
+import be.elevenways.zenit.test.support.DryAnswers;
 import be.elevenways.zenit.test.support.EndpointConduit;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.server.panel.PanelActionOffers;
@@ -653,7 +654,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
     private InlineEditState cellState(String path) throws Exception {
         var response = adminGet(path);
         assertThat(response.statusCode()).as("the cell state answered").isEqualTo(200);
-        return (InlineEditState) Zenit.DRY.parse(response.body());
+        return (InlineEditState) DryAnswers.valueOf(response);
     }
 
     /**

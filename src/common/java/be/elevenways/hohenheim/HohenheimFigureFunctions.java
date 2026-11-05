@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim;
 
 import be.elevenways.hawkeye.common.annotation.Arg;
+import be.elevenways.hawkeye.common.annotation.ClientCopy;
 import be.elevenways.hawkeye.common.annotation.HawkeyeFunction;
+import be.elevenways.hawkeye.common.copy.CopySet;
 import be.elevenways.hawkeye.common.customelement.CustomElement;
 import be.elevenways.hawkeye.common.lambda.LambdaReference1;
 import be.elevenways.hawkeye.common.render.RenderContext;
@@ -14,6 +16,9 @@ import be.elevenways.zenit.common.ui.BadgeVariant;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -45,7 +50,27 @@ public final class HohenheimFigureFunctions {
     /** Wire key of the ceiling the answer reports, 0 when it names none. */
     public static final String CAPACITY_KEY = "capacity";
 
+    private static final Microcopy NOT_ANSWERING = HohenheimMicrocopy.STATUS_PROBE.of("not_answering");
+
+    private static final Microcopy CHECKING = HohenheimMicrocopy.STATUS_PROBE.of("checking");
+
     private HohenheimFigureFunctions() {
+    }
+
+    /** Every word a live figure can say: each probe's answer, each state an instance not running is in, the rest. */
+    public static final class Words implements CopySet {
+        @Override
+        public @NonNull Collection<Microcopy> words() {
+            List<Microcopy> words = new ArrayList<>(List.of(NOT_ANSWERING, CHECKING));
+            for (StatusProbe probe : StatusProbe.values()) {
+                words.add(probe.figure(0, 1));
+                words.add(probe.figure(0, 0));
+            }
+            for (InstanceStatus status : InstanceStatus.values()) {
+                words.add(status.label());
+            }
+            return words;
+        }
     }
 
     /**
@@ -131,19 +156,20 @@ public final class HohenheimFigureFunctions {
         arguments = @Arg(name = "figure", required = false, type = Map.class, expectsReference = false,
                          description = "The newest figure map, or null")
     )
+    @ClientCopy(Words.class)
     public static @NonNull Microcopy words(@Nullable Object figure) {
         return switch (stateOf(figure)) {
             case ANSWERING -> {
                 StatusProbe probe = StatusProbe.forToken(((Map<?, ?>) figure).get(PROBE_KEY));
-                yield probe == null ? HohenheimMicrocopy.STATUS_PROBE.of("not_answering")
+                yield probe == null ? NOT_ANSWERING
                     : probe.figure(count(figure, ONLINE_KEY), count(figure, CAPACITY_KEY));
             }
-            case SILENT -> HohenheimMicrocopy.STATUS_PROBE.of("not_answering");
+            case SILENT -> NOT_ANSWERING;
             case NOT_RUNNING -> {
                 InstanceStatus status = InstanceStatus.forToken(String.valueOf(((Map<?, ?>) figure).get(STATUS_KEY)));
-                yield status == null ? HohenheimMicrocopy.STATUS_PROBE.of("checking") : status.label();
+                yield status == null ? CHECKING : status.label();
             }
-            case WAITING -> HohenheimMicrocopy.STATUS_PROBE.of("checking");
+            case WAITING -> CHECKING;
         };
     }
 

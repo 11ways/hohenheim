@@ -37,6 +37,7 @@ import be.elevenways.zenit.common.flash.FlashNotice;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
+import be.elevenways.zenit.test.support.DryAnswers;
 import be.elevenways.zenit.test.support.FlashHandoff;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.zenit.test.support.ServedAppBinding;
@@ -414,7 +415,7 @@ public abstract class HohenheimTestBase extends ZenitBrowserTestBase {
     /** @return the value a 200 reveal answered, decoded from its DRY body */
     protected static @NonNull String revealedValue(@NonNull HttpResponse<String> answer) {
         assertThat(answer.statusCode()).as("the reveal answered").isEqualTo(200);
-        return String.valueOf(Zenit.DRY.parse(answer.body()));
+        return String.valueOf(DryAnswers.valueOf(answer));
     }
 
     protected HttpResponse<String> keyGet(String key, String path) throws Exception {

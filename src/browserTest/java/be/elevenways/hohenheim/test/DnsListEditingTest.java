@@ -18,6 +18,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.forms.common.choose.InlineCreateResult;
 import be.elevenways.zenit.server.http.ReturnTarget;
+import be.elevenways.zenit.test.support.DryAnswers;
 import com.microsoft.playwright.options.ViewportSize;
 import org.junit.jupiter.api.Test;
 
@@ -676,7 +677,7 @@ class DnsListEditingTest extends HohenheimTestBase {
         HttpResponse<String> response = httpPostDry(RECORD_SOURCE,
             Zenit.DRY.stringify(values), sessionToken, csrfToken);
         assertThat(response.statusCode()).as("the inline-create lane answered").isEqualTo(status);
-        return (InlineCreateResult) Zenit.DRY.parse(response.body());
+        return (InlineCreateResult) DryAnswers.valueOf(response);
     }
 
     private InlineEditState cellState(String path) throws Exception {
@@ -686,7 +687,7 @@ class DnsListEditingTest extends HohenheimTestBase {
     private InlineEditState cellState(String path, String session) throws Exception {
         HttpResponse<String> response = httpGet(path, session);
         assertThat(response.statusCode()).as("the cell state answered").isEqualTo(200);
-        return (InlineEditState) Zenit.DRY.parse(response.body());
+        return (InlineEditState) DryAnswers.valueOf(response);
     }
 
     private InlineEditResult cellSubmit(int recordId, InlineEditSubmit submit) throws Exception {
@@ -709,7 +710,7 @@ class DnsListEditingTest extends HohenheimTestBase {
         HttpResponse<String> response = httpPostDry(path, Zenit.DRY.stringify(submit),
             session.token(), session.csrf());
         assertThat(response.statusCode()).as("the cell lane answered").isEqualTo(status);
-        return (InlineEditResult) Zenit.DRY.parse(response.body());
+        return (InlineEditResult) DryAnswers.valueOf(response);
     }
 
     // --- fixtures ---------------------------------------------------------------------

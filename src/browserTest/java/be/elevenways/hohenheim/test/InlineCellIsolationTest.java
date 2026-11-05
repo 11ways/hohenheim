@@ -51,6 +51,7 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.forms.common.choose.InlineCreateFieldState;
 import be.elevenways.zenit.forms.common.render.FormOptionState;
+import be.elevenways.zenit.test.support.DryAnswers;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
@@ -290,7 +291,7 @@ class InlineCellIsolationTest extends HohenheimHttpTestBase {
         HttpResponse<String> response = httpGet(path, sessionToken);
         assertThat(response.statusCode()).as("the cell state of " + path + " answered")
             .isEqualTo(200);
-        return (InlineEditState) Zenit.DRY.parse(response.body());
+        return (InlineEditState) DryAnswers.valueOf(response);
     }
 
     private InlineEditResult cellSubmit(Target target, int id, InlineEditSubmit submit)
@@ -300,7 +301,7 @@ class InlineCellIsolationTest extends HohenheimHttpTestBase {
             sessionToken, csrfToken);
         assertThat(response.statusCode()).as("the cell lane of " + path + " answered")
             .isEqualTo(200);
-        return (InlineEditResult) Zenit.DRY.parse(response.body());
+        return (InlineEditResult) DryAnswers.valueOf(response);
     }
 
     // --- fixtures ---------------------------------------------------------------------
