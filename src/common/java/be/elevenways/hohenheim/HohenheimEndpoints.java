@@ -274,6 +274,7 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic(HohenheimSlugs.ADMIN).addDelimiter().addStatic(HohenheimSlugs.GIT_PROVIDERS).addDelimiter()
             .addParameter(PROVIDER_ID).addDelimiter().addStatic("repositories").build())
+        .query(PROVIDER_TEXT)
         .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .rateLimit(PROVIDER_BROWSE_LIMIT)
         .build();
@@ -283,6 +284,7 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic(HohenheimSlugs.ADMIN).addDelimiter().addStatic(HohenheimSlugs.GIT_PROVIDERS).addDelimiter()
             .addParameter(PROVIDER_ID).addDelimiter().addStatic("branches").build())
+        .query(PROVIDER_TEXT, PROVIDER_REPOSITORY)
         .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .rateLimit(PROVIDER_BROWSE_LIMIT)
         .build();

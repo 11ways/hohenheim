@@ -53,7 +53,7 @@ final class GitProviderHandlers {
 
         HohenheimEndpoints.GIT_PROVIDER_BRANCHES.setHandler(conduit -> {
             Integer providerId = conduit.getParameter(HohenheimEndpoints.PROVIDER_ID);
-            String repository = conduit.getQueryParam(HohenheimEndpoints.PROVIDER_REPOSITORY.getName());
+            String repository = conduit.getParameter(HohenheimEndpoints.PROVIDER_REPOSITORY);
             if (repository == null || repository.isBlank()) {
                 conduit.badRequest("repository required");
                 return null;
@@ -76,7 +76,7 @@ final class GitProviderHandlers {
 
     /** The optional search text, trimmed and lower-cased; "" when absent. */
     private static @NonNull String searchText(@NonNull Conduit conduit) {
-        String value = conduit.getQueryParam(HohenheimEndpoints.PROVIDER_TEXT.getName());
+        String value = conduit.getParameter(HohenheimEndpoints.PROVIDER_TEXT);
         return BlastString.lower(trimmed(value));
     }
 

@@ -2,6 +2,11 @@ package be.elevenways.hohenheim.test.source;
 
 import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.zenit.common.data.DataItem;
+import be.elevenways.zenit.common.data.DataPage;
+import be.elevenways.zenit.common.result.ActionResult;
+import be.elevenways.zenit.test.support.EndpointConduit;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.server.source.GithubProviderKind;
 import be.elevenways.hohenheim.model.GitProviderModel;
@@ -323,6 +328,32 @@ class GitProviderClientTest {
         assertThat(REDIRECT_TARGET_HITS.get())
             .as("the Authorization header never walked to the redirect target")
             .isZero();
+    }
+
+    @Test
+    void theBranchPickerReadsItsRepositoryAndTextFromTheQuery() {
+        var providers = Models.get(GitProviderModel.class);
+        Row provider = providers.createEmptyRow();
+        provider.set(GitProviderModel.NAME, "picker");
+        provider.set(GitProviderModel.KIND, GithubProviderKind.ID.toString());
+        provider.set(GitProviderModel.BASE_URL, base);
+        provider.set(GitProviderModel.ACCESS_TOKEN, "pat-token");
+        providers.save(provider);
+        int id = provider.get(GitProviderModel.ID);
+
+        // 1. The declared repository and search text ride the query string; the text narrows the branches.
+        EndpointConduit narrowed = EndpointConduit.at("/branches").setParameter(HohenheimEndpoints.PROVIDER_ID, id)
+            .setQueryParam(HohenheimEndpoints.PROVIDER_REPOSITORY.getName(), "acme/app")
+            .setQueryParam(HohenheimEndpoints.PROVIDER_TEXT.getName(), " DE ");
+        ActionResult<DataPage> page = narrowed.handle(HohenheimEndpoints.GIT_PROVIDER_BRANCHES);
+        assertThat(page).as("step 1: answered").isNotNull();
+        assertThat(page.get().items()).extracting(DataItem::value).as("step 1: only the matching branch")
+            .containsExactly("dev");
+
+        // 2. Without a repository the listing is a bad request, the provider never asked.
+        EndpointConduit bare = EndpointConduit.at("/branches").setParameter(HohenheimEndpoints.PROVIDER_ID, id);
+        bare.handle(HohenheimEndpoints.GIT_PROVIDER_BRANCHES);
+        assertThat(bare.status).as("step 2: a repository is required").isEqualTo(400);
     }
 
 }
