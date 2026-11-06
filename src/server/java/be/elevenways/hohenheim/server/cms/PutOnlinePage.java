@@ -16,7 +16,6 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceDevices;
 import be.elevenways.hohenheim.upstream.UpstreamKindInfo;
 import be.elevenways.hohenheim.upstream.UpstreamKinds;
-import be.elevenways.hohenheim.RawValues;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -30,6 +29,7 @@ import be.elevenways.zenit.cms.server.page.PageActions;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
+import be.elevenways.zenit.common.routing.ParameterDefinition;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
@@ -141,6 +141,12 @@ public final class PutOnlinePage extends PanelPage {
     @Override public @NonNull Identifier id() { return HohenheimIds.id("put_online"); }
     @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.PUT_ONLINE.of("put_online"); }
     @Override public @NonNull String slug() { return HohenheimSlugs.PUT_ONLINE; }
+
+    @Override
+    public @NonNull List<ParameterDefinition<?>> queryParameters() {
+        return List.of(HohenheimParams.PUT_ONLINE_KIND, HohenheimParams.FROM_TEMPLATE_TEMPLATE,
+            HohenheimParams.PUT_ONLINE_WORKLOAD, HohenheimParams.PUT_ONLINE_REACH, HohenheimParams.PUT_ONLINE_CHOICE);
+    }
     @Override public @NonNull Icon icon() { return Icon.of("rocket"); }
     @Override public boolean showInNav() { return false; }
     @Override public @NonNull String standsUnder() { return HohenheimSlugs.APPS; }
@@ -163,13 +169,13 @@ public final class PutOnlinePage extends PanelPage {
         vars.put("title", resolve(label(), request));
         vars.put("lead", HohenheimMicrocopy.PUT_ONLINE.of("lead"));
         vars.put("cancelTarget", CmsRoutes.list(request.panelSlug(), HohenheimSlugs.APPS));
-        String kind = request.conduit().getQueryParam(HohenheimParams.PUT_ONLINE_KIND.getName());
-        String template = request.conduit().getQueryParam(HohenheimParams.FROM_TEMPLATE_TEMPLATE.getName());
-        String workload = request.conduit().getQueryParam(HohenheimParams.PUT_ONLINE_WORKLOAD.getName());
+        String kind = request.conduit().getParameter(HohenheimParams.PUT_ONLINE_KIND);
+        Integer template = request.conduit().getParameter(HohenheimParams.FROM_TEMPLATE_TEMPLATE);
+        String workload = request.conduit().getParameter(HohenheimParams.PUT_ONLINE_WORKLOAD);
         PutOnlineReach reach = askedReach(workload,
-            request.conduit().getQueryParam(HohenheimParams.PUT_ONLINE_REACH.getName()));
+            request.conduit().getParameter(HohenheimParams.PUT_ONLINE_REACH));
         PanelAction<Object> workloadAction = reach == null ? null : kindAction(workload, reach);
-        if (template != null && !template.isBlank()) {
+        if (template != null) {
             PanelAction<Row> templateAction = templateAction(template);
             PageActions.Opened opened = PageActions.open(request, this, templateAction.id());
             if (opened instanceof PageActions.Form form) {
@@ -224,7 +230,7 @@ public final class PutOnlinePage extends PanelPage {
             Map<String, RouteTarget> targets = new LinkedHashMap<>();
             List<Map<String, Object>> groups = groups(request, targets);
             // The chooser posts its pick back here as ?choice=: a known value opens its flow, anything else redraws.
-            String choice = request.conduit().getQueryParam(HohenheimParams.PUT_ONLINE_CHOICE.getName());
+            String choice = request.conduit().getParameter(HohenheimParams.PUT_ONLINE_CHOICE);
             RouteTarget chosen = choice == null ? null : targets.get(choice);
             if (chosen != null) {
                 return request.conduit().softRedirect(chosen);
@@ -363,9 +369,8 @@ public final class PutOnlinePage extends PanelPage {
      * The flow a template is put online by, from how its workload is reached ({@link PutOnline#reachOf}): a service
      * gets its Ports step; a website, and a machine whose address the operator may still give, the address flow.
      */
-    private static @NonNull PanelAction<Row> templateAction(@NonNull String templateId) {
-        Integer id = RawValues.parsedInt(templateId);
-        Row template = id == null ? null : Models.get(InstanceTemplateModel.class).findById(id);
+    private static @NonNull PanelAction<Row> templateAction(@NonNull Integer templateId) {
+        Row template = Models.get(InstanceTemplateModel.class).findById(templateId);
         if (template == null) {
             return FROM_TEMPLATE;
         }

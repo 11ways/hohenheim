@@ -29,6 +29,7 @@ import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.EnumField;
+import be.elevenways.zenit.common.routing.Endpoint;
 import be.elevenways.zenit.common.routing.ParameterDefinition;
 import be.elevenways.zenit.common.routing.RouteLocales;
 import be.elevenways.zenit.common.routing.RouteScope;
@@ -38,6 +39,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static be.elevenways.hohenheim.RawValues.parsedInt;
@@ -265,23 +267,26 @@ public final class CmsSupport {
     }
 
     /**
-     * THE read of a declared create-form prefill parameter off the request's query string.
+     * THE read of a declared create-form prefill parameter off the request's query string, text trimmed.
      *
-     * AIDEV-NOTE: {@code Conduit.getParameter(definition)} only answers parameters DECLARED on
-     * the matched route, and a prefill rides the generic CMS create route, which declares none
-     * of Hohenheim's -- so this reads the query value by the definition's own name and resolves
-     * it through the definition's own resolver. The name and the parse therefore have ONE home
-     * (HohenheimParams), shared with the links that compose the same parameter.
+     * AIDEV-NOTE: a prefill rides the generic CMS create route (or a tab, page or action route), which declares none
+     * of Hohenheim's parameters, so it is declared on whichever route answers right before the read: the name and
+     * the parse keep ONE home (HohenheimParams), and a malformed value is BAD_REQUEST.
      *
      * @param conduit the request, null for a caller without one (a create default asked by a task)
-     * @return the resolved value, or null when there is no request or the parameter is absent, blank or malformed
+     * @return the resolved value, or null when there is no request or the parameter is absent or blank
      */
+    @SuppressWarnings("unchecked")
     public static <T> @Nullable T prefill(@Nullable Conduit conduit, @NonNull ParameterDefinition<T> param) {
-        String raw = conduit != null ? conduit.getQueryParam(param.getName()) : null;
-        if (raw == null || raw.isBlank()) {
+        if (conduit == null) {
             return null;
         }
-        return param.parse(raw.trim());
+        Endpoint.declareQueryOn(conduit, List.of(param));
+        T value = conduit.getParameter(param);
+        if (value instanceof String text) {
+            return text.isBlank() ? null : (T) text.trim();
+        }
+        return value;
     }
 
     /**
