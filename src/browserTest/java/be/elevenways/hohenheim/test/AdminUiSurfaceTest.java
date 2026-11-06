@@ -420,12 +420,15 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
             .as("step 1: the fixture declares no install step")
             .isEqualTo(InstanceModel.INSTALL_NONE);
 
-        // 2. So neither the fleet list nor the record's state band spends a badge on it.
-        assertThat(adminGet("/admin/instances?filter.name=ui-surface").body())
+        // 2. So neither the fleet list nor the record's state band spends a badge on it. Read off the RENDERED markup:
+        //    the page's script payloads (the microcopy seed, the hydration state) carry every label the client may
+        //    draw, "No install step" among them, which is no badge and would make every step here pass or fail for
+        //    the wrong reason.
+        assertThat(rendered(adminGet("/admin/instances?filter.name=ui-surface").body()))
             .as("step 2: no per-row 'no install step' badge")
             .doesNotContain("No install step");
-        String quietOverview = adminGet("/admin/instances/" + workspaceId
-            + "/page/overview").body();
+        String quietOverview = rendered(adminGet("/admin/instances/" + workspaceId
+            + "/page/overview").body());
         assertThat(quietOverview).as("step 2: nor one in the record's Details card")
             .doesNotContain("No install step");
         assertThat(quietOverview)
@@ -438,17 +441,17 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
             //    reads on both surfaces.
             workspace.set(InstanceModel.INSTALL_STATE, InstanceModel.INSTALL_PENDING);
             instances.save(workspace);
-            assertThat(adminGet("/admin/instances?filter.name=ui-surface-workspace").body())
+            assertThat(rendered(adminGet("/admin/instances?filter.name=ui-surface-workspace").body()))
                 .as("step 3: a pending install still reads under the status pill")
                 .contains("Install pending");
-            assertThat(adminGet("/admin/instances/" + workspaceId + "/page/overview").body())
+            assertThat(rendered(adminGet("/admin/instances/" + workspaceId + "/page/overview").body()))
                 .as("step 3: and in the Details card")
                 .contains("Install pending");
 
             // 4. FALSIFICATION 2: a failed install is never quietly dropped.
             workspace.set(InstanceModel.INSTALL_STATE, InstanceModel.INSTALL_FAILED);
             instances.save(workspace);
-            assertThat(adminGet("/admin/instances/" + workspaceId + "/page/overview").body())
+            assertThat(rendered(adminGet("/admin/instances/" + workspaceId + "/page/overview").body()))
                 .as("step 4: a failed install keeps its own wording")
                 .contains("Install failed");
         } finally {
@@ -457,9 +460,14 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
         }
 
         // 5. Back to the majority case, and the list is quiet again.
-        assertThat(adminGet("/admin/instances?filter.name=ui-surface").body())
+        assertThat(rendered(adminGet("/admin/instances?filter.name=ui-surface").body()))
             .as("step 5: the badge leaves with the lifecycle")
             .doesNotContain("No install step");
+    }
+
+    /** @return the page's markup without its script elements, whose payloads are data and never drawn */
+    private static String rendered(String html) {
+        return html.replaceAll("(?s)<script\\b[^>]*>.*?</script>", "");
     }
 
     /**
