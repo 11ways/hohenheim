@@ -29,7 +29,8 @@ import be.elevenways.zenit.cms.server.page.PageActions;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
-import be.elevenways.zenit.common.routing.ParameterDefinition;
+import be.elevenways.zenit.common.routing.Endpoint;
+import be.elevenways.zenit.common.routing.MalformedQuery;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
@@ -141,12 +142,6 @@ public final class PutOnlinePage extends PanelPage {
     @Override public @NonNull Identifier id() { return HohenheimIds.id("put_online"); }
     @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.PUT_ONLINE.of("put_online"); }
     @Override public @NonNull String slug() { return HohenheimSlugs.PUT_ONLINE; }
-
-    @Override
-    public @NonNull List<ParameterDefinition<?>> queryParameters() {
-        return List.of(HohenheimParams.PUT_ONLINE_KIND, HohenheimParams.FROM_TEMPLATE_TEMPLATE,
-            HohenheimParams.PUT_ONLINE_WORKLOAD, HohenheimParams.PUT_ONLINE_REACH, HohenheimParams.PUT_ONLINE_CHOICE);
-    }
     @Override public @NonNull Icon icon() { return Icon.of("rocket"); }
     @Override public boolean showInNav() { return false; }
     @Override public @NonNull String standsUnder() { return HohenheimSlugs.APPS; }
@@ -165,6 +160,10 @@ public final class PutOnlinePage extends PanelPage {
 
     @Override
     public @NonNull ActionResult<?> render(@NonNull PanelRequest request) {
+        // Every step choice only steers what the page shows: a stale or edited one redraws the chooser.
+        Endpoint.declareQueryOn(request.conduit(), MalformedQuery.ABSENT, List.of(HohenheimParams.PUT_ONLINE_KIND,
+            HohenheimParams.FROM_TEMPLATE_TEMPLATE, HohenheimParams.PUT_ONLINE_WORKLOAD,
+            HohenheimParams.PUT_ONLINE_REACH, HohenheimParams.PUT_ONLINE_CHOICE));
         Map<String, Object> vars = new HashMap<>();
         vars.put("title", resolve(label(), request));
         vars.put("lead", HohenheimMicrocopy.PUT_ONLINE.of("lead"));

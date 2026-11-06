@@ -95,6 +95,7 @@ import be.elevenways.zenit.common.orm.query.rules.RelationRules;
 import be.elevenways.zenit.common.orm.query.rules.RuleVocabulary;
 import be.elevenways.zenit.common.orm.query.rules.SchemaVocabulary;
 import be.elevenways.zenit.common.orm.query.rules.VariableDefinition;
+import be.elevenways.zenit.common.routing.MalformedQuery;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
@@ -403,7 +404,7 @@ public final class InstanceParts {
      */
     private static @NonNull Map<String, Object> createDefaults(@NonNull AccessContext access) {
         Map<String, Object> values = new LinkedHashMap<>(createForm().defaultValues());
-        String kind = CmsSupport.prefill(access.conduit(), HohenheimParams.PUT_ONLINE_KIND);
+        String kind = CmsSupport.prefill(access.conduit(), MalformedQuery.ABSENT, HohenheimParams.PUT_ONLINE_KIND);
         Identifier kindId = kind == null ? null : Identifier.tryParse(kind);
         if (kindId != null && InstanceKindRegistry.registry().get(kindId) instanceof InstanceKindInfo info
                 && info.putOnlineGroup() != null) {

@@ -38,7 +38,8 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.routing.BoundEndpoint;
-import be.elevenways.zenit.common.routing.ParameterDefinition;
+import be.elevenways.zenit.common.routing.Endpoint;
+import be.elevenways.zenit.common.routing.MalformedQuery;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
@@ -71,11 +72,6 @@ public final class InstanceFilesPage implements RecordTab.Rendered<Row> {
     @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.INSTANCE.of("files"); }
     @Override public @NonNull String slug() { return HohenheimSlugs.Tab.FILES; }
     @Override public @NonNull Icon icon() { return Icon.of("folder-tree"); }
-
-    @Override
-    public @NonNull List<ParameterDefinition<?>> queryParameters() {
-        return List.of(HohenheimParams.FILES_PATH, HohenheimParams.FILES_EDIT);
-    }
 
     /**
      * The tab exists only for a principal that may actually READ this record's files.
@@ -129,6 +125,8 @@ public final class InstanceFilesPage implements RecordTab.Rendered<Row> {
         putSftpCard(vars, conduit, accessContext, instanceId);
 
         String panel = request.panelSlug();
+        Endpoint.declareQueryOn(conduit, MalformedQuery.ABSENT,
+            List.of(HohenheimParams.FILES_PATH, HohenheimParams.FILES_EDIT));
         String requested = conduit.getParameter(HohenheimParams.FILES_PATH);
         String editing = conduit.getParameter(HohenheimParams.FILES_EDIT);
         try {

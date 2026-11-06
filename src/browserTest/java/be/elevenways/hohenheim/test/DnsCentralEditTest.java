@@ -374,6 +374,7 @@ class DnsCentralEditTest extends HohenheimTestBase {
         Row admin = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         Conduit conduit = EndpointConduit.at("/admin/dns-zones/" + zoneId + "/page/records")
             .withAttribute(ConduitAttributes.PRINCIPAL, new UserPrincipal(admin.get(UserModel.ID), "Test Admin"))
+            .withAttribute(ConduitAttributes.ANSWERING_ENDPOINT, CmsEndpoints.RECORD_SUBPAGE)
             .setParameter(CmsEndpoints.RESOURCE_PARAM, "dns-zones")
             .setParameter(CmsEndpoints.RESOURCE_ID_PARAM, String.valueOf(zoneId));
         conduit.setAttribute(RecordTab.RECORD_READ_ONLY, hostReadOnly);

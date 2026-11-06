@@ -61,7 +61,8 @@ import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.routing.BoundEndpoint;
 import be.elevenways.zenit.common.routing.RouteTarget;
-import be.elevenways.zenit.common.routing.ParameterDefinition;
+import be.elevenways.zenit.common.routing.Endpoint;
+import be.elevenways.zenit.common.routing.MalformedQuery;
 import be.elevenways.zenit.common.routing.ReturnPath;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
@@ -98,11 +99,6 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
         .selectedByRoute(zone -> String.valueOf((Object) zone.get(DnsZoneModel.ID))).build();
 
     @Override public @NonNull List<PanelAction<Row>> actions() { return List.of(REMOTE_EDIT); }
-
-    @Override
-    public @NonNull List<ParameterDefinition<?>> queryParameters() {
-        return List.of(HohenheimParams.REMOTE_RECORD);
-    }
 
     @Override
     public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row zone) {
@@ -343,6 +339,7 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
         boolean reachable = false;
         String notice = "";
         DnsRecordFormView editRecord = null;
+        Endpoint.declareQueryOn(conduit, MalformedQuery.ABSENT, List.of(HohenheimParams.REMOTE_RECORD));
         String requestedRecord = conduit.getParameter(HohenheimParams.REMOTE_RECORD);
 
         if (api != null) {

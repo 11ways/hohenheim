@@ -4,6 +4,7 @@ import be.elevenways.protoblast.common.http.HttpMethod;
 import be.elevenways.zenit.common.data.DataPage;
 import be.elevenways.zenit.common.routing.Endpoint;
 import be.elevenways.zenit.common.routing.EndpointRoute;
+import be.elevenways.zenit.common.routing.MalformedQuery;
 import be.elevenways.zenit.common.routing.ParameterDefinition;
 import be.elevenways.zenit.common.routing.RateLimitPolicy;
 import be.elevenways.zenit.common.routing.WebSocketEndpoint;
@@ -274,7 +275,7 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic(HohenheimSlugs.ADMIN).addDelimiter().addStatic(HohenheimSlugs.GIT_PROVIDERS).addDelimiter()
             .addParameter(PROVIDER_ID).addDelimiter().addStatic("repositories").build())
-        .query(PROVIDER_TEXT)
+        .query(MalformedQuery.ABSENT, PROVIDER_TEXT)
         .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .rateLimit(PROVIDER_BROWSE_LIMIT)
         .build();
@@ -284,7 +285,7 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic(HohenheimSlugs.ADMIN).addDelimiter().addStatic(HohenheimSlugs.GIT_PROVIDERS).addDelimiter()
             .addParameter(PROVIDER_ID).addDelimiter().addStatic("branches").build())
-        .query(PROVIDER_TEXT, PROVIDER_REPOSITORY)
+        .query(MalformedQuery.ABSENT, PROVIDER_TEXT, PROVIDER_REPOSITORY)
         .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .rateLimit(PROVIDER_BROWSE_LIMIT)
         .build();

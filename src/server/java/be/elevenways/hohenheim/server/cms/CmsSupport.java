@@ -30,6 +30,7 @@ import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.routing.Endpoint;
+import be.elevenways.zenit.common.routing.MalformedQuery;
 import be.elevenways.zenit.common.routing.ParameterDefinition;
 import be.elevenways.zenit.common.routing.RouteLocales;
 import be.elevenways.zenit.common.routing.RouteScope;
@@ -267,21 +268,34 @@ public final class CmsSupport {
     }
 
     /**
-     * THE read of a declared create-form prefill parameter off the request's query string, text trimmed.
-     *
-     * AIDEV-NOTE: a prefill rides the generic CMS create route (or a tab, page or action route), which declares none
-     * of Hohenheim's parameters, so it is declared on whichever route answers right before the read: the name and
-     * the parse keep ONE home (HohenheimParams), and a malformed value is BAD_REQUEST.
+     * THE read of a declared create-form prefill parameter off the request's query string, text trimmed; a malformed
+     * value is BAD_REQUEST.
      *
      * @param conduit the request, null for a caller without one (a create default asked by a task)
      * @return the resolved value, or null when there is no request or the parameter is absent or blank
      */
-    @SuppressWarnings("unchecked")
     public static <T> @Nullable T prefill(@Nullable Conduit conduit, @NonNull ParameterDefinition<T> param) {
+        return prefill(conduit, MalformedQuery.REFUSED, param);
+    }
+
+    /**
+     * THE read of a declared query parameter a Hohenheim part reads under a route it does not own, text trimmed.
+     *
+     * AIDEV-NOTE: a prefill rides the generic CMS create route (or a tab, page or action route), which declares none
+     * of Hohenheim's parameters, so it is declared on whichever route answers right before the read: the name and
+     * the parse keep ONE home (HohenheimParams). A navigational read (a selection the page only shows) passes ABSENT.
+     *
+     * @param conduit   the request, null for a caller without one (a create default asked by a task)
+     * @param malformed how a value that does not parse reads; one parameter is declared one way per route
+     * @return the resolved value, or null when there is no request or the parameter is absent or blank
+     */
+    @SuppressWarnings("unchecked")
+    public static <T> @Nullable T prefill(@Nullable Conduit conduit, @NonNull MalformedQuery malformed,
+                                          @NonNull ParameterDefinition<T> param) {
         if (conduit == null) {
             return null;
         }
-        Endpoint.declareQueryOn(conduit, List.of(param));
+        Endpoint.declareQueryOn(conduit, malformed, List.of(param));
         T value = conduit.getParameter(param);
         if (value instanceof String text) {
             return text.isBlank() ? null : (T) text.trim();

@@ -25,6 +25,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
+import be.elevenways.zenit.common.routing.MalformedQuery;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
@@ -166,7 +167,7 @@ public final class InstanceConsolePage implements ConsoleModes.Mode {
         vars.put("storedLogs", logs);
 
         // A malformed id reads as null: the page renders with no selection.
-        Integer selected = CmsSupport.prefill(conduit, HohenheimParams.SELECTED_LOG);
+        Integer selected = CmsSupport.prefill(conduit, MalformedQuery.ABSENT, HohenheimParams.SELECTED_LOG);
         String text = "";
         String atIso = "";
         if (selected != null && runtimeId != null) {
