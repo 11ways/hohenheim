@@ -3,7 +3,7 @@
 # reason. Entries are only ever REMOVED: a landing that moves a part onto plumage's surface vocabulary deletes
 # its entries and lowers the ceiling to the new count in the same commit; a new face is never an entry.
 # Generated 2026-11-06.
-ceiling	17
+ceiling	16
 src/common/scss/app.scss|border: 1px solid var(--pl-color-border);	app.scss draws this face by hand; its surface landing moves it onto plumage's vocabulary and deletes this entry.
 src/common/scss/app.scss|border-radius: var(--pl-radius-md);	app.scss draws this face by hand; its surface landing moves it onto plumage's vocabulary and deletes this entry.
 src/common/scss/app.scss|background: var(--pl-color-surface);	app.scss draws this face by hand; its surface landing moves it onto plumage's vocabulary and deletes this entry.
@@ -14,7 +14,6 @@ src/common/scss/app.scss|border-left-width: 3px;	app.scss draws this face by han
 src/common/scss/app.scss|border-left-color: var(--pl-color-destructive);	app.scss draws this face by hand; its surface landing moves it onto plumage's vocabulary and deletes this entry.
 src/common/scss/app.scss|border-left-color: var(--pl-color-warning);	app.scss draws this face by hand; its surface landing moves it onto plumage's vocabulary and deletes this entry.
 src/common/scss/app.scss|border-left-color: var(--pl-color-info);	app.scss draws this face by hand; its surface landing moves it onto plumage's vocabulary and deletes this entry.
-src/common/scss/app.scss|border-radius: inherit;	app.scss draws this face by hand; its surface landing moves it onto plumage's vocabulary and deletes this entry.
 src/common/scss/app.scss|background: color-mix(in srgb, currentColor 5%, transparent);	app.scss draws this face by hand; its surface landing moves it onto plumage's vocabulary and deletes this entry.
 src/common/scss/app.scss|border-block-end: 1px solid var(--pl-color-surface-border);	app.scss draws this face by hand; its surface landing moves it onto plumage's vocabulary and deletes this entry.
 src/common/scss/app.scss|border-block-end: 0;	app.scss draws this face by hand; its surface landing moves it onto plumage's vocabulary and deletes this entry.
