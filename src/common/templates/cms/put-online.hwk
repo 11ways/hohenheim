@@ -63,7 +63,7 @@
         </pl-choice-group>
     </pl-field>
     <pl-form-actions>
-        <pl-button type="submit" variant="primary" data-hh-put-online-continue>
+        <pl-button slot="affirmative" type="submit" variant="primary" data-hh-put-online-continue>
             <pl-icon name="arrow-right"></pl-icon>
             {{ t("continue", scope: "put_online") }}
         </pl-button>
