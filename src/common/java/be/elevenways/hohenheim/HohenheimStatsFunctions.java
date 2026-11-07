@@ -8,6 +8,7 @@ import be.elevenways.hawkeye.common.render.RenderContext;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.util.BlastCollection;
+import be.elevenways.protoblast.common.value.Percent;
 import be.elevenways.zenit.common.channel.ChannelLinks;
 import be.elevenways.zenit.widget.common.data.UsageData;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -272,7 +273,7 @@ public final class HohenheimStatsFunctions {
         name = "cpuShare",
         namespace = "InstanceStats",
         description = "CPU use as a percentage of the app's CPU limit, or of one core",
-        returnType = Integer.class,
+        returnType = Percent.class,
         returnsReference = false,
         arguments = {
             @Arg(name = "sample", required = false, type = Map.class, expectsReference = false,
@@ -281,12 +282,12 @@ public final class HohenheimStatsFunctions {
                  description = "The configured CPU limit in cores, or null for none")
         }
     )
-    public static @Nullable Integer cpuShare(@Nullable Object sample, @Nullable Double cpuLimit) {
+    public static @Nullable Percent cpuShare(@Nullable Object sample, @Nullable Double cpuLimit) {
         if (!(sample instanceof Map<?, ?> map) || !(map.get(Metric.CPU.key()) instanceof Number cpu)) {
             return null;
         }
         double cores = cpuLimit != null && cpuLimit > 0 ? cpuLimit : 1d;
-        return (int) Math.round(cpu.doubleValue() / cores);
+        return Percent.of(Math.round(cpu.doubleValue() / cores));
     }
 
     /** @return true when the sample says the runtime gives no CPU reading (said in words, never a chart) */
@@ -486,7 +487,7 @@ public final class HohenheimStatsFunctions {
         }
         long share = Math.round(cpu.doubleValue());
         return UsageData.measured(share, 100L * Math.max(1, cores(sample)),
-            HohenheimMicrocopy.INSTANCE_STATS.of("cpu_share").withArg("share", share), coresLabel, null);
+            HohenheimMicrocopy.INSTANCE_STATS.of("cpu_share").withArg("share", Percent.of(share)), coresLabel, null);
     }
 
     /** @return the words resolved the way the render resolves its own copy; null stays null */

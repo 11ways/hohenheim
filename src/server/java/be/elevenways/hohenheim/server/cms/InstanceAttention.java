@@ -18,6 +18,7 @@ import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.common.value.Percent;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.zenit.common.routing.BoundEndpoint;
@@ -378,8 +379,8 @@ public final class InstanceAttention {
                 "hard-drive",
                 HohenheimMicrocopy.ATTENTION_TITLE.of("instance_disk")
                     .withArg("name", instance.get(InstanceModel.NAME)),
-                HohenheimMicrocopy.ATTENTION_DETAIL.of("instance_disk").withArg("percent", Math.round(fraction * 100))
-                    .withArg("limit", limit),
+                HohenheimMicrocopy.ATTENTION_DETAIL.of("instance_disk")
+                    .withArg("percent", Percent.of(Math.round(fraction * 100))).withArg("limit", limit),
                 InstanceParts.recordRoute(ADMIN, instance, null),
                 HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_app")
                     .withArg("name", instance.get(InstanceModel.NAME))));

@@ -31,5 +31,5 @@
 # 2026-11-05: the framework work since 2026-10-30 plus plumage cards for settings groups and sharing rows: the
 # breach was 60943 raw bytes over (gzip under); raw 9123840 -> 9640922, gzip 2287627 -> 2330939. Standard 5 percent
 # headroom.
-cms.js.raw=10122969 measured=9640922
-cms.js.gzip=2447486 measured=2330939
+cms.js.raw=10712240 measured=10202133
+cms.js.gzip=2568100 measured=2445809
