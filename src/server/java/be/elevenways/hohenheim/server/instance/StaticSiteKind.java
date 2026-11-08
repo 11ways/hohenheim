@@ -59,6 +59,12 @@ public final class StaticSiteKind implements InstanceKindHandler {
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("build_image"))
             .help(HohenheimMicrocopy.HELP.of("build_image")).build());
 
+    /** The page answered with a 404, relative to the output folder; empty uses the site's own 404.html. */
+    public static final StringField NOT_FOUND_PAGE = SETTINGS_SCHEMA.addField(
+        PathField.builder().name("not_found_page")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("not_found_page"))
+            .help(HohenheimMicrocopy.HELP.of("not_found_page")).build());
+
     public static final IntegerField MEMORY_LIMIT_MB = SETTINGS_SCHEMA.addField(InstanceKindFields.memoryLimit());
 
     public static final DoubleField CPU_LIMIT = SETTINGS_SCHEMA.addField(InstanceKindFields.cpuLimit());
@@ -67,7 +73,8 @@ public final class StaticSiteKind implements InstanceKindHandler {
     static {
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.open(HohenheimFormSections.SOURCE, List.of(
             GitSourceSchema.REPOSITORY_URL, GitSourceSchema.PROVIDER_ID, GitSourceSchema.REPOSITORY,
-            GitSourceSchema.BRANCH, GitSourceSchema.BUILD_COMMAND, OUTPUT_DIRECTORY.getName())));
+            GitSourceSchema.BRANCH, GitSourceSchema.BUILD_COMMAND, OUTPUT_DIRECTORY.getName(),
+            NOT_FOUND_PAGE.getName())));
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.BUILD,
             HohenheimFormSections.join(List.of(BUILD_IMAGE.getName()), GitSourceSchema.BUILD_DETAIL)));
         SETTINGS_SCHEMA.addSection(

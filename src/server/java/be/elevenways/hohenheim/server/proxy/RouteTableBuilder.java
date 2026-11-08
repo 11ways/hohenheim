@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.SiteRedirectModel;
 import be.elevenways.hohenheim.server.auth.SiteAuthGate;
 import be.elevenways.hohenheim.server.auth.SiteAuthGates;
 import be.elevenways.hohenheim.server.preview.PreviewDomains;
@@ -96,7 +97,7 @@ final class RouteTableBuilder {
     private record Inputs(List<Row> sites, Map<Integer, List<Row>> domainsBySite,
                           Map<Integer, Row> accessLists, Map<Integer, List<Row>> rulesByList,
                           Map<Integer, Row> authProviders, Map<Integer, List<Row>> protectedPathsBySite,
-                          Set<String> certifiedNames) {
+                          Map<Integer, List<Row>> redirectsBySite, Set<String> certifiedNames) {
 
         /**
          * @param certificates the proxy's store: the names it loaded are the working ones the global force waits for
@@ -139,8 +140,16 @@ final class RouteTableBuilder {
                         .add(guarded);
                 }
             }
+            // Redirects bucketed per site, same one-query discipline.
+            Map<Integer, List<Row>> redirectsBySite = new HashMap<>();
+            for (Row redirect : Models.get(SiteRedirectModel.class).find().all()) {
+                Integer redirectSiteId = redirect.get(SiteRedirectModel.SITE_ID);
+                if (redirectSiteId != null) {
+                    redirectsBySite.computeIfAbsent(redirectSiteId, ignored -> new ArrayList<>()).add(redirect);
+                }
+            }
             return new Inputs(sites, domainsBySite, accessLists, rulesByList, authProviders,
-                protectedPathsBySite, CertificateCoverage.workingNames(certificates));
+                protectedPathsBySite, redirectsBySite, CertificateCoverage.workingNames(certificates));
         }
     }
 
@@ -277,9 +286,11 @@ final class RouteTableBuilder {
         }
 
         boolean siteRouteAdded = false;
+        List<SiteRedirect> redirects = SiteRedirect.compile(inputs.redirectsBySite().get(siteId));
         for (Row domain : domains) {
             siteRouteAdded |= addDomain(domain, siteId, siteName, site.get(SiteModel.SLUG), requestHandler,
-                accessTree, pathGuards, settings, authGate, siteGate.providerName(), inputs.certifiedNames());
+                accessTree, pathGuards, redirects, settings, authGate, siteGate.providerName(),
+                inputs.certifiedNames());
         }
         if (!siteRouteAdded) {
             releaseUnused(requestHandler, authGate, treeGates);
@@ -369,7 +380,8 @@ final class RouteTableBuilder {
     /** Add one domain row to its tier; false when it contributed no route. */
     private boolean addDomain(Row domain, Integer siteId, String siteName, @Nullable String siteSlug,
                               SiteRequestHandler requestHandler, @Nullable AccessRuleTree accessTree,
-                              List<RouteEntry.PathGuard> pathGuards, Map<String, Object> settings,
+                              List<RouteEntry.PathGuard> pathGuards, List<SiteRedirect> redirects,
+                              Map<String, Object> settings,
                               @Nullable SiteAuthGate authGate, @Nullable String authProviderName,
                               Set<String> certifiedNames) {
         String hostname = domain.get(SiteDomainModel.HOSTNAME);
@@ -396,7 +408,7 @@ final class RouteTableBuilder {
                 matchType))
             || CertificateCoverage.covers(certifiedNames, hostname);
         RouteEntry entry = new RouteEntry(domainHandler, siteName, domain, accessTree,
-            pathGuards, settings, authGate, authProviderName, globalForce);
+            pathGuards, redirects, settings, authGate, authProviderName, globalForce);
 
         // HostnamePatterns.effectiveKind is THE tier decision, shared with the write-time
         // overlap scan: a hostname carrying glob characters routes as a wildcard whatever

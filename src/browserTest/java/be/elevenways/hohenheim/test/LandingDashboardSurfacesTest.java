@@ -41,7 +41,11 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.http.HttpResponse;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -130,6 +134,8 @@ class LandingDashboardSurfacesTest extends HohenheimHttpTestBase {
     private static @Nullable Boolean sshWatch;
     private static @Nullable ProxyServer proxyServer;
     private static @Nullable DnsServer dnsServer;
+    private static @Nullable String dataPath;
+    private static @Nullable String backupPath;
 
     @BeforeAll
     static void seed() throws Exception {
@@ -153,13 +159,27 @@ class LandingDashboardSurfacesTest extends HohenheimHttpTestBase {
         pinAttentionInputs();
     }
 
-    /** Pin the dashboard attention's JVM-global inputs to the stored capture's: no proxy, no DNS, no SSH watch. */
+    /**
+     * Pin the dashboard attention's JVM-global inputs to the stored capture's: no proxy, no DNS, no SSH watch, and the
+     * controller's disks in the test JVM's own temporary directory, so a nearly full disk of the machine running the
+     * suite never adds a disk item to the capture.
+     */
     private static void pinAttentionInputs() {
         backupTarget = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET);
         dnsEnabled = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Dns.ENABLED);
         sshWatch = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.SSH_WATCH_ENABLED);
         proxyServer = ServerMain.getProxyServer();
         dnsServer = ServerMain.getDnsServer();
+        dataPath = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);
+        backupPath = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.BACKUP_PATH);
+        Path scratch;
+        try {
+            scratch = Files.createTempDirectory("hh-landing");
+        } catch (IOException unwritable) {
+            throw new UncheckedIOException(unwritable);
+        }
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, scratch.resolve("data").toString());
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.BACKUP_PATH, scratch.resolve("backups").toString());
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET, null);
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Dns.ENABLED, false);
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.SSH_WATCH_ENABLED, false);
@@ -176,6 +196,8 @@ class LandingDashboardSurfacesTest extends HohenheimHttpTestBase {
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET, backupTarget);
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Dns.ENABLED, dnsEnabled);
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.SSH_WATCH_ENABLED, sshWatch);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, dataPath);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.BACKUP_PATH, backupPath);
         ServerMain.adoptProxyServer(proxyServer);
         ServerMain.adoptDnsServer(dnsServer);
     }

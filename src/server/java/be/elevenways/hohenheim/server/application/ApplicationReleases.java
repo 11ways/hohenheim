@@ -699,7 +699,8 @@ public final class ApplicationReleases {
                     new BuildRequest.StaticSite(trimmed(settings.get(StaticSiteKind.BUILD_IMAGE.getName())),
                         trimmed(settings.get(GitSourceSchema.BUILD_COMMAND)),
                         trimmed(settings.get(GitSourceSchema.BUILD_DIRECTORY)),
-                        trimmed(settings.get(StaticSiteKind.OUTPUT_DIRECTORY.getName())))));
+                        trimmed(settings.get(StaticSiteKind.OUTPUT_DIRECTORY.getName())),
+                        trimmed(settings.get(StaticSiteKind.NOT_FOUND_PAGE.getName())))));
             } finally {
                 if (artifactContext != null) {
                     RuntimeImages.deleteArtifactContext(artifactContext);

@@ -123,8 +123,9 @@ control CREATE%20settings[hohenheim:static_site]/settings.shallow_clone at=10 ki
 control CREATE%20settings[hohenheim:static_site]/settings.submodules at=11 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:static_site]/settings.output_directory at=12 kind=zenitforms:control/string input=path required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:static_site]/settings.build_image at=13 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:static_site]/settings.memory_limit_mb at=14 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:static_site]/settings.cpu_limit at=15 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:static_site]/settings.not_found_page at=14 kind=zenitforms:control/string input=path required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:static_site]/settings.memory_limit_mb at=15 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:static_site]/settings.cpu_limit at=16 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:system_container]/settings.image at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:system_container]/settings.image_origin at=1 kind=zenitforms:form/select input=select required=false readonly=false options=catalog,prepared binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:system_container]/settings.environment_variables at=2 kind=zenitforms:form/key-value input=secret required=false readonly=false options= binding=
@@ -320,8 +321,9 @@ control CREATE%20settings[hohenheim:static_site]/settings.shallow_clone at=10 ki
 control CREATE%20settings[hohenheim:static_site]/settings.submodules at=11 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:static_site]/settings.output_directory at=12 kind=zenitforms:control/string input=path required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:static_site]/settings.build_image at=13 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:static_site]/settings.memory_limit_mb at=14 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:static_site]/settings.cpu_limit at=15 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:static_site]/settings.not_found_page at=14 kind=zenitforms:control/string input=path required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:static_site]/settings.memory_limit_mb at=15 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:static_site]/settings.cpu_limit at=16 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:system_container]/settings.image at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:system_container]/settings.image_origin at=1 kind=zenitforms:form/select input=select required=false readonly=false options=catalog,prepared binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:system_container]/settings.environment_variables at=2 kind=zenitforms:form/key-value input=secret required=false readonly=false options= binding=
@@ -465,8 +467,9 @@ control EDIT%20settings[hohenheim:static_site]/settings.shallow_clone at=10 kind
 control EDIT%20settings[hohenheim:static_site]/settings.submodules at=11 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:static_site]/settings.output_directory at=12 kind=zenitforms:control/string input=path required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:static_site]/settings.build_image at=13 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
-control EDIT%20settings[hohenheim:static_site]/settings.memory_limit_mb at=14 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
-control EDIT%20settings[hohenheim:static_site]/settings.cpu_limit at=15 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20settings[hohenheim:static_site]/settings.not_found_page at=14 kind=zenitforms:control/string input=path required=false readonly=false options= binding=
+control EDIT%20settings[hohenheim:static_site]/settings.memory_limit_mb at=15 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20settings[hohenheim:static_site]/settings.cpu_limit at=16 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:system_container]/settings.image at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:system_container]/settings.image_origin at=1 kind=zenitforms:form/select input=select required=false readonly=false options=catalog,prepared binding=searchable:false,clearable:true,presentation:DEFAULT
 control EDIT%20settings[hohenheim:system_container]/settings.environment_variables at=2 kind=zenitforms:form/key-value input=secret required=false readonly=false options= binding=

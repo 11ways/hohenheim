@@ -227,13 +227,13 @@ public class SiteModel extends Model {
     }
 
     /**
-     * Remove the domain rows of every site a pending delete will remove.
+     * Remove the domain, protected-path and redirect rows of every site a pending delete will remove.
      *
      * A remove hook fires ONCE for the whole delete with a criteria-only context whose row
      * is null, so the doomed ids come from the context's own capture of the pending delete
      * ({@link RemoveFromDatasource#doomedPrimaryKeys()}, trashed sites included). Deleting the
      * children BEFORE the parents also keeps the claim release ordered: SiteDomainModel's
-     * own remove hook still sees rows whose site exists.
+     * own remove hook still sees rows whose site exists, and no child row's foreign key outlives its site.
      */
     private static void cascadeDomainRows(RemoveFromDatasource context) {
         List<Integer> doomed = new ArrayList<>();
@@ -245,6 +245,10 @@ public class SiteModel extends Model {
         if (!doomed.isEmpty()) {
             Models.get(SiteDomainModel.class).find()
                 .where(SiteDomainModel.SITE_ID.in(doomed)).delete();
+            Models.get(ProtectedPathModel.class).find()
+                .where(ProtectedPathModel.SITE_ID.in(doomed)).delete();
+            Models.get(SiteRedirectModel.class).find()
+                .where(SiteRedirectModel.SITE_ID.in(doomed)).delete();
             // AIDEV-NOTE: database attachments used to cascade here too. They no longer
             // belong to a site at all -- the APPLICATION owns them (instance_databases), and
             // it outlives every site that exposed it, so deleting a site must not touch

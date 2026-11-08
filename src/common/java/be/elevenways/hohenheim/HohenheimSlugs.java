@@ -71,6 +71,7 @@ public final class HohenheimSlugs {
     public static final String PROTECTED_PATHS = "protected-paths";
     public static final String PUT_ONLINE = "put-online";
     public static final String RECONCILE_FINDINGS = "reconcile-findings";
+    public static final String REDIRECTS = "redirects";
     public static final String RELEASED_CLAIMS = "released-claims";
     public static final String RELEASES = "releases";
     public static final String RUNTIME_IMAGES = "runtime-images";

@@ -18,6 +18,7 @@ import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.SiteRedirectModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
@@ -28,6 +29,7 @@ import be.elevenways.hohenheim.server.upstream.kinds.StaticUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.TlsPassthroughUpstreamKind;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
+import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -433,6 +435,20 @@ public final class TenantWrites {
             }
             context.eachDoomedRow(doomed -> requireManagedSite(doomed.get(ProtectedPathModel.SITE_ID)));
         });
+        // A site redirect answers to its SITE alone: managing the site is what lets a tenant redirect a path of it.
+        SiteRedirectModel.SCHEMA.addBeforeValidateHook(context -> {
+            Row row = context.getRow();
+            if (row != null && isTenantOriginated()) {
+                requireManagedSites(row, StoredRows.of(Models.get(SiteRedirectModel.class), row),
+                    SiteRedirectModel.SITE_ID);
+            }
+        });
+        SiteRedirectModel.SCHEMA.addBeforeRemoveHook(context -> {
+            if (!isTenantOriginated()) {
+                return;
+            }
+            context.eachDoomedRow(doomed -> requireManagedSite(doomed.get(SiteRedirectModel.SITE_ID)));
+        });
         GitProviderModel.SCHEMA.addBeforeValidateHook(context -> {
             Row row = context.getRow();
             if (row != null && isTenantOriginated()) {
@@ -539,17 +555,21 @@ public final class TenantWrites {
      */
     private static void checkProtectedPathWrite(@NonNull Row row) {
         Row stored = StoredRows.of(Models.get(ProtectedPathModel.class), row);
-        requireManagedSite(row.afterWrite(ProtectedPathModel.SITE_ID, stored));
-        if (stored != null && row.has(ProtectedPathModel.SITE_ID.getName())
-                && !Objects.equals(row.get(ProtectedPathModel.SITE_ID),
-                    stored.get(ProtectedPathModel.SITE_ID))) {
-            requireManagedSite(stored.get(ProtectedPathModel.SITE_ID));
-        }
+        requireManagedSites(row, stored, ProtectedPathModel.SITE_ID);
         AccessContext ctx = acting();
         Object listId = row.afterWrite(ProtectedPathModel.ACCESS_LIST_ID, stored);
         if (ctx == null || !HohenheimAccess.canUseAccessList(ctx, listId)) {
             throw Violations.ofField(ProtectedPathModel.ACCESS_LIST_ID.getName(), listId,
                 HohenheimMicrocopy.VIOLATIONS.of("tenant_access_list_not_usable"));
+        }
+    }
+
+    /** @throws Violations unless the acting tenant manages the row's site, and the site it moves away from */
+    private static void requireManagedSites(@NonNull Row row, @Nullable Row stored, @NonNull IntegerField siteField) {
+        requireManagedSite(row.afterWrite(siteField, stored));
+        if (stored != null && row.has(siteField.getName())
+                && !Objects.equals(row.get(siteField), stored.get(siteField))) {
+            requireManagedSite(stored.get(siteField));
         }
     }
 

@@ -20,6 +20,7 @@ import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.SiteRedirectModel;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -174,6 +175,7 @@ public final class ManagePanel extends Panel {
         HohenheimPanel.addIf(peers, AccessListParts.manage(), Role.PROXY);
         HohenheimPanel.addIf(peers, AccessRuleParts.manage(), Role.PROXY);
         HohenheimPanel.addIf(peers, ProtectedPathParts.manage(), Role.PROXY);
+        HohenheimPanel.addIf(peers, SiteRedirectParts.manage(), Role.PROXY);
         // The tenant's apps: its sites and instances read as one list (AppDirectory). Declared last, because its
         // toolbar names the sibling entries this node registered.
         HohenheimPanel.addIf(peers, AppParts.manage(HohenheimPanel.present(peers, HohenheimSlugs.SITES,
@@ -294,6 +296,12 @@ public final class ManagePanel extends Panel {
         RecordSourceRegistry.INSTANCE.override(RecordSource.of(ProtectedPathModel.REF)
             .search(ProtectedPathModel.PATH)
             .scopedBy(TenantScopes.PROTECTED_PATHS)
+            .build());
+
+        // Site redirects: child rows scoped by their parent SITE, like protected paths.
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(SiteRedirectModel.REF)
+            .search(SiteRedirectModel.FROM_PATH)
+            .scopedBy(TenantScopes.REDIRECTS)
             .build());
 
         // Access rules: child rows scoped by their parent LIST, like protected paths by their site. zenit-cms would

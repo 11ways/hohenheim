@@ -40,8 +40,8 @@ class AppConfigAddressJourneyTest extends HohenheimTestBase {
             .containsExactly(false, List.of("websocket_upgrade", "rewrite_location", "ignore_certificates",
                 "request_timeout", "delay", "upstream_protocol"));
         assertThat(unsectioned(StaticUpstreamKind.SETTINGS_SCHEMA))
-            .as("step 1: static files lead with the folder and the fallback file")
-            .containsExactly("root_path", "fallback_file");
+            .as("step 1: static files lead with the folder, then the fallback file and the not-found page")
+            .containsExactly("root_path", "fallback_file", "not_found_page");
         assertThat(section(StaticUpstreamKind.SETTINGS_SCHEMA, HohenheimFormSections.LISTING).startsCollapsed())
             .as("step 1: what a folder shows stays open").isFalse();
         assertThat(section(StaticUpstreamKind.SETTINGS_SCHEMA, HohenheimFormSections.FORWARDING))

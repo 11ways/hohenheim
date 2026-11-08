@@ -97,7 +97,7 @@ final class UnknownHostRoutes {
         if (upstream != null) {
             UpstreamTarget target = new UpstreamTarget(upstream, false);
             entry = new RouteEntry((exchange, forwarder) -> forwarder.forwardTo(target), "fallback address", null,
-                null, List.of(), null, null, null, false);
+                null, List.of(), List.of(), null, null, null, false);
         } else if (address != null && !address.isBlank()) {
             Blast.log("SiteDispatcher: the fallback address is not an http(s) address, unknown hosts get a 404:",
                 address);

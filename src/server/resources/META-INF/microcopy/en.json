@@ -484,6 +484,16 @@
       "scope": "help"
     }
   ],
+  "not_found_page": [
+    {
+      "text": "Not-found page",
+      "scope": "hohenheim_field"
+    },
+    {
+      "text": "The page visitors see, with a 404 status, when the address names no file. Left empty, a 404.html in the served folder is used when there is one.",
+      "scope": "help"
+    }
+  ],
   "forward_host": [
     {
       "text": "Upstream host",
@@ -2915,6 +2925,15 @@
     {
       "text": "protected paths",
       "scope": "protected_path",
+      "case": "sentence"
+    },
+    {
+      "text": "Redirects",
+      "scope": "site_redirect"
+    },
+    {
+      "text": "redirects",
+      "scope": "site_redirect",
       "case": "sentence"
     },
     {
@@ -10245,6 +10264,15 @@
       "case": "sentence"
     },
     {
+      "text": "Redirect",
+      "scope": "site_redirect"
+    },
+    {
+      "text": "redirect",
+      "scope": "site_redirect",
+      "case": "sentence"
+    },
+    {
       "text": "Template database",
       "scope": "template_database"
     },
@@ -13118,6 +13146,54 @@
   },
   "protected_path_taken": {
     "text": "This path is already protected on this site",
+    "scope": "violations"
+  },
+  "from_path": {
+    "text": "From path",
+    "scope": "site_redirect"
+  },
+  "match": {
+    "text": "Matches",
+    "scope": "site_redirect"
+  },
+  "match_exact": {
+    "text": "Only this path",
+    "scope": "site_redirect"
+  },
+  "match_prefix": {
+    "text": "This path and everything under it",
+    "scope": "site_redirect"
+  },
+  "target": {
+    "text": "Sends visitors to",
+    "scope": "site_redirect"
+  },
+  "redirect_from_path": {
+    "text": "The path a visitor asks for, such as /old-page. It is matched before the site's own pages and sign-in.",
+    "scope": "help"
+  },
+  "redirect_match": {
+    "text": "Everything under it keeps the rest of its path: /blog to /news sends /blog/post to /news/post.",
+    "scope": "help"
+  },
+  "redirect_target": {
+    "text": "A path on this site such as /new-page, or a full address starting with https://. The query string is kept.",
+    "scope": "help"
+  },
+  "redirect_path_invalid": {
+    "text": "A path starting with / is required, without spaces, ? or #",
+    "scope": "violations"
+  },
+  "redirect_target_invalid": {
+    "text": "Enter a path on this site starting with /, or an address starting with http:// or https://",
+    "scope": "violations"
+  },
+  "redirect_loops": {
+    "text": "This would send visitors back to the same redirect, in a loop",
+    "scope": "violations"
+  },
+  "redirect_path_taken": {
+    "text": "This path already redirects on this site",
     "scope": "violations"
   },
   "tenant_git_provider_not_managed": {

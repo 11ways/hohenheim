@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.build;
 
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.server.docker.PinnedImages;
+import be.elevenways.hohenheim.server.sitetype.StaticFileHandler;
 import be.elevenways.protoblast.diagnostic.FileTrees;
 import be.elevenways.hohenheim.server.util.Json;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -104,9 +105,13 @@ public final class StaticSiteBuilder implements Builders {
                 .append("\n");
             copy = "COPY --from=build " + Json.stringify(List.of(inSource(output), "/public/")) + "\n";
         }
+        String notFound = folder(site.notFoundPage(), "not-found page");
         return text.append("FROM ").append(PinnedImages.STATIC_WEB_SERVER).append("\n")
             .append("ENV SERVER_PORT=").append(PORT).append(" SERVER_ROOT=/public SERVER_HEALTH=true")
-            .append(" SERVER_IGNORE_HIDDEN_FILES=true\n")
+            .append(" SERVER_IGNORE_HIDDEN_FILES=true")
+            // The server's own default is ./404.html beside its binary, never the site's: point it into the output.
+            .append(" SERVER_ERROR_PAGE_404=/public/")
+            .append(notFound.equals(".") ? StaticFileHandler.DEFAULT_NOT_FOUND_PAGE : notFound).append("\n")
             .append(copy)
             // Served as nobody: the server only reads the copied files and listens above 1024, so it never needs
             // root, and a shell into it is an unprivileged one.

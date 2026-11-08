@@ -78,6 +78,9 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // A protected path stores the canonical prefix the dispatcher guards, names a
         // list, and claims its (site, path) pair once (form, delegated form, restore).
         be.elevenways.hohenheim.server.cms.ProtectedPathInvariant.install();
+        // A site redirect stores the canonical path the proxy matches, a target it may send a visitor to, never one
+        // onto itself, and claims its (site, path) pair once.
+        be.elevenways.hohenheim.server.cms.SiteRedirectInvariant.install();
         // A DNS record a system authored carries derived attribution, and no caller can
         // hand-write that attribution onto a row of its own.
         GeneratedDnsRecords.install();

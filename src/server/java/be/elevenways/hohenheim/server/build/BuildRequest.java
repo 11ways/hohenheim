@@ -67,11 +67,13 @@ public record BuildRequest(@NonNull Identifier forModel, int forId,
      * @param buildCommand    the shell command that produces the output; blank when the repository holds it as is
      * @param buildDirectory  where the command runs, relative to the repository root; blank for the root
      * @param outputDirectory the folder served, relative to the repository root; blank for the root
+     * @param notFoundPage    the page answered with a 404, relative to the output folder; blank for 404.html
      */
     public record StaticSite(@NonNull String buildImage, @NonNull String buildCommand,
-                             @NonNull String buildDirectory, @NonNull String outputDirectory) {
+                             @NonNull String buildDirectory, @NonNull String outputDirectory,
+                             @NonNull String notFoundPage) {
 
         /** No static site: what every other builder kind carries. */
-        public static final StaticSite NONE = new StaticSite("", "", "", "");
+        public static final StaticSite NONE = new StaticSite("", "", "", "", "");
     }
 }

@@ -484,6 +484,16 @@
       "scope": "help"
     }
   ],
+  "not_found_page": [
+    {
+      "text": "Pagina voor niet gevonden",
+      "scope": "hohenheim_field"
+    },
+    {
+      "text": "De pagina die bezoekers zien, met status 404, als het adres geen bestand aanwijst. Leeg gelaten wordt een 404.html in de geserveerde map gebruikt als die er is.",
+      "scope": "help"
+    }
+  ],
   "forward_host": [
     {
       "text": "Upstream-host",
@@ -2915,6 +2925,15 @@
     {
       "text": "beschermde paden",
       "scope": "protected_path",
+      "case": "sentence"
+    },
+    {
+      "text": "Doorverwijzingen",
+      "scope": "site_redirect"
+    },
+    {
+      "text": "doorverwijzingen",
+      "scope": "site_redirect",
       "case": "sentence"
     },
     {
@@ -10245,6 +10264,15 @@
       "case": "sentence"
     },
     {
+      "text": "Doorverwijzing",
+      "scope": "site_redirect"
+    },
+    {
+      "text": "doorverwijzing",
+      "scope": "site_redirect",
+      "case": "sentence"
+    },
+    {
       "text": "Sjabloondatabank",
       "scope": "template_database"
     },
@@ -13118,6 +13146,54 @@
   },
   "protected_path_taken": {
     "text": "Dit pad is al beschermd op deze site",
+    "scope": "violations"
+  },
+  "from_path": {
+    "text": "Van pad",
+    "scope": "site_redirect"
+  },
+  "match": {
+    "text": "Geldt voor",
+    "scope": "site_redirect"
+  },
+  "match_exact": {
+    "text": "Alleen dit pad",
+    "scope": "site_redirect"
+  },
+  "match_prefix": {
+    "text": "Dit pad en alles eronder",
+    "scope": "site_redirect"
+  },
+  "target": {
+    "text": "Stuurt bezoekers naar",
+    "scope": "site_redirect"
+  },
+  "redirect_from_path": {
+    "text": "Het pad dat een bezoeker opvraagt, zoals /oude-pagina. Het wordt nagekeken voor de eigen pagina's en aanmelding van de site.",
+    "scope": "help"
+  },
+  "redirect_match": {
+    "text": "Alles eronder houdt de rest van zijn pad: /blog naar /nieuws stuurt /blog/bericht naar /nieuws/bericht.",
+    "scope": "help"
+  },
+  "redirect_target": {
+    "text": "Een pad op deze site zoals /nieuwe-pagina, of een volledig adres dat begint met https://. De querystring blijft behouden.",
+    "scope": "help"
+  },
+  "redirect_path_invalid": {
+    "text": "Een pad dat begint met / is vereist, zonder spaties, ? of #",
+    "scope": "violations"
+  },
+  "redirect_target_invalid": {
+    "text": "Geef een pad op deze site dat begint met /, of een adres dat begint met http:// of https://",
+    "scope": "violations"
+  },
+  "redirect_loops": {
+    "text": "Dit zou bezoekers terugsturen naar dezelfde doorverwijzing, in een lus",
+    "scope": "violations"
+  },
+  "redirect_path_taken": {
+    "text": "Dit pad verwijst op deze site al door",
     "scope": "violations"
   },
   "tenant_git_provider_not_managed": {

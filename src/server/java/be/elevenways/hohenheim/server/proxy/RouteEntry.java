@@ -56,6 +56,9 @@ final class RouteEntry {
     // ProtectedPathModel.
     final List<PathGuard> pathGuards;
 
+    // The site's own redirects, answered before its gates and handler (SiteRedirectModel).
+    final List<SiteRedirect> redirects;
+
     // Credential carriers a Hohenheim gate on this route consumes itself; the forwarding stage
     // strips them so the upstream never receives Hohenheim's own authentication material.
     final boolean ownsAuthorizationHeader;
@@ -70,7 +73,7 @@ final class RouteEntry {
     }
 
     RouteEntry(SiteRequestHandler handler, String siteName, Row domain,
-               @Nullable AccessRuleTree accessTree, List<PathGuard> pathGuards,
+               @Nullable AccessRuleTree accessTree, List<PathGuard> pathGuards, List<SiteRedirect> redirects,
                Map<String, Object> siteSettings, @Nullable SiteAuthGate authGate,
                @Nullable String authProviderName, boolean globalForce) {
         this.handler = handler;
@@ -103,6 +106,7 @@ final class RouteEntry {
         // this site is guarded; the compile folds an absent satisfy to the default.
         this.accessTree = accessTree;
         this.pathGuards = pathGuards;
+        this.redirects = redirects;
 
         boolean authorization = authGate instanceof CredentialOwner owner && owner.ownsAuthorizationHeader();
         boolean persistent = authGate instanceof CredentialOwner holder && holder.ownsPersistentCookie();

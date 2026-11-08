@@ -434,6 +434,15 @@ public class SiteDispatcher implements HttpHandler {
             return;
         }
 
+        // --- The site's own redirects: answered before any gate, as a web server's rewrite phase answers them; a
+        //     redirect hands out no content, only an address. Matched on the canonical path, so a spelling of the
+        //     same path cannot slip past it. ---
+        SiteRedirect redirect = SiteRedirect.firstMatching(entry.redirects, path.canonical());
+        if (redirect != null) {
+            redirect.send(exchange, path.raw());
+            return;
+        }
+
         // --- Per-site auth provider gate (identity-level; coexists with the IP/basic access list,
         //     which still runs afterwards). The gate may block (Argon2 verify, Proteus HTTP), so
         //     run it -- and the rest of the forwarding pipeline -- on a worker thread, off the I/O

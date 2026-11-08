@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.SiteRedirectModel;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
@@ -60,6 +61,7 @@ public final class ProxyReloadHooks {
         AccessListModel.MODEL_ID,
         AccessRuleModel.MODEL_ID,
         ProtectedPathModel.MODEL_ID,
+        SiteRedirectModel.MODEL_ID,
         SiteAuthProviderModel.MODEL_ID,
         DatabaseModel.MODEL_ID);
 

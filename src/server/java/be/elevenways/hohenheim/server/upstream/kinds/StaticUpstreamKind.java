@@ -60,6 +60,10 @@ public class StaticUpstreamKind implements UpstreamKindHandler {
         PathField.builder().name("fallback_file").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("fallback_file"))
             .help(HohenheimMicrocopy.HELP.of("fallback_file")).build());
 
+    public static final StringField NOT_FOUND_PAGE = SETTINGS_SCHEMA.addField(
+        PathField.builder().name("not_found_page").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("not_found_page"))
+            .help(HohenheimMicrocopy.HELP.of("not_found_page")).placeholder("404.html").build());
+
     // The folder and the fallback file are the decision; what a
     // folder shows is the next thing changed, and the delay is right almost always so its
     // Connection section folds. AIDEV-NOTE: never the framework's generic "Advanced" here (the site
@@ -124,7 +128,7 @@ public class StaticUpstreamKind implements UpstreamKindHandler {
                 HohenheimMicrocopy.SITE_FAULT.of("tenant_host_files"));
         }
 
-        return new StaticFileHandler(Path.of(rootPathStr), fallbackFile, autoindex,
-            indexes, showHidden);
+        return new StaticFileHandler(Path.of(rootPathStr), fallbackFile,
+            (String) settings.get(NOT_FOUND_PAGE.getName()), autoindex, indexes, showHidden);
     }
 }

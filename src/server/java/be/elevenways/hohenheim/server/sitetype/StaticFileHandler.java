@@ -18,22 +18,32 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Serves static files from a directory. Thread-safe and stateless per instance.
  */
 public class StaticFileHandler implements SiteRequestHandler {
 
+    /** The not-found page a site's files carry by convention, used when the site names none. */
+    public static final String DEFAULT_NOT_FOUND_PAGE = "404.html";
+
     private final Path rootPath;
     private final String fallbackFile;
+    private final @Nullable String notFoundFile;
     private final boolean autoindex;
     private final boolean indexes;
     private final boolean showHidden;
 
-    public StaticFileHandler(Path rootPath, String fallbackFile, boolean autoindex,
+    /**
+     * @param fallbackFile the file answered 200 for a path that names no file (a single-page app's index), or blank
+     * @param notFoundFile the page answered 404 for a path that names no file, when there is no fallback, or blank
+     */
+    public StaticFileHandler(Path rootPath, String fallbackFile, @Nullable String notFoundFile, boolean autoindex,
                              boolean indexes, boolean showHidden) {
         this.rootPath = rootPath;
         this.fallbackFile = fallbackFile;
+        this.notFoundFile = notFoundFile;
         this.autoindex = autoindex;
         this.indexes = indexes;
         this.showHidden = showHidden;
@@ -94,10 +104,20 @@ public class StaticFileHandler implements SiteRequestHandler {
         }
 
         if (!Files.isRegularFile(filePath) && fallbackFile != null && !fallbackFile.isEmpty()) {
-            filePath = rootPath.resolve(fallbackFile);
+            filePath = rootPath.resolve(fallbackFile).normalize();
         }
 
+        int status = 200;
         if (!Files.isRegularFile(filePath)) {
+            filePath = rootPath.resolve(notFoundFile == null || notFoundFile.isBlank()
+                ? DEFAULT_NOT_FOUND_PAGE : notFoundFile.strip()).normalize();
+            status = 404;
+        }
+
+        // The substituted page answers under the same rules as an asked one: inside the root, and not hidden unless the
+        // site shows hidden files.
+        if (!Files.isRegularFile(filePath) || !filePath.startsWith(rootPath)
+                || (!showHidden && hidden(rootPath.relativize(filePath)))) {
             exchange.setStatusCode(404);
             exchange.getResponseSender().send("Not Found");
             return;
@@ -117,6 +137,7 @@ public class StaticFileHandler implements SiteRequestHandler {
             String contentType = Files.probeContentType(filePath);
             if (contentType == null) contentType = "application/octet-stream";
             long fileSize = Files.size(filePath);
+            exchange.setStatusCode(status);
             exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, contentType);
             exchange.getResponseHeaders().put(Headers.CONTENT_LENGTH, fileSize);
 
@@ -217,5 +238,15 @@ public class StaticFileHandler implements SiteRequestHandler {
         } catch (IOException e) {
             return false;
         }
+    }
+
+    /** @return whether a path under the root passes through a hidden (dot) segment */
+    private static boolean hidden(Path relative) {
+        for (Path segment : relative) {
+            if (segment.toString().startsWith(".")) {
+                return true;
+            }
+        }
+        return false;
     }
 }

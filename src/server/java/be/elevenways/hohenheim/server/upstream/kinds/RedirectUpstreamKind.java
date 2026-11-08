@@ -3,6 +3,8 @@ package be.elevenways.hohenheim.server.upstream.kinds;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
+import be.elevenways.hohenheim.model.RedirectStatuses;
+import be.elevenways.hohenheim.server.proxy.RedirectLocation;
 import be.elevenways.hohenheim.server.proxy.RequestPath;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
@@ -32,14 +34,7 @@ public class RedirectUpstreamKind implements UpstreamKindHandler {
             .help(HohenheimMicrocopy.HELP.of("target_url")).build());
 
     public static final EnumField HTTP_STATUS = SETTINGS_SCHEMA.addField(
-        EnumField.builder("http_status")
-            .value("301", "301 Permanent", HohenheimMicrocopy.REDIRECT_STATUS.of("301"))
-            .value("302", "302 Found", HohenheimMicrocopy.REDIRECT_STATUS.of("302"))
-            .value("307", "307 Temporary Redirect", HohenheimMicrocopy.REDIRECT_STATUS.of("307"))
-            .value("308", "308 Permanent Redirect", HohenheimMicrocopy.REDIRECT_STATUS.of("308"))
-            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("redirect_status"))
-            .help(HohenheimMicrocopy.HELP.of("redirect_status"))
-            .build());
+        RedirectStatuses.field("http_status").build());
 
     public static final BooleanField PRESERVE_PATH = SETTINGS_SCHEMA.addField(
         BooleanField.builder("preserve_path").defaultValue(false)
@@ -82,27 +77,8 @@ public class RedirectUpstreamKind implements UpstreamKindHandler {
     @Override
     public SiteRequestHandler createHandler(Row site, Map<String, Object> settings) {
         String targetUrl = (String) settings.get("target_url");
-        String statusStr = (String) settings.getOrDefault("http_status", "302");
-        Object preserveObj = settings.get("preserve_path");
-        boolean preservePath = Boolean.TRUE.equals(preserveObj);
-        int statusCode;
-
-        try {
-            statusCode = Integer.parseInt(statusStr);
-        } catch (NumberFormatException e) {
-            statusCode = 302;
-        }
-
-        // Validate URL scheme to prevent open redirect / XSS
-        if (targetUrl != null && !targetUrl.isEmpty()
-                && !targetUrl.startsWith("http://") && !targetUrl.startsWith("https://")
-                && !targetUrl.startsWith("/")) {
-            final String bad = targetUrl;
-            return (exchange, forwarder) -> {
-                exchange.setStatusCode(502);
-                exchange.getResponseSender().send("Invalid redirect target: must start with http://, https://, or /");
-            };
-        }
+        int status = RedirectStatuses.codeOf(settings.get(HTTP_STATUS.getName()));
+        boolean preservePath = Boolean.TRUE.equals(settings.get(PRESERVE_PATH.getName()));
 
         if (targetUrl == null || targetUrl.isEmpty()) {
             return (exchange, forwarder) -> {
@@ -110,25 +86,17 @@ public class RedirectUpstreamKind implements UpstreamKindHandler {
                 exchange.getResponseSender().send("No redirect target configured");
             };
         }
+        // Validate the target to prevent an open redirect or script URL (RedirectStatuses.isTarget).
+        if (!RedirectStatuses.isTarget(targetUrl)) {
+            return (exchange, forwarder) -> {
+                exchange.setStatusCode(502);
+                exchange.getResponseSender().send("Invalid redirect target: must be an http:// or https:// address, or a path on this site");
+            };
+        }
 
-        final String target = targetUrl;
-        final int status = statusCode;
-
-        return (exchange, forwarder) -> {
-            String location = target;
-            if (preservePath) {
-                // The RAW path (strip_path already applied): the decoded one would turn an
-                // encoded %0a or %3F back into live syntax inside the Location header.
-                String path = RequestPath.rawPathOf(exchange);
-                String query = exchange.getQueryString();
-                location = target + path;
-                if (query != null && !query.isEmpty()) {
-                    location += "?" + query;
-                }
-            }
-            exchange.setStatusCode(status);
-            exchange.getResponseHeaders().put(Headers.LOCATION, location);
-            exchange.endExchange();
-        };
+        // The RAW path (strip_path already applied): the decoded one would turn an encoded %0a or %3F back into live
+        // syntax inside the Location header.
+        return (exchange, forwarder) -> RedirectLocation.send(exchange, status, targetUrl,
+            preservePath ? RequestPath.rawPathOf(exchange) : null, preservePath);
     }
 }

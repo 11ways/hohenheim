@@ -20,6 +20,7 @@ import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.SiteRedirectModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.HostnameAuthority;
@@ -98,6 +99,11 @@ public final class TenantScopes {
     public static final RowScope PROTECTED_PATHS = RowScope.perPrincipal(
         ctx -> HohenheimAccess.managedSiteScope(ctx, Models.get(ProtectedPathModel.class),
             ProtectedPathModel.SITE_ID::in));
+
+    /** Site redirects; tenants only those of the sites they manage. */
+    public static final RowScope REDIRECTS = RowScope.perPrincipal(
+        ctx -> HohenheimAccess.managedSiteScope(ctx, Models.get(SiteRedirectModel.class),
+            SiteRedirectModel.SITE_ID::in));
 
     /** DNS records; tenants only the names they answer for plus explicit view grants. */
     public static final RowScope DNS_RECORDS = RowScope.perPrincipal(TenantScopes::dnsRecordAccess);

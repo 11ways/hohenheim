@@ -137,6 +137,18 @@ public final class SiteParts {
             .visibleWhen((site, access) -> servesHttp(site));
     }
 
+    /**
+     * The Redirects tab: the framework's child list over the panel's redirect entry (its /manage twin there), under
+     * the site. Like protection, only a site that answers HTTP itself has one.
+     *
+     * @param redirects the redirect entry of the panel the tab is in
+     */
+    private static @NonNull ChildList<Row> redirects(@NonNull PanelResource<Row> redirects) {
+        return ChildList.<Row>of(redirects)
+            .label(HohenheimMicrocopy.SITE_REDIRECT.of("plural"))
+            .visibleWhen((site, access) -> servesHttp(site));
+    }
+
     private SiteParts() {
     }
 
@@ -178,7 +190,8 @@ public final class SiteParts {
                 SiteWrites.PURGE_MANY, ResourceAuthority.<Row>builder().delete(HohenheimPanel.ACCESS, null).build()))
             .actions(SiteActions.operator())
             .tabs(ResourceTabs.<Row>of(List.of(AppOverview.siteTab(), DOMAINS,
-                    protectedPaths(ProtectedPathParts.admin()), new SiteDevSessionsPage()))
+                    protectedPaths(ProtectedPathParts.admin()), redirects(SiteRedirectParts.admin()),
+                    new SiteDevSessionsPage()))
                 .withHistory().historyInStrip().withContributions())
             .relatedPages(
                 // The hostname catalog itself: nav-hidden, so without this entry the only way to the cross-site
@@ -199,7 +212,7 @@ public final class SiteParts {
         // delegate from /manage).
         return ManageTwin.reached(entry(ManageTwin.id("site")), TenantScopes.SITES,
                 ResourceTabs.<Row>of(List.of(AppOverview.siteTab(), DOMAINS,
-                    protectedPaths(ProtectedPathParts.manage()))).withContributions())
+                    protectedPaths(ProtectedPathParts.manage()), redirects(SiteRedirectParts.manage()))).withContributions())
             .standsUnder(HohenheimSlugs.APPS)
             // The tenant's words, where the toolbar, the heading and the command palette read them: never the
             // operator's "served from this host".
