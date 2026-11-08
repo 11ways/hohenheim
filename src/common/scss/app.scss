@@ -162,9 +162,15 @@
     }
 
     // One line holds a certificate's name and its expiry: a middle dot sets them apart, as the app list's sublines do.
-    .cms-resource-list-table .hh-state-line-detail + .hh-state-line-detail::before {
-        content: "\00B7";
-        margin-inline-end: var(--pl-space-xs);
+    // The dot carries spaces, which are where the line may break: without them a name and its expiry are one word
+    // that wraps whole, under the cell's one-line clamp, to nothing.
+    .cms-resource-list-table .hh-state-line-detail + .hh-state-line-detail {
+        margin-inline-start: 0;
+
+        &::before {
+            content: " \00B7";
+            margin-inline-end: var(--pl-space-xs);
+        }
     }
 
     // Dashboard onboarding checklist
