@@ -18,8 +18,10 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.time.Duration;
 import java.util.Base64;
+import java.util.Set;
 import java.util.function.Predicate;
 
 /**
@@ -45,8 +47,8 @@ public interface PublishedPortProbe {
     /**
      * One HTTP GET of {@code path} on the port.
      *
-     * @return the status code, or 0 when nothing answered
-     * @throws IOException when the probe could not be sent at all
+     * @return the status code, or 0 when the port took the request and answered nothing in time
+     * @throws IOException when the probe could not be sent at all (refused, reset, or a lane that could not run it)
      */
     int httpStatus(int port, @NonNull String path) throws IOException, InterruptedException;
 
@@ -143,11 +145,15 @@ public interface PublishedPortProbe {
         @Override
         public int httpStatus(int port, @NonNull String path)
                 throws IOException, InterruptedException {
-            HttpResponse<Void> response = this.client.send(
-                HttpRequest.newBuilder(targetOf(port, path))
-                    .timeout(Duration.ofSeconds(5)).GET().build(),
-                HttpResponse.BodyHandlers.discarding());
-            return response.statusCode();
+            try {
+                HttpResponse<Void> response = this.client.send(
+                    HttpRequest.newBuilder(targetOf(port, path))
+                        .timeout(Duration.ofSeconds(5)).GET().build(),
+                    HttpResponse.BodyHandlers.discarding());
+                return response.statusCode();
+            } catch (HttpTimeoutException silent) {
+                return 0;
+            }
         }
 
         @Override
@@ -190,6 +196,9 @@ public interface PublishedPortProbe {
 
         /** The block dd reads an exchange's answer in. */
         private static final int CHUNK = 4096;
+        /** curl's exits for a port that took the connection and answered nothing: 28, 52 and 56. */
+        private static final Set<Integer> CURL_SILENT_EXITS = Set.of(28, 52, 56);
+
 
         private final HostShell shell;
 
@@ -209,7 +218,7 @@ public interface PublishedPortProbe {
         }
 
         @Override
-        public int httpStatus(int port, @NonNull String path) {
+        public int httpStatus(int port, @NonNull String path) throws IOException {
             HostShell.Result result;
             try {
                 result = this.shell.run(
@@ -217,10 +226,19 @@ public interface PublishedPortProbe {
                         + " --connect-timeout 2 --max-time 5 -- "
                         + HostShell.quote(targetOf(port, path).toString()), 10);
             } catch (RuntimeException unanswerable) {
-                return 0;
+                throw new IOException("the host could not run the probe: " + unanswerable.getMessage(), unanswerable);
             }
             String code = result.text().trim();
-            return result.ok() && code.matches("[0-9]{3}") ? Integer.parseInt(code) : 0;
+            if (result.ok() && code.matches("[0-9]{3}")) {
+                return Integer.parseInt(code);
+            }
+            // curl's own exits for a port that took the connection and answered nothing: timed out (28), an empty
+            // reply (52), a failure receiving (56). Every other exit is the lane failing (no curl, ssh down), which
+            // says nothing about the workload.
+            if (CURL_SILENT_EXITS.contains(result.exitCode())) {
+                return 0;
+            }
+            throw new IOException("the host could not run the probe (exit " + result.exitCode() + ")");
         }
 
         @Override

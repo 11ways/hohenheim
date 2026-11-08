@@ -315,26 +315,44 @@ public final class InstanceStatusReconciler {
     private void redeployCrashed(int instanceId, int serverId, String name) {
         Blast.log("INSTANCE RECONCILE: instance", instanceId,
             "died without an observed stop; crash policy restart -> redeploying");
+        redeployInBackground(this.instances, instanceId, serverId, name, Set.of(InstanceModel.STATUS_STOPPED));
+    }
+
+    /**
+     * Redeploys one workload in the background, as its crash policy's automatic restart: a refusal becomes the
+     * record's ERROR cause ({@code WORKLOAD_RESTART_REFUSED}).
+     *
+     * @param from the statuses the restart was decided in; a record that left them before the claim came (an operator
+     *             stopped or redeployed it meanwhile) is not restarted
+     */
+    static void redeployInBackground(@NonNull InstanceService instances, int instanceId, int serverId,
+                                     @NonNull String name, @NonNull Set<String> from) {
         // The background pool carries the reconciler's datasource and declared system identity, and a runtime stop
         // waits for the redeploy before the datasources close.
         HandlerSupport.inBackground(() -> {
             try {
-                // AIDEV-NOTE: the correction still holds this record's claim when it queues the restart. The new
+                // AIDEV-NOTE: the caller may still hold this record's claim when it queues the restart. The new
                 // thread must wait for that claim to leave, then deploy re-entrantly under its own queued claim.
-                this.instances.operations().exclusive(instanceId, InstanceOperationLock.Contention.QUEUE, () -> {
+                instances.operations().exclusive(instanceId, InstanceOperationLock.Contention.QUEUE, () -> {
+                    Row current = Models.get(InstanceModel.class).findById(instanceId);
+                    if (current == null || !from.contains(current.get(InstanceModel.STATUS))) {
+                        Blast.log("INSTANCE RECONCILE: automatic restart of instance", name,
+                            "dropped: its status moved on while it waited");
+                        return;
+                    }
                     try {
-                        this.instances.deploy(instanceId);
+                        instances.deploy(instanceId);
                     } catch (RuntimeException refused) {
-                        Blast.log("INSTANCE RECONCILE: crash restart of instance", name,
+                        Blast.log("INSTANCE RECONCILE: automatic restart of instance", name,
                             "refused:", refused.getMessage());
                         // Under the claim still: the refusal becomes the record's ERROR cause, where the record
                         // read "Not running" with no reason.
-                        InstanceOperationGuard.stampRestartRefused(this.instances.leases(), instanceId, serverId,
-                            name, Set.of(InstanceModel.STATUS_STOPPED), refused);
+                        InstanceOperationGuard.stampRestartRefused(instances.leases(), instanceId, serverId,
+                            name, from, refused);
                     }
                 });
             } catch (RuntimeException refused) {
-                Blast.log("INSTANCE RECONCILE: crash restart of instance", name,
+                Blast.log("INSTANCE RECONCILE: automatic restart of instance", name,
                     "refused:", refused.getMessage());
             }
         });

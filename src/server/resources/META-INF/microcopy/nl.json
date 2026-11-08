@@ -918,6 +918,18 @@
       "target": "happened"
     }
   ],
+  "restarted_unanswered": [
+    {
+      "text": "Herstart, antwoordde niet",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": "{$subject} antwoordde niet meer op zijn site en is herstart",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
   "process_crash_loop": {
     "text": "Proces blijft crashen",
     "scope": "notification_event"
@@ -1617,6 +1629,18 @@
     },
     {
       "text": "Of elke app nog verbonden is met de databases die eraan gekoppeld zijn, en herverbinden waar dat niet zo is",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "restart_hung_workloads": [
+    {
+      "text": "Vastgelopen apps herstarten",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Of elke app die een site bedient nog antwoordt, en een app herstarten die verbindingen aanneemt zonder te antwoorden",
       "scope": "hohenheim",
       "target": "task_description"
     }

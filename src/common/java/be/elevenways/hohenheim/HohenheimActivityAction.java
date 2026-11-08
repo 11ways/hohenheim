@@ -102,6 +102,11 @@ public enum HohenheimActivityAction implements ActivityAction {
     // it queued, the cause it recorded) is the row a person reads, and the full log lists it through the internal
     // filter.
     RECONCILED("reconciled", HistoryVisibility.INTERNAL),
+    /**
+     * A running workload a site serves stopped answering HTTP and was restarted by its crash policy; the detail is the
+     * last probe's failure.
+     */
+    RESTARTED_UNANSWERED("restarted_unanswered"),
     BACKUP("backup"),
     /** A backup attempt that stored nothing; the detail is the failure's own reason. */
     BACKUP_FAILED("backup_failed"),
@@ -415,7 +420,7 @@ public enum HohenheimActivityAction implements ActivityAction {
             case REAPED_CONTROLLER_OBJECTS -> FactShape.of(FactShape.key(OBJECTS_KEY, CoreTypes.LIST));
             case TEMPLATE_CAPTURED -> FactShape.of(FactShape.key(TEMPLATE_KEY, FactShape.RECORD));
             case VOLUME_DECLARED, VOLUME_REDECLARED -> FactShape.of(FactShape.key(VOLUME_KEY, CoreTypes.TEXT));
-            case APP_UPDATE_FAILED, BACKUP_FAILED, RENEWAL_FAILED ->
+            case APP_UPDATE_FAILED, BACKUP_FAILED, RENEWAL_FAILED, RESTARTED_UNANSWERED ->
                 FactShape.of(FactShape.optionalKey(REASON_KEY, CoreTypes.TEXT));
             case QUARANTINED -> FactShape.of(FactShape.optionalKey(REASON_KEY, CoreTypes.TEXT));
             case HOST_KEY_PINNED, HOST_KEY_VERIFIED -> FactShape.of(FactShape.key(LANE_KEY, CoreTypes.TEXT),
@@ -512,8 +517,8 @@ public enum HohenheimActivityAction implements ActivityAction {
             case CONSOLE_COMMAND, DEVICE_ATTACHED, DEVICE_RESIZED, DEVICE_DETACHED, TEMPLATE_CAPTURED, VOLUME_DECLARED,
                  VOLUME_REDECLARED, APP_UPDATED, APP_UPDATE_FAILED, PREVIEW_TRIGGERED, RESTORED_SNAPSHOT, EXEC,
                  EXEC_ENDED, MIGRATED, FILES_SAVE, FILES_UPLOAD, FILES_MKDIR, FILES_RENAME, FILES_DELETE, FILES_WRITE,
-                 DELETED_DATA, SETTLED_INTERRUPTED, RECONCILED, BACKUP, BACKUP_FAILED, SNAPSHOT, SHELL_OPEN,
-                 SHELL_CLOSE, WORKLOAD_EXITED, WORKLOAD_CRASH_LOOPED, WORKLOAD_START_FAILED,
+                 DELETED_DATA, SETTLED_INTERRUPTED, RECONCILED, RESTARTED_UNANSWERED, BACKUP, BACKUP_FAILED, SNAPSHOT,
+                 SHELL_OPEN, SHELL_CLOSE, WORKLOAD_EXITED, WORKLOAD_CRASH_LOOPED, WORKLOAD_START_FAILED,
                  WORKLOAD_ISOLATION_REFUSED, WORKLOAD_NEVER_READY, WORKLOAD_STOP_FAILED, WORKLOAD_REMOVE_FAILED,
                  WORKLOAD_RESTORE_FAILED, WORKLOAD_RESTORE_INTERRUPTED, WORKLOAD_COPY_LOST,
                  WORKLOAD_RESTART_REFUSED, DESTROY_UNFINISHED -> List.of(InstanceModel.MODEL_ID);

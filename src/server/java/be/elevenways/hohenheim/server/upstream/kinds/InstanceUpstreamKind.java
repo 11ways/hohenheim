@@ -93,10 +93,19 @@ public final class InstanceUpstreamKind implements UpstreamKindHandler {
                 HohenheimMicrocopy.SITE_FAULT.of("no_instance"));
         }
 
-        Object scheme = settings.get(SCHEME.getName());
-
         return new InstanceUpstreamHandler(site.get(SiteModel.ID), instanceId,
-            RawValues.isOn(settings, WEBSOCKET_UPGRADE),
-            scheme == null || scheme.toString().isBlank() ? "http" : scheme.toString());
+            RawValues.isOn(settings, WEBSOCKET_UPGRADE), schemeOf(settings));
+    }
+
+    /** @return the scheme the site forwards to its workload with, http when it declares none */
+    public static @NonNull String schemeOf(@NonNull Map<String, Object> settings) {
+        Object scheme = settings.get(SCHEME.getName());
+        return scheme == null || scheme.toString().isBlank() ? "http" : scheme.toString();
+    }
+
+    /** @return the scheme a stored site forwards to its workload with */
+    public static @NonNull String schemeOf(@NonNull Row site) {
+        Map<String, Object> settings = RawValues.mapOrNull(site.get(SiteModel.SETTINGS));
+        return schemeOf(settings == null ? Map.of() : settings);
     }
 }

@@ -24,6 +24,7 @@ import be.elevenways.hohenheim.server.task.ReclaimDockerImages;
 import be.elevenways.hohenheim.server.task.ReconcileDockerResources;
 import be.elevenways.hohenheim.server.task.ReconcileInstanceStatus;
 import be.elevenways.hohenheim.server.task.RepairDatabaseLinks;
+import be.elevenways.hohenheim.server.task.RestartHungWorkloads;
 import be.elevenways.hohenheim.server.task.ResignDnssecZones;
 import be.elevenways.hohenheim.server.task.SecuritySweep;
 import be.elevenways.hohenheim.server.task.SuperviseProxyListeners;
@@ -97,6 +98,7 @@ class HohenheimTaskBootstrapTest {
         ReconcileEngineIsolation.class,
         ReconcileInstanceStatus.class,
         RepairDatabaseLinks.class,
+        RestartHungWorkloads.class,
         ResignDnssecZones.class,
         SecuritySweep.class,
         SuperviseProxyListeners.class,

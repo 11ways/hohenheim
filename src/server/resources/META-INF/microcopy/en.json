@@ -918,6 +918,18 @@
       "target": "happened"
     }
   ],
+  "restarted_unanswered": [
+    {
+      "text": "Restarted, not answering",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": "{$subject} stopped answering its site and was restarted",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
   "process_crash_loop": {
     "text": "Process crash loop",
     "scope": "notification_event"
@@ -1617,6 +1629,18 @@
     },
     {
       "text": "Whether every app is still connected to the databases attached to it, reconnecting any that is not",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "restart_hung_workloads": [
+    {
+      "text": "Restart hung apps",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Whether every app a site serves still answers, restarting one that keeps accepting connections without answering",
       "scope": "hohenheim",
       "target": "task_description"
     }
