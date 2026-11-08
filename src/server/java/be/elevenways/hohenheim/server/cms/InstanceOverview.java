@@ -17,6 +17,7 @@ import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.runtime.WorkloadLane;
 import be.elevenways.hohenheim.HohenheimWidgets;
 import be.elevenways.hohenheim.instance.InstanceDiskView;
+import be.elevenways.hohenheim.instance.InstanceEndpointTable;
 import be.elevenways.hohenheim.instance.InstanceEndpointView;
 import be.elevenways.hohenheim.instance.InstanceLiveUsageView;
 import be.elevenways.hohenheim.instance.LiveFigureView;
@@ -497,7 +498,8 @@ public final class InstanceOverview {
         if (figure != null) {
             body.add(figure);
         }
-        body.add(new WidgetInstance(HohenheimWidgets.INSTANCE_ENDPOINTS.id(), Map.of()).withData(ports));
+        body.add(new WidgetInstance(HohenheimWidgets.INSTANCE_ENDPOINTS.id(), Map.of())
+            .withData(InstanceEndpointTable.of(ports)));
         return new WidgetInstance(CardWidget.ID, Map.of("title", title, "lead", lead), new WidgetTree(body));
     }
 
@@ -560,7 +562,11 @@ public final class InstanceOverview {
         for (PublishedPort published : named) {
             if (Integer.valueOf(port).equals(published.hostPort()) && published.protocol().equals(protocol)) {
                 PortPurpose purpose = published.purpose();
-                return purpose == PortPurpose.OTHER ? Microcopy.literal(published.name()) : purpose.label();
+                if (purpose != PortPurpose.OTHER) {
+                    return purpose.label();
+                }
+                String name = published.name();
+                return name == null || name.isBlank() ? null : Microcopy.literal(name);
             }
         }
         return null;

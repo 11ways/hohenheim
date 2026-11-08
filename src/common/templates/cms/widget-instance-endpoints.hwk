@@ -2,20 +2,21 @@
    (InstanceOverview) carries the title and the hint and is drawn only while a port is held; this widget is the
    table only. #}
 {% declare widget: WidgetInstance %}
-{% declare data: List<InstanceEndpointView> = null %}
+{% declare data: InstanceEndpointTable = null %}
 
-{% if data %}
+{% if data != null and data.rows %}
+{% let purposes = data.purposes %}
 <pl-table>
     <pl-table-header><pl-table-row>
-        <pl-table-head>{{ t("port_for", scope: "instance_overview") }}</pl-table-head>
+        {% if purposes %}<pl-table-head>{{ t("port_for", scope: "instance_overview") }}</pl-table-head>{% /if %}
         <pl-table-head>{{ t("address", scope: "instance_overview") }}</pl-table-head>
         <pl-table-head>{{ t("protocol", scope: "instance_overview") }}</pl-table-head>
         <pl-table-head>{{ t("port_state", scope: "instance_overview") }}</pl-table-head>
     </pl-table-row></pl-table-header>
     <pl-table-body>
-        {% each data as endpoint %}
+        {% each data.rows as endpoint %}
         <pl-table-row data-endpoint-port={% endpoint.port %}>
-            <pl-table-cell data-endpoint-purpose="1">{% if endpoint.purpose != null %}{{ endpoint.purpose }}{% /if %}</pl-table-cell>
+            {% if purposes %}<pl-table-cell data-endpoint-purpose="1">{% if endpoint.purpose != null %}{{ endpoint.purpose }}{% /if %}</pl-table-cell>{% /if %}
             <pl-table-cell>
                 {% if endpoint.address != "" %}
                 <code>{{ endpoint.address }}:{{ endpoint.port }}</code>

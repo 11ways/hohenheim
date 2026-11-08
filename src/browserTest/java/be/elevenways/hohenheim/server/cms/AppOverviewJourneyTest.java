@@ -717,7 +717,9 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
             String loopback = adminGet("/admin/instances/" + id + "/page/overview").body();
             assertThat(loopback).as("step 4: the loopback port says only the host reaches it, with no fix link")
                 .contains("Port 25567 is published on 127.0.0.1 only")
-                .doesNotContain("data-endpoint-fix=\"1\"").doesNotContain("Port 25567 has no public address");
+                .doesNotContain("data-endpoint-fix=\"1\"").doesNotContain("Port 25567 has no public address")
+                .as("step 4: and a port naming no purpose draws no empty For column")
+                .doesNotContain("data-endpoint-purpose");
         } finally {
             PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, id);
             HardDeletes.row(Models.get(InstanceModel.class), instance);
