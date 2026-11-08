@@ -163,6 +163,7 @@ public final class ProxySessionSupport {
         store.save(session);
         writeSessionCookie(exchange, session);
         exchange.putAttachment(ESTABLISHED, session);
+        SiteSignIns.record(exchange, siteId, providerId, subject);
         return session;
     }
 

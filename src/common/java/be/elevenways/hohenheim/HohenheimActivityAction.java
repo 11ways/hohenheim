@@ -107,6 +107,8 @@ public enum HohenheimActivityAction implements ActivityAction {
      * last probe's failure.
      */
     RESTARTED_UNANSWERED("restarted_unanswered"),
+    /** A visitor signed in to a protected site; its actor is the person as the provider named them. */
+    SITE_SIGNED_IN("site_signed_in"),
     BACKUP("backup"),
     /** A backup attempt that stored nothing; the detail is the failure's own reason. */
     BACKUP_FAILED("backup_failed"),
@@ -432,6 +434,8 @@ public enum HohenheimActivityAction implements ActivityAction {
                     EnumField.EnumValue posture = ServerModel.POSTURE.getValues().get(token);
                     return posture == null ? null : posture.getLabel();
                 }), FactShape.key(WARNING_VERSION_KEY, CoreTypes.INTEGER));
+            case SITE_SIGNED_IN -> FactShape.of(FactShape.key(NAME_KEY, CoreTypes.TEXT),
+                FactShape.key(VIA_KEY, CoreTypes.TEXT));
             case PREVIEW_TRIGGERED -> FactShape.of(FactShape.key(VIA_KEY, CoreTypes.TEXT),
                 FactShape.key(REF_KEY, CoreTypes.TEXT));
             case RESTORED_BACKUP -> FactShape.of(FactShape.optionalKey(BACKUP_KEY, CoreTypes.INTEGER),
@@ -509,7 +513,7 @@ public enum HohenheimActivityAction implements ActivityAction {
             case DEPLOYED, STOPPED, ROLLED_BACK -> List.of(InstanceModel.MODEL_ID, StackModel.MODEL_ID);
             case VOLUMES_PURGED -> List.of(StackModel.MODEL_ID);
             case VARIABLE_SET, VARIABLE_DELETED -> List.of(InstanceModel.MODEL_ID, EnvironmentModel.MODEL_ID);
-            case DOMAIN_ADDED, DOMAIN_REMOVED, ENABLED, DISABLED, CLONED -> List.of(SiteModel.MODEL_ID);
+            case DOMAIN_ADDED, DOMAIN_REMOVED, ENABLED, DISABLED, CLONED, SITE_SIGNED_IN -> List.of(SiteModel.MODEL_ID);
             case TESTED -> List.of(NotificationChannelModel.MODEL_ID);
             case APPROVED, UNAPPROVED -> List.of(InstanceTemplateModel.MODEL_ID);
             case QUARANTINE_LIFTED -> List.of(ReleasedRouteClaimModel.MODEL_ID);

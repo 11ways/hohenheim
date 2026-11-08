@@ -928,6 +928,24 @@
       "target": "happened"
     }
   ],
+  "site_signed_in": [
+    {
+      "text": "Signed in",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": "{$name} signed in through {$via}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_name": "true"
+    },
+    {
+      "text": "A visitor signed in to {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
   "restarted_unanswered": [
     {
       "text": "Restarted, not answering",

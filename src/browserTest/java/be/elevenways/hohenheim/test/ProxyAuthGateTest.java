@@ -2,18 +2,22 @@ package be.elevenways.hohenheim.test;
 
 import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
+import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.AccountabilityOrigin;
 import be.elevenways.zenit.server.setting.ServerSettings;
 import be.elevenways.zenit.server.http.RateLimitMiddleware;
 import com.sun.net.httpserver.HttpServer;
@@ -27,6 +31,7 @@ import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -138,6 +143,21 @@ class ProxyAuthGateTest {
         String viaCookie = request("gated.test", null, cookiePair);
         assertThat(statusLine(viaCookie)).contains("200");
         assertThat(viaCookie).contains("upstream-ok");
+
+        // 4b. The sign-in is in the site's history, once: who, through which provider, from the web. Neither the
+        //     cookie that followed nor a cookieless client signing in again from the same address adds a row.
+        assertThat(statusLine(request("gated.test", basic("alice", "s3cret"), null))).contains("200");
+        assertThat(HandlerSupport.awaitBackgroundIdle(Duration.ofSeconds(10)))
+            .as("step 4b: the sign-in log was written").isTrue();
+        List<RecordedChanges.Recorded> signIns =
+            RecordedChanges.withFact(siteModel, siteId, HohenheimActivityAction.SITE_SIGNED_IN);
+        assertThat(signIns).as("step 4b: one sign-in").hasSize(1);
+        assertThat(signIns.getFirst().fact(HohenheimActivityAction.SITE_SIGNED_IN))
+            .as("step 4b: naming who and through which provider")
+            .containsEntry(HohenheimActivityAction.NAME_KEY, "alice")
+            .containsEntry(HohenheimActivityAction.VIA_KEY, "Basic Gate");
+        assertThat(signIns.getFirst().origin()).as("step 4b: from the web")
+            .isEqualTo(AccountabilityOrigin.WEB.id().toString());
 
         // 5..7 assert on the RENDERED Set-Cookie text, not an internal flag: the whole bug
         // class is a cookie that claims to be Secure and is not (or the reverse). This

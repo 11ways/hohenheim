@@ -928,6 +928,24 @@
       "target": "happened"
     }
   ],
+  "site_signed_in": [
+    {
+      "text": "Aangemeld",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": "{$name} meldde zich aan via {$via}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_name": "true"
+    },
+    {
+      "text": "Een bezoeker meldde zich aan op {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
   "restarted_unanswered": [
     {
       "text": "Herstart, antwoordde niet",
