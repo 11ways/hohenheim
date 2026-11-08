@@ -126,7 +126,8 @@ public final class ServerOverviewState {
         state.add(new WidgetInstance(HohenheimWidgets.HOST_STATE.id(), Map.of())
             .withData(ServerParts.statusCellOf(server)));
         // Why a host takes no new apps, in the words the Hosts list and the attention band use (one verdict).
-        if (verdict.standing().severity() != null && verdict.reason() != null) {
+        boolean verdictSaid = verdict.standing().severity() != null && verdict.reason() != null;
+        if (verdictSaid) {
             state.add(alert(AlertVariant.WARNING, NoticeData.of(verdict.standing().label().resolve(locales, resolver),
                 verdict.reason().resolve(locales, resolver))));
         }
@@ -152,11 +153,15 @@ public final class ServerOverviewState {
             WidgetBadge.of(volumeBackend.label().resolve(locales, resolver),
                 volumeBackend.color(), volumeBackend.icon())))));
         if (volumeBackend == VolumeBackend.UNCHECKED && server.get(ServerModel.VOLUME_PROBED_AT) == null) {
-            // Never checked at all (a new host's stored default): there is no finding and no reason yet.
-            state.add(alert(AlertVariant.WARNING, NoticeData.of(
-                HohenheimMicrocopy.SERVER_OVERVIEW.of("volume_backend_never_checked_title").resolve(locales, resolver),
-                HohenheimMicrocopy.SERVER_OVERVIEW.of("volume_backend_never_checked_body")
-                    .resolve(locales, resolver))));
+            // Never checked at all (a new host's stored default): there is no finding and no reason yet. A host whose
+            // verdict already reads "Never checked yet" gets the badge alone: one problem said once.
+            if (!verdictSaid || server.get(ServerModel.PROBED_AT) != null) {
+                state.add(alert(AlertVariant.WARNING, NoticeData.of(
+                    HohenheimMicrocopy.SERVER_OVERVIEW.of("volume_backend_never_checked_title")
+                        .resolve(locales, resolver),
+                    HohenheimMicrocopy.SERVER_OVERVIEW.of("volume_backend_never_checked_body")
+                        .resolve(locales, resolver))));
+            }
         } else if (volumeBackend == VolumeBackend.UNCHECKED) {
             // The probe could not read the host: say so and why, never advise a filesystem it may already have.
             state.add(alert(AlertVariant.WARNING, NoticeData.of(

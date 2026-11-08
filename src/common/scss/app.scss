@@ -360,6 +360,14 @@
         min-width: 0;
     }
 
+    // A dashboard column holding several widgets (the tenant board's apps over its recent changes) sets them apart.
+    .hh-dashboard-band .widget-columns > .widget-section {
+        display: flex;
+        flex-direction: column;
+        gap: var(--pl-space-lg);
+        min-width: 0;
+    }
+
     .hh-attention-clear {
         display: flex;
         align-items: center;

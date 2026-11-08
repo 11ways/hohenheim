@@ -78,7 +78,7 @@
                             </pl-table-cell>
                             <pl-table-cell class="hh-deploys-when">
                                 {% if deploy.startedAtIso != "" %}
-                                <pl-relative-time datetime={% deploy.startedAtIso %} wording={% wording %} title={% deploy.startedAtIso %}></pl-relative-time>
+                                <pl-relative-time datetime={% deploy.startedAtIso %} wording={% wording %} title={% deploy.startedAtIso %} units="one"></pl-relative-time>
                                 {% /if %}
                             </pl-table-cell>
                             <pl-table-cell class="hh-deploys-when">{{ deploy.duration }}</pl-table-cell>

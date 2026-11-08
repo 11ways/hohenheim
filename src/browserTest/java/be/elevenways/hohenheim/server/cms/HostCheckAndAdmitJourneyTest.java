@@ -69,8 +69,9 @@ class HostCheckAndAdmitJourneyTest extends HohenheimTestBase {
             .as("step 1b: a new host's volume storage is stored not checked").isEqualTo("unchecked");
         String newHostPage = httpGet(CmsRoutes.subpage(HohenheimSlugs.ADMIN, HohenheimSlugs.SERVERS,
             host.get(ServerModel.ID), RecordOverview.SLUG).toUrl(), sessionToken).body();
-        assertThat(newHostPage).as("step 1b: the host page says it was not checked yet")
-            .contains("Volume storage not checked yet")
+        assertThat(newHostPage).as("step 1b: the host page says once that it was not checked yet, in its verdict")
+            .contains("Never checked yet")
+            .doesNotContain("Volume storage not checked yet")
             .doesNotContain("Mount a btrfs filesystem");
 
         // 2. Checking a host it cannot reach (an unpinned SSH host) is refused naming the check that must pass; the

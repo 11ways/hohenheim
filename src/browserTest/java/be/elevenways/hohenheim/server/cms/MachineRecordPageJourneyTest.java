@@ -158,10 +158,9 @@ class MachineRecordPageJourneyTest extends HohenheimHttpTestBase {
             assertThat(InstanceKinds.offers(app, WorkloadLane.FILES)).as("step 7: the Docker driver browses files")
                 .isTrue();
             assertThat(adminGet(appPage).body()).as("step 7: its resize recreates the container")
-                .contains("recreates a running workload's container")
-                .as("step 7: and says the ports are kept, naming the one case a number can still change")
-                .contains("It keeps its published ports")
-                .contains("only a number the host picked itself")
+                .contains("recreates the running container")
+                .as("step 7: and says the ports you set are kept, which leaves only a host-picked number to change")
+                .contains("ports you set are kept")
                 .doesNotContain("published port may change")
                 .as("step 7: its kind cards offer only what this record can become")
                 .contains("data-value=\"hohenheim:docker_container\"")
