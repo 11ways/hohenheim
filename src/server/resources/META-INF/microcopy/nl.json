@@ -10447,6 +10447,22 @@
       "scope": "attention_detail"
     }
   ],
+  "controller_disk": {
+    "text": "De schijf met {$path} is bijna vol",
+    "scope": "attention_title"
+  },
+  "host_disk": {
+    "text": "Schijf bijna vol op {$name}",
+    "scope": "attention_title"
+  },
+  "disk_filling": {
+    "text": "{$percent :percent} in gebruik, {$free :bytes} vrij van {$total :bytes}. Back-ups mislukken zodra hij vol is, dus maak nu ruimte vrij.",
+    "scope": "attention_detail"
+  },
+  "act_open_host": {
+    "text": "Open de host",
+    "scope": "attention_action"
+  },
   "control_plane_backup": [
     {
       "text": "Back-ups blijven op deze machine",

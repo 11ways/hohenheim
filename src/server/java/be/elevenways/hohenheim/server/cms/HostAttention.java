@@ -8,10 +8,16 @@ import be.elevenways.hohenheim.OnboardingStage;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.host.HostStanding;
 import be.elevenways.hohenheim.host.PreflightCheckView;
+import be.elevenways.hohenheim.model.HostMode;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.DataDirectory;
+import be.elevenways.hohenheim.server.database.DatabaseBackups;
 import be.elevenways.hohenheim.server.docker.DockerHealth;
+import be.elevenways.hohenheim.server.host.DiskSpace;
+import be.elevenways.hohenheim.server.host.HostDisk;
+import be.elevenways.hohenheim.server.host.VolumeBackends;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.task.VerifyWorkloadIsolation;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -24,6 +30,11 @@ import be.elevenways.zenit.common.task.orm.SystemTaskHistoryModel;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.io.IOException;
+import java.nio.file.FileStore;
+import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -32,6 +43,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 import static be.elevenways.hohenheim.server.cms.AttentionItems.byHost;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.item;
@@ -109,6 +122,113 @@ public final class HostAttention {
                 .about(AttentionSubject.host(id), heldBackText(held))
                 .forStage(OnboardingStage.ADMISSION));
         }
+    }
+
+    /**
+     * Every disk filling up ({@link DiskFill}): each filesystem the controller writes its database, backups and dumps
+     * to, measured here, and with {@code hosts} each host's instance-data disk from its stored fresh reading. ONE item
+     * per filesystem: a local host whose volume root shares a controller disk is that disk's item.
+     *
+     * AIDEV-NOTE: Robbedoes' root disk filled to 89% under kept backup archives on 2026-10-30, the nightly dump ran
+     * out of room and took the shared MongoDB container down with it, and nothing said so for weeks: the live hosts
+     * have no mail transport, so the dashboard is the one channel an operator is sure to see.
+     *
+     * @param hosts whether host workloads run here, so hosts carry disks of their own
+     */
+    static void disksFillingUp(@NonNull List<AttentionItem> items, boolean hosts) {
+        disksFillingUp(items, hosts, HostAttention::spaceOf);
+    }
+
+    /**
+     * {@link #disksFillingUp(List, boolean)} with the controller's filesystems measured by {@code measure}, so a test
+     * proves the projection without filling a disk.
+     */
+    public static void disksFillingUp(@NonNull List<AttentionItem> items, boolean hosts,
+                                      @NonNull Function<FileStore, @Nullable DiskSpace> measure) {
+        // Only a store that answered counts as reported: a local host on a store the controller could not measure
+        // still speaks from its own stored reading.
+        Set<FileStore> seen = new HashSet<>();
+        Set<FileStore> measured = new HashSet<>();
+        for (Supplier<String> setting : List.<Supplier<String>>of(() -> DataDirectory.path().toString(),
+                () -> DatabaseBackups.backupRoot().toString())) {
+            Path path = pathOf(setting);
+            FileStore store = path == null ? null : storeOf(path);
+            DiskSpace space = store == null || !seen.add(store) ? null : measure.apply(store);
+            if (space == null) {
+                continue;
+            }
+            measured.add(store);
+            AttentionSeverity severity = space.fill().severity();
+            if (severity != null) {
+                items.add(item(severity, "hard-drive",
+                    HohenheimMicrocopy.ATTENTION_TITLE.of("controller_disk").withArg("path", path.toString()),
+                    diskDetail(space)));
+            }
+        }
+        if (!hosts) {
+            return;
+        }
+        Path volumeRoot = pathOf(VolumeBackends::volumeRoot);
+        FileStore localVolumes = volumeRoot == null ? null : storeOf(volumeRoot);
+        for (Row server : Models.get(ServerModel.class).find().all()) {
+            if (HostMode.LOCAL.declaredBy(server) && localVolumes != null && measured.contains(localVolumes)) {
+                continue;
+            }
+            HostDisk.Reading reading = HostDisk.storedOf(server);
+            AttentionSeverity severity = reading == null || !reading.fresh() ? null : reading.space().fill().severity();
+            if (severity == null) {
+                continue;
+            }
+            int id = server.get(ServerModel.ID);
+            items.add(item(severity, "hard-drive",
+                HohenheimMicrocopy.ATTENTION_TITLE.of("host_disk").withArg("name", server.get(ServerModel.NAME)),
+                diskDetail(reading.space()),
+                CmsRoutes.open(ADMIN, HohenheimSlugs.SERVERS, id),
+                HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_host")));
+        }
+    }
+
+    /** @return the setting's path made absolute, null when the stored value names no path */
+    private static @Nullable Path pathOf(@NonNull Supplier<String> setting) {
+        String value = setting.get();
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Path.of(value).toAbsolutePath().normalize();
+        } catch (InvalidPathException unusable) {
+            return null;
+        }
+    }
+
+    /** @return the filesystem holding {@code path}, or its nearest existing parent; null when none answers */
+    private static @Nullable FileStore storeOf(@NonNull Path path) {
+        for (Path at = path.toAbsolutePath(); at != null; at = at.getParent()) {
+            if (Files.exists(at)) {
+                try {
+                    return Files.getFileStore(at);
+                } catch (IOException unreadable) {
+                    return null;
+                }
+            }
+        }
+        return null;
+    }
+
+    /** @return the filesystem's size and what an unprivileged writer may use, null when it cannot say */
+    private static @Nullable DiskSpace spaceOf(@NonNull FileStore store) {
+        try {
+            long total = store.getTotalSpace();
+            long free = Math.min(store.getUsableSpace(), total);
+            return total > 0 ? new DiskSpace(total, free) : null;
+        } catch (IOException unreadable) {
+            return null;
+        }
+    }
+
+    private static @NonNull Microcopy diskDetail(@NonNull DiskSpace space) {
+        return HohenheimMicrocopy.ATTENTION_DETAIL.of("disk_filling").withArg("percent", space.percentUsed())
+            .withArg("free", space.freeBytes()).withArg("total", space.totalBytes());
     }
 
     /**

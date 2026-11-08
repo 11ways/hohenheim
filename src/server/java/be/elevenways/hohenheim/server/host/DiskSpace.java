@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.server.host;
 
+import be.elevenways.protoblast.common.value.Percent;
+import org.checkerframework.checker.nullness.qual.NonNull;
+
 /**
  * One filesystem's size and what is still free on it, in bytes.
  *
@@ -19,5 +22,15 @@ public record DiskSpace(long totalBytes, long freeBytes) {
     /** @return the bytes in use */
     public long usedBytes() {
         return this.totalBytes - this.freeBytes;
+    }
+
+    /** @return how full it is */
+    public @NonNull DiskFill fill() {
+        return DiskFill.of(usedBytes(), this.totalBytes);
+    }
+
+    /** @return the share in use, rounded to a whole percent */
+    public @NonNull Percent percentUsed() {
+        return DiskFill.percentUsed(usedBytes(), this.totalBytes);
     }
 }

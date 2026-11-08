@@ -194,7 +194,7 @@ public final class AttentionCollector {
         return items;
     }
 
-    /** The host tier's items (the local daemon, admission, parked ports), which the Hosts list also leads with. */
+    /** The host tier's items (the local daemon, admission, full disks, parked ports), which the Hosts list leads with. */
     public static @NonNull List<AttentionItem> hosts() {
         List<AttentionItem> items = new ArrayList<>();
         if (HohenheimRoles.dockerRequired()) {
@@ -208,6 +208,7 @@ public final class AttentionCollector {
             HostAttention.isolationUnenforced(items);
             HostAttention.stuckReleasingPorts(items, Now.instant().minus(HostAttention.RELEASING_STUCK_AFTER));
         }
+        HostAttention.disksFillingUp(items, HohenheimRoles.hostWorkloadsEnabled());
         return items;
     }
 

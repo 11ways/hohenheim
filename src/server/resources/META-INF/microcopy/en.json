@@ -10447,6 +10447,22 @@
       "scope": "attention_detail"
     }
   ],
+  "controller_disk": {
+    "text": "The disk holding {$path} is almost full",
+    "scope": "attention_title"
+  },
+  "host_disk": {
+    "text": "Disk almost full on {$name}",
+    "scope": "attention_title"
+  },
+  "disk_filling": {
+    "text": "{$percent :percent} in use, {$free :bytes} free of {$total :bytes}. Backups fail once it runs out, so make room now.",
+    "scope": "attention_detail"
+  },
+  "act_open_host": {
+    "text": "Open the host",
+    "scope": "attention_action"
+  },
   "control_plane_backup": [
     {
       "text": "Backups stay on this machine",

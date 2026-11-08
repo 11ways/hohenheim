@@ -13,12 +13,12 @@ import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
+import be.elevenways.hohenheim.server.host.DiskFill;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.protoblast.common.value.Percent;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.zenit.common.routing.BoundEndpoint;
@@ -60,12 +60,6 @@ import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
  * @since 0.1.0
  */
 public final class InstanceAttention {
-
-    /** Above this fraction of an ENFORCED root-disk ceiling an instance needs attention. */
-    private static final double DISK_HIGH = 0.85;
-
-    /** ... and above this it is about to break rather than merely worth watching. */
-    private static final double DISK_CRITICAL = 0.95;
 
     private InstanceAttention() {
     }
@@ -371,16 +365,17 @@ public final class InstanceAttention {
             if (used == null || limit == null || limit <= 0) {
                 continue;
             }
-            double fraction = (double) used / limit;
-            if (fraction < DISK_HIGH) {
+            DiskFill fill = DiskFill.of(used, limit);
+            AttentionSeverity severity = fill.severity();
+            if (severity == null) {
                 continue;
             }
-            items.add(item(fraction >= DISK_CRITICAL ? AttentionSeverity.ERROR : AttentionSeverity.WARNING,
+            items.add(item(severity,
                 "hard-drive",
                 HohenheimMicrocopy.ATTENTION_TITLE.of("instance_disk")
                     .withArg("name", instance.get(InstanceModel.NAME)),
                 HohenheimMicrocopy.ATTENTION_DETAIL.of("instance_disk")
-                    .withArg("percent", Percent.of(Math.round(fraction * 100))).withArg("limit", limit),
+                    .withArg("percent", DiskFill.percentUsed(used, limit)).withArg("limit", limit),
                 InstanceParts.recordRoute(ADMIN, instance, null),
                 HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_app")
                     .withArg("name", instance.get(InstanceModel.NAME))));
