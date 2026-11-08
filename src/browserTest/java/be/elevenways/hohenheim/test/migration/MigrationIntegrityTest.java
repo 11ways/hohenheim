@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.migration;
 
 import be.elevenways.hohenheim.migration.HohenheimMigration;
 import be.elevenways.hohenheim.migration.M001_HohenheimBaseline;
+import be.elevenways.hohenheim.migration.M002_AfterBaseline;
 import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationException;
 import be.elevenways.zenit.common.orm.migration.MigrationKey;
@@ -323,21 +324,24 @@ class MigrationIntegrityTest {
     }
 
     /**
-     * The baseline is irreversible: a rollback is refused before any down() runs and the schema stays whole.
+     * The baseline is irreversible: a rollback naming it is refused before any down() runs and the schema stays whole.
      */
     @Test
     void theBaselineRefusesARollbackAndKeepsTheSchema() throws Exception {
         SqliteDatasource datasource = emptyDatabase("rollback");
-        List<Supplier<Migration>> only = List.of(M001_HohenheimBaseline::new);
+        // The chain up to its published migration, the least a runner admits of this stream.
+        List<Supplier<Migration>> chain = List.of(M001_HohenheimBaseline::new, M002_AfterBaseline::new);
 
         // 1. Build the whole schema on its own; it depends on nothing outside itself.
-        assertThat(new MigrationRunner(datasource, only).migrate().isSuccess()).as("step 1: the schema builds")
+        assertThat(new MigrationRunner(datasource, chain).migrate().isSuccess()).as("step 1: the schema builds")
             .isTrue();
         long created = scalar(datasource, SCHEMA_TABLES);
         assertThat(created).as("step 1: the schema is not empty").isGreaterThan(50L);
 
-        // 2. Rolling back is refused up front, and every table survives it.
-        assertThatThrownBy(() -> new MigrationRunner(datasource, only).rollback())
+        // 2. Rolling the chain back is refused up front at the baseline, and every table survives it, the published
+        //    migration's own included: no down() ran.
+        assertThatThrownBy(() -> new MigrationRunner(datasource, chain).rollback(List.of(
+                MigrationKey.of(new M002_AfterBaseline()), MigrationKey.of(new M001_HohenheimBaseline()))))
             .as("step 2: the irreversible baseline refuses its rollback")
             .isInstanceOf(MigrationException.class);
         assertThat(scalar(datasource, SCHEMA_TABLES)).as("step 2: no table was dropped").isEqualTo(created);

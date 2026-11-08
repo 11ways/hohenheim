@@ -1,6 +1,9 @@
 package be.elevenways.hohenheim.test.migration;
 
 import be.elevenways.hohenheim.migration.M001_HohenheimBaseline;
+import be.elevenways.hohenheim.migration.M002_AfterBaseline;
+import be.elevenways.zenit.common.orm.migration.Migration;
+import be.elevenways.zenit.common.orm.migration.MigrationKey;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import be.elevenways.zenit.test.support.SchemaSnapshot;
@@ -11,6 +14,7 @@ import java.io.File;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -20,8 +24,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * AIDEV-NOTE: the chain's classes are deleted, so its schema is PINNED as a SchemaSnapshot rendering
  * ({@value #CHAIN_RESOURCE}): rendered once on 2026-10-21 from a fresh SQLite database the old chain migrated through
  * auto-discovery (hohenheim 718bedc3), kept to the tables the baseline creates so another stream's schema change never
- * touches it. It is history, never regenerated; an appended migration changes neither side. The baseline runs alone,
- * which also proves it depends on no other stream's table.
+ * touches it. It is history, never regenerated; an appended migration changes neither side. The baseline runs with
+ * no other stream, which also proves it depends on no other stream's table; the published M002 runs with it (a runner
+ * admits no chain short of its published migration) and is rolled back through its own down() before the compare.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -43,7 +48,10 @@ class HohenheimBaselineSnapshotTest {
         db.delete();
         db.deleteOnExit();
         SqliteDatasource datasource = new SqliteDatasource(TestSqliteFiles.url(db.toPath()));
-        new MigrationRunner(datasource, List.of(M001_HohenheimBaseline::new)).migrate().requireSuccess();
+        List<Supplier<Migration>> migrations = List.of(M001_HohenheimBaseline::new, M002_AfterBaseline::new);
+        new MigrationRunner(datasource, migrations).migrate().requireSuccess();
+        new MigrationRunner(datasource, migrations).rollback(MigrationKey.of(new M002_AfterBaseline()))
+            .requireSuccess();
 
         // The runner's own zenit_ ledgers are no part of the stream's schema.
         SchemaSnapshot baseline = SchemaSnapshot.of(datasource, table -> !table.startsWith("zenit_"));

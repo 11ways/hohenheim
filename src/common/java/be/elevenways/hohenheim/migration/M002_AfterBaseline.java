@@ -11,8 +11,8 @@ import java.util.List;
  * build hooks, the database dump ledger, the DNS peer that mirrors every zone, site redirects, and the status probe
  * backfill of the starter Minecraft servers ({@link StatusProbeBackfill}).
  *
- * AIDEV-NOTE: THE one migration after the last published version (M001, recorded on kuifje and robbedoes on
- * 2026-10-21). Until the next live deploy publishes it, every schema change edits THIS migration; never add an M003.
+ * AIDEV-NOTE: PUBLISHED: kuifje and robbedoes applied it on 2026-11-08, so it is frozen (pinned in
+ * migration-pins.txt). A schema change from now on is a new M003; never edit this one again.
  * Every column is nullable, so the rows a live install holds stay valid and read as "not recorded": generations read
  * as 0 ("never rotated, deployed with it"), a pending password as "no change in flight". Its one data step is the
  * status probe backfill, which records the rows it writes. down() undoes exactly what up() did, in reverse.

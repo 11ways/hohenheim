@@ -184,8 +184,8 @@ test one end-to-end: inline `NotificationDispatcher` + `webhook://default` + a l
 
 ## Migrations
 
-The INSTALL schema starts from one baseline migration (followed by at most ONE unpublished migration,
-today `M002_AfterBaseline`, `2026_10_23_000001`),
+The INSTALL schema starts from one baseline migration plus `M002_AfterBaseline` (`2026_10_23_000001`, published
+on kuifje and robbedoes 2026-11-08, pinned) and at most ONE unpublished migration after it (none yet),
 `src/common/java/be/elevenways/hohenheim/migration/M001_HohenheimBaseline.java`
 (version `2026_10_21_000001`, name `hohenheim_baseline`: the workspace's squash-baseline
 convention), GENERATED on 2026-10-21 by folding
@@ -214,8 +214,8 @@ those citations are history, not files you will find.
   editing an operation in one makes the next `--run-migrations` rehearsal REFUSE
   under `database.migration_integrity=fail`. The rule is ONE declared fact plus a
   committed table: `MigrationIntegrityTest.DEPLOYED_THROUGH` is the highest
-  version every install that must keep booting has applied or adopted (`2026_10_21_000001`: the
-  baseline is pinned from the day it landed, since adoption records its digest),
+  version every install that must keep booting has applied or adopted (`HohenheimMigration.PUBLISHED`,
+  `2026_10_23_000001` since the 2026-11-08 live deploy; the baseline was pinned from the day it landed),
   and `src/browserTest/resources/migration-pins.txt` carries one
   `<class><TAB><digest>` line per migration at or below it. Editing a pinned
   migration fails the build naming both digests; a migration below the mark with
@@ -223,11 +223,9 @@ those citations are history, not files you will find.
   paste. A deploy that applied migrations raises the mark and adds the pins
   (`tools/deploy-host.sh` reminds it); a pin is never regenerated to make a red
   build green. Comments and formatting are outside the digest.
-- NEVER add a migration. A chain has at most ONE migration newer than its last
-  published (live-deployed) version: today `M002_AfterBaseline`, above the mark.
-  Every schema change edits that one migration until a live deploy publishes it
-  (raising the mark); only then may the next change create `M003_...`, with a
-  LATER dated version (never `021`, which sorts before the baseline's version).
+- A chain has at most ONE migration newer than its last published (live-deployed) version. `M002_AfterBaseline`
+  is published and frozen, so the next schema change creates `M003_...` with a LATER dated version than
+  `2026_10_23_000001`; every further change edits that M003 until a live deploy publishes it (raising the mark).
   Use the ORM DSL (`alterTable` + `addColumn`/`dropColumn`), never raw SQL.
   Existing rows are real, so a column added to a populated table is nullable or
   carries a default, and a backfill is a `builder.data(...)` step -- never a

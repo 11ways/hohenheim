@@ -7,3 +7,4 @@
 # The 001..019 chain was squashed into M001_HohenheimBaseline on 2026-10-21 (docs/migration-squash-2026-10-21); its pins
 # left with its classes. The baseline is pinned from the start: every live install adopts it, recording this digest.
 M001_HohenheimBaseline	4ec5e67d1883e35bfb4da8b17d9f272f783d8c1b07918513f86a3ca3ae980d1d
+M002_AfterBaseline	cbaae7d01b0d317359b6a1cd2cf0708b4f67f35791158af1dbb102e70de60a06

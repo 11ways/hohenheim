@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.migration;
 
 import be.elevenways.hohenheim.migration.HohenheimMigration;
 import be.elevenways.zenit.common.orm.migration.Migration;
+import be.elevenways.zenit.common.orm.migration.MigrationKey;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import be.elevenways.zenit.server.setting.ServerSettings;
@@ -18,13 +19,13 @@ import java.util.function.Supplier;
 /**
  * Builds the database an install that applied Hohenheim's migrations only up to one version is in.
  *
- * AIDEV-NOTE: an older install is built by running the DISCOVERED set minus the Hohenheim migrations
- * above the version, never by deleting ledger rows off a fully migrated file. Removing a MIDDLE row
- * produces a history no real install can have (a migration pending behind applied ones of its own
- * stream), which the strict integrity check rightly refuses as out of order; that is how the
- * rehearsal fixture broke the day a migration was appended after the one it regressed. Other
- * streams (zenit core, the modules) stay whole: they number independently and are not what an
- * upgrade of this app's jar moves.
+ * AIDEV-NOTE: an older install is built by migrating the DISCOVERED set whole, then rolling the Hohenheim migrations
+ * above the version back through their own down() (a rollback removes its ledger row): the history a real install
+ * that never applied them holds. Running a partial set instead is refused by core once a
+ * migration above the cut is the stream's published version (a chain must hold its published migration), and
+ * deleting a MIDDLE applied row produces a history no real install can have (a migration pending behind applied ones
+ * of its own stream), which the strict integrity check rightly refuses as out of order. Other streams (zenit core,
+ * the modules) stay whole: they number independently and are not what an upgrade of this app's jar moves.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -57,15 +58,12 @@ public final class InstallsAt {
     private static void migrate(@NonNull Path file, @NonNull Predicate<String> keepsOwnVersion) {
         SqliteDatasource datasource = new SqliteDatasource(TestSqliteFiles.url(file));
         try {
-            List<Supplier<Migration>> kept = new ArrayList<>();
-            for (Supplier<Migration> supplier : MigrationRunner.discoverMigrations(
-                    datasource.getDatasourceIdentifier())) {
-                Migration migration = supplier.get();
-                if (!isHohenheim(migration) || keepsOwnVersion.test(migration.getVersion())) {
-                    kept.add(supplier);
-                }
+            new MigrationRunner(datasource).migrate().requireSuccess();
+            List<MigrationKey> above = hohenheimMigrations(datasource.getDatasourceIdentifier()).stream()
+                .filter(migration -> !keepsOwnVersion.test(migration.getVersion())).map(MigrationKey::of).toList();
+            if (!above.isEmpty()) {
+                new MigrationRunner(datasource).rollback(above).requireSuccess();
             }
-            new MigrationRunner(datasource, kept).migrate().requireSuccess();
         } finally {
             datasource.close();
         }

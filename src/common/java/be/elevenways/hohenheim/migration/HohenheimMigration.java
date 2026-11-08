@@ -23,9 +23,9 @@ public abstract class HohenheimMigration extends Migration {
     @NonNull
     public static final String STREAM = "be.elevenways.hohenheim";
 
-    /** The Hohenheim version its live hosts recorded last (kuifje, robbedoes, 2026-10-21); only a live deploy moves it. */
+    /** The Hohenheim version its live hosts recorded last (kuifje, robbedoes, 2026-11-08); only a live deploy moves it. */
     @NonNull
-    public static final String PUBLISHED = "2026_10_21_000001";
+    public static final String PUBLISHED = "2026_10_23_000001";
 
     protected HohenheimMigration(@NonNull String version, @NonNull String name) {
         super(version, name);
