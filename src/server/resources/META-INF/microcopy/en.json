@@ -16936,7 +16936,7 @@
     "scope": "certificate"
   },
   "state_renews_detail": {
-    "text": "Renews itself; {$expiry}",
+    "text": "Renews itself",
     "scope": "certificate"
   },
   "lets_in_column": {

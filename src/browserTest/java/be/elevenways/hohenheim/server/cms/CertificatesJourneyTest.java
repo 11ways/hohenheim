@@ -64,7 +64,7 @@ class CertificatesJourneyTest extends HohenheimTestBase {
         assertThat(worksCell.state()).as("step 3: it works").isEqualTo("works");
         assertThat(worksCell.detail().key()).as("step 3: and renews itself").isEqualTo("state_renews_detail");
         assertThat(worksCell.detail().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
-            .as("step 3: saying when it expires in whole days").matches("Renews itself; expires in (79|80) days");
+            .as("step 3: leaving when it expires to the Expires column").isEqualTo("Renews itself");
 
         // 4. The list renders the three states as words.
         HttpResponse<String> page = adminGet("/admin/certificates");

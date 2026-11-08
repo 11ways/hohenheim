@@ -294,8 +294,8 @@ public final class CertificateParts {
         }
         Microcopy valid = days == null ? null
             : renews
+                // The list's Expires column and the record's own expiry say when; the state says only that it renews.
                 ? HohenheimMicrocopy.CERTIFICATE.of("state_renews_detail")
-                    .withArg("expiry", CertificateExpiry.inSentence(expires))
                 : CertificateExpiry.of(expires);
         return StateLineCell.of(CertificateState.WORKS, valid);
     }
