@@ -218,6 +218,12 @@ class AccessPagesJourneyTest extends HohenheimHttpTestBase {
         // 3. The providers tab reads Sign-in providers.
         assertThat(access).as("step 3: the tab reads sign-in providers").contains("Sign-in providers")
             .doesNotContain("Auth providers");
+
+        // 4. The People page keeps ONE primary button, its New user: Invite by email beside it steps down.
+        String people = adminGet("/admin/users").body();
+        String invite = people.substring(people.indexOf("data-action-id=\"zenit:invite_user\""));
+        assertThat(invite.substring(0, invite.indexOf('>'))).as("step 4: the invite is a secondary button")
+            .contains("variant=\"secondary\"");
     }
 
     private static Row site(String name) {
