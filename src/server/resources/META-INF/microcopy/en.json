@@ -16464,6 +16464,39 @@
   "stop_instance": { "text": "{$actor} stopped {$subject}", "scope": "hohenheim", "target": "happened" },
   "restart_instance": { "text": "{$actor} restarted {$subject}", "scope": "hohenheim", "target": "happened" },
   "backup_instance": { "text": "{$actor} backed up {$subject}", "scope": "hohenheim", "target": "happened" },
+  "connect_push_webhook": { "text": "{$actor} connected the push webhook of {$subject}", "scope": "hohenheim", "target": "happened" },
+  "connect_webhook": {
+    "text": "Connect push webhook",
+    "scope": "deployments"
+  },
+  "webhook_created": {
+    "text": "The push webhook was created at the git provider: pushes to {$name} now deploy it",
+    "scope": "deployments"
+  },
+  "webhook_updated": {
+    "text": "The push webhook at the git provider was brought up to date for {$name}",
+    "scope": "deployments"
+  },
+  "webhook_no_provider": {
+    "text": "This app's source is not bound to a git provider, so there is nowhere to register a webhook. Paste the payload URL and secret into your forge instead.",
+    "scope": "violations"
+  },
+  "webhook_provider_cannot_register": {
+    "text": "This kind of git provider has no API to register webhooks with. Paste the payload URL and secret into your forge instead.",
+    "scope": "violations"
+  },
+  "webhook_provider_unusable": {
+    "text": "The git provider this app is bound to cannot be used right now; check its settings",
+    "scope": "violations"
+  },
+  "webhook_needs_https_address": {
+    "text": "The app needs a site address with a working HTTPS certificate before a forge can deliver to it",
+    "scope": "violations"
+  },
+  "webhook_provider_refused": {
+    "text": "The git provider refused to register the webhook: {$reason}",
+    "scope": "violations"
+  },
   "snapshot_instance": { "text": "{$actor} took a snapshot of {$subject}", "scope": "hohenheim", "target": "happened" },
   "console_command_instance": { "text": "{$actor} sent a console command to {$subject}", "scope": "hohenheim", "target": "happened" },
   "exec_instance": { "text": "{$actor} ran a command in {$subject}", "scope": "hohenheim", "target": "happened" },

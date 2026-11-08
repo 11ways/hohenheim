@@ -45,6 +45,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
+import be.elevenways.hohenheim.server.source.GitWebhookProvisioning;
 
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.zenit.common.edit.FormSpec;
@@ -109,6 +110,13 @@ public final class InstanceOperationHandlers {
                 .applies(InstanceOperationHandlers::authored)
                 .availability((row, access) -> InstanceBackups.backupRefusal(row))
             .handle(InstanceOperationHandlers::backup);
+        // Only an app whose source is bound to a git provider has somewhere to register a webhook; the provider kind
+        // and a working HTTPS address decide whether it can now (GitWebhookProvisioning).
+        OperationHandlers.attach(InstanceOperations.CONNECT_WEBHOOK).source(SUBJECTS)
+                .applies(row -> authored(row) && GitWebhookProvisioning.applies(row))
+                .availability((row, access) -> GitWebhookProvisioning.refusal(row))
+                .authorize(HohenheimAccess.operatorOnly(OPERATOR_VERB))
+            .handle(call -> GitWebhookProvisioning.connect(instanceId(call)));
         OperationHandlers.attach(InstanceOperations.SNAPSHOT).source(SUBJECTS)
                 .applies(InstanceOperationHandlers::authored)
             .handle(InstanceOperationHandlers::snapshot);

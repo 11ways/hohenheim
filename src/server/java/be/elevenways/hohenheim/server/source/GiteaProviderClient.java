@@ -97,6 +97,29 @@ public class GiteaProviderClient extends ApiProviderClient {
                 stateToken, context, description, targetUrl);
     }
 
+    @Override
+    protected @NonNull String hooksUrl(@NonNull String repository) {
+        return this.apiBase + "/repos/" + repoPath(repository) + "/hooks";
+    }
+
+    /** Gitea pages on {@code limit}, not {@code per_page}. */
+    @Override
+    protected @NonNull String hookPageQuery(int page) {
+        return "limit=" + HOOK_PAGE_SIZE + "&page=" + page;
+    }
+
+    @Override
+    protected @NonNull String hooksToken() throws IOException {
+        return requireToken();
+    }
+
+    /** Gitea's CreateHookOption: a {@code gitea} hook, JSON payloads signed with the secret. */
+    @Override
+    protected @NonNull Map<String, Object> hookBody(@NonNull String url, @NonNull String secret) {
+        return Map.of("type", "gitea", "active", true, "events", List.of("push", "pull_request"),
+            "config", Map.of("url", url, "content_type", "json", "secret", secret));
+    }
+
     /** {@code owner/repo}, refusing nesting and every path trick. */
     private static @NonNull String repoPath(@NonNull String repository) {
         return validRepoPath(repository, false);

@@ -16464,6 +16464,39 @@
   "stop_instance": { "text": "{$actor} stopte {$subject}", "scope": "hohenheim", "target": "happened" },
   "restart_instance": { "text": "{$actor} herstartte {$subject}", "scope": "hohenheim", "target": "happened" },
   "backup_instance": { "text": "{$actor} maakte een back-up van {$subject}", "scope": "hohenheim", "target": "happened" },
+  "connect_push_webhook": { "text": "{$actor} koppelde de push-webhook van {$subject}", "scope": "hohenheim", "target": "happened" },
+  "connect_webhook": {
+    "text": "Push-webhook koppelen",
+    "scope": "deployments"
+  },
+  "webhook_created": {
+    "text": "De push-webhook is aangemaakt bij de git-provider: pushes naar {$name} deployen het nu",
+    "scope": "deployments"
+  },
+  "webhook_updated": {
+    "text": "De push-webhook bij de git-provider is bijgewerkt voor {$name}",
+    "scope": "deployments"
+  },
+  "webhook_no_provider": {
+    "text": "De bron van deze app is niet gekoppeld aan een git-provider, dus er is geen plaats om een webhook te registreren. Plak de payload-URL en het geheim in je forge.",
+    "scope": "violations"
+  },
+  "webhook_provider_cannot_register": {
+    "text": "Dit soort git-provider heeft geen API om webhooks te registreren. Plak de payload-URL en het geheim in je forge.",
+    "scope": "violations"
+  },
+  "webhook_provider_unusable": {
+    "text": "De git-provider waaraan deze app gekoppeld is, kan nu niet gebruikt worden; controleer zijn instellingen",
+    "scope": "violations"
+  },
+  "webhook_needs_https_address": {
+    "text": "De app heeft een siteadres met een werkend HTTPS-certificaat nodig voordat een forge erheen kan leveren",
+    "scope": "violations"
+  },
+  "webhook_provider_refused": {
+    "text": "De git-provider weigerde de webhook te registreren: {$reason}",
+    "scope": "violations"
+  },
   "snapshot_instance": { "text": "{$actor} maakte een momentopname van {$subject}", "scope": "hohenheim", "target": "happened" },
   "console_command_instance": { "text": "{$actor} stuurde een consoleopdracht naar {$subject}", "scope": "hohenheim", "target": "happened" },
   "exec_instance": { "text": "{$actor} voerde een opdracht uit in {$subject}", "scope": "hohenheim", "target": "happened" },

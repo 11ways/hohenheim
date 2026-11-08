@@ -128,6 +128,23 @@ public final class InstanceOperations {
         .facts(OperationFact.REACHES_OUTSIDE)
         .register();
 
+    /**
+     * Registers the app's push webhook at the git provider its source is bound to; true when it was created rather
+     * than brought up to date. Gated on CONFIG: it stores the webhook secret when the app has none, and changes what
+     * the forge sends where.
+     */
+    public static final Operation<Row, Void, Boolean> CONNECT_WEBHOOK =
+        Operation.declare(HohenheimIds.id("connect_push_webhook"))
+            .happened(OperationSentences.of("connect_push_webhook"))
+            .label(HohenheimMicrocopy.DEPLOYMENTS.of("connect_webhook"))
+            .icon(Icon.of("plug"))
+            .one(INSTANCE)
+            .gate(gate(HohenheimCapabilities.CONFIG))
+            .result(Boolean.class)
+            .command(COMMAND_FACET)
+            .facts(OperationFact.REACHES_OUTSIDE, OperationFact.IDEMPOTENT)
+            .register();
+
     /** The snapshot's optional note. */
     public static final StringField NOTE = StringField.builder("note")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("snapshot_note"))

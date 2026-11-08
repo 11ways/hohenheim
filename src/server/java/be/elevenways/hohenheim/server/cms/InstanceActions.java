@@ -74,7 +74,7 @@ final class InstanceActions {
         return List.of(SiteActions.openSiteAction(OPEN_SITE, AppHealth::openInstances, InstanceModel.ID),
             deployAction(false),
             stopAction(), restartAction(false), snapshotAction(), backupAction(),
-            appUpdateAction(false), consoleCommandAction(), exposeAction(), rollbackAction(),
+            appUpdateAction(false), connectWebhookAction(), consoleCommandAction(), exposeAction(), rollbackAction(),
             installAction(), reinstallAction(), captureTemplateAction(), migrateAction(),
             destroyWithDataAction(), checkHostAction());
     }
@@ -193,6 +193,23 @@ final class InstanceActions {
             .inlineInRow(false)
             .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.INSTANCE.of("backup_now"),
                 HohenheimMicrocopy.INSTANCE.of("backup_confirm"), ActionStyle.DEFAULT))
+            .build();
+    }
+
+    /**
+     * Registers the push webhook at the app's git provider; operator only, like the payload URL and secret the
+     * Deploys tab shows to an operator alone. Offered where the source is bound to a provider, dead with its reason
+     * while the provider kind or the app's address cannot take one.
+     */
+    private static @NonNull PanelAction<Row> connectWebhookAction() {
+        return PanelAction.<Row, Boolean>places(InstanceOperations.CONNECT_WEBHOOK, ActionPlacement.ROW,
+                (request, created) -> CmsActionResult.refreshWithToast(HohenheimMicrocopy.DEPLOYMENTS
+                    .of(Boolean.TRUE.equals(created) ? "webhook_created" : "webhook_updated")
+                    .withArg("name", request.subject().get(InstanceModel.NAME))))
+            .label(HohenheimMicrocopy.DEPLOYMENTS.of("connect_webhook"))
+            .icon(Icon.of("plug"))
+            .inlineOnRecord(false)
+            .inlineInRow(false)
             .build();
     }
 

@@ -137,6 +137,23 @@ public class GithubProviderClient extends ApiProviderClient {
                 context, description, targetUrl);
     }
 
+    @Override
+    protected @NonNull String hooksUrl(@NonNull String repository) {
+        return this.apiBase + "/repos/" + repoPath(repository) + "/hooks";
+    }
+
+    @Override
+    protected @NonNull String hooksToken() throws IOException {
+        return anyToken();
+    }
+
+    /** A repository webhook: JSON payloads signed with the secret (X-Hub-Signature-256), TLS verified. */
+    @Override
+    protected @NonNull Map<String, Object> hookBody(@NonNull String url, @NonNull String secret) {
+        return Map.of("name", "web", "active", true, "events", List.of("push", "pull_request"),
+            "config", Map.of("url", url, "content_type", "json", "secret", secret, "insecure_ssl", "0"));
+    }
+
     // -- installation-token minting -------------------------------------------
 
     private @NonNull CachedToken mintedToken() throws IOException {

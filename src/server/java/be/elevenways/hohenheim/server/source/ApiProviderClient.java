@@ -133,6 +133,73 @@ abstract class ApiProviderClient implements GitProviderClient {
         }
     }
 
+    @Override
+    public final boolean registersWebhooks() {
+        return true;
+    }
+
+    /** The most webhook pages read before giving up on finding the one to update. */
+    private static final int HOOK_PAGES = 10;
+
+    /**
+     * Lists the repository's webhooks, every page of them, then updates the one sending to {@code url} or creates
+     * it: a second press never leaves two webhooks delivering every push twice.
+     */
+    @Override
+    public final @NonNull HookRegistration ensurePushWebhook(@NonNull String repository, @NonNull String url,
+                                                             @NonNull String secret) throws IOException {
+        String token = hooksToken();
+        String hooks = hooksUrl(repository);
+        Map<String, String> headers = Map.of("Authorization", "Bearer " + token,
+            "Content-Type", "application/json");
+        byte[] body = Json.stringify(hookBody(url, secret)).getBytes(StandardCharsets.UTF_8);
+        for (int page = 1; page <= HOOK_PAGES; page++) {
+            if (!(getJson(hooks + "?" + hookPageQuery(page), token) instanceof List<?> listed) || listed.isEmpty()) {
+                break;
+            }
+            for (Object entry : listed) {
+                if (entry instanceof Map<?, ?> hook && url.equals(hookTarget(hook)) && hook.get("id") != null) {
+                    String one = hooks + "/" + String.valueOf(hook.get("id")).replaceAll("[^0-9]", "");
+                    requireSuccess(one, exchange(hookUpdateMethod(), one, headers, body));
+                    return HookRegistration.UPDATED;
+                }
+            }
+            if (listed.size() < HOOK_PAGE_SIZE) {
+                break;
+            }
+        }
+        requireSuccess(hooks, exchange(HttpMethod.POST, hooks, headers, body));
+        return HookRegistration.CREATED;
+    }
+
+    /** The webhooks one listing page asks for: the lowest maximum of the supported forges (Gitea's). */
+    protected static final int HOOK_PAGE_SIZE = 50;
+
+    /** @return the query of one page of the webhook list; default GitHub's and GitLab's {@code per_page} */
+    protected @NonNull String hookPageQuery(int page) {
+        return "per_page=" + HOOK_PAGE_SIZE + "&page=" + page;
+    }
+
+    /** @return the repository's webhook collection URL */
+    protected abstract @NonNull String hooksUrl(@NonNull String repository);
+
+    /** @return the token webhook administration authenticates with */
+    protected abstract @NonNull String hooksToken() throws IOException;
+
+    /** @return the provider's create/update body of a push and pull request webhook */
+    protected abstract @NonNull Map<String, Object> hookBody(@NonNull String url, @NonNull String secret);
+
+    /** @return the address a listed webhook delivers to; default {@code config.url} (GitHub, Gitea) */
+    protected @Nullable String hookTarget(@NonNull Map<?, ?> hook) {
+        return hook.get("config") instanceof Map<?, ?> config && config.get("url") != null
+            ? String.valueOf(config.get("url")) : null;
+    }
+
+    /** @return the method that updates one webhook; default PATCH (GitHub, Gitea) */
+    protected @NonNull HttpMethod hookUpdateMethod() {
+        return HttpMethod.PATCH;
+    }
+
     /**
      * The URL without its query string: it never carries a secret here, but refusal
      * messages travel into toasts and logs, so keep them to the path.

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.source;
 
+import be.elevenways.protoblast.common.http.HttpMethod;
 import be.elevenways.zenit.server.net.OutboundUrlGuard;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -84,6 +85,35 @@ public class GitlabProviderClient extends ApiProviderClient {
         };
         postStatus(this.apiBase + "/projects/" + projectPath(repository)
             + "/statuses/" + commitSha, requireToken(), stateToken, context, description, targetUrl);
+    }
+
+    @Override
+    protected @NonNull String hooksUrl(@NonNull String repository) {
+        return this.apiBase + "/projects/" + projectPath(repository) + "/hooks";
+    }
+
+    @Override
+    protected @NonNull String hooksToken() throws IOException {
+        return requireToken();
+    }
+
+    /** A project hook: GitLab sends the secret back verbatim as X-Gitlab-Token rather than signing. */
+    @Override
+    protected @NonNull Map<String, Object> hookBody(@NonNull String url, @NonNull String secret) {
+        return Map.of("url", url, "token", secret, "push_events", true, "merge_requests_events", true,
+            "enable_ssl_verification", true);
+    }
+
+    /** A GitLab hook names its address at the top level. */
+    @Override
+    protected @Nullable String hookTarget(@NonNull Map<?, ?> hook) {
+        return hook.get("url") != null ? String.valueOf(hook.get("url")) : null;
+    }
+
+    /** GitLab edits a project hook with PUT. */
+    @Override
+    protected @NonNull HttpMethod hookUpdateMethod() {
+        return HttpMethod.PUT;
     }
 
     /**

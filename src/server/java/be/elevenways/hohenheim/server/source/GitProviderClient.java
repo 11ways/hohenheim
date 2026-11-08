@@ -28,6 +28,16 @@ public interface GitProviderClient {
     /** Deployment status states, folded onto each provider's own vocabulary. */
     enum StatusState { PENDING, SUCCESS, FAILURE }
 
+    /** What registering a push webhook did at the provider. */
+    enum HookRegistration {
+
+        /** The repository had no webhook to this address; one was created. */
+        CREATED,
+
+        /** The repository already had a webhook to this address; its secret and events were brought up to date. */
+        UPDATED
+    }
+
     /** @throws IOException when the provider refuses or is unreachable */
     @NonNull List<RepoRef> listRepositories() throws IOException;
 
@@ -64,4 +74,21 @@ public interface GitProviderClient {
                       @NonNull StatusState state, @NonNull String context,
                       @NonNull String description, @Nullable String targetUrl)
         throws IOException;
+
+    /** @return whether this provider kind can register a push webhook on a repository through its API */
+    default boolean registersWebhooks() {
+        return false;
+    }
+
+    /**
+     * Makes sure {@code repository} sends its pushes and pull requests to {@code url}, signed with {@code secret}: the
+     * webhook to that address is created, or brought up to date when one exists, never doubled.
+     *
+     * @throws IOException when the provider refuses, is unreachable, or cannot register webhooks
+     *                     ({@link #registersWebhooks()})
+     */
+    default @NonNull HookRegistration ensurePushWebhook(@NonNull String repository, @NonNull String url,
+                                                      @NonNull String secret) throws IOException {
+        throw new IOException("This provider kind cannot register webhooks");
+    }
 }

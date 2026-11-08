@@ -28,6 +28,7 @@ import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
 import be.elevenways.hohenheim.server.source.GitSourcePolls;
 import be.elevenways.hohenheim.server.source.GitWebhookHandler;
+import be.elevenways.hohenheim.server.source.GitWebhookProvisioning;
 import be.elevenways.hohenheim.server.source.HookUrls;
 import be.elevenways.hohenheim.server.source.WebhookOutcome;
 import be.elevenways.hohenheim.source.GitSourceSchema;
@@ -1050,7 +1051,7 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         // conduit chain, so it is deliberately outside the Endpoint framework and has no
         // RouteTarget. Referencing the handler's own PREFIX constant is what keeps this
         // display URL from drifting away from the route that actually answers.
-        return new InstanceDeploys.Webhook(HookUrls.forInstance(instanceId, GitWebhookHandler.PREFIX + instanceId),
+        return new InstanceDeploys.Webhook(GitWebhookProvisioning.payloadUrlOf(instanceId),
             Objects.toString(settings.get(GitSourceSchema.WEBHOOK_SECRET), "").isEmpty()
                 ? null : HohenheimSecrets.WEBHOOK_SECRET.ref(instanceId),
             GitSourceSchema.autoDeploys(settings));
