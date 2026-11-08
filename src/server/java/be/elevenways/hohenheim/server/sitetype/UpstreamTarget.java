@@ -11,8 +11,8 @@ import java.util.List;
  *
  * @param uri   the upstream as configured: what an upstream redirect is recognised by, and what is
  *              dialed when there are no {@code dials}
- * @param dials the vetted addresses to dial instead, in order (the next when one refuses);
- *              empty for a target dialed as named
+ * @param dials the addresses to dial instead, in order (the next when one refuses): a tenant host's vetted
+ *              addresses, or an operator site's backends in this request's turn; empty for a target dialed as named
  */
 public record UpstreamTarget(URI uri, UpstreamProtocol protocol, boolean ignoreCertificates,
                              List<PinnedUpstreamDial> dials) {

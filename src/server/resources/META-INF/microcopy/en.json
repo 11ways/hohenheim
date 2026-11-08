@@ -514,6 +514,16 @@
       "scope": "help"
     }
   ],
+  "more_backends": [
+    {
+      "text": "More backends",
+      "scope": "hohenheim_field"
+    },
+    {
+      "text": "Further host:port addresses serving the same app, one per line. Requests take turns among all of them, skip one that stops answering and try the next when a connection is refused.",
+      "scope": "help"
+    }
+  ],
   "forward_scheme": [
     {
       "text": "Protocol",
@@ -17272,6 +17282,10 @@
   },
   "tenant_socket": {
     "text": "a site a tenant owns may not forward to a unix socket",
+    "scope": "site_fault"
+  },
+  "tenant_more_backends": {
+    "text": "a site a tenant owns may forward to one address only",
     "scope": "site_fault"
   },
   "tenant_private_address": {

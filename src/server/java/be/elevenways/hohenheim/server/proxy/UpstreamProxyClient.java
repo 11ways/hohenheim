@@ -37,10 +37,10 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * Dials the upstream chosen for an exchange, picking the wire protocol and the TLS trust
  * posture the site type asked for.
  *
- * AIDEV-NOTE: a pinned target carries one dial per vetted address. A refused dial advances the
- * exchange's {@link DialPlan}, and ProxyHandler's own connection retry (it calls findTarget and
- * getConnection again) dials the next one; the plan raises ProxyHandler's retry count to the
- * number of further addresses. Every address was vetted, so falling through never leaves the set.
+ * AIDEV-NOTE: a pinned target carries one dial per address: a tenant host's vetted addresses, or an operator
+ * site's own backends. A refused dial advances the exchange's {@link DialPlan}, and ProxyHandler's own connection
+ * retry (it calls findTarget and getConnection again) dials the next one; the plan raises ProxyHandler's retry count
+ * to the number of further addresses. A tenant's dials were all vetted, so falling through never leaves the set.
  */
 final class UpstreamProxyClient implements ProxyClient {
 

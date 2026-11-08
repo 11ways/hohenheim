@@ -24,6 +24,7 @@ import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
 import be.elevenways.hohenheim.server.instance.InstanceImagePolicy;
+import be.elevenways.hohenheim.server.sitetype.ProbeableUpstream;
 import be.elevenways.hohenheim.server.upstream.kinds.AddressUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.StaticUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.TlsPassthroughUpstreamKind;
@@ -854,6 +855,21 @@ public final class TenantWrites {
             throw Violations.ofField(settingsKey(AddressUpstreamKind.FORWARD_HOST.getName()),
                 host, HohenheimMicrocopy.VIOLATIONS.of("proxy_upstream_invalid"));
         }
+        // Each further backend is judged as the main host is: a plain host[:port], nothing else.
+        String moreKey = AddressUpstreamKind.MORE_BACKENDS.getName();
+        try {
+            for (ProbeableUpstream.Target backend : AddressUpstreamKind.moreBackends(settings.get(moreKey),
+                    schemeOf(settings))) {
+                String authority = backend.host().contains(":") ? "[" + backend.host() + "]" : backend.host();
+                if (PROXY_UPSTREAM_BASE.problemOf(schemeOf(settings) + "://" + authority) != null) {
+                    throw Violations.ofField(settingsKey(moreKey), backend.host(),
+                        HohenheimMicrocopy.VIOLATIONS.of("proxy_upstream_invalid"));
+                }
+            }
+        } catch (IllegalArgumentException unreadable) {
+            throw Violations.ofField(settingsKey(moreKey), unreadable.getMessage(),
+                HohenheimMicrocopy.VIOLATIONS.of("proxy_upstream_invalid"));
+        }
     }
 
     /**
@@ -872,10 +888,13 @@ public final class TenantWrites {
      */
     private static void refuseTenantUpstream(@NonNull String kind, @NonNull Map<?, ?> settings) {
         if (AddressUpstreamKind.ID.toString().equals(kind)) {
-            String socket = trimmed(settings.get(AddressUpstreamKind.SOCKET.getName()));
-            if (!socket.isEmpty()) {
-                throw Violations.ofField(settingsKey(AddressUpstreamKind.SOCKET.getName()), socket,
-                    HohenheimMicrocopy.VIOLATIONS.of("tenant_proxy_upstream_private"));
+            for (String frozen : List.of(AddressUpstreamKind.SOCKET.getName(),
+                    AddressUpstreamKind.MORE_BACKENDS.getName())) {
+                String value = trimmed(settings.get(frozen));
+                if (!value.isEmpty()) {
+                    throw Violations.ofField(settingsKey(frozen), value,
+                        HohenheimMicrocopy.VIOLATIONS.of("tenant_proxy_upstream_private"));
+                }
             }
             refusePrivateHost(AddressUpstreamKind.FORWARD_HOST.getName(), schemeOf(settings),
                 settings.get(AddressUpstreamKind.FORWARD_HOST.getName()),

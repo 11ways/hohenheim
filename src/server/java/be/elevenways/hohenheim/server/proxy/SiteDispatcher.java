@@ -168,7 +168,9 @@ public class SiteDispatcher implements HttpHandler {
      *
      * AIDEV-NOTE: this is what makes a proxy whose target never answers read as down before its first visitor
      * (W5a2: a new Grafana app on a closed port showed green). It feeds the SAME record visitors' dials feed, so
-     * healthOf stays the one verdict. A round on an older route table writes nothing.
+     * healthOf stays the one verdict. A round on an older route table writes nothing. A site spread over several
+     * backends is up while any of them answers; each backend's own answer goes back to its handler, which passes a
+     * silent one over.
      */
     public void probeUpstreams() {
         if (!this.probing.compareAndSet(false, true)) {
@@ -179,14 +181,19 @@ public class SiteDispatcher implements HttpHandler {
             Map<Integer, ProbeableUpstream> targets = new LinkedHashMap<>();
             for (RouteEntry entry : generation.entries()) {
                 if (entry.siteId > 0 && entry.handler instanceof ProbeableUpstream probeable
-                        && probeable.probeHost() != null) {
+                        && !probeable.probeTargets().isEmpty()) {
                     targets.putIfAbsent(entry.siteId, probeable);
                 }
             }
             for (Map.Entry<Integer, ProbeableUpstream> target : targets.entrySet()) {
-                boolean answered = accepts(target.getValue().probeHost(), target.getValue().probePort());
+                boolean anyAnswered = false;
+                for (ProbeableUpstream.Target backend : target.getValue().probeTargets()) {
+                    boolean answered = accepts(backend.host(), backend.port());
+                    target.getValue().probed(backend, answered);
+                    anyAnswered |= answered;
+                }
                 if (this.routes == generation) {
-                    upstreamAnswered.put(target.getKey(), answered);
+                    upstreamAnswered.put(target.getKey(), anyAnswered);
                 }
             }
         } finally {

@@ -39,8 +39,14 @@ final class ResponseMutations {
         if (upstream != null && Boolean.TRUE.equals(exchange.getAttachment(SiteDispatcher.REWRITE_LOCATION))) {
             String location = headers.getFirst(Headers.LOCATION);
             if (location != null) {
+                // Any backend a request may have been dialed at names the upstream: a site spread over several,
+                // or a refused dial that fell through to the next, redirects from the one that answered.
                 String rewritten = rewriteLocation(location, upstream.uri(), exchange,
                     entry.stripPath ? entry.path : null);
+                for (int dial = 0; rewritten == null && dial < upstream.dials().size(); dial++) {
+                    rewritten = rewriteLocation(location, upstream.dials().get(dial).uri(), exchange,
+                        entry.stripPath ? entry.path : null);
+                }
                 if (rewritten != null) {
                     headers.put(Headers.LOCATION, rewritten);
                 }

@@ -514,6 +514,16 @@
       "scope": "help"
     }
   ],
+  "more_backends": [
+    {
+      "text": "Meer backends",
+      "scope": "hohenheim_field"
+    },
+    {
+      "text": "Bijkomende host:poort-adressen die dezelfde app bedienen, een per regel. Verzoeken komen om beurten bij elk ervan, slaan er een over die niet meer antwoordt en proberen de volgende wanneer een verbinding geweigerd wordt.",
+      "scope": "help"
+    }
+  ],
   "forward_scheme": [
     {
       "text": "Protocol",
@@ -17272,6 +17282,10 @@
   },
   "tenant_socket": {
     "text": "een site van een tenant mag niet doorsturen naar een unix-socket",
+    "scope": "site_fault"
+  },
+  "tenant_more_backends": {
+    "text": "een site van een tenant mag maar naar een adres doorsturen",
     "scope": "site_fault"
   },
   "tenant_private_address": {

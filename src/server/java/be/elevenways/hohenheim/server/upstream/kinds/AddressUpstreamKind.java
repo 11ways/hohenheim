@@ -31,14 +31,19 @@ import io.undertow.server.HttpServerExchange;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.PathKind;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
+import org.xnio.OptionMap;
 
 /**
  * Forwards requests to an upstream HTTP/HTTPS server.
@@ -63,6 +68,12 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
     public static final IntegerField FORWARD_PORT = SETTINGS_SCHEMA.addField(
         IntegerField.builder().name("forward_port").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("forward_port"))
             .help(HohenheimMicrocopy.HELP.of("forward_port")).build());
+
+    /** Further host[:port] backends, one per line: requests take turns among them all and pass a silent one over. */
+    public static final TextField MORE_BACKENDS = SETTINGS_SCHEMA.addField(
+        TextField.builder("more_backends")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("more_backends"))
+            .help(HohenheimMicrocopy.HELP.of("more_backends")).build());
 
     public static final EnumField UPSTREAM_PROTOCOL = SETTINGS_SCHEMA.addField(protocolField());
 
@@ -163,6 +174,16 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
                 exchange.getResponseSender().send("No upstream configured");
             };
         }
+        String scheme = (String) settings.getOrDefault("forward_scheme", "http");
+        List<ProbeableUpstream.Target> more;
+        try {
+            more = moreBackends(settings.get(MORE_BACKENDS.getName()), scheme);
+        } catch (IllegalArgumentException unreadable) {
+            return (exchange, forwarder) -> {
+                exchange.setStatusCode(502);
+                exchange.getResponseSender().send("Invalid upstream: " + unreadable.getMessage());
+            };
+        }
 
         // AIDEV-NOTE: a tenant-owned site reaches the public internet only (TenantUpstreams).
         // The socket check comes FIRST because socket OVERRIDES forward_host below: a tenant
@@ -171,9 +192,11 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
         // publicOnly: tenant-owned AND not marked trusted by the operator.
         boolean tenantOwned = TenantUpstreams.publicOnly(site);
         Integer siteId = site.get(SiteModel.ID);
-        if (tenantOwned && socket != null) {
+        if (tenantOwned && (socket != null || !more.isEmpty())) {
+            // A further backend would be dialed without the per-request public-address vetting a tenant's one host
+            // gets, so a tenant-owned site faults rather than reach a private address through it.
             return new FaultedSiteHandler(siteId != null ? siteId : -1,
-                HohenheimMicrocopy.SITE_FAULT.of("tenant_socket"));
+                HohenheimMicrocopy.SITE_FAULT.of(socket != null ? "tenant_socket" : "tenant_more_backends"));
         }
 
         // Socket mode takes precedence over url mode (matching the Node implementation). The unix
@@ -184,7 +207,6 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
                 websocketEnabled, rewriteLocation, protocol);
         }
 
-        String scheme = (String) settings.getOrDefault("forward_scheme", "http");
         Object portObj = settings.get("forward_port");
         int port = portObj instanceof Integer i ? i : DefaultPorts.of(scheme);
 
@@ -208,16 +230,89 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
                 websocketEnabled, rewriteLocation);
         }
 
-        return new FixedAddressHandler(new UpstreamTarget(upstream, protocol, ignoreCertificates), host, port,
-            websocketEnabled, rewriteLocation);
+        List<Backend> backends = new ArrayList<>();
+        backends.add(new Backend(new ProbeableUpstream.Target(host, port), upstream));
+        for (ProbeableUpstream.Target backend : more) {
+            try {
+                backends.add(new Backend(backend,
+                    new URI(scheme, null, backend.host(), backend.port(), "/", null, null)));
+            } catch (URISyntaxException unaddressable) {
+                return (exchange, forwarder) -> {
+                    exchange.setStatusCode(502);
+                    exchange.getResponseSender().send("Invalid upstream: " + backend.host());
+                };
+            }
+        }
+        return new FixedAddressHandler(backends, protocol, ignoreCertificates, websocketEnabled, rewriteLocation);
     }
 
     /**
-     * Forwards an operator-configured site to one fixed host and port, which the dispatcher also probes on its own
-     * so an upstream that does not answer shows as down before any visitor finds out.
+     * The further backends a settings value names, one {@code host[:port]} per line (or comma), a missing port the
+     * scheme's own.
+     *
+     * @param value the {@link #MORE_BACKENDS} setting as stored, null or blank for none
+     * @throws IllegalArgumentException naming the first entry that is no host[:port]
      */
-    private record FixedAddressHandler(UpstreamTarget target, String host, int port, boolean websocketEnabled,
-                                       boolean rewriteLocation) implements SiteRequestHandler, ProbeableUpstream {
+    public static @NonNull List<ProbeableUpstream.Target> moreBackends(@Nullable Object value, @NonNull String scheme) {
+        if (value == null) {
+            return List.of();
+        }
+        List<ProbeableUpstream.Target> backends = new ArrayList<>();
+        for (String entry : String.valueOf(value).split("[\\n,]")) {
+            String trimmed = entry.trim();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+            URI parsed;
+            try {
+                parsed = new URI("tcp://" + trimmed);
+            } catch (URISyntaxException unreadable) {
+                throw new IllegalArgumentException(trimmed, unreadable);
+            }
+            if (parsed.getHost() == null || parsed.getRawPath() != null && !parsed.getRawPath().isEmpty()
+                    || parsed.getUserInfo() != null || parsed.getQuery() != null || parsed.getFragment() != null) {
+                throw new IllegalArgumentException(trimmed);
+            }
+            int port = parsed.getPort() < 0 ? DefaultPorts.of(scheme) : parsed.getPort();
+            if (port < 1 || port > 65535) {
+                throw new IllegalArgumentException(trimmed);
+            }
+            backends.add(new ProbeableUpstream.Target(parsed.getHost().replaceAll("^\\[|]$", ""), port));
+        }
+        return List.copyOf(backends);
+    }
+
+    /** One backend of an operator-configured site: where it is, and the URI it is dialed at. */
+    private record Backend(ProbeableUpstream.Target address, URI uri) {}
+
+    /**
+     * Forwards an operator-configured site to its fixed backends, which the dispatcher also probes on its own so an
+     * upstream that does not answer shows as down before any visitor finds out.
+     *
+     * AIDEV-NOTE: with several backends each request starts at the next one in turn, passing over one the last probe
+     * found silent, and dials the others after it in order when its first dial is refused (the dial plan's own
+     * retry), so one backend going down costs a visitor a refused connect at most, never an error page. A backend
+     * that is down for the probe is still dialed last: a probe can be wrong, and a request with nowhere else to go
+     * loses nothing by trying it. One backend dials exactly as a single address always did.
+     */
+    private static final class FixedAddressHandler implements SiteRequestHandler, ProbeableUpstream {
+
+        private final List<Backend> backends;
+        private final UpstreamProtocol protocol;
+        private final boolean ignoreCertificates;
+        private final boolean websocketEnabled;
+        private final boolean rewriteLocation;
+        private final AtomicInteger turn = new AtomicInteger();
+        private final Set<Target> silent = ConcurrentHashMap.newKeySet();
+
+        FixedAddressHandler(List<Backend> backends, UpstreamProtocol protocol, boolean ignoreCertificates,
+                            boolean websocketEnabled, boolean rewriteLocation) {
+            this.backends = List.copyOf(backends);
+            this.protocol = protocol;
+            this.ignoreCertificates = ignoreCertificates;
+            this.websocketEnabled = websocketEnabled;
+            this.rewriteLocation = rewriteLocation;
+        }
 
         @Override
         public void handleRequest(HttpServerExchange exchange, UpstreamForwarder forwarder) {
@@ -227,17 +322,44 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
             if (this.rewriteLocation) {
                 exchange.putAttachment(SiteDispatcher.REWRITE_LOCATION, Boolean.TRUE);
             }
-            forwarder.forwardTo(this.target);
+            forwarder.forwardTo(target());
+        }
+
+        /** @return this request's target: one backend as named, several as dials in this request's turn */
+        UpstreamTarget target() {
+            if (this.backends.size() == 1) {
+                return new UpstreamTarget(this.backends.get(0).uri(), this.protocol, this.ignoreCertificates);
+            }
+            // The turn goes round the backends that answer, so a silent one's share is spread evenly over the rest;
+            // the silent ones follow as the last dials, in case the probe was wrong.
+            List<PinnedUpstreamDial> answering = new ArrayList<>();
+            List<PinnedUpstreamDial> passedOver = new ArrayList<>();
+            for (Backend backend : this.backends) {
+                PinnedUpstreamDial dial = new PinnedUpstreamDial(backend.uri(), OptionMap.EMPTY);
+                (this.silent.contains(backend.address()) ? passedOver : answering).add(dial);
+            }
+            List<PinnedUpstreamDial> turnOver = answering.isEmpty() ? passedOver : answering;
+            int start = Math.floorMod(this.turn.getAndIncrement(), turnOver.size());
+            List<PinnedUpstreamDial> dials = new ArrayList<>(turnOver.subList(start, turnOver.size()));
+            dials.addAll(turnOver.subList(0, start));
+            if (turnOver == answering) {
+                dials.addAll(passedOver);
+            }
+            return UpstreamTarget.pinned(dials.get(0).uri(), dials, this.protocol, this.ignoreCertificates);
         }
 
         @Override
-        public String probeHost() {
-            return this.host;
+        public @NonNull List<Target> probeTargets() {
+            return this.backends.stream().map(Backend::address).toList();
         }
 
         @Override
-        public int probePort() {
-            return this.port;
+        public void probed(@NonNull Target target, boolean answered) {
+            if (answered) {
+                this.silent.remove(target);
+            } else {
+                this.silent.add(target);
+            }
         }
     }
 
