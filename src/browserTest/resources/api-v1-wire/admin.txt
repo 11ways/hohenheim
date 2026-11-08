@@ -6,7 +6,7 @@
 ## list zones with a tenant key
 > GET /api/v1/dns/zones
 < 403 application/json; charset=utf-8
-{"code":"FORBIDDEN","message":"You are not allowed to do that","status":403}
+{"code":"FORBIDDEN","message":"You are not allowed to do that","readerWords":true,"status":403}
 
 ## create a zone
 > POST /api/v1/dns/zones (application/x-www-form-urlencoded, 62 bytes)
@@ -36,7 +36,7 @@
 ## list hosts with a tenant key
 > GET /api/v1/hosts
 < 403 application/json; charset=utf-8
-{"code":"FORBIDDEN","message":"You are not allowed to do that","status":403}
+{"code":"FORBIDDEN","message":"You are not allowed to do that","readerWords":true,"status":403}
 
 ## read a host
 > GET /api/v1/hosts/1
@@ -46,7 +46,7 @@
 ## read an absent host
 > GET /api/v1/hosts/999999
 < 404 application/json; charset=utf-8
-{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","readerWords":true,"status":404}
 
 ## list engines
 > GET /api/v1/engines
@@ -56,7 +56,7 @@
 ## list engines with a tenant key
 > GET /api/v1/engines
 < 403 application/json; charset=utf-8
-{"code":"FORBIDDEN","message":"You are not allowed to do that","status":403}
+{"code":"FORBIDDEN","message":"You are not allowed to do that","readerWords":true,"status":403}
 
 ## read an engine
 > GET /api/v1/engines/1
@@ -66,7 +66,7 @@
 ## read an absent engine
 > GET /api/v1/engines/999999
 < 404 application/json; charset=utf-8
-{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","readerWords":true,"status":404}
 
 ## list databases
 > GET /api/v1/databases
@@ -76,7 +76,7 @@
 ## list databases as a browser session
 > GET /api/v1/databases
 < 403 application/json; charset=utf-8
-{"code":"FORBIDDEN","message":"You are not allowed to do that","status":403}
+{"code":"FORBIDDEN","message":"You are not allowed to do that","readerWords":true,"status":403}
 
 ## read a delegated database
 > GET /api/v1/databases/1
@@ -86,7 +86,7 @@
 ## read an undelegated database
 > GET /api/v1/databases/2
 < 404 application/json; charset=utf-8
-{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","readerWords":true,"status":404}
 
 ## move a shared database
 > POST /api/v1/databases/1/move-shared (application/x-www-form-urlencoded, 0 bytes)
@@ -116,7 +116,7 @@
 ## list access lists as a browser session
 > GET /api/v1/access-lists
 < 403 application/json; charset=utf-8
-{"code":"FORBIDDEN","message":"You are not allowed to do that","status":403}
+{"code":"FORBIDDEN","message":"You are not allowed to do that","readerWords":true,"status":403}
 
 ## read an access list
 > GET /api/v1/access-lists/1
@@ -126,7 +126,7 @@
 ## read an access list the key does not manage
 > GET /api/v1/access-lists/1
 < 404 application/json; charset=utf-8
-{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","readerWords":true,"status":404}
 
 ## create an access list
 > POST /api/v1/access-lists (application/x-www-form-urlencoded, 34 bytes)
@@ -156,4 +156,4 @@
 ## delete an access list the key does not manage
 > POST /api/v1/access-lists/1/delete (application/x-www-form-urlencoded, 0 bytes)
 < 404 application/json; charset=utf-8
-{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","readerWords":true,"status":404}

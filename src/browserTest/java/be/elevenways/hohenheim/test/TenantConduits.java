@@ -108,8 +108,8 @@ public final class TenantConduits {
     }
 
     /**
-     * The same carrier, as a request opened under one parent record ({@code ?parent=}): the way a programmatic create
-     * of a child whose parent is fixed names the parent it is written under.
+     * The same carrier, as the create form's submit opened under one parent record ({@code ?parent=}): the way a
+     * programmatic create of a child whose parent is fixed names the parent it is written under.
      */
     public static Conduit stubUnder(@Nullable Principal principal, Object parentKey) {
         return stub(principal, null, null, String.valueOf(parentKey));
@@ -133,6 +133,7 @@ public final class TenantConduits {
             conduit.setParameter(CmsEndpoints.PANEL_PARAM, panelSlug);
         }
         if (parentKey != null) {
+            conduit.withAttribute(ConduitAttributes.ANSWERING_ENDPOINT, CmsEndpoints.CREATE_SUBMIT);
             conduit.setQueryParam(CmsEndpoints.PARENT_PARAM.getName(), parentKey);
         }
         return conduit;

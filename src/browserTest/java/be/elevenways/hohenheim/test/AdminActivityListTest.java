@@ -410,12 +410,13 @@ class AdminActivityListTest extends HohenheimTestBase {
         assertThat(picked.body()).as("step 2: another app's actions are not")
             .doesNotContain("/admin/instances/" + beta + "/open");
 
-        // 3. An id no app the reader may read carries narrows to nothing, like a missing one, never to everything.
+        // 3. An id no app the reader may read carries is dropped from the read under a notice, like a missing one:
+        //    the list never widens silently.
         HttpResponse<String> guessed = adminGet("/admin/activity?filter." + AdminActivityResource.APP_FILTER
             + "=987654321");
-        assertThat(guessed.body()).as("step 3: a guessed app shows no app's actions")
-            .doesNotContain("/admin/instances/" + alpha + "/open")
-            .doesNotContain("/admin/instances/" + beta + "/open");
+        assertThat(guessed.statusCode()).as("step 3: the guessed app still lists").isEqualTo(200);
+        assertThat(rendered(guessed.body())).as("step 3: and says the filter was dropped")
+            .contains("One filter names something you can no longer see.");
     }
 
     @Test

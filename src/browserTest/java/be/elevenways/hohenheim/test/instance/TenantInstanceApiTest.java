@@ -25,6 +25,8 @@ import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.PermissionChecker;
 import be.elevenways.zenit.common.validation.Violations;
@@ -414,7 +416,8 @@ class TenantInstanceApiTest extends HohenheimHttpTestBase {
             null));
         assertThat(refusedMint)
             .as("step 3: minting a capability its owner does not hold is refused")
-            .isInstanceOf(IllegalArgumentException.class);
+            .isInstanceOfSatisfying(DomainRefusal.class,
+                refusal -> assertThat(refusal.is(ZenitRefusalReason.FORBIDDEN)).isTrue());
 
         // 4. image_any is NOT delegable at all: not even a holder could mint it.
         Throwable refusedImageAny = catchThrowable(() -> ApiKeyService.create(actorB, tenantBId,
@@ -423,7 +426,8 @@ class TenantInstanceApiTest extends HohenheimHttpTestBase {
             null));
         assertThat(refusedImageAny)
             .as("step 4: a non-delegable capability can never enter a key scope")
-            .isInstanceOf(IllegalArgumentException.class);
+            .isInstanceOfSatisfying(DomainRefusal.class,
+                refusal -> assertThat(refusal.is(ZenitRefusalReason.FORBIDDEN)).isTrue());
     }
 
     /**

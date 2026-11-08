@@ -6,7 +6,7 @@
 ## list sites as a browser session
 > GET /api/v1/sites
 < 403 application/json; charset=utf-8
-{"code":"FORBIDDEN","message":"You are not allowed to do that","status":403}
+{"code":"FORBIDDEN","message":"You are not allowed to do that","readerWords":true,"status":403}
 
 ## read a managed site
 > GET /api/v1/sites/1
@@ -16,7 +16,7 @@
 ## read an unmanaged site
 > GET /api/v1/sites/2
 < 404 application/json; charset=utf-8
-{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","readerWords":true,"status":404}
 
 ## list a site's domains
 > GET /api/v1/sites/1/domains
@@ -26,7 +26,7 @@
 ## list an unmanaged site's domains
 > GET /api/v1/sites/2/domains
 < 404 application/json; charset=utf-8
-{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","readerWords":true,"status":404}
 
 ## list deployments
 > GET /api/v1/sites/1/deployments
@@ -36,7 +36,7 @@
 ## list an unmanaged site's deployments
 > GET /api/v1/sites/2/deployments
 < 404 application/json; charset=utf-8
-{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","readerWords":true,"status":404}
 
 ## read a deployment log
 > GET /api/v1/sites/1/deployments/1/log
@@ -46,7 +46,7 @@
 ## read another site's deployment log
 > GET /api/v1/sites/1/deployments/2/log
 < 404 application/json; charset=utf-8
-{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","readerWords":true,"status":404}
 
 ## list releases
 > GET /api/v1/sites/1/releases
@@ -56,7 +56,7 @@
 ## list an unmanaged site's releases
 > GET /api/v1/sites/2/releases
 < 404 application/json; charset=utf-8
-{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","readerWords":true,"status":404}
 
 ## read a release
 > GET /api/v1/sites/1/releases/1
@@ -66,7 +66,7 @@
 ## read another site's release
 > GET /api/v1/sites/1/releases/2
 < 404 application/json; charset=utf-8
-{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","readerWords":true,"status":404}
 
 ## list builds
 > GET /api/v1/sites/1/builds
@@ -76,7 +76,7 @@
 ## list an unmanaged site's builds
 > GET /api/v1/sites/2/builds
 < 404 application/json; charset=utf-8
-{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","readerWords":true,"status":404}
 
 ## read a build log
 > GET /api/v1/sites/1/builds/1/log
@@ -86,7 +86,7 @@
 ## read another site's build log
 > GET /api/v1/sites/1/builds/2/log
 < 404 application/json; charset=utf-8
-{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","readerWords":true,"status":404}
 
 ## read the current artifact
 > GET /api/v1/sites/1/artifact
@@ -96,7 +96,7 @@
 ## read the artifact of a site without an application
 > GET /api/v1/sites/3/artifact
 < 404 application/json; charset=utf-8
-{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","readerWords":true,"status":404}
 
 ## read an artifact receipt
 > GET /api/v1/sites/1/artifact/1
@@ -106,7 +106,7 @@
 ## read another site's artifact receipt
 > GET /api/v1/sites/1/artifact/2
 < 404 application/json; charset=utf-8
-{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","readerWords":true,"status":404}
 
 ## list projects
 > GET /api/v1/projects
@@ -116,7 +116,7 @@
 ## list projects as a browser session
 > GET /api/v1/projects
 < 403 application/json; charset=utf-8
-{"code":"FORBIDDEN","message":"You are not allowed to do that","status":403}
+{"code":"FORBIDDEN","message":"You are not allowed to do that","readerWords":true,"status":403}
 
 ## read a member project
 > GET /api/v1/projects/1
@@ -126,7 +126,7 @@
 ## read a project without membership
 > GET /api/v1/projects/2
 < 404 application/json; charset=utf-8
-{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","readerWords":true,"status":404}
 
 ## list environment variables
 > GET /api/v1/environments/1/variables
@@ -136,7 +136,7 @@
 ## list environment variables with a tenant key
 > GET /api/v1/environments/1/variables
 < 404 application/json; charset=utf-8
-{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","readerWords":true,"status":404}
 
 ## set an environment variable
 > POST /api/v1/environments/1/variables (application/x-www-form-urlencoded, 32 bytes)
@@ -176,7 +176,7 @@
 ## remove another site's domain
 > POST /api/v1/sites/1/domains/2/delete (application/x-www-form-urlencoded, 0 bytes)
 < 404 application/json; charset=utf-8
-{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","readerWords":true,"status":404}
 
 ## create a site
 > POST /api/v1/sites (application/x-www-form-urlencoded, 105 bytes)

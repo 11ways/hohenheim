@@ -391,10 +391,11 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
 
         // 3. The per-kind section says a kind must be chosen instead of claiming the
         //    (unchosen) type has no settings.
-        assertThat(empty.body())
+        String drawn = rendered(empty.body());
+        assertThat(drawn)
             .as("an unchosen kind asks for a kind")
             .contains("choose a type above");
-        assertThat(empty.body())
+        assertThat(drawn)
             .as("an unchosen kind is never described as a settings-less type")
             .doesNotContain("This type has no extra settings");
 

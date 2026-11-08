@@ -465,11 +465,6 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
             .doesNotContain("No install step");
     }
 
-    /** @return the page's markup without its script elements, whose payloads are data and never drawn */
-    private static String rendered(String html) {
-        return html.replaceAll("(?s)<script\\b[^>]*>.*?</script>", "");
-    }
-
     /**
      * Steps 1-4: Deploy is offered per KIND DECLARATION, never per kind name, and an
      * unrecognised kind fails closed. Steps 3 and 4 are the falsification.

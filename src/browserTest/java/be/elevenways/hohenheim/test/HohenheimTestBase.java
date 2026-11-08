@@ -336,6 +336,14 @@ public abstract class HohenheimTestBase extends ZenitBrowserTestBase {
         return "?q=" + URLEncoder.encode(rule, StandardCharsets.UTF_8);
     }
 
+    /**
+     * @return the page's markup without its script elements: their payloads (the microcopy seed, the hydration state)
+     *         carry every word the client may draw, so a text check on the raw body passes or fails for the wrong reason
+     */
+    protected static String rendered(String html) {
+        return html.replaceAll("(?s)<script\\b[^>]*>.*?</script>", "");
+    }
+
     /** A urlencoded POST as the harness admin, CSRF token included. */
     protected HttpResponse<String> adminPostForm(String path, String body) throws Exception {
         return httpPostForm(path, body, sessionToken, csrfToken);

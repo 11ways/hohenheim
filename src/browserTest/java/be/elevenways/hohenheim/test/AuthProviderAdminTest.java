@@ -77,7 +77,8 @@ class AuthProviderAdminTest extends HohenheimTestBase {
         page.locator("div[role='option'][data-value='hohenheim:basic']").click();
         page.waitForSelector("zf-schema-sub-form pl-field");
 
-        assertThat(page.locator("zf-schema-sub-form pl-empty-state").count()).isZero();
+        assertThat(page.locator("zf-schema-sub-form pl-empty-state:has-text('choose a type')").count())
+            .as("the choose-a-type placeholder is gone once a type is chosen").isZero();
 
         // Free text commits as the value: type an unlisted permission, Enter.
         picker.locator(".pl-select-field").click();

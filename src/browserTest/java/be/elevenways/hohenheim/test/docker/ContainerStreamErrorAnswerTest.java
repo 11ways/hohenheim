@@ -54,7 +54,8 @@ class ContainerStreamErrorAnswerTest {
 
     @BeforeEach
     void listen() throws IOException {
-        this.directory = Files.createTempDirectory("hohenheim-fake-docker");
+        // A short prefix: an AF_UNIX path holds 108 bytes, and the test JVM's temp directory is already deep.
+        this.directory = Files.createTempDirectory("hh-docker");
         Path socket = this.directory.resolve("docker.sock");
         this.server = ServerSocketChannel.open(StandardProtocolFamily.UNIX);
         this.server.bind(UnixDomainSocketAddress.of(socket));

@@ -25,8 +25,8 @@ admin POST missing key
 admin GET after deletes
   200 {"id":"{environment}","variables":[{"key":"ENV_API_BASELINE_PLAIN","kind":"plain","value":"plain-value-2"},{"key":"ENV_API_BASELINE_SEEDED","kind":"plain","value":"seeded-value"}]}
 admin GET missing environment
-  404 {"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+  404 {"code":"NOT_FOUND","message":"The page you are looking for does not exist","readerWords":true,"status":404}
 member GET {environment}/variables
-  404 {"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+  404 {"code":"NOT_FOUND","message":"The page you are looking for does not exist","readerWords":true,"status":404}
 member POST set
-  404 {"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+  404 {"code":"NOT_FOUND","message":"The page you are looking for does not exist","readerWords":true,"status":404}

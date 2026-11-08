@@ -17,6 +17,8 @@ import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Principal;
 import be.elevenways.zenit.common.security.RecordCapabilityDecision;
@@ -145,7 +147,8 @@ class CapabilityWalkTest extends HohenheimHttpTestBase {
             assertThatThrownBy(() -> ApiKeyService.create(actor, walkOperatorId, "walk-ci",
                     List.of(scope), null))
                 .as("step 1: an operator holding manage on no record must not mint the scope")
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOfSatisfying(DomainRefusal.class,
+                    refusal -> assertThat(refusal.is(ZenitRefusalReason.FORBIDDEN)).isTrue())
                 .hasMessageContaining("do not currently hold");
 
             // 2. With the grant, the SAME mint succeeds: the production vocabulary
@@ -175,7 +178,8 @@ class CapabilityWalkTest extends HohenheimHttpTestBase {
             assertThatThrownBy(() -> ApiKeyService.create(actor, walkOperatorId, "walk-ci2",
                     List.of(CapabilityScopes.format(SiteModel.MODEL_ID, "exec")), null))
                 .as("step 4: an unregistered capability must refuse to mint")
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOfSatisfying(DomainRefusal.class,
+                    refusal -> assertThat(refusal.is(ZenitRefusalReason.INVALID)).isTrue())
                 .hasMessageContaining("Unknown capability");
         } finally {
             RecordGrants.revoke(GrantSubjectType.USER, walkOperatorId, SiteModel.MODEL_ID, walkSiteId,

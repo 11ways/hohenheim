@@ -328,7 +328,7 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
             "site_id=" + foreignSiteId + "&hostname=stolen.tenantscope.test");
         assertThat(stolen.statusCode()).as("step 2: the foreign-site create is refused")
             .isIn(200, 302, 303, 403, 404, 422);
-        assertThat(stolen.body()).as("step 2: the refusal is not the archived-parent copy")
+        assertThat(rendered(stolen.body())).as("step 2: the refusal is not the archived-parent copy")
             .doesNotContain("in the trash");
         assertThat(domainByHostname("stolen.tenantscope.test"))
             .as("the row scope scopes READS; the site_id a CREATE submits is a "
@@ -342,7 +342,7 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
             .isIn(200, 422);
         // The site chooser offers only managed sites, so the foreign id is refused as an unavailable choice before
         // any writer runs; TenantWrites' tenant_site_not_managed is the backstop TenantHostnameTierTest proves.
-        assertThat(moved.body()).as("step 3: refused because the foreign site is no choice the tenant has")
+        assertThat(rendered(moved.body())).as("step 3: refused because the foreign site is no choice the tenant has")
             .contains(ApiSupport.shippedText(SubmittedValueCoercion.UNKNOWN_TARGET_MESSAGE_KEY.copy()
                 .withArg("id", String.valueOf(foreignSiteId))))
             .doesNotContain("in the trash");

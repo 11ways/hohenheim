@@ -6,7 +6,7 @@
 ## list instances as a browser session
 > GET /api/v1/instances
 < 403 application/json; charset=utf-8
-{"code":"FORBIDDEN","message":"You are not allowed to do that","status":403}
+{"code":"FORBIDDEN","message":"You are not allowed to do that","readerWords":true,"status":403}
 
 ## read an instance
 > GET /api/v1/instances/1
@@ -16,7 +16,7 @@
 ## read an invisible instance
 > GET /api/v1/instances/2
 < 404 application/json; charset=utf-8
-{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","readerWords":true,"status":404}
 
 ## read the console tail
 > GET /api/v1/instances/1/logs?lines=50
@@ -26,7 +26,7 @@
 ## read an invisible instance's console tail
 > GET /api/v1/instances/2/logs
 < 404 application/json; charset=utf-8
-{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","readerWords":true,"status":404}
 
 ## list variables
 > GET /api/v1/instances/1/variables
@@ -36,7 +36,7 @@
 ## list an invisible instance's variables
 > GET /api/v1/instances/2/variables
 < 404 application/json; charset=utf-8
-{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","readerWords":true,"status":404}
 
 ## set a variable
 > POST /api/v1/instances/1/variables (application/x-www-form-urlencoded, 32 bytes)
@@ -106,7 +106,7 @@
 ## list an invisible instance's devices
 > GET /api/v1/instances/2/devices
 < 404 application/json; charset=utf-8
-{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","readerWords":true,"status":404}
 
 ## attach a disk
 > POST /api/v1/instances/3/devices (application/x-www-form-urlencoded, 34 bytes)

@@ -12,13 +12,16 @@ import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.testsupport.text.InOrder;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.cms.AuthAdminParts;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceForm;
+import be.elevenways.zenit.common.conduit.ConduitAttributes;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.AccessContext;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -134,7 +137,10 @@ class ProjectPagesJourneyTest extends HohenheimTestBase {
         PanelResource<Row> variableEntry = (PanelResource<Row>) Objects.requireNonNull(
             PanelRegistry.getBySlug(HohenheimSlugs.ADMIN)).entryBySlug(HohenheimSlugs.ENVIRONMENT_VARIABLES);
         ResourceForm<Row> form = Objects.requireNonNull(Objects.requireNonNull(variableEntry).form());
-        Map<String, Object> defaults = form.createDefaults(TenantConduits.operator(),
+        AccessContext rendering = TenantConduits.operator();
+        Objects.requireNonNull(rendering.conduit()).setAttribute(ConduitAttributes.ANSWERING_ENDPOINT,
+            CmsEndpoints.CREATE_FORM);
+        Map<String, Object> defaults = form.createDefaults(rendering,
             Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN)));
         assertThat(defaults).as("step 5: the kind starts plain")
             .containsEntry(InstanceVariableModel.KIND.getName(), InstanceVariableModel.KIND_PLAIN);

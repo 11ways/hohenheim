@@ -76,10 +76,11 @@ class AdminRenderBudgetTest extends HohenheimHttpTestBase {
         // setting (about three times the size), not growth: teavm-bundle.budget is the size budget.
         // 2026-10-20: 8MB -> 9MB at 8,459,761 bytes, the settings checked (an obfuscated bundle),
         // the growth framework-wide (QQ's teavm-bundle.budget attributes it). If this trips, check those two
-        // flags before raising it.
+        // flags before raising it. 2026-11-08: 9MB -> 12MB at 10,215,991 bytes, the bundle checked obfuscated (short
+        // names, minified) and teavm-bundle.budget already re-based for the framework growth since 2026-10-30.
         assertThat(bundleBytes)
             .as("the admin client bundle must stay optimized (teavm obfuscated + BALANCED)")
-            .isLessThan(9L * 1024 * 1024);
+            .isLessThan(12L * 1024 * 1024);
     }
 
     // AIDEV-NOTE: ONE client for the whole measurement, deliberately not the base's
