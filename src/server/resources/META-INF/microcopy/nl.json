@@ -2191,7 +2191,7 @@
       "scope": "onboarding"
     },
     {
-      "text": "Hohenheim-beheer",
+      "text": "Beheer",
       "scope": "admin"
     },
     {
@@ -3091,7 +3091,7 @@
       "scope": "attention_title"
     },
     {
-      "text": ".match {$count :integer}\none {{1 Docker-resource op deze host is niet door Hohenheim aangemaakt. Die blijft ongemoeid; open {$page} om hem te bekijken.}}\n* {{{$count :integer} Docker-resources op deze host zijn niet door Hohenheim aangemaakt. Ze blijven ongemoeid; open {$page} om precies deze te bekijken.}}",
+      "text": ".match {$count :integer}\none {{1 Docker-resource op deze host is niet door Hohenheim aangemaakt; die blijft ongemoeid.}}\n* {{{$count :integer} Docker-resources op deze host zijn niet door Hohenheim aangemaakt; ze blijven ongemoeid.}}",
       "scope": "attention_detail"
     }
   ],

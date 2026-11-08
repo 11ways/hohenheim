@@ -2191,7 +2191,7 @@
       "scope": "onboarding"
     },
     {
-      "text": "Hohenheim admin",
+      "text": "Admin",
       "scope": "admin"
     },
     {
@@ -3091,7 +3091,7 @@
       "scope": "attention_title"
     },
     {
-      "text": ".match {$count :integer}\none {{1 Docker resource on this host was not created by Hohenheim. It is left alone; open {$page} to review it.}}\n* {{{$count :integer} Docker resources on this host were not created by Hohenheim. They are left alone; open {$page} to review exactly these.}}",
+      "text": ".match {$count :integer}\none {{1 Docker resource on this host was not created by Hohenheim; it is left alone.}}\n* {{{$count :integer} Docker resources on this host were not created by Hohenheim; they are left alone.}}",
       "scope": "attention_detail"
     }
   ],

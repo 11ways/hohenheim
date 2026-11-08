@@ -4,7 +4,6 @@ import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.model.ReconcileFindingModel;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
-import be.elevenways.hohenheim.server.cms.ReconcileFindingParts;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -84,13 +83,11 @@ class ForeignResourceAttentionTest extends HohenheimHttpTestBase {
                 .isEqualTo(2);
             assertThat(row.detail().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
                 .as("step 2: said in a real plural, never '(s)'")
-                .startsWith("2 Docker resources on this host were not created by Hohenheim.");
+                .isEqualTo("2 Docker resources on this host were not created by Hohenheim; they are left alone.");
 
-            // 3. The sentence names the page by the label that page actually carries --
-            //    one declaring home, resolved in the reader's own locale.
-            assertThat(row.detail().args().get("page"))
-                .as("step 3: the detail names the target page by its own declared label")
-                .isEqualTo(ReconcileFindingParts.LABEL);
+            // 3. The sentence leaves naming the page to the row's own link, so it never says where to go twice.
+            assertThat(row.detail().args().get("page")).as("step 3: the detail names no page; the link does")
+                .isNull();
 
             // 4. The link is narrowed, and readably so: the expression names the host and
             //    both counted buckets rather than being an opaque blob.
@@ -122,10 +119,10 @@ class ForeignResourceAttentionTest extends HohenheimHttpTestBase {
                 .as("step 6: counting only its own foreign resource").isEqualTo(1);
             assertThat(other.detail().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
                 .as("step 6: in the singular")
-                .startsWith("1 Docker resource on this host was not created by Hohenheim.");
+                .isEqualTo("1 Docker resource on this host was not created by Hohenheim; it is left alone.");
             assertThat(other.detail().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
                 .as("step 6: and in Dutch")
-                .startsWith("1 Docker-resource op deze host is niet door Hohenheim aangemaakt.");
+                .isEqualTo("1 Docker-resource op deze host is niet door Hohenheim aangemaakt; die blijft ongemoeid.");
             String elsewhere = adminGet(other.target().toUrl()).body();
             assertThat(elsewhere).as("step 6: which lands on that host's resource only")
                 .contains("attref-elsewhere")

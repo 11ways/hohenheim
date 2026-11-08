@@ -236,8 +236,7 @@ public final class AttentionCollector {
         }
         countByServer.forEach((server, count) -> items.add(item(AttentionSeverity.INFO, "cubes",
             HohenheimMicrocopy.ATTENTION_TITLE.of("docker_foreign").withArg("server", server),
-            HohenheimMicrocopy.ATTENTION_DETAIL.of("docker_foreign").withArg("count", count)
-                .withArg("page", ReconcileFindingParts.LABEL),
+            HohenheimMicrocopy.ATTENTION_DETAIL.of("docker_foreign").withArg("count", count),
             findingsOf(server, FOREIGN_BUCKETS),
             HohenheimMicrocopy.ATTENTION_ACTION.of("act_review_findings"))));
     }

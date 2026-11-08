@@ -110,9 +110,10 @@
         gap: var(--pl-space-xs);
     }
 
-    // A usage cell's bar takes a usable width in its column; the flex column would otherwise shrink it to nothing.
+    // A usage cell's bar takes a usable width in its column, wide enough for "1.2 GB of 1.2 GB booked" on one line;
+    // the flex column would otherwise shrink it to nothing.
     .hh-usage {
-        min-width: 9rem;
+        min-width: 11rem;
 
         pl-usage-bar {
             align-self: stretch;
@@ -158,6 +159,12 @@
 
     .cms-resource-list-table .hh-state-line-detail {
         margin-inline-start: var(--pl-space-xs);
+    }
+
+    // One line holds a certificate's name and its expiry: a middle dot sets them apart, as the app list's sublines do.
+    .cms-resource-list-table .hh-state-line-detail + .hh-state-line-detail::before {
+        content: "\00B7";
+        margin-inline-end: var(--pl-space-xs);
     }
 
     // Dashboard onboarding checklist
@@ -670,6 +677,12 @@
         display: inline-flex;
         align-items: center;
         gap: var(--pl-space-xs);
+    }
+
+    // In a list row the hostnames are one line under the cell's own clamp (an inline-flex box would wrap a hostname
+    // mid-name instead of ending it in an ellipsis).
+    .cms-resource-list-table .hh-site-hostnames {
+        display: inline;
     }
 
     .hh-state-actions {

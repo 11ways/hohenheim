@@ -977,8 +977,8 @@ public final class DatabaseParts {
 
     /**
      * The newest stored dump as a word and a line: how long ago and how big, a warning when it is older than the
-     * nightly backup allows, "Never" as a warning while a persistent database has none, and "Not backed up" for a
-     * temporary one.
+     * nightly backup allows, "Never" as a warning while a persistent database has none (with no line beside the row's
+     * own Back up now, unless that verb cannot run), and "Not backed up" for a temporary one.
      */
     private static @NonNull StateLineCell lastBackupCell(@NonNull Row database, @NonNull BackupReading backup,
                                                          @NonNull Conduit conduit) {
@@ -988,7 +988,7 @@ public final class DatabaseParts {
             case TEMPORARY -> StateLineCell.of(state, HohenheimMicrocopy.DATABASE_OVERVIEW.of("backup_temporary"),
                 HohenheimMicrocopy.DATABASE_OVERVIEW.of("backup_temporary_detail"));
             case NEVER -> StateLineCell.of(state, HohenheimMicrocopy.DATABASE_OVERVIEW.of("backup_never"),
-                neverBackedUpDetail(database));
+                backUpUnavailable(database));
             case OVERDUE -> StateLineCell.of(state, Microcopy.literal(ago(newest, conduit)),
                 HohenheimMicrocopy.DATABASE_OVERVIEW.of("backup_overdue_detail")
                     .withArg("size", newest.bytes()));
