@@ -120,6 +120,13 @@
         }
     }
 
+    // In a list row a usage cell stays a box (the state line goes inline there), so its width floor holds and its
+    // bar sits over the whole "1.2 GB of 1.2 GB booked" instead of an ellipsis.
+    .cms-resource-list-table .hh-state-line.hh-usage {
+        display: inline-block;
+        vertical-align: middle;
+    }
+
     // A tenant's usage card: the budget and its amount on one line, the bar under them, a gap between budgets.
     .hh-tenant-usage-line {
         display: grid;
