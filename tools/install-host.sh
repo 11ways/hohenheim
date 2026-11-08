@@ -551,6 +551,45 @@ volume() {
     esac
 }
 
+# Whether the volume root is ZFS: its volumes are then datasets below the dataset mounted there.
+on_zfs() {
+    [ "$(stat -f -c %T "$VOLUME_ROOT" 2>/dev/null || true)" = zfs ]
+}
+
+# Refuses a name ZFS would not take as a dataset or snapshot component.
+zfs_name() {
+    case "$1" in
+        ''|.|..|-*|*[!A-Za-z0-9_.:-]*) refuse "'$1' is not a ZFS name" ;;
+    esac
+}
+
+# Sets DS to the dataset of REL (an <instance> folder or an <instance>/<name> volume) below the
+# dataset mounted exactly at the volume root; a root that is a plain folder inside some dataset is
+# refused, since a dataset made below it would mount elsewhere and its quota would cap nothing the
+# workload writes.
+zfs_dataset() {
+    local root rel="$1" part
+    root="$(zfs list -H -o name "$VOLUME_ROOT")" || refuse "$VOLUME_ROOT is not a ZFS dataset"
+    [ "$(zfs get -H -o value mountpoint "$root")" = "$VOLUME_ROOT" ] \
+        || refuse "$VOLUME_ROOT is not the mountpoint of a ZFS dataset"
+    local IFS=/
+    for part in $rel; do
+        zfs_name "$part"
+    done
+    DS="$root/$rel"
+}
+
+# Splits a snapshot path <volume>/.zfs/snapshot/<name> into SNAP_VOLUME and SNAP_NAME.
+zfs_snapshot_path() {
+    case "$1" in
+        */.zfs/snapshot/*) ;;
+        *) refuse "'$1' is not a ZFS snapshot path" ;;
+    esac
+    SNAP_VOLUME="${1%/.zfs/snapshot/*}"
+    SNAP_NAME="${1##*/.zfs/snapshot/}"
+    zfs_name "$SNAP_NAME"
+}
+
 verb="${1:-}"
 [ -n "$verb" ] || usage
 shift
@@ -560,6 +599,11 @@ case "$verb" in
         [ $# -eq 1 ] || usage
         volume "$1"
         rel="$BELOW"
+        if on_zfs; then
+            zfs_dataset "$rel"
+            zfs list -H -o name "$DS" >/dev/null 2>&1 || zfs create -p "$DS"
+            exit 0
+        fi
         enter "$VOLUME_ROOT" ""
         ensure_dir "${rel%/*}"
         enter "$VOLUME_ROOT" "${rel%/*}"
@@ -575,6 +619,11 @@ case "$verb" in
             none) ;;
             ''|*[!0-9]*) refuse "'$2' is not a byte count or none" ;;
         esac
+        if on_zfs; then
+            zfs_dataset "$rel"
+            zfs set refquota="$2" "$DS"
+            exit 0
+        fi
         btrfs quota enable "$VOLUME_ROOT" >/dev/null 2>&1 || true
         enter "$VOLUME_ROOT" "${rel%/*}"
         leaf="${rel##*/}"
@@ -585,6 +634,11 @@ case "$verb" in
         [ $# -eq 1 ] || usage
         volume "$1"
         rel="$BELOW"
+        if on_zfs; then
+            zfs_dataset "$rel"
+            zfs get -Hp -o value referenced "$DS"
+            exit 0
+        fi
         enter "$VOLUME_ROOT" "${rel%/*}"
         leaf="${rel##*/}"
         [ ! -L "$leaf" ] || refuse "'$leaf' is a symlink"
@@ -594,6 +648,13 @@ case "$verb" in
         [ $# -eq 2 ] || usage
         volume "$1"
         rel="$BELOW"
+        if on_zfs; then
+            zfs_snapshot_path "$2"
+            [ "$SNAP_VOLUME" = "$1" ] || refuse "'$2' is not a snapshot of '$1'"
+            zfs_dataset "$rel"
+            zfs snapshot "$DS@$SNAP_NAME"
+            exit 0
+        fi
         below "$VOLUME_ROOT/.snapshots" "$2" 2 2
         target="$BELOW"
         enter "$VOLUME_ROOT" ""
@@ -610,6 +671,26 @@ case "$verb" in
         ;;
     volume-destroy)
         [ $# -eq 1 ] || usage
+        if on_zfs; then
+            case "$1" in
+                */.zfs/snapshot/*)
+                    zfs_snapshot_path "$1"
+                    volume "$SNAP_VOLUME"
+                    zfs_dataset "$BELOW"
+                    if zfs list -H -t snapshot -o name "$DS@$SNAP_NAME" >/dev/null 2>&1; then
+                        zfs destroy "$DS@$SNAP_NAME"
+                    fi
+                    exit 0
+                    ;;
+            esac
+            volume "$1"
+            zfs_dataset "$BELOW"
+            if zfs list -H -o name "$DS" >/dev/null 2>&1; then
+                zfs destroy -r "$DS"
+                exit 0
+            fi
+            [ ! -e "$1" ] || ! mountpoint -q "$1" || refuse "'$1' is still mounted"
+        fi
         case "$1" in
             "$VOLUME_ROOT/.snapshots"/*)
                 below "$VOLUME_ROOT/.snapshots" "$1" 2 2
@@ -641,6 +722,15 @@ case "$verb" in
         case "$owner" in
             *[!0-9]*) refuse "'$1' is not an instance folder" ;;
         esac
+        if on_zfs; then
+            zfs_dataset "$owner"
+            if zfs list -H -o name "$DS" >/dev/null 2>&1; then
+                if [ "$(zfs list -H -r -d 1 -o name "$DS" | wc -l)" -eq 1 ]; then
+                    zfs destroy "$DS"
+                fi
+                exit 0
+            fi
+        fi
         enter "$VOLUME_ROOT" ""
         if [ -d "./$owner" ] && [ ! -L "./$owner" ]; then
             rmdir --ignore-fail-on-non-empty -- "./$owner"
@@ -668,6 +758,14 @@ case "$verb" in
         ;;
     volume-read)
         [ $# -eq 1 ] || usage
+        if on_zfs; then
+            zfs_snapshot_path "$1"
+            volume "$SNAP_VOLUME"
+            enter "$VOLUME_ROOT" "$BELOW"
+            cd -P -- ".zfs/snapshot/$SNAP_NAME" || refuse "no snapshot '$SNAP_NAME'"
+            tar --numeric-owner -cf - .
+            exit 0
+        fi
         below "$VOLUME_ROOT/.snapshots" "$1" 2 2
         enter "$VOLUME_ROOT" ".snapshots/$BELOW"
         tar --numeric-owner -cf - .

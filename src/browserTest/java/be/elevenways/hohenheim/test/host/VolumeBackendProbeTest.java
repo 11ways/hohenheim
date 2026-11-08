@@ -42,7 +42,7 @@ class VolumeBackendProbeTest {
         assertThat(classify("/data\nbtrfs\nrw,relatime,subvol=/x").backend())
             .as("step 1: btrfs is recognised").isEqualTo(VolumeBackend.BTRFS);
         assertThat(classify("/data\nzfs\nrw,xattr,noacl").backend())
-            .as("step 1: zfs is recognised too, unimplemented as it is")
+            .as("step 1: zfs is recognised too")
             .isEqualTo(VolumeBackend.ZFS);
 
         // 2. XFS is the whole reason the mount options are read: the SAME fstype answers

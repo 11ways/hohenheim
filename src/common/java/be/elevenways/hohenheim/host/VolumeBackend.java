@@ -37,11 +37,11 @@ import java.util.List;
  */
 public enum VolumeBackend {
 
-    /** Subvolume per volume, qgroup quota, read-only snapshots -- the implemented one. */
+    /** Subvolume per volume, qgroup quota, read-only snapshots. */
     BTRFS("btrfs", "Btrfs", true, true, true, "layer-group", BadgeVariant.SUCCESS),
 
-    /** Dataset per volume, {@code quota=} property, native snapshots -- NOT implemented. */
-    ZFS("zfs", "ZFS", false, true, true, "database", BadgeVariant.WARNING),
+    /** Dataset per volume, {@code refquota}, native read-only snapshots. */
+    ZFS("zfs", "ZFS", true, true, true, "database", BadgeVariant.SUCCESS),
 
     /** XFS with project quota ENABLED on the mount: quota yes, snapshot no -- NOT implemented. */
     XFS_PRJQUOTA("xfs_prjquota", "XFS project quota", false, true, false, "hard-drive", BadgeVariant.WARNING),

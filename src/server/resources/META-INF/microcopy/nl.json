@@ -12084,11 +12084,11 @@
     "scope": "violations"
   },
   "host_no_volume_quota": {
-    "text": "Host '{$name}' kan geen volumequota afdwingen (backend: {$backend}), dus {$kind} kan er niet op draaien. Koppel een btrfs-bestandssysteem aan de volumemap of kies een andere host.",
+    "text": "Host '{$name}' kan geen volumequota afdwingen (backend: {$backend}), dus {$kind} kan er niet op draaien. Koppel een btrfs-bestandssysteem of een ZFS-dataset aan de volumemap of kies een andere host.",
     "scope": "violations"
   },
   "volume_backend_unimplemented": {
-    "text": "Hohenheim kan geen volumes beheren op de {$backend}-backend; alleen btrfs kan vandaag een volume aanmaken, begrenzen en snapshotten.",
+    "text": "Hohenheim kan geen volumes beheren op de {$backend}-backend; alleen btrfs en ZFS kunnen vandaag een volume aanmaken, begrenzen en snapshotten.",
     "scope": "violations"
   },
   "volume_create_failed": {
@@ -12116,7 +12116,7 @@
     "scope": "violations"
   },
   "volume_no_snapshot_support": {
-    "text": "Host '{$name}' kan geen snapshot van een volume maken (backend: {$backend}), dus een deploy die naar gedeclareerde volumes zou schrijven wordt geweigerd. Koppel een btrfs-bestandssysteem aan de volumemap, of verwijder de volumes.",
+    "text": "Host '{$name}' kan geen snapshot van een volume maken (backend: {$backend}), dus een deploy die naar gedeclareerde volumes zou schrijven wordt geweigerd. Koppel een btrfs-bestandssysteem of een ZFS-dataset aan de volumemap, of verwijder de volumes.",
     "scope": "violations"
   },
   "volume_host_unknown": {
@@ -12701,7 +12701,7 @@
     "scope": "server_overview"
   },
   "volume_backend_none_body": {
-    "text": "De dataroot kan geen groottelimieten afdwingen of snapshots nemen, dus workspaces en applicaties kunnen niet op deze host geplaatst worden. Mount een btrfs-bestandssysteem op de volumes-map van het datapad en controleer deze host daarna opnieuw.",
+    "text": "De dataroot kan geen groottelimieten afdwingen of snapshots nemen, dus workspaces en applicaties kunnen niet op deze host geplaatst worden. Mount een btrfs-bestandssysteem of een ZFS-dataset op de volumes-map van het datapad en controleer deze host daarna opnieuw.",
     "scope": "server_overview"
   },
   "create_title": [
@@ -12735,7 +12735,7 @@
     "scope": "server_overview"
   },
   "volume_backend_unsupported_body": {
-    "text": "De dataroot is {$backend}, waarop Hohenheim geen volumes kan beheren, dus workspaces en applicaties kunnen niet op deze host geplaatst worden. Alleen btrfs is vandaag geimplementeerd: mount een btrfs-bestandssysteem op de volumes-map van het datapad en controleer deze host daarna opnieuw.",
+    "text": "De dataroot is {$backend}, waarop Hohenheim geen volumes kan beheren, dus workspaces en applicaties kunnen niet op deze host geplaatst worden. Mount een btrfs-bestandssysteem of een ZFS-dataset op de volumes-map van het datapad en controleer deze host daarna opnieuw.",
     "scope": "server_overview"
   },
   "volume_backend_no_snapshot_title": {
@@ -12743,7 +12743,7 @@
     "scope": "server_overview"
   },
   "volume_backend_no_snapshot_body": {
-    "text": "De dataroot dwingt groottelimieten af maar kan geen snapshots nemen, dus deploys van applicaties MET volumes worden hier geweigerd. Btrfs op het datapad lost dit op.",
+    "text": "De dataroot dwingt groottelimieten af maar kan geen snapshots nemen, dus deploys van applicaties MET volumes worden hier geweigerd. Btrfs of ZFS op het datapad lost dit op.",
     "scope": "server_overview"
   },
   "build": {

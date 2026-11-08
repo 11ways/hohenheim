@@ -23,9 +23,9 @@ import java.nio.file.Path;
  * backend member breaks this build until someone decides what it can do -- an unknown
  * backend can never silently fall through to "works like btrfs".
  *
- * AIDEV-NOTE: only btrfs is implemented. ZFS and XFS project quota refuse BY NAME rather
- * than degrading, because a volume whose quota was never applied looks exactly like one
- * whose quota is enforced until the day it fills the host's disk.
+ * AIDEV-NOTE: btrfs and ZFS are implemented. XFS project quota refuses BY NAME rather than degrading, because a
+ * volume whose quota was never applied looks exactly like one whose quota is enforced until the day it fills the
+ * host's disk.
  *
  * AIDEV-NOTE: which members this file implements is DECLARED on the enum
  * ({@link VolumeBackend#isImplemented}), and that declaration is what the picker and
@@ -170,7 +170,8 @@ public interface VolumeOperations {
                                                 @NonNull HostShell shell) {
         return switch (backend) {
             case BTRFS -> new BtrfsVolumeOperations(shell);
-            case ZFS, XFS_PRJQUOTA, NONE, UNCHECKED -> new UnimplementedVolumeOperations(backend, shell);
+            case ZFS -> new ZfsVolumeOperations(shell);
+            case XFS_PRJQUOTA, NONE, UNCHECKED -> new UnimplementedVolumeOperations(backend, shell);
         };
     }
 
