@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.diagnostic.ListedLines;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -20,7 +21,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -100,14 +100,7 @@ public final class CommunityScripts {
     public static @NonNull Set<String> upstreamVocabulary() {
         Set<String> upstream = cachedUpstream;
         if (upstream == null) {
-            Set<String> names = new LinkedHashSet<>();
-            for (String line : readResource("upstream-vocabulary.txt").split("\n")) {
-                String name = line.trim();
-                if (!name.isEmpty() && !name.startsWith("#")) {
-                    names.add(name);
-                }
-            }
-            upstream = Set.copyOf(names);
+            upstream = Set.copyOf(ListedLines.of(readResource("upstream-vocabulary.txt")));
             cachedUpstream = upstream;
         }
         return upstream;
