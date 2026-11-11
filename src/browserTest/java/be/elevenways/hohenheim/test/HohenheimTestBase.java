@@ -72,7 +72,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 public abstract class HohenheimTestBase extends ZenitBrowserTestBase {
 
     @RegisterExtension
-    protected static final ServedApp APP = HohenheimServedApp.app().keepingServerForJvm().with(new AdminSession());
+    protected static final ServedApp APP = HohenheimServedApp.app().with(new AdminSession());
 
     protected static String sessionToken;
     protected static String csrfToken;
