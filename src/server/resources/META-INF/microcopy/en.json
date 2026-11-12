@@ -12883,10 +12883,16 @@
     "text": "On",
     "scope": "access_rule"
   },
-  "state_off": {
-    "text": "Off",
-    "scope": "access_rule"
-  },
+  "state_off": [
+    {
+      "text": "Off",
+      "scope": "access_rule"
+    },
+    {
+      "text": "Off",
+      "scope": "app_list"
+    }
+  ],
   "switch_on": {
     "text": "Switch on",
     "scope": "access_rule"

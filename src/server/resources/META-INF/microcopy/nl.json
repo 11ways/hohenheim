@@ -12883,10 +12883,16 @@
     "text": "Aan",
     "scope": "access_rule"
   },
-  "state_off": {
-    "text": "Uit",
-    "scope": "access_rule"
-  },
+  "state_off": [
+    {
+      "text": "Uit",
+      "scope": "access_rule"
+    },
+    {
+      "text": "Uit",
+      "scope": "app_list"
+    }
+  ],
   "switch_on": {
     "text": "Aanzetten",
     "scope": "access_rule"

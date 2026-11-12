@@ -131,8 +131,9 @@ final class AppDirectory {
     }
 
     /**
-     * How an app is counted: live, with a problem, neither (starting, deploying or not read yet), or retired (out of
-     * service on purpose, so never a problem and never waiting to be read).
+     * How an app is counted: live, with a problem, neither (starting, deploying or not read yet; or off, not set up or
+     * switched off, a tone no app's verdict carries today but which would ask for no attention either), or retired (out
+     * of service on purpose, so never a problem and never waiting to be read).
      */
     enum Count {
         LIVE,
@@ -144,7 +145,7 @@ final class AppDirectory {
             return switch (tone) {
                 case OK -> LIVE;
                 case ATTENTION, BROKEN -> PROBLEM;
-                case UNKNOWN -> NEITHER;
+                case UNKNOWN, OFF -> NEITHER;
                 case RETIRED -> RETIRED;
             };
         }

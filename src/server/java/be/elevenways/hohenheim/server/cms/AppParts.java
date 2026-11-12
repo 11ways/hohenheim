@@ -283,13 +283,26 @@ public final class AppParts {
         return builder.label(HohenheimMicrocopy.APP_LIST.of("kind")).build();
     }
 
-    /** The state filter's values: the framework's verdict tones, worded for an app. */
+    /** The state filter's values: the framework's verdict tones an app's verdict can carry, worded for an app. */
     private static @NonNull EnumField stateField() {
         EnumField.Builder builder = EnumField.builder("state");
         for (HealthTone tone : HealthTone.values()) {
-            builder.value(tone.token(), spec -> spec.label(stateLabel(tone.token())));
+            if (judgesAnApp(tone)) {
+                builder.value(tone.token(), spec -> spec.label(stateLabel(tone.token())));
+            }
         }
         return builder.label(HohenheimMicrocopy.APP_LIST.of("state")).build();
+    }
+
+    /**
+     * @return whether an app's verdict ({@link AppHealth}) can carry this tone, so the state filter offers it: an app
+     *         is never judged off (not set up or switched off), so filtering on it could match no app
+     */
+    static boolean judgesAnApp(@NonNull HealthTone tone) {
+        return switch (tone) {
+            case OK, ATTENTION, BROKEN, UNKNOWN, RETIRED -> true;
+            case OFF -> false;
+        };
     }
 
     /** @return a verdict tone's one word for an app ("Working"), the state filter's */
@@ -304,7 +317,7 @@ public final class AppParts {
      */
     static @NonNull Microcopy stateWord(@NonNull RecordHealth verdict) {
         return switch (verdict.tone()) {
-            case OK, ATTENTION, BROKEN, RETIRED -> stateLabel(verdict.tone().token());
+            case OK, ATTENTION, BROKEN, RETIRED, OFF -> stateLabel(verdict.tone().token());
             case UNKNOWN -> verdict.headline();
         };
     }

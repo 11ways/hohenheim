@@ -66,7 +66,7 @@ public enum AttentionSeverity {
         return switch (tone) {
             case BROKEN -> ERROR;
             case ATTENTION -> WARNING;
-            case OK, UNKNOWN, RETIRED -> null;
+            case OK, UNKNOWN, RETIRED, OFF -> null;
         };
     }
 
