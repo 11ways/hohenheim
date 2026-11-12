@@ -268,16 +268,20 @@ public final class ControlPlaneBackups {
      * only: must run before the datasource is opened (the {@code --restore-control-plane}
      * boot argument), never against a live server.
      *
-     * @return the archive's manifest
+     * @return the archive's manifest, and whether the keyring the restore wrote is readable by its owner only
+     *         ({@link RecoveryArchive.Restored#keyringOwnerOnly}); false is no failure, the restore is whole, but its
+     *         caller must tell the operator that the master keys are readable by others
      */
-    public static RecoveryArchive.@NonNull Manifest restore(@NonNull Path archive) {
+    public static RecoveryArchive.@NonNull Restored restore(@NonNull Path archive) {
         Path database = databaseFile();
         Path keyring = keyringFile();
-        RecoveryArchive.Manifest manifest = RecoveryArchive.restore(archive, database, keyring);
+        RecoveryArchive.Restored restored = RecoveryArchive.restore(archive, database, keyring);
+        RecoveryArchive.Manifest manifest = restored.manifest();
         Blast.log("Restored control-plane recovery archive", archive.toString(),
             "-> database", database.toString(), "+ keyring", keyring.toString(),
-            "(created", manifest.created() + ", keys", String.join(",", manifest.keyIds()) + ")");
-        return manifest;
+            "(created", manifest.created() + ", keys", String.join(",", manifest.keyIds())
+                + ", keyring owner-only", restored.keyringOwnerOnly() + ")");
+        return restored;
     }
 
     /**

@@ -32,6 +32,7 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -154,10 +155,16 @@ class ControlPlaneBackupTest {
             ServerSettings.VALUES.setValue(
                 ServerSettings.Database.Encryption.KEY_FILE, keyringFile.toString());
             target.retrieve(archive.key(), fetched);
-            RecoveryArchive.Manifest manifest = ControlPlaneBackups.restore(fetched);
-            assertThat(manifest.activeKeyId())
+            RecoveryArchive.Restored restored = ControlPlaneBackups.restore(fetched);
+            assertThat(restored.manifest().activeKeyId())
                 .as("step 5: the restored archive names the key it was made under")
                 .isEqualTo(archive.manifest().activeKeyId());
+            assertThat(restored.keyringOwnerOnly())
+                .as("step 5: on a filesystem that keeps POSIX permissions the restore reports the keyring owner-only")
+                .isTrue();
+            assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(keyringFile)))
+                .as("step 5: and the keyring it wrote reads back as its owner's alone, as it reported")
+                .isEqualTo("rw-------");
         } finally {
             Files.deleteIfExists(fetched);
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.PATH, originalPath);

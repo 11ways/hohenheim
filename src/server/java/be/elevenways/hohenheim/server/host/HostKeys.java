@@ -7,10 +7,12 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.DataDirectory;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.diagnostic.AtomicFiles;
 import be.elevenways.protoblast.server.process.ProcessOutcome;
 import be.elevenways.protoblast.server.process.Subprocess;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.io.DurableFiles;
 import be.elevenways.zenit.server.security.SshKeyType;
 import be.elevenways.zenit.server.security.SshPublicKey;
 import java.time.Duration;
@@ -18,10 +20,11 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -368,8 +371,9 @@ public final class HostKeys {
         Path directory = DataDirectory.resolve("host-ssh", ControllerIdentity.token());
         try {
             Files.createDirectories(directory);
-            trySetPermissions(directory, "rwx------");
-        } catch (IOException e) {
+            // Owner-only where the filesystem allows it; DurableFiles logs a mount that does not.
+            DurableFiles.restrictDirectoryToOwner(directory);
+        } catch (IOException | UncheckedIOException e) {
             throw new IllegalStateException("Cannot create the host ssh store at "
                 + directory + ": " + e.getMessage(), e);
         }
@@ -397,33 +401,68 @@ public final class HostKeys {
 
     private static Path writeKnownHosts(String alias, String pinnedKey) {
         Path file = storeDirectory().resolve("known_hosts-" + alias);
-        return writeFile(file, alias + " " + keyLineOf(pinnedKey) + "\n", "rw-------");
+        return writeFile(file, alias + " " + keyLineOf(pinnedKey) + "\n");
     }
 
     private static Path writeIdentity(Row server, String privateKey) {
         Path file = storeDirectory().resolve("id-" + server.get(ServerModel.ID));
         String body = privateKey.endsWith("\n") ? privateKey : privateKey + "\n";
-        return writeFile(file, body, "rw-------");
+        return writePrivateKey(file, body);
     }
 
-    /** Rewrite from the database unless the file already says exactly this. */
-    private static Path writeFile(Path file, String content, String permissions) {
+    /**
+     * Writes a private key readable by its owner only from its first byte: staged empty, narrowed, then filled and
+     * moved into place atomically, as zenit writes its keyring. A key already there with exactly this content is
+     * narrowed in place.
+     *
+     * @throws Violations {@code host_identity_not_private} naming the file when it cannot be kept to its owner (its
+     *                    filesystem refuses the mode, or a symbolic link stands in its place); nothing is written
+     */
+    static Path writePrivateKey(Path file, String body) {
         try {
-            if (!Files.exists(file) || !content.equals(Files.readString(file, StandardCharsets.UTF_8))) {
-                Files.writeString(file, content, StandardCharsets.UTF_8);
+            if (Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)
+                && body.equals(Files.readString(file, StandardCharsets.UTF_8))) {
+                requireOwnerOnly(file, file);
+                return file;
             }
-            trySetPermissions(file, permissions);
+            try (AtomicFiles.Staged staged = AtomicFiles.stage(file)) {
+                requireOwnerOnly(staged.path(), file);
+                Files.writeString(staged.path(), body, StandardCharsets.UTF_8);
+                staged.commit();
+            }
             return file;
         } catch (IOException e) {
             throw new IllegalStateException("Cannot write " + file + ": " + e.getMessage(), e);
         }
     }
 
-    private static void trySetPermissions(Path path, String permissions) {
+    /** @throws Violations {@code host_identity_not_private} when {@code path} cannot be narrowed to its owner */
+    private static void requireOwnerOnly(Path path, Path named) {
+        boolean ownerOnly;
         try {
-            Files.setPosixFilePermissions(path, PosixFilePermissions.fromString(permissions));
-        } catch (IOException | UnsupportedOperationException ignored) {
-            // Non-POSIX filesystem; the content is still authoritative.
+            ownerOnly = DurableFiles.restrictToOwner(path);
+        } catch (UncheckedIOException notItsOwn) {
+            ownerOnly = false;
+        }
+        if (!ownerOnly) {
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("host_identity_not_private")
+                .withArg("path", named.toString()));
+        }
+    }
+
+    /**
+     * Rewrite a public file (known hosts) from the database unless it already says exactly this, then narrow it to its
+     * owner where the filesystem allows it (DurableFiles logs a mount that does not): it holds nothing secret.
+     */
+    private static Path writeFile(Path file, String content) {
+        try {
+            if (!Files.exists(file) || !content.equals(Files.readString(file, StandardCharsets.UTF_8))) {
+                Files.writeString(file, content, StandardCharsets.UTF_8);
+            }
+            DurableFiles.restrictToOwner(file);
+            return file;
+        } catch (IOException e) {
+            throw new IllegalStateException("Cannot write " + file + ": " + e.getMessage(), e);
         }
     }
 }

@@ -11,6 +11,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.server.process.Subprocess;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -98,6 +99,20 @@ class GitRemoteAccessTest extends HohenheimTestBase {
         assertThat(catchThrowable(() -> GitProviders.clientFor(keyless).listRepositories()))
             .as("step 5: testing a connection without a key names what is missing")
             .isInstanceOf(IOException.class).hasMessageContaining("holds no private key");
+
+        // 6. A key directory that cannot be kept to its owner (here a symbolic link standing in its place) refuses in
+        //    words naming the directory and the remedy, and what the link points at keeps its mode.
+        Path elsewhere = Files.createTempDirectory("hh-key-elsewhere");
+        Files.setPosixFilePermissions(elsewhere, PosixFilePermissions.fromString("rwxr-xr-x"));
+        Path linked = Files.createSymbolicLink(Files.createTempDirectory("hh-key-root").resolve("keys"), elsewhere);
+        assertThat(catchThrowable(() -> SshProviderClient.KeyAccess.privateDirectory(linked)))
+            .as("step 6: refused in words").isInstanceOfSatisfying(Violations.class, refused -> {
+                Microcopy words = refused.iterator().next().message();
+                assertThat(words.key()).isEqualTo("git_key_directory_not_private");
+                assertThat(String.valueOf(words.args().get("path"))).isEqualTo(linked.toString());
+            });
+        assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(elsewhere)))
+            .as("step 6: nothing followed the link").isEqualTo("rwxr-xr-x");
     }
 
     /** The remote is asked for its branches and a branch's head without a checkout. */

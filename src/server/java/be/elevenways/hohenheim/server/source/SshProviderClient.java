@@ -1,8 +1,11 @@
 package be.elevenways.hohenheim.server.source;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.server.DataDirectory;
 import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.protoblast.diagnostic.FileTrees;
+import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.io.DurableFiles;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -122,8 +125,9 @@ final class SshProviderClient implements GitProviderClient {
             Path pinned = privateDirectory(root.resolve("known_hosts")).resolve(String.valueOf(providerId));
             Path directory = Files.createTempDirectory(keys, "key-",
                 PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")));
-            Path file = Files.createFile(directory.resolve("id"),
-                PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")));
+            // Inside the owner-only directory above, so a mount that ignores the file's mode exposes nothing.
+            Path file = directory.resolve("id");
+            DurableFiles.createOwnerOnlyFile(file);
             Files.writeString(file, key, StandardCharsets.UTF_8);
             // LogLevel=ERROR keeps ssh's own notices (a host key pinned on first use) out of the reason a refusal shows.
             String command = "ssh -i " + HostShell.quote(file.toAbsolutePath().toString())
@@ -165,9 +169,25 @@ final class SshProviderClient implements GitProviderClient {
             return key + "\n";
         }
 
-        private static @NonNull Path privateDirectory(@NonNull Path directory) throws IOException {
+        /**
+         * A directory only its owner may enter; refused when it cannot be made so (its filesystem keeps it reachable
+         * by others, or a symbolic link or file stands in its place), since it holds key material.
+         *
+         * @throws Violations {@code git_key_directory_not_private} naming the directory and the remedy; nothing is
+         *                    written into it
+         */
+        static @NonNull Path privateDirectory(@NonNull Path directory) throws IOException {
             Files.createDirectories(directory);
-            Files.setPosixFilePermissions(directory, PosixFilePermissions.fromString("rwx------"));
+            boolean ownerOnly;
+            try {
+                ownerOnly = DurableFiles.restrictDirectoryToOwner(directory);
+            } catch (UncheckedIOException notItsOwn) {
+                ownerOnly = false;
+            }
+            if (!ownerOnly) {
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("git_key_directory_not_private")
+                    .withArg("path", directory.toString()));
+            }
             return directory;
         }
     }

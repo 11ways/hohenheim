@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cli;
 
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.server.cli.OfflineCommand;
 import be.elevenways.zenit.server.cli.OfflineCommandContext;
 import be.elevenways.zenit.server.cli.OfflineCommandException;
@@ -51,8 +52,7 @@ public final class RestoreControlPlaneCommand implements OfflineCommand {
 
         if (isLocalFile(pointer)) {
             HohenheimDatabase.closeDatasource();
-            RecoveryArchive.Manifest manifest = ControlPlaneBackups.restore(Path.of(pointer));
-            report(context, manifest);
+            report(context, ControlPlaneBackups.restore(Path.of(pointer)), ControlPlaneBackups.keyringFile());
             return;
         }
 
@@ -65,7 +65,7 @@ public final class RestoreControlPlaneCommand implements OfflineCommand {
         }
         try {
             HohenheimDatabase.closeDatasource();
-            report(context, ControlPlaneBackups.restore(fetched));
+            report(context, ControlPlaneBackups.restore(fetched), ControlPlaneBackups.keyringFile());
         } finally {
             try {
                 ControlPlaneBackups.deleteFetched(fetched);
@@ -85,10 +85,21 @@ public final class RestoreControlPlaneCommand implements OfflineCommand {
         }
     }
 
-    private static void report(@NonNull OfflineCommandContext context,
-                               RecoveryArchive.@NonNull Manifest manifest) {
+    /**
+     * What the restore did, in the operator's words; a keyring it left readable by others is a WARNING line in zenit's
+     * own words ({@link RecoveryArchive.Restored#warning}), as zenit's {@code --restore-backup} prints it.
+     *
+     * @param keyring where the restore wrote the keyring
+     */
+    static void report(@NonNull OfflineCommandContext context, RecoveryArchive.@NonNull Restored restored,
+                       @NonNull Path keyring) {
+        RecoveryArchive.Manifest manifest = restored.manifest();
         context.print("Restored control-plane archive created " + manifest.created()
             + " (encryption keys " + String.join(",", manifest.keyIds()) + ").");
+        Microcopy warning = restored.warning(keyring);
+        if (warning != null) {
+            context.warn(warning);
+        }
         context.print("Start the server to boot on the restored database.");
     }
 }

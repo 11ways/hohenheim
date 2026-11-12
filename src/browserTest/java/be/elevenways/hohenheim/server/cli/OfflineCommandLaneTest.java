@@ -21,12 +21,15 @@ import be.elevenways.zenit.server.cli.BuildInfoCommand;
 import be.elevenways.zenit.server.cli.EncryptionKeySurveyCommand;
 import be.elevenways.zenit.server.cli.HistorySecretSurveyCommand;
 import be.elevenways.zenit.server.cli.HostConsole;
+import be.elevenways.zenit.server.cli.OfflineCommandContext;
 import be.elevenways.zenit.server.cli.OfflineCommandException;
 import be.elevenways.zenit.server.cli.OfflineCommands;
 import be.elevenways.zenit.server.cli.PurgeHistorySecretsCommand;
 import be.elevenways.zenit.server.cli.ReencryptSecretsCommand;
 import be.elevenways.zenit.server.cli.RetireEncryptionKeyCommand;
 import be.elevenways.zenit.server.cli.RotateEncryptionKeyCommand;
+import be.elevenways.zenit.server.orm.backup.RecoveryArchive;
+import be.elevenways.zenit.server.orm.backup.SnapshotFormat;
 import be.elevenways.zenit.server.setting.ServerSettings;
 import org.assertj.core.api.SoftAssertions;
 import org.junit.jupiter.api.AfterAll;
@@ -371,6 +374,33 @@ class OfflineCommandLaneTest {
         } finally {
             HohenheimRoles.capture();
         }
+    }
+
+    /**
+     * A control-plane restore that leaves the keyring readable by others tells the operator so, in zenit's words for
+     * that fact (the WARNING line zenit's own --restore-backup prints), and a private keyring adds no line.
+     */
+    @Test
+    void aRestoreThatLeavesTheKeyringReadableByOthersWarnsTheOperator() {
+        RecoveryArchive.Manifest manifest = new RecoveryArchive.Manifest(RecoveryArchive.FORMAT_VERSION,
+            "2026-11-12T00:00:00Z", "00", 1, "00", 1, "k1", List.of("k1"), SnapshotFormat.SQLITE_FILE);
+        Path keyring = Path.of("/srv/hohenheim/field-encryption.keys");
+
+        // 1. A private keyring: the report names the archive and the next step, nothing else.
+        List<String> quiet = new ArrayList<>();
+        RestoreControlPlaneCommand.report(OfflineCommandContext.parse(new String[0], quiet::add),
+            new RecoveryArchive.Restored(manifest, true), keyring);
+        assertThat(quiet).as("step 1: no warning for a private keyring").hasSize(2)
+            .noneMatch(line -> line.startsWith("WARNING"));
+
+        // 2. A keyring others can read: one WARNING line, naming the keyring and the remedy.
+        List<String> warned = new ArrayList<>();
+        RestoreControlPlaneCommand.report(OfflineCommandContext.parse(new String[0], warned::add),
+            new RecoveryArchive.Restored(manifest, false), keyring);
+        assertThat(warned).as("step 2: the report gains one line").hasSize(3);
+        assertThat(warned).filteredOn(line -> line.startsWith("WARNING: "))
+            .as("step 2: a WARNING naming the keyring and the remedy").singleElement().asString()
+            .contains(keyring.toString(), "chmod 600");
     }
 
     /** The offline lane as the entry point dispatches it, keeping its refusal typed. */

@@ -40,15 +40,12 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.attribute.PosixFilePermission;
-import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Stream;
 
 /**
@@ -80,9 +77,6 @@ public final class DatabaseBackups {
 
     /** Subdirectory of the backup path dumps are staged in before upload, never kept. */
     public static final String STAGING_SUBDIRECTORY = "database-staging";
-
-    /** The permissions of the staging root: plaintext dumps pass through it. */
-    private static final Set<PosixFilePermission> OWNER_ONLY_DIRECTORY = PosixFilePermissions.fromString("rwx------");
 
     private static final Retention.InstanceCaptures RETENTION = new Retention.InstanceCaptures(
         DatabaseDumpModel.class, DatabaseDumpModel.ID, DatabaseDumpModel.DATABASE_ID, DatabaseDumpModel.STATUS,
@@ -515,29 +509,28 @@ public final class DatabaseBackups {
     }
 
     /**
-     * Narrows a staging directory to its owner and reads it back, refusing when it cannot be.
+     * Narrows a staging directory to its owner and reads it back ({@link DurableFiles#restrictDirectoryToOwner}),
+     * refusing when it cannot be.
      *
      * AIDEV-NOTE: fail CLOSED, a non-POSIX filesystem included: a dump or restore never writes plaintext into a
-     * directory others may enter. A symbolic link is refused before anything follows it, so a planted link can never
-     * redirect the narrowing (or the plaintext) to another directory.
+     * directory others may enter. The framework refuses a symbolic link before anything follows it, so a planted link
+     * can never redirect the narrowing (or the plaintext) to another directory.
      *
      * @throws DomainRefusal {@code database_staging_unsafe} naming the directory and why
      */
     private static void restrictToOwner(@NonNull Path directory) {
         String why;
-        if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
-            why = "it is not a directory of its own (a symbolic link or another file)";
-        } else {
-            try {
-                Files.setPosixFilePermissions(directory, OWNER_ONLY_DIRECTORY);
-                Set<PosixFilePermission> found = Files.getPosixFilePermissions(directory, LinkOption.NOFOLLOW_LINKS);
-                if (found.equals(OWNER_ONLY_DIRECTORY)) {
-                    return;
-                }
-                why = "it reads back as " + PosixFilePermissions.toString(found);
-            } catch (IOException | UnsupportedOperationException | SecurityException failed) {
-                why = HohenheimViolations.reasonOf(failed);
+        try {
+            if (!DurableFiles.restrictDirectoryToOwner(directory)) {
+                why = "its filesystem refused owner-only permissions or keeps none";
+            } else if (!Files.isWritable(directory)) {
+                // Owner-only is no group or other bit; a directory its owner cannot write in is no staging area.
+                why = "its owner cannot write in it";
+            } else {
+                return;
             }
+        } catch (UncheckedIOException | SecurityException failed) {
+            why = HohenheimViolations.reasonOf(failed);
         }
         throw new DomainRefusal(HohenheimRefusalReason.DATABASE_STAGING_UNSAFE,
             "the dump staging directory " + directory + " cannot be restricted to its owner: " + why,

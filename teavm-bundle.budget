@@ -31,5 +31,16 @@
 # 2026-11-05: the framework work since 2026-10-30 plus plumage cards for settings groups and sharing rows: the
 # breach was 60943 raw bytes over (gzip under); raw 9123840 -> 9640922, gzip 2287627 -> 2330939. Standard 5 percent
 # headroom.
-cms.js.raw=10712240 measured=10202133
-cms.js.gzip=2568100 measured=2445809
+# 2026-11-12: the work since 2026-11-05 (the breach was 123956 raw / 8799 gzip bytes over): raw 10202133 -> 10836196
+# (+634063), gzip 2445809 -> 2576899. Per package against teavm-bundle.sizes, the +634063 is: framework +485527,
+# Hohenheim's own +11299 (its templates +8069, models +2025: site redirects), unmapped +137237 (unattributed: TeaVM
+# runtime and metadata no source class owns). The framework part: generated templates +357752 (plumage tags +193579
+# with pl-media-transport +34153, now pl-scrubber's transport on zenit-cms's revisions page, pl-nav-menu-editor
+# +21297, pl-stepper-nav +8698, pl-theme-selector +7854; zenit-cms +63666 with class serializers +31111 and child list
+# sections +19031; zenit-forms +28546; zenit-auth +21591 OIDC consent; zenit-cms tags +20332; the rest +30038),
+# hawkeye runtime +32752, zenit and modules +30980, protoblast +29573 (DRY SerializationContext +22109: references
+# ranked by use), plumage +16761 (Phosphor glyphs +7922 of the default Mochi look: Mochi and Y2k are chosenByDefault
+# theme packages and Hohenheim names no theme), TeaVM classlib +14159, domino +3572, elsewhere -22. No java.math, no new
+# server-only class. Standard 5 percent headroom.
+cms.js.raw=11378006 measured=10836196
+cms.js.gzip=2705744 measured=2576899
