@@ -172,10 +172,10 @@ public final class ApiConduits {
                     yield refusal(conduit,
                         HohenheimViolations.instanceRefusal("instance_operation_in_progress", instance, null));
                 }
-                case BAD_REQUEST, METHOD_NOT_ALLOWED, LOGIN_REQUIRED, INTERACTIVE_LOGIN_REQUIRED, RATE_LIMITED,
-                     CSRF_ORIGIN, CSRF_TOKEN_MISSING, CSRF_TOKEN_INVALID, STALE, RETRY_MISMATCH,
-                     ARCHIVED, CYCLE, IN_USE, AMBIGUOUS, STORE_BUSY, AT_CAPACITY, TOO_LARGE, SERVICE_UNAVAILABLE,
-                     OUTCOME_UNKNOWN, SECRET_ALREADY_DISCLOSED, SERVER_OVERLOADED -> throw refusal;
+                case BAD_REQUEST, METHOD_NOT_ALLOWED, LOGIN_REQUIRED, INTERACTIVE_LOGIN_REQUIRED, VIEW_ONLY,
+                     NOT_WHILE_ACTING, RATE_LIMITED, CSRF_ORIGIN, CSRF_TOKEN_MISSING, CSRF_TOKEN_INVALID, STALE,
+                     RETRY_MISMATCH, ARCHIVED, CYCLE, IN_USE, AMBIGUOUS, STORE_BUSY, AT_CAPACITY, TOO_LARGE,
+                     SERVICE_UNAVAILABLE, OUTCOME_UNKNOWN, SECRET_ALREADY_DISCLOSED, SERVER_OVERLOADED -> throw refusal;
             };
         }
         throw refusal;
