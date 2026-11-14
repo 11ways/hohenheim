@@ -55,6 +55,7 @@ SPACE_HEADROOM_MB="256"
 JAVA_BIN="java"
 STAMP="$(date -u +%Y%m%d-%H%M%S)"
 DRY_RUN="no"
+UPLOAD_STREAMS="1"
 MODE="deploy"
 ZENIT_DEV="${ZENIT_DEV_BIN:-zenit-dev}"
 CONFIG_PATH="${ZENIT_DEV_CONFIG:-$HOME/.config/zenit-dev/config.json}"
@@ -75,6 +76,8 @@ ROLLBACK_JAR=""
 # they decide whether a failing lane removes its scratch on exit.
 SCRATCH_PLACED="no"
 SWAP_BEGUN="no"
+# The local directory holding the jar's upload parts while --upload-streams sends them; removed on every exit.
+UPLOAD_PARTS=""
 
 # --- output helpers ---------------------------------------------------------
 
@@ -106,6 +109,10 @@ Options:
   --preflight <dir>      preflight directory on the host
                          (default /root/hohenheim-preflight-<stamp>)
   --java <path>          local java used for the stamp check (default java)
+  --upload-streams <n>   send the jar over <n> connections at once (default 1, at
+                         most 64): it is cut into <n> parts, joined on the host and
+                         verified by its sha256 as always. For a path that loses
+                         packets, where one connection crawls
   --dry-run              print the plan, execute nothing
   --rollback             swap <preflight>/rollback.jar back in and restart
   --help                 this text
@@ -131,6 +138,7 @@ while [ $# -gt 0 ]; do
         --health-timeout) HEALTH_TIMEOUT="${2:-}"; HEALTH_TIMEOUT_EXPLICIT="yes"; shift 2 ;;
         --preflight) PREFLIGHT_DIR="${2:-}"; shift 2 ;;
         --java) JAVA_BIN="${2:-}"; shift 2 ;;
+        --upload-streams) UPLOAD_STREAMS="${2:-}"; shift 2 ;;
         --rollback) MODE="rollback"; shift ;;
         --dry-run) DRY_RUN="yes"; shift ;;
         --help|-h) usage; exit 0 ;;
@@ -146,6 +154,11 @@ LOCAL_JAR="${positional[1]:-}"
 case "$HEALTH_TIMEOUT" in
     ''|*[!0-9]*) fail "--health-timeout takes whole seconds, got '$HEALTH_TIMEOUT'" ;;
 esac
+case "$UPLOAD_STREAMS" in
+    ''|*[!0-9]*) fail "--upload-streams takes a whole number, got '$UPLOAD_STREAMS'" ;;
+esac
+[ "$UPLOAD_STREAMS" -ge 1 ] && [ "$UPLOAD_STREAMS" -le 64 ] \
+    || fail "--upload-streams takes 1 to 64, got '$UPLOAD_STREAMS'"
 
 if [ "$MODE" = "deploy" ]; then
     [ -n "$LOCAL_JAR" ] || fail "name the local jar to deploy (--help for usage)"
@@ -254,9 +267,38 @@ section() {
         grab { print }'
 }
 
-# Removes this lane's uploaded jar and rehearsal copy; a preflight backup is never scratch.
+# Removes this lane's uploaded jar, its upload parts and rehearsal copy; a preflight backup is never scratch.
 remove_scratch() {
-    remote "$SUDO rm -rf '$REHEARSE_DIR'; rm -f '$STAGED_JAR'"
+    remote "$SUDO rm -rf '$REHEARSE_DIR'; rm -f '$STAGED_JAR' '$STAGED_JAR'.part.*"
+}
+
+# Uploads the jar over --upload-streams connections: cut into that many parts, each sent on its own connection,
+# joined on the host one part at a time (so the host never holds the jar twice) and judged whole by the sha256
+# check that follows. The starts are a second apart: sshd drops connections past its MaxStartups of 10 that have
+# not signed in yet.
+upload_in_parts() {
+    local part pid pids="" failed="no"
+    UPLOAD_PARTS="$(mktemp -d)" || fail "could not make a directory for the upload parts"
+    split -n "$UPLOAD_STREAMS" -d -a 3 "$LOCAL_JAR" "$UPLOAD_PARTS/$STAGED_JAR.part." \
+        || fail "could not cut the jar into $UPLOAD_STREAMS parts"
+    for part in "$UPLOAD_PARTS"/*; do
+        scp -q -o BatchMode=yes "$part" "$SSH_TARGET:$(basename "$part")" &
+        pids="$pids $!"
+        sleep 1
+    done
+    for pid in $pids; do
+        wait "$pid" || failed="yes"
+    done
+    rm -rf "$UPLOAD_PARTS"
+    UPLOAD_PARTS=""
+    [ "$failed" = "no" ] || fail "upload failed: a part did not arrive"
+    remote "set -e
+echo '@@join'
+: > '$STAGED_JAR'
+for part in '$STAGED_JAR'.part.*; do
+  cat \"\$part\" >> '$STAGED_JAR'
+  rm -f \"\$part\"
+done" > /dev/null || fail "could not join the uploaded parts on the host"
 }
 
 # On a failing exit before the swap, removes the lane's scratch. Its preflight backup
@@ -264,6 +306,7 @@ remove_scratch() {
 # removed, so the operator finds the host exactly as the failure left it.
 clean_refused_lane() {
     local rc=$?
+    [ -z "$UPLOAD_PARTS" ] || rm -rf "$UPLOAD_PARTS"
     [ "$rc" -ne 0 ] && [ "$DRY_RUN" = "no" ] && [ "$SCRATCH_PLACED" = "yes" ] && [ "$SWAP_BEGUN" = "no" ] \
         || return 0
     printf '   removing the refused lane'"'"'s scratch: %s and ~/%s\n' "$REHEARSE_DIR" "$STAGED_JAR" >&2
@@ -527,7 +570,10 @@ fi
 
 SCRATCH_PLACED="yes"
 if [ "$DRY_RUN" = "yes" ]; then
-    info "PLAN: scp $LOCAL_JAR $SSH_TARGET:$STAGED_JAR"
+    info "PLAN: scp $LOCAL_JAR $SSH_TARGET:$STAGED_JAR (over $UPLOAD_STREAMS connection(s))"
+elif [ "$UPLOAD_STREAMS" -gt 1 ]; then
+    upload_in_parts
+    info "uploaded over $UPLOAD_STREAMS connections"
 else
     scp -q -o BatchMode=yes "$LOCAL_JAR" "$SSH_TARGET:$STAGED_JAR" || fail "upload failed"
 fi

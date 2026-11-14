@@ -154,6 +154,10 @@ case "$script" in
         printf 'cafebabe  /opt/hohenheim/hohenheim-server.jar\n'
         printf '@@start 0\n'
         ;;
+    *"@@join"*)
+        log "join-upload"
+        printf '%s\n' "$script" > "$JOIN_SCRIPT"
+        ;;
     *sha256sum*)
         log "verify-upload"
         printf '%s\n' "$FAKE_JAR_SHA"
@@ -213,6 +217,7 @@ export SWAP_SCRIPT="$WORK/swap.sh"
 export HEALTH_SCRIPT="$WORK/health.sh"
 export PRUNE_SCRIPT="$WORK/prune.sh"
 export CLEANUP_SCRIPT="$WORK/cleanup.sh"
+export JOIN_SCRIPT="$WORK/join.sh"
 export FAKE_JAR_SHA="$JAR_SHA"
 export ZENIT_DEV_CONFIG="$CONFIG"
 
@@ -297,6 +302,24 @@ expect "step 2 names the repos the pending deploy replaces" "$STEP2" \
     "the host lacks pushed commits of upstream repos (the deploy is pending): zenit"
 expect "step 2 never reads the OLD jar's pushed-ahead as pushed after this build" "$OUT" \
     "pushed after this build" no
+
+# --- 1b. the jar over several connections -------------------------------------
+
+OUT="$(run_lane testbox "$JAR" --upload-streams 3)" || no "the lane with three upload streams exits 0"
+expect "three streams are named" "$OUT" "uploaded over 3 connections"
+if [ "$(/usr/bin/grep -c '^scp .*\.part\.00[0-2]' "$SSH_LOG")" = "3" ]; then
+    ok "each of the three parts is sent by its own scp"
+else
+    no "each of the three parts is sent by its own scp (got: $(/usr/bin/grep '^scp ' "$SSH_LOG" | tr '\n' ' '))"
+fi
+expect "the parts are joined on the host before the sha256 check" \
+    "$(/usr/bin/grep -v '^scp ' "$SSH_LOG" | tr '\n' ' ')" "space join-upload verify-upload backup"
+expect "the join appends each part and removes it" "$(cat "$JOIN_SCRIPT")" "rm -f \"\$part\""
+if OUT="$(run_lane testbox "$JAR" --upload-streams 0 2>&1)"; then
+    no "zero upload streams are refused"
+else
+    expect "zero upload streams are refused by name" "$OUT" "--upload-streams takes 1 to 64"
+fi
 
 # An explicit --health-timeout wins over the derived budget; a quick rehearsal still gets the base 120s.
 OUT="$(run_lane testbox "$JAR" --health-timeout 900)" || no "the lane with an explicit budget exits 0"
