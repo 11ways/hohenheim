@@ -51,6 +51,7 @@ import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.WidgetTree;
 import be.elevenways.zenit.widget.common.builtin.AlertVariant;
 import be.elevenways.zenit.widget.common.builtin.AlertWidget;
+import be.elevenways.zenit.widget.common.builtin.ColumnSplit;
 import be.elevenways.zenit.widget.common.builtin.FactListWidget;
 import be.elevenways.zenit.widget.common.builtin.ItemListWidget;
 import be.elevenways.zenit.widget.common.builtin.SectionWidget;
@@ -198,15 +199,8 @@ public final class ServerOverviewState {
         // The host's actions are its record heading's (zenitcms:record-head), never a second row here.
         bands.add(band(new WidgetTree(state)));
 
-        List<TrustLaneView> lanes = trustLanes(server);
-        if (!lanes.isEmpty()) {
-            bands.add(band(new WidgetTree(List.of(
-                new WidgetInstance(HohenheimWidgets.HOST_TRUST.id(), Map.of()).withData(lanes)))));
-        }
-
-        bands.add(band(new WidgetTree(List.of(
-            new WidgetInstance(HohenheimWidgets.HOST_PREFLIGHT.id(), Map.of()).withData(preflightReport(server))))));
-
+        // How full it is and what runs on it come first, side by side (board FO91, Host-Overview): the two questions
+        // an operator opens a host with. Trust and the stored checks follow.
         HostCapacityView capacity = capacityOf(server, serverId);
         List<WidgetInstance> capacityBand = new ArrayList<>();
         capacityBand.add(new WidgetInstance(UsageBarWidget.ID, Map.of("label",
@@ -222,11 +216,19 @@ public final class ServerOverviewState {
         capacityBand.add(new WidgetInstance(UsageBarWidget.ID,
                 Map.of("label", HohenheimWidgetCopy.localized(HohenheimMicrocopy.SERVER_OVERVIEW.of("disk_capacity"))))
             .withData(diskUsage(disk, locales, resolver)));
-        bands.add(band(new WidgetTree(capacityBand)));
+        bands.add(band(new WidgetTree(List.of(AdminDashboard.columns(List.of(
+            new WidgetInstance(SectionWidget.ID, Map.of(), new WidgetTree(capacityBand)),
+            new WidgetInstance(HohenheimWidgets.HOST_WORKLOADS.id(), Map.of())
+                .withData(workloadsOf(panelSlug, serverId))), ColumnSplit.EVEN)))));
+
+        List<TrustLaneView> lanes = trustLanes(server);
+        if (!lanes.isEmpty()) {
+            bands.add(band(new WidgetTree(List.of(
+                new WidgetInstance(HohenheimWidgets.HOST_TRUST.id(), Map.of()).withData(lanes)))));
+        }
 
         bands.add(band(new WidgetTree(List.of(
-            new WidgetInstance(HohenheimWidgets.HOST_WORKLOADS.id(), Map.of())
-                .withData(workloadsOf(panelSlug, serverId))))));
+            new WidgetInstance(HohenheimWidgets.HOST_PREFLIGHT.id(), Map.of()).withData(preflightReport(server))))));
 
         // AIDEV-NOTE: the per-record RECENT ACTIVITY band -- what an operator did to THIS
         // host, in the order it happened. Unconditional here, unlike the instance page's

@@ -172,9 +172,13 @@ public class InstanceModel extends Model {
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 
+    /** The form card holding what an app is called and where it runs. */
+    public static final String BASICS_GROUP = "basics";
+
     // User data, NOT localized (names are the user's own words).
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("name"))
+        .group(BASICS_GROUP)
         .build());
 
     // ONE discriminator: the kind implies the runtime (docker_container now; system_container
@@ -210,6 +214,7 @@ public class InstanceModel extends Model {
     public static final IntegerField SERVER_ID = SCHEMA.addField(
         IntegerField.builder().name("server_id")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("server"))
+            .group(BASICS_GROUP)
             .build());
 
     public static final EnumField STATUS = SCHEMA.addField(statusField());
@@ -274,6 +279,7 @@ public class InstanceModel extends Model {
         IntegerField.builder().name("runtime_image_id")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("runtime_image"))
             .help(HohenheimMicrocopy.HELP.of("instance_runtime_image"))
+            .group(BASICS_GROUP)
             .build());
 
     /**
@@ -382,6 +388,7 @@ public class InstanceModel extends Model {
     public static final IntegerField ENVIRONMENT_ID = SCHEMA.addField(
         IntegerField.builder().name("environment_id")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("environment"))
+            .group(BASICS_GROUP)
             .build());
 
     /**

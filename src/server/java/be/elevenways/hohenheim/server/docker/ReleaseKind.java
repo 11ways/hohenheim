@@ -135,6 +135,7 @@ public final class ReleaseKind implements InstanceKindHandler {
     // says who owns them.
     static {
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.LIMITS,
+            HohenheimFormSections.limitsNote(),
             List.of(MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName())));
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.MANAGED,
             List.of(BUILT_IMAGE_ID.getName(), IMAGE_REF.getName(), SOURCE_FINGERPRINT.getName())));

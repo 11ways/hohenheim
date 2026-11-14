@@ -2061,6 +2061,10 @@
     {
       "text": "Start",
       "scope": "power_operation"
+    },
+    {
+      "text": "Start",
+      "scope": "form_section"
     }
   ],
   "started": [
@@ -12750,6 +12754,22 @@
     "text": "Build",
     "scope": "form_section"
   },
+  "checks_passed": {
+    "text": "Checks that passed: {$count :integer}",
+    "scope": "server_overview"
+  },
+  "facts_measured": {
+    "text": "Measured facts: {$count :integer}",
+    "scope": "server_overview"
+  },
+  "basics": {
+    "text": "Basics",
+    "scope": "form_section"
+  },
+  "limits_description": {
+    "text": "A new memory or CPU limit applies when you save. On a Docker host the app restarts and is briefly down; on an Incus host it changes in place.",
+    "scope": "form_section"
+  },
   "deployment": {
     "text": "Deployment",
     "scope": "form_section"
@@ -13710,17 +13730,8 @@
       "scope": "database"
     },
     {
-      "text": "A new memory or CPU ceiling recreates the running container, so it is briefly down; ports you set are kept.",
-      "scope": "instance"
-    },
-    {
       "text": "Only the memory and CPU ceilings can be changed here; every other field describes the container that was provisioned. Saving a new ceiling recreates the engine, so every database on it loses its connections until it is back.",
       "scope": "database_engine"
-    },
-    {
-      "scope": "instance",
-      "runtime": "incus",
-      "text": "Saving a new memory or CPU ceiling changes the running workload's size in place through Incus; its disks and addresses are kept."
     }
   ],
   "database_resize_failed": {
@@ -19267,6 +19278,26 @@
   },
   "databases_lead": {
     "text": "This app's data in its databases is backed up with each database, not with the app.",
+    "scope": "instance_backup"
+  },
+  "backups_lead": {
+    "text": "A copy of this app's files, kept at its backup target. Restore one into a new app or over this one.",
+    "scope": "instance_backup"
+  },
+  "snapshots_lead": {
+    "text": "A quick copy kept on this host, to go back to before a risky change. It is lost with the host.",
+    "scope": "instance_backup"
+  },
+  "schedules_lead": {
+    "text": "Make backups or snapshots by themselves, for example every night.",
+    "scope": "instance_backup"
+  },
+  "no_target_title": {
+    "text": "No backup target yet",
+    "scope": "instance_backup"
+  },
+  "no_target_body": {
+    "text": "Backups need a place to go. Until one is chosen, none can be made.",
     "scope": "instance_backup"
   },
   "last_backup": {

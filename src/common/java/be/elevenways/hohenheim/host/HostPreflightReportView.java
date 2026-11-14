@@ -7,6 +7,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * The whole stored preflight report as ONE widget payload: the kernel-truth verdict,
@@ -42,5 +43,17 @@ public record HostPreflightReportView(
 
     private PreflightStatus summary() {
         return this.passed ? PreflightStatus.PASS : PreflightStatus.FAIL;
+    }
+
+    /** @return the checks that did not pass, the required ones first: the ones a reader has to see */
+    public @NonNull List<PreflightCheckView> attention() {
+        return Stream.concat(this.mustPass.stream(), this.advice.stream())
+            .filter(PreflightCheckView::notPassing).toList();
+    }
+
+    /** @return the checks that passed, folded behind their count */
+    public @NonNull List<PreflightCheckView> passing() {
+        return Stream.concat(this.mustPass.stream(), this.advice.stream())
+            .filter(check -> !check.notPassing()).toList();
     }
 }

@@ -108,6 +108,7 @@ public final class DatabaseContainerKind implements InstanceKindHandler {
     // the rest is what DatabaseService writes for you.
     static {
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.RUNTIME,
+            HohenheimFormSections.limitsNote(),
             List.of(DATA_VOLUME.getName(), SHARED.getName(), COMMAND.getName(),
                 ENVIRONMENT_VARIABLES.getName(), MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName())));
     }

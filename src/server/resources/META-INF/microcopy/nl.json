@@ -2061,6 +2061,10 @@
     {
       "text": "Starten",
       "scope": "power_operation"
+    },
+    {
+      "text": "Starten",
+      "scope": "form_section"
     }
   ],
   "started": [
@@ -12750,6 +12754,22 @@
     "text": "Build",
     "scope": "form_section"
   },
+  "checks_passed": {
+    "text": "Geslaagde controles: {$count :integer}",
+    "scope": "server_overview"
+  },
+  "facts_measured": {
+    "text": "Gemeten feiten: {$count :integer}",
+    "scope": "server_overview"
+  },
+  "basics": {
+    "text": "Basis",
+    "scope": "form_section"
+  },
+  "limits_description": {
+    "text": "Een nieuwe geheugen- of CPU-limiet geldt zodra u opslaat. Op een Docker-host herstart de app en is die even niet bereikbaar; op een Incus-host verandert ze ter plaatse.",
+    "scope": "form_section"
+  },
   "deployment": {
     "text": "Uitrollen",
     "scope": "form_section"
@@ -13710,17 +13730,8 @@
       "scope": "database"
     },
     {
-      "text": "Een nieuwe geheugen- of CPU-limiet hermaakt de draaiende container, dus die is even offline; poorten die jij instelde blijven behouden.",
-      "scope": "instance"
-    },
-    {
       "text": "Alleen het geheugen- en CPU-plafond zijn hier aanpasbaar; elk ander veld beschrijft de container die aangemaakt is. Een nieuw plafond bewaren maakt de engine opnieuw aan, dus elke database erop verliest haar verbindingen tot ze terug is.",
       "scope": "database_engine"
-    },
-    {
-      "scope": "instance",
-      "runtime": "incus",
-      "text": "Een nieuwe geheugen- of CPU-limiet opslaan past de grootte van de draaiende workload ter plekke aan via Incus; schijven en adressen blijven behouden."
     }
   ],
   "database_resize_failed": {
@@ -19267,6 +19278,26 @@
   },
   "databases_lead": {
     "text": "De gegevens van deze app in zijn databanken worden met elke databank geback-upt, niet met de app.",
+    "scope": "instance_backup"
+  },
+  "backups_lead": {
+    "text": "Een kopie van de bestanden van deze app, bewaard op het back-updoel. Zet er een terug in een nieuwe app of over deze heen.",
+    "scope": "instance_backup"
+  },
+  "snapshots_lead": {
+    "text": "Een snelle kopie op deze host, om naar terug te keren voor een riskante wijziging. Ze gaat verloren met de host.",
+    "scope": "instance_backup"
+  },
+  "schedules_lead": {
+    "text": "Maak back-ups of snapshots vanzelf, bijvoorbeeld elke nacht.",
+    "scope": "instance_backup"
+  },
+  "no_target_title": {
+    "text": "Nog geen back-updoel",
+    "scope": "instance_backup"
+  },
+  "no_target_body": {
+    "text": "Back-ups hebben een plek nodig. Zolang er geen gekozen is, kan er geen gemaakt worden.",
     "scope": "instance_backup"
   },
   "last_backup": {

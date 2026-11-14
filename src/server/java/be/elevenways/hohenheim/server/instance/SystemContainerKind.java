@@ -109,6 +109,7 @@ public final class SystemContainerKind implements InstanceKindHandler {
     // fold under one header. AIDEV-NOTE: after the fields -- membership is validated eagerly.
     static {
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.LIMITS,
+            HohenheimFormSections.limitsNote(),
             List.of(MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName(),
                 ROOT_DISK_GB.getName(), NETWORK_LIMIT_MBIT.getName())));
     }

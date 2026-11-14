@@ -397,12 +397,20 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
                 + "'][data-collapsed='true']", 1, "step 1: the " + section + " fold is collapsed on first paint");
         }
 
-        // 2. The decisions stay OUTSIDE every fold: the seven fields a person answers.
+        // 2. The decisions stay OPEN: the seven fields a person answers stand in the two open sections (Source and
+        //    Start), never inside a collapsed one.
+        for (String section : List.of("source", "start")) {
+            assertCount(SETTINGS + " pl-card[data-section='" + section + "']", 1,
+                "step 2: the " + section + " section is drawn");
+            assertCount(SETTINGS + " pl-card[data-section='" + section + "'][data-collapsed='true']", 0,
+                "step 2: the " + section + " section is open on first paint");
+        }
         for (String visible : List.of("repository_url", "provider_id", "repository", "branch",
                 "build_command", "start_command", "container_port")) {
             assertThat(page.locator(SETTINGS + " [name='settings." + visible + "']").count())
                 .as("step 2: " + visible + " renders").isGreaterThan(0);
-            assertThat(page.locator(SETTINGS + " pl-card [name='settings." + visible + "']").count())
+            assertThat(page.locator(SETTINGS + " pl-card[data-collapsed='true'] [name='settings." + visible + "']")
+                    .count())
                 .as("step 2: " + visible + " is not inside a fold").isZero();
         }
 

@@ -141,12 +141,18 @@ public final class WorkspaceKind implements InstanceKindHandler {
     // GitSourceSchema's own groups, so a field added there lands in the same fold for
     // every kind that hosts it.
     static {
+        SETTINGS_SCHEMA.addSection(HohenheimFormSections.open(HohenheimFormSections.SOURCE, List.of(
+            GitSourceSchema.REPOSITORY_URL, GitSourceSchema.PROVIDER_ID, GitSourceSchema.REPOSITORY,
+            GitSourceSchema.BRANCH, GitSourceSchema.BUILD_COMMAND)));
+        SETTINGS_SCHEMA.addSection(HohenheimFormSections.open(HohenheimFormSections.START, List.of(
+            START_COMMAND.getName(), CONTAINER_PORT.getName())));
         SETTINGS_SCHEMA.addSection(
             HohenheimFormSections.collapsed(HohenheimFormSections.BUILD, GitSourceSchema.BUILD_DETAIL));
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.DEPLOYMENT,
             HohenheimFormSections.join(GitSourceSchema.DELIVERY, GitSourceSchema.PREVIEWS)));
         SETTINGS_SCHEMA.addSection(
-            HohenheimFormSections.collapsed(HohenheimFormSections.RUNTIME, List.of(
+            HohenheimFormSections.collapsed(HohenheimFormSections.RUNTIME,
+                HohenheimFormSections.limitsNote(), List.of(
                 HOME_QUOTA_MB.getName(), ENVIRONMENT_VARIABLES.getName(),
                 MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName(), CONSOLE_KIND.getName())));
     }

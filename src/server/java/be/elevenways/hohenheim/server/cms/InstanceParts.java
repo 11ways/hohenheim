@@ -83,6 +83,7 @@ import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.edit.EditContext;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.edit.EditView;
+import be.elevenways.zenit.common.edit.FieldGroup;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.server.project.ProjectGuards;
 import be.elevenways.zenit.common.operation.SubjectType;
@@ -150,6 +151,7 @@ public final class InstanceParts {
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("project"))
         .help(HohenheimMicrocopy.HELP.of("instance_project"))
         .visibleIn(EditView.CREATE)
+        .group(InstanceModel.BASICS_GROUP)
         .build();
 
     private InstanceParts() {
@@ -256,6 +258,7 @@ public final class InstanceParts {
                     (row, request) -> liveFigureCellOf(row))
                 .build())
             .form(form(FormSpec.builder()
+                    .group(basics())
                     .add(InstanceModel.NAME)
                     .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.CRASH_POLICY))
                     .build())
@@ -298,12 +301,7 @@ public final class InstanceParts {
             .tabLabel(HohenheimMicrocopy.APP_OVERVIEW.of("configuration"))
             .lead((instance, access) -> instance.get(InstanceModel.ID) == null ? null
                 : new RecordLead(AppOverview.instanceLead(instance, access.conduit()), null))
-            .inlineEditable(InstanceModel.NAME, InstanceModel.CRASH_POLICY)
-            // Saving a new memory or CPU ceiling reaches a live workload the way its host's driver applies one (Docker
-            // recreates the container, Incus rewrites the instance in place); on the create form there is nothing yet.
-            .notice((instance, access) -> instance.get(InstanceModel.ID) == null ? null
-                : HohenheimMicrocopy.INSTANCE.of("resize_notice")
-                    .withFilter("runtime", InstanceKinds.hostRuntimeOf(instance)));
+            .inlineEditable(InstanceModel.NAME, InstanceModel.CRASH_POLICY);
     }
 
     /**
@@ -427,6 +425,7 @@ public final class InstanceParts {
             // the nav needs; createTitle gives it an honest singular. An edit page leads with the record's own name,
             // like every other tab of the record, so no editTitle is declared.
             .createTitle(HohenheimMicrocopy.INSTANCE.of("create_title"))
+            .group(basics())
             // AIDEV-NOTE: the kind entry offers what this record may BECOME: on a create every kind a human may author
             // (InstanceKinds.placeableOptions), on a stored record only its InstanceKinds.kindChangesOf, the set its
             // write hook enforces. Record-aware (OptionSource.dynamic): the render's AND the save's coercion context
@@ -489,6 +488,8 @@ public final class InstanceParts {
             // AIDEV-NOTE: this section can only name TOP-LEVEL entries; the per-kind SETTINGS sub-form folds through
             // the schema-declared sections each kind adds (HohenheimFormSections). Never fold a field by hiding it
             // with visibleIn: that makes it unwritable.
+            // The name and where it runs read as one line: the two answers every app has.
+            .row(InstanceModel.NAME.getName(), InstanceModel.SERVER_ID.getName())
             .section(FormSection.of(BACKUPS_SECTION, HohenheimMicrocopy.INSTANCE.of("backups"),
                 InstanceModel.BACKUP_TARGET_ID.getName()))
             .section(FormSection.of(CONNECT_SECTION, HohenheimMicrocopy.INSTANCE_OVERVIEW.of("connect"),
@@ -498,6 +499,11 @@ public final class InstanceParts {
             .showWhen(InstanceModel.RUNTIME_IMAGE_ID.getName(), InstanceModel.KIND.getName(),
                 InstanceKinds.kindsWhere(InstanceKindHandler::usesRuntimeImage).toArray(String[]::new))
             .build();
+    }
+
+    /** The card an app's name and placement stand in, on every form over the instance model. */
+    private static @NonNull FieldGroup basics() {
+        return FieldGroup.of(InstanceModel.BASICS_GROUP, HohenheimMicrocopy.FORM_SECTION.of("basics"));
     }
 
     /**

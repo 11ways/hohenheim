@@ -62,6 +62,9 @@ public final class HohenheimFormSections {
      */
     public static final String SOURCE = "source";
 
+    /** What starts the app and where it listens: the start command and its port. */
+    public static final String START = "start";
+
     /** Which requests an address answers: the name, how it matches, the path under it and the local address. */
     public static final String ADDRESS_REQUESTS = "address_requests";
 
@@ -98,6 +101,17 @@ public final class HohenheimFormSections {
     public static @NonNull FormSection open(@NonNull String id, @NonNull Microcopy description,
                                             @NonNull List<String> entryNames) {
         return new FormSection(id, HohenheimMicrocopy.FORM_SECTION.of(id), description, null, false, entryNames);
+    }
+
+    /** A folded section with a line under its label saying when its values take effect. */
+    public static @NonNull FormSection collapsed(@NonNull String id, @NonNull Microcopy description,
+                                                 @NonNull List<String> entryNames) {
+        return new FormSection(id, HohenheimMicrocopy.FORM_SECTION.of(id), description, null, true, entryNames);
+    }
+
+    /** @return the line under a limits section saying what saving a new memory or CPU limit does to a running app */
+    public static @NonNull Microcopy limitsNote() {
+        return HohenheimMicrocopy.FORM_SECTION.of("limits_description");
     }
 
     /** @return one list, so a section can name a shared group plus its own members */

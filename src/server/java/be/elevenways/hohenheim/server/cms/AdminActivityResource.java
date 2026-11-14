@@ -112,7 +112,8 @@ public final class AdminActivityResource {
             .description(CmsSupport.navHint(HohenheimMicrocopy.HOHENHEIM))
             .reads(ActivityAdmin.reads(AdminActivityResource::cell))
             .list(ActivityAdmin.list(TABLE)
-                .chrome(CmsSupport.WIDE_LIST.withFiltersOpen(true))
+                // The filters stay folded behind Filter (board FO91, Activity): the default scope reads as its chip.
+                .chrome(CmsSupport.WIDE_LIST)
                 .defaultFilter(ActivityAdmin.defaultFilter().with(ActionModel.ORIGIN.getName(),
                         HIDE_BACKGROUND_EXPRESSION),
                     filter -> ActionModel.ORIGIN.getName().equals(filter)

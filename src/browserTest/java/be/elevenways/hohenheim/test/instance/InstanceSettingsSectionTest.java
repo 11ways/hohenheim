@@ -96,24 +96,29 @@ class InstanceSettingsSectionTest {
     @Test
     void gitSourcedKindsLeadWithTheDecisionsAndFoldTheRest() {
 
-        // 1. A workspace is decided by where the code is, what builds it, what starts it
-        //    and which port it serves. Seven fields, out of twenty-two.
+        // 1. A workspace is decided by where the code is, what builds it, what starts it and which port it serves:
+        //    seven fields, out of twenty-two, in two open sections (board FO91, App-Configuration).
         assertThat(visibleRun(WorkspaceKind.SETTINGS_SCHEMA))
-            .as("step 1: the workspace create form leads with seven fields")
-            .containsExactly("repository_url", "provider_id", "repository", "branch",
-                "build_command", "start_command", "container_port");
+            .as("step 1: every workspace field belongs to a named section").isEmpty();
+        assertThat(sectionMembers(WorkspaceKind.SETTINGS_SCHEMA, HohenheimFormSections.SOURCE))
+            .as("step 1: the source section says where the code is and what builds it")
+            .containsExactly("repository_url", "provider_id", "repository", "branch", "build_command");
+        assertThat(sectionMembers(WorkspaceKind.SETTINGS_SCHEMA, HohenheimFormSections.START))
+            .as("step 1: the start section says what starts it and where it listens")
+            .containsExactly("start_command", "container_port");
 
         // 2. And the other fifteen sit in three folds that say what is inside them.
         //    Three, not four: a collapsed bar costs as much height as three folded fields
         //    save, so previews ride the deployment lane they belong to.
         assertThat(WorkspaceKind.SETTINGS_SCHEMA.getSections())
-            .as("step 2: three named sections, never one 'advanced' drawer")
+            .as("step 2: two open sections, then three named folds, never one 'advanced' drawer")
             .extracting(FormSection::id)
-            .containsExactly(HohenheimFormSections.BUILD, HohenheimFormSections.DEPLOYMENT,
-                HohenheimFormSections.RUNTIME);
+            .containsExactly(HohenheimFormSections.SOURCE, HohenheimFormSections.START,
+                HohenheimFormSections.BUILD, HohenheimFormSections.DEPLOYMENT, HohenheimFormSections.RUNTIME);
         assertThat(WorkspaceKind.SETTINGS_SCHEMA.getSections())
-            .as("step 2: every one of them starts folded")
-            .allMatch(FormSection::startsCollapsed);
+            .as("step 2: the decisions are open, everything with a working default starts folded")
+            .extracting(FormSection::startsCollapsed)
+            .containsExactly(false, false, true, true, true);
         assertThat(sectionMembers(WorkspaceKind.SETTINGS_SCHEMA, HohenheimFormSections.RUNTIME))
             .as("step 2: the runtime fold carries the environment, every ceiling and the"
                 + " console shape")
@@ -153,14 +158,16 @@ class InstanceSettingsSectionTest {
         FormSpec derived = FieldFormEntryRegistry.INSTANCE.deriveSpec(WorkspaceKind.SETTINGS_SCHEMA);
         assertThat(derived.sections()).extracting(FormSection::id)
             .as("step 4: the derived spec carries every declared section")
-            .containsExactly(HohenheimFormSections.BUILD, HohenheimFormSections.DEPLOYMENT,
-                HohenheimFormSections.RUNTIME);
+            .containsExactly(HohenheimFormSections.SOURCE, HohenheimFormSections.START,
+                HohenheimFormSections.BUILD, HohenheimFormSections.DEPLOYMENT, HohenheimFormSections.RUNTIME);
         assertThat(derived.sectionOf("memory_limit_mb"))
             .as("step 4: and each member resolves to its section")
             .isNotNull()
             .extracting(FormSection::id).isEqualTo(HohenheimFormSections.RUNTIME);
         assertThat(derived.sectionOf("repository_url"))
-            .as("step 4: while a visible field belongs to none").isNull();
+            .as("step 4: an open decision resolves to its open section")
+            .isNotNull()
+            .extracting(FormSection::id).isEqualTo(HohenheimFormSections.SOURCE);
     }
 
     /** The other kinds fold what has a working default and keep what a person decides. */

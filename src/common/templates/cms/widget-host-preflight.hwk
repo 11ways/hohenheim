@@ -70,14 +70,19 @@
         </p>
         {% /if %}
         {% if data != null && data.mustPass.size() + data.advice.size() > 0 %}
-        {% if data.mustPass.size() > 0 %}
-        <h3 class="hh-checks-title">{{ t("must_pass", scope: "server_overview") }}</h3>
-        {% render preflightChecks(data.mustPass) %}
-        {% /if %}
-        {% if data.advice.size() > 0 %}
-        <h3 class="hh-checks-title">{{ t("advice", scope: "server_overview") }}</h3>
+        {#- What did not pass is drawn open, with its fix; what passed folds behind its count (board FO91,
+            Host-Overview): thirty rows saying "Passed" hid the two that needed reading. -#}
+        {% if data.attention.size() > 0 %}
         <p class="hh-checks-note">{{ t("advice_never_blocks", scope: "server_overview") }}</p>
-        {% render preflightChecks(data.advice) %}
+        {% render preflightChecks(data.attention) %}
+        {% /if %}
+        {% if data.passing.size() > 0 %}
+        <pl-collapsible data-preflight-passing="1">
+            <pl-collapsible-trigger caret>{{ t("checks_passed", scope: "server_overview", count: data.passing.size()) }}</pl-collapsible-trigger>
+            <pl-collapsible-content>
+                {% render preflightChecks(data.passing) %}
+            </pl-collapsible-content>
+        </pl-collapsible>
         {% /if %}
         {% else %}
         <pl-empty-state icon="stethoscope">
@@ -86,27 +91,31 @@
         </pl-empty-state>
         {% /if %}
         {% if data != null && data.facts %}
-        <h3 class="hh-facts-title">{{ t("facts", scope: "server_overview") }}</h3>
-        <pl-table>
-            <pl-table-header><pl-table-row>
-                <pl-table-head>{{ t("fact", scope: "server_overview") }}</pl-table-head>
-                <pl-table-head>{{ t("value", scope: "server_overview") }}</pl-table-head>
-                <pl-table-head>{{ t("measured_at", scope: "server_overview") }}</pl-table-head>
-            </pl-table-row></pl-table-header>
-            <pl-table-body>
-                {% each data.facts as fact %}
-                <pl-table-row data-fact={% fact.name %}>
-                    <pl-table-cell>{{ fact.label }}</pl-table-cell>
-                    <pl-table-cell>{{ fact.value }}</pl-table-cell>
-                    <pl-table-cell>
-                        {% if fact.measuredAtIso != null %}
-                        <pl-relative-time datetime={% fact.measuredAtIso %} title={% fact.measuredAtIso %} units="one"></pl-relative-time>
-                        {% /if %}
-                    </pl-table-cell>
-                </pl-table-row>
-                {% /each %}
-            </pl-table-body>
-        </pl-table>
+        <pl-collapsible data-preflight-facts="1">
+            <pl-collapsible-trigger caret>{{ t("facts_measured", scope: "server_overview", count: data.facts.size()) }}</pl-collapsible-trigger>
+            <pl-collapsible-content>
+                <pl-table>
+                    <pl-table-header><pl-table-row>
+                        <pl-table-head>{{ t("fact", scope: "server_overview") }}</pl-table-head>
+                        <pl-table-head>{{ t("value", scope: "server_overview") }}</pl-table-head>
+                        <pl-table-head>{{ t("measured_at", scope: "server_overview") }}</pl-table-head>
+                    </pl-table-row></pl-table-header>
+                    <pl-table-body>
+                        {% each data.facts as fact %}
+                        <pl-table-row data-fact={% fact.name %}>
+                            <pl-table-cell>{{ fact.label }}</pl-table-cell>
+                            <pl-table-cell>{{ fact.value }}</pl-table-cell>
+                            <pl-table-cell>
+                                {% if fact.measuredAtIso != null %}
+                                <pl-relative-time datetime={% fact.measuredAtIso %} title={% fact.measuredAtIso %} units="one"></pl-relative-time>
+                                {% /if %}
+                            </pl-table-cell>
+                        </pl-table-row>
+                        {% /each %}
+                    </pl-table-body>
+                </pl-table>
+            </pl-collapsible-content>
+        </pl-collapsible>
         {% /if %}
     </pl-card-content>
 </pl-card>

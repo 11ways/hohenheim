@@ -173,7 +173,7 @@ public final class ApplicationKind implements InstanceKindHandler {
             GitSourceSchema.WEBHOOK_SECRET, GitSourceSchema.POLL_INTERVAL, HEALTH_PATH.getName(),
             KEEP_RELEASES.getName())));
         SETTINGS_SCHEMA.addSection(
-            HohenheimFormSections.collapsed(HohenheimFormSections.RUNTIME, List.of(
+            HohenheimFormSections.collapsed(HohenheimFormSections.RUNTIME, HohenheimFormSections.limitsNote(), List.of(
                 MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName(),
                 CONSOLE_KIND.getName(), COMMAND.getName(), WORKDIR.getName())));
     }

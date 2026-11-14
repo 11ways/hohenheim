@@ -7,14 +7,29 @@
 {#- The section the databases' line follows. -#}
 {% declare databasesAfter: String = "" %}
 {% declare databases: List<AttachedDatabaseBackup> %}
+{#- One sentence per section saying what it is for, keyed by the section's resource slug (board FO91, App-Backups). -#}
+{% declare leads: Map<String, String> %}
+{#- True while the app names no backup target: backups cannot be made, and the tab says so where its reader looks. -#}
+{% declare noTarget: Boolean = false %}
+{#- Where an operator chooses the target, null for a reader who cannot. -#}
+{% declare targetUrl: String = null %}
 {% extend "zenitcms:shell" var:title=title %}
 
 {% block "main" %}
 <section class="cms-child-list-page">
     {% render "zenitcms:record-head" var:head=head %}
 
+    {% if noTarget %}
+    <pl-alert variant="warning" data-hh-no-backup-target>
+        <pl-alert-title>{{ t("no_target_title", scope: "instance_backup") }}</pl-alert-title>
+        <pl-alert-description>{{ t("no_target_body", scope: "instance_backup") }}
+            {% if targetUrl != null %}<a href={% targetUrl %}>{{ t("backup_target_choose", scope: "instance") }}</a>{% /if %}
+        </pl-alert-description>
+    </pl-alert>
+    {% /if %}
+
     {% each sections as section key section.resourceSlug %}
-    {% render "zenitcms:child-list-section" var:section=section var:panelSlug=panelSlug %}
+    {% render "zenitcms:child-list-section" var:section=section var:panelSlug=panelSlug var:card=true var:lead=leads[section.resourceSlug] %}
     {% if section.resourceSlug == databasesAfter and databases %}
     <section class="cms-child-list-section" data-hh-attached-database-backups>
         <pl-page-header class="cms-child-list-section-header">

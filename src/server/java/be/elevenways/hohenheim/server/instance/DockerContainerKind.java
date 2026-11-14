@@ -161,6 +161,7 @@ public final class DockerContainerKind implements InstanceKindHandler {
             List.of(PORT_PROTOCOL.getName(), PORT_EXPOSURE.getName(), HOST_PORT.getName(), PUBLISHED_PORTS.getName(),
                 SRV_SERVICE.getName(), STATUS_PROBE.getName())));
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.LIMITS,
+            HohenheimFormSections.limitsNote(),
             List.of(MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName())));
         // The console shape has a working default (plain); a TUI workload opts in.
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.RUNTIME,
