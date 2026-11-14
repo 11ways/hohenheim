@@ -77,9 +77,6 @@ public final class InstanceBackupsPage implements RecordTab.Rendered<Row> {
 
     private final @NonNull ChildList<Row> sections;
 
-    /** Whether the tab is the operator's, who may choose the backup target. */
-    private final boolean operator;
-
     /** @param operator whether the tab is the operator's, which names the backup target in use and links to its choice */
     InstanceBackupsPage(boolean operator) {
         ChildList<Row> tab = ChildList.<Row>sections(HohenheimSlugs.Tab.BACKUPS,
@@ -103,7 +100,6 @@ public final class InstanceBackupsPage implements RecordTab.Rendered<Row> {
                 failureColumn(), (snapshot, request) -> WithheldFailure.of(request.conduit())
                     .shown(snapshot.get(InstanceSnapshotModel.ERROR)));
         this.sections = operator ? tab.headerLink(HohenheimSlugs.INSTANCE_BACKUPS, backupTargetLink()) : tab;
-        this.operator = operator;
     }
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_backups"); }
@@ -125,12 +121,7 @@ public final class InstanceBackupsPage implements RecordTab.Rendered<Row> {
             HohenheimSlugs.INSTANCE_BACKUPS, lead(conduit, "backups_lead"),
             HohenheimSlugs.INSTANCE_SNAPSHOTS, lead(conduit, "snapshots_lead"),
             HohenheimSlugs.INSTANCE_SCHEDULES, lead(conduit, "schedules_lead")));
-        boolean noTarget = instance.get(InstanceModel.BACKUP_TARGET_ID) == null;
-        vars.put("noTarget", noTarget);
-        if (noTarget && this.operator) {
-            vars.put("targetUrl", CmsRoutes.detail(request.panelSlug(), HohenheimSlugs.INSTANCES,
-                instance.get(InstanceModel.ID)).toUrl());
-        }
+        vars.put("noTarget", instance.get(InstanceModel.BACKUP_TARGET_ID) == null);
         vars.put("head", recordHead(conduit));
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_BACKUPS, vars);
     }

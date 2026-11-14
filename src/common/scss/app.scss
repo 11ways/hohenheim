@@ -102,6 +102,11 @@
         --pl-log-view-max-height: 24rem;
     }
 
+    // A record tab's notice stands off its first card as the cards stand off each other (the Backups tab).
+    .cms-child-list-page > pl-alert {
+        margin-block-end: var(--pl-space-lg);
+    }
+
     // A state cell: the answer's badge, and the lines that explain it stacked underneath.
     .hh-state-line {
         display: inline-flex;
