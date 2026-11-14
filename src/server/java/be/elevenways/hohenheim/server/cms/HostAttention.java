@@ -18,6 +18,7 @@ import be.elevenways.hohenheim.server.docker.DockerHealth;
 import be.elevenways.hohenheim.server.host.DiskSpace;
 import be.elevenways.hohenheim.server.host.HostDisk;
 import be.elevenways.hohenheim.server.host.VolumeBackends;
+import be.elevenways.protoblast.common.platform.PlatformSeam;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.task.VerifyWorkloadIsolation;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -136,7 +137,18 @@ public final class HostAttention {
      * @param hosts whether host workloads run here, so hosts carry disks of their own
      */
     static void disksFillingUp(@NonNull List<AttentionItem> items, boolean hosts) {
-        disksFillingUp(items, hosts, HostAttention::spaceOf);
+        disksFillingUp(items, hosts, store -> DISKS.require().of(store));
+    }
+
+    /** The seam behind the controller's own disk readings, which a capture of the dashboard pins. */
+    public static final PlatformSeam<DiskMeasure> DISKS = PlatformSeam.withDefault(DiskMeasure.class,
+        HostAttention::spaceOf);
+
+    /** Reads one filesystem's size and room. */
+    public interface DiskMeasure {
+
+        /** @return the reading, null when the filesystem cannot say */
+        @Nullable DiskSpace of(@NonNull FileStore store);
     }
 
     /**

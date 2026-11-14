@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.SystemUserModel;
 import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.hohenheim.server.cms.HostAttention;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.dns.DnsServer;
 import be.elevenways.hohenheim.server.docker.DockerHealth;
@@ -41,11 +42,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.net.http.HttpResponse;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -134,8 +131,7 @@ class LandingDashboardSurfacesTest extends HohenheimHttpTestBase {
     private static @Nullable Boolean sshWatch;
     private static @Nullable ProxyServer proxyServer;
     private static @Nullable DnsServer dnsServer;
-    private static @Nullable String dataPath;
-    private static @Nullable String backupPath;
+    private static HostAttention.@Nullable DiskMeasure diskMeasure;
 
     @BeforeAll
     static void seed() throws Exception {
@@ -161,8 +157,8 @@ class LandingDashboardSurfacesTest extends HohenheimHttpTestBase {
 
     /**
      * Pin the dashboard attention's JVM-global inputs to the stored capture's: no proxy, no DNS, no SSH watch, and the
-     * controller's disks in the test JVM's own temporary directory, so a nearly full disk of the machine running the
-     * suite never adds a disk item to the capture.
+     * controller's disks unmeasured, so a nearly full disk of the machine running the suite never adds a disk item to
+     * the capture (a temporary directory did not pin it: /tmp shares the root disk on some machines).
      */
     private static void pinAttentionInputs() {
         backupTarget = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET);
@@ -170,16 +166,8 @@ class LandingDashboardSurfacesTest extends HohenheimHttpTestBase {
         sshWatch = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.SSH_WATCH_ENABLED);
         proxyServer = ServerMain.getProxyServer();
         dnsServer = ServerMain.getDnsServer();
-        dataPath = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);
-        backupPath = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.BACKUP_PATH);
-        Path scratch;
-        try {
-            scratch = Files.createTempDirectory("hh-landing");
-        } catch (IOException unwritable) {
-            throw new UncheckedIOException(unwritable);
-        }
-        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, scratch.resolve("data").toString());
-        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.BACKUP_PATH, scratch.resolve("backups").toString());
+        diskMeasure = HostAttention.DISKS.installed();
+        HostAttention.DISKS.install(store -> null);
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET, null);
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Dns.ENABLED, false);
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.SSH_WATCH_ENABLED, false);
@@ -196,8 +184,7 @@ class LandingDashboardSurfacesTest extends HohenheimHttpTestBase {
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET, backupTarget);
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Dns.ENABLED, dnsEnabled);
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.SSH_WATCH_ENABLED, sshWatch);
-        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, dataPath);
-        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.BACKUP_PATH, backupPath);
+        HostAttention.DISKS.restoreInstalled(diskMeasure);
         ServerMain.adoptProxyServer(proxyServer);
         ServerMain.adoptDnsServer(dnsServer);
     }
