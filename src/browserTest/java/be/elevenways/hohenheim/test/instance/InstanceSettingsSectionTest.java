@@ -204,10 +204,10 @@ class InstanceSettingsSectionTest {
         assertThat(visibleRun(StackServiceKind.SETTINGS_SCHEMA))
             .containsExactly("image", "command", "environment_variables", "volumes", "published_ports");
 
-        // 5. And the upstream that carries ten knobs leads with the four that name the
+        // 5. And the upstream that carries ten knobs leads with the five that name the
         //    destination.
         assertThat(visibleRun(AddressUpstreamKind.SETTINGS_SCHEMA))
-            .containsExactly("forward_scheme", "forward_host", "forward_port", "socket");
+            .containsExactly("forward_scheme", "forward_host", "forward_port", "more_backends", "socket");
     }
 
     /**

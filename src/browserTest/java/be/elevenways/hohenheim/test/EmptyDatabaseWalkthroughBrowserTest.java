@@ -234,7 +234,11 @@ class EmptyDatabaseWalkthroughBrowserTest extends HawkeyeBrowserTestBase {
                 String pattern = route.toPattern();
                 if (route.getMethod() == HttpMethod.GET && (pattern.equals(root) || pattern.startsWith(root + "/"))) {
                     accountRoutes.add(route);
-                    if (route.getParameters().isEmpty()) accountPages.add(route.toUrl());
+                    // A page that declares a query (the OpenID consent page and its pending interaction) answers
+                    // only a request carrying it, so it is reached through a rendered link like a routed parameter.
+                    if (route.getParameters().isEmpty() && endpoint.getQueryParameters().isEmpty()) {
+                        accountPages.add(route.toUrl());
+                    }
                 }
             }
         }

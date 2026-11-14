@@ -6,6 +6,8 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.orm.datasource.Datasource;
+import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.history.History;
@@ -19,7 +21,9 @@ import io.undertow.util.Headers;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.time.Duration;
+import java.util.Collections;
 import java.util.Map;
+import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -45,7 +49,14 @@ public final class SiteSignIns {
     /** Entries kept before the expired ones are swept out. */
     private static final int SWEEP_AT = 10_000;
 
-    private static final Map<String, Long> LAST = new ConcurrentHashMap<>();
+    /**
+     * The last recorded sign-in per key, per database: a site id means a site of one database only.
+     *
+     * AIDEV-NOTE: one map for the process coalesced a sign-in to site 1 of a NEW database with one made minutes
+     * earlier on another (every test class boots a fresh database in one JVM), so the second database's history
+     * never got its row.
+     */
+    private static final Map<Datasource, Map<String, Long>> LAST = Collections.synchronizedMap(new WeakHashMap<>());
 
     /** Records that {@code subject} signed in to site {@code siteId} through the provider record {@code providerId}. */
     public static void record(@NonNull HttpServerExchange exchange, int siteId, int providerId,
@@ -54,13 +65,14 @@ public final class SiteSignIns {
             return;
         }
         String ip = TrustedProxies.clientIpOf(exchange);
-        if (!firstInWindow(siteId + "\n" + subject + "\n" + ip)) {
-            return;
-        }
         CallerChannel channel = new CallerChannel(AccountabilityOrigin.WEB, ip,
             exchange.getRequestHeaders().getFirst(Headers.USER_AGENT));
         Accountability visitor = Accountability.of((String) null, subject, channel);
         try {
+            // Inside the try: with no database to ask (a runtime going down) the window cannot be read either.
+            if (!firstInWindow(siteId + "\n" + subject + "\n" + ip)) {
+                return;
+            }
             HandlerSupport.inBackground(() -> {
                 try {
                     Row provider = Models.get(SiteAuthProviderModel.class).findById(providerId);
@@ -75,7 +87,7 @@ public final class SiteSignIns {
                 }
             });
         } catch (RuntimeException stopping) {
-            // A runtime that is stopping takes no background work: the sign-in itself stands.
+            // A runtime that is stopping takes no background work and names no database: the sign-in itself stands.
             Blast.log("SITE SIGN-IN: not recorded while stopping -", subject, "on site", siteId);
         }
     }
@@ -84,11 +96,12 @@ public final class SiteSignIns {
     private static boolean firstInWindow(@NonNull String key) {
         long now = Now.millis();
         long window = COALESCE.toMillis();
-        if (LAST.size() > SWEEP_AT) {
-            LAST.values().removeIf(at -> now - at >= window);
+        Map<String, Long> last = LAST.computeIfAbsent(Db.currentOrDefault(), database -> new ConcurrentHashMap<>());
+        if (last.size() > SWEEP_AT) {
+            last.values().removeIf(at -> now - at >= window);
         }
         boolean[] first = {false};
-        LAST.compute(key, (k, at) -> {
+        last.compute(key, (k, at) -> {
             if (at == null || now - at >= window) {
                 first[0] = true;
                 return now;

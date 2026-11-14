@@ -70,7 +70,7 @@ class RecordTabSetJourneyTest extends HohenheimHttpTestBase {
             assertThat(console).as("step 3: a container has no screen mode")
                 .doesNotContain("data-console-mode=\"framebuffer\"");
             assertThat(console).as("step 3: the active mode says what it is for")
-                .contains("The workload's own output, live");
+                .contains("What the app prints, live");
 
             // 3b. A stored console run is listed by WHEN it ran, in the viewer's words (never a raw ISO instant), and
             //     the opened run's card names that time the same way.

@@ -33,7 +33,7 @@ class AppConfigAddressJourneyTest extends HohenheimTestBase {
         //    open, the knobs that are right almost always folded under Advanced.
         assertThat(unsectioned(AddressUpstreamKind.SETTINGS_SCHEMA))
             .as("step 1: a proxy leads with where requests go")
-            .containsExactly("forward_scheme", "forward_host", "forward_port", "socket");
+            .containsExactly("forward_scheme", "forward_host", "forward_port", "more_backends", "socket");
         assertThat(section(AddressUpstreamKind.SETTINGS_SCHEMA, HohenheimFormSections.FORWARDING))
             .as("step 1: then how the connection behaves, open, the protocol pin last")
             .extracting(FormSection::startsCollapsed, FormSection::entryNames)

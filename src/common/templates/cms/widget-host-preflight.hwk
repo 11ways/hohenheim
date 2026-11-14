@@ -26,7 +26,7 @@
             </pl-table-cell>
             <pl-table-cell>
                 {% if check.atIso != null %}
-                <pl-relative-time datetime={% check.atIso %} title={% check.atIso %}></pl-relative-time>
+                <pl-relative-time datetime={% check.atIso %} title={% check.atIso %} units="one"></pl-relative-time>
                 {% /if %}
             </pl-table-cell>
         </pl-table-row>
@@ -41,7 +41,7 @@
         {% if data != null && data.probedAtIso != null %}
         <pl-card-description>
             {{ t("last_preflight", scope: "server_overview") }}
-            <pl-relative-time datetime={% data.probedAtIso %} title={% data.probedAtIso %}></pl-relative-time>
+            <pl-relative-time datetime={% data.probedAtIso %} title={% data.probedAtIso %} units="one"></pl-relative-time>
         </pl-card-description>
         <pl-card-header-actions>
             <pl-badge variant={% data.summaryVariant %} data-preflight-verdict="1">{{ data.summaryLabel }}</pl-badge>
@@ -59,7 +59,7 @@
             {% elseif data.kernel.proven %}
             <pl-badge variant="success">{{ t("kernel_proven", scope: "server_overview") }}</pl-badge>
             {% if data.kernel.checkedAtIso != null %}
-            <pl-relative-time datetime={% data.kernel.checkedAtIso %} title={% data.kernel.checkedAtIso %}></pl-relative-time>
+            <pl-relative-time datetime={% data.kernel.checkedAtIso %} title={% data.kernel.checkedAtIso %} units="one"></pl-relative-time>
             {% /if %}
             {% else %}
             <pl-badge variant="destructive">{{ t("kernel_unproven", scope: "server_overview") }}</pl-badge>
@@ -100,7 +100,7 @@
                     <pl-table-cell>{{ fact.value }}</pl-table-cell>
                     <pl-table-cell>
                         {% if fact.measuredAtIso != null %}
-                        <pl-relative-time datetime={% fact.measuredAtIso %} title={% fact.measuredAtIso %}></pl-relative-time>
+                        <pl-relative-time datetime={% fact.measuredAtIso %} title={% fact.measuredAtIso %} units="one"></pl-relative-time>
                         {% /if %}
                     </pl-table-cell>
                 </pl-table-row>

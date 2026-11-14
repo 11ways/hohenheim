@@ -520,9 +520,12 @@ class DnsListEditingTest extends HohenheimTestBase {
 
         // 2. The table FITS its card at a narrow width: every cell keeps to one line and ends in an ellipsis, so the
         //    scroll area has nothing to scroll and no column is pinned over another.
+        String widths = (String) page.locator(viewport).evaluate("el => el.scrollWidth + ' in ' + el.clientWidth + ': '"
+            + " + [...el.querySelectorAll('pl-table-body pl-table-row:first-child > *')].map(cell =>"
+            + " (cell.dataset.column || 'actions') + ' ' + Math.round(cell.getBoundingClientRect().width)).join(', ')");
         assertThat((Boolean) page.locator(viewport)
                 .evaluate("el => el.scrollWidth <= el.clientWidth + 1"))
-            .as("step 2: the table fits the scrollport").isTrue();
+            .as("step 2: the table fits the scrollport (%s)", widths).isTrue();
         assertCount(scroller + "[data-overflow-inline-end]", 0, "step 2: nothing passes under the trailing edge");
         assertCount(".cms-resource-list-table [data-sticky]", 0, "step 2: no column is pinned");
 

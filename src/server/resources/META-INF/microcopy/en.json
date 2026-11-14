@@ -6307,7 +6307,7 @@
     }
   ],
   "instance_kind": {
-    "text": "What this instance runs; the kind decides its settings and its runtime driver",
+    "text": "What this app is. The kind decides which settings it has.",
     "scope": "help"
   },
   "instance_container_port": {
@@ -7847,7 +7847,7 @@
       "scope": "capability"
     },
     {
-      "text": "The workload's own output, live, and a line to its main process.",
+      "text": "What the app prints, live, and a line to type to it.",
       "scope": "console_mode"
     },
     {
@@ -7903,7 +7903,7 @@
       "scope": "instance_console"
     },
     {
-      "text": "This instance is not running",
+      "text": "This app is not running",
       "scope": "instance_stats"
     },
     {
@@ -7942,11 +7942,11 @@
   ],
   "not_running_description": [
     {
-      "text": "Deploy the instance to attach to its console.",
+      "text": "Deploy the app to see its console.",
       "scope": "instance_console"
     },
     {
-      "text": "Live statistics appear once the workload starts",
+      "text": "Live figures appear once it runs.",
       "scope": "instance_stats"
     },
     {
@@ -8532,7 +8532,7 @@
     "scope": "violations"
   },
   "files_workload_not_browsable": {
-    "text": "The workload must be running to browse, create, rename or delete files",
+    "text": "The app must be running before you can browse or change its files.",
     "scope": "violations"
   },
   "files_managed_config": {
@@ -11311,7 +11311,7 @@
     "scope": "instance_stats"
   },
   "disk_description": {
-    "text": "The stored observation, not a live reading.",
+    "text": "The last measurement, not a live figure.",
     "scope": "instance_stats"
   },
   "host_posture_unacknowledged": {
@@ -11619,7 +11619,7 @@
       "scope": "database_engine"
     },
     {
-      "text": "Everything that serves visitors or runs a workload: sites, instances and stacks in one list.",
+      "text": "Everything you have put online: websites, apps, virtual machines and stacks.",
       "scope": "app"
     },
     {

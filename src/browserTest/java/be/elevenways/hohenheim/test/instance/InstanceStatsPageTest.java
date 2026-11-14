@@ -111,7 +111,7 @@ class InstanceStatsPageTest extends HohenheimHttpTestBase {
         assertThat(stopped.statusCode()).isEqualTo(200);
         assertThat(stopped.body())
             .as("step 3: a stopped instance says so rather than drawing nothing")
-            .contains("This instance is not running")
+            .contains("This app is not running")
             .doesNotContain("<pl-sparkline");
     }
 

@@ -4,7 +4,7 @@
 {% if value != null %}
 <span class="hh-state-line" attr:data-state={% value.state %}>
     <pl-badge variant={% value.variant %}>{{ value.label }}</pl-badge>
-    {% if value.detail != null %}<span class="hh-state-line-detail">{{ value.detail }}</span>{% /if %}
+    {% if value.detail != null %}<span class="hh-state-line-detail hh-state-line-why">{{ value.detail }}</span>{% /if %}
     {% if value.url != null %}
     <a class="hh-state-line-detail" href={% value.url %} data-state-link>{{ value.link }}</a>
     {% /if %}

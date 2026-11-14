@@ -6307,7 +6307,7 @@
     }
   ],
   "instance_kind": {
-    "text": "Wat deze instantie draait; de soort bepaalt de instellingen en de runtime-driver",
+    "text": "Wat deze app is. De soort bepaalt welke instellingen de app heeft.",
     "scope": "help"
   },
   "instance_container_port": {
@@ -7847,7 +7847,7 @@
       "scope": "capability"
     },
     {
-      "text": "De eigen uitvoer van de workload, live, en een regel naar het hoofdproces.",
+      "text": "Wat de app afdrukt, live, en een regel om ernaar te typen.",
       "scope": "console_mode"
     },
     {
@@ -7903,7 +7903,7 @@
       "scope": "instance_console"
     },
     {
-      "text": "Deze instance draait niet",
+      "text": "Deze app draait niet",
       "scope": "instance_stats"
     },
     {
@@ -7942,11 +7942,11 @@
   ],
   "not_running_description": [
     {
-      "text": "Rol de instantie uit om aan de console te koppelen.",
+      "text": "Rol de app uit om de console te zien.",
       "scope": "instance_console"
     },
     {
-      "text": "Live statistieken verschijnen zodra de workload start",
+      "text": "Live cijfers verschijnen zodra de app draait.",
       "scope": "instance_stats"
     },
     {
@@ -8532,7 +8532,7 @@
     "scope": "violations"
   },
   "files_workload_not_browsable": {
-    "text": "De workload moet draaien om bestanden te bekijken, aan te maken, te hernoemen of te verwijderen",
+    "text": "De app moet draaien voordat u de bestanden kunt bekijken of wijzigen.",
     "scope": "violations"
   },
   "files_managed_config": {
@@ -11311,7 +11311,7 @@
     "scope": "instance_stats"
   },
   "disk_description": {
-    "text": "De bewaarde waarneming, geen live meting.",
+    "text": "De laatste meting, geen live cijfer.",
     "scope": "instance_stats"
   },
   "host_posture_unacknowledged": {
@@ -11619,7 +11619,7 @@
       "scope": "database_engine"
     },
     {
-      "text": "Alles wat bezoekers bedient of een workload draait: sites, instanties en stacks in een lijst.",
+      "text": "Alles wat u online hebt gezet: websites, apps, virtuele machines en stacks.",
       "scope": "app"
     },
     {

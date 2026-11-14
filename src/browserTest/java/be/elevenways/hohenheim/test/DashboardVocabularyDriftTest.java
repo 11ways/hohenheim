@@ -45,13 +45,13 @@ class DashboardVocabularyDriftTest {
     private static final Path APP_SCSS = Path.of("src/common/scss/app.scss");
 
     @Test
-    void attentionSeverityIsTheStylesheetVocabulary() throws IOException {
+    void attentionSeverityIsCarriedByItsMember() throws IOException {
         String scss = Files.readString(APP_SCSS);
 
-        // 1. Every data-severity value the stylesheet tints is a member's key, and every member is tinted.
+        // 1. An item's severity is the tone of its icon mark (AttentionSeverity.badge): the stylesheet tints no edge
+        //    or surface by severity, so it holds no second copy of the keys.
         Set<String> styled = captures(scss, "\\[data-severity=\"([a-z_-]+)\"\\]");
-        assertThat(styled).as("step 1: app.scss tints exactly the AttentionSeverity keys")
-            .containsExactlyInAnyOrderElementsOf(keys(AttentionSeverity.values(), AttentionSeverity::key));
+        assertThat(styled).as("step 1: app.scss styles no AttentionSeverity key").isEmpty();
 
         // 2. A stored or legacy spelling resolves to its member.
         assertThat(AttentionSeverity.of("error"))

@@ -38,6 +38,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Stream;
 
 /**
  * A single managed runtime unit (the instance tier's record): one container today,
@@ -943,14 +944,22 @@ public class InstanceModel extends Model {
     private static final Duration SESSION_QUIET = Duration.ofMinutes(Objects.requireNonNull(
         HohenheimSettings.Sftp.IDLE_TIMEOUT_MINUTES.getDefaultValue(), "the SFTP idle timeout's default"));
 
+    /** The disk sweeper's readings: what the machine measured, never a change to the app. */
+    private static final List<Field<?, ?>> DISK_OBSERVATIONS = List.of(DISK_USED_BYTES, DISK_LIMIT_BYTES,
+        DISK_OBSERVED_AT);
+
     /**
      * Values are captured, an app's configuration changes included, and {@link #RECORDED_OPERATION_STATE} with them;
      * a cause or correction is recorded as its own fact.
+     *
+     * AIDEV-NOTE: the disk readings are excepted. Recorded, the 10-minute sweep wrote "System changed alpvm" into
+     * every measured app's history six times an hour (3,900 rows on one VM by 2026-11-14), burying what people did.
      */
     public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.optional().values()
         // The other operation-owned stamps were never recorded: the old code wrote them only through
         // InstanceOperationGuard's hook-free fenced updateAll.
-        .except(OPERATION_OWNED.stream().filter(field -> !RECORDED_OPERATION_STATE.contains(field))
+        .except(Stream.concat(DISK_OBSERVATIONS.stream(),
+                OPERATION_OWNED.stream().filter(field -> !RECORDED_OPERATION_STATE.contains(field)))
             .toArray(Field<?, ?>[]::new))
         .foldingSessionsWithin(SESSION_QUIET));
 }

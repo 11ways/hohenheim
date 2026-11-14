@@ -623,7 +623,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
         assertThat(stats.statusCode()).as("step 1: the stats tab renders").isEqualTo(200);
         assertThat(stats.body())
             .as("step 1: a stopped instance says so instead of drawing an empty chart")
-            .contains("This instance is not running");
+            .contains("This app is not running");
 
         // 2. A manage holder WITHOUT files.read is not offered the Files tab AT ALL, so
         //    the route 404s: InstanceFilesPage.visibleFor hides AND enforces, and a tab
