@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.server.util.Http11;
 import be.elevenways.hohenheim.server.util.Watchdog;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.util.Closeables;
+import be.elevenways.zenit.server.net.WebSocketFrames;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -19,16 +20,13 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
-import java.util.Base64;
 import java.util.Locale;
 
 /**
  * The shared half of both Incus transports: one fresh channel per REST exchange
  * ({@code Connection: close}, a bounded {@link Http11} head-then-body read) and the RFC 6455
- * client handshake for the websocket lane. Subclasses only open the byte channel --
+ * client handshake for the websocket lane, its key and accept value from zenit's
+ * {@link WebSocketFrames}. Subclasses only open the byte channel --
  * a pinned+identified TLS socket, or the local unix socket.
  */
 abstract class StreamIncusTransport implements IncusTransport {
@@ -43,8 +41,6 @@ abstract class StreamIncusTransport implements IncusTransport {
      * {@link #exchangeDownload}, never this lane.
      */
     static final long MAX_RESPONSE_BYTES = ByteUnit.MEGABYTE.bytes(32);
-
-    private static final SecureRandom RANDOM = new SecureRandom();
 
     /** One open byte channel to the daemon. */
     protected interface Channel extends Closeable {
@@ -192,9 +188,7 @@ abstract class StreamIncusTransport implements IncusTransport {
     @Override
     public @NonNull IncusWebSocket openWebSocket(@NonNull String pathAndQuery,
                                                  long connectTimeoutMs) throws IOException {
-        byte[] nonce = new byte[16];
-        RANDOM.nextBytes(nonce);
-        String key = Base64.getEncoder().encodeToString(nonce);
+        String key = WebSocketFrames.newKey();
         Map<String, String> headers = new LinkedHashMap<>();
         headers.put("Upgrade", "websocket");
         headers.put("Connection", "Upgrade");
@@ -260,7 +254,7 @@ abstract class StreamIncusTransport implements IncusTransport {
             throw new IOException("Incus refused the websocket upgrade at " + describe()
                 + ": " + (lines.length > 0 ? lines[0] : "(empty response)"));
         }
-        String expected = acceptFor(key);
+        String expected = WebSocketFrames.acceptOf(key);
         for (String line : lines) {
             int colon = line.indexOf(':');
             if (colon > 0 && line.substring(0, colon).trim()
@@ -273,15 +267,5 @@ abstract class StreamIncusTransport implements IncusTransport {
             }
         }
         throw new IOException("websocket handshake carried no Sec-WebSocket-Accept");
-    }
-
-    private static @NonNull String acceptFor(@NonNull String key) {
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-1").digest(
-                (key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").getBytes(StandardCharsets.ISO_8859_1));
-            return Base64.getEncoder().encodeToString(digest);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-1 unavailable", e);
-        }
     }
 }
