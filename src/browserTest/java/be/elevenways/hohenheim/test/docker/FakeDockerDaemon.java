@@ -87,6 +87,8 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
         final @NonNull Map<String, String> labels;
         final @NonNull String image;
         final int containerPort;
+        /** The environment the create handed the container. */
+        @NonNull Map<String, String> env = Map.of();
         boolean running;
         int hostPort;
         /** The host port the spec asked for (a pre-allocated or remembered number), 0 for the kernel's pick. */
@@ -261,6 +263,12 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
         return workload != null && workload.running;
     }
 
+    /** The environment the container under this handle was created with; empty for none. */
+    public @NonNull Map<String, String> envOf(@NonNull String handle) {
+        Workload workload = this.workloads.get(handle);
+        return workload == null ? Map.of() : workload.env;
+    }
+
     /**
      * The containers currently joined to one link network. A create REPLACES the container under its handle, and
      * the replacement is joined to nothing, exactly as a real daemon's fresh container sits on its own network only.
@@ -399,6 +407,7 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
                 containerPort);
             Integer requested = spec.publications().isEmpty() ? null : spec.publications().get(0).preallocatedPort();
             created.requestedPort = requested == null ? 0 : requested;
+            created.env = Map.copyOf(spec.env());
             FakeDockerDaemon.this.workloads.put(spec.handle(), created);
             // A recreate is what CLEARS the daemon's OOMKilled flag, so a fake that kept
             // it would make the redeploy of a dead workload look like it changed nothing.

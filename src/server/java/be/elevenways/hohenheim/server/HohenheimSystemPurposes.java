@@ -41,6 +41,8 @@ public final class HohenheimSystemPurposes {
     public static final @NonNull SystemPurpose DNS_MIRROR = declare("dns_mirror");
     /** The scan mirroring each host's /etc/passwd into system users. */
     public static final @NonNull SystemPurpose SYSTEM_USERS = declare("system_users");
+    /** An app's deploy starting a database workload it is attached to that is down. */
+    public static final @NonNull SystemPurpose DATABASE_START = declare("database_start");
 
     private HohenheimSystemPurposes() {
     }

@@ -188,9 +188,10 @@ dependencies {
     // The screen journey: a scripted SPICE server behind a VM's screen, read through recording sockets.
     browserTestImplementation(testFixtures(libs.pepperglass))
     browserTestImplementation libs.zenit.kvm.test.support
-    // SftpJourneyTest signs in with MINA's own SFTP client, the client zenit-sftp's journeys use.
-    browserTestImplementation libs.sshd.core
-    browserTestImplementation libs.sshd.sftp
+    // SftpJourneyTest signs in with MINA's own SFTP client, the client zenit-sftp's journeys use. Without sshd's unused
+    // jcl-over-slf4j, as zenit-sftp declares it: zenit-media's pdfbox brings commons-logging, the same classes.
+    browserTestImplementation(libs.sshd.core) { exclude group: 'org.slf4j', module: 'jcl-over-slf4j' }
+    browserTestImplementation(libs.sshd.sftp) { exclude group: 'org.slf4j', module: 'jcl-over-slf4j' }
     // PanelSurfaces: the stored before/after and twin captures of the /manage entries.
     browserTestImplementation libs.zenit.cms.test.support
     // FakeTransport: notification-channel tests resolve fake:// DSNs, which production never registers.

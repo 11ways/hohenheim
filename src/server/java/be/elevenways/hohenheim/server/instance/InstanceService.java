@@ -5,11 +5,13 @@ import be.elevenways.hohenheim.model.DeployTrigger;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceFileModel;
+import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.BootSettle;
+import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.hohenheim.server.application.ApplicationDeploys;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.application.ApplicationUpstreams;
@@ -18,6 +20,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
+import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.host.HostAdmission;
@@ -40,6 +43,7 @@ import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.QueryBuilder;
+import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.server.task.record.RecordSchedules;
 import be.elevenways.zenit.common.validation.Violations;
@@ -50,6 +54,8 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.Map;
 import java.util.function.Supplier;
 
@@ -233,6 +239,7 @@ public final class InstanceService {
         // Above the fold, so all three lanes and every surface -- row action, automation
         // API, schedule chain -- answer the same way.
         requireDeployAdmitted(instanceId);
+        startAttachedDatabases(instanceId, trigger);
         // A release-managed record owns no container: deploying it means checking the
         // source out and converging a RELEASE. The branch is here, after the gate and
         // before any driver work, so every existing power surface deploys an application
@@ -247,6 +254,54 @@ public final class InstanceService {
             return new WorkspaceBuilds(this).deploy(instanceId, null, null, trigger).status();
         }
         return deployWorkloadNow(instanceId, trigger, null);
+    }
+
+    /**
+     * Brings up each attached database's serving workload the daemon reports down, so this deploy's environment
+     * carries its credentials.
+     *
+     * AIDEV-NOTE: found 2026-11-16 on Robbedoes. After a host reboot the crash restarts ran side by side and every app
+     * was deployed before its database's container existed: DatabaseEnvInjection skipped the family
+     * (container_not_running), and the Node apps waited forever on an undefined DATABASE_URL behind a 503. The check
+     * runs under the database's own claim, so a database its own restart already brought up is left alone, and the
+     * trigger decides through {@link DeployStartPolicy} whether an operator-stopped database may be started. The start
+     * runs as declared system work (a tenant holds no power over a shared engine, and starting what its app needs is
+     * the installation's convergence), and a start that fails leaves the deploy as it was before: the injection reports
+     * the database as unresolved.
+     */
+    private void startAttachedDatabases(int instanceId, @NonNull DeployTrigger trigger) {
+        InstanceDatabaseModel links = Models.get(InstanceDatabaseModel.class);
+        Row instance = liveRow(instanceId);
+        if (links == null || instance == null) {
+            return;
+        }
+        Set<Integer> servingIds = new LinkedHashSet<>();
+        for (Row link : links.findByInstanceId(ApplicationReleases.linkOwnerOf(instance))) {
+            Integer databaseId = link.get(InstanceDatabaseModel.DATABASE_ID);
+            Row serving = databaseId == null ? null : DatabaseInstances.owned(databaseId);
+            Integer servingId = serving == null ? null : serving.get(InstanceModel.ID);
+            if (servingId != null && servingId != instanceId) {
+                servingIds.add(servingId);
+            }
+        }
+        for (int servingId : servingIds) {
+            try {
+                this.operations.exclusive(servingId, InstanceOperationLock.Contention.QUEUE, () -> {
+                    ContainerState state = liveStatus(servingId).state();
+                    Row current = liveRow(servingId);
+                    if ((state != ContainerState.STOPPED && state != ContainerState.ABSENT) || current == null
+                            || DeployStartPolicy.declineToStartStored(trigger, current, current) != null) {
+                        return;
+                    }
+                    Blast.log("INSTANCE: starting database workload", servingId, "before instance", instanceId);
+                    ExecutionIdentity.runAsSystem(HohenheimSystemPurposes.DATABASE_START,
+                        () -> deploy(servingId, trigger));
+                });
+            } catch (RuntimeException failed) {
+                Blast.log("INSTANCE: could not start database workload", servingId, "before instance", instanceId,
+                    "-", failed.getMessage());
+            }
+        }
     }
 
     @FunctionalInterface

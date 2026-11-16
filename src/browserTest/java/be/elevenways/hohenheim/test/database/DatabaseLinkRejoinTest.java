@@ -166,6 +166,23 @@ class DatabaseLinkRejoinTest {
                 .containsExactlyInAnyOrder(appHandle, engineHandle);
             assertThat(InstanceDatabaseNetworks.repairAll()).as("step 5: a healthy network needs no repair")
                 .isZero();
+
+            // 6. THE REBOOT (Robbedoes, 2026-11-16): every container is gone at once, and the app's crash restart
+            //    runs while the engine's record still claims it runs. The app's deploy starts the engine first, so
+            //    it is created with its database's connection variables instead of none.
+            daemon.killWorkload(engineHandle);
+            daemon.killWorkload(appHandle);
+            assertThat(daemon.isRunning(engineHandle)).as("step 6 anchor: the engine is down").isFalse();
+            int appStarts = daemon.callCount("start:" + appHandle);
+            assertThat(new InstanceStatusReconciler().reconcile(appId).verdict())
+                .as("step 6: the reconciler corrects the dead app before the engine").isEqualTo(Verdict.CORRECTED);
+            Poll.until("step 6: the crash restart started the app again", WAIT,
+                () -> daemon.callCount("start:" + appHandle) > appStarts && daemon.isRunning(appHandle));
+            assertThat(daemon.isRunning(engineHandle)).as("step 6: the app's deploy started its engine").isTrue();
+            assertThat(daemon.envOf(appHandle)).as("step 6: the app was created with its database's URL")
+                .containsKeys("DATABASE_URL", "DB_URL");
+            assertThat(daemon.linkMembersOf(link)).as("step 6: and both sit on the link network again")
+                .containsExactlyInAnyOrder(appHandle, engineHandle);
         });
     }
 
