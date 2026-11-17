@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -69,7 +70,8 @@ class InstanceInviteJourneyTest extends HohenheimTestBase {
             // 2. The operator invites an address no account holds: the invitation is mailed, never shown, and the
             //    new account holds the machine before anyone accepted, though nobody can sign in as it yet.
             page.fill("[data-sharing-invite-form] pl-input[name='email'] input", INVITEE);
-            submitSharing(AuthEndpoints.POST_SHARING_INVITE, "[data-sharing-invite-form] pl-button[type='submit']");
+            submitSharing(AuthEndpoints.POST_SHARING_INVITE, "[data-sharing-invite-form] pl-button[type='submit']",
+                "Invitation sent to " + INVITEE);
             page.waitForCondition(() -> mailed.size() == 1);
             page.waitForSelector("[data-sharing-invite-form]");
             assertThat(page.locator("[data-sharing-invite] pl-one-time-secret").count())
@@ -155,7 +157,8 @@ class InstanceInviteJourneyTest extends HohenheimTestBase {
             //    marked "Invited", with when the link stops working.
             navigateToApp(accessTab);
             page.fill("[data-sharing-invite-form] pl-input[name='email'] input", invitee);
-            submitSharing(AuthEndpoints.POST_SHARING_INVITE, "[data-sharing-invite-form] pl-button[type='submit']");
+            submitSharing(AuthEndpoints.POST_SHARING_INVITE, "[data-sharing-invite-form] pl-button[type='submit']",
+                "Invitation sent to " + invitee);
             page.waitForCondition(() -> mailed.size() == 1);
             page.waitForSelector("[data-sharing-invitation]");
             assertThat(page.locator("[data-sharing-invitation]").textContent())
@@ -166,7 +169,8 @@ class InstanceInviteJourneyTest extends HohenheimTestBase {
 
             // 2. Resend mails a fresh link; the first one is refused from then on.
             submitSharing(AuthEndpoints.POST_SHARING_INVITE_RESEND,
-                "[data-sharing-invitation-resend] pl-button[type='submit']");
+                "[data-sharing-invitation-resend] pl-button[type='submit']",
+                "A new invitation was sent to " + invitee);
             page.waitForCondition(() -> mailed.size() == 2);
             assertThat(person.navigate(mailed.get(0)).status())
                 .as("step 2: THE ASSERTION -- the old link is refused").isEqualTo(400);
@@ -176,7 +180,8 @@ class InstanceInviteJourneyTest extends HohenheimTestBase {
             // 3. Cancel invitation removes the never-used account, its link and the machine's grant, and lands back on
             //    the Access tab, where nobody waits any more.
             submitSharing(AuthEndpoints.POST_SHARING_INVITE_CANCEL,
-                "[data-sharing-invitation-cancel] pl-button[type='submit']");
+                "[data-sharing-invitation-cancel] pl-button[type='submit']",
+                "The invitation for " + invitee + " is cancelled");
             assertThat(Models.get(UserModel.class).findFirst(UserModel.EMAIL, invitee))
                 .as("step 3: the never-used account is gone").isNull();
             assertThat(person.navigate(mailed.get(1)).status())
@@ -187,7 +192,8 @@ class InstanceInviteJourneyTest extends HohenheimTestBase {
 
             // 4. Invited again, then revoked on the Access tab: it was all the invitee held, so the account goes too.
             page.fill("[data-sharing-invite-form] pl-input[name='email'] input", invitee);
-            submitSharing(AuthEndpoints.POST_SHARING_INVITE, "[data-sharing-invite-form] pl-button[type='submit']");
+            submitSharing(AuthEndpoints.POST_SHARING_INVITE, "[data-sharing-invite-form] pl-button[type='submit']",
+                "Invitation sent to " + invitee);
             page.waitForCondition(() -> mailed.size() == 3);
             UUID secondId = accountId(invitee);
             HttpResponse<String> revoked = adminPostForm(
@@ -212,17 +218,28 @@ class InstanceInviteJourneyTest extends HohenheimTestBase {
     }
 
     /**
-     * Submits one of the Access tab's sharing forms and waits until the tab it lands back on has loaded and hydrated.
+     * Submits one of the Access tab's sharing forms, waits until the page its redirect leads back to, the tab, has
+     * rendered and hydrated, reads the success toast, and closes it as a person does.
      *
-     * AIDEV-NOTE: a sharing form posts to zenit-auth's endpoint, which is served outside the panel's document policy,
-     * so its soft submit lands as a document load of the tab. A step that navigates or clicks before that landing
-     * competes with it: the landing aborted a following navigation to the same tab in a busy lane.
+     * AIDEV-NOTE: a sharing form posts to zenit-auth's endpoint, served outside the panel's document policy. Its
+     * redirect announces no document (zenit 3d2915f3d), so the soft submit follows it in place: no document load
+     * ever replaces the page, and a wait for one never ends. A submission raises no NavigationEnded either, so the
+     * wait is the rendered page. The page stays, so its toast stays too, over the controls at the card's foot (it
+     * held the Resend button): the next sharing action waits until it is closed.
      */
-    private void submitSharing(@NonNull PageEndpoint action, @NonNull String submit) {
+    private void submitSharing(@NonNull PageEndpoint action, @NonNull String submit, @NonNull String toastSays) {
         String path = action.toUrl();
-        Response answer = saveAndLandInPlace(response -> "POST".equals(response.request().method())
-            && path.equals(URI.create(response.url()).getPath()), () -> page.locator(submit).click());
-        assertThat(answer.status()).as("the sharing action at %s is accepted", path).isLessThan(400);
+        AtomicReference<Response> answer = new AtomicReference<>();
+        waitForNavigationRendered(() -> answer.set(page.waitForResponse(response ->
+            "POST".equals(response.request().method()) && path.equals(URI.create(response.url()).getPath()),
+            () -> page.locator(submit).click())));
+        waitForHydration();
+        assertThat(answer.get().status()).as("the sharing action at %s is accepted", path).isLessThan(400);
+        String toast = "pl-toast[data-flash-toast][open]";
+        assertThat(waitForSelector(toast).textContent()).as("the sharing action at %s says what it did", path)
+            .contains(toastSays);
+        page.locator(toast + " > button.close").click();
+        waitForHidden(toast);
     }
 
     private static UUID accountId(String email) {

@@ -239,11 +239,13 @@ class AppsListJourneyTest extends HohenheimHttpTestBase {
             assertThat(redirectRow).as("step 9: the list draws its host cell as a dash")
                 .contains("class=\"cms-cell-absent\" aria-label=\"-\"").contains(">-</pb-microcopy></span>")
                 .as("step 9: never as None").doesNotContain(">None<");
-            // The list is one live part (zenit-cms 814dddb2), so its cells carry reactive markers: the text is judged.
+            // The list is one live part (zenit-cms 814dddb2), so its cells carry reactive markers: the text is judged,
+            // as the host cell draws it, whatever wrappers the list lays around its words (its floor and its clamp).
             String stackSiteRow = adminGet("/admin/apps?_search=" + PREFIX + "stack-site").body();
             assertThat(TestStrings.withoutReactiveMarkers(stackSiteRow))
                 .as("step 9: the served website's row names the host")
-                .containsPattern("data-column=\"host\"[^>]*>\\s*<div class=\"cms-cell-clamp\"[^>]*>\\s*" + host + "\\s*<");
+                .containsPattern("data-column=\"host\"[^>]*>(?:\\s*<div class=\"cms-cell-[a-z]+\"[^>]*>)+\\s*"
+                    + host + "\\s*<");
 
             // 10. A catch-all website (only a pattern) serves its visitors, and its verdict says what it catches: a
             //     pattern is never presented as an address to visit ("Live at *.catch...").

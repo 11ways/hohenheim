@@ -129,10 +129,11 @@ class MachineRecordPageJourneyTest extends HohenheimHttpTestBase {
             assertThat(adminGet(vmPage + "/page/stats").statusCode()).as("step 4: the Metrics tab renders")
                 .isEqualTo(200);
 
-            // 5. Its configuration words the resize as Incus applies it, and offers no other kind.
+            // 5. Its configuration's limits section words the resize as Incus applies it (one wording for every
+            //    runtime since the form's sections), and offers no other kind.
             String vmEdit = adminGet(vmPage).body();
-            assertThat(vmEdit).as("step 5: the resize notice speaks of Incus")
-                .contains("in place through Incus")
+            assertThat(vmEdit).as("step 5: the limits section says an Incus host resizes in place")
+                .contains("on an Incus host it changes in place")
                 .doesNotContain("It keeps its published ports")
                 .as("step 5: no kind card offers a website kind")
                 .doesNotContain("Build from a repository");
@@ -157,10 +158,10 @@ class MachineRecordPageJourneyTest extends HohenheimHttpTestBase {
                 .doesNotContain(appPage + "/page/devices");
             assertThat(InstanceKinds.offers(app, WorkloadLane.FILES)).as("step 7: the Docker driver browses files")
                 .isTrue();
-            assertThat(adminGet(appPage).body()).as("step 7: its resize recreates the container")
-                .contains("recreates the running container")
-                .as("step 7: and says the ports you set are kept, which leaves only a host-picked number to change")
-                .contains("ports you set are kept")
+            // The limits section words a resize for every runtime at once (the per-runtime notices went with the
+            // form's sections): on Docker a restart, briefly down; never a host-picked port that may change.
+            assertThat(adminGet(appPage).body()).as("step 7: its resize restarts the app on a Docker host")
+                .contains("On a Docker host the app restarts and is briefly down")
                 .doesNotContain("published port may change")
                 .as("step 7: its kind cards offer only what this record can become")
                 .contains("data-value=\"hohenheim:docker_container\"")

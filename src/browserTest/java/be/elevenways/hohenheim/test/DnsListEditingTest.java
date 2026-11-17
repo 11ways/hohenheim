@@ -529,8 +529,10 @@ class DnsListEditingTest extends HohenheimTestBase {
         assertCount(scroller + "[data-overflow-inline-end]", 0, "step 2: nothing passes under the trailing edge");
         assertCount(".cms-resource-list-table [data-sticky]", 0, "step 2: no column is pinned");
 
-        // 3. The long value is one line with its whole text on its hover, and the row's actions are on screen.
-        String valueClamp = "pl-table-row[data-row-key='" + recordId + "'] .cms-cell-clamp[title*='v=spf1']";
+        // 3. The long value is one line with its whole text on its hover (the words around the clamp carry it, the
+        //    cell's width floor reads them), and the row's actions are on screen.
+        String valueClamp = "pl-table-row[data-row-key='" + recordId + "'] .cms-cell-words[title*='v=spf1']"
+            + " > .cms-cell-clamp";
         assertCount(valueClamp, 1, "step 3: the whole value rides the hover");
         assertThat(page.locator(valueClamp).evaluate("el => getComputedStyle(el).webkitLineClamp"))
             .as("step 3: the value keeps to one line").isEqualTo("1");
