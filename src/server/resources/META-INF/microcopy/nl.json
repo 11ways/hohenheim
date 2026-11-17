@@ -19492,5 +19492,32 @@
   "dump_restore_in_place_confirm_generic": {"text": "Eerst wordt een verse back-up van de database gemaakt; daarna wordt de inhoud vervangen door deze back-up.", "scope": "database_dump"},
   "dump_restore_in_place_confirm": {"text": "Eerst wordt een verse back-up van {$name} gemaakt; daarna wordt de inhoud vervangen door de back-up van {$at}.", "scope": "database_dump"},
   "dump_restored_in_place": {"text": "{$name} hersteld; de back-up van net ervoor is die van {$before}", "scope": "database_dump"},
-  "dump_delete": {"text": "Verwijderen", "scope": "database_dump"}
+  "dump_delete": {"text": "Verwijderen", "scope": "database_dump"},
+  "deploy_from_repository": {"text": "Deployen vanuit een repository", "scope": "site_repository"},
+  "deploy_from_repository_description": {"text": "Hohenheim bouwt de repository en serveert ze; deze site behoudt haar adressen en bescherming; elke push wordt gedeployed.", "scope": "site_repository"},
+  "deploy_from_repository_happened": {"text": "{$actor} deployde {$subject} vanuit een repository", "scope": "site_repository"},
+  "run_release": {"text": "Bouwen en serveren", "scope": "site_repository"},
+  "run_switch": {"text": "Deze site ernaar laten wijzen", "scope": "site_repository"},
+  "done_release": {"text": "De eerste release wordt geserveerd", "scope": "site_repository"},
+  "done_switch": {"text": "Deze site serveert nu de app", "scope": "site_repository"},
+  "repository_outcome": {"text": "Deze site serveert nu de app die uit de repository gebouwd is. Elke push wordt gedeployed.", "scope": "site_repository"},
+  "repository_outcome_folder": {"text": "Deze site serveert nu de app die uit de repository gebouwd is. Voordien serveerde ze de map {$folder}; die map staat nog op de schijf.", "scope": "site_repository"},
+  "repository_deployed": [
+    {
+      "text": "Gedeployed vanuit een repository",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": "Gedeployed vanuit een repository; voordien serveerde ze de map {$path}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_path": "true"
+    },
+    {
+      "text": "{$actor} deployde {$subject} vanuit een repository",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ]
 }

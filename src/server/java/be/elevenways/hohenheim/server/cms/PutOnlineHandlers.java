@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.app.PutOnlineReach;
@@ -24,9 +25,11 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceTemplateHandlers;
 import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
 import be.elevenways.hohenheim.server.instance.InstanceTemplates;
+import be.elevenways.hohenheim.server.instance.StaticSiteKind;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.hohenheim.server.tls.UploadedCertificates;
 import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
+import be.elevenways.hohenheim.server.upstream.kinds.StaticUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.StreamUpstreamKind;
 import be.elevenways.hohenheim.server.ports.SitePortClaims;
 import be.elevenways.hohenheim.site.SiteOperations;
@@ -36,6 +39,8 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
@@ -45,6 +50,8 @@ import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.server.operation.OperationCall;
 import be.elevenways.zenit.server.operation.OperationHandlers;
+import be.elevenways.zenit.server.operation.OperationPipeline;
+import be.elevenways.zenit.server.operation.OperationRequest;
 import be.elevenways.zenit.server.http.HostPattern;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -82,8 +89,9 @@ import java.util.function.IntConsumer;
  * and the first start is {@link InstanceService#deploy}. The ACME order runs after the website's transaction has
  * committed, never inside it. A step that cannot finish (Let's Encrypt off, a name that points elsewhere, databases
  * still provisioning) does not fail what already exists: the run ends with a message that says what is left, and the
- * app's own page (its health verdict) says the rest.
- *
+ * app's own page (its health verdict) says the rest. The repository deploy of a site that serves a folder
+ * ({@link #deployFromRepository}) is the one flow that fails whole: it makes its app through the same kind-led write
+ * ({@link #placedOfKind}) and destroys it again when its release or the site's switch fails.
  * @author Jelle De Loecker
  * @since  0.9.0
  */
@@ -116,6 +124,11 @@ final class PutOnlineHandlers {
         OperationHandlers.attach(PutOnline.PUT_STREAM_ONLINE)
             .authorize(PutOnlineHandlers::admitStream)
             .handle(PutOnlineHandlers::putStreamOnline);
+        OperationHandlers.attach(PutOnline.DEPLOY_FROM_REPOSITORY)
+            .applies(site -> SiteOperationHandlers.live(site)
+                && StaticUpstreamKind.ID.toString().equals(site.get(SiteModel.UPSTREAM_KIND)))
+            .authorize(PutOnlineHandlers::admitRepository)
+            .handle(PutOnlineHandlers::deployFromRepository);
     }
 
     private PutOnlineHandlers() {
@@ -451,6 +464,20 @@ final class PutOnlineHandlers {
     }
 
     /**
+     * In the request, before a run is recorded: Put-online's own judgement of making a Static site app from its
+     * settings ({@link #admitKind}, refused on any other kind), then the site's update writer's reach of the site.
+     */
+    private static @Nullable DomainRefusal admitRepository(@NonNull Row site,
+                                                           PutOnline.@Nullable FromRepository input,
+                                                           @NonNull AccessContext access) {
+        String kind = input == null ? StaticSiteKind.ID.toString() : input.kind();
+        DomainRefusal refusal = admitKind(access, kind, !StaticSiteKind.ID.toString().equals(kind)
+            || !PutOnline.offeredWith(kind, PutOnlineReach.WEBSITE));
+        return refusal != null ? refusal
+            : SiteOperationHandlers.<PutOnline.FromRepository>reachesSite().refuse(site, input, access);
+    }
+
+    /**
      * App, install, website, certificate, live.
      *
      * @return the new instance's id
@@ -637,14 +664,31 @@ final class PutOnlineHandlers {
     }
 
     /**
-     * The app, as the template funnel writes one: placement chooses the host from the kind and its settings, and the
-     * save meets every model hook (declarations, image policy, quota, capacity). The pipeline sealed each secret; the
-     * record stores their text, so they are opened once here.
+     * The app, as the template funnel writes one ({@link #placedOfKind}), attached as the run's subject before its app
+     * step is done.
      *
      * @param onPlaced what the host placement chose must also hold, asked before the record is saved; null for none
      * @return the saved record, attached as the run's subject
      */
     private static @NonNull Row createOfKind(@NonNull OperationCall<Void, ?> call, @Nullable String givenName,
+                                             @Nullable Integer serverId, @Nullable String kindId,
+                                             @Nullable Map<String, Object> given, @Nullable IntConsumer onPlaced) {
+        Row instance = placedOfKind(call, givenName, serverId, kindId, given, onPlaced);
+        call.attachSubject(InstanceOperations.INSTANCE, instance);
+        appStepDone(call, kindId, instance);
+        return instance;
+    }
+
+    /**
+     * The app, as the template funnel writes one: placement chooses the host from the kind and its settings, and the
+     * save meets every model hook (declarations, image policy, quota, capacity).
+     *
+     * AIDEV-NOTE: the pipeline sealed each secret; the record stores their text, so they are opened once here.
+     *
+     * @param onPlaced what the host placement chose must also hold, asked before the record is saved; null for none
+     * @return the saved record
+     */
+    private static @NonNull Row placedOfKind(@NonNull OperationCall<?, ?> call, @Nullable String givenName,
                                              @Nullable Integer serverId, @Nullable String kindId,
                                              @Nullable Map<String, Object> given, @Nullable IntConsumer onPlaced) {
         InstanceKindHandler kind = Objects.requireNonNull(InstanceKinds.getHandler(kindId), "admitted kind");
@@ -670,11 +714,99 @@ final class PutOnlineHandlers {
         } catch (Violations refused) {
             throw refusedAs("app", refused);
         }
-        call.attachSubject(InstanceOperations.INSTANCE, instance);
+        return instance;
+    }
+
+    /** Finishes the run's app step with the kind's label and the host the app was placed on. */
+    private static void appStepDone(@NonNull OperationCall<?, ?> call, @Nullable String kindId, @NonNull Row instance) {
         InstanceKindInfo info = InstanceKindRegistry.registry().get(Identifier.tryParse(String.valueOf(kindId)));
         call.reportStepDone(appDone(info == null ? Microcopy.literal(String.valueOf(kindId)) : info.getLabel(),
             instance));
-        return instance;
+    }
+
+    /**
+     * App, first serving release, the site pointed at it: until the last step the site keeps serving its folder, and a
+     * step that fails destroys the app again ({@link InstanceTemplates#completeOrDestroy}), so the site is never left
+     * pointing at a half-made app and no app stays behind. The app takes the site's name.
+     *
+     * AIDEV-NOTE: the first deploy is THE deploy funnel ({@link InstanceService#deploy}); for a release-managed kind
+     * it returns only once its first release passed the health gate and serves (ReleaseEngine.initialRelease), and
+     * throws otherwise, so its return IS the wait. Unlike Put-online's first start, a refused or failed deploy fails
+     * the run. The run's subject stays the site until the switch is done, so a failed run is found from the site.
+     *
+     * @return the new app's id
+     */
+    private static @NonNull Integer deployFromRepository(
+            @NonNull OperationCall<Row, PutOnline.FromRepository> call) {
+        PutOnline.FromRepository input = Objects.requireNonNull(call.input(), "a repository deploy has its input");
+        Row site = call.subject();
+        int siteId = site.get(SiteModel.ID);
+        Row app = placedOfKind(call, site.get(SiteModel.NAME), input.serverId(), input.kind(), input.settings(), null);
+        appStepDone(call, input.kind(), app);
+        int appId = app.get(InstanceModel.ID);
+        String[] folder = new String[1];
+        InstanceTemplates.completeOrDestroy(appId, () -> {
+            firstRelease(call, appId);
+            folder[0] = pointSiteAt(call, siteId, appId);
+        });
+        call.attachSubject(InstanceOperations.INSTANCE, app);
+        call.reportOutcome(folder[0] == null ? HohenheimMicrocopy.SITE_REPOSITORY.of("repository_outcome")
+            : HohenheimMicrocopy.SITE_REPOSITORY.of("repository_outcome_folder").withArg("folder", folder[0]));
+        return appId;
+    }
+
+    /** The app's first deploy, through the deploy funnel; a refused or failed one is the run's words. */
+    private static void firstRelease(@NonNull OperationCall<?, ?> call, int appId) {
+        try {
+            new InstanceService().deploy(appId, DeployTrigger.MANUAL);
+        } catch (Violations refused) {
+            throw refusedAs("release", refused);
+        }
+        call.reportStepDone(HohenheimMicrocopy.SITE_REPOSITORY.of("done_release"));
+    }
+
+    /**
+     * Points the site at the app through the site's own update writer, patching only the upstream kind, the instance
+     * link and the upstream settings (the instance kind's defaults: the app's single publication); its name,
+     * addresses, certificates, access list, sign-in provider, protected paths and redirects stay as they are.
+     *
+     * AIDEV-NOTE: the update runs in a transaction opened here, so its command JOINS this run's command, which already
+     * holds the site's subject lease; outside one it would ask that same lease as a command of its own and wait on
+     * this very run. The site is read again in it: one trashed or pointed elsewhere during the build is refused, and
+     * the history fact naming the folder it served commits with the switch or not at all.
+     *
+     * @return the folder the site served until now, null when it named none
+     * @throws DomainRefusal when the site is gone or no longer serves files
+     */
+    private static @Nullable String pointSiteAt(@NonNull OperationCall<Row, ?> call, int siteId, int appId) {
+        AccessContext operator = Objects.requireNonNull(call.access(), "an operator asked for it");
+        String[] folder = new String[1];
+        try {
+            Models.get(SiteModel.class).getResolvedDatasource().withTransaction(transaction -> {
+                Row site = Models.get(SiteModel.class).findById(siteId);
+                if (site == null || !SiteOperationHandlers.live(site)
+                        || !StaticUpstreamKind.ID.toString().equals(site.get(SiteModel.UPSTREAM_KIND))) {
+                    throw new DomainRefusal(ZenitRefusalReason.STALE, "site " + siteId + " no longer serves files");
+                }
+                Map<String, Object> served = RawValues.mapOrNull(site.get(SiteModel.SETTINGS));
+                folder[0] = served == null ? null
+                    : Texts.trimmedOrNull(served.get(StaticUpstreamKind.ROOT_PATH.getName()));
+                Map<String, Object> patch = new LinkedHashMap<>();
+                patch.put(SiteModel.UPSTREAM_KIND.getName(), InstanceUpstreamKind.ID.toString());
+                patch.put(SiteModel.INSTANCE_ID.getName(), appId);
+                patch.put(SiteModel.SETTINGS.getName(), Map.of());
+                OperationPipeline.invoke(OperationRequest.of(SiteWrites.UPDATE, call.surface()).caller(operator)
+                    .subjects(List.of(site)).patch(patch));
+                History.event(Models.get(SiteModel.class), siteId, folder[0] == null
+                    ? Change.fact(HohenheimActivityAction.REPOSITORY_DEPLOYED)
+                    : Change.fact(HohenheimActivityAction.REPOSITORY_DEPLOYED,
+                        Map.of(HohenheimActivityAction.PATH_KEY, folder[0])));
+            });
+        } catch (Violations refused) {
+            throw refusedAs("website", refused);
+        }
+        call.reportStepDone(HohenheimMicrocopy.SITE_REPOSITORY.of("done_switch"));
+        return folder[0];
     }
 
     /**

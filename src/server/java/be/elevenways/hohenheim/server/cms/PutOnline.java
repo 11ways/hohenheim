@@ -19,6 +19,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.tls.HostnameReach;
@@ -218,6 +219,15 @@ public final class PutOnline {
         OperationSteps.step("live", HohenheimMicrocopy.PUT_ONLINE.of("run_live")))
         .inJourneyAfterItsForm(BEFORE_FORM, STEP_LIVE)
         .titled(titleFrom(InstanceTemplateOperations.NAME.getName()));
+
+    /**
+     * The run's steps when a site serving a folder is deployed from a repository instead: the Static site app, its
+     * first serving release, then the site pointed at it.
+     */
+    private static final OperationSteps REPOSITORY_STEPS = OperationSteps.of(
+        OperationSteps.step("app", HohenheimMicrocopy.PUT_ONLINE.of("run_app")),
+        OperationSteps.step("release", HohenheimMicrocopy.SITE_REPOSITORY.of("run_release")),
+        OperationSteps.step("switch", HohenheimMicrocopy.SITE_REPOSITORY.of("run_switch")));
 
     /** What one port of a kind-led service is for; Other names it with {@link #PORT_NAME}. */
     public static final StringField PORT_PURPOSE = StringField.builder("purpose")
@@ -447,6 +457,22 @@ public final class PutOnline {
         .build();
 
     /**
+     * A site's repository deploy: the Static site kind's own settings, as the kind-led website flow asks them, and the
+     * host pick that flow asks for every kind; no name and no address, since the app takes the site's name and the
+     * site keeps its own addresses.
+     *
+     * AIDEV-NOTE: the kind is an entry like {@link #WORKLOAD_INPUT}'s, so the settings derive from it and the host pick
+     * judges it, through the same entries; the site's placement fixes it to the Static site kind (SiteActions) and the
+     * authorizer refuses any other (PutOnlineHandlers.admitRepository), so no surface makes another kind this way.
+     */
+    private static final FormSpec REPOSITORY_INPUT = FormSpec.builder()
+        .add(declaredHostPick())
+        .add(InstanceModel.KIND)
+        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.SETTINGS))
+        .section(RUNS_ON_HOST)
+        .build();
+
+    /**
      * What the HTTPS step answered: the certificate choice, an uploaded chain and key, and the access list.
      *
      * @param choice        null for a value the vocabulary does not know (the select refuses it first)
@@ -557,6 +583,11 @@ public final class PutOnline {
     public record WorkloadService(@Nullable String name, @Nullable Integer serverId, @Nullable String kind,
                                   @Nullable Map<String, Object> settings, @NonNull List<Map<String, Object>> ports,
                                   @Nullable String game_address) {
+    }
+
+    /** A site's repository deploy: the host (null: placement picks), the kind (only Static site) and its settings. */
+    public record FromRepository(@Nullable Integer serverId, @Nullable String kind,
+                                 @Nullable Map<String, Object> settings) {
     }
 
     /** Puts one template online: the app, its address, its certificate, then the first deploy. */
@@ -705,6 +736,28 @@ public final class PutOnline {
             .facts(OperationFact.REACHES_OUTSIDE)
             .command(CmsCommands.EXTERNAL)
             .background(WORKLOAD_SERVICE_STEPS)
+            .register();
+
+    /**
+     * Deploys a site that serves a folder from a repository: a Static site app is made from it and released, and only
+     * once that release serves is the site pointed at it, keeping its addresses and protection. Its result is the
+     * app's id.
+     */
+    public static final Operation<Row, FromRepository, Integer> DEPLOY_FROM_REPOSITORY =
+        Operation.declare(HohenheimIds.id("site_deploy_from_repository"))
+            .label(HohenheimMicrocopy.SITE_REPOSITORY.of("deploy_from_repository"))
+            .happened(HohenheimMicrocopy.SITE_REPOSITORY.of("deploy_from_repository_happened"))
+            .icon(Icon.of("code-branch"))
+            .one(SiteOperations.SITE)
+            .gate(OperationGate.open())
+            .input(OperationInput.of(REPOSITORY_INPUT, FromRepository.class, values -> new FromRepository(
+                values.get(InstanceTemplateOperations.SERVER_ID), values.get(InstanceModel.KIND),
+                RawValues.mapOrNull(values.get(InstanceModel.SETTINGS.getName())))))
+            .result(Integer.class)
+            .rateLimit(HohenheimEndpoints.INSTANCE_CREATE_LIMIT)
+            .facts(OperationFact.REACHES_OUTSIDE)
+            .command(OperationCommand.perSubject().execution(CommandExecution.OUTSIDE_TRANSACTION))
+            .background(REPOSITORY_STEPS)
             .register();
 
     private PutOnline() {

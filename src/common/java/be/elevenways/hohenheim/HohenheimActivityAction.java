@@ -120,6 +120,8 @@ public enum HohenheimActivityAction implements ActivityAction {
     ENABLED("enabled"),
     DISABLED("disabled"),
     CLONED("cloned"),
+    /** A site that served a folder now serves an app deployed from a repository; the detail is the folder it served. */
+    REPOSITORY_DEPLOYED("repository_deployed"),
     QUARANTINE_LIFTED("quarantine_lifted"),
     HTTPS_FORCED("https_forced"),
 
@@ -462,6 +464,7 @@ public enum HohenheimActivityAction implements ActivityAction {
                 FactShape.key(RUN_USER_KEY, CoreTypes.TEXT), FactShape.key(CLOSED_BY_KEY, CoreTypes.TEXT));
             case DISABLED -> FactShape.of(FactShape.optionalKey(STRANDED_KEY, CoreTypes.BOOLEAN));
             case CLONED -> FactShape.of(FactShape.key(ORIGINAL_KEY, FactShape.RECORD));
+            case REPOSITORY_DEPLOYED -> FactShape.of(FactShape.optionalKey(PATH_KEY, CoreTypes.TEXT));
             case MOVE_SHARED, DYNDNS_TOKEN_MINTED, DYNDNS_TOKEN_REVOKED, ROLLED_BACK, VOLUMES_PURGED, TESTED, APPROVED,
                  UNAPPROVED, BACKUP_DOWNLOADED, APP_UPDATED, ENABLED, HTTPS_FORCED, ADMISSION_CORDONED,
                  ADMISSION_UNCORDONED, ADMISSION_ADMITTED, FORCED -> FactShape.NONE;
@@ -513,7 +516,8 @@ public enum HohenheimActivityAction implements ActivityAction {
             case DEPLOYED, STOPPED, ROLLED_BACK -> List.of(InstanceModel.MODEL_ID, StackModel.MODEL_ID);
             case VOLUMES_PURGED -> List.of(StackModel.MODEL_ID);
             case VARIABLE_SET, VARIABLE_DELETED -> List.of(InstanceModel.MODEL_ID, EnvironmentModel.MODEL_ID);
-            case DOMAIN_ADDED, DOMAIN_REMOVED, ENABLED, DISABLED, CLONED, SITE_SIGNED_IN -> List.of(SiteModel.MODEL_ID);
+            case DOMAIN_ADDED, DOMAIN_REMOVED, ENABLED, DISABLED, CLONED, REPOSITORY_DEPLOYED, SITE_SIGNED_IN ->
+                List.of(SiteModel.MODEL_ID);
             case TESTED -> List.of(NotificationChannelModel.MODEL_ID);
             case APPROVED, UNAPPROVED -> List.of(InstanceTemplateModel.MODEL_ID);
             case QUARANTINE_LIFTED -> List.of(ReleasedRouteClaimModel.MODEL_ID);

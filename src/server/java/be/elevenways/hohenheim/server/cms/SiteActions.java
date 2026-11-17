@@ -3,6 +3,8 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.instance.StaticSiteKind;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.site.ProtectPath;
@@ -67,8 +69,8 @@ final class SiteActions {
     static @NonNull List<PanelAction<Row>> operator() {
         return List.of(openSiteAction(OPEN_SITE, AppHealth::openSites, SiteModel.ID), enableAction(),
             disableAction(), cloneAction(),
-            rollbackAction(), protectPathAction(), fixHttpsAction(), stopForcingHttpsAction(), addAddressAction(),
-            fixProtectionAction(), changeConfigurationAction());
+            rollbackAction(), deployFromRepositoryAction(), protectPathAction(), fixHttpsAction(),
+            stopForcingHttpsAction(), addAddressAction(), fixProtectionAction(), changeConfigurationAction());
     }
 
     /**
@@ -290,6 +292,23 @@ final class SiteActions {
             .description(HohenheimMicrocopy.SITE.of("rollback_hint"))
             .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.SITE.of("rollback"),
                 HohenheimMicrocopy.SITE.of("rollback_confirm"), ActionStyle.DESTRUCTIVE))
+            .build();
+    }
+
+    /**
+     * Deploy a site that serves a folder from a repository: the Static site kind's own settings in a sheet, a
+     * background run that builds and releases the app before the site is pointed at it, and once it ended well the
+     * app's Deploys tab, where every later push shows. The kind is fixed, never asked.
+     */
+    private static @NonNull PanelAction<Row> deployFromRepositoryAction() {
+        return PanelAction.<Row, Integer>placesRun(PutOnline.DEPLOY_FROM_REPOSITORY, ActionPlacement.ROW)
+            .finishedRunOpens(Row.class, InstanceDeploymentsPage::tabOf)
+            .inlineInRow(false)
+            .inSheet()
+            .fixed((site, request) -> Map.of(InstanceModel.KIND.getName(), StaticSiteKind.ID.toString()))
+            .description(HohenheimMicrocopy.SITE_REPOSITORY.of("deploy_from_repository_description"))
+            .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.SITE_REPOSITORY.of("deploy_from_repository"),
+                HohenheimMicrocopy.SITE_REPOSITORY.of("deploy_from_repository_description"), ActionStyle.PRIMARY))
             .build();
     }
 }

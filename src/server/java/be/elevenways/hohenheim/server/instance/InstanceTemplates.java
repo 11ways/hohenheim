@@ -430,7 +430,7 @@ public final class InstanceTemplates {
      * to avoid. A destroy that itself fails is logged BESIDE the original refusal rather
      * than replacing it -- the operator must read what the create refused.
      */
-    private static void completeOrDestroy(int instanceId, @NonNull Runnable work) {
+    public static void completeOrDestroy(int instanceId, @NonNull Runnable work) {
         try {
             work.run();
         } catch (RuntimeException | Error refused) {

@@ -19492,5 +19492,32 @@
   "dump_restore_in_place_confirm_generic": {"text": "A fresh backup of the database is taken first; then its contents are replaced with this backup.", "scope": "database_dump"},
   "dump_restore_in_place_confirm": {"text": "A fresh backup of {$name} is taken first; then its contents are replaced with the backup from {$at}.", "scope": "database_dump"},
   "dump_restored_in_place": {"text": "Restored {$name}; the backup taken just before is the one from {$before}", "scope": "database_dump"},
-  "dump_delete": {"text": "Delete", "scope": "database_dump"}
+  "dump_delete": {"text": "Delete", "scope": "database_dump"},
+  "deploy_from_repository": {"text": "Deploy from a repository", "scope": "site_repository"},
+  "deploy_from_repository_description": {"text": "Hohenheim builds the repository and serves it; this site keeps its addresses and protection; every push deploys.", "scope": "site_repository"},
+  "deploy_from_repository_happened": {"text": "{$actor} deployed {$subject} from a repository", "scope": "site_repository"},
+  "run_release": {"text": "Build and serve it", "scope": "site_repository"},
+  "run_switch": {"text": "Point this site at it", "scope": "site_repository"},
+  "done_release": {"text": "Its first release serves", "scope": "site_repository"},
+  "done_switch": {"text": "This site now serves the app", "scope": "site_repository"},
+  "repository_outcome": {"text": "This site now serves the app built from the repository. Every push deploys.", "scope": "site_repository"},
+  "repository_outcome_folder": {"text": "This site now serves the app built from the repository. It served the folder {$folder} before; that folder is still on disk.", "scope": "site_repository"},
+  "repository_deployed": [
+    {
+      "text": "Deployed from a repository",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": "Deployed from a repository; it served the folder {$path} before",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_path": "true"
+    },
+    {
+      "text": "{$actor} deployed {$subject} from a repository",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ]
 }

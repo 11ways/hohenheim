@@ -233,7 +233,7 @@ public final class SiteOperationHandlers {
      * A trashed site takes none of these: it routes nothing until a restore, which runs its own route checks, so an
      * enable there would bypass them and a clone or rollback of it would act on a record the panels hide.
      */
-    private static boolean live(@NonNull Row site) {
+    static boolean live(@NonNull Row site) {
         return !SiteModel.SOFT_DELETE.isTrashed(site);
     }
 
@@ -241,7 +241,7 @@ public final class SiteOperationHandlers {
         return Boolean.TRUE.equals(site.get(SiteModel.ENABLED));
     }
 
-    private static <I> @NonNull Authorizer<Row, I> reachesSite() {
+    static <I> @NonNull Authorizer<Row, I> reachesSite() {
         return (site, input, access) -> HohenheimAccess.reachesRecord(access, SiteModel.MODEL_ID,
             site.get(SiteModel.ID), HohenheimCapabilities.MANAGE) ? null : concealed(site);
     }
