@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimCapabilities;
+import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Locale;
 import be.elevenways.zenit.auth.cms.SubjectTag;
@@ -213,6 +215,86 @@ class InstanceInviteJourneyTest extends HohenheimTestBase {
                     RecordGrantModel.SUBJECT_ID.eq(account.get(UserModel.ID)));
                 HardDeletes.row(Models.get(UserModel.class), account);
             }
+            HardDeletes.byId(Models.get(InstanceModel.class), vmId);
+        }
+    }
+
+    @Test
+    void oneInviteGivesTheMachineAndTheAccessListGuardingIt() throws Exception {
+        String invitee = PREFIX + "guarded@example.com";
+        List<String> mailed = new CopyOnWriteArrayList<>();
+        AuthMail.Sender previousSender = AuthMail.SENDER.require();
+        String previousBase = ServerSettings.VALUES.getValue(ServerSettings.Network.MAIN_URL);
+        ServerSettings.VALUES.setValue(ServerSettings.Network.MAIN_URL, this.baseUrl());
+        AuthMail.SENDER.install(new InvitationCapture(mailed));
+        Model lists = Models.get(AccessListModel.class);
+        Row list = lists.createEmptyRow();
+        Model sites = Models.get(SiteModel.class);
+        Row site = sites.createEmptyRow();
+        Integer vmId = null;
+        try {
+            vmId = vm();
+            list.set(AccessListModel.NAME, PREFIX + "lab list");
+            list.set(AccessListModel.SATISFY, AccessListModel.SATISFY_ANY);
+            lists.save(list);
+            int listId = list.get(AccessListModel.ID);
+            site.set(SiteModel.NAME, PREFIX + "site");
+            site.set(SiteModel.SLUG, PREFIX + "site");
+            site.set(SiteModel.UPSTREAM_KIND, "hohenheim:instance");
+            site.set(SiteModel.ENABLED, false);
+            site.set(SiteModel.INSTANCE_ID, vmId);
+            site.set(SiteModel.ACCESS_LIST_ID, listId);
+            sites.save(site);
+            int siteId = site.get(SiteModel.ID);
+            String box = "[data-sharing-invite-companion='" + AccessListModel.MODEL_ID + "#" + listId + "']";
+
+            // 1. The machine's Access tab offers the access list guarding it, by name, unticked, under the form's
+            //    access.
+            navigateToApp("/admin/instances/" + vmId + "/page/access");
+            page.waitForSelector(box);
+            // innerText, the words a person reads: the legend also carries its required word, hidden while optional.
+            assertThat(page.locator("[data-sharing-invite-companions] pl-fieldset-legend").innerText().trim())
+                .as("step 1: under one heading").isEqualTo("Also give access to what guards this app");
+            assertThat(page.locator(box + " pl-label").innerText().trim()).as("step 1: the list by its name")
+                .isEqualTo("Access list " + PREFIX + "lab list: add and change who gets in");
+            assertThat(page.locator(box + " pl-checkbox[checked]").count()).as("step 1: unticked").isZero();
+
+            // 2. Inviting an address with the list ticked gives the new account the machine and manage on the list.
+            page.fill("[data-sharing-invite-form] pl-input[name='email'] input", invitee);
+            page.locator(box + " pl-checkbox button").click();
+            page.waitForSelector(box + " pl-checkbox[checked]");
+            submitSharing(AuthEndpoints.POST_SHARING_INVITE, "[data-sharing-invite-form] pl-button[type='submit']",
+                "Invitation sent to " + invitee);
+            page.waitForCondition(() -> mailed.size() == 1);
+            UUID personId = accountId(invitee);
+            AccessContext tenant = AccessContext.of(TenantConduits.stubFor(new UserPrincipal(personId, "Guarded")));
+            assertThat(reaches(personId, vmId)).as("step 2: the machine's chosen access holds").isTrue();
+            assertThat(HohenheimAccess.reachesRecord(tenant, AccessListModel.MODEL_ID, listId,
+                HohenheimCapabilities.MANAGE)).as("step 2: THE ASSERTION -- and manage on the list").isTrue();
+
+            // 3. Nothing on the site beyond what the machine's grant carries: no grant of its own, no site manage,
+            //    and the site reads through the machine. The per-record walk answers the hop; the set-wise
+            //    HohenheimAccess.reachesRecord lists only records holding a grant row of their own, so it never sees
+            //    a site reached through its app.
+            assertThat(Models.get(RecordGrantModel.class).find()
+                .where(RecordGrantModel.SUBJECT_ID.eq(personId))
+                .and(RecordGrantModel.MODEL.eq(SiteModel.MODEL_ID.toString())).all())
+                .as("step 3: no grant on the site").isEmpty();
+            assertThat(tenant.hasCapability(SiteModel.MODEL_ID, siteId, HohenheimCapabilities.MANAGE))
+                .as("step 3: never site manage").isFalse();
+            assertThat(tenant.hasCapability(SiteModel.MODEL_ID, siteId, HohenheimCapabilities.VIEW))
+                .as("step 3: the site reads through the machine").isTrue();
+        } finally {
+            AuthMail.SENDER.install(previousSender);
+            ServerSettings.VALUES.setValue(ServerSettings.Network.MAIN_URL, previousBase);
+            Row account = Models.get(UserModel.class).findFirst(UserModel.EMAIL, invitee);
+            if (account != null) {
+                HardDeletes.where(Models.get(RecordGrantModel.class),
+                    RecordGrantModel.SUBJECT_ID.eq(account.get(UserModel.ID)));
+                HardDeletes.row(Models.get(UserModel.class), account);
+            }
+            HardDeletes.byId(sites, site.get(SiteModel.ID));
+            HardDeletes.byId(lists, list.get(AccessListModel.ID));
             HardDeletes.byId(Models.get(InstanceModel.class), vmId);
         }
     }

@@ -18393,6 +18393,9 @@
     "text": "de regels en wie erdoor mag",
     "scope": "capability"
   },
+  "companion": {"text": "Toegangslijst {$name}: toevoegen en wijzigen wie erin mag", "scope": "access_list"},
+  "companions_app": {"text": "Geef ook toegang tot wat deze app bewaakt", "scope": "access_list"},
+  "companions_site": {"text": "Geef ook toegang tot wat deze site bewaakt", "scope": "access_list"},
   "view_description": {
     "text": "bekijken, niets wijzigen",
     "scope": "capability"

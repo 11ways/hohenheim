@@ -13,12 +13,22 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
+import be.elevenways.hohenheim.server.cms.SiteGuards;
 import be.elevenways.zenit.auth.server.GrantableModel;
+import be.elevenways.zenit.auth.server.RecordCompanion;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.KnownCapabilities;
 import be.elevenways.zenit.common.security.KnownCapability;
 import be.elevenways.zenit.common.security.RecordCapabilityRules;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static be.elevenways.hohenheim.HohenheimCapabilities.BACKUPS;
@@ -76,7 +86,11 @@ final class HohenheimGrantPolicy {
         // whose find hook hides a trashed row from the presence-only default both the
         // grant path and the sweep read -- so the default IS the liveness rule. Instances
         // (below) follow the same reasoning.
-        RecordGrants.declareGrantable(GrantableModel.of(SiteModel.MODEL_ID));
+        // A person given a site usually needs the access lists guarding it too: the invite offers them, each its own
+        // grant of manage on its own list (never site manage, decision 2026-10-15).
+        RecordGrants.declareGrantable(GrantableModel.of(SiteModel.MODEL_ID).accompaniedBy(
+            HohenheimMicrocopy.ACCESS_LIST.of("companions_site"),
+            id -> guardingLists(SiteGuards.accessListsOfSite((Integer) id))));
         KnownCapabilities.register(SiteModel.MODEL_ID,
             KnownCapability.of(MANAGE)
                 .label(HohenheimMicrocopy.CAPABILITY.of("manage"))
@@ -183,7 +197,9 @@ final class HohenheimGrantPolicy {
         // exec cannot be listed as an implier at all: it is ADMIN, and KnownCapability
         // refuses ADMIN + impliedBy structurally. "manage does not imply exec" is thus an
         // invariant of the mechanism, not a line someone could edit here by accident.
-        RecordGrants.declareGrantable(GrantableModel.of(InstanceModel.MODEL_ID));
+        RecordGrants.declareGrantable(GrantableModel.of(InstanceModel.MODEL_ID).accompaniedBy(
+            HohenheimMicrocopy.ACCESS_LIST.of("companions_app"),
+            id -> guardingLists(SiteGuards.accessListsOfApp((Integer) id))));
         KnownCapabilities.register(InstanceModel.MODEL_ID,
             KnownCapability.of(MANAGE)
                 .label(HohenheimMicrocopy.CAPABILITY.of("manage"))
@@ -429,5 +445,28 @@ final class HohenheimGrantPolicy {
                 // The requester IS the owner: the (id, kind) pair renewal re-decides authority
                 // against every sweep.
                 .ownedBy(CertificateModel.REQUESTER));
+    }
+
+    /**
+     * The access lists guarding a record as its invite offers them: each with manage, named by the list's name; a
+     * list whose row is gone is left out.
+     */
+    private static @NonNull List<RecordCompanion> guardingLists(@NonNull List<Integer> listIds) {
+        List<RecordCompanion> companions = new ArrayList<>(listIds.size());
+        if (listIds.isEmpty()) {
+            return companions;
+        }
+        Map<Integer, String> names = new HashMap<>();
+        for (Row list : Models.get(AccessListModel.class).find().where(AccessListModel.ID.in(listIds)).all()) {
+            names.put(list.get(AccessListModel.ID), list.get(AccessListModel.NAME));
+        }
+        for (Integer listId : listIds) {
+            if (names.containsKey(listId)) {
+                String name = Objects.requireNonNullElse(names.get(listId), String.valueOf(listId));
+                companions.add(new RecordCompanion(AccessListModel.MODEL_ID, listId, MANAGE,
+                    HohenheimMicrocopy.ACCESS_LIST.of("companion").withArg("name", name)));
+            }
+        }
+        return companions;
     }
 }

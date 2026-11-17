@@ -18393,6 +18393,9 @@
     "text": "its rules and who it lets in",
     "scope": "capability"
   },
+  "companion": {"text": "Access list {$name}: add and change who gets in", "scope": "access_list"},
+  "companions_app": {"text": "Also give access to what guards this app", "scope": "access_list"},
+  "companions_site": {"text": "Also give access to what guards this site", "scope": "access_list"},
   "view_description": {
     "text": "see it, change nothing",
     "scope": "capability"
