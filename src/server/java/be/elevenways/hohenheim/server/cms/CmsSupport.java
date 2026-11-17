@@ -23,9 +23,14 @@ import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.ActivitySources;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
+import be.elevenways.zenit.cms.server.panel.PanelGate;
+import be.elevenways.zenit.cms.server.panel.PartsReads;
+import be.elevenways.zenit.cms.server.panel.RecordTabGate;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.EnumField;
@@ -377,5 +382,27 @@ public final class CmsSupport {
                                                                 @NonNull AccessContext access) {
         PanelResource<Row> entry = declaredRowEntry(panel, slug);
         return entry != null && panel.admits(entry, access) ? entry : null;
+    }
+
+    /**
+     * Whether this viewer may follow a door to a record of another entry of the panel rendering this page: that
+     * entry's read reaches the record (the scope a tenant's grants draw), and the tab, when one is named, is open for
+     * it. A door that would answer "page not found" is not drawn: a tenant granted the instance alone reads the
+     * addresses of the site serving it, but neither the site nor its domains are theirs to open.
+     *
+     * @param tab the record tab the door opens, null for the record itself
+     */
+    static boolean opens(@NonNull AccessContext access, @NonNull String entrySlug, @Nullable Object key,
+                         @Nullable String tab) {
+        Conduit conduit = access.conduit();
+        Panel panel = key == null || conduit == null ? null : PanelRegistry.getBySlug(panelSlug(conduit));
+        PanelResource<Row> entry = panel == null ? null : declaredRowEntry(panel, entrySlug);
+        if (entry == null || !panel.admits(entry, access)) {
+            return false;
+        }
+        PanelRequest request = PanelGate.request(panel, access);
+        Row record = PartsReads.loadRow(request, entry, key, access);
+        return record != null && (tab == null
+            || RecordTabGate.judge(request, entry, record, tab) instanceof RecordTabGate.Verdict.Open<Row>);
     }
 }

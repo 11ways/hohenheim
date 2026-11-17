@@ -58,15 +58,18 @@ class AccessPagesJourneyTest extends HohenheimHttpTestBase {
         assertThat(lists).as("step 1: a list nothing uses says so").contains("No rules yet")
             .contains("Nothing yet");
 
-        // 2. A list's rules tab names every place it protects: a whole app, or one path on an app.
+        // 2. A list's rules tab names every place it guards in one line: a whole app, or one path on an app, each
+        //    leading to its app.
         HttpResponse<String> rules = adminGet("/admin/access-lists/" + staff + "/page/rules");
         assertThat(rules.statusCode()).as("step 2: the rules tab renders").isEqualTo(200);
-        assertThat(rules.body()).as("step 2: the whole wiki is protected").contains("Everything on wiki-" + suffix);
-        assertThat(rules.body()).as("step 2: one path on the shop").contains("/wp-admin on shop-" + suffix);
+        String guards = rendered(rules.body());
+        assertThat(guards).as("step 2: the whole wiki is guarded, leading to it")
+            .contains("/admin/sites/" + wiki.get(SiteModel.ID)).contains("wiki-" + suffix).contains("(whole app)");
+        assertThat(guards).as("step 2: one path on the shop").contains("/wp-admin on shop-" + suffix);
 
-        // 3. A list nothing uses says how to put it to use.
+        // 3. A list nothing uses says so.
         assertThat(adminGet("/admin/access-lists/" + unused + "/page/rules").body())
-            .as("step 3: an unused list says nothing uses it").contains("Nothing uses this list yet");
+            .as("step 3: an unused list says nothing uses it").contains("Guards nothing yet.");
 
         // 4. The lists page says what a list is for, and makes a list through its one header action: no quick-add bar
         //    beside the search.

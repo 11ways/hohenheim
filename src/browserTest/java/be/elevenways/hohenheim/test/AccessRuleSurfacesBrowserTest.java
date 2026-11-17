@@ -41,6 +41,8 @@ import static be.elevenways.hohenheim.HohenheimSlugs.MANAGE;
  * first, a middle and a last sibling, and a lone child), both toggle directions and a rule of a list the tenant does
  * not manage. A failing comparison is a changed surface, never a file to refresh; an accepted difference is declared
  * as a move.
+ * The one stored line added since is the group's "Add inside" (hohenheim:access_rule_add_inside), which replaced the
+ * Rules tab's hand-written add form; a leaf is not offered it.
  */
 class AccessRuleSurfacesBrowserTest extends HohenheimTestBase {
 

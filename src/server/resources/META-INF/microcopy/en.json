@@ -11725,10 +11725,6 @@
       "scope": "preview_status"
     }
   ],
-  "root_group": {
-    "text": "The list itself (top level)",
-    "scope": "access_rule"
-  },
   "root_any": {
     "text": "A request is allowed as soon as ONE of these rules passes.",
     "scope": "access_rule"
@@ -11737,36 +11733,28 @@
     "text": "A request is allowed only when EVERY one of these rules passes.",
     "scope": "access_rule"
   },
-  "group_at": {
-    "text": "Group {$path}",
-    "scope": "access_rule"
-  },
   "add_title": {
-    "text": "Add a rule",
+    "text": "Add a rule to {$list}",
     "scope": "access_rule"
   },
-  "add_description": {
-    "text": "Choose which group the rule joins and what it checks.",
+  "add_lead": {
+    "text": "It counts from the moment you add it.",
     "scope": "access_rule"
   },
-  "add_parent": {
+  "add_inside": {
     "text": "Add inside",
     "scope": "access_rule"
   },
-  "add_type": {
-    "text": "Rule type",
+  "add_inside_title": {
+    "text": "Add a rule inside this group",
     "scope": "access_rule"
   },
   "add_action": {
     "text": "Add rule",
     "scope": "access_rule"
   },
-  "add_disabled_note": {
-    "text": "A new rule starts switched off, so traffic keeps flowing until you have filled it in and switched it on. A new group starts on, because an empty group gates nothing.",
-    "scope": "access_rule"
-  },
-  "added_group": {
-    "text": "Group added",
+  "added": {
+    "text": "Rule added",
     "scope": "access_rule"
   },
   "unknown_type": {
@@ -16484,6 +16472,8 @@
   ],
   "test_channel": { "text": "{$actor} sent a test through {$subject}", "scope": "hohenheim", "target": "happened" },
   "test_backup_target": { "text": "{$actor} tested the connection to {$subject}", "scope": "hohenheim", "target": "happened" },
+  "access_rule_add": { "text": "{$actor} added a rule to {$subject}", "scope": "hohenheim", "target": "happened" },
+  "access_rule_add_inside": { "text": "{$actor} added a rule inside {$subject}", "scope": "hohenheim", "target": "happened" },
   "access_rule_toggle": { "text": "{$actor} switched rule {$subject} on or off", "scope": "hohenheim", "target": "happened" },
   "delete_access_rule": { "text": "{$actor} deleted rule {$subject}", "scope": "hohenheim", "target": "happened" },
   "delete_project": { "text": "{$actor} deleted project {$subject}", "scope": "hohenheim", "target": "happened" },
@@ -17022,16 +17012,20 @@
     "text": ".match {$count :integer}\none {{1 place}}\n* {{{$count :integer} places}}",
     "scope": "access_list"
   },
-  "protects_site": {
-    "text": "Everything on {$site}",
+  "guards": {
+    "text": "Guards",
+    "scope": "access_list"
+  },
+  "guards_whole_app": {
+    "text": "(whole app)",
     "scope": "access_list"
   },
   "protects_path": {
     "text": "{$path} on {$site}",
     "scope": "access_list"
   },
-  "protects_none": {
-    "text": "Nothing uses this list yet: attach it to an app, or protect a path with it.",
+  "guards_nothing": {
+    "text": "Guards nothing yet.",
     "scope": "access_list"
   },
   "shared_note": {

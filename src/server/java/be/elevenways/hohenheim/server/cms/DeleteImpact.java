@@ -409,9 +409,10 @@ public final class DeleteImpact {
     /**
      * One place an access list gates: a whole site ({@code path} null), or one protected path on a site.
      *
-     * @param site the site's name (its id when it has none)
+     * @param siteId the site's id, null for a path whose site is gone
+     * @param site   the site's name (its id when it has none)
      */
-    record AccessListUse(@Nullable String path, @NonNull String site) {
+    record AccessListUse(@Nullable String path, @Nullable Integer siteId, @NonNull String site) {
     }
 
     /** @return every place one access list gates: the sites naming it, then the protected paths naming it */
@@ -422,7 +423,7 @@ public final class DeleteImpact {
         }
         for (Row site : sites()) {
             if (accessListId.equals(site.get(SiteModel.ACCESS_LIST_ID))) {
-                uses.add(new AccessListUse(null, siteName(site)));
+                uses.add(new AccessListUse(null, site.get(SiteModel.ID), siteName(site)));
             }
         }
         for (Row path : paths()) {
@@ -432,7 +433,8 @@ public final class DeleteImpact {
                     Integer siteId = path.get(ProtectedPathModel.SITE_ID);
                     Row site = sites().stream().filter(row -> siteId != null && siteId.equals(row.get(SiteModel.ID)))
                         .findFirst().orElse(null);
-                    uses.add(new AccessListUse(pattern, site == null ? String.valueOf(siteId) : siteName(site)));
+                    uses.add(new AccessListUse(pattern, site == null ? null : siteId,
+                        site == null ? String.valueOf(siteId) : siteName(site)));
                 }
             }
         }

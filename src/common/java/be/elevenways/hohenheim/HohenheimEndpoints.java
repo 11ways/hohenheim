@@ -290,38 +290,10 @@ public class HohenheimEndpoints {
         .rateLimit(PROVIDER_BROWSE_LIMIT)
         .build();
 
-    /** The access list whose rule tree a request adds to. */
+    /** The access list an automation API request reads or writes. */
     public static final ParameterDefinition<Integer> ACCESS_LIST_ID = ParameterDefinition.builder(Integer.class)
         .name("accessListId")
         .stringResolver(Integer::parseInt)
-        .build();
-
-    // --- Access-rule creation (POST from the access list's Rules tab) ---
-
-    /**
-     * Adds ONE node to an access list's rule tree. Creation lives here rather than on the
-     * generated create form because a node's PLACE (its list and its parent group) is a
-     * property of the tree the tab is showing, not a field an operator should type.
-     */
-    public static final Endpoint<Object> ACCESS_RULES_ADD = Endpoint.<Object>builder()
-        .identifier(HohenheimIds.id("access_rules_add"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic(HohenheimSlugs.ADMIN).addDelimiter().addStatic(HohenheimSlugs.ACCESS_LISTS).addDelimiter()
-            .addParameter(ACCESS_LIST_ID).addDelimiter().addStatic("rules").build())
-        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
-        .build();
-
-    /**
-     * The delegated twin of {@link #ACCESS_RULES_ADD}: the /manage Rules tab posts here.
-     * The permission is only the panel-eligibility gate; the handler additionally demands
-     * {@code manage} on the LIST, and the model write pipeline (TenantWrites) re-asks it.
-     */
-    public static final Endpoint<Object> MANAGE_ACCESS_RULES_ADD = Endpoint.<Object>builder()
-        .identifier(HohenheimIds.id("manage_access_rules_add"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic(HohenheimSlugs.MANAGE).addDelimiter().addStatic(HohenheimSlugs.ACCESS_LISTS).addDelimiter()
-            .addParameter(ACCESS_LIST_ID).addDelimiter().addStatic("rules").build())
-        .requiresPermission(HohenheimSources.MANAGE_ACCESS)
         .build();
 
     // --- DNS zone-file import (POST for the CMS zone-file tab) ---

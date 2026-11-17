@@ -43,9 +43,9 @@ import java.util.Objects;
  * through it, which is what argon2-hashes a basic-auth password ({@code
  * AccessRuleParts} save hook) -- a raw {@code Model.save} of the same map stores
  * the plaintext, and {@code BasicCredentials.verifyPassword} then fails closed forever.
- * The one direct write left is the rule NODE's birth ({@link AccessRuleNodes}), shared
- * verbatim with the Rules tab, because a rule's place in the tree is not a form field and
- * {@code AccessRuleParts} declares no create.
+ * The one direct write left is the rule NODE's birth ({@link AccessRuleNodes}), the home
+ * the Rules tab's add operations birth through too, because a rule's place in the tree is
+ * not a form field and {@code AccessRuleParts} declares no create.
  *
  * Authorization mirrors the panels exactly, and both panels create access lists: an admin
  * key writes through the admin access-list entry (the operator form, {@code shared}

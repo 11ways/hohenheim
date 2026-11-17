@@ -11725,10 +11725,6 @@
       "scope": "preview_status"
     }
   ],
-  "root_group": {
-    "text": "De lijst zelf (bovenste niveau)",
-    "scope": "access_rule"
-  },
   "root_any": {
     "text": "Een verzoek wordt toegelaten zodra ÉÉN van deze regels slaagt.",
     "scope": "access_rule"
@@ -11737,36 +11733,28 @@
     "text": "Een verzoek wordt alleen toegelaten als ELKE regel slaagt.",
     "scope": "access_rule"
   },
-  "group_at": {
-    "text": "Groep {$path}",
-    "scope": "access_rule"
-  },
   "add_title": {
-    "text": "Regel toevoegen",
+    "text": "Regel toevoegen aan {$list}",
     "scope": "access_rule"
   },
-  "add_description": {
-    "text": "Kies in welke groep de regel komt en wat ze controleert.",
+  "add_lead": {
+    "text": "Ze telt vanaf het moment dat u ze toevoegt.",
     "scope": "access_rule"
   },
-  "add_parent": {
+  "add_inside": {
     "text": "Toevoegen in",
     "scope": "access_rule"
   },
-  "add_type": {
-    "text": "Soort regel",
+  "add_inside_title": {
+    "text": "Regel toevoegen in deze groep",
     "scope": "access_rule"
   },
   "add_action": {
     "text": "Regel toevoegen",
     "scope": "access_rule"
   },
-  "add_disabled_note": {
-    "text": "Een nieuwe regel staat eerst uit, zodat het verkeer blijft doorgaan tot je ze hebt ingevuld en aangezet. Een nieuwe groep staat wel aan, want een lege groep houdt niets tegen.",
-    "scope": "access_rule"
-  },
-  "added_group": {
-    "text": "Groep toegevoegd",
+  "added": {
+    "text": "Regel toegevoegd",
     "scope": "access_rule"
   },
   "unknown_type": {
@@ -16484,6 +16472,8 @@
   ],
   "test_channel": { "text": "{$actor} stuurde een test via {$subject}", "scope": "hohenheim", "target": "happened" },
   "test_backup_target": { "text": "{$actor} testte de verbinding met {$subject}", "scope": "hohenheim", "target": "happened" },
+  "access_rule_add": { "text": "{$actor} voegde een regel toe aan {$subject}", "scope": "hohenheim", "target": "happened" },
+  "access_rule_add_inside": { "text": "{$actor} voegde een regel toe in {$subject}", "scope": "hohenheim", "target": "happened" },
   "access_rule_toggle": { "text": "{$actor} zette regel {$subject} aan of uit", "scope": "hohenheim", "target": "happened" },
   "delete_access_rule": { "text": "{$actor} verwijderde regel {$subject}", "scope": "hohenheim", "target": "happened" },
   "delete_project": { "text": "{$actor} verwijderde project {$subject}", "scope": "hohenheim", "target": "happened" },
@@ -17022,16 +17012,20 @@
     "text": ".match {$count :integer}\none {{1 plaats}}\n* {{{$count :integer} plaatsen}}",
     "scope": "access_list"
   },
-  "protects_site": {
-    "text": "Alles op {$site}",
+  "guards": {
+    "text": "Bewaakt",
+    "scope": "access_list"
+  },
+  "guards_whole_app": {
+    "text": "(hele app)",
     "scope": "access_list"
   },
   "protects_path": {
     "text": "{$path} op {$site}",
     "scope": "access_list"
   },
-  "protects_none": {
-    "text": "Nog niets gebruikt deze lijst: koppel ze aan een app, of bescherm er een pad mee.",
+  "guards_nothing": {
+    "text": "Bewaakt nog niets.",
     "scope": "access_list"
   },
   "shared_note": {

@@ -1,153 +1,234 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimCapabilities;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
+import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.auth.BasicCredentials;
+import be.elevenways.hohenheim.server.cms.AccessRuleParts;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
+import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Authors a NESTED rule tree through the admin UI end to end: add a group, add a rule
- * inside that group, fill it in, switch it on, reorder, and reload to prove the tree that
- * comes back is the one that was built; and separately walks one rule through refusal,
- * draft, enable and both switch states.
+ * Authors a NESTED rule tree through the admin UI end to end, each rule added in ONE step through the add dialog:
+ * a login switched on from the start, a group, rules added inside that group, reordering, the line naming what the
+ * list guards, and who is offered the add at all; and separately walks one rule through refusal, draft, enable and
+ * both switch states.
  */
 class AccessRuleEditorTest extends HohenheimTestBase {
 
+    private static final String DIALOG = ".pl-alertdialog-modal[data-open]";
+    private static final String INPUT_FORM = DIALOG + " form[data-cms-action-input]";
+    private static final String OK = DIALOG + " pl-button[data-cms-confirm-ok]";
+    private static final String ADD_RULE = "[data-access-rule-add] pl-button[data-action-id*='access_rule_add']";
+
     @Test
-    void authorsANestedRuleTreeThroughTheAdminUi() {
-        // 1. A list starts with no rules at all, and says so.
+    void addsARuleInOneStepAndNestsRulesInsideAGroup() throws Exception {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
         Row list = Models.get(AccessListModel.class).createEmptyRow();
-        list.set(AccessListModel.NAME, "Editor journey list");
+        list.set(AccessListModel.NAME, "Editor journey " + suffix);
         list.set(AccessListModel.SATISFY, AccessListModel.SATISFY_ALL);
         Models.get(AccessListModel.class).save(list);
         int listId = list.get(AccessListModel.ID);
         String rulesUrl = "/admin/access-lists/" + listId + "/page/rules";
 
+        // 1. A list starts with no rules, says so, says nothing uses it, and offers ONE "Add rule", in the Rules card:
+        //    no form of the page's own, and no "Add inside" select anywhere.
         navigateToApp(rulesUrl);
         waitForHydration();
         assertThat(page.locator("pl-empty-state").count())
             .as("step 1: a list with no rules shows the empty state").isEqualTo(1);
+        assertThat(page.locator("pl-empty-state").textContent())
+            .as("step 1: which says everyone gets in meanwhile").contains("lets every request through");
         assertThat(page.content())
             .as("step 1: and the root group's mode is stated in words")
             .contains("EVERY one of these rules passes");
+        assertThat(page.locator("[data-access-list-guards]").textContent())
+            .as("step 1: a list nothing uses says so in its one line").contains("Guards nothing yet.");
+        assertThat(page.locator("pl-button[data-action-id*='access_rule_add']").count())
+            .as("step 1: the add is drawn exactly once").isEqualTo(1);
+        assertThat(page.locator(ADD_RULE).count()).as("step 1: in the Rules card's header").isEqualTo(1);
+        assertThat(page.locator("pl-select[name='parent_id'], #add-rule-form").count())
+            .as("step 1: no page form and no parent select").isZero();
 
-        // 2. Add a GROUP at the top level. The type select defaults to it, so this is one
-        //    click on a page that came from the server.
-        page.click("#add-rule-submit");
+        // 2. Add rule opens the dialog titled by the list, on a password rule that is switched on. The dialog draws
+        //    its words in the browser, where they may land after it opens: wait for them, never read the first frame.
+        click(ADD_RULE);
+        page.waitForSelector(INPUT_FORM + " " + field("data.username") + " input");
+        assertContainsText(DIALOG + " pl-alert-dialog-title", "Add a rule to Editor journey " + suffix,
+            "step 2: the dialog names the list");
+        assertContainsText(DIALOG + " pl-alert-dialog-description", "It counts from the moment you add it.",
+            "step 2: and says when the rule counts");
+        assertContainsText(DIALOG + " pl-button[data-cms-confirm-cancel]", "Cancel",
+            "step 2: and offers to cancel");
+        assertThat(page.locator(DIALOG + " pl-select[name='type'] .pl-select-value").textContent())
+            .as("step 2: the kind defaults to a password").contains("Password");
+        assertThat(page.locator(DIALOG + " pl-switch[name='enabled'] > button").getAttribute("aria-checked"))
+            .as("step 2: and the rule is switched on").isEqualTo("true");
+
+        // 3. A blank username is refused IN the dialog, on its field, and nothing is written.
+        click(OK);
+        page.waitForSelector(DIALOG + " " + field("data.username") + " pl-field-error");
+        assertThat(page.locator(DIALOG).count()).as("step 3: the dialog stays open").isEqualTo(1);
+        assertThat(Models.get(AccessRuleModel.class).findForAccessList(listId))
+            .as("step 3: no rule was written").isEmpty();
+
+        // 4. With a username and a password the rule lands at the top, switched ON, its password stored as the hash
+        //    the request-time gate verifies the login against.
+        page.locator(DIALOG + " " + field("data.username") + " input:not([type='hidden'])").fill("matthias");
+        page.locator(DIALOG + " " + field("data.password") + " input:not([type='hidden'])").fill("correct horse");
+        waitForNavigationEnded(() -> click(OK));
+        waitForHidden(DIALOG);
         page.waitForSelector(".hh-rule-row");
-        waitForHydration();
-        assertThat(page.locator(".hh-rule-row").count())
-            .as("step 2: the group is in the tree").isEqualTo(1);
-        assertThat(page.locator(".hh-rule-row[data-rule-type='group']").count())
-            .as("step 2: as a group").isEqualTo(1);
-
-        // 3. Add an ALLOWED NETWORK rule INSIDE that group: pick the group as the parent and
-        //    the type as the rule kind, both through the real selects.
-        navigateToApp(rulesUrl);
-        waitForHydration();
-        chooseOption("parent_id", groupId(listId));
-        chooseOption("type", AccessRuleModel.TYPE_IP_ALLOW);
-        page.click("#add-rule-submit");
-        // A leaf lands on its OWN form, so it can be filled in immediately -- the redirect
-        // the add endpoint answers with.
-        page.waitForURL("**/admin/access-rules/**");
-        waitForHydration();
-        assertThat(Models.get(AccessRuleModel.class).findForAccessList(listId).stream()
-                .map(rule -> rule.get(AccessRuleModel.TYPE) + "/" + rule.get(AccessRuleModel.PARENT_ID))
-                .toList())
-            .as("step 3: the group plus the leaf that was just added INTO it")
-            .containsExactlyInAnyOrder("group/null",
-                AccessRuleModel.TYPE_IP_ALLOW + "/" + groupIdValue(listId));
-        page.waitForSelector("[name='data.network']");
-
-        // 4. Fill the rule in and switch it on. A new leaf is born switched OFF, which is
-        //    what keeps live traffic flowing while it is half-typed.
-        int ruleId = leafId(listId);
-        Row fresh = Models.get(AccessRuleModel.class).findById(ruleId);
-        assertThat((Boolean) fresh.get(AccessRuleModel.ENABLED))
-            .as("step 4: a new leaf starts switched off").isFalse();
-
-        page.fill("pl-input[name='data.network'] input", "10.0.0.0/8");
-        page.click("pl-switch[name='enabled'] button");
-        page.click(".cms-form-actions pl-button[type='submit']");
         page.waitForSelector("pl-toast, .pl-toast");
         waitForHydration();
+        List<Row> added = Models.get(AccessRuleModel.class).findForAccessList(listId);
+        assertThat(added).as("step 4: one rule").hasSize(1);
+        Row login = added.get(0);
+        assertThat((String) login.get(AccessRuleModel.TYPE)).as("step 4: a password rule")
+            .isEqualTo(AccessRuleModel.TYPE_BASIC_AUTH);
+        assertThat((Integer) login.get(AccessRuleModel.PARENT_ID)).as("step 4: at the top of the tree").isNull();
+        assertThat((Boolean) login.get(AccessRuleModel.ENABLED)).as("step 4: switched on from the start").isTrue();
+        String stored = (String) AccessRuleModel.dataOf(login).get(AccessRuleModel.BASIC_AUTH_PASSWORD.getName());
+        assertThat(BasicCredentials.isHashed(stored)).as("step 4: the password is stored as a hash").isTrue();
+        assertThat(BasicCredentials.matchesHeader(basic("matthias", "correct horse"), "matthias", stored, "test"))
+            .as("step 4: the gate's own check accepts the login").isTrue();
+        assertThat(BasicCredentials.matchesHeader(basic("matthias", "wrong"), "matthias", stored, "test"))
+            .as("step 4: and refuses another password").isFalse();
+        assertThat(page.locator(".hh-rule-row .hh-rule-state[data-rule-state='on']").count())
+            .as("step 4: the row says it is on").isEqualTo(1);
+        assertThat(page.content()).as("step 4: the password is nowhere on the page").doesNotContain("correct horse");
 
-        Row saved = Models.get(AccessRuleModel.class).findById(ruleId);
-        assertThat(AccessRuleModel.dataOf(saved).get("network"))
-            .as("step 4: the network reached the per-type data map").isEqualTo("10.0.0.0/8");
-        assertThat((Boolean) saved.get(AccessRuleModel.ENABLED))
-            .as("step 4: and the operator switched it on").isTrue();
-        assertThat((Integer) saved.get(AccessRuleModel.PARENT_ID))
-            .as("step 4: nested inside the group it was added to")
-            .isEqualTo(groupIdValue(listId));
+        // 5. A group, added the same way: the kind is chosen in the dialog.
+        click(ADD_RULE);
+        page.waitForSelector(INPUT_FORM + " " + field("data.username") + " input");
+        chooseOption("type", AccessRuleModel.TYPE_GROUP);
+        waitForNavigationEnded(() -> click(OK));
+        waitForHidden(DIALOG);
+        page.waitForSelector(".hh-rule-row[data-rule-type='group']");
+        waitForHydration();
+        int groupId = groupIdValue(listId);
+        String groupRow = ".hh-rule-row[data-rule-id='" + groupId + "'] ";
+        String addInside = "pl-button[data-action-id*='access_rule_add_inside']";
+        assertThat(page.locator(groupRow + addInside).count())
+            .as("step 5: the group's own row offers Add inside").isEqualTo(1);
+        assertThat(page.locator(".hh-rule-row[data-rule-id='" + login.get(AccessRuleModel.ID) + "'] " + addInside)
+            .count()).as("step 5: a leaf offers none").isZero();
 
-        // 5. Back on the tab, the tree RELOADS as it was built: a group with a child under
-        //    it, the child indented one level and numbered inside its parent.
+        // 6. Add inside lands an allowed network UNDER the group; the tree reloads with it indented and numbered
+        //    inside its parent.
+        addInside(groupRow + addInside, AccessRuleModel.TYPE_IP_ALLOW, "10.0.0.0/8");
+        assertThat(Models.get(AccessRuleModel.class).findChildren(listId, groupId))
+            .as("step 6: the rule landed inside the group").hasSize(1);
         navigateToApp(rulesUrl);
         waitForHydration();
-        assertThat(page.locator(".hh-rule-row").count())
-            .as("step 5: both nodes render").isEqualTo(2);
-        assertThat(page.locator(".hh-rule-row").nth(1).getAttribute("style"))
-            .as("step 5: the child is indented one level").contains("--hh-rule-depth: 1");
-        assertThat(page.locator(".hh-rule-row").nth(1).locator(".hh-rule-path").textContent().trim())
-            .as("step 5: and numbered inside its parent").isEqualTo("1.1");
-        assertThat(page.content())
-            .as("step 5: the rule's own summary reads as what it decides")
+        assertThat(page.locator(".hh-rule-row").count()).as("step 6: three nodes render").isEqualTo(3);
+        assertThat(page.locator(".hh-rule-row").nth(2).getAttribute("style"))
+            .as("step 6: the child is indented one level").contains("--hh-rule-depth: 1");
+        assertThat(page.locator(".hh-rule-row").nth(2).locator(".hh-rule-path").textContent().trim())
+            .as("step 6: and numbered inside its parent").isEqualTo("2.1");
+        assertThat(page.content()).as("step 6: the rule's own summary reads as what it decides")
             .contains("10.0.0.0/8");
         assertThat(page.locator(".hh-rule-row .hh-rule-state[data-rule-state='off']").count())
-            .as("step 5: nothing is left switched off").isZero();
-        assertThat(page.locator(".hh-rule-row .hh-rule-state[data-rule-state='on']").count())
-            .as("step 5: and both nodes SAY they are on, rather than showing nothing")
-            .isEqualTo(2);
+            .as("step 6: nothing is left switched off").isZero();
 
-        // 6. A second leaf inside the same group, and REORDERING within that group.
-        chooseOption("parent_id", groupId(listId));
-        chooseOption("type", AccessRuleModel.TYPE_IP_DENY);
-        page.click("#add-rule-submit");
-        page.waitForURL("**/admin/access-rules/**");
+        // 7. A second rule inside the same group, and REORDERING within that group.
+        addInside(groupRow + addInside, AccessRuleModel.TYPE_IP_DENY, "10.1.0.0/16");
         navigateToApp(rulesUrl);
         waitForHydration();
-        assertThat(page.locator(".hh-rule-row").count())
-            .as("step 6: three nodes now").isEqualTo(3);
-
-        List<Row> siblings = Models.get(AccessRuleModel.class)
-            .findChildren(listId, groupIdValue(listId));
-        assertThat(siblings).as("step 6: both leaves live inside the group").hasSize(2);
+        List<Row> siblings = Models.get(AccessRuleModel.class).findChildren(listId, groupId);
+        assertThat(siblings).as("step 7: both leaves live inside the group").hasSize(2);
         int first = siblings.get(0).get(AccessRuleModel.ID);
-
-        String moveDown = ".hh-rule-row[data-rule-id='" + first + "'] "
-            + "pl-button[data-action-id*='move_down']";
+        String moveDown = ".hh-rule-row[data-rule-id='" + first + "'] pl-button[data-action-id*='move_down']";
         assertThat(page.locator(moveDown).count())
-            .as("step 6: the rule resource's own move action renders on the row").isEqualTo(1);
+            .as("step 7: the rule resource's own move action renders on the row").isEqualTo(1);
         page.click(moveDown);
         page.waitForSelector("pl-toast, .pl-toast");
         waitForHydration();
-
-        List<Row> reordered = Models.get(AccessRuleModel.class)
-            .findChildren(listId, groupIdValue(listId));
-        assertThat((Integer) reordered.get(1).get(AccessRuleModel.ID))
-            .as("step 6: the moved rule is now the second child").isEqualTo(first);
-
-        // 7. And the tree the server renders after all of that is still the tree that was
-        //    authored -- nesting, order and all.
+        assertThat((Integer) Models.get(AccessRuleModel.class).findChildren(listId, groupId).get(1)
+                .get(AccessRuleModel.ID))
+            .as("step 7: the moved rule is now the second child").isEqualTo(first);
         navigateToApp(rulesUrl);
         waitForHydration();
-        assertThat(page.locator(".hh-rule-row").nth(1).locator(".hh-rule-path").textContent().trim())
-            .as("step 7: the first child keeps outline number 1.1").isEqualTo("1.1");
-        assertThat(page.locator(".hh-rule-row").nth(2).locator(".hh-rule-path").textContent().trim())
-            .as("step 7: and the second is 1.2").isEqualTo("1.2");
-        assertThat(page.locator(".hh-rule-row").nth(2).getAttribute("data-rule-id"))
+        assertThat(page.locator(".hh-rule-row").nth(3).locator(".hh-rule-path").textContent().trim())
+            .as("step 7: the second child is 2.2").isEqualTo("2.2");
+        assertThat(page.locator(".hh-rule-row").nth(3).getAttribute("data-rule-id"))
             .as("step 7: which is the rule that was moved down").isEqualTo(String.valueOf(first));
+
+        // 8. Once an app uses the list, its one line names the app and leads to it.
+        int siteId = site("rules-journey-" + suffix);
+        int panelSiteId = site("rules-journey-panel-" + suffix);
+        UUID managerId = ApiSupport.user("rules-manager-" + suffix + "@hohenheim.local", "Rules Manager");
+        UUID outsiderId = ApiSupport.user("rules-outsider-" + suffix + "@hohenheim.local", "Rules Outsider");
+        try {
+            Row site = Models.get(SiteModel.class).findById(siteId);
+            site.set(SiteModel.ACCESS_LIST_ID, listId);
+            Models.get(SiteModel.class).save(site);
+            navigateToApp(rulesUrl);
+            waitForHydration();
+            String use = "[data-access-list-guards] [data-access-list-use]";
+            assertThat(page.locator("[data-access-list-guards]").textContent())
+                .as("step 8: the line names the app as a whole")
+                .contains("Guards rules-journey-" + suffix + " (whole app).");
+            assertThat(page.locator(use + " a").textContent().trim())
+                .as("step 8: the app's name is the link").isEqualTo("rules-journey-" + suffix);
+            assertThat(page.locator(use + " a").getAttribute("href"))
+                .as("step 8: to the app's page").contains("/admin/sites/" + siteId);
+
+            // 9. On /manage, a tenant managing the list is offered the add; one that does not manage it reaches
+            //    neither the tab nor the add, and its invoke writes nothing.
+            //    The /manage access lists admit a tenant managing some app, so both manage one.
+            for (UUID tenant : List.of(managerId, outsiderId)) {
+                RecordGrants.grant(GrantSubjectType.USER, tenant, SiteModel.MODEL_ID, panelSiteId,
+                    HohenheimCapabilities.MANAGE, true);
+            }
+            RecordGrants.grant(GrantSubjectType.USER, managerId, AccessListModel.MODEL_ID, listId,
+                HohenheimCapabilities.MANAGE, true);
+            String manageUrl = "/manage/access-lists/" + listId + "/page/rules";
+            HttpResponse<String> managed = httpGet(manageUrl, sessionFor(managerId).token());
+            assertThat(managed.statusCode()).as("step 9: the manager opens the tab").isEqualTo(200);
+            assertThat(rendered(managed.body())).as("step 9: and is offered the add")
+                .contains("data-access-rule-add");
+            TestSession outsider = sessionFor(outsiderId);
+            assertThat(httpGet(manageUrl, outsider.token()).statusCode())
+                .as("step 9: the outsider does not reach the tab").isEqualTo(404);
+            String invoke = CmsRoutes.invoke(HohenheimSlugs.MANAGE, HohenheimSlugs.ACCESS_LISTS,
+                    AccessRuleParts.ADD.id()).with(CmsEndpoints.SUBJECT_PARAM, String.valueOf(listId))
+                .with(CmsEndpoints.TAB_PARAM, HohenheimSlugs.Tab.RULES).toUrl();
+            int before = Models.get(AccessRuleModel.class).findForAccessList(listId).size();
+            HttpResponse<String> refused = httpPostForm(invoke,
+                confirmed("type=ip_allow&data.network=10.9.0.0%2F16&enabled=true"), outsider.token(),
+                outsider.csrf());
+            assertThat(refused.statusCode()).as("step 9: the outsider's add is refused as missing").isEqualTo(404);
+            assertThat(Models.get(AccessRuleModel.class).findForAccessList(listId))
+                .as("step 9: and writes nothing").hasSize(before);
+        } finally {
+            for (UUID tenant : List.of(managerId, outsiderId)) {
+                RecordGrants.revoke(GrantSubjectType.USER, tenant, SiteModel.MODEL_ID, panelSiteId,
+                    HohenheimCapabilities.MANAGE);
+            }
+            RecordGrants.revoke(GrantSubjectType.USER, managerId, AccessListModel.MODEL_ID, listId,
+                HohenheimCapabilities.MANAGE);
+            HardDeletes.byId(Models.get(SiteModel.class), siteId);
+            HardDeletes.byId(Models.get(SiteModel.class), panelSiteId);
+        }
     }
 
     /**
@@ -189,9 +270,9 @@ class AccessRuleEditorTest extends HohenheimTestBase {
             .isInstanceOf(Violations.class);
         model.delete(model.findById(emptyDraft.get(AccessRuleModel.ID)));
 
-        // 1. A leaf of the tree, born the way the tab's add form makes one: switched off
+        // 1. A leaf of the tree, born the way the automation API makes one: switched off
         //    and empty. Created directly here because what follows is about SAVING it,
-        //    not about the add form the journey above already walks.
+        //    not about the add dialog the journey above already walks.
         Row leaf = model.createEmptyRow();
         leaf.set(AccessRuleModel.ACCESS_LIST_ID, listId);
         leaf.set(AccessRuleModel.TYPE, AccessRuleModel.TYPE_IP_ALLOW);
@@ -213,8 +294,8 @@ class AccessRuleEditorTest extends HohenheimTestBase {
         assertThat(AccessRuleModel.dataOf(model.findById(ruleId)).get("network"))
             .as("step 2: nothing nonsensical reached the row").isNull();
 
-        // 3. EMPTY while switched off stays allowed: a new rule is a draft by design, and
-        //    the add form promises exactly that.
+        // 3. EMPTY while switched off stays allowed: a rule switched off is a draft by design,
+        //    which the switch in the add dialog offers too.
         HttpResponse<String> draftSave = httpPostEdit(saveUrl,
             "type=ip_allow&data.network=", sessionToken, csrfToken);
         assertThat(draftSave.statusCode())
@@ -273,12 +354,11 @@ class AccessRuleEditorTest extends HohenheimTestBase {
     }
 
     /**
-     * The add form survives a SOFT navigation onto the tab: reaching the Rules tab by
-     * clicking it re-renders the page client-side, where the POST target is a DRY-revived
-     * one, and a form that loses its method attribute there submits GET and earns a 405.
+     * The add dialog survives a SOFT navigation onto the tab: reaching the Rules tab by clicking it re-renders the
+     * page client-side, where the invoke target is a DRY-revived one, and the dialog must still open and add.
      */
     @Test
-    void keepsThePostMethodWhenTheTabIsReachedBySoftNavigation() {
+    void addsFromTheDialogWhenTheTabIsReachedBySoftNavigation() {
         // 1. A list, reached the way an operator reaches it: the record's own edit page.
         Row list = Models.get(AccessListModel.class).createEmptyRow();
         list.set(AccessListModel.NAME, "Soft nav list");
@@ -292,19 +372,32 @@ class AccessRuleEditorTest extends HohenheimTestBase {
         // 2. Click the Rules tab instead of typing its URL: an anchor inside the shell is a
         //    soft navigation, so the tab's template renders in the BROWSER.
         page.click(".cms-record-tabs a[href$='/page/rules']");
-        page.waitForSelector("#add-rule-form");
+        page.waitForSelector(ADD_RULE);
         waitForHydration();
 
-        // 3. The add form still declares POST. A missing attribute reads back as "get",
-        //    which is exactly the 405 this covers.
-        assertThat(page.locator("#add-rule-form").evaluate("form => form.method"))
-            .as("step 3: the client-rendered add form still posts").isEqualTo("post");
-
-        // 4. And it actually posts: the click creates the group rather than 405-ing.
-        page.click("#add-rule-submit");
+        // 3. The client-rendered add still opens its dialog and adds: a group, chosen in the dialog.
+        click(ADD_RULE);
+        page.waitForSelector(INPUT_FORM + " " + field("data.username") + " input");
+        chooseOption("type", AccessRuleModel.TYPE_GROUP);
+        waitForNavigationEnded(() -> click(OK));
+        waitForHidden(DIALOG);
         page.waitForSelector(".hh-rule-row");
         assertThat(Models.get(AccessRuleModel.class).findForAccessList(listId))
-            .as("step 4: the add lane created the rule").hasSize(1);
+            .as("step 3: the dialog's add created the rule").hasSize(1);
+    }
+
+    /** Opens a group's "Add inside", picks the kind and the network, and adds; the tab comes back with the row. */
+    private void addInside(String button, String type, String network) {
+        int before = page.locator(".hh-rule-row").count();
+        click(button);
+        page.waitForSelector(INPUT_FORM + " " + field("data.username") + " input");
+        chooseOption("type", type);
+        page.waitForSelector(DIALOG + " " + field("data.network") + " input");
+        page.locator(DIALOG + " " + field("data.network") + " input:not([type='hidden'])").fill(network);
+        waitForNavigationEnded(() -> click(OK));
+        waitForHidden(DIALOG);
+        page.waitForCondition(() -> page.locator(".hh-rule-row").count() == before + 1);
+        waitForHydration();
     }
 
     /**
@@ -324,8 +417,13 @@ class AccessRuleEditorTest extends HohenheimTestBase {
             .as("the select shows the chosen option").isNotBlank();
     }
 
-    private static String groupId(int listId) {
-        return String.valueOf(groupIdValue(listId));
+    private static String field(String path) {
+        return "pl-field[data-path='" + path + "']";
+    }
+
+    private static String basic(String username, String password) {
+        return "Basic " + Base64.getEncoder().encodeToString((username + ":" + password)
+            .getBytes(StandardCharsets.UTF_8));
     }
 
     private static Integer groupIdValue(int listId) {
@@ -335,12 +433,15 @@ class AccessRuleEditorTest extends HohenheimTestBase {
             .first().get(AccessRuleModel.ID);
     }
 
-    private static int leafId(int listId) {
-        for (Row rule : Models.get(AccessRuleModel.class).findForAccessList(listId)) {
-            if (!AccessRuleModel.TYPE_GROUP.equals(rule.get(AccessRuleModel.TYPE))) {
-                return rule.get(AccessRuleModel.ID);
-            }
-        }
-        throw new IllegalStateException("no leaf rule was created");
+    private static int site(String slug) {
+        Row row = Models.get(SiteModel.class).createEmptyRow();
+        row.set(SiteModel.NAME, slug);
+        row.set(SiteModel.SLUG, slug);
+        row.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
+        row.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
+        row.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
+        row.set(SiteModel.ENABLED, false);
+        Models.get(SiteModel.class).save(row);
+        return row.get(SiteModel.ID);
     }
 }

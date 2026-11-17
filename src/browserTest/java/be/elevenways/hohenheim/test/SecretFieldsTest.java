@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.auth.AccessRuleNodes;
 import be.elevenways.hohenheim.server.auth.BasicCredentials;
 import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
 import be.elevenways.zenit.auth.server.PasswordHasher;
@@ -107,13 +108,10 @@ class SecretFieldsTest extends HohenheimTestBase {
         assertThat(row).isNotNull();
         Integer accessListId = row.get(AccessListModel.ID);
 
-        response = adminPostForm("/admin/access-lists/" + accessListId + "/rules",
-            "type=basic_auth");
-        assertThat(response.statusCode()).isIn(200, 302, 303);
-        Row rule = Models.get(AccessRuleModel.class).find()
-            .where(AccessRuleModel.ACCESS_LIST_ID.eq(accessListId)).first();
-        assertThat(rule).isNotNull();
-        Integer ruleId = rule.get(AccessRuleModel.ID);
+        // The empty node the automation API births and then configures through the rule form, which is the lane
+        // this covers; the add dialog's own hashing is AccessRuleEditorTest's.
+        Integer ruleId = AccessRuleNodes.add(accessListId, null, AccessRuleModel.TYPE_BASIC_AUTH)
+            .get(AccessRuleModel.ID);
 
         response = adminPostEdit("/admin/access-rules/" + ruleId,
             "type=basic_auth&data.username=operator&data.password=" + password + "&enabled=true");

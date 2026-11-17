@@ -21,15 +21,11 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
-import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.ActivitySources;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.zenit.cms.common.resource.ResourceVerb;
-import be.elevenways.zenit.cms.server.panel.PanelGate;
 import be.elevenways.zenit.cms.server.panel.PartsForms;
-import be.elevenways.zenit.cms.server.panel.PartsReads;
-import be.elevenways.zenit.cms.server.panel.RecordTabGate;
 import be.elevenways.zenit.cms.server.panel.ResourceVerbs;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -54,6 +50,8 @@ import java.util.List;
 import java.util.Map;
 import be.elevenways.hohenheim.RawValues;
 import java.util.Set;
+
+import static be.elevenways.hohenheim.server.cms.CmsSupport.opens;
 
 /**
  * The ONE composition of an app's overview, drawn by both of its record pages (an instance's, and a site's when it
@@ -296,7 +294,7 @@ final class AppOverview {
         return new WidgetInstance(HohenheimWidgets.APP_PROTECTION.id(), Map.of()).withData(rows);
     }
 
-    /** @return the list's Rules tab in this panel, null for a viewer who may not open it ({@link #opens}) */
+    /** @return the list's Rules tab in this panel, null for a viewer who may not open it ({@link CmsSupport#opens}) */
     private static @Nullable String rulesUrl(@NonNull AccessContext access, @NonNull Integer listId) {
         return opens(access, HohenheimSlugs.ACCESS_LISTS, listId, HohenheimSlugs.Tab.RULES)
             ? CmsRoutes.subpage(CmsSupport.panelSlug(access.conduit()), HohenheimSlugs.ACCESS_LISTS, listId,
@@ -345,7 +343,8 @@ final class AppOverview {
 
     /**
      * A titled framework card around one widget, with its header link (Add address, Protect a path) only when the
-     * caller resolved a url: a reader who may not follow it ({@link #opens}) is not shown a door that refuses.
+     * caller resolved a url: a reader who may not follow it ({@link CmsSupport#opens}) is not shown a door that
+     * refuses.
      */
     private static @NonNull WidgetInstance card(@NonNull Microcopy title, @NonNull WidgetInstance body,
                                                 @NonNull Microcopy linkLabel, @Nullable String linkUrl,
@@ -409,28 +408,6 @@ final class AppOverview {
     }
 
     // -- helpers ----------------------------------------------------------------------
-
-    /**
-     * Whether this viewer may follow a door to a record of another entry of the panel rendering this overview: that
-     * entry's read reaches the record (the scope a tenant's grants draw), and the tab, when one is named, is open for
-     * it. A door that would answer "page not found" is not drawn: a tenant granted the instance alone reads the
-     * addresses of the site serving it, but neither the site nor its domains are theirs to open.
-     *
-     * @param tab the record tab the door opens, null for the record itself
-     */
-    private static boolean opens(@NonNull AccessContext access, @NonNull String entrySlug, @Nullable Object key,
-                                 @Nullable String tab) {
-        Conduit conduit = access.conduit();
-        Panel panel = key == null || conduit == null ? null : PanelRegistry.getBySlug(CmsSupport.panelSlug(conduit));
-        PanelResource<Row> entry = panel == null ? null : CmsSupport.declaredRowEntry(panel, entrySlug);
-        if (entry == null || !panel.admits(entry, access)) {
-            return false;
-        }
-        PanelRequest request = PanelGate.request(panel, access);
-        Row record = PartsReads.loadRow(request, entry, key, access);
-        return record != null && (tab == null
-            || RecordTabGate.judge(request, entry, record, tab) instanceof RecordTabGate.Verdict.Open<Row>);
-    }
 
     private static @NonNull String listName(@Nullable Integer accessListId) {
         Row list = Models.get(AccessListModel.class).findById(accessListId);
