@@ -130,15 +130,23 @@ class ProtectedPathJourneyTest extends HohenheimHttpTestBase {
         assertThat(band).as("step 1: how it lets visitors in, as protection")
             .contains("Password, 1 person").contains("Protected").doesNotContain("data-app-protection-open");
         assertThat(band).as("step 1: the card's door leads to who gets in").contains("Edit who gets in");
+        assertThat(band).as("step 1: the list's name wears the link register, not the row's title colour")
+            .doesNotContain("data-row-link");
+        assertThat(band).as("step 1: THE ASSERTION -- changing which list guards it is offered on the row too")
+            .contains("data-app-protection-change").contains("href=\"/admin/sites/" + guardedId + "\"");
 
         // 2. Under it the paths section, headed as the paths that carry their own protection; empty, it says every
-        //    path follows the whole app and offers protecting one in place.
-        String paths = tab.substring(tab.indexOf("data-cms-child-list=\"" + HohenheimSlugs.PROTECTED_PATHS + "\""));
+        //    path follows the whole app. Protect a path is the record heading's act alone, never offered again here.
+        int section = tab.indexOf("data-cms-child-list=\"" + HohenheimSlugs.PROTECTED_PATHS + "\"");
+        assertThat(section).as("step 2: the paths section is drawn").isNotNegative();
+        String paths = tab.substring(section);
         assertThat(paths).as("step 2: the section's own heading").contains("Paths with their own protection");
         assertThat(paths).as("step 2: the empty section says what protecting a path does")
             .contains("Until a path is protected here, it follows its app");
-        assertThat(paths).as("step 2: and offers Protect a path there")
+        assertThat(tab.substring(0, section)).as("step 2: the record heading offers Protect a path")
             .contains("/invoke/hohenheim.protect_path");
+        assertThat(paths).as("step 2: THE ASSERTION -- the section does not offer it a second time")
+            .doesNotContain("/invoke/hohenheim.protect_path");
 
         // 3. The overview's Protection card reads "Whole app" while no path has its own, linked to the same rules.
         String overview = adminGet("/admin/sites/" + guardedId + "/page/overview").body();
@@ -158,7 +166,8 @@ class ProtectedPathJourneyTest extends HohenheimHttpTestBase {
         assertThat(tenantBand).as("step 4: THE ASSERTION -- no link to a list the tenant cannot open")
             .doesNotContain("/" + HohenheimSlugs.ACCESS_LISTS + "/" + lab)
             .doesNotContain("Edit who gets in")
-            .doesNotContain("data-widget-card-link");
+            .doesNotContain("data-widget-card-link")
+            .doesNotContain("data-app-protection-change");
 
         // 5. A site without a list is open to everyone, said plainly; its form is the door to guard it.
         Integer openId = site("whole-app-open-" + suffix).get(SiteModel.ID);
@@ -167,8 +176,9 @@ class ProtectedPathJourneyTest extends HohenheimHttpTestBase {
             .contains("data-app-protection=\"Open to everyone\"")
             .contains("Anyone who has the address can open this app.")
             .doesNotContain("Protected");
-        assertThat(openBand).as("step 5: the card's door is the site's form")
-            .contains("href=\"/admin/sites/" + openId + "\"").contains("Change");
+        assertThat(openBand).as("step 5: the card's door is the site's form, and the row offers no second one")
+            .contains("href=\"/admin/sites/" + openId + "\"").contains("Change")
+            .doesNotContain("data-app-protection-change");
 
         // 6. A whole-app list that lets everyone through reads as open, as an open path does, never as protected.
         int empty = list("Empty " + suffix, AccessListModel.SATISFY_ANY);

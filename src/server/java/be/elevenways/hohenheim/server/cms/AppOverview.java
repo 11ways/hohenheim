@@ -236,23 +236,30 @@ final class AppOverview {
      * line, above the paths that carry their own protection.
      *
      * AIDEV-NOTE: the board draws two header doors, "Edit who gets in" and "Change"; a framework card carries one
-     * ({@link CardWidget#withLink}), so the list's rules lead and the site's form is the door only for a viewer who
-     * cannot open the list's rules but may change which list it is ({@link #changesWholeApp}).
+     * ({@link CardWidget#withLink}). While a list guards the app, the header's door is its rules (for a viewer who may
+     * open them, else none) and "Change" is a quiet link on the row beside its badge; without one, "Change" is the
+     * header's door. Change is offered to a viewer
+     * who may change which list it is ({@link #changesWholeApp}) and leads to the site's form, the one writer of that
+     * field: zenit-cms has no plain-link address that opens a placed operation's input in a dialog, so a one-field
+     * dialog cannot be linked from a widget yet.
      */
     static @NonNull WidgetTree protectionBand(@NonNull Row site, @NonNull AccessContext access) {
         Integer listId = site.get(SiteModel.ACCESS_LIST_ID);
         String rules = listId == null ? null : rulesUrl(access, listId);
+        String change = changesWholeApp(site, access)
+            ? CmsRoutes.detail(CmsSupport.panelSlug(access.conduit()), HohenheimSlugs.SITES, site.get(SiteModel.ID))
+                .toUrl()
+            : null;
+        AppProtection line = wholeApp(site, null, access);
         // CardWidget.ofFacts' title-and-lead shape, around the overview's own protection rows.
         WidgetInstance card = new WidgetInstance(CardWidget.ID, Map.of(
                 "title", HohenheimMicrocopy.APP_OVERVIEW.of("whole_app"),
                 "lead", HohenheimMicrocopy.APP_OVERVIEW.of("whole_app_lead")),
-            new WidgetTree(List.of(protectionRows(List.of(wholeApp(site, null, access))))));
+            new WidgetTree(List.of(protectionRows(List.of(listId != null ? line.withChange(change) : line)))));
         if (rules != null) {
             card = CardWidget.withLink(card, HohenheimMicrocopy.APP_OVERVIEW.of("edit_who_gets_in"), rules, "key");
-        } else if (changesWholeApp(site, access)) {
-            card = CardWidget.withLink(card, HohenheimMicrocopy.APP_OVERVIEW.of("change_whole_app"),
-                CmsRoutes.detail(CmsSupport.panelSlug(access.conduit()), HohenheimSlugs.SITES,
-                    site.get(SiteModel.ID)).toUrl(), "sliders");
+        } else if (listId == null && change != null) {
+            card = CardWidget.withLink(card, HohenheimMicrocopy.APP_OVERVIEW.of("change_whole_app"), change, "sliders");
         }
         return new WidgetTree(List.of(card));
     }

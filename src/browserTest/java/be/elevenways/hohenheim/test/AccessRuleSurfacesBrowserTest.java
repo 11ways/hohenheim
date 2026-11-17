@@ -42,7 +42,8 @@ import static be.elevenways.hohenheim.HohenheimSlugs.MANAGE;
  * not manage. A failing comparison is a changed surface, never a file to refresh; an accepted difference is declared
  * as a move.
  * The one stored line added since is the group's "Add inside" (hohenheim:access_rule_add_inside), which replaced the
- * Rules tab's hand-written add form; a leaf is not offered it.
+ * Rules tab's hand-written add form; a leaf is not offered it. Since then the row's one inline button is a group's Add
+ * inside, else the switch (declared first), so the moves joined the menu, and the kind's select offers no clear.
  */
 class AccessRuleSurfacesBrowserTest extends HohenheimTestBase {
 

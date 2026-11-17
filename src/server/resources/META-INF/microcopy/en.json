@@ -194,21 +194,21 @@
   ],
   "basic_auth_user": [
     {
-      "text": "Basic Auth username",
+      "text": "Username",
       "scope": "hohenheim_field"
     },
     {
-      "text": "Optional username required in addition to the IP rules.",
+      "text": "What the visitor types to get in.",
       "scope": "help"
     }
   ],
   "basic_auth_password": [
     {
-      "text": "Basic Auth password",
+      "text": "Password",
       "scope": "hohenheim_field"
     },
     {
-      "text": "Leave blank on edit to keep the stored password; its value is never sent back to the browser.",
+      "text": "Stored as a hash; nobody can read it back. When you edit a rule, leave it empty to keep the current password.",
       "scope": "help"
     }
   ],

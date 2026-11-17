@@ -1,7 +1,8 @@
 {#- Rules tab on an access list: one line naming what the list guards, then the rule TREE, flattened to one
-    depth-ordered loop. The card's "Add rule" is the tab's own placed operation over the list, and every row's buttons
-    are the rule resource's OWN row actions ("Add inside" on a group among them), all rendered through the standard
-    invoke partial, so each arrives with its dialog, confirmation and permission gate attached. -#}
+    depth-ordered loop. The card's "Add rule" is the tab's own placed operation over the list, and every row's actions
+    are the rule resource's OWN row actions ("Add inside" on a group among them), banded as a cms list row bands them:
+    Edit and the one inline button, then the row's menu (the list's own cms-group-row-menu), so each arrives with its
+    dialog, confirmation and permission gate attached. -#}
 {% declare title: String %}
 {% declare satisfy: String = "any" %}
 {% declare rules: List<AccessRuleView> %}
@@ -12,7 +13,7 @@
 {% extend "zenitcms:shell" var:title=title %}
 
 {% block "main" %}
-<section class="cms-resource-list-page hh-access-rules">
+<section class="cms-resource-list-page cms-record-tab-page hh-access-rules">
     {% if head != null %}{% render "zenitcms:record-head" var:head=head %}{% /if %}
 
     {#- Where the list is used, in one sentence: each place leads to its app when the reader may open it. -#}
@@ -32,23 +33,35 @@
         </pl-card-header>
         <pl-card-content>
             {% if rules %}
+            {#- The carrier form every row's inline button and menu item submits through by form=: the menu's items
+                portal out of the row, so the association is the only way their submit (and confirmation) works. -#}
+            <form id="hh-rule-actions-form" method="post">
+                {% csrf() %}
+            </form>
             <ul class="hh-rule-tree">
                 {% each rules as rule %}
+                {#- Two groups that wrap apart: what the rule is (number, kind, summary, on/off) and what can be done
+                    with it, which drops to its own line where the row has no room for both. -#}
                 <li class="hh-rule-row" style={% rule.indentStyle %} data-rule-id={% rule.id %} data-rule-type={% rule.type %}>
-                    <span class="hh-rule-path">{{ rule.path }}</span>
-                    {#- The kind badge is neutral on purpose: a green "Allowed network" pill
-                        read as "this rule is on", which is the one thing it never said. The
-                        state is the pill beside it, which names BOTH states. -#}
-                    <pl-badge variant="outline" icon={% rule.iconName %}>{{ rule.typeLabel }}</pl-badge>
-                    <span class="hh-rule-summary">{{ rule.summary }}</span>
-                    <span class="hh-rule-state" data-rule-state={% rule.enabledBadge.key %}>
-                        {% render "zenitcms:cell/enum-badge" var:value=rule.enabledBadge %}
+                    <span class="hh-rule-line">
+                        <span class="hh-rule-path">{{ rule.path }}</span>
+                        {#- The kind badge is neutral on purpose: a green "Allowed network" pill
+                            read as "this rule is on", which is the one thing it never said. The
+                            state is the pill beside it, which names BOTH states. -#}
+                        <pl-badge variant="outline" icon={% rule.iconName %}>{{ rule.typeLabel }}</pl-badge>
+                        <span class="hh-rule-summary">{{ rule.summary }}</span>
+                        <span class="hh-rule-state" data-rule-state={% rule.enabledBadge.key %}>
+                            {% render "zenitcms:cell/enum-badge" var:value=rule.enabledBadge %}
+                        </span>
                     </span>
                     <span class="hh-rule-actions">
                         <pl-button size="sm" variant="ghost" use:Zenit.route={% rule.editTarget %} data-rule-edit={% rule.id %}>{{ t("edit", scope: "access_rule") }}</pl-button>
-                        {% each rule.invokes as invoke %}
-                        {% render "zenitcms:action/invoke" var:action=invoke %}
+                        {% each rule.inlineInvokes as invoke %}
+                        {% render "zenitcms:action/invoke-button" var:action=invoke var:size="sm" var:variant=ButtonVariant.GHOST var:formId="hh-rule-actions-form" %}
                         {% /each %}
+                        {% if rule.menuInvokes %}
+                        <cms-group-row-menu invokes={% rule.menuInvokes %} formId="hh-rule-actions-form"></cms-group-row-menu>
+                        {% /if %}
                     </span>
                 </li>
                 {% /each %}

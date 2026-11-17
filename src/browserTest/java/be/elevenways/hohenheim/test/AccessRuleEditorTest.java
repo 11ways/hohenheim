@@ -14,6 +14,7 @@ import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
+import com.microsoft.playwright.options.ViewportSize;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
@@ -149,16 +150,37 @@ class AccessRuleEditorTest extends HohenheimTestBase {
         assertThat(page.locator(".hh-rule-row .hh-rule-state[data-rule-state='off']").count())
             .as("step 6: nothing is left switched off").isZero();
 
-        // 7. A second rule inside the same group, and REORDERING within that group.
+        // 7. A second rule inside the same group, and REORDERING within that group. The moves and the confirmed
+        //    delete live in the row's menu (the list's own row menu), never as buttons on the row.
         addInside(groupRow + addInside, AccessRuleModel.TYPE_IP_DENY, "10.1.0.0/16");
         navigateToApp(rulesUrl);
         waitForHydration();
         List<Row> siblings = Models.get(AccessRuleModel.class).findChildren(listId, groupId);
         assertThat(siblings).as("step 7: both leaves live inside the group").hasSize(2);
         int first = siblings.get(0).get(AccessRuleModel.ID);
-        String moveDown = ".hh-rule-row[data-rule-id='" + first + "'] pl-button[data-action-id*='move_down']";
-        assertThat(page.locator(moveDown).count())
-            .as("step 7: the rule resource's own move action renders on the row").isEqualTo(1);
+        String firstRow = ".hh-rule-row[data-rule-id='" + first + "'] ";
+        String trigger = firstRow + "cms-group-row-menu pl-dropdown-menu-trigger pl-button";
+        String menu = "he-bottom .pl-dropdown-menu-content__popup:visible button.cms-menu-action";
+        String moveDown = menu + "[data-action-id*='move_down']";
+        String delete = menu + "[data-action-id*='delete']";
+        assertThat(page.locator(firstRow + "pl-button[data-action-id*='move_']").count())
+            .as("step 7: no move is a button on the row").isZero();
+        assertThat(page.locator(firstRow + "pl-button[data-action-id*='toggle']").count())
+            .as("step 7: a leaf's switch stays on the row").isEqualTo(1);
+        click(trigger);
+        page.waitForSelector(moveDown);
+        assertThat(page.locator(menu + "[data-action-id*='move_up']").count())
+            .as("step 7: the row's menu offers both moves").isEqualTo(1);
+        page.locator(delete).first().click();
+        page.waitForSelector(DIALOG);
+        assertContainsText(DIALOG + " pl-button[data-cms-confirm-cancel]", "Cancel",
+            "step 7: the menu's delete still asks first");
+        click(DIALOG + " pl-button[data-cms-confirm-cancel]");
+        waitForHidden(DIALOG);
+        assertThat(Models.get(AccessRuleModel.class).findById(first))
+            .as("step 7: a cancelled delete deletes nothing").isNotNull();
+        click(trigger);
+        page.waitForSelector(moveDown);
         page.click(moveDown);
         page.waitForSelector("pl-toast, .pl-toast");
         waitForHydration();
@@ -228,6 +250,38 @@ class AccessRuleEditorTest extends HohenheimTestBase {
                 HohenheimCapabilities.MANAGE);
             HardDeletes.byId(Models.get(SiteModel.class), siteId);
             HardDeletes.byId(Models.get(SiteModel.class), panelSiteId);
+        }
+
+        // 10. On a phone (390 px) every row stays inside its card: the summary wraps by words, never past three lines,
+        //     and the actions drop under it instead of running out of the card.
+        ViewportSize wide = page.viewportSize();
+        page.setViewportSize(390, 844);
+        try {
+            navigateToApp(rulesUrl);
+            waitForHydration();
+            Object misfits = page.evaluate("() => [...document.querySelectorAll('.hh-rule-row')].flatMap(row => {"
+                + " const card = row.closest('pl-card').getBoundingClientRect();"
+                + " const summary = row.querySelector('.hh-rule-summary');"
+                + " const style = getComputedStyle(summary);"
+                + " const line = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.5;"
+                + " const out = [];"
+                + " if (summary.getBoundingClientRect().height > 3 * line + 1)"
+                + "  out.push(row.dataset.ruleId + ' summary');"
+                + " const parts = row.querySelectorAll('.hh-rule-line > *, .hh-rule-actions pl-button');"
+                + " for (const part of [row, ...parts]) {"
+                + "  const box = part.getBoundingClientRect();"
+                + "  if (box.width === 0 && box.height === 0) continue;"
+                + "  if (box.left < card.left - 0.5 || box.right > card.right + 0.5)"
+                + "   out.push(row.dataset.ruleId + ' ' + part.tagName + ' ' + box.left + '..' + box.right);"
+                + " }"
+                + " return out; })");
+            assertThat(page.locator(".hh-rule-row").count()).as("step 10: the rows render on a phone").isEqualTo(4);
+            assertThat(misfits).as("step 10: THE ASSERTION -- no summary past three lines, nothing out of the card")
+                .isEqualTo(List.of());
+        } finally {
+            if (wide != null) {
+                page.setViewportSize(wide.width, wide.height);
+            }
         }
     }
 

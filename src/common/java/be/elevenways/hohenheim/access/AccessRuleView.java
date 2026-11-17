@@ -22,8 +22,10 @@ import java.util.List;
  *                 the provider's name, the group's mode)
  * @param enabledBadge  the on/off pill, so the switched-ON state is stated rather than
  *                      shown by the absence of a chip
- * @param invokes  the rule resource's OWN row actions for this row and viewer, so move,
- *                 toggle and the confirmed delete arrive with their gates attached
+ * @param inlineInvokes the row's inline band of the rule resource's OWN row actions, as a cms list row bands them
+ *                      ({@code ActionStateTranslator.bandRowOffers}): its one useful button
+ * @param menuInvokes   the rest of that band, the overflow then the destructive tail, for the row's menu; each arrives
+ *                      with its gate and confirmation attached
  */
 @HawkeyeClass
 public record AccessRuleView(
@@ -38,6 +40,7 @@ public record AccessRuleView(
     @NonNull EnumBadgeState enabledBadge,
     boolean isGroup,
     @Nullable RouteTarget editTarget,
-    @NonNull List<InvokeActionState> invokes
+    @NonNull List<InvokeActionState> inlineInvokes,
+    @NonNull List<InvokeActionState> menuInvokes
 ) {
 }

@@ -194,21 +194,21 @@
   ],
   "basic_auth_user": [
     {
-      "text": "Basic Auth-gebruikersnaam",
+      "text": "Gebruikersnaam",
       "scope": "hohenheim_field"
     },
     {
-      "text": "Optionele gebruikersnaam die naast de IP-regels vereist is.",
+      "text": "Wat de bezoeker intypt om binnen te komen.",
       "scope": "help"
     }
   ],
   "basic_auth_password": [
     {
-      "text": "Basic Auth-wachtwoord",
+      "text": "Wachtwoord",
       "scope": "hohenheim_field"
     },
     {
-      "text": "Laat leeg tijdens het bewerken om het opgeslagen wachtwoord te behouden; de waarde wordt nooit teruggestuurd naar de browser.",
+      "text": "Opgeslagen als hash; niemand kan het teruglezen. Laat het leeg wanneer u een regel bewerkt om het huidige wachtwoord te behouden.",
       "scope": "help"
     }
   ],

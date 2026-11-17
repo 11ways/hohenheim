@@ -30,15 +30,27 @@
         gap: var(--pl-space-xs);
     }
 
+    // A row is two groups that wrap apart: what the rule is, then its actions, which drop to their own line where the
+    // row has no room for both, so on a phone neither squeezes the summary nor runs out of the card.
     .hh-rule-row {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
-        gap: var(--pl-space-sm);
+        gap: var(--pl-space-xs) var(--pl-space-sm);
         padding: var(--pl-space-xs) var(--pl-space-sm);
         border: 1px solid var(--pl-color-border);
         border-radius: var(--pl-radius-md);
         background: var(--pl-color-surface);
         margin-inline-start: calc(var(--hh-rule-depth, 0) * var(--pl-space-lg));
+    }
+
+    .hh-rule-line {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--pl-space-xs) var(--pl-space-sm);
+        flex: 1 1 20rem;
+        min-width: 0;
     }
 
     .hh-rule-path {
@@ -47,9 +59,12 @@
         min-width: 3ch;
     }
 
+    // The summary wraps between words: it takes the line's rest while that is wide enough to read, else its own
+    // line under the number and kind; only a single word longer than the row ever breaks.
     .hh-rule-summary {
-        flex: 1;
+        flex: 1 1 10rem;
         min-width: 0;
+        overflow-wrap: break-word;
     }
 
     // The on/off pill sits between the summary and the buttons; the wrapper only
@@ -61,8 +76,11 @@
 
     .hh-rule-actions {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
         gap: var(--pl-space-2xs);
+        margin-inline-start: auto;
+        max-width: 100%;
     }
 
     // Deployment error + log detail row (site Deployments tab): compact,

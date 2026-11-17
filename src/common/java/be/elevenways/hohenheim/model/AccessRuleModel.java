@@ -140,8 +140,10 @@ public class AccessRuleModel extends Model {
      */
     public static final IntegerField SORT = SCHEMA.addField(
         IntegerField.builder().name("sort").build());
+    /** The rule's kind: its editor offers no clear, and the save hook below refuses an empty or unknown one. */
     public static final EnumField TYPE = SCHEMA.addField(EnumField.builder("type")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("rule_type")).help(HohenheimMicrocopy.HELP.of("rule_type"))
+        .keepsAValue()
         .value(TYPE_GROUP, v -> v.displayName("Group")
             .label(HohenheimMicrocopy.ACCESS_RULE_TYPE.of("group"))
             .icon("layer-group").color(ColorHue.GRAY).schema(GROUP_DATA_SCHEMA))

@@ -240,8 +240,10 @@ public final class AccessRuleParts {
             // No create: a rule is born inside a tree, through ADD on the list's Rules tab or ADD_INSIDE on a group; a
             // generic create would produce a node belonging to no list and enforcing nothing.
             .writes(ResourceMutations.rows().update().beforeSave(AccessRuleParts::hashPassword).delete(DELETE).build())
-            .actions(Stream.concat(PanelTreeOrderActions.of(ORDER).stream(),
-                Stream.of(toggleAction(), addInsideAction())).toList())
+            // Declared order is band order: a row's one inline button is a group's Add inside, else its switch; the
+            // moves and the delete stay in the row's menu (ActionStateTranslator.INLINE_ROW_ACTION_CAP).
+            .actions(Stream.concat(Stream.of(addInsideAction(), toggleAction()),
+                PanelTreeOrderActions.of(ORDER).stream()).toList())
             .authority(ResourceAuthority.<Row>builder()
                 .write(null, (rule, access) -> writeRefusal(rule, access) == null)
                 .build());

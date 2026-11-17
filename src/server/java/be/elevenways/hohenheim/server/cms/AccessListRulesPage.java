@@ -19,6 +19,7 @@ import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.cms.server.panel.PanelActionOffers;
 import be.elevenways.zenit.cms.server.render.action.ActionStateTranslator;
+import be.elevenways.zenit.cms.server.render.action.ActionStateTranslator.RowActionPresentation;
 import be.elevenways.zenit.cms.server.render.action.RowOffer;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -162,7 +163,10 @@ public final class AccessListRulesPage implements RecordTab.Rendered<Row> {
             String type = rule.get(AccessRuleModel.TYPE);
             boolean isGroup = AccessRuleModel.TYPE_GROUP.equals(type);
             EnumField.EnumValue declared = AccessRuleModel.TYPE.getValues().get(type);
-
+            // The row's actions banded as a cms list row bands them: its one inline button, the rest for its menu.
+            RowActionPresentation band = ActionStateTranslator.bandRowOffers(offers.apply(rule), 0);
+            List<InvokeActionState> menu = new ArrayList<>(band.overflowInvokes());
+            menu.addAll(band.destructiveInvokes());
             views.add(new AccessRuleView(
                 id != null ? id : 0,
                 depth,
@@ -178,7 +182,8 @@ public final class AccessListRulesPage implements RecordTab.Rendered<Row> {
                 // The edit link carries the tab as its return target, like the invokes:
                 // a rule's Cancel/Delete then come back here, not to the global rule list.
                 ReturnTarget.bind(CmsRoutes.detail(panel, HohenheimSlugs.ACCESS_RULES, id), pageUrl),
-                ActionStateTranslator.bandRowOffers(offers.apply(rule), 0).allInvokes()));
+                band.inlineInvokes(),
+                List.copyOf(menu)));
 
             if (isGroup) {
                 flatten(childrenByParent.getOrDefault(id, List.of()), childrenByParent,

@@ -1,18 +1,26 @@
 {#- An app's protected paths. A path whose protection admits everyone is said as OPEN, never drawn as protected: that
     green lock over an open door is the lie this card exists to stop telling. The framework card around it
-    (AppOverview) carries the title and the Protect a path link. -#}
+    (AppOverview) carries the title and the Protect a path link. A row's name is a plain link (never the row's own
+    data-row-link, which wears the title's colour), since a row may offer a second door: its quiet "Change". -#}
 {% declare widget: WidgetInstance %}
 {% declare data: List<AppProtection> = null %}
 <pl-list variant="default" data-app-card="protection">
     {% each data as row %}
     <pl-list-item data-app-protection={% row.path %} attr:data-app-protection-open={% row.open ? "1" : null %}>
         <span slot="leading" class="hh-app-card-glyph"><pl-icon name={% row.open ? "triangle-exclamation" : row.guarded ? "key" : "globe" %} size="sm"></pl-icon></span>
-        <pl-list-item-title>{% if row.url != null %}<a href={% row.url %} data-row-link>{{ row.path }}</a>{% else %}{{ row.path }}{% /if %}</pl-list-item-title>
+        <pl-list-item-title>{% if row.url != null %}<a href={% row.url %}>{{ row.path }}</a>{% else %}{{ row.path }}{% /if %}</pl-list-item-title>
         <pl-list-item-meta>{{ row.summary }}</pl-list-item-meta>
-        {% if row.open %}
-        <pl-list-item-trailing><pl-badge tone="quiet" variant="warning">{{ t("open_to_everyone", scope: "protected_path") }}</pl-badge></pl-list-item-trailing>
-        {% elseif row.guarded %}
-        <pl-list-item-trailing><pl-badge tone="quiet" variant="success">{{ t("protected", scope: "protected_path") }}</pl-badge></pl-list-item-trailing>
+        {% if row.open or row.guarded or row.changeUrl != null %}
+        <pl-list-item-trailing>
+            {% if row.open %}
+            <pl-badge tone="quiet" variant="warning">{{ t("open_to_everyone", scope: "protected_path") }}</pl-badge>
+            {% elseif row.guarded %}
+            <pl-badge tone="quiet" variant="success">{{ t("protected", scope: "protected_path") }}</pl-badge>
+            {% /if %}
+            {% if row.changeUrl != null %}
+            <pl-button variant="text" size="sm" href={% row.changeUrl %} data-app-protection-change>{{ t("change_whole_app", scope: "app_overview") }}</pl-button>
+            {% /if %}
+        </pl-list-item-trailing>
         {% /if %}
     </pl-list-item>
     {% /each %}
