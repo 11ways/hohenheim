@@ -8201,16 +8201,10 @@
     "text": "Loopback only",
     "scope": "port_exposure"
   },
-  "public": [
-    {
-      "text": "Public",
-      "scope": "port_exposure"
-    },
-    {
-      "text": "Public",
-      "scope": "app_overview"
-    }
-  ],
+  "public": {
+    "text": "Public",
+    "scope": "port_exposure"
+  },
   "instance_not_permitted": {
     "text": "You are not allowed to perform this action on this instance",
     "scope": "violations"
@@ -15703,6 +15697,38 @@
   "everything_else": {
     "text": "Everything else",
     "scope": "app_overview"
+  },
+  "whole_app": {
+    "text": "Whole app",
+    "scope": "app_overview"
+  },
+  "whole_app_lead": {
+    "text": "What every visitor must pass, on every address of this app.",
+    "scope": "app_overview"
+  },
+  "whole_app_anyone": {
+    "text": "Anyone who has the address can open this app.",
+    "scope": "app_overview"
+  },
+  "whole_app_list": {
+    "text": "{$list}: {$lets_in}",
+    "scope": "app_overview"
+  },
+  "edit_who_gets_in": {
+    "text": "Edit who gets in",
+    "scope": "app_overview"
+  },
+  "change_whole_app": {
+    "text": "Change",
+    "scope": "app_overview"
+  },
+  "paths_own_protection": {
+    "text": "Paths with their own protection",
+    "scope": "app_overview"
+  },
+  "no_own_protection": {
+    "text": "Until a path is protected here, it follows its app's protection. Protecting a path puts its own access list in front of it.",
+    "scope": "protected_path"
   },
   "switched_on": {
     "text": "Switched on",

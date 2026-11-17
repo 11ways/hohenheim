@@ -102,6 +102,8 @@ public final class ProtectedPathParts {
             .reads(ResourceReads.rows())
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).facets().ruleFilters()
                 .search(ProtectedPathModel.PATH)
+                // An empty list says paths follow their app's protection until one is protected, and what that does.
+                .emptyDescription(HohenheimMicrocopy.PROTECTED_PATH.of("no_own_protection"))
                 .computed(Objects.requireNonNull(table.column(PROTECTION_COLUMN)),
                     (path, request) -> protectionBadge(path))
                 .build())

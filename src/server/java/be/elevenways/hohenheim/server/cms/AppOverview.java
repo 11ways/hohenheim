@@ -25,9 +25,12 @@ import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.ActivitySources;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.RecordOverview;
+import be.elevenways.zenit.cms.common.resource.ResourceVerb;
 import be.elevenways.zenit.cms.server.panel.PanelGate;
+import be.elevenways.zenit.cms.server.panel.PartsForms;
 import be.elevenways.zenit.cms.server.panel.PartsReads;
 import be.elevenways.zenit.cms.server.panel.RecordTabGate;
+import be.elevenways.zenit.cms.server.panel.ResourceVerbs;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -180,8 +183,9 @@ final class AppOverview {
     }
 
     /**
-     * The protected paths of these sites, and the line for everything else; null when no site terminates HTTP here
-     * (a TLS passthrough site protects nothing).
+     * The protected paths of these sites, and each site's line for the rest of it ({@link #wholeApp}): "Whole app"
+     * while the site protects no path, "Everything else" beside the paths that carry their own; null when no site
+     * terminates HTTP here (a TLS passthrough site protects nothing).
      */
     static @Nullable WidgetInstance protection(@NonNull List<Row> sites, @NonNull AccessContext access) {
         Conduit conduit = access.conduit();
@@ -201,8 +205,9 @@ final class AppOverview {
         List<AppProtection> rows = new ArrayList<>();
         for (Row site : served) {
             String lead = prefix ? site.get(SiteModel.NAME) + " " : "";
-            for (Row path : Models.get(ProtectedPathModel.class).find()
-                    .where(ProtectedPathModel.SITE_ID.eq(site.get(SiteModel.ID))).all()) {
+            List<Row> paths = Models.get(ProtectedPathModel.class).find()
+                .where(ProtectedPathModel.SITE_ID.eq(site.get(SiteModel.ID))).all();
+            for (Row path : paths) {
                 boolean open = ProtectedPathInvariant.isOpen(path);
                 Integer listId = path.get(ProtectedPathModel.ACCESS_LIST_ID);
                 // How visitors get in, in words, when the list is plain; otherwise the list it follows, by name.
@@ -216,21 +221,102 @@ final class AppOverview {
                         .resolve(locales, resolver),
                     open, true));
             }
-            Integer siteList = site.get(SiteModel.ACCESS_LIST_ID);
-            rows.add(new AppProtection(lead + text("everything_else", locales, resolver), null,
-                siteList == null ? text("public", locales, resolver)
-                    : HohenheimMicrocopy.APP_OVERVIEW.of("by_list")
-                        .withArg("list", listName(siteList)).resolve(locales, resolver),
-                false, siteList != null));
+            rows.add(wholeApp(site, lead + text(paths.isEmpty() ? "whole_app" : "everything_else", locales,
+                resolver), access));
         }
         Integer siteId = served.size() == 1 ? served.get(0).get(SiteModel.ID) : null;
         String protectUrl = siteId != null && opens(access, HohenheimSlugs.SITES, siteId,
             HohenheimSlugs.PROTECTED_PATHS)
             ? CmsRoutes.subpage(panelSlug, HohenheimSlugs.SITES, siteId, HohenheimSlugs.PROTECTED_PATHS).toUrl()
             : null;
-        return card(HohenheimMicrocopy.APP_OVERVIEW.of("protection"),
-            new WidgetInstance(HohenheimWidgets.APP_PROTECTION.id(), Map.of()).withData(rows),
+        return card(HohenheimMicrocopy.APP_OVERVIEW.of("protection"), protectionRows(rows),
             HohenheimMicrocopy.APP_OVERVIEW.of("protect_path"), protectUrl, "lock");
+    }
+
+    /**
+     * The Protection tab's band ({@code ChildList.widgets}): the Whole app card over the site's {@link #wholeApp}
+     * line, above the paths that carry their own protection.
+     *
+     * AIDEV-NOTE: the board draws two header doors, "Edit who gets in" and "Change"; a framework card carries one
+     * ({@link CardWidget#withLink}), so the list's rules lead and the site's form is the door only for a viewer who
+     * cannot open the list's rules but may change which list it is ({@link #changesWholeApp}).
+     */
+    static @NonNull WidgetTree protectionBand(@NonNull Row site, @NonNull AccessContext access) {
+        Integer listId = site.get(SiteModel.ACCESS_LIST_ID);
+        String rules = listId == null ? null : rulesUrl(access, listId);
+        // CardWidget.ofFacts' title-and-lead shape, around the overview's own protection rows.
+        WidgetInstance card = new WidgetInstance(CardWidget.ID, Map.of(
+                "title", HohenheimMicrocopy.APP_OVERVIEW.of("whole_app"),
+                "lead", HohenheimMicrocopy.APP_OVERVIEW.of("whole_app_lead")),
+            new WidgetTree(List.of(protectionRows(List.of(wholeApp(site, null, access))))));
+        if (rules != null) {
+            card = CardWidget.withLink(card, HohenheimMicrocopy.APP_OVERVIEW.of("edit_who_gets_in"), rules, "key");
+        } else if (changesWholeApp(site, access)) {
+            card = CardWidget.withLink(card, HohenheimMicrocopy.APP_OVERVIEW.of("change_whole_app"),
+                CmsRoutes.detail(CmsSupport.panelSlug(access.conduit()), HohenheimSlugs.SITES,
+                    site.get(SiteModel.ID)).toUrl(), "sliders");
+        }
+        return new WidgetTree(List.of(card));
+    }
+
+    /**
+     * THE whole-app line of one site, on its overview's Protection card and atop its Protection tab: the access list
+     * every visitor passes on every address, linked to that list's rules for a viewer who may open them, with how it
+     * lets visitors in; "Open to everyone" without one. A list that lets everyone through reads as open, never as
+     * protected, by the gate's own reading ({@link ProtectedPathInvariant#listAdmitsEveryone}).
+     *
+     * @param label the line's own words ("Whole app" on the overview), null to lead with the list's name (the tab)
+     */
+    static @NonNull AppProtection wholeApp(@NonNull Row site, @Nullable String label, @NonNull AccessContext access) {
+        Conduit conduit = access.conduit();
+        LocaleChain locales = conduit.getLocales();
+        MessageResolver resolver = conduit.getMessageResolver();
+        Integer listId = site.get(SiteModel.ACCESS_LIST_ID);
+        if (listId == null) {
+            return new AppProtection(label != null ? label
+                : HohenheimMicrocopy.PROTECTED_PATH.of("open_to_everyone").resolve(locales, resolver), null,
+                text("whole_app_anyone", locales, resolver), false, false);
+        }
+        boolean open = ProtectedPathInvariant.listAdmitsEveryone(listId);
+        Microcopy list = HohenheimMicrocopy.APP_OVERVIEW.of("by_list").withArg("list", listName(listId));
+        Microcopy letsIn = AccessRuleSummaries.letsInOf(listId);
+        String url = rulesUrl(access, listId);
+        if (label == null) {
+            return new AppProtection(list.resolve(locales, resolver), url, letsIn.resolve(locales, resolver), open,
+                true);
+        }
+        Microcopy summary = open
+            ? HohenheimMicrocopy.APP_OVERVIEW.of("list_admits_everyone").withArg("list", listName(listId))
+            : HohenheimMicrocopy.APP_OVERVIEW.of("whole_app_list").withArg("list", list).withArg("lets_in", letsIn);
+        return new AppProtection(label, url, summary.resolve(locales, resolver), open, true);
+    }
+
+    /** The protection rows as the overview's Protection widget draws them. */
+    private static @NonNull WidgetInstance protectionRows(@NonNull List<AppProtection> rows) {
+        return new WidgetInstance(HohenheimWidgets.APP_PROTECTION.id(), Map.of()).withData(rows);
+    }
+
+    /** @return the list's Rules tab in this panel, null for a viewer who may not open it ({@link #opens}) */
+    private static @Nullable String rulesUrl(@NonNull AccessContext access, @NonNull Integer listId) {
+        return opens(access, HohenheimSlugs.ACCESS_LISTS, listId, HohenheimSlugs.Tab.RULES)
+            ? CmsRoutes.subpage(CmsSupport.panelSlug(access.conduit()), HohenheimSlugs.ACCESS_LISTS, listId,
+                HohenheimSlugs.Tab.RULES).toUrl()
+            : null;
+    }
+
+    /**
+     * Whether this viewer may change which list guards the whole site: this panel's site form edits that field for
+     * them and they may update the site. The delegated form carries no such field, so /manage never offers it.
+     */
+    private static boolean changesWholeApp(@NonNull Row site, @NonNull AccessContext access) {
+        Conduit conduit = access.conduit();
+        Panel panel = conduit == null ? null : PanelRegistry.getBySlug(CmsSupport.panelSlug(conduit));
+        PanelResource<Row> entry = panel == null ? null : CmsSupport.declaredRowEntry(panel, HohenheimSlugs.SITES);
+        String field = SiteModel.ACCESS_LIST_ID.getName();
+        return entry != null && panel.admits(entry, access)
+            && PartsForms.formSpec(entry).findEntry(field) != null
+            && PartsForms.editableAlong(entry, field, access, site)
+            && ResourceVerbs.allows(panel, entry, ResourceVerb.UPDATE, site, access);
     }
 
     /** The workload's measured resources, each the framework's usage gauge, so NOT MEASURED stays an answer. */

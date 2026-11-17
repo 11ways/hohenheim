@@ -21,6 +21,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
 import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
+import be.elevenways.hohenheim.site.ProtectPath;
 import be.elevenways.hohenheim.site.SiteHostnamesCell;
 import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.hohenheim.site.SiteTls;
@@ -125,16 +126,24 @@ public final class SiteParts {
         .visibleWhen((site, access) -> reachOf(site).asksAddress());
 
     /**
-     * The Protection tab, in the overview card's word: the framework's child list over the panel's protected-path entry
-     * (its /manage twin there), under the site. A TLS passthrough site terminates nothing here, so it has no paths to
-     * protect and no tab.
+     * The Protection tab, in the overview card's word: first the whole app's protection (the site's own access list,
+     * {@link AppOverview#protectionBand}), then the framework's child list over the panel's protected-path entry (its
+     * /manage twin there) under the site, headed as the paths that carry their own, offering Protect a path in place.
+     * A TLS passthrough site terminates nothing here, so it has no paths to protect and no tab.
+     *
+     * AIDEV-NOTE: a site guarded as a whole used to read "No protected paths yet" here, as if unguarded: the band says
+     * what guards every address before the list says which paths differ.
      *
      * @param paths the protected-path entry of the panel the tab is in
      */
     private static @NonNull ChildList<Row> protectedPaths(@NonNull PanelResource<Row> paths) {
         return ChildList.<Row>of(paths)
             .label(HohenheimMicrocopy.APP_OVERVIEW.of("protection"))
-            .visibleWhen((site, access) -> servesHttp(site));
+            .visibleWhen((site, access) -> servesHttp(site))
+            .widgets(AppOverview::protectionBand)
+            .heading(HohenheimSlugs.PROTECTED_PATHS,
+                (site, access) -> HohenheimMicrocopy.APP_OVERVIEW.of("paths_own_protection"))
+            .parentActions(HohenheimSlugs.PROTECTED_PATHS, ProtectPath.OPERATION.id());
     }
 
     /**

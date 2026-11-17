@@ -1,11 +1,16 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.AttentionItem;
+import be.elevenways.hohenheim.HohenheimCapabilities;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
+import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -15,6 +20,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -23,6 +29,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * A protected path only ever points at a list that really guards it, from both sides: no path is pointed at an open
  * list, and no rule or list write opens a list that protects a path. A path stored open before this rule keeps
  * serving, flagged as open to everyone.
+ * A site's Protection tab and overview card lead with what guards the whole app, by the same reading.
  *
  * @author Jelle De Loecker
  * @since  0.2.0
@@ -96,6 +103,100 @@ class ProtectedPathJourneyTest extends HohenheimHttpTestBase {
             Map.of("username", "editor", "password", "correct horse"), true);
         assertThat(AccessRuleSummaries.summaryOf(named, AccessRuleModel.TYPE_BASIC_AUTH).key())
             .as("step 2: a username is shown").isEqualTo("summary_basic_auth");
+    }
+
+    @Test
+    void theProtectionTabLeadsWithWhatGuardsTheWholeApp() throws Exception {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        String listName = "DAEL lab " + suffix;
+        int lab = list(listName, AccessListModel.SATISFY_ANY);
+        rule(lab, null, AccessRuleModel.TYPE_BASIC_AUTH, Map.of("username", "anna", "password", "correct horse"),
+            true);
+        Row guarded = site("whole-app-guarded-" + suffix);
+        guarded.set(SiteModel.ACCESS_LIST_ID, lab);
+        Models.get(SiteModel.class).save(guarded);
+        Integer guardedId = guarded.get(SiteModel.ID);
+        String rules = "/admin/" + HohenheimSlugs.ACCESS_LISTS + "/" + lab + "/page/" + HohenheimSlugs.Tab.RULES;
+
+        // 1. A site guarded by a whole-app list leads its Protection tab with the Whole app card: the list by name,
+        //    linked to its rules, how it lets visitors in, Protected, and "Edit who gets in" to those rules.
+        String tab = adminGet(protectionTab("admin", guardedId)).body();
+        String band = bandOf(tab);
+        assertThat(band).as("step 1: the Whole app card, saying what it guards")
+            .contains("Whole app").contains("What every visitor must pass, on every address of this app.");
+        assertThat(band).as("step 1: THE ASSERTION -- the list by name, linked to its Rules tab")
+            .contains("data-app-protection=\"Access list " + listName + "\"")
+            .contains("href=\"" + rules + "\"");
+        assertThat(band).as("step 1: how it lets visitors in, as protection")
+            .contains("Password, 1 person").contains("Protected").doesNotContain("data-app-protection-open");
+        assertThat(band).as("step 1: the card's door leads to who gets in").contains("Edit who gets in");
+
+        // 2. Under it the paths section, headed as the paths that carry their own protection; empty, it says every
+        //    path follows the whole app and offers protecting one in place.
+        String paths = tab.substring(tab.indexOf("data-cms-child-list=\"" + HohenheimSlugs.PROTECTED_PATHS + "\""));
+        assertThat(paths).as("step 2: the section's own heading").contains("Paths with their own protection");
+        assertThat(paths).as("step 2: the empty section says what protecting a path does")
+            .contains("Until a path is protected here, it follows its app");
+        assertThat(paths).as("step 2: and offers Protect a path there")
+            .contains("/invoke/hohenheim.protect_path");
+
+        // 3. The overview's Protection card reads "Whole app" while no path has its own, linked to the same rules.
+        String overview = adminGet("/admin/sites/" + guardedId + "/page/overview").body();
+        assertThat(overview).as("step 3: the whole-app row, named for what it covers")
+            .contains("data-app-protection=\"Whole app\"")
+            .contains("Access list " + listName + ": Password, 1 person");
+        assertThat(overview).as("step 3: THE ASSERTION -- linked to the list's rules")
+            .contains("href=\"" + rules + "\"");
+
+        // 4. A tenant managing the site but not the list reads the list's name without a door to it.
+        UUID tenantId = ApiSupport.user("whole-app-" + suffix + "@hohenheim.local", "Whole App Tenant");
+        RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, guardedId,
+            HohenheimCapabilities.MANAGE, true);
+        String tenantBand = bandOf(httpGet(protectionTab("manage", guardedId), sessionFor(tenantId).token()).body());
+        assertThat(tenantBand).as("step 4: the list by name")
+            .contains("data-app-protection=\"Access list " + listName + "\"");
+        assertThat(tenantBand).as("step 4: THE ASSERTION -- no link to a list the tenant cannot open")
+            .doesNotContain("/" + HohenheimSlugs.ACCESS_LISTS + "/" + lab)
+            .doesNotContain("Edit who gets in")
+            .doesNotContain("data-widget-card-link");
+
+        // 5. A site without a list is open to everyone, said plainly; its form is the door to guard it.
+        Integer openId = site("whole-app-open-" + suffix).get(SiteModel.ID);
+        String openBand = bandOf(adminGet(protectionTab("admin", openId)).body());
+        assertThat(openBand).as("step 5: open to everyone, in words")
+            .contains("data-app-protection=\"Open to everyone\"")
+            .contains("Anyone who has the address can open this app.")
+            .doesNotContain("Protected");
+        assertThat(openBand).as("step 5: the card's door is the site's form")
+            .contains("href=\"/admin/sites/" + openId + "\"").contains("Change");
+
+        // 6. A whole-app list that lets everyone through reads as open, as an open path does, never as protected.
+        int empty = list("Empty " + suffix, AccessListModel.SATISFY_ANY);
+        Row hollow = site("whole-app-hollow-" + suffix);
+        hollow.set(SiteModel.ACCESS_LIST_ID, empty);
+        Models.get(SiteModel.class).save(hollow);
+        String hollowBand = bandOf(adminGet(protectionTab("admin", hollow.get(SiteModel.ID))).body());
+        assertThat(hollowBand).as("step 6: THE ASSERTION -- flagged open")
+            .contains("data-app-protection-open=\"1\"").contains("Open to everyone").doesNotContain("Protected");
+
+        // 7. Once a path has its own protection, the overview's row is the rest of the app: "Everything else".
+        protect(guarded, "/members", lab);
+        assertThat(adminGet("/admin/sites/" + guardedId + "/page/overview").body())
+            .as("step 7: the row names the rest beside the path")
+            .contains("data-app-protection=\"Everything else\"")
+            .contains("data-app-protection=\"/members\"");
+    }
+
+    private static String protectionTab(String panel, Object siteId) {
+        return "/" + panel + "/sites/" + siteId + "/page/" + HohenheimSlugs.PROTECTED_PATHS;
+    }
+
+    /** @return the tab's band about the site, from its mount to the first section */
+    private static String bandOf(String page) {
+        int start = page.indexOf("data-cms-child-list-band");
+        int end = page.indexOf("data-cms-child-list=\"" + HohenheimSlugs.PROTECTED_PATHS + "\"");
+        assertThat(start).as("the band draws above the paths section: " + page).isNotNegative().isLessThan(end);
+        return page.substring(start, end);
     }
 
     private static void assertRefused(Runnable write, String key, String step) {

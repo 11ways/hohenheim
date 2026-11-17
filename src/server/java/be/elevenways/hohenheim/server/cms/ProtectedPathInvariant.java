@@ -48,7 +48,12 @@ public final class ProtectedPathInvariant {
     /** @return whether this protected path's list lets every visitor through, as the gate would compile it */
     public static boolean isOpen(@NonNull Row protectedPath) {
         Object listId = protectedPath.get(ProtectedPathModel.ACCESS_LIST_ID);
-        return listId instanceof Integer id && admitsEveryone(id, null, rulesOf(id));
+        return listId instanceof Integer id && listAdmitsEveryone(id);
+    }
+
+    /** @return whether this access list lets every visitor through, as the gate would compile it */
+    public static boolean listAdmitsEveryone(int listId) {
+        return admitsEveryone(listId, null, rulesOf(listId));
     }
 
     /** Installs the invariant once per JVM. */

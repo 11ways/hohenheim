@@ -8201,16 +8201,10 @@
     "text": "Enkel loopback",
     "scope": "port_exposure"
   },
-  "public": [
-    {
-      "text": "Publiek",
-      "scope": "port_exposure"
-    },
-    {
-      "text": "Openbaar",
-      "scope": "app_overview"
-    }
-  ],
+  "public": {
+    "text": "Publiek",
+    "scope": "port_exposure"
+  },
   "instance_not_permitted": {
     "text": "Je mag deze actie niet uitvoeren op deze instantie",
     "scope": "violations"
@@ -15703,6 +15697,38 @@
   "everything_else": {
     "text": "Al de rest",
     "scope": "app_overview"
+  },
+  "whole_app": {
+    "text": "Hele app",
+    "scope": "app_overview"
+  },
+  "whole_app_lead": {
+    "text": "Waar elke bezoeker langs moet, op elk adres van deze app.",
+    "scope": "app_overview"
+  },
+  "whole_app_anyone": {
+    "text": "Iedereen die het adres heeft, kan deze app openen.",
+    "scope": "app_overview"
+  },
+  "whole_app_list": {
+    "text": "{$list}: {$lets_in}",
+    "scope": "app_overview"
+  },
+  "edit_who_gets_in": {
+    "text": "Wijzigen wie binnen mag",
+    "scope": "app_overview"
+  },
+  "change_whole_app": {
+    "text": "Wijzigen",
+    "scope": "app_overview"
+  },
+  "paths_own_protection": {
+    "text": "Paden met een eigen beveiliging",
+    "scope": "app_overview"
+  },
+  "no_own_protection": {
+    "text": "Zolang een pad hier niet beveiligd is, volgt het de beveiliging van zijn app. Een beveiligd pad krijgt een eigen toegangslijst.",
+    "scope": "protected_path"
   },
   "switched_on": {
     "text": "Ingeschakeld",
