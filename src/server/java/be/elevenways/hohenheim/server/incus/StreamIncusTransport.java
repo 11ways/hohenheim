@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.server.util.Http11;
 import be.elevenways.hohenheim.server.util.Watchdog;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.util.Closeables;
-import be.elevenways.zenit.server.net.WebSocketFrames;
+import be.elevenways.zenit.server.net.WebSocketStream;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -18,16 +18,15 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.LinkedHashMap;
+import java.time.Duration;
 import java.util.Map;
-import java.util.Locale;
 
 /**
  * The shared half of both Incus transports: one fresh channel per REST exchange
- * ({@code Connection: close}, a bounded {@link Http11} head-then-body read) and the RFC 6455
- * client handshake for the websocket lane, its key and accept value from zenit's
- * {@link WebSocketFrames}. Subclasses only open the byte channel --
- * a pinned+identified TLS socket, or the local unix socket.
+ * ({@code Connection: close}, a bounded {@link Http11} head-then-body read) and the websocket
+ * lane, zenit's {@link WebSocketStream} over the same channel: Incus speaks RFC 6455 over its
+ * unix socket too, where no URL (and so no outbound policy) applies. Subclasses only open the
+ * byte channel -- a pinned+identified TLS socket, or the local unix socket.
  */
 abstract class StreamIncusTransport implements IncusTransport {
 
@@ -188,84 +187,32 @@ abstract class StreamIncusTransport implements IncusTransport {
     @Override
     public @NonNull IncusWebSocket openWebSocket(@NonNull String pathAndQuery,
                                                  long connectTimeoutMs) throws IOException {
-        String key = WebSocketFrames.newKey();
-        Map<String, String> headers = new LinkedHashMap<>();
-        headers.put("Upgrade", "websocket");
-        headers.put("Connection", "Upgrade");
-        headers.put("Sec-WebSocket-Key", key);
-        headers.put("Sec-WebSocket-Version", "13");
-        byte[] head = Http11.head("GET", pathAndQuery, hostHeader(), headers);
-
         Channel channel = open(connectTimeoutMs);
-        // The watchdog covers connect + handshake ONLY: an established stream lives
-        // until a side closes it.
-        Watchdog.Deadline watchdog = deadline(channel, "websocket " + pathAndQuery, connectTimeoutMs);
+        WebSocketStream stream;
         try {
-            OutputStream out = channel.out();
-            out.write(head);
-            out.flush();
-            InputStream in = channel.in();
-            String response = readHandshakeHead(in);
-            verifyHandshake(response, key);
-            watchdog.cancel();
-            return new Rfc6455WebSocket(in, out, channel);
+            // The deadline covers the upgrade ONLY: an established stream lives until a side closes it.
+            stream = WebSocketStream.upgrade(channel.in(), channel.out(), channel, hostHeader(), pathAndQuery,
+                Duration.ofMillis(connectTimeoutMs), MAX_RESPONSE_BYTES);
         } catch (IOException e) {
             Closeables.closeQuietly(channel);
-            if (watchdog.expired()) {
-                throw new IOException("Incus websocket handshake with " + describe()
-                    + " timed out after " + connectTimeoutMs + "ms");
-            }
-            throw e;
-        } finally {
-            watchdog.cancel();
+            throw new IOException("Incus websocket upgrade at " + describe() + " failed: " + e.getMessage(), e);
         }
-    }
+        return new IncusWebSocket() {
+            @Override
+            public byte @Nullable [] receive() throws IOException {
+                WebSocketStream.Message message = stream.receive();
+                return message == null ? null : message.payload();
+            }
 
-    /** Read EXACTLY the response head (up to CRLFCRLF), never a byte of the first frame. */
-    private static @NonNull String readHandshakeHead(@NonNull InputStream in) throws IOException {
-        ByteArrayOutputStream head = new ByteArrayOutputStream();
-        int matched = 0;
-        while (matched < 4) {
-            int value = in.read();
-            if (value < 0) {
-                throw new IOException("connection closed during the websocket handshake: "
-                    + head.toString(StandardCharsets.ISO_8859_1).lines().findFirst().orElse(""));
+            @Override
+            public void send(byte @NonNull [] data) throws IOException {
+                stream.sendBinary(data);
             }
-            head.write(value);
-            boolean cr = value == '\r';
-            boolean lf = value == '\n';
-            matched = switch (matched) {
-                case 0 -> cr ? 1 : 0;
-                case 1 -> lf ? 2 : cr ? 1 : 0;
-                case 2 -> cr ? 3 : 0;
-                default -> lf ? 4 : cr ? 1 : 0;
-            };
-            if (head.size() > 64 * 1024) {
-                throw new IOException("oversized websocket handshake response");
-            }
-        }
-        return head.toString(StandardCharsets.ISO_8859_1);
-    }
 
-    private void verifyHandshake(@NonNull String response, @NonNull String key)
-            throws IOException {
-        String[] lines = response.split("\r\n");
-        if (lines.length == 0 || !lines[0].contains(" 101 ")) {
-            throw new IOException("Incus refused the websocket upgrade at " + describe()
-                + ": " + (lines.length > 0 ? lines[0] : "(empty response)"));
-        }
-        String expected = WebSocketFrames.acceptOf(key);
-        for (String line : lines) {
-            int colon = line.indexOf(':');
-            if (colon > 0 && line.substring(0, colon).trim()
-                    .toLowerCase(Locale.ROOT).equals("sec-websocket-accept")) {
-                String accept = line.substring(colon + 1).trim();
-                if (!expected.equals(accept)) {
-                    throw new IOException("websocket accept mismatch from " + describe());
-                }
-                return;
+            @Override
+            public void close() {
+                stream.close();
             }
-        }
-        throw new IOException("websocket handshake carried no Sec-WebSocket-Accept");
+        };
     }
 }
