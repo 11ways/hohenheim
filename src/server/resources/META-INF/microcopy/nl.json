@@ -7966,10 +7966,17 @@
       "scope": "instance_shell"
     }
   ],
-  "runs": {
-    "text": "Uitvoeringen",
-    "scope": "instance_schedule"
-  },
+  "runs": [
+    {
+      "text": "Uitvoeringen",
+      "scope": "instance_schedule"
+    },
+    {
+      "text": "uitvoeringen",
+      "scope": "instance_schedule",
+      "case": "sentence"
+    }
+  ],
   "add": [
     {
       "text": "Toevoegen aan deze map",
@@ -8679,10 +8686,17 @@
     "text": "Deze applicatie heeft geen draaiende release om verkeer van weg te schakelen",
     "scope": "violations"
   },
-  "members": {
-    "text": "Leden",
-    "scope": "project"
-  },
+  "members": [
+    {
+      "text": "Leden",
+      "scope": "project"
+    },
+    {
+      "text": "leden",
+      "scope": "project",
+      "case": "sentence"
+    }
+  ],
   "owned_sites": {
     "text": "Sites",
     "scope": "project"
@@ -19386,7 +19400,7 @@
   "not_answering": {"scope": "status_probe", "text": "Antwoordt niet"},
   "checking": {"scope": "status_probe", "text": "Bezig met nagaan"},
   "live_figure": {"scope": "instance", "text": "Live"},
-  "build_hooks_plural": {"text": "Build hooks", "scope": "build_hook"},
+  "build_hooks_plural": [{"text": "Build hooks", "scope": "build_hook"}, {"text": "build hooks", "scope": "build_hook", "case": "sentence"}],
   "build_hook_singular": {"text": "Build hook", "scope": "build_hook"},
   "build_hooks_lead": {"text": "Een build hook is een geheime URL: alles wat ernaar POST, een CMS dat publiceert of een taak elders, rolt deze app uit. Hij antwoordt alleen over HTTPS, dus een nieuwe URL die enkel als pad verschijnt betekent dat nog geen adres van deze app een werkend certificaat heeft: voeg er een toe, of zet een https-adres met een certificaat voor het pad.", "scope": "build_hook"},
   "build_hooks_empty": {"text": "Nog geen build hooks. Maak er een aan om een CMS of een geplande taak deze app te laten uitrollen.", "scope": "build_hook"},
@@ -19438,7 +19452,7 @@
   "restore_database_dump": {"text": "{$actor} herstelde databaseback-up {$subject} in een nieuwe database", "scope": "hohenheim", "target": "happened"},
   "restore_database_dump_in_place": {"text": "{$actor} herstelde databaseback-up {$subject} ter plaatse", "scope": "hohenheim", "target": "happened"},
   "delete_database_dump": {"text": "{$actor} verwijderde databaseback-up {$subject}", "scope": "hohenheim", "target": "happened"},
-  "dump_plural": {"text": "Databaseback-ups", "scope": "database_dump"},
+  "dump_plural": [{"text": "Databaseback-ups", "scope": "database_dump"}, {"text": "databaseback-ups", "scope": "database_dump", "case": "sentence"}],
   "dump_singular": {"text": "Databaseback-up", "scope": "database_dump"},
   "dump_tab": {"text": "Back-ups", "scope": "database_dump"},
   "dump_lead": {"text": "Dumps van deze database, versleuteld bewaard op het back-updoel.", "scope": "database_dump"},

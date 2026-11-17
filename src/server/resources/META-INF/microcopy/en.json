@@ -7966,10 +7966,17 @@
       "scope": "instance_shell"
     }
   ],
-  "runs": {
-    "text": "Schedule runs",
-    "scope": "instance_schedule"
-  },
+  "runs": [
+    {
+      "text": "Schedule runs",
+      "scope": "instance_schedule"
+    },
+    {
+      "text": "schedule runs",
+      "scope": "instance_schedule",
+      "case": "sentence"
+    }
+  ],
   "add": [
     {
       "text": "Add to this directory",
@@ -8679,10 +8686,17 @@
     "text": "This application has no running release to switch traffic away from",
     "scope": "violations"
   },
-  "members": {
-    "text": "Members",
-    "scope": "project"
-  },
+  "members": [
+    {
+      "text": "Members",
+      "scope": "project"
+    },
+    {
+      "text": "members",
+      "scope": "project",
+      "case": "sentence"
+    }
+  ],
   "owned_sites": {
     "text": "Sites",
     "scope": "project"
@@ -19386,7 +19400,7 @@
   "not_answering": {"scope": "status_probe", "text": "Not answering"},
   "checking": {"scope": "status_probe", "text": "Checking"},
   "live_figure": {"scope": "instance", "text": "Live"},
-  "build_hooks_plural": {"text": "Build hooks", "scope": "build_hook"},
+  "build_hooks_plural": [{"text": "Build hooks", "scope": "build_hook"}, {"text": "build hooks", "scope": "build_hook", "case": "sentence"}],
   "build_hook_singular": {"text": "Build hook", "scope": "build_hook"},
   "build_hooks_lead": {"text": "A build hook is a secret URL: anything that POSTs to it, a CMS publishing or a job elsewhere, deploys this app. It answers over HTTPS only, so a new URL shown as a bare path means no address of this app has a working certificate yet: add one, or prefix the path with an https address that has one.", "scope": "build_hook"},
   "build_hooks_empty": {"text": "No build hooks yet. Create one to let a CMS or a scheduled job deploy this app.", "scope": "build_hook"},
@@ -19438,7 +19452,7 @@
   "restore_database_dump": {"text": "{$actor} restored database backup {$subject} into a new database", "scope": "hohenheim", "target": "happened"},
   "restore_database_dump_in_place": {"text": "{$actor} restored database backup {$subject} in place", "scope": "hohenheim", "target": "happened"},
   "delete_database_dump": {"text": "{$actor} deleted database backup {$subject}", "scope": "hohenheim", "target": "happened"},
-  "dump_plural": {"text": "Database backups", "scope": "database_dump"},
+  "dump_plural": [{"text": "Database backups", "scope": "database_dump"}, {"text": "database backups", "scope": "database_dump", "case": "sentence"}],
   "dump_singular": {"text": "Database backup", "scope": "database_dump"},
   "dump_tab": {"text": "Backups", "scope": "database_dump"},
   "dump_lead": {"text": "Dumps of this database, stored encrypted on the backup target.", "scope": "database_dump"},
