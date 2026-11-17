@@ -28,6 +28,7 @@ import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.routing.UrlTarget;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.HashMap;
 import java.util.List;
@@ -298,17 +299,24 @@ final class SiteActions {
     /**
      * Deploy a site that serves a folder from a repository: the Static site kind's own settings in a sheet, a
      * background run that builds and releases the app before the site is pointed at it, and once it ended well the
-     * app's Deploys tab, where every later push shows. The kind is fixed, never asked.
+     * app's Deploys tab, where every later push shows. The kind is fixed, never asked; the sheet also opens with it, so
+     * its host pick judges each host for a Static site as Put-online's does.
      */
     private static @NonNull PanelAction<Row> deployFromRepositoryAction() {
         return PanelAction.<Row, Integer>placesRun(PutOnline.DEPLOY_FROM_REPOSITORY, ActionPlacement.ROW)
             .finishedRunOpens(Row.class, InstanceDeploymentsPage::tabOf)
             .inlineInRow(false)
             .inSheet()
-            .fixed((site, request) -> Map.of(InstanceModel.KIND.getName(), StaticSiteKind.ID.toString()))
+            .fixed(SiteActions::staticSiteKind)
+            .inputValues(SiteActions::staticSiteKind)
             .description(HohenheimMicrocopy.SITE_REPOSITORY.of("deploy_from_repository_description"))
             .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.SITE_REPOSITORY.of("deploy_from_repository"),
                 HohenheimMicrocopy.SITE_REPOSITORY.of("deploy_from_repository_description"), ActionStyle.PRIMARY))
             .build();
+    }
+
+    /** @return the kind a site's repository deploy makes: a Static site, whatever the site or request */
+    private static @NonNull Map<String, Object> staticSiteKind(@Nullable Row site, @NonNull PanelRequest request) {
+        return Map.of(InstanceModel.KIND.getName(), StaticSiteKind.ID.toString());
     }
 }

@@ -17,6 +17,7 @@ import be.elevenways.hohenheim.model.SiteRedirectModel;
 import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.StaticUpstreamKind;
 import be.elevenways.hohenheim.site.ProtectPath;
+import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.RecordedChanges;
 import be.elevenways.hohenheim.server.ControllerScope;
@@ -92,6 +93,13 @@ class StaticSiteJourneyTest extends HohenheimTestBase {
     private static final String HOSTNAME = "static-journey.test";
     private static final String FOLDER_SITE = "folder-journey";
     private static final String FOLDER_HOSTNAME = "folder-journey.test";
+    private static final String SHEET = ".pl-sheet-panel[data-open]";
+    private static final String SHEET_OK = SHEET + " pl-button[data-cms-confirm-ok]";
+    private static final String INPUT_FORM = "form[data-cms-action-input]";
+    private static final String DEPLOY_ACTION = "[data-action-id='" + PutOnline.DEPLOY_FROM_REPOSITORY.id() + "']";
+    private static final String SETTINGS_REPOSITORY = InstanceModel.SETTINGS.getName() + ".repository_url";
+    private static final String OFFERED = "data-action-id=\"" + PutOnline.DEPLOY_FROM_REPOSITORY.id() + "\"";
+    private static final String RECORD_MENU = ".cms-record-toolbar pl-dropdown-menu-trigger pl-button";
 
     /** Unique per run, so a stale checkout or image of an earlier run can never answer for this one. */
     private static final String MARK = "static-" + System.nanoTime();
@@ -302,69 +310,155 @@ class StaticSiteJourneyTest extends HohenheimTestBase {
             .as("step 2: and the tenant's invoke is refused").isNotNull()
             .extracting(DomainRefusal::reason).isEqualTo(ZenitRefusalReason.FORBIDDEN);
 
-        // 3. A repository that does not build: the run fails with the build's reason, the site still serves its
+        // 3. On the site's own page the action opens its sheet: its title and lead in words, and the Static site
+        //    kind's own settings, with no type to see or choose. A blank repository is refused on its field, in the
+        //    sheet, and nothing is made.
+        assertThat(adminGet("/admin/sites/" + siteId).body()).as("step 3: a folder site's page offers the action")
+            .contains(OFFERED);
+        openDeploySheet(siteId);
+        assertContainsText(SHEET + " pl-sheet-title", "Deploy from a repository", "step 3: the sheet's title");
+        assertContainsText(SHEET + " pl-sheet-description", "this site keeps its addresses and protection",
+            "step 3: and its lead says what will happen");
+        String sheet = page.locator(SHEET).textContent();
+        assertThat(sheet).as("step 3: the Static site's own settings are drawn")
+            .contains("Repository URL", "Git connection", "Branch", "Build command", "Output folder")
+            .doesNotContain("Nothing to configure yet");
+        List<String> headings = page.locator(SHEET + " zf-form-section pl-collapsible-trigger").allTextContents()
+            .stream().map(String::trim).toList();
+        for (String heading : List.of("Source and build", "Build", "Deployment", "Runtime")) {
+            assertThat(headings).as("step 3: the kind's section %s is drawn under its heading", heading)
+                .anyMatch(text -> text.startsWith(heading));
+        }
+        assertThat(page.locator(SHEET + " " + field(InstanceModel.KIND.getName())).count())
+            .as("step 3: the kind is never drawn").isZero();
+        click(SHEET_OK);
+        page.waitForSelector(SHEET + " " + field(SETTINGS_REPOSITORY) + " pl-field-error");
+        assertContainsText(SHEET + " " + field(SETTINGS_REPOSITORY) + " pl-field-error",
+            "Name the repository to deploy", "step 3: refused on the repository's own field");
+        assertThat(page.locator(SHEET).count()).as("step 3: the sheet stays open").isEqualTo(1);
+        assertThat(page.locator(SHEET).textContent()).as("step 3: still drawing the settings after the refusal")
+            .contains("Build command").doesNotContain("Nothing to configure yet");
+        assertThat(Models.get(InstanceModel.class).find().where(InstanceModel.NAME.eq(FOLDER_SITE)).first())
+            .as("step 3: no app was made").isNull();
+        String siteKey = SiteOperations.SITE.keyOf(site(siteId));
+        assertThat(OperationRuns.recentFor(SiteOperations.SITE, siteKey, 1, operator))
+            .as("step 3: and no run started").isEmpty();
+        click(SHEET + " pl-button[data-cms-confirm-cancel]");
+        waitForHidden(SHEET);
+
+        // 4. A repository that does not build: the run fails with the build's reason, the site still serves its
         //    folder, and no app is left behind.
-        OperationRun failed = ended(deploy(siteId, repositoryForm("exit 3"), operator), operator, "step 3");
-        assertThat(failed.status()).as("step 3: the run did not succeed").isNotEqualTo(OperationRunStatus.SUCCEEDED);
-        assertThat(failed.outcome()).as("step 3: and says why").isNotNull();
-        assertThat(failed.outcome().key()).as("step 3: the build's own reason (%s)", failed.outcome())
+        long failedRunId = deploy(siteId, repositoryForm("exit 3"), operator);
+        OperationRun failed = ended(failedRunId, operator, "step 4");
+        assertThat(failed.status()).as("step 4: the run did not succeed").isNotEqualTo(OperationRunStatus.SUCCEEDED);
+        assertThat(failed.outcome()).as("step 4: and says why").isNotNull();
+        assertThat(failed.outcome().key()).as("step 4: the build's own reason (%s)", failed.outcome())
             .isEqualTo("application_image_build_failed");
-        assertThat((String) site(siteId).get(SiteModel.UPSTREAM_KIND)).as("step 3: the site still serves files")
+        assertThat((String) site(siteId).get(SiteModel.UPSTREAM_KIND)).as("step 4: the site still serves files")
             .isEqualTo(StaticUpstreamKind.ID.toString());
         assertThat(Models.get(InstanceModel.class).find().where(InstanceModel.NAME.eq(FOLDER_SITE)).first())
-            .as("step 3: no app is left behind").isNull();
+            .as("step 4: no app is left behind").isNull();
         assertThat(ProxyTestSupport.rawRequest(port, FOLDER_HOSTNAME, "/"))
-            .as("step 3: the folder still answers").contains("200").contains(MARK + "-folder");
+            .as("step 4: the folder still answers").contains("200").contains(MARK + "-folder");
 
-        // 4. A repository that builds: the run ends well, the app takes the site's name, and its first release
-        //    serves the built page on the site's own address.
-        OperationRun run = ended(deploy(siteId, repositoryForm("mkdir -p out && cp index.html out/"), operator),
-            operator, "step 4");
-        assertThat(run.status()).as("step 4: the run succeeded (%s)", run.outcome())
+        // 5. A repository that builds, typed into the sheet: the run it starts ends well, the app takes the site's
+        //    name and exactly the typed settings, and its first release serves the built page on the site's own
+        //    address.
+        openDeploySheet(siteId);
+        typeInto(SETTINGS_REPOSITORY, folderUpstream.toString());
+        typeInto("settings.build_command", "mkdir -p out && cp index.html out/");
+        typeInto("settings.output_directory", "out");
+        click(SHEET + " zf-form-section:has(" + field("settings.build_image") + ") pl-collapsible-trigger");
+        page.waitForSelector(SHEET + " " + field("settings.build_image") + " input:not([type='hidden']):visible");
+        typeInto("settings.build_image", TestImages.ALPINE);
+        waitForNavigationEnded(() -> click(SHEET_OK));
+        OperationRun started = Poll.value("step 5: the sheet started a run", Duration.ofSeconds(30),
+            Duration.ofMillis(100), () -> OperationRuns.recentFor(SiteOperations.SITE, siteKey, 1, operator).stream()
+                .filter(seen -> seen.id() > failedRunId).findFirst().orElse(null));
+        OperationRun run = ended(started.id(), operator, "step 5");
+        assertThat(run.status()).as("step 5: the run succeeded (%s)", run.outcome())
             .isEqualTo(OperationRunStatus.SUCCEEDED);
         Row app = Models.get(InstanceModel.class).find().where(InstanceModel.NAME.eq(FOLDER_SITE)).first();
-        assertThat(app).as("step 4: the app exists under the site's name").isNotNull();
+        assertThat(app).as("step 5: the app exists under the site's name").isNotNull();
         folderAppId = app.get(InstanceModel.ID);
-        assertThat((String) app.get(InstanceModel.KIND)).as("step 4: a Static site").isEqualTo("hohenheim:static_site");
+        assertThat((String) app.get(InstanceModel.KIND)).as("step 5: a Static site").isEqualTo("hohenheim:static_site");
+        Map<String, Object> stored = InstanceModel.settingsOf(app);
+        assertThat(List.of(String.valueOf(stored.get("repository_url")), String.valueOf(stored.get("build_command")),
+                String.valueOf(stored.get("output_directory")), String.valueOf(stored.get("build_image"))))
+            .as("step 5: the app holds exactly what was typed into the sheet")
+            .isEqualTo(List.of(folderUpstream.toString(), "mkdir -p out && cp index.html out/", "out",
+                TestImages.ALPINE));
+        assertThat(stored.get("auto_deploy")).as("step 5: and the kind's defaults, so every push deploys")
+            .isEqualTo(true);
         Row switched = site(siteId);
         assertThat(List.of(String.valueOf((Object) switched.get(SiteModel.UPSTREAM_KIND)),
                 String.valueOf((Object) switched.get(SiteModel.INSTANCE_ID))))
-            .as("step 4: the site serves the app now")
+            .as("step 5: the site serves the app now")
             .isEqualTo(List.of(InstanceUpstreamKind.ID.toString(), String.valueOf(folderAppId)));
-        servingAt(folderAppId, git(folderUpstream, "rev-parse", "HEAD").trim(), "step 4");
+        servingAt(folderAppId, git(folderUpstream, "rev-parse", "HEAD").trim(), "step 5");
         assertThat(ProxyTestSupport.rawRequest(port, FOLDER_HOSTNAME, "/"))
-            .as("step 4: the same address serves the built page").contains("200").contains(MARK + "-repo-one");
+            .as("step 5: the same address serves the built page").contains("200").contains(MARK + "-repo-one");
         assertThat(List.of(statusLine(port, "/members"), statusLine(port, "/old")))
-            .as("step 4: the protected path and the redirect answer as they did on the folder").isEqualTo(guarded);
+            .as("step 5: the protected path and the redirect answer as they did on the folder").isEqualTo(guarded);
 
-        // 5. Everything else the site had is as it was, the folder is still on disk, and the site's history names it.
-        assertThat(keptOf(siteId)).as("step 5: name, addresses, certificates, list, provider, paths, redirects")
+        // 6. Everything else the site had is as it was, the folder is still on disk, the site's history names it, and
+        //    a site that no longer serves files is not offered the action again.
+        assertThat(keptOf(siteId)).as("step 6: name, addresses, certificates, list, provider, paths, redirects")
             .isEqualTo(kept);
-        assertThat(Files.exists(folder.resolve("index.html"))).as("step 5: the folder is still there").isTrue();
+        assertThat(Files.exists(folder.resolve("index.html"))).as("step 6: the folder is still there").isTrue();
         List<RecordedChanges.Recorded> deployed = RecordedChanges.withFact(Models.get(SiteModel.class), siteId,
             HohenheimActivityAction.REPOSITORY_DEPLOYED);
-        assertThat(deployed).as("step 5: one history line").hasSize(1);
+        assertThat(deployed).as("step 6: one history line").hasSize(1);
         assertThat(deployed.getFirst().fact(HohenheimActivityAction.REPOSITORY_DEPLOYED)
                 .get(HohenheimActivityAction.PATH_KEY))
-            .as("step 5: naming the folder it served before").isEqualTo(folder.toString());
+            .as("step 6: naming the folder it served before").isEqualTo(folder.toString());
+        assertThat(adminGet("/admin/sites/" + siteId).body()).as("step 6: an app's site is not offered the action")
+            .doesNotContain(OFFERED);
 
-        // 6. The app is listed with its Deploys tab, where the run's onward link leads.
+        // 7. The app is listed with its Deploys tab, where the run's onward link leads.
         assertThat(adminGet(CmsRoutes.subpage(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCES, folderAppId,
                 HohenheimSlugs.Tab.DEPLOYMENTS).toUrl()).statusCode())
-            .as("step 6: the app's Deploys tab opens").isEqualTo(200);
+            .as("step 7: the app's Deploys tab opens").isEqualTo(200);
 
-        // 7. A push: the scheduled check deploys it, and the site's address serves the new page.
+        // 8. A push: the scheduled check deploys it, and the site's address serves the new page.
         Files.writeString(folderUpstream.resolve("index.html"), "<h1>" + MARK + "-repo-two</h1>\n");
         git(folderUpstream, "commit", "-q", "-am", "second page");
         String pushed = git(folderUpstream, "rev-parse", "HEAD").trim();
         Row record = Models.get(InstanceModel.class).findById(folderAppId);
         GitSourcePolls.Check check = GitSourcePolls.check(record, SiteSources.settingsOfInstance(record),
             Now.instant());
-        assertThat(check.finding()).as("step 7: the check deploys the pushed head (%s)", check.failure())
+        assertThat(check.finding()).as("step 8: the check deploys the pushed head (%s)", check.failure())
             .isEqualTo(GitSourcePolls.Finding.DEPLOYING);
-        servingAt(folderAppId, pushed, "step 7");
+        servingAt(folderAppId, pushed, "step 8");
         assertThat(ProxyTestSupport.rawRequest(port, FOLDER_HOSTNAME, "/"))
-            .as("step 7: the address serves the pushed page").contains("200").contains(MARK + "-repo-two");
+            .as("step 8: the address serves the pushed page").contains("200").contains(MARK + "-repo-two");
+    }
+
+    /** Opens the site's page and its Deploy from a repository sheet, waiting until the sheet draws its settings. */
+    private void openDeploySheet(int siteId) {
+        navigateToApp("/admin/sites/" + siteId);
+        waitForHydration();
+        openRecordMenu();
+        page.locator(DEPLOY_ACTION + ":visible").first().click();
+        page.waitForSelector(SHEET + " " + INPUT_FORM + " " + field(SETTINGS_REPOSITORY)
+            + " input:not([type='hidden'])");
+    }
+
+    /** Opens the record heading's overflow menu, unless the action is already drawn as a button. */
+    private void openRecordMenu() {
+        if (page.locator(DEPLOY_ACTION + ":visible").count() == 0 && page.locator(RECORD_MENU).count() > 0) {
+            page.locator(RECORD_MENU).first().click();
+            page.waitForSelector(".pl-dropdown-menu-content__popup");
+        }
+    }
+
+    /** Types a value into one field of the open sheet. */
+    private void typeInto(String path, String value) {
+        page.locator(SHEET + " " + field(path) + " input:not([type='hidden'])").first().fill(value);
+    }
+
+    private static String field(String path) {
+        return "pl-field[data-path='" + path + "']";
     }
 
     /** @return the repository deploy's form: the local host, the fixture repository and this build command */

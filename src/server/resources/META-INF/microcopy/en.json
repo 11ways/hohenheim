@@ -19495,6 +19495,7 @@
   "dump_delete": {"text": "Delete", "scope": "database_dump"},
   "deploy_from_repository": {"text": "Deploy from a repository", "scope": "site_repository"},
   "deploy_from_repository_description": {"text": "Hohenheim builds the repository and serves it; this site keeps its addresses and protection; every push deploys.", "scope": "site_repository"},
+  "repository_required": {"text": "Name the repository to deploy: its URL, or a Git connection and one of its repositories.", "scope": "site_repository"},
   "deploy_from_repository_happened": {"text": "{$actor} deployed {$subject} from a repository", "scope": "site_repository"},
   "run_release": {"text": "Build and serve it", "scope": "site_repository"},
   "run_switch": {"text": "Point this site at it", "scope": "site_repository"},

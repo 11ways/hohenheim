@@ -19495,6 +19495,7 @@
   "dump_delete": {"text": "Verwijderen", "scope": "database_dump"},
   "deploy_from_repository": {"text": "Deployen vanuit een repository", "scope": "site_repository"},
   "deploy_from_repository_description": {"text": "Hohenheim bouwt de repository en serveert ze; deze site behoudt haar adressen en bescherming; elke push wordt gedeployed.", "scope": "site_repository"},
+  "repository_required": {"text": "Geef de repository op die u wilt deployen: haar URL, of een Git-verbinding en een van haar repositories.", "scope": "site_repository"},
   "deploy_from_repository_happened": {"text": "{$actor} deployde {$subject} vanuit een repository", "scope": "site_repository"},
   "run_release": {"text": "Bouwen en serveren", "scope": "site_repository"},
   "run_switch": {"text": "Deze site ernaar laten wijzen", "scope": "site_repository"},

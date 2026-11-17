@@ -32,6 +32,8 @@ import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.StaticUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.StreamUpstreamKind;
 import be.elevenways.hohenheim.server.ports.SitePortClaims;
+import be.elevenways.hohenheim.server.source.SiteSources;
+import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
@@ -465,7 +467,8 @@ final class PutOnlineHandlers {
 
     /**
      * In the request, before a run is recorded: Put-online's own judgement of making a Static site app from its
-     * settings ({@link #admitKind}, refused on any other kind), then the site's update writer's reach of the site.
+     * settings ({@link #admitKind}, refused on any other kind), then the site's update writer's reach of the site, then
+     * a repository to deploy from, refused on its field so the sheet says it before anything is made.
      */
     private static @Nullable DomainRefusal admitRepository(@NonNull Row site,
                                                            PutOnline.@Nullable FromRepository input,
@@ -473,8 +476,16 @@ final class PutOnlineHandlers {
         String kind = input == null ? StaticSiteKind.ID.toString() : input.kind();
         DomainRefusal refusal = admitKind(access, kind, !StaticSiteKind.ID.toString().equals(kind)
             || !PutOnline.offeredWith(kind, PutOnlineReach.WEBSITE));
-        return refusal != null ? refusal
-            : SiteOperationHandlers.<PutOnline.FromRepository>reachesSite().refuse(site, input, access);
+        if (refusal == null) {
+            refusal = SiteOperationHandlers.<PutOnline.FromRepository>reachesSite().refuse(site, input, access);
+        }
+        if (refusal != null || input == null
+                || SiteSources.hasRepository(input.settings() == null ? Map.of() : input.settings())) {
+            return refusal;
+        }
+        return new DomainRefusal(ZenitRefusalReason.INVALID, "a repository deploy names no repository",
+            InstanceModel.SETTINGS.getName() + "." + GitSourceSchema.REPOSITORY_URL,
+            HohenheimMicrocopy.SITE_REPOSITORY.of("repository_required"));
     }
 
     /**

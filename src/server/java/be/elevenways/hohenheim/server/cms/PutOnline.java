@@ -22,6 +22,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
+import be.elevenways.hohenheim.server.instance.StaticSiteKind;
 import be.elevenways.hohenheim.server.tls.HostnameReach;
 import be.elevenways.hohenheim.server.upstream.kinds.StreamUpstreamKind;
 import be.elevenways.hohenheim.upstream.UpstreamKindInfo;
@@ -457,18 +458,24 @@ public final class PutOnline {
         .build();
 
     /**
-     * A site's repository deploy: the Static site kind's own settings, as the kind-led website flow asks them, and the
-     * host pick that flow asks for every kind; no name and no address, since the app takes the site's name and the
-     * site keeps its own addresses.
+     * A site's repository deploy: the Static site kind's own settings, as the kind-led website flow draws them for
+     * that kind, and the host pick that flow asks for every kind; no name and no address, since the app takes the
+     * site's name and the site keeps its own addresses.
      *
-     * AIDEV-NOTE: the kind is an entry like {@link #WORKLOAD_INPUT}'s, so the settings derive from it and the host pick
-     * judges it, through the same entries; the site's placement fixes it to the Static site kind (SiteActions) and the
-     * authorizer refuses any other (PutOnlineHandlers.admitRepository), so no surface makes another kind this way.
+     * AIDEV-NOTE: the settings are the kind-led settings entry's own sub-form for the Static site kind (the field
+     * registry's derivation of StaticSiteKind's schema, which Nested.subSpecOf draws for that kind), declared
+     * static. The kind-led entry resolves its sub-form from the kind's VALUE, and this input is drawn in a record
+     * action's sheet, where the placement's fixed kind is never among the values the sheet opens or redraws with
+     * (a sheet carries no transport, so Put-online's hidden kind is not available there): a dynamic entry drew "choose
+     * a type" and a refusal on one of its fields found no field. The kind stays an entry for the host pick, which
+     * judges by it; the site's placement fixes it (SiteActions) and the authorizer refuses any other
+     * (PutOnlineHandlers.admitRepository).
      */
     private static final FormSpec REPOSITORY_INPUT = FormSpec.builder()
         .add(declaredHostPick())
         .add(InstanceModel.KIND)
-        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.SETTINGS))
+        .add(Nested.of(InstanceModel.SETTINGS)
+            .subSpec(FieldFormEntryRegistry.INSTANCE.deriveSpec(StaticSiteKind.SETTINGS_SCHEMA)).build())
         .section(RUNS_ON_HOST)
         .build();
 
