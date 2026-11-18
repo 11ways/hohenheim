@@ -1,7 +1,10 @@
 package be.elevenways.hohenheim;
 
 import be.elevenways.hawkeye.common.annotation.Arg;
+import be.elevenways.hawkeye.common.annotation.ClientCopy;
 import be.elevenways.hawkeye.common.annotation.HawkeyeFunction;
+import be.elevenways.hawkeye.common.copy.CarriedCopy;
+import be.elevenways.hawkeye.common.copy.CopySet;
 import be.elevenways.hawkeye.common.customelement.CustomElement;
 import be.elevenways.hawkeye.common.lambda.LambdaReference1;
 import be.elevenways.hawkeye.common.render.RenderContext;
@@ -15,6 +18,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -409,6 +413,7 @@ public final class HohenheimStatsFunctions {
                  description = "The words for an amount in use with nothing to measure it against")
         }
     )
+    @ClientCopy(UsageData.Sizes.class)
     public static @NonNull UsageData memoryUsage(RenderContext context, @Nullable Object sample,
                                                  @Nullable Long bookedBytes, @Nullable Microcopy waiting,
                                                  @Nullable Microcopy noLimit) {
@@ -458,12 +463,24 @@ public final class HohenheimStatsFunctions {
                  description = "The cores the share is measured against, said as words")
         }
     )
+    @ClientCopy({CpuShare.class, CarriedCopy.class})
     public static @NonNull UsageData cpuUsage(RenderContext context, @Nullable Object previous,
                                               @Nullable Object sample, @Nullable Microcopy waiting,
                                               @Nullable Microcopy unreported, @Nullable Microcopy firstReading,
                                               @Nullable Microcopy coresLabel) {
         return cpuGauge(previous, sample, words(context, waiting), words(context, unreported),
             words(context, firstReading), coresLabel);
+    }
+
+    /** The words a CPU reading's share is said in; argument {@code share}. */
+    private static final Microcopy CPU_SHARE = HohenheimMicrocopy.INSTANCE_STATS.of("cpu_share");
+
+    /** The share {@link #cpuGauge} says a reading's CPU in. */
+    public static final class CpuShare implements CopySet {
+        @Override
+        public @NonNull Collection<Microcopy> words() {
+            return List.of(CPU_SHARE);
+        }
     }
 
     /**
@@ -487,7 +504,7 @@ public final class HohenheimStatsFunctions {
         }
         long share = Math.round(cpu.doubleValue());
         return UsageData.measured(share, 100L * Math.max(1, cores(sample)),
-            HohenheimMicrocopy.INSTANCE_STATS.of("cpu_share").withArg("share", Percent.of(share)), coresLabel, null);
+            CPU_SHARE.withArg("share", Percent.of(share)), coresLabel, null);
     }
 
     /** @return the words resolved the way the render resolves its own copy; null stays null */
