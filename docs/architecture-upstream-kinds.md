@@ -69,7 +69,7 @@ reverse "exposed by" lookup, delete cascades need it, and the tenant scope joins
 polymorphic settings map, because the dynamic form entry rewrites that map on every admin
 save and would drop it (AIDEV-NOTE in `SiteModel`).
 
-## The six implemented kinds
+## The seven implemented kinds
 
 All in `src/server/java/be/elevenways/hohenheim/server/upstream/kinds/`. Identifiers are
 `hohenheim:<name>`. `StaticFileHandler` lives in `server/sitetype/` and is NOT a kind -- it
@@ -83,6 +83,7 @@ is the `SiteRequestHandler` that `StaticUpstreamKind` returns.
 | Redirect | `redirect` | `RedirectUpstreamKind` | a 3xx response |
 | Instance | `instance` | `InstanceUpstreamKind` | an instance this deployment manages |
 | Dev namespace | `dev_namespace` | `DevNamespaceUpstreamKind` | a live dev-tunnel lease |
+| TCP/UDP stream | `stream` | `StreamUpstreamKind` | a public port of its own, relayed unread to an address |
 
 A site with no upstream at all is simply a site whose `instance_id` is null on a kind that
 wants one -- there is no `dead` kind any more.
@@ -107,6 +108,26 @@ Missing upstream and unparseable URIs both degrade to a 502 handler rather than 
 1-300). It implements `TlsPassthroughProvider`, whose `createHandler` throws
 `UnsupportedOperationException` by design -- these sites never see an HTTP exchange. Model
 validation refuses HTTP-only domain and site options for this kind.
+
+**TCP/UDP stream**: `listen_port` (the public port, claimed in the port ledger), `protocol`
+(tcp / udp / both, default tcp), `forward_host`, `forward_port`, `connect_timeout` (default
+10s), `proxy_protocol_v2` (default false; the same declaration as TLS passthrough's,
+`ProxyProtocolSetting`). It implements `StreamProvider`: no hostname, no HTTP; the proxy
+relays it (`StreamRelays`, one `PublicTcpListener` and/or `PublicUdpRelay` per stream). On a
+host with IPv6 the public port listens on every address of BOTH families (one dual-stack socket per transport:
+on a host with IPv6, Java binds the `0.0.0.0` it is given as `::` with IPV6_V6ONLY off), so
+IPv6 clients reach it as IPv4 ones do. What the upstream sees as the client:
+
+- setting off (the default): the proxy's own address, for TCP and UDP alike, as behind npmplus;
+- setting on: each TCP connection starts with a PROXY v2 header (`ProxyProtocolV2.encode`)
+  carrying the client's real address and port and the public address and port it connected
+  to, TCP4 for an IPv4 client and TCP6 for an IPv6 one, before any byte of the client's. The
+  upstream must be configured to expect it (a mail server behind a stream learns its real
+  clients this way); one that is not reads it as garbage.
+
+PROXY v2 over UDP is not offered: the setting on a stream that forwards UDP (`udp` or `both`)
+is refused on its field (`stream_proxy_protocol_tcp_only`), and `StreamTarget` refuses the
+combination for any other writer, so the stream is not forwarded rather than silently headerless.
 
 **Static**: `root_path` (PathField, directory browser), `autoindex` (default **true** --
 matching the Node original's ecstatic behaviour), `indexes` (default true),
@@ -248,7 +269,7 @@ src/common/java/be/elevenways/hohenheim/
 src/server/java/be/elevenways/hohenheim/server/
   upstream/UpstreamKindHandler.java   -- @BlastDiscoverable server contract
   upstream/UpstreamKindHandlers.java  -- registrar + handler map + boot()
-  upstream/kinds/                     -- the six kinds
+  upstream/kinds/                     -- the seven kinds
   sitetype/SiteRequestHandler.java    -- unified request dispatch
   sitetype/SiteHealth.java            -- UP/DOWN/DEGRADED/DEPLOYING/UNKNOWN
   sitetype/StaticFileHandler.java     -- the handler StaticUpstreamKind returns

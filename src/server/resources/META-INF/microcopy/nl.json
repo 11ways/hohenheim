@@ -540,7 +540,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Voeg de binaire PROXY v2-header toe zodat de backend de oorspronkelijke client- en doeladressen ontvangt.",
+      "text": "Verstuur eerst de binaire PROXY v2-header op elke verbinding, zodat de upstream het oorspronkelijke clientadres en de poort kent, en het adres waarmee de client verbond. De upstream moet die header verwachten: een upstream die dat niet doet, leest hem als onzin en verbreekt de verbinding. Staat dit uit, dan ziet de upstream deze proxy als de client.",
       "scope": "help"
     }
   ],
@@ -19239,6 +19239,7 @@
   "outcome_stream_live": {"scope": "put_online", "text": "Poort {$port} van de host van deze proxy stuurt nu door naar {$target}."},
   "stream_no_http_auth": {"scope": "violations", "text": "Een TCP/UDP-stream wordt ongelezen doorgestuurd en kan dus niemand naar een login sturen. Verwijder de loginprovider."},
   "stream_access_list_credentials": {"scope": "violations", "text": "Deze toegangslijst vraagt om een wachtwoord of een login, wat een TCP/UDP-stream niet kan. Kies een lijst met alleen adresregels."},
+  "stream_proxy_protocol_tcp_only": {"scope": "violations", "text": "Een PROXY v2-header wordt alleen op TCP-verbindingen verstuurd, en deze stream stuurt UDP door. Zet het protocol op TCP of schakel de header uit."},
   "not_forwarding": [
     {"scope": "app_health", "text": "Stuurt niet door"},
     {"scope": "attention_title", "text": "{$name} stuurt zijn poort niet door"}

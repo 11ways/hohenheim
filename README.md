@@ -437,6 +437,14 @@ to accept PROXY v2; an ordinary TLS listener will reject the prefixed stream.
 Connection, DNS, malformed-ClientHello, loop-prevention, and trust-boundary
 failures are rate-limited in the Hohenheim log.
 
+A TCP stream (`stream` upstream) takes the same `proxy_protocol_v2` setting, off by
+default. On, every TCP connection to the upstream starts with a PROXY v2 header carrying
+the client's real address and port and the public address it connected to (TCP4 or TCP6,
+the client's family); off, the upstream sees the proxy as the client. On a host with IPv6 a
+stream's public port listens on every IPv4 and IPv6 address (one dual-stack socket), so IPv6
+clients reach it too. The setting is refused on a stream that forwards UDP: PROXY v2 is never sent over
+UDP.
+
 File format is Protoblast's **DRY** (extended JSON with comments). See
 `HohenheimSettings.java` in the source for the authoritative list.
 
@@ -515,6 +523,7 @@ discovered at compile time, never registered by hand:
 | `address`          | Forwards to an upstream HTTP/HTTPS server (TCP address or unix socket). |
 | `instance`         | Serves the hostname from an instance this deployment manages; the site names it through `sites.instance_id` and the routing build resolves that instance's published loopback port. |
 | `tls_passthrough`  | Passes the original TLS stream to a backend selected by SNI (see below). |
+| `stream`           | A public port of the proxy's own host relayed unread (TCP, UDP or both) to an address and port; optionally a PROXY v2 header first (see above). |
 | `dev-namespace`    | A wildcard namespace (`*.dev.example.com`) that remote dev servers register into over the [dev tunnel](#dev-tunnel). |
 
 See [`docs/architecture-upstream-kinds.md`](docs/architecture-upstream-kinds.md)

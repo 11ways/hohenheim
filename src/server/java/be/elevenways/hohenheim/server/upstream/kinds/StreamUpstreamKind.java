@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.sitetype.StreamTarget;
 import be.elevenways.hohenheim.server.upstream.TenantUpstreams;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.BooleanField;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
@@ -19,8 +20,11 @@ import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.zenit.common.ui.BadgeColor;
 import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.common.validation.ValidationContext;
+import be.elevenways.zenit.common.validation.ValidationResult;
 import be.elevenways.zenit.common.validation.validator.Range;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -35,7 +39,12 @@ import java.util.Map;
  * Hohenheim writes into Docker's DOCKER-USER chain, an object it does not own; and an upstream on the proxy host's
  * loopback cannot be DNATed at all (route_localnet 0). The relay reaches every upstream the proxy can dial, the same
  * way TLS passthrough already does, and the access list is judged on the connecting address before anything is
- * dialled. The upstream sees the proxy's address as the client, as it would behind npmplus.
+ * dialled. On a host with IPv6 the public port listens on every address of both families (one dual-stack socket per
+ * transport, see StreamRelays), so IPv6 clients reach it as IPv4 ones do. The upstream sees the proxy's address as
+ * the client, as it would behind npmplus, unless {@link #PROXY_PROTOCOL_V2} is on: each TCP connection then starts
+ * with a PROXY v2 header carrying the client's real address and port and the public address it connected to (TCP4
+ * or TCP6, the client's own family), which the upstream must be set to expect (a mail server behind it learns who
+ * connected). UDP never carries the header: the setting is refused on a stream that forwards datagrams.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -75,6 +84,11 @@ public final class StreamUpstreamKind implements StreamProvider {
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("connect_timeout"))
             .help(HohenheimMicrocopy.HELP.of("stream_connect_timeout"))
             .build());
+
+    /** Sends a PROXY v2 header first on every TCP connection; refused while the stream forwards UDP. */
+    public static final BooleanField PROXY_PROTOCOL_V2 = SETTINGS_SCHEMA.addField(ProxyProtocolSetting.builder()
+        .validator(StreamUpstreamKind::refuseOverUdp)
+        .build());
 
     @Override public Identifier typeId() { return ID; }
     @Override public String getDisplayName() { return "TCP/UDP stream"; }
@@ -142,7 +156,17 @@ public final class StreamUpstreamKind implements StreamProvider {
             throw new IllegalArgumentException("a tenant-owned stream may only forward to a public address");
         }
         int seconds = timeout == null ? 10 : Math.max(1, Math.min(300, timeout));
-        return new StreamTarget(listen, protocol, host, forward, seconds * 1000, publicOnly);
+        return new StreamTarget(listen, protocol, host, forward, seconds * 1000, publicOnly,
+            RawValues.isOn(settings, PROXY_PROTOCOL_V2));
+    }
+
+    /** A PROXY v2 header rides TCP connections only: on with UDP forwarded (alone or beside TCP), it is refused. */
+    private static @NonNull ValidationResult refuseOverUdp(@Nullable Boolean on, @NonNull ValidationContext context) {
+        StreamProtocol protocol = protocolOf(context.siblings());
+        if (Boolean.TRUE.equals(on) && protocol != null && protocol.forwardsUdp()) {
+            return ValidationResult.invalid(HohenheimMicrocopy.VIOLATIONS.of("stream_proxy_protocol_tcp_only"));
+        }
+        return ValidationResult.valid();
     }
 
     /** @return the stream's protocol, TCP when the setting is absent, null for a token the vocabulary does not know */

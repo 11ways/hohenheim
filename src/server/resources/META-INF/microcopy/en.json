@@ -540,7 +540,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Prepend the binary PROXY v2 header so the backend receives the original client and destination addresses.",
+      "text": "Send the binary PROXY v2 header before anything else on each connection, so the upstream learns the original client address and port and the address it connected to. The upstream must be set to expect the header: one that is not reads it as garbage and drops the connection. Off, the upstream sees this proxy as the client.",
       "scope": "help"
     }
   ],
@@ -19239,6 +19239,7 @@
   "outcome_stream_live": {"scope": "put_online", "text": "Port {$port} of this proxy's host now forwards to {$target}."},
   "stream_no_http_auth": {"scope": "violations", "text": "A TCP/UDP stream is forwarded unread, so it cannot send anyone to a login. Remove the login provider."},
   "stream_access_list_credentials": {"scope": "violations", "text": "This access list asks for a password or a login, which a TCP/UDP stream cannot do. Pick a list with address rules only."},
+  "stream_proxy_protocol_tcp_only": {"scope": "violations", "text": "A PROXY v2 header is sent on TCP connections only, and this stream forwards UDP. Set the protocol to TCP, or switch the header off."},
   "not_forwarding": [
     {"scope": "app_health", "text": "Not forwarding"},
     {"scope": "attention_title", "text": "{$name} is not forwarding its port"}

@@ -108,10 +108,11 @@ silently aborts used to make a run of nothing look green.
   declares its settings schema (which drives the discriminated settings sub-form in the
   CMS) and its request handler. Adding a kind means implementing one class -- no edits to
   existing dispatch code. See `docs/architecture-upstream-kinds.md`.
-- The six kinds live in `src/server/java/be/elevenways/hohenheim/server/upstream/kinds/`:
+- The seven kinds live in `src/server/java/be/elevenways/hohenheim/server/upstream/kinds/`:
   `StaticUpstreamKind`, `RedirectUpstreamKind`, `AddressUpstreamKind`,
   `InstanceUpstreamKind`, `TlsPassthroughUpstreamKind` (a `TlsPassthroughProvider`, not an
-  HTTP handler) and `DevNamespaceUpstreamKind`. The request-handling PLUMBING stays in
+  HTTP handler), `StreamUpstreamKind` (a `StreamProvider`, relayed by `StreamRelays`) and
+  `DevNamespaceUpstreamKind`. The request-handling PLUMBING stays in
   `server/sitetype/` (forwarder, targets, health, bridges, `StaticFileHandler`) -- read
   that package name as "request handling", not as "site type".
 - What a site RUNS is no longer a site question: the workload kinds (`docker`, `node`,

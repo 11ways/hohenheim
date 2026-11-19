@@ -36,6 +36,12 @@ import java.util.concurrent.atomic.AtomicReference;
  * what the stored sites say. A port it cannot bind is kept as a {@link StreamBindFailure} (the attention item, the site's
  * verdict and the alert read it) and tried again at every reconcile, which the listener supervisor runs each minute
  * while one is failing.
+ *
+ * AIDEV-NOTE: "0.0.0.0" is NOT an IPv4-only bind here. Measured 2026-11-19 on OpenJDK 25: on a host with IPv6, Java
+ * opens AF_INET6 sockets with IPV6_V6ONLY off and binds the IPv4 wildcard as {@code ::}, so a stream's TCP and UDP
+ * ports take IPv6 clients too (ServerSocket still reports the 0.0.0.0 it was asked for; a DatagramChannel reports
+ * {@code ::}). An IPv4 client is reported as an IPv4 address, so access lists and the PROXY v2 header see TCP4 for it
+ * and TCP6 only for a real IPv6 client. StreamClientAddressJourneyTest pins both families.
  */
 final class StreamRelays {
 
@@ -67,6 +73,7 @@ final class StreamRelays {
         }
     }
 
+    /* The wildcard of both families on an IPv6 host: see the class note. */
     private static final String BIND_ADDRESS = "0.0.0.0";
     private static final int MAX_CONNECTIONS = 1_024;
 
@@ -190,7 +197,8 @@ final class StreamRelays {
         }
         StreamTarget target = route.target();
         return new ConnectionRouter.Decision(BackendChoice.external(target.forwardHost(), target.forwardPort(),
-            false, target.connectTimeoutMs(), target.publicOnly()), ConnectionRouter.NOTHING_CONSUMED);
+            target.sendsProxyProtocolV2(), target.connectTimeoutMs(), target.publicOnly()),
+            ConnectionRouter.NOTHING_CONSUMED);
     }
 
     private static @Nullable InetSocketAddress udpUpstream(@NonNull Route route, @NonNull InetSocketAddress client)

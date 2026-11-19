@@ -41,10 +41,7 @@ public final class TlsPassthroughUpstreamKind implements TlsPassthroughProvider 
             .build());
 
     public static final BooleanField PROXY_PROTOCOL_V2 = SETTINGS_SCHEMA.addField(
-        BooleanField.builder("proxy_protocol_v2").defaultValue(false)
-            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("proxy_protocol_v2"))
-            .help(HohenheimMicrocopy.HELP.of("proxy_protocol_v2"))
-            .build());
+        ProxyProtocolSetting.builder().build());
 
     public static final IntegerField CONNECT_TIMEOUT = SETTINGS_SCHEMA.addField(
         IntegerField.builder().name("connect_timeout").defaultValue(10).required().suffix("s")
