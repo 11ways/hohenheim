@@ -25,6 +25,7 @@ import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.protoblast.common.time.Pace;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -33,10 +34,17 @@ import java.net.URLEncoder;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
+import java.security.cert.X509Certificate;
+import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -64,6 +72,8 @@ class CertificateSigningRequestApiTest extends HohenheimHttpTestBase {
     private static final String UNSERVED = "nobody." + ZONE;
     private static final String SMTP = "smtp." + ZONE;
     private static final String IMAP = "imap." + ZONE;
+    private static final String POP = "pop." + ZONE;
+    private static final String SUBMISSION = "submission." + ZONE;
     private static final Pattern SUBJECT_ID = Pattern.compile("\"subject\"\\s*:\\s*\\{[^}]*\"id\"\\s*:\\s*\"(\\d+)\"");
 
     private static FakeAcmeServer ca;
@@ -75,6 +85,7 @@ class CertificateSigningRequestApiTest extends HohenheimHttpTestBase {
     private static String mailKey;
     private static String strangerKey;
     private static String adminKey;
+    private static String coManagerKey;
     private static KeyPair mailServerKey;
 
     @BeforeAll
@@ -98,6 +109,8 @@ class CertificateSigningRequestApiTest extends HohenheimHttpTestBase {
         domain(mailSite, MAIL);
         domain(mailSite, SMTP);
         domain(mailSite, IMAP);
+        domain(mailSite, POP);
+        domain(mailSite, SUBMISSION);
         domain(site("csrapi-foreign"), FOREIGN);
 
         UUID mailOwner = ApiSupport.user("csrapi-mail@hohenheim.local", "Mail Host Owner");
@@ -108,6 +121,11 @@ class CertificateSigningRequestApiTest extends HohenheimHttpTestBase {
         mailKey = ApiKeyService.create(mailOwner, "csrapi-mail", tenantScopes, null).plaintext();
         UUID stranger = ApiSupport.user("csrapi-stranger@hohenheim.local", "Stranger");
         strangerKey = ApiKeyService.create(stranger, "csrapi-stranger", tenantScopes, null).plaintext();
+        // A second account managing the same site: it may obtain the mail names too, as its own certificates.
+        UUID coManager = ApiSupport.user("csrapi-comanager@hohenheim.local", "Co-manager");
+        RecordGrants.grant(GrantSubjectType.USER, coManager, SiteModel.MODEL_ID, mailSite,
+            HohenheimCapabilities.MANAGE, true);
+        coManagerKey = ApiKeyService.create(coManager, "csrapi-comanager", tenantScopes, null).plaintext();
         UUID adminId = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first().get(UserModel.ID);
         adminKey = ApiKeyService.create(adminId, "csrapi-admin", List.of("hohenheim.*"), null).plaintext();
@@ -330,10 +348,98 @@ class CertificateSigningRequestApiTest extends HohenheimHttpTestBase {
             .isEqualTo(smtpChain);
     }
 
+    /**
+     * An order is never shared across owners: another account ordering the very same request for the same names while
+     * the first account's order is in flight joins nothing. It is refused when it does not manage the names, and
+     * otherwise gets its own certificate, never the first account's id, status or chain.
+     */
+    @Test
+    void anotherAccountNeverJoinsAnOrderInFlight() throws Exception {
+        String request = TestSigningRequests.pem(TestSigningRequests.ec("secp256r1"), List.of(POP, SUBMISSION));
+        String names = POP + "," + SUBMISSION;
+        CompletableFuture<Void> held = new CompletableFuture<>();
+        CompletableFuture<Void> release = new CompletableFuture<>();
+        AtomicBoolean holdNext = new AtomicBoolean(true);
+        // The first authorization poll waits for the test's word, so the mail host's order stays in flight.
+        acme().setPollPauseForTesting(wait -> {
+            if (holdNext.compareAndSet(true, false)) {
+                held.complete(null);
+                try {
+                    release.get(30, TimeUnit.SECONDS);
+                } catch (ExecutionException | TimeoutException unreleased) {
+                    throw new IllegalStateException(unreleased);
+                }
+            }
+        });
+        ca.validateSlowly(1);
+        try {
+            // 1. The mail host orders; its order is in flight, held at its first poll.
+            CompletableFuture<HttpResponse<String>> mailOrder = CompletableFuture.supplyAsync(
+                () -> orderUnchecked(mailKey, request, names));
+            assertThat(held).as("step 1: the mail host's order is in flight").succeedsWithin(Duration.ofSeconds(10));
+
+            // 2. A key that does not manage the names is refused neutrally, as without an order in flight.
+            HttpResponse<String> stranger = order(strangerKey, request, names);
+            assertThat(stranger.statusCode()).as("step 2: refused (%s)", stranger.body()).isEqualTo(422);
+            assertThat(ApiSupport.codeOf(stranger.body())).as("step 2: neutrally")
+                .isEqualTo(HostnameAuthority.HOSTNAME_UNAVAILABLE);
+
+            // 3. A co-manager ordering the same request is answered while that order is still held: it joined none.
+            CompletableFuture<HttpResponse<String>> coOrder = CompletableFuture.supplyAsync(
+                () -> orderUnchecked(coManagerKey, request, names));
+            assertThat(coOrder).as("step 3: answered while the mail host's order is in flight")
+                .succeedsWithin(Duration.ofSeconds(10));
+            HttpResponse<String> co = coOrder.join();
+            assertThat(co.statusCode()).as("step 3: its own certificate, issued (%s)", co.body()).isEqualTo(201);
+            int coId = ApiSupport.idOf(co.body());
+
+            // 4. Released, the mail host's order issues its own certificate.
+            release.complete(null);
+            assertThat(mailOrder).as("step 4: the mail host is answered").succeedsWithin(Duration.ofSeconds(10));
+            HttpResponse<String> mail = mailOrder.join();
+            assertThat(mail.statusCode()).as("step 4: issued (%s)", mail.body()).isEqualTo(201);
+            int mailId = ApiSupport.idOf(mail.body());
+            assertThat(coId).as("step 4: two certificates, one per owner").isNotEqualTo(mailId);
+            Row mailCert = Models.get(CertificateModel.class).findById(mailId);
+            Row coCert = Models.get(CertificateModel.class).findById(coId);
+            assertThat(CertificateModel.requesterOf(coCert)).as("step 4: each stored under its own owner")
+                .isNotEqualTo(CertificateModel.requesterOf(mailCert));
+
+            // 5. The co-manager never sees the mail host's certificate: not its id, status or chain.
+            assertThat(co.body()).as("step 5: its answer is its own row").doesNotContainPattern(idField(mailId));
+            assertThat(keyGet(coManagerKey, "/api/v1/certificates/" + mailId).statusCode())
+                .as("step 5: no status").isEqualTo(404);
+            assertThat(keyGet(coManagerKey, "/api/v1/certificates/" + mailId + "/chain").statusCode())
+                .as("step 5: no chain").isEqualTo(404);
+            assertThat(ApiSupport.idOf(keyGet(coManagerKey, "/api/v1/certificates/" + coId).body()))
+                .as("step 5: its own status").isEqualTo(coId);
+            X509Certificate coLeaf = CertificatePem.chainOf(
+                keyGet(coManagerKey, "/api/v1/certificates/" + coId + "/chain").body()).get(0);
+            assertThat(coLeaf).as("step 5: its chain is its own certificate's")
+                .isEqualTo(CertificatePem.chainOf(coCert.get(CertificateModel.CERTIFICATE_PEM)).get(0))
+                .as("step 5: never the mail host's")
+                .isNotEqualTo(CertificatePem.chainOf(mailCert.get(CertificateModel.CERTIFICATE_PEM)).get(0));
+            assertThat(keyGet(coManagerKey, "/api/v1/certificates").body()).as("step 5: nor lists it")
+                .doesNotContainPattern(idField(mailId));
+        } finally {
+            release.complete(null);
+            ca.validateSlowly(0);
+            acme().setPollPauseForTesting(Pace.Pause.REAL);
+        }
+    }
+
     // -- fixtures -------------------------------------------------------------
 
     private HttpResponse<String> order(String key, String csr, String hostnames) throws Exception {
         return keyPost(key, "/api/v1/certificates", "csr=" + encoded(csr) + "&hostnames=" + encoded(hostnames));
+    }
+
+    private HttpResponse<String> orderUnchecked(String key, String csr, String hostnames) {
+        try {
+            return order(key, csr, hostnames);
+        } catch (Exception failed) {
+            throw new IllegalStateException(failed);
+        }
     }
 
     private static String encoded(String value) {
@@ -343,6 +449,11 @@ class CertificateSigningRequestApiTest extends HohenheimHttpTestBase {
     private static String leafPin(Row cert) throws Exception {
         return SigningRequest.publicKeyPin(CertificatePem.chainOf(cert.get(CertificateModel.CERTIFICATE_PEM)).get(0)
             .getPublicKey());
+    }
+
+    /** @return a pattern matching the JSON field {@code "id": id} and no longer id */
+    private static String idField(int id) {
+        return "\"id\"\\s*:\\s*" + id + "(?!\\d)";
     }
 
     /** @return the requester-key certificates whose names are exactly these */

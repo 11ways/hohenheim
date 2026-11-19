@@ -411,8 +411,8 @@ public class AcmeService {
      *
      * AIDEV-NOTE: the row id rides the outcome on failure too, so a caller reads the failure
      * reason off THAT row (its renewal_error) instead of guessing which error row is its own.
-     * A request that joined an identical in-flight order names the leader's row, which is the
-     * row whose fate it shared. A replayed request names the row it already is (THE
+     * A request that joined an identical in-flight order of the same owner names the leader's
+     * row, which is the row whose fate it shared. A replayed request names the row it already is (THE
      * requester-key name-set rule, {@link #requesterCertificate}), whatever that row's status.
      *
      * @param certificateId the certificate row the request wrote, joined or replayed, or null
@@ -550,12 +550,12 @@ public class AcmeService {
         // invariant documents. Do NOT move it up into HohenheimHandlers.
         Map<String, Integer> declaring = CertificateAuthority.authorize(requester, hostnames);
 
-        // Claim the order key BEFORE creating a row: a concurrent identical
-        // request shares the leader's certificate row instead of minting a
-        // duplicate ACTIVE record for the same domains. The name-set rule, the claim
-        // and the pending row are one step under nameSets, so a second request for a
-        // name set finds the first one's row instead of racing it.
-        String orderKey = certificateOrderKey(hostnames, email, null, signing);
+        // Claim the order key BEFORE saving a row: a concurrent identical request of the
+        // same owner shares the leader's certificate row instead of minting a duplicate
+        // ACTIVE record for the same domains. The name-set rule, the claim and the pending
+        // row are one step under nameSets, so a second request for a name set finds the
+        // first one's row instead of racing it.
+        String orderKey = certificateOrderKey(hostnames, email, null, signing, requester.subject());
         OrderFlight flight = new OrderFlight(true, new CompletableFuture<>());
         OrderFlight existing;
         Row certRow = null;
@@ -566,29 +566,32 @@ public class AcmeService {
                     "from this signing request; nothing is ordered");
                 return RequestOutcome.replayed(replayed);
             }
+            // AIDEV-NOTE: the row is built BEFORE the claim. A claim nobody leads holds every later identical order on
+            // its future forever, so nothing but the save (which releases it on failure) runs between taking a claim
+            // and handing it a row; a joiner simply drops the row it built.
+            Row pending = certModel.createEmptyRow();
+            pending.set(CertificateModel.NICE_NAME, niceName);
+            pending.set(CertificateModel.PROVIDER, CertificateModel.PROVIDER_LETSENCRYPT);
+            pending.set(CertificateModel.STATUS, CertificateModel.STATUS_PENDING);
+            pending.set(CertificateModel.DOMAIN_NAMES_TEXT, String.join(",", hostnames));
+            pending.set(CertificateModel.CHALLENGE_TYPE, challengeType);
+            pending.set(CertificateModel.DNS_PUBLISHER, dnsPublisher);
+            CertificateModel.setRequester(pending, requester.subject());
+            if (email != null && !email.isBlank()) {
+                pending.set(CertificateModel.LETSENCRYPT_EMAIL, email.trim());
+            }
+            signing.pending(pending);
             existing = inFlightOrders.putIfAbsent(orderKey, flight);
             if (existing == null) {
-                certRow = certModel.createEmptyRow();
-                certRow.set(CertificateModel.NICE_NAME, niceName);
-                certRow.set(CertificateModel.PROVIDER, CertificateModel.PROVIDER_LETSENCRYPT);
-                certRow.set(CertificateModel.STATUS, CertificateModel.STATUS_PENDING);
-                certRow.set(CertificateModel.DOMAIN_NAMES_TEXT, String.join(",", hostnames));
-                certRow.set(CertificateModel.CHALLENGE_TYPE, challengeType);
-                certRow.set(CertificateModel.DNS_PUBLISHER, dnsPublisher);
-                CertificateModel.setRequester(certRow, requester.subject());
-                if (email != null && !email.isBlank()) {
-                    certRow.set(CertificateModel.LETSENCRYPT_EMAIL, email.trim());
-                }
-                signing.pending(certRow);
                 try {
-                    certModel.save(certRow);
+                    certModel.save(pending);
+                    flight.certificateId().set(pending.get(CertificateModel.ID));
                 } catch (RuntimeException | Error unsaved) {
-                    // A claim nobody leads would hold every later identical order on its future forever.
                     flight.result().completeExceptionally(unsaved);
                     inFlightOrders.remove(orderKey, flight);
                     throw unsaved;
                 }
-                flight.certificateId().set(certRow.get(CertificateModel.ID));
+                certRow = pending;
             }
         }
         if (existing != null) {
@@ -720,8 +723,8 @@ public class AcmeService {
         // request for the same names coalesce onto one order, and the joiner adopts the
         // leader's material -- which for a re-issue means writing a certificate ordered
         // under a different row's request onto this row. Renewal deliberately keeps the
-        // id-less key so SAN-identical renewals still share one order.
-        String orderKey = certificateOrderKey(hostnames, email, certificateId, signing);
+        // id-less key so an owner's SAN-identical renewals still share one order.
+        String orderKey = certificateOrderKey(hostnames, email, certificateId, signing, requester.subject());
         OrderFlight flight = new OrderFlight(false, new CompletableFuture<>());
         if (inFlightOrders.putIfAbsent(orderKey, flight) != null) {
             return new ReissueResult(false, "A re-issue of this certificate is already in progress");
@@ -864,14 +867,15 @@ public class AcmeService {
         requireValidHostnames(hostnames, true);
 
         Signing signing = OwnKey.fresh();
-        String orderKey = certificateOrderKey(hostnames, email, null, signing);
+        String orderKey = certificateOrderKey(hostnames, email, null, signing, requester.subject());
         OrderFlight flight = new OrderFlight(false, new CompletableFuture<>());
+        var certModel = Models.get(CertificateModel.class);
+        // Made before the claim: nothing but the try below, which releases it, runs while it is held.
+        Row certRow = certModel.createEmptyRow();
         if (inFlightOrders.putIfAbsent(orderKey, flight) != null) {
             throw new IllegalStateException("A certificate order for these hostnames is already in progress");
         }
 
-        var certModel = Models.get(CertificateModel.class);
-        Row certRow = certModel.createEmptyRow();
         try {
             certRow.set(CertificateModel.NICE_NAME, niceName);
             certRow.set(CertificateModel.PROVIDER, CertificateModel.PROVIDER_LETSENCRYPT);
@@ -895,7 +899,7 @@ public class AcmeService {
             scheduler.schedule(asSystem(() -> expireManualDnsOrder(token, pending)),
                 TimeUnit.MINUTES.toMillis(MANUAL_DNS_ORDER_MINUTES));
             return manualRequest(token, manualDnsOrders.get(token));
-        } catch (Exception e) {
+        } catch (Exception | Error e) {
             flight.result().completeExceptionally(e);
             inFlightOrders.remove(orderKey, flight);
             recordRenewalFailure(certRow, failureReason(e));
@@ -1178,7 +1182,8 @@ public class AcmeService {
             OrderResult result = performAcmeOrder(hostnames,
                 certRow.get(CertificateModel.LETSENCRYPT_EMAIL), challengeType,
                 certRow.get(CertificateModel.DNS_PUBLISHER),
-                certRow.get(CertificateModel.ID), declaring, signingOf(certRow, hostnames));
+                certRow.get(CertificateModel.ID), CertificateModel.requesterOf(certRow), declaring,
+                signingOf(certRow, hostnames));
 
             applyIssuedMaterial(certRow, result);
             certModel.save(certRow);
@@ -1254,12 +1259,16 @@ public class AcmeService {
     // Core ACME order flow (shared by request and renewal)
     // -----------------------------------------------------------------------
 
-    /** Place a renewal order, joining an identical order already in flight instead of doubling it. */
+    /**
+     * Place a renewal order, joining an identical order of the same owner already in flight instead of doubling it.
+     *
+     * @param owner the certificate's stored requester, null for an unattended one
+     */
     private OrderResult performAcmeOrder(List<String> hostnames, @Nullable String email,
                                          String challengeType, @Nullable String dnsPublisher,
-                                         int certificateId,
+                                         int certificateId, @Nullable PrincipalRef owner,
                                          Map<String, Integer> declaring, Signing signing) throws Exception {
-        String orderKey = certificateOrderKey(hostnames, email, null, signing);
+        String orderKey = certificateOrderKey(hostnames, email, null, signing, owner);
         OrderFlight leader = new OrderFlight(true, new CompletableFuture<>());
         leader.certificateId().set(certificateId);
         OrderFlight existing = inFlightOrders.putIfAbsent(orderKey, leader);
@@ -1284,16 +1293,24 @@ public class AcmeService {
     }
 
     /**
-     * The key same-account/same-SAN/same-key orders coalesce on.
+     * The key identical orders coalesce on: one owner, one CA account, one key holder, one name set.
+     *
+     * AIDEV-NOTE: the owner is part of the key. Without it a second account ordering the same names (from the same
+     * signing request, or with a fresh key of Hohenheim's) joined the first account's flight and was handed that
+     * account's row: its id and status in the answer, and through the shared {@link OrderResult} its chain and key.
      *
      * @param certificateId the row an order writes INTO when that row already exists, which
      *                      makes the key unshareable with any other row's order; null for
      *                      the lanes that may legitimately share one order
      * @param signing       whose key the order certifies ({@link Signing#orderKeyPart})
+     * @param owner         the account the order is stored under ({@link CertificateModel#REQUESTER}), null for
+     *                      unattended work
      */
     private static String certificateOrderKey(List<String> hostnames, @Nullable String email,
-                                              @Nullable Integer certificateId, Signing signing) {
-        return (certificateId != null ? "cert" + certificateId + "@" : "") + signing.orderKeyPart()
+                                              @Nullable Integer certificateId, Signing signing,
+                                              @Nullable PrincipalRef owner) {
+        return (certificateId != null ? "cert" + certificateId + "@" : "")
+            + "owner:" + (owner != null ? owner.key() : "") + "@" + signing.orderKeyPart()
             + normalizeAccountEmail(email) + ":" + hostnames.stream()
             .map(name -> name.trim().toLowerCase(Locale.ROOT))
             .distinct()
