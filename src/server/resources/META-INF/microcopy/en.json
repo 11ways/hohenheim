@@ -15033,6 +15033,10 @@
     "text": "The public port window must start above 1024 and end at or below {$max}",
     "scope": "violations"
   },
+  "setting_ipv6_address": {
+    "text": "Leave the IPv6 address empty to serve every IPv6 address, or give one address of this host such as 2001:db8::1; :: and IPv4 addresses cannot bind beside the IPv4 listener",
+    "scope": "violations"
+  },
   "settings.hohenheim.auth_proteus.access_key.label": "Access key",
   "settings.hohenheim.auth_proteus.access_key.help": "Access key of the Proteus realm.",
   "settings.hohenheim.auth_proteus.authenticator.label": "Authenticator",

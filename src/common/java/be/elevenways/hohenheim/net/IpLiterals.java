@@ -41,6 +41,30 @@ public final class IpLiterals {
     }
 
     /**
+     * Whether a value names ONE IPv6 address a listener can hold beside the IPv4 wildcard: a structural IPv6 literal
+     * ({@link #isIpv6}) that is neither the unspecified address nor IPv4-mapped.
+     *
+     * AIDEV-NOTE: both refused spellings claim IPv4 addresses too. The JDK binds an IPv6 socket dual-stack and offers
+     * no IPV6_V6ONLY option, so "::" holds the port on 0.0.0.0 and an IPv4-mapped address holds it on that IPv4
+     * address: either bind fails with "Address already in use" beside the IPv4-only wildcard listener.
+     */
+    public static boolean isDedicatedIpv6(@Nullable String value) {
+        if (!isIpv6(value)) {
+            return false;
+        }
+        byte[] bytes = IpRanges.parseLiteral(value);
+        if (bytes == null || bytes.length != 16) {
+            return false;
+        }
+        for (byte part : bytes) {
+            if (part != 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Whether a configured value is one literal address or one CIDR range (trimmed, no DNS,
      * no zone index), the shape the PROXY-protocol trusted-source list stores.
      *

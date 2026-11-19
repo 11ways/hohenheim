@@ -15033,6 +15033,10 @@
     "text": "Het publieke poortvenster moet boven 1024 beginnen en op of onder {$max} eindigen",
     "scope": "violations"
   },
+  "setting_ipv6_address": {
+    "text": "Laat het IPv6-adres leeg om elk IPv6-adres te bedienen, of geef een adres van deze host zoals 2001:db8::1; :: en IPv4-adressen kunnen niet naast de IPv4-listener binden",
+    "scope": "violations"
+  },
   "settings.hohenheim.auth_proteus.access_key.label": "Toegangssleutel",
   "settings.hohenheim.auth_proteus.access_key.help": "Toegangssleutel van de Proteus-realm.",
   "settings.hohenheim.auth_proteus.authenticator.label": "Authenticator",

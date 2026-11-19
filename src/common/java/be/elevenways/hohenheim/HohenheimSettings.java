@@ -240,6 +240,25 @@ public class HohenheimSettings {
             .restartRequired()
             .build();
 
+        private static final MicrocopyKey IPV6_ADDRESS_WORDS = HohenheimMicrocopy.VIOLATIONS.copy()
+            .declareKey(Proxy.class, "setting_ipv6_address");
+
+        /**
+         * Unset, or one IPv6 address ({@link IpLiterals#isDedicatedIpv6}) the proxy binds beside its IPv4-only
+         * wildcard; the "::" wildcard would collide with it, and unset already serves every IPv6 address.
+         */
+        public static final SettingsRule IPV6_ADDRESS_DEDICATED =
+            SettingsRule.named("hohenheim_proxy_ipv6_address")
+                .reads(IPV6_ADDRESS)
+                .check(proposed -> {
+                    String address = proposed.get(IPV6_ADDRESS);
+                    return address == null || address.isBlank() || IpLiterals.isDedicatedIpv6(address.trim()) ? null
+                        : "proxy.ipv6_address is " + address + "; it must be one IPv6 address, never the :: wildcard"
+                            + " or an IPv4 or IPv4-mapped address";
+                })
+                .says(IPV6_ADDRESS_WORDS.copy())
+                .addTo(Zenit.SETTINGS_VALUES);
+
         public static final SettingDefinition<String> NOT_FOUND_MESSAGE = GROUP.buildSetting("not_found_message",
                 String.class)
             .defaultValue("")

@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.server.proxy.ProxyProtocolV2;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
+import be.elevenways.hohenheim.server.proxy.PublicTcpListener;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.net.BindException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
@@ -31,6 +33,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.addDomain;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.setupSite;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** The plain HTTP listener resolves PROXY v2 identity exactly like the TLS one. */
 class ProxyProtocolHttpTest {
@@ -176,6 +180,48 @@ class ProxyProtocolHttpTest {
             .as("step 3: the IPv6 address reaches the site on the same port").contains("200 OK").contains("backend");
         assertThat(InetAddress.getByName(seenHeaders.get("x-real-ip")))
             .as("step 3: the IPv6 client").isEqualTo(InetAddress.getByName("::1"));
+    }
+
+    /**
+     * The "::" wildcard is no dedicated IPv6 address: the JDK has no IPV6_V6ONLY, so it binds dual-stack and collides
+     * with the IPv4-only wildcard on the port, and the setting refuses it, and every other address that claims IPv4.
+     */
+    @Test
+    void theIpv6WildcardCollidesWithTheIpv4OneAndIsRefused() throws Exception {
+        // 1. The collision is real: beside an IPv4-only 0.0.0.0, "::" cannot bind the port, "::1" can.
+        try (ServerSocket ipv4 = PublicTcpListener.IPV4_ONLY.create()) {
+            ipv4.bind(new InetSocketAddress("0.0.0.0", 0));
+            int port = ipv4.getLocalPort();
+            try (ServerSocket wildcard = PublicTcpListener.EVERY_FAMILY.create()) {
+                assertThatThrownBy(() -> wildcard.bind(new InetSocketAddress(InetAddress.getByName("::"), port)))
+                    .as("step 1: :: is dual-stack and holds the IPv4 wildcard's port")
+                    .isInstanceOf(BindException.class);
+            }
+            try (ServerSocket dedicated = PublicTcpListener.EVERY_FAMILY.create()) {
+                dedicated.bind(new InetSocketAddress(InetAddress.getByName("::1"), port));
+                assertThat(dedicated.isBound()).as("step 1: one IPv6 address binds beside it").isTrue();
+            }
+        }
+
+        // 2. So the setting refuses every spelling that claims IPv4 too, by its rule and with nothing stored.
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.IPV6_ADDRESS, "2001:db8::1");
+        for (String refused : List.of("::", " :: ", "0:0:0:0:0:0:0:0", "::ffff:7f00:1", "::ffff:127.0.0.1",
+                "127.0.0.1", "proxy.example.test", "fe80::1%eth0")) {
+            assertThatThrownBy(() -> Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.IPV6_ADDRESS, refused))
+                .as("step 2: %s is refused", refused)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining(HohenheimSettings.Proxy.IPV6_ADDRESS_DEDICATED.getName());
+        }
+        assertThat(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.IPV6_ADDRESS))
+            .as("step 2: the address in force is unchanged").isEqualTo("2001:db8::1");
+        assertThat(HohenheimSettings.Proxy.IPV6_ADDRESS_DEDICATED.copy())
+            .as("step 2: the rule carries the copy an editor shows").isNotNull();
+
+        // 3. Unset and one IPv6 address stay valid.
+        for (String accepted : List.of("", "::1", "2001:db8::1")) {
+            assertThatCode(() -> Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.IPV6_ADDRESS, accepted))
+                .as("step 3: %s is accepted", accepted).doesNotThrowAnyException();
+        }
     }
 
     private void startBackendAndProxy(String hostname, String listenOn) throws Exception {
