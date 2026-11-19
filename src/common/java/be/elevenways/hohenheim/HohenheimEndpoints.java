@@ -381,6 +381,79 @@ public class HohenheimEndpoints {
         .rateLimit(DOWNLOAD_LIMIT)
         .build();
 
+    // --- Certificate API v1 (znit_ bearer keys via zenit-auth): an order from the caller's own signing request ---
+    //
+    // The caller keeps its key; Hohenheim orders, renews from the stored request and serves the chain. No
+    // requiresPermission: who may order a name is CertificateAuthority's answer (HostnameAuthority over every name),
+    // and who may read a certificate is the record walk (its requester owns it) -- the /manage certificate scope. The
+    // handlers refuse every principal that is not an API key, which is what makes csrfExempt safe.
+
+    /** Each order reaches the CA and may publish challenge records: one principal's orders share one bounded budget. */
+    private static final RateLimitPolicy CERTIFICATE_ORDER_LIMIT =
+        RateLimitPolicy.of(20, Duration.ofMinutes(10))
+            .keyBy(RateLimitPolicy.KeyBy.PRINCIPAL_OR_IP)
+            .named("hh_certificate_order");
+
+    /** The certificates this key may read, each as its status projection. */
+    public static final Endpoint<Object> API_CERTIFICATES = Endpoint.<Object>builder()
+        .identifier(HohenheimIds.id("api_certificates"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("certificates").build())
+        .requiresLogin()
+        .rateLimit(PAAS_READ_LIMIT)
+        .build();
+
+    /**
+     * Orders a certificate from the caller's PEM signing request ({@code csr}) for exactly {@code hostnames}.
+     * csrfExempt is safe: the handler refuses non-API-key principals.
+     */
+    public static final Endpoint<Object> API_CERTIFICATE_CREATE = Endpoint.<Object>builder()
+        .identifier(HohenheimIds.id("api_certificate_create"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("certificates").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(CERTIFICATE_ORDER_LIMIT)
+        .build();
+
+    /** One certificate's status: names, expiry, who holds the key, the pinned public key and the last failure. */
+    public static final Endpoint<Object> API_CERTIFICATE = Endpoint.<Object>builder()
+        .identifier(HohenheimIds.id("api_certificate"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("certificates").addDelimiter().addParameter(CERT_ID).build())
+        .requiresLogin()
+        .rateLimit(PAAS_READ_LIMIT)
+        .build();
+
+    /** One certificate's public chain: what {@link #CERTIFICATES_CHAIN_DOWNLOAD} serves, read by the key. */
+    public static final Endpoint<Object> API_CERTIFICATE_CHAIN = Endpoint.<Object>builder()
+        .identifier(HohenheimIds.id("api_certificate_chain"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("certificates").addDelimiter().addParameter(CERT_ID)
+            .addDelimiter().addStatic("chain").build())
+        .requiresLogin()
+        .rateLimit(PAAS_READ_LIMIT)
+        .build();
+
+    /**
+     * Re-orders a requester-held certificate from a NEW signing request, the only way its key changes.
+     * csrfExempt is safe: the handler refuses non-API-key principals.
+     */
+    public static final Endpoint<Object> API_CERTIFICATE_SIGNING_REQUEST = Endpoint.<Object>builder()
+        .identifier(HohenheimIds.id("api_certificate_signing_request"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("certificates").addDelimiter().addParameter(CERT_ID)
+            .addDelimiter().addStatic("signing-request").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(CERTIFICATE_ORDER_LIMIT)
+        .build();
+
     // --- Managed database dump download / restore upload ---
     public static final Endpoint<Object> DATABASES_BACKUP = Endpoint.<Object>builder()
         .identifier(HohenheimIds.id("databases_backup"))

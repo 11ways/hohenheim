@@ -99,6 +99,9 @@ public final class CertificateParts {
     /** The names a certificate covers besides its own name: the name column's second line. */
     static final String OTHER_NAMES_COLUMN = "other_names";
 
+    /** Who holds the key, said only when it is not Hohenheim: the provider column's second line. */
+    static final String KEY_CUSTODY_COLUMN = "key_custody";
+
     private CertificateParts() {}
     /**
      * Display-only form entries: VIRTUAL string fields, never schema columns.
@@ -137,6 +140,7 @@ public final class CertificateParts {
         .add(CertificateModel.CERTIFICATE_PEM)
         .add(CertificateModel.PRIVATE_KEY_PEM)
         .add(CertificateModel.AUTO_RENEW)
+        .add(CertificateModel.KEY_HOLDER)
         .add(COVERED_NAMES_DISPLAY)
         .add(DNS_RECORDS_DISPLAY)
         .add(EXPIRY_DISPLAY)
@@ -171,7 +175,11 @@ public final class CertificateParts {
         .column(ColumnSpec.fromField(CertificateModel.NICE_NAME).filterable().subtext(OTHER_NAMES_COLUMN).build())
         .column(otherNamesColumn())
         .column(ColumnSpec.fromField(CertificateModel.DOMAIN_NAMES_TEXT).filterable().hidden().build())
-        .column(ColumnSpec.fromField(CertificateModel.PROVIDER).filterable().build())
+        // A certificate ordered from its requester's own signing request says so under its provider: Hohenheim holds no
+        // key for it, so it serves nobody here and offers no key bundle.
+        .column(ColumnSpec.fromField(CertificateModel.PROVIDER).filterable().subtext(KEY_CUSTODY_COLUMN).build())
+        .column(keyCustodyColumn())
+        .column(ColumnSpec.fromField(CertificateModel.KEY_HOLDER).filterable().hidden().build())
         // The state in words (failing, waiting for a DNS record, works and for how long), the column an operator
         // scans first; the stored status stays in the picker and the filter strip.
         .column(stateColumn())
@@ -198,6 +206,8 @@ public final class CertificateParts {
             .label(FieldLabels.labelFor(CertificateModel.NICE_NAME)).build())
         .filter(FilterSpec.leaf(CertificateModel.PROVIDER, CoreTypes.EQUALS)
             .label(FieldLabels.labelFor(CertificateModel.PROVIDER)).build())
+        .filter(FilterSpec.leaf(CertificateModel.KEY_HOLDER, CoreTypes.EQUALS)
+            .label(FieldLabels.labelFor(CertificateModel.KEY_HOLDER)).build())
         .filter(FilterSpec.leaf(CertificateModel.DOMAIN_NAMES_TEXT, CoreTypes.CONTAINS)
             .label(FieldLabels.labelFor(CertificateModel.DOMAIN_NAMES_TEXT)).build())
         .filter(FilterSpec.leaf(CertificateModel.STATUS, CoreTypes.EQUALS)
@@ -230,6 +240,17 @@ public final class CertificateParts {
             }
         }
         return others.isEmpty() ? null : String.join(", ", others);
+    }
+
+    /** The hidden column behind the provider's second line, {@link #keyCustody}. */
+    private static @NonNull ColumnSpec keyCustodyColumn() {
+        return ColumnSpec.virtual(KEY_CUSTODY_COLUMN, HohenheimMicrocopy.CERTIFICATE.of("key_custody_column")).hidden()
+            .build();
+    }
+
+    /** @return "Key held by the requester" for a certificate whose requester holds the key, null when Hohenheim does */
+    static @Nullable String keyCustody(@NonNull Row cert) {
+        return CertificateModel.keyHeldHere(cert) ? null : copy("key_held_by_requester");
     }
 
     /** The certificate's state column: a word and a line, {@link #stateCell}. */
@@ -281,7 +302,8 @@ public final class CertificateParts {
         if (days != null && days < 0) {
             return StateLineCell.of(CertificateState.EXPIRED, CertificateExpiry.of(expires));
         }
-        if (!loaded) {
+        // A certificate whose requester holds the key is never loaded, by construction: not loaded is its normal state.
+        if (!loaded && CertificateModel.keyHeldHere(cert)) {
             return StateLineCell.of(CertificateState.NOT_LOADED,
                 HohenheimMicrocopy.CERTIFICATE.of("state_not_loaded_detail"));
         }
@@ -356,6 +378,8 @@ public final class CertificateParts {
                 .computed(Objects.requireNonNull(ADMIN_TABLE.column(STATE_COLUMN)), (row, request) -> stateCell(row))
                 .computed(Objects.requireNonNull(ADMIN_TABLE.column(OTHER_NAMES_COLUMN)),
                     (row, request) -> otherNames(row))
+                .computed(Objects.requireNonNull(ADMIN_TABLE.column(KEY_CUSTODY_COLUMN)),
+                    (row, request) -> keyCustody(row))
                 .build())
             .form(ResourceForm.<Row>of(ADMIN_FORM).bindings(fieldBindings()).wideRecordPages()
                 .landingTab(RecordOverview.SLUG).build())
@@ -374,7 +398,8 @@ public final class CertificateParts {
     /** Status-only tenant twin: its form contains no PEM, and it declares no write or download. */
     public static @NonNull PanelResource<Row> manage() {
         FormSpec form = FormSpec.builder().add(CertificateModel.NICE_NAME).add(CertificateModel.DOMAIN_NAMES_TEXT)
-            .add(CertificateModel.STATUS).add(CertificateModel.EXPIRES_ON).add(CertificateModel.RENEWAL_ERROR).build();
+            .add(CertificateModel.STATUS).add(CertificateModel.EXPIRES_ON).add(CertificateModel.RENEWAL_ERROR)
+            .add(CertificateModel.KEY_HOLDER).build();
         List<ResourceFieldBinding> bindings = new ArrayList<>();
         for (var entry : form.entries()) {
             bindings.add(ResourceFieldBinding.of(entry.name(), FieldAccess.alwaysReadonly()));
@@ -426,9 +451,20 @@ public final class CertificateParts {
             .withArg("domains", domains));
     }
 
-    /** Coverage and renewal diagnostics are written by the ACME machinery, never by hand. */
+    /**
+     * Coverage and renewal diagnostics are written by the ACME machinery, never by hand. A certificate whose requester
+     * holds the key has no key field at all, and its chain is the CA's: both are Hohenheim's to author only for a
+     * certificate whose key it holds (an upload on the create form included).
+     */
     private static @NonNull List<ResourceFieldBinding> fieldBindings() {
         return List.of(
+            ResourceFieldBinding.of(CertificateModel.PRIVATE_KEY_PEM.getName(), FieldAccess.customRecordAware(
+                (ctx, record) -> record instanceof Row row && !CertificateModel.keyHeldHere(row)
+                    ? FieldAccess.Decision.HIDDEN : FieldAccess.Decision.EDITABLE)),
+            ResourceFieldBinding.of(CertificateModel.CERTIFICATE_PEM.getName(), FieldAccess.customRecordAware(
+                (ctx, record) -> record instanceof Row row && !CertificateModel.keyHeldHere(row)
+                    ? FieldAccess.Decision.READONLY : FieldAccess.Decision.EDITABLE)),
+            ResourceFieldBinding.of(CertificateModel.KEY_HOLDER.getName(), FieldAccess.alwaysReadonly()),
             ResourceFieldBinding.of(COVERED_NAMES_DISPLAY.getName(), FieldAccess.alwaysReadonly()),
             ResourceFieldBinding.of(DNS_RECORDS_DISPLAY.getName(), FieldAccess.alwaysReadonly()),
             ResourceFieldBinding.of(EXPIRY_DISPLAY.getName(), FieldAccess.alwaysReadonly()),
@@ -520,8 +556,12 @@ public final class CertificateParts {
         Map<String, Object> values = CmsSupport.mutable(submitted);
         describe(values, validatePems(values, new OperationInput.Values(values), null));
         keepChainOnly(values);
+        withoutCustody(values);
+        String keyPem = trimmed(values.remove(CertificateModel.PRIVATE_KEY_PEM.getName()));
         Row row = Models.get(CertificateModel.class).createEmptyRow();
         values.forEach(row::set);
+        // An upload is a certificate whose key Hohenheim holds: the custody's one writer stamps it.
+        CertificateModel.keepKey(row, keyPem);
         row.set(CertificateModel.PROVIDER, CertificateModel.PROVIDER_CUSTOM);
         row.set(CertificateModel.STATUS, CertificateModel.STATUS_ACTIVE);
         row.set(CertificateModel.AUTO_RENEW, false);
@@ -533,6 +573,13 @@ public final class CertificateParts {
                                OperationInput.@NonNull Values merged) {
         Map<String, Object> values = CmsSupport.mutable(submitted);
         X509Certificate leaf = validatePems(values, merged, existing);
+        withoutCustody(values);
+        if (!CertificateModel.keyHeldHere(existing)) {
+            // The requester's certificate: its chain is the CA's and its key is not here; the bindings keep both
+            // readonly, and this write never carries them whatever reaches it.
+            values.remove(CertificateModel.CERTIFICATE_PEM.getName());
+            values.remove(CertificateModel.PRIVATE_KEY_PEM.getName());
+        }
         if (values.containsKey(CertificateModel.CERTIFICATE_PEM.getName())) {
             describe(values, leaf);
         }
@@ -542,6 +589,12 @@ public final class CertificateParts {
         }
         values.forEach(existing::set);
         Models.get(CertificateModel.class).save(existing);
+    }
+
+    /** Drops the custody columns from a write: only CertificateModel's keepKey and keepSigningRequest set them. */
+    private static void withoutCustody(@NonNull Map<String, Object> values) {
+        values.remove(CertificateModel.KEY_HOLDER.getName());
+        values.remove(CertificateModel.SIGNING_REQUEST_PEM.getName());
     }
 
     /**
@@ -592,6 +645,14 @@ public final class CertificateParts {
         String certPem = trimmed(merged.get(CertificateModel.CERTIFICATE_PEM.getName()));
         String keyPem = trimmed(merged.get(CertificateModel.PRIVATE_KEY_PEM.getName()));
         String name = trimmed(merged.get(CertificateModel.NICE_NAME.getName()));
+        if (existing != null && !CertificateModel.keyHeldHere(existing)) {
+            // Its requester holds the key and the CA wrote the chain: neither is authored here (both bound readonly),
+            // so only the name is required and the stored chain is what describes it.
+            if (name.isEmpty()) {
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("cert_fields_required"));
+            }
+            return certPem.isEmpty() ? null : UploadedCertificates.leafOf(certPem);
+        }
         if (name.isEmpty() || certPem.isEmpty() || keyPem.isEmpty()) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("cert_fields_required"));
         }
@@ -619,6 +680,8 @@ public final class CertificateParts {
             .icon(Icon.of("download"))
             .route((row, request) -> HohenheimEndpoints.CERTIFICATES_DOWNLOAD
                 .with(HohenheimEndpoints.CERT_ID, row.get(CertificateModel.ID)))
+            // No key here, no bundle: a certificate whose requester holds the key offers its chain alone.
+            .shownWhen((row, access) -> CertificateModel.keyHeldHere(row))
             // Exporting the PEM is rare next to edit/delete: overflow, not inline.
             .inlineInRow(false)
             .inlineOnRecord(false)

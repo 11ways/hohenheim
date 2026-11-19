@@ -5,23 +5,26 @@ chrome - views=false advanced=false search=true columns=true rail=false selectio
 column nice_name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=other_names relation=false
 column other_names at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
 column domain_names_text at=2 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column provider at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
-column state at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-column status at=5 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column renewal_error at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column challenge_type at=7 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column dns_publisher at=8 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column issued_on at=9 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
-column expires_on at=10 shown=true hidden=false sortable=true filterable=true copyable=false subtext= relation=false
-column next_attempt_at at=11 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
-column error_count at=12 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column created_at at=13 shown=false hidden=true sortable=true filterable=true copyable=false subtext= relation=false
-filter nice_name at=0 kind=TEXT facet=false param=filter.nice_name
-filter provider at=1 kind=SELECT facet=true param=filter.provider
-filter domain_names_text at=2 kind=TEXT facet=false param=filter.domain_names_text
-filter status at=3 kind=SELECT facet=true param=filter.status
-filter expires_on at=4 kind=TEXT facet=false param=filter.expires_on
-filter created_at at=5 kind=TEXT facet=false param=filter.created_at
+column provider at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext=key_custody relation=false
+column key_custody at=4 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column key_holder at=5 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column state at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column status at=7 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column renewal_error at=8 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column challenge_type at=9 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column dns_publisher at=10 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column issued_on at=11 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
+column expires_on at=12 shown=true hidden=false sortable=true filterable=true copyable=false subtext= relation=false
+column next_attempt_at at=13 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
+column error_count at=14 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column created_at at=15 shown=false hidden=true sortable=true filterable=true copyable=false subtext= relation=false
+filter nice_name at=0 kind=leaf:variable%3Dnice_name,key%3Dfilter.nice_name,operators%3Dprotoblast:contains,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/text%2525252Cfilter.nice_name%2525252Cprotoblast:text%2525252CTEXT%2525252C%25252525-%2525252Cfalse%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.nice_name%3D%252525- facet=false param=filter.nice_name
+filter provider at=1 kind=leaf:variable%3Dprovider,key%3Dfilter.provider,operators%3Dprotoblast:equals,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/choice%2525252Cfilter.provider%2525252Cprotoblast:text%2525252CENUM%2525252Cletsencrypt%252525252Ccustom%252525252Cacme_account%2525252Ctrue%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.provider%3D%252525- facet=true param=filter.provider
+filter key_holder at=2 kind=leaf:variable%3Dkey_holder,key%3Dfilter.key_holder,operators%3Dprotoblast:equals,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/choice%2525252Cfilter.key_holder%2525252Cprotoblast:text%2525252CENUM%2525252Chohenheim%252525252Crequester%2525252Ctrue%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.key_holder%3D%252525- facet=true param=filter.key_holder
+filter domain_names_text at=3 kind=leaf:variable%3Ddomain_names_text,key%3Dfilter.domain_names_text,operators%3Dprotoblast:contains,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/text%2525252Cfilter.domain_names_text%2525252Cprotoblast:text%2525252CTEXT%2525252C%25252525-%2525252Cfalse%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.domain_names_text%3D%252525- facet=false param=filter.domain_names_text
+filter status at=4 kind=leaf:variable%3Dstatus,key%3Dfilter.status,operators%3Dprotoblast:equals,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/choice%2525252Cfilter.status%2525252Cprotoblast:text%2525252CENUM%2525252Cactive%252525252Cpending%252525252Cerror%2525252Ctrue%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.status%3D%252525- facet=true param=filter.status
+filter expires_on at=5 kind=leaf:variable%3Dexpires_on,key%3Dfilter.expires_on,operators%3Dprotoblast:between%252Cprotoblast:gte%252Cprotoblast:lte,controls%3Dreadings%3Dprotoblast:gte%2525252Cprotoblast:between%25252Cbound%3Dtrue%25252Ccontrol%3Dzenitforms:rule-value/temporal%2525252Cfilter.expires_on.from%2525252Cprotoblast:instant%2525252CINSTANT%2525252C%25252525-%2525252Cfalse%2525252Cdatetime%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-%252Creadings%3Dprotoblast:lte%2525252Cprotoblast:between%25252Cbound%3Dtrue%25252Ccontrol%3Dzenitforms:rule-value/temporal%2525252Cfilter.expires_on.to%2525252Cprotoblast:instant%2525252CINSTANT%2525252C%25252525-%2525252Cfalse%2525252Cdatetime%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.expires_on%3D%252525- facet=false param=filter.expires_on
+filter created_at at=6 kind=leaf:variable%3Dcreated_at,key%3Dfilter.created_at,operators%3Dprotoblast:between%252Cprotoblast:gte%252Cprotoblast:lte,controls%3Dreadings%3Dprotoblast:gte%2525252Cprotoblast:between%25252Cbound%3Dtrue%25252Ccontrol%3Dzenitforms:rule-value/temporal%2525252Cfilter.created_at.from%2525252Cprotoblast:instant%2525252CINSTANT%2525252C%25252525-%2525252Cfalse%2525252Cdatetime%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-%252Creadings%3Dprotoblast:lte%2525252Cprotoblast:between%25252Cbound%3Dtrue%25252Ccontrol%3Dzenitforms:rule-value/temporal%2525252Cfilter.created_at.to%2525252Cprotoblast:instant%2525252CINSTANT%2525252C%25252525-%2525252Cfalse%2525252Cdatetime%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.created_at%3D%252525- facet=false param=filter.created_at
 header hohenheim:request_certificate at=0 verb=invoke band=inline style=DEFAULT disabled= confirm=style:PRIMARY,title:get_certificate_title%252Cscope%3Dcertificate_request,body:uses_production%252Cscope%3Dcertificate_request,confirm:get_certificate%252Cscope%3Dcertificate_request,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:true target=/{panel}/{entry}/invoke/hohenheim.request_certificate
 tab overview at=0 landing=true view=true
 tab history at=1 landing=false view=false
@@ -43,23 +46,26 @@ chrome - views=false advanced=false search=true columns=true rail=false selectio
 column nice_name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=other_names relation=false
 column other_names at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
 column domain_names_text at=2 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column provider at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
-column state at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-column status at=5 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column renewal_error at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column challenge_type at=7 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column dns_publisher at=8 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column issued_on at=9 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
-column expires_on at=10 shown=true hidden=false sortable=true filterable=true copyable=false subtext= relation=false
-column next_attempt_at at=11 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
-column error_count at=12 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column created_at at=13 shown=false hidden=true sortable=true filterable=true copyable=false subtext= relation=false
-filter nice_name at=0 kind=TEXT facet=false param=filter.nice_name
-filter provider at=1 kind=SELECT facet=true param=filter.provider
-filter domain_names_text at=2 kind=TEXT facet=false param=filter.domain_names_text
-filter status at=3 kind=SELECT facet=true param=filter.status
-filter expires_on at=4 kind=TEXT facet=false param=filter.expires_on
-filter created_at at=5 kind=TEXT facet=false param=filter.created_at
+column provider at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext=key_custody relation=false
+column key_custody at=4 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column key_holder at=5 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column state at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column status at=7 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column renewal_error at=8 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column challenge_type at=9 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column dns_publisher at=10 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column issued_on at=11 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
+column expires_on at=12 shown=true hidden=false sortable=true filterable=true copyable=false subtext= relation=false
+column next_attempt_at at=13 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
+column error_count at=14 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column created_at at=15 shown=false hidden=true sortable=true filterable=true copyable=false subtext= relation=false
+filter nice_name at=0 kind=leaf:variable%3Dnice_name,key%3Dfilter.nice_name,operators%3Dprotoblast:contains,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/text%2525252Cfilter.nice_name%2525252Cprotoblast:text%2525252CTEXT%2525252C%25252525-%2525252Cfalse%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.nice_name%3D%252525- facet=false param=filter.nice_name
+filter provider at=1 kind=leaf:variable%3Dprovider,key%3Dfilter.provider,operators%3Dprotoblast:equals,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/choice%2525252Cfilter.provider%2525252Cprotoblast:text%2525252CENUM%2525252Cletsencrypt%252525252Ccustom%252525252Cacme_account%2525252Ctrue%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.provider%3D%252525- facet=true param=filter.provider
+filter key_holder at=2 kind=leaf:variable%3Dkey_holder,key%3Dfilter.key_holder,operators%3Dprotoblast:equals,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/choice%2525252Cfilter.key_holder%2525252Cprotoblast:text%2525252CENUM%2525252Chohenheim%252525252Crequester%2525252Ctrue%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.key_holder%3D%252525- facet=true param=filter.key_holder
+filter domain_names_text at=3 kind=leaf:variable%3Ddomain_names_text,key%3Dfilter.domain_names_text,operators%3Dprotoblast:contains,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/text%2525252Cfilter.domain_names_text%2525252Cprotoblast:text%2525252CTEXT%2525252C%25252525-%2525252Cfalse%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.domain_names_text%3D%252525- facet=false param=filter.domain_names_text
+filter status at=4 kind=leaf:variable%3Dstatus,key%3Dfilter.status,operators%3Dprotoblast:equals,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/choice%2525252Cfilter.status%2525252Cprotoblast:text%2525252CENUM%2525252Cactive%252525252Cpending%252525252Cerror%2525252Ctrue%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.status%3D%252525- facet=true param=filter.status
+filter expires_on at=5 kind=leaf:variable%3Dexpires_on,key%3Dfilter.expires_on,operators%3Dprotoblast:between%252Cprotoblast:gte%252Cprotoblast:lte,controls%3Dreadings%3Dprotoblast:gte%2525252Cprotoblast:between%25252Cbound%3Dtrue%25252Ccontrol%3Dzenitforms:rule-value/temporal%2525252Cfilter.expires_on.from%2525252Cprotoblast:instant%2525252CINSTANT%2525252C%25252525-%2525252Cfalse%2525252Cdatetime%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-%252Creadings%3Dprotoblast:lte%2525252Cprotoblast:between%25252Cbound%3Dtrue%25252Ccontrol%3Dzenitforms:rule-value/temporal%2525252Cfilter.expires_on.to%2525252Cprotoblast:instant%2525252CINSTANT%2525252C%25252525-%2525252Cfalse%2525252Cdatetime%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.expires_on%3D%252525- facet=false param=filter.expires_on
+filter created_at at=6 kind=leaf:variable%3Dcreated_at,key%3Dfilter.created_at,operators%3Dprotoblast:between%252Cprotoblast:gte%252Cprotoblast:lte,controls%3Dreadings%3Dprotoblast:gte%2525252Cprotoblast:between%25252Cbound%3Dtrue%25252Ccontrol%3Dzenitforms:rule-value/temporal%2525252Cfilter.created_at.from%2525252Cprotoblast:instant%2525252CINSTANT%2525252C%25252525-%2525252Cfalse%2525252Cdatetime%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-%252Creadings%3Dprotoblast:lte%2525252Cprotoblast:between%25252Cbound%3Dtrue%25252Ccontrol%3Dzenitforms:rule-value/temporal%2525252Cfilter.created_at.to%2525252Cprotoblast:instant%2525252CINSTANT%2525252C%25252525-%2525252Cfalse%2525252Cdatetime%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.created_at%3D%252525- facet=false param=filter.created_at
 header hohenheim:request_certificate at=0 verb=invoke band=inline style=DEFAULT disabled= confirm=style:PRIMARY,title:get_certificate_title%252Cscope%3Dcertificate_request,body:uses_production%252Cscope%3Dcertificate_request,confirm:get_certificate%252Cscope%3Dcertificate_request,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:true target=/{panel}/{entry}/invoke/hohenheim.request_certificate
 row zenit:edit at=0 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
 row hohenheim:download_certificate at=1 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{entry}/{record}/download
@@ -74,26 +80,28 @@ control EDIT%20nice_name at=0 kind=zenitforms:control/string input=text required
 control EDIT%20certificate_pem at=1 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
 control EDIT%20private_key_pem at=2 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
 control EDIT%20auto_renew at=3 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control EDIT%20covered_names_display at=4 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control EDIT%20dns_records_display at=5 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control EDIT%20expiry_display at=6 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control EDIT%20challenge_type_display at=7 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control EDIT%20dns_publisher_display at=8 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control EDIT%20renewal_error_display at=9 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control EDIT%20error_count at=10 kind=zenitforms:control/number input=number required=false readonly=true options= binding=
-control EDIT%20next_attempt_display at=11 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20key_holder at=4 kind=zenitforms:form/select input=select required=false readonly=true options=hohenheim,requester binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20covered_names_display at=5 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20dns_records_display at=6 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20expiry_display at=7 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20challenge_type_display at=8 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20dns_publisher_display at=9 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20renewal_error_display at=10 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20error_count at=11 kind=zenitforms:control/number input=number required=false readonly=true options= binding=
+control EDIT%20next_attempt_display at=12 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
 control DETAIL%20nice_name at=0 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
 control DETAIL%20certificate_pem at=1 kind=zenitforms:control/text input=multiline required=false readonly=true options= binding=
 control DETAIL%20private_key_pem at=2 kind=zenitforms:control/text input=multiline required=false readonly=true options= binding=
 control DETAIL%20auto_renew at=3 kind=zenitforms:control/boolean input=checkbox required=false readonly=true options= binding=
-control DETAIL%20covered_names_display at=4 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control DETAIL%20dns_records_display at=5 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control DETAIL%20expiry_display at=6 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control DETAIL%20challenge_type_display at=7 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control DETAIL%20dns_publisher_display at=8 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control DETAIL%20renewal_error_display at=9 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control DETAIL%20error_count at=10 kind=zenitforms:control/number input=number required=false readonly=true options= binding=
-control DETAIL%20next_attempt_display at=11 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20key_holder at=4 kind=zenitforms:form/select input=select required=false readonly=true options=hohenheim,requester binding=searchable:false,clearable:true,presentation:DEFAULT
+control DETAIL%20covered_names_display at=5 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20dns_records_display at=6 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20expiry_display at=7 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20challenge_type_display at=8 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20dns_publisher_display at=9 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20renewal_error_display at=10 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20error_count at=11 kind=zenitforms:control/number input=number required=false readonly=true options= binding=
+control DETAIL%20next_attempt_display at=12 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
 
 case admin.certificates.operator.issued admin certificates operator v2
 admission - verdict=admitted
@@ -105,23 +113,26 @@ chrome - views=false advanced=false search=true columns=true rail=false selectio
 column nice_name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=other_names relation=false
 column other_names at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
 column domain_names_text at=2 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column provider at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
-column state at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-column status at=5 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column renewal_error at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column challenge_type at=7 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column dns_publisher at=8 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column issued_on at=9 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
-column expires_on at=10 shown=true hidden=false sortable=true filterable=true copyable=false subtext= relation=false
-column next_attempt_at at=11 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
-column error_count at=12 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column created_at at=13 shown=false hidden=true sortable=true filterable=true copyable=false subtext= relation=false
-filter nice_name at=0 kind=TEXT facet=false param=filter.nice_name
-filter provider at=1 kind=SELECT facet=true param=filter.provider
-filter domain_names_text at=2 kind=TEXT facet=false param=filter.domain_names_text
-filter status at=3 kind=SELECT facet=true param=filter.status
-filter expires_on at=4 kind=TEXT facet=false param=filter.expires_on
-filter created_at at=5 kind=TEXT facet=false param=filter.created_at
+column provider at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext=key_custody relation=false
+column key_custody at=4 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column key_holder at=5 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column state at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column status at=7 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column renewal_error at=8 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column challenge_type at=9 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column dns_publisher at=10 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column issued_on at=11 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
+column expires_on at=12 shown=true hidden=false sortable=true filterable=true copyable=false subtext= relation=false
+column next_attempt_at at=13 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
+column error_count at=14 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column created_at at=15 shown=false hidden=true sortable=true filterable=true copyable=false subtext= relation=false
+filter nice_name at=0 kind=leaf:variable%3Dnice_name,key%3Dfilter.nice_name,operators%3Dprotoblast:contains,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/text%2525252Cfilter.nice_name%2525252Cprotoblast:text%2525252CTEXT%2525252C%25252525-%2525252Cfalse%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.nice_name%3D%252525- facet=false param=filter.nice_name
+filter provider at=1 kind=leaf:variable%3Dprovider,key%3Dfilter.provider,operators%3Dprotoblast:equals,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/choice%2525252Cfilter.provider%2525252Cprotoblast:text%2525252CENUM%2525252Cletsencrypt%252525252Ccustom%252525252Cacme_account%2525252Ctrue%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.provider%3D%252525- facet=true param=filter.provider
+filter key_holder at=2 kind=leaf:variable%3Dkey_holder,key%3Dfilter.key_holder,operators%3Dprotoblast:equals,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/choice%2525252Cfilter.key_holder%2525252Cprotoblast:text%2525252CENUM%2525252Chohenheim%252525252Crequester%2525252Ctrue%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.key_holder%3D%252525- facet=true param=filter.key_holder
+filter domain_names_text at=3 kind=leaf:variable%3Ddomain_names_text,key%3Dfilter.domain_names_text,operators%3Dprotoblast:contains,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/text%2525252Cfilter.domain_names_text%2525252Cprotoblast:text%2525252CTEXT%2525252C%25252525-%2525252Cfalse%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.domain_names_text%3D%252525- facet=false param=filter.domain_names_text
+filter status at=4 kind=leaf:variable%3Dstatus,key%3Dfilter.status,operators%3Dprotoblast:equals,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/choice%2525252Cfilter.status%2525252Cprotoblast:text%2525252CENUM%2525252Cactive%252525252Cpending%252525252Cerror%2525252Ctrue%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.status%3D%252525- facet=true param=filter.status
+filter expires_on at=5 kind=leaf:variable%3Dexpires_on,key%3Dfilter.expires_on,operators%3Dprotoblast:between%252Cprotoblast:gte%252Cprotoblast:lte,controls%3Dreadings%3Dprotoblast:gte%2525252Cprotoblast:between%25252Cbound%3Dtrue%25252Ccontrol%3Dzenitforms:rule-value/temporal%2525252Cfilter.expires_on.from%2525252Cprotoblast:instant%2525252CINSTANT%2525252C%25252525-%2525252Cfalse%2525252Cdatetime%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-%252Creadings%3Dprotoblast:lte%2525252Cprotoblast:between%25252Cbound%3Dtrue%25252Ccontrol%3Dzenitforms:rule-value/temporal%2525252Cfilter.expires_on.to%2525252Cprotoblast:instant%2525252CINSTANT%2525252C%25252525-%2525252Cfalse%2525252Cdatetime%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.expires_on%3D%252525- facet=false param=filter.expires_on
+filter created_at at=6 kind=leaf:variable%3Dcreated_at,key%3Dfilter.created_at,operators%3Dprotoblast:between%252Cprotoblast:gte%252Cprotoblast:lte,controls%3Dreadings%3Dprotoblast:gte%2525252Cprotoblast:between%25252Cbound%3Dtrue%25252Ccontrol%3Dzenitforms:rule-value/temporal%2525252Cfilter.created_at.from%2525252Cprotoblast:instant%2525252CINSTANT%2525252C%25252525-%2525252Cfalse%2525252Cdatetime%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-%252Creadings%3Dprotoblast:lte%2525252Cprotoblast:between%25252Cbound%3Dtrue%25252Ccontrol%3Dzenitforms:rule-value/temporal%2525252Cfilter.created_at.to%2525252Cprotoblast:instant%2525252CINSTANT%2525252C%25252525-%2525252Cfalse%2525252Cdatetime%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.created_at%3D%252525- facet=false param=filter.created_at
 header hohenheim:request_certificate at=0 verb=invoke band=inline style=DEFAULT disabled= confirm=style:PRIMARY,title:get_certificate_title%252Cscope%3Dcertificate_request,body:uses_production%252Cscope%3Dcertificate_request,confirm:get_certificate%252Cscope%3Dcertificate_request,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:true target=/{panel}/{entry}/invoke/hohenheim.request_certificate
 row zenit:edit at=0 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
 row hohenheim:download_certificate at=1 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{entry}/{record}/download
@@ -137,26 +148,28 @@ control EDIT%20nice_name at=0 kind=zenitforms:control/string input=text required
 control EDIT%20certificate_pem at=1 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
 control EDIT%20private_key_pem at=2 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
 control EDIT%20auto_renew at=3 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control EDIT%20covered_names_display at=4 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control EDIT%20dns_records_display at=5 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control EDIT%20expiry_display at=6 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control EDIT%20challenge_type_display at=7 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control EDIT%20dns_publisher_display at=8 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control EDIT%20renewal_error_display at=9 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control EDIT%20error_count at=10 kind=zenitforms:control/number input=number required=false readonly=true options= binding=
-control EDIT%20next_attempt_display at=11 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20key_holder at=4 kind=zenitforms:form/select input=select required=false readonly=true options=hohenheim,requester binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20covered_names_display at=5 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20dns_records_display at=6 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20expiry_display at=7 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20challenge_type_display at=8 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20dns_publisher_display at=9 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20renewal_error_display at=10 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20error_count at=11 kind=zenitforms:control/number input=number required=false readonly=true options= binding=
+control EDIT%20next_attempt_display at=12 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
 control DETAIL%20nice_name at=0 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
 control DETAIL%20certificate_pem at=1 kind=zenitforms:control/text input=multiline required=false readonly=true options= binding=
 control DETAIL%20private_key_pem at=2 kind=zenitforms:control/text input=multiline required=false readonly=true options= binding=
 control DETAIL%20auto_renew at=3 kind=zenitforms:control/boolean input=checkbox required=false readonly=true options= binding=
-control DETAIL%20covered_names_display at=4 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control DETAIL%20dns_records_display at=5 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control DETAIL%20expiry_display at=6 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control DETAIL%20challenge_type_display at=7 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control DETAIL%20dns_publisher_display at=8 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control DETAIL%20renewal_error_display at=9 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control DETAIL%20error_count at=10 kind=zenitforms:control/number input=number required=false readonly=true options= binding=
-control DETAIL%20next_attempt_display at=11 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20key_holder at=4 kind=zenitforms:form/select input=select required=false readonly=true options=hohenheim,requester binding=searchable:false,clearable:true,presentation:DEFAULT
+control DETAIL%20covered_names_display at=5 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20dns_records_display at=6 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20expiry_display at=7 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20challenge_type_display at=8 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20dns_publisher_display at=9 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20renewal_error_display at=10 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20error_count at=11 kind=zenitforms:control/number input=number required=false readonly=true options= binding=
+control DETAIL%20next_attempt_display at=12 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
 
 case admin.certificates.operator.selection admin certificates operator v2
 admission - verdict=admitted
@@ -165,23 +178,26 @@ chrome - views=false advanced=false search=true columns=true rail=false selectio
 column nice_name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=other_names relation=false
 column other_names at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
 column domain_names_text at=2 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column provider at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
-column state at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-column status at=5 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column renewal_error at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column challenge_type at=7 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column dns_publisher at=8 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column issued_on at=9 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
-column expires_on at=10 shown=true hidden=false sortable=true filterable=true copyable=false subtext= relation=false
-column next_attempt_at at=11 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
-column error_count at=12 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column created_at at=13 shown=false hidden=true sortable=true filterable=true copyable=false subtext= relation=false
-filter nice_name at=0 kind=TEXT facet=false param=filter.nice_name
-filter provider at=1 kind=SELECT facet=true param=filter.provider
-filter domain_names_text at=2 kind=TEXT facet=false param=filter.domain_names_text
-filter status at=3 kind=SELECT facet=true param=filter.status
-filter expires_on at=4 kind=TEXT facet=false param=filter.expires_on
-filter created_at at=5 kind=TEXT facet=false param=filter.created_at
+column provider at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext=key_custody relation=false
+column key_custody at=4 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column key_holder at=5 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column state at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column status at=7 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column renewal_error at=8 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column challenge_type at=9 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column dns_publisher at=10 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column issued_on at=11 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
+column expires_on at=12 shown=true hidden=false sortable=true filterable=true copyable=false subtext= relation=false
+column next_attempt_at at=13 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
+column error_count at=14 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column created_at at=15 shown=false hidden=true sortable=true filterable=true copyable=false subtext= relation=false
+filter nice_name at=0 kind=leaf:variable%3Dnice_name,key%3Dfilter.nice_name,operators%3Dprotoblast:contains,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/text%2525252Cfilter.nice_name%2525252Cprotoblast:text%2525252CTEXT%2525252C%25252525-%2525252Cfalse%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.nice_name%3D%252525- facet=false param=filter.nice_name
+filter provider at=1 kind=leaf:variable%3Dprovider,key%3Dfilter.provider,operators%3Dprotoblast:equals,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/choice%2525252Cfilter.provider%2525252Cprotoblast:text%2525252CENUM%2525252Cletsencrypt%252525252Ccustom%252525252Cacme_account%2525252Ctrue%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.provider%3D%252525- facet=true param=filter.provider
+filter key_holder at=2 kind=leaf:variable%3Dkey_holder,key%3Dfilter.key_holder,operators%3Dprotoblast:equals,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/choice%2525252Cfilter.key_holder%2525252Cprotoblast:text%2525252CENUM%2525252Chohenheim%252525252Crequester%2525252Ctrue%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.key_holder%3D%252525- facet=true param=filter.key_holder
+filter domain_names_text at=3 kind=leaf:variable%3Ddomain_names_text,key%3Dfilter.domain_names_text,operators%3Dprotoblast:contains,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/text%2525252Cfilter.domain_names_text%2525252Cprotoblast:text%2525252CTEXT%2525252C%25252525-%2525252Cfalse%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.domain_names_text%3D%252525- facet=false param=filter.domain_names_text
+filter status at=4 kind=leaf:variable%3Dstatus,key%3Dfilter.status,operators%3Dprotoblast:equals,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/choice%2525252Cfilter.status%2525252Cprotoblast:text%2525252CENUM%2525252Cactive%252525252Cpending%252525252Cerror%2525252Ctrue%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.status%3D%252525- facet=true param=filter.status
+filter expires_on at=5 kind=leaf:variable%3Dexpires_on,key%3Dfilter.expires_on,operators%3Dprotoblast:between%252Cprotoblast:gte%252Cprotoblast:lte,controls%3Dreadings%3Dprotoblast:gte%2525252Cprotoblast:between%25252Cbound%3Dtrue%25252Ccontrol%3Dzenitforms:rule-value/temporal%2525252Cfilter.expires_on.from%2525252Cprotoblast:instant%2525252CINSTANT%2525252C%25252525-%2525252Cfalse%2525252Cdatetime%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-%252Creadings%3Dprotoblast:lte%2525252Cprotoblast:between%25252Cbound%3Dtrue%25252Ccontrol%3Dzenitforms:rule-value/temporal%2525252Cfilter.expires_on.to%2525252Cprotoblast:instant%2525252CINSTANT%2525252C%25252525-%2525252Cfalse%2525252Cdatetime%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.expires_on%3D%252525- facet=false param=filter.expires_on
+filter created_at at=6 kind=leaf:variable%3Dcreated_at,key%3Dfilter.created_at,operators%3Dprotoblast:between%252Cprotoblast:gte%252Cprotoblast:lte,controls%3Dreadings%3Dprotoblast:gte%2525252Cprotoblast:between%25252Cbound%3Dtrue%25252Ccontrol%3Dzenitforms:rule-value/temporal%2525252Cfilter.created_at.from%2525252Cprotoblast:instant%2525252CINSTANT%2525252C%25252525-%2525252Cfalse%2525252Cdatetime%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-%252Creadings%3Dprotoblast:lte%2525252Cprotoblast:between%25252Cbound%3Dtrue%25252Ccontrol%3Dzenitforms:rule-value/temporal%2525252Cfilter.created_at.to%2525252Cprotoblast:instant%2525252CINSTANT%2525252C%25252525-%2525252Cfalse%2525252Cdatetime%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.created_at%3D%252525- facet=false param=filter.created_at
 header hohenheim:request_certificate at=0 verb=invoke band=inline style=DEFAULT disabled= confirm=style:PRIMARY,title:get_certificate_title%252Cscope%3Dcertificate_request,body:uses_production%252Cscope%3Dcertificate_request,confirm:get_certificate%252Cscope%3Dcertificate_request,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:true target=/{panel}/{entry}/invoke/hohenheim.request_certificate
 tab overview at=0 landing=true view=true
 tab history at=1 landing=false view=false
@@ -198,23 +214,26 @@ chrome - views=false advanced=false search=true columns=true rail=false selectio
 column nice_name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=other_names relation=false
 column other_names at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
 column domain_names_text at=2 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column provider at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
-column state at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-column status at=5 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column renewal_error at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column challenge_type at=7 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column dns_publisher at=8 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column issued_on at=9 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
-column expires_on at=10 shown=true hidden=false sortable=true filterable=true copyable=false subtext= relation=false
-column next_attempt_at at=11 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
-column error_count at=12 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column created_at at=13 shown=false hidden=true sortable=true filterable=true copyable=false subtext= relation=false
-filter nice_name at=0 kind=TEXT facet=false param=filter.nice_name
-filter provider at=1 kind=SELECT facet=true param=filter.provider
-filter domain_names_text at=2 kind=TEXT facet=false param=filter.domain_names_text
-filter status at=3 kind=SELECT facet=true param=filter.status
-filter expires_on at=4 kind=TEXT facet=false param=filter.expires_on
-filter created_at at=5 kind=TEXT facet=false param=filter.created_at
+column provider at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext=key_custody relation=false
+column key_custody at=4 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column key_holder at=5 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column state at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column status at=7 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column renewal_error at=8 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column challenge_type at=9 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column dns_publisher at=10 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column issued_on at=11 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
+column expires_on at=12 shown=true hidden=false sortable=true filterable=true copyable=false subtext= relation=false
+column next_attempt_at at=13 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
+column error_count at=14 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column created_at at=15 shown=false hidden=true sortable=true filterable=true copyable=false subtext= relation=false
+filter nice_name at=0 kind=leaf:variable%3Dnice_name,key%3Dfilter.nice_name,operators%3Dprotoblast:contains,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/text%2525252Cfilter.nice_name%2525252Cprotoblast:text%2525252CTEXT%2525252C%25252525-%2525252Cfalse%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.nice_name%3D%252525- facet=false param=filter.nice_name
+filter provider at=1 kind=leaf:variable%3Dprovider,key%3Dfilter.provider,operators%3Dprotoblast:equals,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/choice%2525252Cfilter.provider%2525252Cprotoblast:text%2525252CENUM%2525252Cletsencrypt%252525252Ccustom%252525252Cacme_account%2525252Ctrue%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.provider%3D%252525- facet=true param=filter.provider
+filter key_holder at=2 kind=leaf:variable%3Dkey_holder,key%3Dfilter.key_holder,operators%3Dprotoblast:equals,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/choice%2525252Cfilter.key_holder%2525252Cprotoblast:text%2525252CENUM%2525252Chohenheim%252525252Crequester%2525252Ctrue%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.key_holder%3D%252525- facet=true param=filter.key_holder
+filter domain_names_text at=3 kind=leaf:variable%3Ddomain_names_text,key%3Dfilter.domain_names_text,operators%3Dprotoblast:contains,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/text%2525252Cfilter.domain_names_text%2525252Cprotoblast:text%2525252CTEXT%2525252C%25252525-%2525252Cfalse%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.domain_names_text%3D%252525- facet=false param=filter.domain_names_text
+filter status at=4 kind=leaf:variable%3Dstatus,key%3Dfilter.status,operators%3Dprotoblast:equals,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/choice%2525252Cfilter.status%2525252Cprotoblast:text%2525252CENUM%2525252Cactive%252525252Cpending%252525252Cerror%2525252Ctrue%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.status%3D%252525- facet=true param=filter.status
+filter expires_on at=5 kind=leaf:variable%3Dexpires_on,key%3Dfilter.expires_on,operators%3Dprotoblast:between%252Cprotoblast:gte%252Cprotoblast:lte,controls%3Dreadings%3Dprotoblast:gte%2525252Cprotoblast:between%25252Cbound%3Dtrue%25252Ccontrol%3Dzenitforms:rule-value/temporal%2525252Cfilter.expires_on.from%2525252Cprotoblast:instant%2525252CINSTANT%2525252C%25252525-%2525252Cfalse%2525252Cdatetime%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-%252Creadings%3Dprotoblast:lte%2525252Cprotoblast:between%25252Cbound%3Dtrue%25252Ccontrol%3Dzenitforms:rule-value/temporal%2525252Cfilter.expires_on.to%2525252Cprotoblast:instant%2525252CINSTANT%2525252C%25252525-%2525252Cfalse%2525252Cdatetime%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.expires_on%3D%252525- facet=false param=filter.expires_on
+filter created_at at=6 kind=leaf:variable%3Dcreated_at,key%3Dfilter.created_at,operators%3Dprotoblast:between%252Cprotoblast:gte%252Cprotoblast:lte,controls%3Dreadings%3Dprotoblast:gte%2525252Cprotoblast:between%25252Cbound%3Dtrue%25252Ccontrol%3Dzenitforms:rule-value/temporal%2525252Cfilter.created_at.from%2525252Cprotoblast:instant%2525252CINSTANT%2525252C%25252525-%2525252Cfalse%2525252Cdatetime%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-%252Creadings%3Dprotoblast:lte%2525252Cprotoblast:between%25252Cbound%3Dtrue%25252Ccontrol%3Dzenitforms:rule-value/temporal%2525252Cfilter.created_at.to%2525252Cprotoblast:instant%2525252CINSTANT%2525252C%25252525-%2525252Cfalse%2525252Cdatetime%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.created_at%3D%252525- facet=false param=filter.created_at
 header hohenheim:request_certificate at=0 verb=invoke band=inline style=DEFAULT disabled= confirm=style:PRIMARY,title:get_certificate_title%252Cscope%3Dcertificate_request,body:uses_production%252Cscope%3Dcertificate_request,confirm:get_certificate%252Cscope%3Dcertificate_request,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:true target=/{panel}/{entry}/invoke/hohenheim.request_certificate
 tab overview at=0 landing=true view=true
 tab history at=1 landing=false view=false
@@ -252,6 +271,7 @@ control EDIT%20domain_names_text at=1 kind=zenitforms:control/string input=text 
 control EDIT%20status at=2 kind=zenitforms:form/select input=select required=false readonly=true options=active,pending,error binding=searchable:false,clearable:true,presentation:DEFAULT
 control EDIT%20expires_on at=3 kind=zenitforms:control/datetime input=datetime required=false readonly=true options= binding=
 control EDIT%20renewal_error at=4 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20key_holder at=5 kind=zenitforms:form/select input=select required=false readonly=true options=hohenheim,requester binding=searchable:false,clearable:true,presentation:DEFAULT
 
 case manage.certificates.tenant.foreign manage certificates tenant v2
 admission - verdict=admitted
@@ -283,4 +303,5 @@ control EDIT%20domain_names_text at=1 kind=zenitforms:control/string input=text 
 control EDIT%20status at=2 kind=zenitforms:form/select input=select required=false readonly=true options=active,pending,error binding=searchable:false,clearable:true,presentation:DEFAULT
 control EDIT%20expires_on at=3 kind=zenitforms:control/datetime input=datetime required=false readonly=true options= binding=
 control EDIT%20renewal_error at=4 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20key_holder at=5 kind=zenitforms:form/select input=select required=false readonly=true options=hohenheim,requester binding=searchable:false,clearable:true,presentation:DEFAULT
 

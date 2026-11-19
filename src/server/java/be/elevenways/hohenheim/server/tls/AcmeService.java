@@ -127,16 +127,17 @@ public class AcmeService {
     private final ConcurrentHashMap<String, OrderFlight> inFlightOrders = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, PendingManualDnsOrder> manualDnsOrders = new ConcurrentHashMap<>();
 
-    // ACME account sessions keyed by normalized override email ("" = the global account),
-    // each with its own persisted key pair. Guarded by the synchronized ensureAccount.
+    // ACME account sessions keyed by directory and normalized override email ("" = the global account),
+    // each email with its own persisted key pair. Guarded by the synchronized ensureAccount.
     private final Map<String, Account> accounts = new HashMap<>();
 
     private record ChallengeEntry(String authorization, Set<String> validHostnames) {}
 
     /**
-     * Result of an ACME certificate order.
+     * Result of an ACME certificate order: the chain, its expiry, and the signing whose key the chain certifies, which
+     * is what a row keeps beside it ({@link Signing#keep}).
      */
-    private record OrderResult(String certPem, String keyPem, Instant expiresAt) {}
+    private record OrderResult(String certPem, Instant expiresAt, Signing signing) {}
 
     /** certificateId carries the leader's row id so joiners can share the row instead of minting a duplicate. */
     private record OrderFlight(boolean joinable, CompletableFuture<OrderResult> result, AtomicInteger certificateId) {
@@ -150,9 +151,122 @@ public class AcmeService {
                                     DnsTxtRecord record, String identifier) {}
 
     /** declaring maps every requested SAN to the domain row that authorized it. */
-    private record DnsOrderContext(Order order, KeyPair domainKeyPair, List<String> hostnames,
+    private record DnsOrderContext(Order order, Signing signing, List<String> hostnames,
                                    List<DnsAuthorization> authorizations,
                                    Map<String, Integer> declaring) {}
+
+    /**
+     * Whose key an order certifies: Hohenheim's own, made fresh for the order, or the requester's, named by its signing
+     * request.
+     *
+     * AIDEV-NOTE: the signing is part of the order key ({@link #orderKeyPart}), so an order for Hohenheim's key never
+     * joins one for a requester's key over the same names (the joiner would adopt a chain for a key it does not hold),
+     * and a requester-held certificate renews from its stored request, so its key never changes behind a DANE pin.
+     */
+    private sealed interface Signing permits OwnKey, RequesterKey {
+
+        /** @return the PKCS#10 the CA's finalize receives */
+        byte[] csr(List<String> hostnames) throws Exception;
+
+        /** Stores, beside an issued chain, who holds its key: the key itself, or the request it was ordered from. */
+        void keep(Row certRow) throws Exception;
+
+        /** Stamps a not yet issued row with who will hold its key. */
+        void pending(Row certRow);
+
+        /** @throws IllegalStateException when the issued leaf certifies another key than this signing's */
+        void requireCertifies(X509Certificate leaf);
+
+        /** @return this signing's part of the order key; empty for Hohenheim's own fresh keys */
+        String orderKeyPart();
+    }
+
+    /** Hohenheim's own key, made for one order and stored with the certificate. */
+    private record OwnKey(KeyPair pair) implements Signing {
+
+        static OwnKey fresh() {
+            return new OwnKey(KeyPairUtils.createKeyPair(2048));
+        }
+
+        @Override
+        public byte[] csr(List<String> hostnames) throws Exception {
+            CSRBuilder csrBuilder = new CSRBuilder();
+            for (String hostname : hostnames) {
+                csrBuilder.addDomain(hostname);
+            }
+            csrBuilder.sign(this.pair);
+            return csrBuilder.getEncoded();
+        }
+
+        @Override
+        public void keep(Row certRow) throws Exception {
+            CertificateModel.keepKey(certRow, privateKeyToPem(this.pair));
+        }
+
+        @Override
+        public void pending(Row certRow) {
+        }
+
+        @Override
+        public void requireCertifies(X509Certificate leaf) {
+            if (!leaf.getPublicKey().equals(this.pair.getPublic())) {
+                throw new IllegalStateException("The CA issued a certificate for another key than the order's");
+            }
+        }
+
+        @Override
+        public String orderKeyPart() {
+            return "";
+        }
+    }
+
+    /** The requester's key, named by its signing request; Hohenheim never sees the key itself. */
+    private record RequesterKey(SigningRequest request) implements Signing {
+
+        @Override
+        public byte[] csr(List<String> hostnames) {
+            return this.request.der();
+        }
+
+        @Override
+        public void keep(Row certRow) {
+            CertificateModel.keepSigningRequest(certRow, this.request.pem());
+        }
+
+        @Override
+        public void pending(Row certRow) {
+            CertificateModel.keepSigningRequest(certRow, this.request.pem());
+        }
+
+        @Override
+        public void requireCertifies(X509Certificate leaf) {
+            if (!SigningRequest.publicKeyPin(leaf.getPublicKey()).equals(this.request.publicKeyPin())) {
+                throw new IllegalStateException("The CA issued a certificate for another key than the signing request's");
+            }
+        }
+
+        @Override
+        public String orderKeyPart() {
+            return "csr:" + this.request.publicKeyPin() + "@";
+        }
+    }
+
+    /**
+     * The signing a stored certificate renews with: a fresh key of Hohenheim's for one whose key it holds, the stored
+     * signing request for one whose requester holds it.
+     *
+     * @throws SigningRequest.Refused when the stored request no longer reads for the stored names
+     * @throws IllegalStateException  for a key holder nobody declared, which renews with nothing
+     */
+    private static Signing signingOf(Row certRow, List<String> hostnames) {
+        if (CertificateModel.keyHeldHere(certRow)) {
+            return OwnKey.fresh();
+        }
+        if (CertificateModel.keyHeldByRequester(certRow)) {
+            return new RequesterKey(SigningRequest.read(certRow.get(CertificateModel.SIGNING_REQUEST_PEM), hostnames));
+        }
+        throw new IllegalStateException("Unknown key holder: " + certRow.get(CertificateModel.KEY_HOLDER));
+    }
 
     private record PendingManualDnsOrder(int certificateId, DnsOrderContext order, Instant createdAt,
                                          String orderKey, OrderFlight flight) {}
@@ -274,6 +388,28 @@ public class AcmeService {
                                                       @Nullable String email, String challengeType,
                                                       @Nullable String dnsPublisher,
                                                       CertificateAuthority.Requester requester) {
+        return request(hostnames, niceName, email, challengeType, dnsPublisher, requester, OwnKey.fresh());
+    }
+
+    /**
+     * Request a new Let's Encrypt certificate from the requester's own signing request: the requester keeps the key,
+     * the row keeps the request (every renewal orders from it again) and no private key, so the proxy never loads it.
+     * Blocks until the certificate is issued or an error occurs.
+     *
+     * @param request a signing request already judged for exactly {@code hostnames}
+     * @return the row the request wrote or joined, and whether it was issued
+     * @throws CertificateAuthority.Refused when the requester may not obtain these names
+     */
+    public @NonNull RequestOutcome requestFromSigningRequest(@NonNull SigningRequest request,
+                                                             List<String> hostnames, String niceName,
+                                                             String challengeType, @Nullable String dnsPublisher,
+                                                             CertificateAuthority.Requester requester) {
+        return request(hostnames, niceName, null, challengeType, dnsPublisher, requester, new RequesterKey(request));
+    }
+
+    private @NonNull RequestOutcome request(List<String> hostnames, String niceName, @Nullable String email,
+                                            String challengeType, @Nullable String dnsPublisher,
+                                            CertificateAuthority.Requester requester, Signing signing) {
         var certModel = Models.get(CertificateModel.class);
 
         // AIDEV-NOTE: authorization runs FIRST, before the order-key claim and before the
@@ -287,7 +423,7 @@ public class AcmeService {
         // Claim the order key BEFORE creating a row: a concurrent identical
         // request shares the leader's certificate row instead of minting a
         // duplicate ACTIVE record for the same domains.
-        String orderKey = certificateOrderKey(hostnames, email, null);
+        String orderKey = certificateOrderKey(hostnames, email, null, signing);
         OrderFlight flight = new OrderFlight(true, new CompletableFuture<>());
         OrderFlight existing = inFlightOrders.putIfAbsent(orderKey, flight);
         if (existing != null) {
@@ -317,13 +453,14 @@ public class AcmeService {
         if (email != null && !email.isBlank()) {
             certRow.set(CertificateModel.LETSENCRYPT_EMAIL, email.trim());
         }
+        signing.pending(certRow);
         certModel.save(certRow);
         int certId = certRow.get(CertificateModel.ID);
         flight.certificateId().set(certId);
 
         try {
             OrderResult result = leadOrder(orderKey, flight, hostnames, email, challengeType,
-                dnsPublisher, declaring);
+                dnsPublisher, declaring, signing);
 
             applyIssuedMaterial(certRow, result);
             certModel.save(certRow);
@@ -358,16 +495,50 @@ public class AcmeService {
      * certificate are now the ones THIS actor asked for -- but it does mean an operator
      * re-issuing a tenant's certificate takes over its renewal authority.
      *
-     * @param certRow the stored certificate; must be a {@code letsencrypt} row
+     * @param certRow the stored certificate; must be a {@code letsencrypt} row whose key Hohenheim holds
      * @throws CertificateAuthority.Refused when the requester may not obtain the NEW names
      */
     public @NonNull ReissueResult reissueCertificate(@NonNull Row certRow, List<String> hostnames,
                                                      @Nullable String email, String challengeType,
                                                      @Nullable String dnsPublisher,
                                                      CertificateAuthority.Requester requester) {
-        // Visibility is not authorization: the row action hides itself for non-ACME rows and
-        // the handler refuses one, and this refuses it a third time because this is the only
-        // layer every future caller must pass through.
+        requireReissuable(certRow, challengeType, dnsPublisher);
+        // A requester-held certificate re-issued with a key of Hohenheim's would change the key behind the
+        // requester's pins and hand Hohenheim a certificate the requester asked to keep: it re-orders only from a new
+        // signing request (reissueFromSigningRequest).
+        if (!CertificateModel.keyHeldHere(certRow)) {
+            throw new IllegalArgumentException("Its requester holds this certificate's key; it is re-ordered from a"
+                + " new signing request");
+        }
+        return reissue(certRow, hostnames, email, challengeType, dnsPublisher, requester, OwnKey.fresh());
+    }
+
+    /**
+     * Re-order a requester-held certificate from a NEW signing request, writing the result and the new request onto
+     * the SAME row: the only way its key changes. The row is touched only on success, exactly as a re-issue.
+     *
+     * @param request a signing request already judged for exactly {@code hostnames}
+     * @throws CertificateAuthority.Refused when the requester may not obtain these names
+     * @throws IllegalArgumentException     when the row is no Let's Encrypt certificate whose requester holds the key
+     */
+    public @NonNull ReissueResult reissueFromSigningRequest(@NonNull Row certRow, @NonNull SigningRequest request,
+                                                            List<String> hostnames, String challengeType,
+                                                            @Nullable String dnsPublisher,
+                                                            CertificateAuthority.Requester requester) {
+        requireReissuable(certRow, challengeType, dnsPublisher);
+        if (!CertificateModel.keyHeldByRequester(certRow)) {
+            throw new IllegalArgumentException("Hohenheim holds this certificate's key; a signing request never takes"
+                + " it over");
+        }
+        return reissue(certRow, hostnames, certRow.get(CertificateModel.LETSENCRYPT_EMAIL), challengeType,
+            dnsPublisher, requester, new RequesterKey(request));
+    }
+
+    /**
+     * Visibility is not authorization: the row action hides itself for non-ACME rows and the handler refuses one, and
+     * this refuses it a third time because this is the only layer every future caller must pass through.
+     */
+    private static void requireReissuable(@NonNull Row certRow, String challengeType, @Nullable String dnsPublisher) {
         if (!CertificateModel.PROVIDER_LETSENCRYPT.equals(certRow.get(CertificateModel.PROVIDER))) {
             throw new IllegalArgumentException("Only Let's Encrypt certificates can be re-issued");
         }
@@ -378,7 +549,11 @@ public class AcmeService {
             // it is a separate mechanism, not a parameter of this one.
             throw new IllegalArgumentException("Manual DNS-01 re-issue is not supported");
         }
+    }
 
+    private @NonNull ReissueResult reissue(@NonNull Row certRow, List<String> hostnames, @Nullable String email,
+                                           String challengeType, @Nullable String dnsPublisher,
+                                           CertificateAuthority.Requester requester, Signing signing) {
         int certificateId = certRow.get(CertificateModel.ID);
         var certModel = Models.get(CertificateModel.class);
 
@@ -391,7 +566,7 @@ public class AcmeService {
         // leader's material -- which for a re-issue means writing a certificate ordered
         // under a different row's request onto this row. Renewal deliberately keeps the
         // id-less key so SAN-identical renewals still share one order.
-        String orderKey = certificateOrderKey(hostnames, email, certificateId);
+        String orderKey = certificateOrderKey(hostnames, email, certificateId, signing);
         OrderFlight flight = new OrderFlight(false, new CompletableFuture<>());
         if (inFlightOrders.putIfAbsent(orderKey, flight) != null) {
             return new ReissueResult(false, "A re-issue of this certificate is already in progress");
@@ -399,7 +574,7 @@ public class AcmeService {
 
         try {
             OrderResult result = leadOrder(orderKey, flight, hostnames, email, challengeType,
-                dnsPublisher, declaring);
+                dnsPublisher, declaring, signing);
 
             applyIssuedMaterial(certRow, result);
             certRow.set(CertificateModel.DOMAIN_NAMES_TEXT, String.join(",", hostnames));
@@ -438,11 +613,11 @@ public class AcmeService {
     private OrderResult leadOrder(String orderKey, OrderFlight flight, List<String> hostnames,
                                   @Nullable String email, String challengeType,
                                   @Nullable String dnsPublisher,
-                                  Map<String, Integer> declaring) throws Exception {
+                                  Map<String, Integer> declaring, Signing signing) throws Exception {
         try {
             requireValidHostnames(hostnames, CertificateModel.CHALLENGE_DNS.equals(challengeType));
             OrderResult result = performAcmeOrderUncoalesced(hostnames, email, challengeType,
-                dnsPublisher, declaring);
+                dnsPublisher, declaring, signing);
             flight.result().complete(result);
             return result;
         } catch (Exception | Error failure) {
@@ -464,10 +639,13 @@ public class AcmeService {
         }
     }
 
-    /** Stamp freshly issued material onto a row; the four issuance lanes all write this. */
-    private static void applyIssuedMaterial(Row certRow, OrderResult result) {
+    /**
+     * Stamp freshly issued material onto a row; the four issuance lanes all write this. Who holds the key is written
+     * with it ({@link Signing#keep}), so a chain is never stored beside another order's custody.
+     */
+    private static void applyIssuedMaterial(Row certRow, OrderResult result) throws Exception {
         certRow.set(CertificateModel.CERTIFICATE_PEM, result.certPem());
-        certRow.set(CertificateModel.PRIVATE_KEY_PEM, result.keyPem());
+        result.signing().keep(certRow);
         certRow.set(CertificateModel.EXPIRES_ON, result.expiresAt());
         certRow.set(CertificateModel.ISSUED_ON, Now.instant());
         markRenewalSuccess(certRow);
@@ -522,7 +700,8 @@ public class AcmeService {
 
         requireValidHostnames(hostnames, true);
 
-        String orderKey = certificateOrderKey(hostnames, email, null);
+        Signing signing = OwnKey.fresh();
+        String orderKey = certificateOrderKey(hostnames, email, null, signing);
         OrderFlight flight = new OrderFlight(false, new CompletableFuture<>());
         if (inFlightOrders.putIfAbsent(orderKey, flight) != null) {
             throw new IllegalStateException("A certificate order for these hostnames is already in progress");
@@ -544,7 +723,7 @@ public class AcmeService {
             }
             certModel.save(certRow);
 
-            DnsOrderContext order = prepareDnsOrder(hostnames, email, declaring);
+            DnsOrderContext order = prepareDnsOrder(hostnames, email, declaring, signing);
             String token = SecureTokens.randomToken();
             int certificateId = certRow.get(CertificateModel.ID);
             PendingManualDnsOrder pending = new PendingManualDnsOrder(
@@ -754,8 +933,20 @@ public class AcmeService {
     }
 
     /**
-     * Active certificates nearing expiry, plus errored certificates whose retry backoff
-     * has elapsed (errored certs used to be filtered out forever).
+     * How long a certificate may stay pending before the sweep takes it for an order that died with its process: far
+     * past any one order, whose polling is bounded per authorization ({@link #MAX_POLL_ATTEMPTS}) and per CA-paced wait
+     * ({@link #POLL_BUDGET}).
+     */
+    static final Duration STALE_PENDING = Duration.ofHours(2);
+
+    /**
+     * Active certificates nearing expiry, errored certificates whose retry backoff has elapsed (errored certs used to
+     * be filtered out forever), and pending ones whose order died with an earlier process.
+     *
+     * AIDEV-NOTE: a pending row is written before its order and settled after it, so a process that stops in between
+     * (a crash, a deploy) left it pending forever: nothing retried it and the requester saw "Issuing" for good. A
+     * manual DNS-01 order is pending by design while its operator publishes records; it never auto-renews, so the
+     * auto_renew clause keeps it out.
      */
     public static List<Row> findRenewalCandidates(CertificateModel certModel, Instant now) {
         List<Row> due = new ArrayList<>();
@@ -779,6 +970,13 @@ public class AcmeService {
                 due.add(cert);
             }
         }
+
+        due.addAll(certModel.find()
+            .where(CertificateModel.PROVIDER.eq(CertificateModel.PROVIDER_LETSENCRYPT))
+            .where(CertificateModel.STATUS.eq(CertificateModel.STATUS_PENDING))
+            .where(CertificateModel.AUTO_RENEW.eq(true))
+            .where(CertificateModel.CREATED_AT.lte(now.minus(STALE_PENDING)))
+            .all());
 
         return due;
     }
@@ -817,7 +1015,7 @@ public class AcmeService {
             OrderResult result = performAcmeOrder(hostnames,
                 certRow.get(CertificateModel.LETSENCRYPT_EMAIL), challengeType,
                 certRow.get(CertificateModel.DNS_PUBLISHER),
-                certRow.get(CertificateModel.ID), declaring);
+                certRow.get(CertificateModel.ID), declaring, signingOf(certRow, hostnames));
 
             applyIssuedMaterial(certRow, result);
             certModel.save(certRow);
@@ -897,8 +1095,8 @@ public class AcmeService {
     private OrderResult performAcmeOrder(List<String> hostnames, @Nullable String email,
                                          String challengeType, @Nullable String dnsPublisher,
                                          int certificateId,
-                                         Map<String, Integer> declaring) throws Exception {
-        String orderKey = certificateOrderKey(hostnames, email, null);
+                                         Map<String, Integer> declaring, Signing signing) throws Exception {
+        String orderKey = certificateOrderKey(hostnames, email, null, signing);
         OrderFlight leader = new OrderFlight(true, new CompletableFuture<>());
         leader.certificateId().set(certificateId);
         OrderFlight existing = inFlightOrders.putIfAbsent(orderKey, leader);
@@ -919,19 +1117,20 @@ public class AcmeService {
                 throw e;
             }
         }
-        return leadOrder(orderKey, leader, hostnames, email, challengeType, dnsPublisher, declaring);
+        return leadOrder(orderKey, leader, hostnames, email, challengeType, dnsPublisher, declaring, signing);
     }
 
     /**
-     * The key same-account/same-SAN orders coalesce on.
+     * The key same-account/same-SAN/same-key orders coalesce on.
      *
      * @param certificateId the row an order writes INTO when that row already exists, which
      *                      makes the key unshareable with any other row's order; null for
      *                      the lanes that may legitimately share one order
+     * @param signing       whose key the order certifies ({@link Signing#orderKeyPart})
      */
     private static String certificateOrderKey(List<String> hostnames, @Nullable String email,
-                                              @Nullable Integer certificateId) {
-        return (certificateId != null ? "cert" + certificateId + "@" : "")
+                                              @Nullable Integer certificateId, Signing signing) {
+        return (certificateId != null ? "cert" + certificateId + "@" : "") + signing.orderKeyPart()
             + normalizeAccountEmail(email) + ":" + hostnames.stream()
             .map(name -> name.trim().toLowerCase(Locale.ROOT))
             .distinct()
@@ -942,14 +1141,15 @@ public class AcmeService {
     private OrderResult performAcmeOrderUncoalesced(List<String> hostnames, @Nullable String email,
                                                      String challengeType,
                                                      @Nullable String dnsPublisher,
-                                                     Map<String, Integer> declaring) throws Exception {
+                                                     Map<String, Integer> declaring,
+                                                     Signing signing) throws Exception {
 
         if (CertificateModel.CHALLENGE_DNS.equals(challengeType)) {
             DnsTxtPublisher publisher = DnsTxtPublishers.INSTANCE.get(dnsPublisher);
             if (publisher == null) {
                 throw new IllegalStateException("DNS-01 publisher is unavailable: " + dnsPublisher);
             }
-            DnsOrderContext context = prepareDnsOrder(hostnames, email, declaring);
+            DnsOrderContext context = prepareDnsOrder(hostnames, email, declaring, signing);
             List<DnsAuthorization> published = new ArrayList<>();
             try {
                 for (DnsAuthorization authorization : context.authorizations()) {
@@ -984,7 +1184,6 @@ public class AcmeService {
         }
 
         Account account = ensureAccount(normalizeAccountEmail(email));
-        KeyPair domainKeyPair = KeyPairUtils.createKeyPair(2048);
         Order order = createOrder(account, hostnames);
 
         Set<String> hostnameSet = new HashSet<>();
@@ -996,7 +1195,7 @@ public class AcmeService {
             completeHttpChallenge(auth, hostnameSet, polls);
         }
 
-        return finalizeOrder(new DnsOrderContext(order, domainKeyPair, hostnames, List.of(),
+        return finalizeOrder(new DnsOrderContext(order, signing, hostnames, List.of(),
             declaring), polls);
     }
 
@@ -1009,9 +1208,8 @@ public class AcmeService {
     }
 
     private DnsOrderContext prepareDnsOrder(List<String> hostnames, @Nullable String email,
-                                            Map<String, Integer> declaring) throws Exception {
+                                            Map<String, Integer> declaring, Signing signing) throws Exception {
         Account account = ensureAccount(normalizeAccountEmail(email));
-        KeyPair domainKeyPair = KeyPairUtils.createKeyPair(2048);
         Order order = createOrder(account, hostnames);
         List<DnsAuthorization> authorizations = new ArrayList<>();
         for (Authorization auth : order.getAuthorizations()) {
@@ -1025,7 +1223,7 @@ public class AcmeService {
                 new DnsTxtRecord(Dns01Challenge.toRRName(auth.getIdentifier()), challenge.getDigest()),
                 auth.getIdentifier().getDomain()));
         }
-        return new DnsOrderContext(order, domainKeyPair, List.copyOf(hostnames),
+        return new DnsOrderContext(order, signing, List.copyOf(hostnames),
             List.copyOf(authorizations), Map.copyOf(declaring));
     }
 
@@ -1082,12 +1280,7 @@ public class AcmeService {
     }
 
     private OrderResult finalizeOrder(DnsOrderContext context, PollBudget polls) throws Exception {
-        CSRBuilder csrBuilder = new CSRBuilder();
-        for (String hostname : context.hostnames()) {
-            csrBuilder.addDomain(hostname);
-        }
-        csrBuilder.sign(context.domainKeyPair());
-        context.order().execute(csrBuilder.getEncoded());
+        context.order().execute(context.signing().csr(context.hostnames()));
 
         Order order = context.order();
         // AIDEV-NOTE: getStatus can lazily fetch after execute; that hidden poll would discard its Retry-After.
@@ -1110,12 +1303,9 @@ public class AcmeService {
         Certificate acmeCert = order.getCertificate();
         List<X509Certificate> chain = acmeCert.getCertificateChain();
         X509Certificate leaf = chain.get(0);
+        context.signing().requireCertifies(leaf);
 
-        return new OrderResult(
-            CertificatePem.pemOf(chain),
-            privateKeyToPem(context.domainKeyPair()),
-            leaf.getNotAfter().toInstant()
-        );
+        return new OrderResult(CertificatePem.pemOf(chain), leaf.getNotAfter().toInstant(), context.signing());
     }
 
     // -----------------------------------------------------------------------
@@ -1184,13 +1374,21 @@ public class AcmeService {
         return staging ? "acme://letsencrypt.org/staging" : "acme://letsencrypt.org";
     }
 
+    /**
+     * The account for one email on the CA the settings name NOW.
+     *
+     * AIDEV-NOTE: cached per directory AND email. Keyed by email alone, a session opened on one directory served every
+     * later order until a restart, so switching ssl.letsencrypt_staging (an operator setting with no restart) or the
+     * directory URL kept ordering from the CA the process first spoke to. The account KEY stays per email: the same
+     * key registers one account on each directory.
+     */
     private synchronized Account ensureAccount(String normalizedEmail) throws Exception {
-        Account existing = accounts.get(normalizedEmail);
-        if (existing != null) return existing;
-
         boolean staging = HohenheimSettings.isOn(HohenheimSettings.Ssl.LETSENCRYPT_STAGING);
 
         String serverUri = directoryUri(staging);
+        String accountKey = serverUri + " " + normalizedEmail;
+        Account existing = accounts.get(accountKey);
+        if (existing != null) return existing;
 
         String email = normalizedEmail.isEmpty()
             ? Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_EMAIL)
@@ -1208,7 +1406,7 @@ public class AcmeService {
         }
 
         Account account = builder.create(session);
-        accounts.put(normalizedEmail, account);
+        accounts.put(accountKey, account);
         Blast.log("ACME: account ready",
             normalizedEmail.isEmpty() ? "(global," : "(" + normalizedEmail + ",",
             staging ? "staging)" : "production)");

@@ -137,24 +137,20 @@ class TenantHostnameIsolationTest extends HohenheimHttpTestBase {
             .isEqualTo("tenant_record_not_authorized");
 
         // 5. And so does a certificate order: the exact hostname is authorized and
-        //    attributed to the tenant's OWN row, the wildcard's names refuse NOT_MANAGED
-        //    (served by the catch-all, so never NOT_SERVED), an unserved name NOT_SERVED.
+        //    attributed to the tenant's OWN row, while the wildcard's names (served by the
+        //    catch-all) and an unserved name refuse with ONE answer: a tenant is never told
+        //    which of them this installation serves.
         CertificateAuthority.Requester tenant = CertificateAuthority.Requester.ofSubject(PrincipalRef.account(aliceId));
         assertThat(CertificateAuthority.authorize(tenant, List.of("a." + ZONE)))
             .as("step 5: the order is authorized and attributed to the deciding row")
             .containsEntry("a." + ZONE, aliceDomainId);
-        for (String foreign : List.of("zzz." + ZONE, "**." + ZONE, "b." + ZONE)) {
+        for (String foreign : List.of("zzz." + ZONE, "**." + ZONE, "b." + ZONE, "a.nobody.test")) {
             assertThatThrownBy(() -> CertificateAuthority.authorize(tenant, List.of(foreign)))
-                .as("step 5: " + foreign + " is served by a site the tenant does not manage")
+                .as("step 5: " + foreign + " is refused with the neutral answer, served or not")
                 .isInstanceOf(CertificateAuthority.Refused.class)
                 .extracting(refusal -> ((CertificateAuthority.Refused) refusal).refusal())
-                .isEqualTo(CertificateAuthority.Refusal.NOT_MANAGED);
+                .isEqualTo(CertificateAuthority.Refusal.UNAVAILABLE);
         }
-        assertThatThrownBy(() -> CertificateAuthority.authorize(tenant, List.of("a.nobody.test")))
-            .as("step 5: a name no row covers stays NOT_SERVED")
-            .isInstanceOf(CertificateAuthority.Refused.class)
-            .extracting(refusal -> ((CertificateAuthority.Refused) refusal).refusal())
-            .isEqualTo(CertificateAuthority.Refusal.NOT_SERVED);
     }
 
     @Test

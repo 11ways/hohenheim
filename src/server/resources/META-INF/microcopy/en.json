@@ -2480,6 +2480,14 @@
     "text": "You do not manage the site serving {$hostnames}",
     "scope": "certificate_request_error"
   },
+  "reissue_requester_key": {
+    "text": "Its requester holds this certificate's key: only a new signing request from the requester re-orders it",
+    "scope": "certificate_request_error"
+  },
+  "signing_request_key_held_here": {
+    "text": "Hohenheim holds this certificate's key; a signing request cannot take it over",
+    "scope": "certificate_request_error"
+  },
   "excluded_hostnames": {
     "text": "Excluded from Let's Encrypt by their domain settings: {$hostnames}",
     "scope": "certificate_request_error"
@@ -4573,6 +4581,20 @@
       "scope": "help"
     }
   ],
+  "cert_key_holder": [
+    {
+      "text": "Key held by",
+      "scope": "hohenheim_field"
+    },
+    {
+      "text": "Who holds the private key. A certificate whose requester holds the key was ordered from the requester's own signing request: Hohenheim keeps its chain, renews it from the same request and never serves it.",
+      "scope": "help"
+    }
+  ],
+  "cert_signing_request_pem": {
+    "text": "Signing request (PEM)",
+    "scope": "hohenheim_field"
+  },
   "cert_auto_renew": [
     {
       "text": "Auto-renew",
@@ -13300,6 +13322,14 @@
     "text": "ACME account",
     "scope": "cert_provider"
   },
+  "hohenheim": {
+    "text": "Hohenheim",
+    "scope": "cert_key_holder"
+  },
+  "requester": {
+    "text": "The requester",
+    "scope": "cert_key_holder"
+  },
   "dns": {
     "text": "DNS-01",
     "scope": "cert_challenge"
@@ -13474,6 +13504,34 @@
   },
   "hostname_unavailable": {
     "text": "This hostname is not available on this installation",
+    "scope": "violations"
+  },
+  "signing_request_unreadable": {
+    "text": "The signing request cannot be read: send one PEM CERTIFICATE REQUEST block",
+    "scope": "violations"
+  },
+  "signing_request_bad_signature": {
+    "text": "The signing request is not signed by the key it carries",
+    "scope": "violations"
+  },
+  "signing_request_weak_signature": {
+    "text": "The signing request is signed with an algorithm that is not accepted ({$detail}); sign it with SHA-256 or stronger",
+    "scope": "violations"
+  },
+  "signing_request_weak_key": {
+    "text": "The signing request's key is too weak ({$detail}); use RSA 2048 or stronger, or ECDSA P-256",
+    "scope": "violations"
+  },
+  "signing_request_unsupported_key": {
+    "text": "The certificate authority does not issue for this key ({$detail}); use RSA 2048, 3072 or 4096, or ECDSA P-256 or P-384",
+    "scope": "violations"
+  },
+  "signing_request_names_differ": {
+    "text": "The signing request names {$detail}, not exactly the requested hostnames",
+    "scope": "violations"
+  },
+  "signing_request_unsupported_content": {
+    "text": "The signing request asks for something that would not be honoured ({$detail}); send only its names, as subject alternative names",
     "scope": "violations"
   },
   "enable_hostname_unavailable": {
@@ -17010,6 +17068,14 @@
   },
   "state_renews_detail": {
     "text": "Renews itself",
+    "scope": "certificate"
+  },
+  "key_held_by_requester": {
+    "text": "Key held by the requester",
+    "scope": "certificate"
+  },
+  "key_custody_column": {
+    "text": "Key custody",
     "scope": "certificate"
   },
   "lets_in_column": {

@@ -15,6 +15,7 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.PrincipalField;
 import be.elevenways.zenit.common.security.PrincipalKinds;
 import be.elevenways.zenit.common.security.PrincipalRef;
@@ -61,11 +62,29 @@ public class CertificateModel extends Model {
         return status != null && SERVED_STATUSES.contains(status);
     }
 
-    /** @return whether the proxy serves this stored certificate by its status ({@link #SERVED_STATUSES}) */
+    /**
+     * @return whether the proxy serves this stored certificate: a served status ({@link #SERVED_STATUSES}) on a
+     *         certificate whose key Hohenheim holds ({@link #keyHeldHere})
+     */
     public static boolean served(@NonNull Row certificate) {
         String status = certificate.get(STATUS);
-        return served(status);
+        return served(status) && keyHeldHere(certificate);
     }
+
+    /** {@link #served(Row)} as criteria, for the readers that ask the stored rows rather than one row. */
+    public static @NonNull Criteria servedCriteria() {
+        return Criteria.and(STATUS.in(SERVED_STATUSES), KEY_HOLDER.eq(KEY_HOLDER_HOHENHEIM));
+    }
+
+    /** {@link #KEY_HOLDER} value for a certificate whose private key Hohenheim made and keeps. */
+    public static final String KEY_HOLDER_HOHENHEIM = "hohenheim";
+
+    /**
+     * {@link #KEY_HOLDER} value for a certificate ordered from the requester's own signing request: the requester
+     * keeps the key, Hohenheim stores only the request ({@link #SIGNING_REQUEST_PEM}) and the chain, and so can never
+     * serve it.
+     */
+    public static final String KEY_HOLDER_REQUESTER = "requester";
 
     /** {@link #PROVIDER} value for the internal ACME account key row (excluded from listings). */
     public static final String PROVIDER_ACME_ACCOUNT = "acme_account";
@@ -93,7 +112,31 @@ public class CertificateModel extends Model {
      */
     public static final String DNS_PUBLISHER_COMMAND = "command";
 
+    /** @return whether Hohenheim holds this certificate's private key; an unknown or absent holder is not */
+    public static boolean keyHeldHere(@NonNull Row certificate) {
+        String holder = certificate.get(KEY_HOLDER);
+        return KEY_HOLDER_HOHENHEIM.equals(holder);
+    }
 
+    /** @return whether the requester holds this certificate's private key and Hohenheim only its signing request */
+    public static boolean keyHeldByRequester(@NonNull Row certificate) {
+        String holder = certificate.get(KEY_HOLDER);
+        return KEY_HOLDER_REQUESTER.equals(holder);
+    }
+
+    /** Stores Hohenheim's own key for this certificate: the key is held here and no signing request is kept. */
+    public static void keepKey(@NonNull Row certificate, @NonNull String keyPem) {
+        certificate.set(KEY_HOLDER, KEY_HOLDER_HOHENHEIM);
+        certificate.set(PRIVATE_KEY_PEM, keyPem);
+        certificate.set(SIGNING_REQUEST_PEM, null);
+    }
+
+    /** Stores the requester's signing request: the requester keeps the key, and no key is stored here. */
+    public static void keepSigningRequest(@NonNull Row certificate, @NonNull String signingRequestPem) {
+        certificate.set(KEY_HOLDER, KEY_HOLDER_REQUESTER);
+        certificate.set(PRIVATE_KEY_PEM, null);
+        certificate.set(SIGNING_REQUEST_PEM, signingRequestPem);
+    }
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final StringField NICE_NAME = SCHEMA.addField(StringField.builder().name("nice_name")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("cert_nice_name"))
@@ -113,6 +156,33 @@ public class CertificateModel extends Model {
         .secret().encrypted().inputHint(InputType.MULTILINE)
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("cert_private_key_pem"))
         .help(HohenheimMicrocopy.HELP.of("cert_private_key_pem")).build());
+
+    /**
+     * Who holds the certificate's private key: THE fact that decides whether Hohenheim can serve it.
+     *
+     * AIDEV-NOTE: read through {@link #keyHeldHere} and {@link #served(Row)}, never by comparing the column at a
+     * reader. The proxy's store, the working names, the force-HTTPS latch, the served count, coverage, the key bundle
+     * download and the re-issue action all ask it; a value nobody declared is not held here (fail closed). Written only
+     * by {@link #keepKey} and {@link #keepSigningRequest}, which keep it, the key and the signing request one fact.
+     */
+    public static final EnumField KEY_HOLDER = SCHEMA.addField(EnumField.builder("key_holder")
+        .value(KEY_HOLDER_HOHENHEIM, v -> v.displayName("Hohenheim")
+            .label(HohenheimMicrocopy.CERT_KEY_HOLDER.of(KEY_HOLDER_HOHENHEIM)).icon("server").color(ColorHue.GRAY))
+        .value(KEY_HOLDER_REQUESTER, v -> v.displayName("Requester")
+            .label(HohenheimMicrocopy.CERT_KEY_HOLDER.of(KEY_HOLDER_REQUESTER)).icon("key").color(ColorHue.VIOLET))
+        .defaultValue(KEY_HOLDER_HOHENHEIM)
+        .visibleIn(EditView.EDIT, EditView.DETAIL)
+        .attribute(FieldAttributes.GROUP, "coverage")
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("cert_key_holder"))
+        .help(HohenheimMicrocopy.HELP.of("cert_key_holder"))
+        .build());
+
+    /**
+     * The requester's PKCS#10 signing request in PEM, kept so every renewal orders from the SAME public key; null when
+     * Hohenheim holds the key. A signing request is public, so it is stored in the clear.
+     */
+    public static final TextField SIGNING_REQUEST_PEM = SCHEMA.addField(TextField.builder("signing_request_pem")
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("cert_signing_request_pem")).build());
     /** Absent until a certificate is issued; list, record and the admin overview say so in the same words. */
     public static final DateTimeField EXPIRES_ON = SCHEMA.addField(DateTimeField.builder().name("expires_on")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("cert_expires_on"))

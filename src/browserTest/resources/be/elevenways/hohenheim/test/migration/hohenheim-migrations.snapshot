@@ -174,3 +174,9 @@ table migration:be.elevenways.hohenheim@2026_10_23_000001
   op create_table:site_redirects[id|integer|null=false|uniq=true|pk=true|auto=true|def=none|len=null|prec=null,null,site_id|integer|null=false|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null|ref=sites.id:null:null,from_path|string|null=false|uniq=false|pk=false|auto=false|def=none|len=500|prec=null,null,match_kind|string|null=true|uniq=false|pk=false|auto=false|def=none|len=20|prec=null,null,target|string|null=false|uniq=false|pk=false|auto=false|def=none|len=2000|prec=null,null,http_status|string|null=true|uniq=false|pk=false|auto=false|def=none|len=3|prec=null,null,created_at|datetime|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null,updated_at|datetime|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null]
   op create_table:status_probe_backfills[instance_id|integer|null=false|uniq=true|pk=true|auto=false|def=none|len=null|prec=null,null]
   op data:give the starter Minecraft servers made before it existed their status probe@2
+table migration:be.elevenways.hohenheim@2026_11_19_000001
+  checksum 8cc8df1b219a5d36ca6bae507a91a0623aee0a8c68c08b74f94483980ed4f9a9
+  class be.elevenways.hohenheim.migration.M003_CertificateSigningRequests
+  name certificate_signing_requests
+  op add_column:certificates:key_holder|string|null=true|uniq=false|pk=false|auto=false|def=lit:hohenheim|len=32|prec=null,null
+  op add_column:certificates:signing_request_pem|text|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null

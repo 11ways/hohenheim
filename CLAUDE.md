@@ -186,7 +186,7 @@ test one end-to-end: inline `NotificationDispatcher` + `webhook://default` + a l
 ## Migrations
 
 The INSTALL schema starts from one baseline migration plus `M002_AfterBaseline` (`2026_10_23_000001`, published
-on kuifje and robbedoes 2026-11-08, pinned) and at most ONE unpublished migration after it (none yet),
+on kuifje and robbedoes 2026-11-08, pinned) and at most ONE unpublished migration after it (`M003_CertificateSigningRequests`),
 `src/common/java/be/elevenways/hohenheim/migration/M001_HohenheimBaseline.java`
 (version `2026_10_21_000001`, name `hohenheim_baseline`: the workspace's squash-baseline
 convention), GENERATED on 2026-10-21 by folding

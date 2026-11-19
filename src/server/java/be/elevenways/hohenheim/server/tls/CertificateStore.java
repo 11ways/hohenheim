@@ -61,8 +61,9 @@ public class CertificateStore {
     }
 
     /**
-     * Load every certificate the proxy serves ({@link CertificateModel#SERVED_STATUSES}) from the database.
-     * Builds a complete new snapshot and swaps it in atomically.
+     * Load every certificate the proxy serves ({@link CertificateModel#servedCriteria}: a served status on a
+     * certificate whose key Hohenheim holds) from the database. Builds a complete new snapshot and swaps it in
+     * atomically.
      */
     public synchronized void loadFromDatabase() {
         var certModel = Models.get(CertificateModel.class);
@@ -70,7 +71,7 @@ public class CertificateStore {
 
         List<Row> certs = certModel.find()
             .where(CertificateModel.CERTIFICATE_PEM.isNotNull())
-            .where(CertificateModel.STATUS.in(CertificateModel.SERVED_STATUSES))
+            .where(CertificateModel.servedCriteria())
             .orderBy(CertificateModel.ID, SortOrder.ASC)
             .all();
 

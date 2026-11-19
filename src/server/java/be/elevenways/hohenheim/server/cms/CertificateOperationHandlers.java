@@ -14,7 +14,9 @@ import be.elevenways.hohenheim.server.tls.RenewalFailure;
 import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.hohenheim.server.tls.CertificateAuthority;
 import be.elevenways.hohenheim.server.tls.CommandDnsTxtPublisher;
+import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.hohenheim.server.tls.HostnameReach;
+import be.elevenways.hohenheim.server.tls.SigningRequest;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.validation.validator.Email;
@@ -42,14 +44,16 @@ import java.util.Objects;
 import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
- * The certificate operations' handlers: every Let's Encrypt order the admin places goes through {@link #order}.
+ * The certificate operations' handlers: every Let's Encrypt order the admin places goes through {@link #order}, every
+ * order from a requester's own signing request through {@link #orderFromSigningRequest} and
+ * {@link #reorderFromSigningRequest}.
  *
  * AIDEV-NOTE: the order of checks is the old request handler's, kept on purpose: input first (email, names, the
  * wildcard rule), then whether Let's Encrypt may be used, then operational state (hosted DNS, hook, proxy), then the
  * reach pre-check, and only then the CA. Who may obtain which name is CertificateAuthority's decision inside
  * AcmeService, never this class's; the operator-only gate here is the admin surface's.
  */
-final class CertificateOperationHandlers {
+public final class CertificateOperationHandlers {
 
     static {
         OperationHandlers.attach(CertificateOperations.REQUEST).authorize(admin())
@@ -60,7 +64,9 @@ final class CertificateOperationHandlers {
             .availability((domain, access) -> letsEncryptUnavailable())
             .handle(call -> order(require(call.input()), call.subjectAccess(), null));
         OperationHandlers.attach(CertificateOperations.REISSUE).authorize(admin())
-            .applies(cert -> CertificateModel.PROVIDER_LETSENCRYPT.equals(cert.get(CertificateModel.PROVIDER)))
+            // A requester-held certificate re-orders only from a new signing request of its requester's.
+            .applies(cert -> CertificateModel.PROVIDER_LETSENCRYPT.equals(cert.get(CertificateModel.PROVIDER))
+                && CertificateModel.keyHeldHere(cert))
             .availability((cert, access) -> letsEncryptUnavailable())
             .handle(call -> order(require(call.input()), call.subjectAccess(), call.subject()));
         OperationHandlers.attach(CertificateOperations.CONTINUE_DNS).authorize(admin())
@@ -147,6 +153,9 @@ final class CertificateOperationHandlers {
         }
         if (reissue != null && CertificateModel.DNS_PUBLISHER_MANUAL.equals(publisher)) {
             throw refused(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("reissue_manual_unsupported"));
+        }
+        if (reissue != null && !CertificateModel.keyHeldHere(reissue)) {
+            throw refused(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("reissue_requester_key"));
         }
         if (CertificateModel.DNS_PUBLISHER_INTERNAL.equals(publisher)) {
             refuseUnhostedZones(hostnames);
@@ -240,12 +249,152 @@ final class CertificateOperationHandlers {
         return certId;
     }
 
-    /** Hosted DNS publishes only into zones this server is the primary of. */
-    private static void refuseUnhostedZones(@NonNull List<String> hostnames) {
-        var dnsServer = ServerMain.getDnsServer();
-        if (dnsServer == null || !dnsServer.isRunning()) {
-            throw refused(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("dns_server_disabled"));
+    /**
+     * Orders a certificate from a requester's own signing request: the requester keeps the key, Hohenheim stores the
+     * request and the chain and renews from the same request. The challenge is chosen for the caller
+     * ({@link #automaticChallenge}).
+     *
+     * AIDEV-NOTE: the names are authorized FIRST, before this lane says anything else about them (their syntax, their
+     * zone, where they resolve, the request's own names), so a caller that does not answer for a name learns only the
+     * one neutral refusal. AcmeService decides again where every lane reaches the CA; this early answer only moves the
+     * refusal in front of the checks that would otherwise tell.
+     *
+     * @param signingRequestPem the requester's PKCS#10 in PEM, refused on the {@code csr} field when it does not read
+     * @return the row the order wrote, issued or failed (a failed row renews like every other: the sweep retries it)
+     * @throws Violations a refusal before any row was written
+     */
+    public static AcmeService.@NonNull RequestOutcome orderFromSigningRequest(@Nullable String signingRequestPem,
+                                                                            @NonNull List<String> hostnames,
+                                                                            @Nullable String niceName,
+                                                                            @NonNull AccessContext access) {
+        var requester = CertificateAuthority.Requester.of(access);
+        Prepared prepared = prepare(signingRequestPem, hostnames, requester);
+        String name = niceName == null || niceName.isBlank() ? hostnames.get(0) : niceName.trim();
+        AcmeService.RequestOutcome outcome;
+        try {
+            outcome = prepared.acme().requestFromSigningRequest(prepared.request(), hostnames, name,
+                prepared.challenge().type(), prepared.challenge().publisher(), requester);
+        } catch (CertificateAuthority.Refused refusal) {
+            throw refused(refusal.sentence());
         }
+        Integer certId = outcome.certificateId();
+        if (certId == null) {
+            throw refused(RenewalFailure.sentenceFor(null));
+        }
+        if (outcome.issued()) {
+            History.event(Models.get(CertificateModel.class), certId, Change.fact(HohenheimActivityAction.REQUESTED));
+        }
+        return outcome;
+    }
+
+    /**
+     * Re-orders a requester-held certificate from a NEW signing request onto the same row: the one way its key
+     * changes. The row is touched only when the new certificate is issued.
+     *
+     * @param hostnames the names to order; empty re-orders the names the certificate covers now
+     * @throws Violations a refusal; the certificate is unchanged
+     */
+    public static void reorderFromSigningRequest(@NonNull Row cert, @Nullable String signingRequestPem,
+                                                 @NonNull List<String> hostnames, @NonNull AccessContext access) {
+        if (!CertificateModel.keyHeldByRequester(cert)) {
+            throw refused(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("signing_request_key_held_here"));
+        }
+        List<String> names = hostnames.isEmpty() ? CertificateCoverage.namesOf(cert) : hostnames;
+        var requester = CertificateAuthority.Requester.of(access);
+        Prepared prepared = prepare(signingRequestPem, names, requester);
+        int certId = cert.get(CertificateModel.ID);
+        String previous = String.valueOf((Object) cert.get(CertificateModel.DOMAIN_NAMES_TEXT));
+        AcmeService.ReissueResult outcome;
+        try {
+            outcome = prepared.acme().reissueFromSigningRequest(cert, prepared.request(), names,
+                prepared.challenge().type(), prepared.challenge().publisher(), requester);
+        } catch (CertificateAuthority.Refused refusal) {
+            throw refused(refusal.sentence());
+        }
+        if (!outcome.issued()) {
+            throw refused(RenewalFailure.sentenceFor(outcome.failureReason()));
+        }
+        History.event(Models.get(CertificateModel.class), certId, Change.fact(HohenheimActivityAction.REISSUED,
+            Map.of(HohenheimActivityAction.HOSTNAMES_KEY, List.copyOf(names),
+                HohenheimActivityAction.PREVIOUS_KEY, previous)));
+    }
+
+    /** A signing-request order's checked inputs: the judged request, the chosen challenge and the service to order on. */
+    private record Prepared(@NonNull SigningRequest request, @NonNull Challenge challenge, @NonNull AcmeService acme) {}
+
+    /** The checks a signing-request order passes before the CA, in {@link #orderFromSigningRequest}'s order. */
+    private static @NonNull Prepared prepare(@Nullable String signingRequestPem, @NonNull List<String> hostnames,
+                                             CertificateAuthority.@NonNull Requester requester) {
+        if (hostnames.isEmpty()) {
+            throw refused(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("domain_required"));
+        }
+        try {
+            CertificateAuthority.authorize(requester, hostnames);
+        } catch (CertificateAuthority.Refused refusal) {
+            throw refused(refusal.sentence());
+        }
+        Microcopy unavailable = letsEncryptUnavailable();
+        if (unavailable != null) {
+            throw refused(unavailable);
+        }
+        ProxyServer proxy = ServerMain.getProxyServer();
+        if (proxy == null) {
+            throw refused(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("proxy_unavailable"));
+        }
+        Challenge challenge = automaticChallenge(hostnames);
+        boolean dns = CertificateModel.CHALLENGE_DNS.equals(challenge.type());
+        if (!dns && hostnames.stream().anyMatch(name -> AcmeService.wildcardSanBase(name) != null)) {
+            throw refused(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("wildcard_requires_dns"));
+        }
+        List<String> invalid = AcmeService.invalidHostnames(hostnames, dns);
+        if (!invalid.isEmpty()) {
+            throw refused(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("invalid_hostnames")
+                .withArg("hostnames", String.join(", ", invalid)));
+        }
+        SigningRequest request;
+        try {
+            request = SigningRequest.read(signingRequestPem, hostnames);
+        } catch (SigningRequest.Refused refusal) {
+            throw Violations.ofField(SIGNING_REQUEST_FIELD, null, refusal.sentence());
+        }
+        if (!dns) {
+            refuseUnreachable(hostnames);
+        }
+        return new Prepared(request, challenge, proxy.getAcmeService());
+    }
+
+    /** The request field a signing-request order reads its PEM from, and names in a refusal of it. */
+    public static final String SIGNING_REQUEST_FIELD = "csr";
+
+    /** A challenge and, for DNS-01, its publisher. */
+    record Challenge(@NonNull String type, @Nullable String publisher) {}
+
+    /**
+     * THE challenge of an order nobody chose one for: DNS-01 through the internal publisher when this server runs DNS
+     * and may publish into the zone of every name, else HTTP-01.
+     *
+     * AIDEV-NOTE: DNS-01 first because it needs no route: a name served by a stream only (a mail host's MX name) has
+     * no HTTPS site, and while the proxy answers an HTTP-01 challenge for ANY Host before routing (SiteDispatcher), that
+     * still needs the name to resolve to this proxy's port 80. A zone hosted here needs neither.
+     */
+    static @NonNull Challenge automaticChallenge(@NonNull List<String> hostnames) {
+        var dnsServer = ServerMain.getDnsServer();
+        if (dnsServer != null && dnsServer.isRunning() && zoneReach(hostnames).publishable()) {
+            return new Challenge(CertificateModel.CHALLENGE_DNS, CertificateModel.DNS_PUBLISHER_INTERNAL);
+        }
+        return new Challenge(CertificateModel.CHALLENGE_HTTP, null);
+    }
+
+    /** Where the internal publisher may write each name's challenge record: the names it cannot, and why. */
+    private record ZoneReach(@NonNull List<String> unhosted, @NonNull List<String> replicated,
+                             @Nullable String owningPeer) {
+
+        boolean publishable() {
+            return this.unhosted.isEmpty() && this.replicated.isEmpty();
+        }
+    }
+
+    private static @NonNull ZoneReach zoneReach(@NonNull List<String> hostnames) {
         InternalDnsTxtPublisher internal = new InternalDnsTxtPublisher();
         List<String> unhosted = new ArrayList<>();
         List<String> replicated = new ArrayList<>();
@@ -266,14 +415,24 @@ final class CertificateOperationHandlers {
                 unhosted.add(base);
             }
         }
-        if (!unhosted.isEmpty()) {
-            throw refused(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("zone_not_hosted")
-                .withArg("hostnames", String.join(", ", unhosted)));
+        return new ZoneReach(unhosted, replicated, owningPeer);
+    }
+
+    /** Hosted DNS publishes only into zones this server is the primary of. */
+    private static void refuseUnhostedZones(@NonNull List<String> hostnames) {
+        var dnsServer = ServerMain.getDnsServer();
+        if (dnsServer == null || !dnsServer.isRunning()) {
+            throw refused(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("dns_server_disabled"));
         }
-        if (!replicated.isEmpty()) {
+        ZoneReach reach = zoneReach(hostnames);
+        if (!reach.unhosted().isEmpty()) {
+            throw refused(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("zone_not_hosted")
+                .withArg("hostnames", String.join(", ", reach.unhosted())));
+        }
+        if (!reach.replicated().isEmpty()) {
             throw refused(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("zone_not_primary")
-                .withArg("hostnames", String.join(", ", replicated))
-                .withArg("peer", String.valueOf(owningPeer)));
+                .withArg("hostnames", String.join(", ", reach.replicated()))
+                .withArg("peer", String.valueOf(reach.owningPeer())));
         }
     }
 

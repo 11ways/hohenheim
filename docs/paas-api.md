@@ -137,6 +137,11 @@ returned). Say so when delegating; the grant UI does not.
 | GET | `/api/v1/engines/{id}` | One engine plus the logical databases on it, and its container's live usage when the stats hub has a sample (ADMIN-ONLY) |
 | GET | `/api/v1/hosts` | Hosts with their memory ledger: budget, booked, free, overcommit (ADMIN-ONLY) -- see Hosts and capacity below |
 | GET | `/api/v1/hosts/{id}` | One host plus every workload booked on it (instances AND database engines) |
+| GET | `/api/v1/certificates` | Certificates the key may read (the `/manage` certificate scope: the ones it ordered, plus `view` grants) -- see Certificates from a signing request below |
+| POST | `/api/v1/certificates` | Order a certificate from the caller's own signing request: `csr` (PEM), `hostnames`, optional `name` |
+| GET | `/api/v1/certificates/{id}` | Status: names, holder, expiry, the issued key's pin, the last failure |
+| GET | `/api/v1/certificates/{id}/chain` | The public chain (what the admin chain download serves); 404 before issuance |
+| POST | `/api/v1/certificates/{id}/signing-request` | Re-order a requester-held certificate from a NEW request (`csr`, optional `hostnames`): the only way its key changes |
 
 Also present (older lanes, admin-permission-gated): `/api/sites`,
 `/api/sites/{id}/deploy` and `/api/dns/...`.
@@ -696,6 +701,45 @@ nothing is declared and `keep_ns` was not given: the rows are left untouched rat
 than published under nobody's nameservers), `import_secondary_zone` (a secondary's
 rows are its primary's), `import_failed` (unparseable text, the parser's reason in
 the message). An unknown zone is 404.
+
+## Certificates from a signing request
+
+For a service that terminates TLS itself and must keep its key (a mail server pinning it in DANE TLSA records). The
+caller sends a PKCS#10 signing request; Hohenheim orders from it, stores the chain and the request and NO private key,
+renews from the SAME request (so the key never changes behind a pin), and never loads the certificate into its proxy
+(it has no key to serve it with). The key bundle download is not offered for such a certificate and stays
+interactive-only for every other.
+
+Who may order a name is the certificate authority's ordinary answer: every name must be a domain of a live site the
+key's owner manages (a mail host's own site declares its mail names as domains). A key that is no admin is refused
+every name it does not answer for with ONE neutral answer, `hostname_unavailable`, whether the name is unknown,
+another site's or opted out by another site's row; an admin key is told `hostname_not_served`,
+`hostname_not_managed` or `excluded_hostnames`. The names are authorized before anything else is said about them.
+
+The request must be signed by the key it carries (`signing_request_bad_signature`), carry exactly the requested names
+as its common name and DNS alternative names (`signing_request_names_differ`), an RSA 2048/3072/4096 or ECDSA
+P-256/P-384 key (`signing_request_weak_key`, `signing_request_unsupported_key`), a SHA-2 signature
+(`signing_request_weak_signature`) and nothing Hohenheim would not honour: no subject attribute but the common name,
+no extension but the alternative names (`signing_request_unsupported_content`). Each refusal is 422 on the `csr`
+field.
+
+The challenge is chosen for the caller: DNS-01 through the internal publisher when this controller runs DNS and may
+write the zone of every name (a stream-only name needs no route), else HTTP-01, which the proxy answers for any
+hostname that reaches its port 80; a wildcard needs DNS-01. The order is synchronous: **201** with the status when
+issued, **202** with the status when the order failed (the row exists, `failure` says why, and the renewal sweep
+retries it with the usual backoff). Rate limit: `hh_certificate_order` (20 per 10 minutes) on both writes,
+`hh_paas_read` on the reads.
+
+```
+{"id":42,"name":"mx.example.be","hostnames":["mx.example.be","mail.example.be"],"status":"active",
+ "key_holder":"requester","auto_renew":true,"challenge":"http","issued_on":"2026-11-19T12:00:00Z",
+ "expires_on":"2027-02-17T12:00:00Z","next_attempt_at":null,
+ "public_key_sha256":"<hex SHA-256 of the leaf's SubjectPublicKeyInfo>","failure":null}
+```
+
+`public_key_sha256` is what a DANE `3 1 1` record publishes. `failure`, when set, is `{code, message, at}`. Rotation
+(`POST .../signing-request`) re-orders onto the same certificate and touches it only when the new chain is issued,
+so publish the new key's TLSA record first.
 
 ## Environment variables are admin-only
 

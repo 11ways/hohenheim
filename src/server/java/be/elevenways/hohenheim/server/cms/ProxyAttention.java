@@ -130,7 +130,7 @@ public final class ProxyAttention {
             return;
         }
         long served = Models.get(CertificateModel.class).find()
-            .where(CertificateModel.STATUS.in(CertificateModel.SERVED_STATUSES)).count();
+            .where(CertificateModel.servedCriteria()).count();
         items.add(item(AttentionSeverity.ERROR, "certificate",
             HohenheimMicrocopy.ATTENTION_TITLE.of("https_unavailable"),
             served == 0 ? HohenheimMicrocopy.ATTENTION_DETAIL.of("https_no_certificate")

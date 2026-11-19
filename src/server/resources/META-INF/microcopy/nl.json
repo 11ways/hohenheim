@@ -2480,6 +2480,14 @@
     "text": "Je beheert de site die {$hostnames} bedient niet",
     "scope": "certificate_request_error"
   },
+  "reissue_requester_key": {
+    "text": "De aanvrager houdt de sleutel van dit certificaat: alleen een nieuw ondertekeningsverzoek van de aanvrager bestelt het opnieuw",
+    "scope": "certificate_request_error"
+  },
+  "signing_request_key_held_here": {
+    "text": "Hohenheim houdt de sleutel van dit certificaat; een ondertekeningsverzoek kan die niet overnemen",
+    "scope": "certificate_request_error"
+  },
   "excluded_hostnames": {
     "text": "Uitgesloten van Let's Encrypt via hun domeininstellingen: {$hostnames}",
     "scope": "certificate_request_error"
@@ -4573,6 +4581,20 @@
       "scope": "help"
     }
   ],
+  "cert_key_holder": [
+    {
+      "text": "Sleutel bij",
+      "scope": "hohenheim_field"
+    },
+    {
+      "text": "Wie de privésleutel houdt. Een certificaat waarvan de aanvrager de sleutel houdt, is besteld met het eigen ondertekeningsverzoek van de aanvrager: Hohenheim bewaart de keten, vernieuwt het met hetzelfde verzoek en serveert het nooit.",
+      "scope": "help"
+    }
+  ],
+  "cert_signing_request_pem": {
+    "text": "Ondertekeningsverzoek (PEM)",
+    "scope": "hohenheim_field"
+  },
   "cert_auto_renew": [
     {
       "text": "Automatisch vernieuwen",
@@ -13300,6 +13322,14 @@
     "text": "ACME-account",
     "scope": "cert_provider"
   },
+  "hohenheim": {
+    "text": "Hohenheim",
+    "scope": "cert_key_holder"
+  },
+  "requester": {
+    "text": "De aanvrager",
+    "scope": "cert_key_holder"
+  },
   "dns": {
     "text": "DNS-01",
     "scope": "cert_challenge"
@@ -13474,6 +13504,34 @@
   },
   "hostname_unavailable": {
     "text": "Deze hostnaam is niet beschikbaar op deze installatie",
+    "scope": "violations"
+  },
+  "signing_request_unreadable": {
+    "text": "Het ondertekeningsverzoek is onleesbaar: stuur één PEM-blok CERTIFICATE REQUEST",
+    "scope": "violations"
+  },
+  "signing_request_bad_signature": {
+    "text": "Het ondertekeningsverzoek is niet ondertekend met de sleutel die het bevat",
+    "scope": "violations"
+  },
+  "signing_request_weak_signature": {
+    "text": "Het ondertekeningsverzoek is ondertekend met een algoritme dat niet aanvaard wordt ({$detail}); onderteken het met SHA-256 of sterker",
+    "scope": "violations"
+  },
+  "signing_request_weak_key": {
+    "text": "De sleutel van het ondertekeningsverzoek is te zwak ({$detail}); gebruik RSA 2048 of sterker, of ECDSA P-256",
+    "scope": "violations"
+  },
+  "signing_request_unsupported_key": {
+    "text": "De certificaatautoriteit geeft voor deze sleutel geen certificaat uit ({$detail}); gebruik RSA 2048, 3072 of 4096, of ECDSA P-256 of P-384",
+    "scope": "violations"
+  },
+  "signing_request_names_differ": {
+    "text": "Het ondertekeningsverzoek noemt {$detail}, niet precies de gevraagde hostnamen",
+    "scope": "violations"
+  },
+  "signing_request_unsupported_content": {
+    "text": "Het ondertekeningsverzoek vraagt iets dat niet gehonoreerd zou worden ({$detail}); stuur alleen de namen, als alternatieve namen",
     "scope": "violations"
   },
   "enable_hostname_unavailable": {
@@ -17010,6 +17068,14 @@
   },
   "state_renews_detail": {
     "text": "Vernieuwt zichzelf",
+    "scope": "certificate"
+  },
+  "key_held_by_requester": {
+    "text": "Sleutel bij de aanvrager",
+    "scope": "certificate"
+  },
+  "key_custody_column": {
+    "text": "Sleutelbeheer",
     "scope": "certificate"
   },
   "lets_in_column": {

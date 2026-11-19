@@ -1,0 +1,284 @@
+package be.elevenways.hohenheim.test.tls;
+
+import be.elevenways.hohenheim.HohenheimCapabilities;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.SiteDomainModel;
+import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.hohenheim.server.auth.HostnameAuthority;
+import be.elevenways.hohenheim.server.proxy.ProxyServer;
+import be.elevenways.hohenheim.server.tls.AcmeService;
+import be.elevenways.hohenheim.server.tls.CertificateCoverage;
+import be.elevenways.hohenheim.server.tls.CertificatePem;
+import be.elevenways.hohenheim.server.tls.SigningRequest;
+import be.elevenways.hohenheim.test.ApiSupport;
+import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
+import be.elevenways.zenit.auth.CapabilityScopes;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
+import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.auth.server.ApiKeyService;
+import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
+import java.net.URLEncoder;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.security.KeyPair;
+import java.util.List;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * A machine orders a certificate from its OWN signing request and Hohenheim never holds the key: the order stores the
+ * chain and the request and no key, renews from the same request so the pinned key never changes, is never loaded
+ * into the proxy's store, offers no key bundle, and serves its status and chain to the owning key alone. Refusals
+ * tell a key that is no admin nothing about which names this installation serves.
+ *
+ * AIDEV-NOTE: the CA is {@link FakeAcmeServer}, which signs the REAL request it is sent, so "the chain certifies the
+ * requester's key" is a fact read off the issued leaf, never assumed. HTTP-01 is answered in-process by the served
+ * proxy's own challenge responder; no DNS server runs here, so the automatic challenge is HTTP-01.
+ *
+ * @author Jelle De Loecker
+ * @since  0.10.0
+ */
+class CertificateSigningRequestApiTest extends HohenheimHttpTestBase {
+
+    private static final String ZONE = "csrapi.test";
+    private static final String MX = "mx." + ZONE;
+    private static final String MAIL = "mail." + ZONE;
+    private static final String FOREIGN = "foreign." + ZONE;
+    private static final String UNSERVED = "nobody." + ZONE;
+
+    private static FakeAcmeServer ca;
+    private static ProxyServer adoptedProxy;
+    private static String savedDirectory;
+    private static String savedEmail;
+    private static Boolean savedEnabled;
+
+    private static String mailKey;
+    private static String strangerKey;
+    private static String adminKey;
+    private static KeyPair mailServerKey;
+
+    @BeforeAll
+    static void seed() throws Exception {
+        if (ServerMain.getProxyServer() == null) {
+            adoptedProxy = new ProxyServer();
+            ServerMain.adoptProxyServer(adoptedProxy);
+        }
+        ca = new FakeAcmeServer();
+        savedDirectory = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Ssl.ACME_DIRECTORY_URL);
+        savedEmail = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_EMAIL);
+        savedEnabled = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_ENABLED);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Ssl.LETSENCRYPT_ENABLED, true);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Ssl.ACME_DIRECTORY_URL, ca.directoryUrl());
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Ssl.LETSENCRYPT_EMAIL, "acme-test@example.com");
+        ca.validateHttpWith((token, identifier) -> acme().getChallengeResponse(token, identifier) != null);
+
+        // The mail host's own site declares its mail names as domains; another site serves the foreign name.
+        int mailSite = site("csrapi-mail");
+        domain(mailSite, MX);
+        domain(mailSite, MAIL);
+        domain(site("csrapi-foreign"), FOREIGN);
+
+        UUID mailOwner = ApiSupport.user("csrapi-mail@hohenheim.local", "Mail Host Owner");
+        RecordGrants.grant(GrantSubjectType.USER, mailOwner, SiteModel.MODEL_ID, mailSite,
+            HohenheimCapabilities.MANAGE, true);
+        List<String> tenantScopes = List.of(CapabilityScopes.format(SiteModel.MODEL_ID, HohenheimCapabilities.MANAGE),
+            CapabilityScopes.format(CertificateModel.MODEL_ID, HohenheimCapabilities.VIEW));
+        mailKey = ApiKeyService.create(mailOwner, "csrapi-mail", tenantScopes, null).plaintext();
+        UUID stranger = ApiSupport.user("csrapi-stranger@hohenheim.local", "Stranger");
+        strangerKey = ApiKeyService.create(stranger, "csrapi-stranger", tenantScopes, null).plaintext();
+        UUID adminId = Models.get(UserModel.class).find()
+            .where(UserModel.EMAIL.eq("test@hohenheim.local")).first().get(UserModel.ID);
+        adminKey = ApiKeyService.create(adminId, "csrapi-admin", List.of("hohenheim.*"), null).plaintext();
+
+        mailServerKey = TestSigningRequests.rsa(2048);
+    }
+
+    @AfterAll
+    static void tearDown() {
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Ssl.ACME_DIRECTORY_URL, savedDirectory);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Ssl.LETSENCRYPT_EMAIL, savedEmail);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Ssl.LETSENCRYPT_ENABLED, savedEnabled);
+        if (ca != null) {
+            ca.close();
+        }
+        if (adoptedProxy != null) {
+            ServerMain.adoptProxyServer(null);
+        }
+    }
+
+    /** Ordered, read, renewed and re-keyed: the requester's key is the only key the certificate ever certifies. */
+    @Test
+    void aMailHostOrdersRenewsAndRekeysFromItsOwnSigningRequest() throws Exception {
+        String pin = SigningRequest.publicKeyPin(mailServerKey.getPublic());
+
+        // 1. The order: issued, from the request, with no key stored and the request kept.
+        HttpResponse<String> ordered = order(mailKey, TestSigningRequests.pem(mailServerKey, List.of(MX, MAIL)),
+            MX + "," + MAIL);
+        assertThat(ordered.statusCode()).as("step 1: issued (%s)", ordered.body()).isEqualTo(201);
+        int certId = ApiSupport.idOf(ordered.body());
+        Row cert = Models.get(CertificateModel.class).findById(certId);
+        assertThat((String) cert.get(CertificateModel.KEY_HOLDER)).as("step 1: the requester holds the key")
+            .isEqualTo(CertificateModel.KEY_HOLDER_REQUESTER);
+        assertThat((String) cert.get(CertificateModel.PRIVATE_KEY_PEM)).as("step 1: no key is stored").isNull();
+        String storedRequest = cert.get(CertificateModel.SIGNING_REQUEST_PEM);
+        assertThat(storedRequest).as("step 1: the request is kept").contains("BEGIN CERTIFICATE REQUEST");
+        assertThat(leafPin(cert)).as("step 1: the chain certifies the requester's key").isEqualTo(pin);
+
+        // 2. Never loaded: the proxy cannot serve a certificate whose key it does not hold, and no reader counts it.
+        ServerMain.getProxyServer().getCertificateStore().loadFromDatabase();
+        assertThat(ServerMain.getProxyServer().getCertificateStore().holds(certId))
+            .as("step 2: the proxy's store never loads it").isFalse();
+        assertThat(CertificateModel.served(cert)).as("step 2: and it is no served certificate").isFalse();
+        assertThat(CertificateCoverage.coveringCertificate(MX)).as("step 2: nor does it cover the name for HTTPS")
+            .isNull();
+
+        // 3. Status and chain, read by the owning key; another key is told the certificate does not exist.
+        HttpResponse<String> status = keyGet(mailKey, "/api/v1/certificates/" + certId);
+        assertThat(status.statusCode()).as("step 3: the owner reads its status").isEqualTo(200);
+        assertThat(status.body()).as("step 3: the status names the holder and the pin")
+            .contains("\"key_holder\":\"requester\"").contains(pin).doesNotContain("PRIVATE KEY");
+        HttpResponse<String> chain = keyGet(mailKey, "/api/v1/certificates/" + certId + "/chain");
+        assertThat(chain.statusCode()).as("step 3: the owner fetches its chain").isEqualTo(200);
+        assertThat(chain.body()).as("step 3: the chain alone").contains("BEGIN CERTIFICATE")
+            .doesNotContain("PRIVATE KEY");
+        assertThat(keyGet(strangerKey, "/api/v1/certificates/" + certId).statusCode())
+            .as("step 3: another key reads no status").isEqualTo(404);
+        assertThat(keyGet(strangerKey, "/api/v1/certificates/" + certId + "/chain").statusCode())
+            .as("step 3: and fetches no chain").isEqualTo(404);
+        assertThat(keyGet(strangerKey, "/api/v1/certificates").body())
+            .as("step 3: nor lists it").doesNotContain(MX);
+
+        // 4. Renewal orders from the stored request: same key, same request, still no key stored.
+        String firstChain = cert.get(CertificateModel.CERTIFICATE_PEM);
+        assertThat(acme().renewCertificate(cert, Models.get(CertificateModel.class)))
+            .as("step 4: the sweep's renewal issues").isTrue();
+        Row renewed = Models.get(CertificateModel.class).findById(certId);
+        assertThat((String) renewed.get(CertificateModel.CERTIFICATE_PEM)).as("step 4: a new chain")
+            .isNotEqualTo(firstChain);
+        assertThat(leafPin(renewed)).as("step 4: certifying the SAME key").isEqualTo(pin);
+        assertThat((String) renewed.get(CertificateModel.SIGNING_REQUEST_PEM)).as("step 4: from the same request")
+            .isEqualTo(storedRequest);
+        assertThat((String) renewed.get(CertificateModel.PRIVATE_KEY_PEM)).as("step 4: still no key").isNull();
+
+        // 5. No key bundle: the action is not offered and the route sends none, interactively or by key.
+        HttpResponse<String> bundle = adminGet("/certificates/" + certId + "/download");
+        assertThat(bundle.statusCode()).as("step 5: the interactive bundle route sends no bundle")
+            .isBetween(300, 399);
+        assertThat(bundle.body()).as("step 5: no key material").doesNotContain("PRIVATE KEY");
+        HttpResponse<String> keyedBundle = keyGet(adminKey, "/certificates/" + certId + "/download");
+        assertThat(keyedBundle.statusCode()).as("step 5: and stays interactive-only").isEqualTo(403);
+        assertThat(keyedBundle.body()).contains("INTERACTIVE_LOGIN_REQUIRED");
+        // The record offers the chain and no bundle; the list says who holds the key under its provider.
+        String record = httpGetFollowingRedirects(CmsRoutes.detail(HohenheimSlugs.ADMIN, HohenheimSlugs.CERTIFICATES,
+            certId).toUrl(), sessionToken).body();
+        assertThat(record).as("step 5: the record offers the public chain")
+            .contains("/certificates/" + certId + "/chain")
+            .doesNotContain("/certificates/" + certId + "/download");
+        assertThat(adminGet(CmsRoutes.list(HohenheimSlugs.ADMIN, HohenheimSlugs.CERTIFICATES).toUrl()).body())
+            .as("step 5: the list says the requester holds the key")
+            .contains(ApiSupport.shippedText(HohenheimMicrocopy.CERTIFICATE.of("key_held_by_requester")));
+
+        // 6. Rotation is the requester's deliberate act: a new request, a new key, on the same certificate.
+        KeyPair rotated = TestSigningRequests.ec("secp256r1");
+        HttpResponse<String> rekeyed = keyPost(mailKey, "/api/v1/certificates/" + certId + "/signing-request",
+            "csr=" + encoded(TestSigningRequests.pem(rotated, List.of(MX, MAIL))));
+        assertThat(rekeyed.statusCode()).as("step 6: re-ordered (%s)", rekeyed.body()).isEqualTo(200);
+        Row after = Models.get(CertificateModel.class).findById(certId);
+        assertThat(leafPin(after)).as("step 6: the chain now certifies the new key")
+            .isEqualTo(SigningRequest.publicKeyPin(rotated.getPublic()));
+        assertThat((String) after.get(CertificateModel.PRIVATE_KEY_PEM)).as("step 6: and still no key").isNull();
+    }
+
+    /** A key that is no admin learns nothing about names it does not answer for; an admin keeps the reasons. */
+    @Test
+    void refusalsTellATenantNothingAndAnAdminTheReason() throws Exception {
+        String neutral = HostnameAuthority.HOSTNAME_UNAVAILABLE;
+
+        // 1. A name another site serves and a name nobody serves: ONE answer, the same words, no row.
+        HttpResponse<String> foreign = order(mailKey, TestSigningRequests.pem(mailServerKey, List.of(FOREIGN)),
+            FOREIGN);
+        HttpResponse<String> unserved = order(mailKey, TestSigningRequests.pem(mailServerKey, List.of(UNSERVED)),
+            UNSERVED);
+        assertThat(foreign.statusCode()).as("step 1: foreign is refused").isEqualTo(422);
+        assertThat(ApiSupport.codeOf(foreign.body())).as("step 1: neutrally").isEqualTo(neutral);
+        assertThat(unserved.body()).as("step 1: byte-identical to an unserved name").isEqualTo(foreign.body());
+        assertThat(Models.get(CertificateModel.class).find()
+                .where(CertificateModel.DOMAIN_NAMES_TEXT.eq(FOREIGN)).first())
+            .as("step 1: and no certificate row exists").isNull();
+
+        // 2. The admin is told which half refused.
+        HttpResponse<String> admin = order(adminKey, TestSigningRequests.pem(mailServerKey, List.of(UNSERVED)),
+            UNSERVED);
+        assertThat(ApiSupport.codeOf(admin.body())).as("step 2: the admin keeps the reason")
+            .isEqualTo("hostname_not_served");
+
+        // 3. A request breaking a rule is refused on its field, by name, before any order.
+        HttpResponse<String> differ = order(mailKey, TestSigningRequests.pem(mailServerKey, List.of(MX)),
+            MX + "," + MAIL);
+        assertThat(ApiSupport.codeOf(differ.body())).as("step 3: names differ").isEqualTo("signing_request_names_differ");
+        assertThat(ApiSupport.fieldOf(differ.body())).as("step 3: on the csr field").isEqualTo("csr");
+        HttpResponse<String> weak = order(mailKey, TestSigningRequests.pem(TestSigningRequests.rsa(1024),
+            List.of(MX)), MX);
+        assertThat(ApiSupport.codeOf(weak.body())).as("step 3: a weak key").isEqualTo("signing_request_weak_key");
+        byte[] tampered = TestSigningRequests.der(mailServerKey, List.of(MX), TestSigningRequests.Extra.NONE);
+        tampered[tampered.length - 1] ^= 0x01;
+        HttpResponse<String> forged = order(mailKey, TestSigningRequests.pem(tampered), MX);
+        assertThat(ApiSupport.codeOf(forged.body())).as("step 3: no proof of possession")
+            .isEqualTo("signing_request_bad_signature");
+
+        // 4. The neutral words are THE hostname-authority refusal's, shipped in both languages.
+        assertThat(foreign.body()).as("step 4: the neutral sentence")
+            .contains(ApiSupport.shippedText(HohenheimMicrocopy.VIOLATIONS.of(neutral)));
+    }
+
+    // -- fixtures -------------------------------------------------------------
+
+    private HttpResponse<String> order(String key, String csr, String hostnames) throws Exception {
+        return keyPost(key, "/api/v1/certificates", "csr=" + encoded(csr) + "&hostnames=" + encoded(hostnames));
+    }
+
+    private static String encoded(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
+    }
+
+    private static String leafPin(Row cert) throws Exception {
+        return SigningRequest.publicKeyPin(CertificatePem.chainOf(cert.get(CertificateModel.CERTIFICATE_PEM)).get(0)
+            .getPublicKey());
+    }
+
+    private static AcmeService acme() {
+        return ServerMain.getProxyServer().getAcmeService();
+    }
+
+    private static int site(String slug) {
+        Row site = Models.get(SiteModel.class).createEmptyRow();
+        site.set(SiteModel.NAME, slug);
+        site.set(SiteModel.SLUG, slug);
+        site.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
+        site.set(SiteModel.STATUS, "active");
+        site.set(SiteModel.ENABLED, true);
+        Models.get(SiteModel.class).save(site);
+        return site.get(SiteModel.ID);
+    }
+
+    private static void domain(int siteId, String hostname) {
+        Row domain = Models.get(SiteDomainModel.class).createEmptyRow();
+        domain.set(SiteDomainModel.SITE_ID, siteId);
+        domain.set(SiteDomainModel.HOSTNAME, hostname);
+        domain.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+        Models.get(SiteDomainModel.class).save(domain);
+    }
+}

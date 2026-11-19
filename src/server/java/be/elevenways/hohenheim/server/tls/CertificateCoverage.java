@@ -40,14 +40,16 @@ public final class CertificateCoverage {
     }
 
     /**
-     * The certificate rows a name can be covered by (every row but the ACME account key), read once for a page of
-     * names ({@link #coveringCertificate(String, List)}).
+     * The certificate rows a name can be covered by (every row but the ACME account key and the certificates whose
+     * requester holds the key, which Hohenheim can never serve), read once for a page of names
+     * ({@link #coveringCertificate(String, List)}).
      */
     public static @NonNull List<Row> candidates() {
         return Models.get(CertificateModel.class).find()
             .where(new CompositeCriteria(CompositeOperator.OR,
                 CertificateModel.PROVIDER.isNull(),
                 CertificateModel.PROVIDER.ne(CertificateModel.PROVIDER_ACME_ACCOUNT)))
+            .where(CertificateModel.KEY_HOLDER.eq(CertificateModel.KEY_HOLDER_HOHENHEIM))
             .all();
     }
 
@@ -114,7 +116,7 @@ public final class CertificateCoverage {
 
     /**
      * The names a working certificate covers: what the running proxy's certificate store loaded (the names it answers
-     * a handshake for), and the names a served certificate row ({@link CertificateModel#SERVED_STATUSES}) declares
+     * a handshake for), and the names a served certificate row ({@link CertificateModel#servedCriteria}) declares
      * only where no proxy runs in this process (a node without the proxy role, a test), because the stored rows are
      * then all there is to read.
      *
@@ -168,7 +170,7 @@ public final class CertificateCoverage {
     private static @NonNull Set<String> servedNames() {
         Set<String> names = new HashSet<>();
         for (Row cert : Models.get(CertificateModel.class).find()
-                .where(CertificateModel.STATUS.in(CertificateModel.SERVED_STATUSES)).all()) {
+                .where(CertificateModel.servedCriteria()).all()) {
             if (!CertificateModel.PROVIDER_ACME_ACCOUNT.equals(cert.get(CertificateModel.PROVIDER))) {
                 names.addAll(namesOf(cert));
             }

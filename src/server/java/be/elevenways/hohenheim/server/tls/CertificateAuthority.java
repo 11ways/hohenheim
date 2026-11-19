@@ -64,23 +64,30 @@ public final class CertificateAuthority {
     /** Why a request was refused; the identity a caller reports, never a parsed message. */
     public enum Refusal {
 
-        /** No live domain row covers the name -- this installation does not serve it. */
+        /** No live domain row covers the name -- this installation does not serve it. Told to admins only. */
         NOT_SERVED,
 
-        /** A covering row belongs to a site the caller may not manage. */
+        /** A covering row belongs to a site the caller may not manage. Told to admins only. */
         NOT_MANAGED,
 
-        /** A covering row opted out of Let's Encrypt. */
-        EXCLUDED
+        /** A covering row the caller answers for opted out of Let's Encrypt. */
+        EXCLUDED,
+
+        /**
+         * The ONE answer a caller without the admin permission gets for a name that is not served, served by a site it
+         * may not manage, or opted out by a row it does not answer for: the existence of a name is never told.
+         */
+        UNAVAILABLE
     }
 
     /**
      * A refused certificate request.
      *
-     * AIDEV-NOTE: the three refusal identities are distinguishable, which IS an existence
-     * oracle for hostnames configured on this installation -- acceptable while the endpoint
-     * is admin-gated. When delegation relaxes that gate, NOT_SERVED and NOT_MANAGED must
-     * collapse into one answer, or a tenant can enumerate every hostname the box serves.
+     * AIDEV-NOTE: the distinct refusal identities are an existence oracle for hostnames configured on this
+     * installation, so only an admin (and unattended system work) is told them. Every other caller -- an API key of a
+     * tenant, a stored tenant requester at renewal -- is refused {@link Refusal#UNAVAILABLE} in
+     * {@link HostnameAuthority#HOSTNAME_UNAVAILABLE}'s neutral words, the same answer whether the name is unknown,
+     * foreign or opted out by somebody else, so probing names through an order enumerates nothing.
      */
     public static final class Refused extends RuntimeException {
 
@@ -105,13 +112,17 @@ public final class CertificateAuthority {
             return this.hostname;
         }
 
-        /** @return the refusal in the admin's words, naming the refused hostname */
+        /** @return the refusal in the caller's words: the refused hostname named to an admin, nothing told otherwise */
         public @NonNull Microcopy sentence() {
-            String key = switch (this.refusal) {
-                case NOT_SERVED -> "hostname_not_served";
-                case NOT_MANAGED -> "hostname_not_managed";
-                case EXCLUDED -> "excluded_hostnames";
+            return switch (this.refusal) {
+                case NOT_SERVED -> named("hostname_not_served");
+                case NOT_MANAGED -> named("hostname_not_managed");
+                case EXCLUDED -> named("excluded_hostnames");
+                case UNAVAILABLE -> HohenheimMicrocopy.VIOLATIONS.of(HostnameAuthority.HOSTNAME_UNAVAILABLE);
             };
+        }
+
+        private @NonNull Microcopy named(@NonNull String key) {
             return HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of(key).withArg("hostnames", this.hostname);
         }
 
@@ -245,7 +256,7 @@ public final class CertificateAuthority {
             List<Row> covering = snapshot.covering(hostname);
 
             if (covering.isEmpty()) {
-                throw new Refused(Refusal.NOT_SERVED, hostname);
+                throw refused(admin, Refusal.NOT_SERVED, hostname);
             }
             // The AUTHORITY half asks the deciding tier only -- the SAME rows a tenant DNS
             // write is judged on, so the two lanes can never disagree about a name.
@@ -254,7 +265,7 @@ public final class CertificateAuthority {
                 for (Row domain : deciding) {
                     Integer siteId = domain.get(SiteDomainModel.SITE_ID);
                     if (siteId == null || !requester.canManageSite(siteId)) {
-                        throw new Refused(Refusal.NOT_MANAGED, hostname);
+                        throw refused(false, Refusal.NOT_MANAGED, hostname);
                     }
                 }
             }
@@ -264,12 +275,16 @@ public final class CertificateAuthority {
             // half deliberately walks EVERY covering row, not just the deciding tier. A
             // TLS-passthrough site is checked beside the flag rather than through it: the
             // model hook forces the flag on WRITE, so only rows written since then carry it.
+            // A non-admin is told the opt-out only for a row it answers for itself: another
+            // site's covering row is no fact of its own to learn.
             for (Row domain : covering) {
                 Row site = snapshot.siteOf(domain);
                 if (Boolean.TRUE.equals(domain.get(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT))
                         || site != null && SiteModel.UPSTREAM_TLS_PASSTHROUGH
                             .equals(site.get(SiteModel.UPSTREAM_KIND))) {
-                    throw new Refused(Refusal.EXCLUDED, hostname);
+                    Integer siteId = domain.get(SiteDomainModel.SITE_ID);
+                    throw refused(admin || siteId != null && requester.canManageSite(siteId), Refusal.EXCLUDED,
+                        hostname);
                 }
             }
             // Attributed to the row that ROUTES the name, never to a broader wildcard that
@@ -278,5 +293,10 @@ public final class CertificateAuthority {
         }
 
         return declaring;
+    }
+
+    /** @return the refusal as {@code told} may learn it: the precise one, or {@link Refusal#UNAVAILABLE} */
+    private static @NonNull Refused refused(boolean told, @NonNull Refusal precise, @NonNull String hostname) {
+        return new Refused(told ? precise : Refusal.UNAVAILABLE, hostname);
     }
 }

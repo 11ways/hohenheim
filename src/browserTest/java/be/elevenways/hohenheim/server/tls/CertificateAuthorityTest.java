@@ -165,8 +165,13 @@ class CertificateAuthorityTest extends HohenheimHttpTestBase {
         assertThatThrownBy(() -> CertificateAuthority.authorize(tenant, List.of(foreign)))
             .isInstanceOf(CertificateAuthority.Refused.class)
             .extracting(refused -> ((CertificateAuthority.Refused) refused).refusal())
-            .describedAs("the tenant serves nothing on that site")
-            .isEqualTo(CertificateAuthority.Refusal.NOT_MANAGED);
+            .describedAs("the tenant serves nothing on that site, and is told only the neutral answer")
+            .isEqualTo(CertificateAuthority.Refusal.UNAVAILABLE);
+        assertThatThrownBy(() -> CertificateAuthority.authorize(CertificateAuthority.Requester.SYSTEM,
+                List.of("nobody-at-all." + ZONE)))
+            .extracting(refused -> ((CertificateAuthority.Refused) refused).refusal())
+            .describedAs("while unattended work, an admin, keeps the precise reason")
+            .isEqualTo(CertificateAuthority.Refusal.NOT_SERVED);
 
         // The refusal happens before the order key is claimed and before the row exists.
         assertThatThrownBy(() -> acme().requestCertificate(List.of(foreign), "Foreign Cert",
@@ -188,7 +193,7 @@ class CertificateAuthorityTest extends HohenheimHttpTestBase {
             .isInstanceOf(CertificateAuthority.Refused.class)
             .extracting(refused -> ((CertificateAuthority.Refused) refused).refusal())
             .describedAs("owned." + ZONE + " intersects *." + ZONE + " but does not cover it")
-            .isEqualTo(CertificateAuthority.Refusal.NOT_SERVED);
+            .isEqualTo(CertificateAuthority.Refusal.UNAVAILABLE);
 
         // The wildcard row the tenant DOES hold covers its own set.
         assertThat(CertificateAuthority.authorize(tenant, List.of("*.wild." + ZONE)))
@@ -333,7 +338,7 @@ class CertificateAuthorityTest extends HohenheimHttpTestBase {
             .describedAs("step 2: a renewal without an account subject is an error")
             .isEqualTo(CertificateModel.STATUS_ERROR);
         assertThat((String) after.get(CertificateModel.RENEWAL_ERROR))
-            .describedAs("step 2: refused by authority, never ordered as the system").contains("NOT_MANAGED");
+            .describedAs("step 2: refused by authority, never ordered as the system").contains("UNAVAILABLE");
     }
 
     private void renewalAfterRevocation(Row cert, CertificateModel certModel) {
@@ -356,7 +361,7 @@ class CertificateAuthorityTest extends HohenheimHttpTestBase {
             .isEqualTo(CertificateModel.STATUS_ERROR);
         assertThat((String) after.get(CertificateModel.RENEWAL_ERROR))
             .describedAs("the surfaced reason names the authority refusal")
-            .contains("NOT_MANAGED")
+            .contains("UNAVAILABLE")
             .contains("owned." + ZONE);
         assertThat((Boolean) after.get(CertificateModel.AUTO_RENEW))
             .describedAs("refuse-and-surface: auto-renew stays on so a re-grant heals itself")

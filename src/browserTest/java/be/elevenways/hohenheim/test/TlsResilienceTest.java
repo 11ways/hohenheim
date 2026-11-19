@@ -19,6 +19,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.*;
 
 import java.io.File;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -154,6 +155,36 @@ class TlsResilienceTest {
         assertThat(candidates)
             .contains("Due Error", "Null Error", "Expiring Active")
             .doesNotContain("Future Error", "Fresh Active", "Custom Error");
+    }
+
+    /**
+     * A pending order whose process died is retried once it is far past any one order; a fresh one and a manual DNS-01
+     * order, which waits for its operator by design, never are.
+     */
+    @Test
+    void theSweepTakesAPendingOrderOnlyOnceItIsStale() {
+        var certModel = Models.get(CertificateModel.class);
+        Instant now = Now.instant();
+        createCert("Pending Order", CertificateModel.PROVIDER_LETSENCRYPT, CertificateModel.STATUS_PENDING,
+            "pending-order.test");
+        Row manual = createCert("Pending Manual", CertificateModel.PROVIDER_LETSENCRYPT,
+            CertificateModel.STATUS_PENDING, "pending-manual.test");
+        manual.set(CertificateModel.AUTO_RENEW, false);
+        certModel.save(manual);
+
+        // 1. Just written: its order may still be running in this process.
+        assertThat(AcmeService.findRenewalCandidates(certModel, now).stream()
+                .map(r -> (String) r.get(CertificateModel.NICE_NAME)).toList())
+            .as("step 1: a pending order is left to the order that wrote it")
+            .doesNotContain("Pending Order", "Pending Manual");
+
+        // 2. Past every order's polling bounds: the order that wrote it is gone, so the sweep orders it.
+        Instant later = now.plus(Duration.ofHours(3));
+        assertThat(AcmeService.findRenewalCandidates(certModel, later).stream()
+                .map(r -> (String) r.get(CertificateModel.NICE_NAME)).toList())
+            .as("step 2: a stale pending order is retried, a manual DNS-01 order never")
+            .contains("Pending Order")
+            .doesNotContain("Pending Manual");
     }
 
     @Test

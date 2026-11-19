@@ -100,14 +100,21 @@ public final class CertificatePem {
      * @throws CertificateEncodingException when a certificate cannot be encoded
      */
     public static @NonNull String pemOf(@NonNull List<X509Certificate> chain) throws CertificateEncodingException {
-        Base64.Encoder lines = Base64.getMimeEncoder(64, new byte[] {'\n'});
         StringBuilder text = new StringBuilder();
         for (X509Certificate certificate : chain) {
-            text.append("-----BEGIN CERTIFICATE-----\n")
-                .append(lines.encodeToString(certificate.getEncoded()))
-                .append("\n-----END CERTIFICATE-----\n");
+            text.append(block("CERTIFICATE", certificate.getEncoded()));
         }
         return text.toString();
+    }
+
+    /** @return a PKCS#10 signing request's DER as its one CERTIFICATE REQUEST block, ended by a newline */
+    public static @NonNull String signingRequestPemOf(byte @NonNull [] der) {
+        return block("CERTIFICATE REQUEST", der);
+    }
+
+    private static @NonNull String block(@NonNull String label, byte @NonNull [] der) {
+        Base64.Encoder lines = Base64.getMimeEncoder(64, new byte[] {'\n'});
+        return "-----BEGIN " + label + "-----\n" + lines.encodeToString(der) + "\n-----END " + label + "-----\n";
     }
 
     /**
