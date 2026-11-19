@@ -72,7 +72,8 @@ class PublicTcpListenerRecoveryTest {
         AtomicReference<IOException> escalated = new AtomicReference<>();
         listener = new PublicTcpListener("127.0.0.1", 0, 5_000,
             new InternalListenerRouter(() -> (InetSocketAddress) backend.getLocalSocketAddress()),
-            List::of, new ConnectionIdentities(), ip -> false, 100, 100, escalated::set);
+            List::of, new ConnectionIdentities(), ip -> false, 100, 100, escalated::set,
+            PublicTcpListener.EVERY_FAMILY);
         listener.setAcceptFailurePolicyForTesting(5, 5, 20);
         listener.setServerSocketFactoryForTesting(() -> new ServerSocket() {
             @Override

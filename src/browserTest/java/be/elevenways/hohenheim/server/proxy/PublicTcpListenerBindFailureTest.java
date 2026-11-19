@@ -29,7 +29,8 @@ class PublicTcpListenerBindFailureTest {
             port = occupant.getLocalPort();
             listener = new PublicTcpListener("127.0.0.1", port, 5_000,
                 new InternalListenerRouter(() -> new InetSocketAddress("127.0.0.1", 1)),
-                List::of, new ConnectionIdentities(), ip -> false, 10, 10, failure -> { });
+                List::of, new ConnectionIdentities(), ip -> false, 10, 10, failure -> { },
+                PublicTcpListener.EVERY_FAMILY);
             listener.setServerSocketFactoryForTesting(() -> {
                 ServerSocket socket = new ServerSocket();
                 created.set(socket);

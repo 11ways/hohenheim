@@ -281,9 +281,11 @@ public class ProxyServer {
         // A configured PROXY v2 peer set means the public HTTP port must resolve connection
         // identity before Undertow decodes a request. In socket mode the bridge already is
         // that front, and with no configured peer nothing may send a header, so the plain
-        // public listener stays hop-free.
+        // public listener stays hop-free. A dedicated IPv6 address needs the front too:
+        // Undertow cannot bind its "0.0.0.0" as IPv4 only (see startPublicListeners).
         boolean proxyProtocolIngress = !socketMode && !trustedProxyProtocolSources().isEmpty();
-        boolean internalOnly = socketMode || proxyProtocolIngress;
+        boolean frontedIngress = !socketMode && (proxyProtocolIngress || dedicatedIpv6Address() != null);
+        boolean internalOnly = socketMode || frontedIngress;
 
         // AIDEV-NOTE: socket mode REFUSES to start without trusted proxy keys. An AF_UNIX
         // peer has no IP address and the bridge does no identity registration, so every
@@ -318,8 +320,6 @@ public class ProxyServer {
                 .setServerOption(UndertowOptions.ENABLE_HTTP2, true)
                 .setIoThreads(IO_THREADS)
                 .setHandler(handler);
-
-            if (!internalOnly) addIpv6Listener(builder, httpPort, null);
             httpServer = builder.build();
 
             httpServer.start();
@@ -329,7 +329,7 @@ public class ProxyServer {
                     HohenheimSettings.Proxy.HTTP_SOCKET_PERMISSIONS);
                 httpSocketBridge = new UnixSocketListenerBridge(
                     Path.of(socketPath.trim()), undertowAddress.getPort(), permissions);
-            } else if (proxyProtocolIngress) {
+            } else if (frontedIngress) {
                 httpTerminationAddress = undertowAddress;
                 startPublicListeners(httpFrontListeners, httpPort,
                     new InternalListenerRouter(() -> httpTerminationAddress),
@@ -347,7 +347,7 @@ public class ProxyServer {
             noteHttpListenerHealthy();
             Blast.log(socketMode ? "Proxy HTTP listening on Unix socket" : "Proxy HTTP listening on port",
                       socketMode ? httpSocketBridge.getSocketPath() : publicHttpAddress.getPort(),
-                      proxyProtocolIngress ? "(PROXY v2 ingress," : "(",
+                      proxyProtocolIngress ? "(PROXY v2 ingress," : frontedIngress ? "(fronted," : "(",
                       dispatcher.getExactRouteCount() + " exact,",
                       dispatcher.getWildcardRouteCount() + " wildcard routes)");
         } catch (Exception e) {
@@ -369,7 +369,12 @@ public class ProxyServer {
     }
 
     /**
-     * Binds the public IPv4 listener and, when configured, the extra IPv6 one.
+     * Binds the public IPv4 listener and, when configured, the dedicated IPv6 one on the same port.
+     *
+     * AIDEV-NOTE: the JDK binds "0.0.0.0" as a DUAL-STACK socket on an IPv6 host, which holds every IPv6 address of
+     * the port too, so a second bind on the IPv6 address failed with "Address already in use" and took the listener
+     * down. Without an IPv6 address the wildcard keeps serving both families; with one, the wildcard is IPv4 only and
+     * IPv6 is served on that address alone, as the setting says.
      *
      * @throws IOException when a listener cannot bind; already-bound ones stay in the list
      *                     so the caller's teardown closes them
@@ -383,21 +388,28 @@ public class ProxyServer {
             "proxy.max_pending_connections", 1, 100_000);
         int maxConnections = boundedSetting(HohenheimSettings.Proxy.MAX_PUBLIC_CONNECTIONS,
             "proxy.max_public_connections", 1, 1_000_000);
+        String ipv6Address = dedicatedIpv6Address();
 
         PublicTcpListener ipv4 = new PublicTcpListener("0.0.0.0", port, prologueTimeout, router,
             ProxyServer::trustedProxyProtocolSources, connectionIdentities, dispatcher::isBanned,
-            maxConnections, maxPending, failureHandler);
+            maxConnections, maxPending, failureHandler,
+            ipv6Address == null ? PublicTcpListener.EVERY_FAMILY : PublicTcpListener.IPV4_ONLY);
         ipv4.start();
         target.add(ipv4);
 
-        String ipv6Address = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.IPV6_ADDRESS);
-        if (ipv6Address == null || ipv6Address.isBlank()) return;
+        if (ipv6Address == null) return;
         int ipv6Port = port == 0 ? ipv4.getLocalAddress().getPort() : port;
-        PublicTcpListener ipv6 = new PublicTcpListener(ipv6Address.trim(), ipv6Port, prologueTimeout,
+        PublicTcpListener ipv6 = new PublicTcpListener(ipv6Address, ipv6Port, prologueTimeout,
             router, ProxyServer::trustedProxyProtocolSources, connectionIdentities,
-            dispatcher::isBanned, maxConnections, maxPending, failureHandler);
+            dispatcher::isBanned, maxConnections, maxPending, failureHandler, PublicTcpListener.EVERY_FAMILY);
         ipv6.start();
         target.add(ipv6);
+    }
+
+    /** @return the trimmed proxy.ipv6_address, or null when unset */
+    private static @Nullable String dedicatedIpv6Address() {
+        String configured = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.IPV6_ADDRESS);
+        return configured == null || configured.isBlank() ? null : configured.trim();
     }
 
     /** Whether at least one non-blank X-Hohenheim-Key is configured. */
@@ -507,17 +519,6 @@ public class ProxyServer {
         httpsState = State.FAILED;
         recordHttpsFailure(failure.getMessage(), null);
         Blast.log("PROXY HTTPS LISTENER FAILED:", failure.getMessage());
-    }
-
-    private static void addIpv6Listener(Undertow.Builder builder, int port, SSLContext sslContext) {
-        String ipv6Address = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.IPV6_ADDRESS);
-        if (ipv6Address == null || ipv6Address.isBlank()) return;
-
-        if (sslContext != null) {
-            builder.addHttpsListener(port, ipv6Address.trim(), sslContext);
-        } else {
-            builder.addHttpListener(port, ipv6Address.trim());
-        }
     }
 
     public synchronized void stop() {

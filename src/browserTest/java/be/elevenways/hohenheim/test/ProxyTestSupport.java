@@ -16,6 +16,7 @@ import java.io.IOException;
 import java.io.File;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
@@ -118,7 +119,17 @@ public final class ProxyTestSupport {
      */
     public static String rawRequestAs(int port, String method, String host, String path,
                                       String... extraHeaderLines) throws Exception {
-        try (Socket socket = new Socket("127.0.0.1", port)) {
+        return rawRequestAt("127.0.0.1", port, method, host, path, extraHeaderLines);
+    }
+
+    /**
+     * Raw HTTP/1.1 exchange against one listener address; returns the full response (headers + body).
+     * @param address the literal address to connect to, IPv4 or IPv6
+     * @param extraHeaderLines additional request header lines, without CRLF
+     */
+    public static String rawRequestAt(String address, int port, String method, String host, String path,
+                                      String... extraHeaderLines) throws Exception {
+        try (Socket socket = new Socket(InetAddress.getByName(address), port)) {
             socket.setSoTimeout(5000);
 
             StringBuilder request = new StringBuilder()

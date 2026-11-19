@@ -20,6 +20,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -55,6 +56,7 @@ class ProxyProtocolHttpTest {
         if (backend != null) backend.stop(0);
         Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Proxy.PROXY_PROTOCOL_TRUSTED_SOURCES, List.of());
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.IPV6_ADDRESS, "");
     }
 
     @Test
@@ -140,7 +142,47 @@ class ProxyProtocolHttpTest {
         assertThat(seenHeaders.get("x-real-ip")).isEqualTo("127.0.0.1");
     }
 
+    /**
+     * A named IPv6 address serves beside the IPv4 wildcard on the same, fixed port. Java binds "0.0.0.0" as a
+     * dual-stack socket on an IPv6 host, which already holds every IPv6 address of the port, so the second bind used
+     * to fail with "Address already in use" and take the whole HTTP listener down. Port 0 would hide it: each
+     * listener then takes its own ephemeral port.
+     */
+    @Test
+    void aDedicatedIpv6AddressServesBesideTheIpv4Wildcard() throws Exception {
+        APP.renewDatabase();
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.IPV6_ADDRESS, "::1");
+        int fixedPort;
+        try (ServerSocket probe = new ServerSocket(0)) {
+            fixedPort = probe.getLocalPort();
+        }
+        startBackendAndProxy("dual.example.test", null, fixedPort);
+
+        // 1. Both listeners bind.
+        assertThat(proxy.getHttpState())
+            .as("step 1: HTTP runs with the IPv6 address configured")
+            .isEqualTo(ProxyServer.State.RUNNING);
+        int port = proxy.getHttpAddress().getPort();
+        assertThat(port).as("step 1: the configured port").isEqualTo(fixedPort);
+
+        // 2. IPv4 reaches the site and keeps its own client address.
+        assertThat(ProxyTestSupport.rawRequestAt("127.0.0.1", port, "GET", "dual.example.test", "/"))
+            .as("step 2: IPv4 reaches the site").contains("200 OK").contains("backend");
+        assertThat(seenHeaders.get("x-real-ip")).as("step 2: the IPv4 client").isEqualTo("127.0.0.1");
+
+        // 3. The dedicated IPv6 address reaches it on the same port, as itself.
+        seenHeaders.clear();
+        assertThat(ProxyTestSupport.rawRequestAt("::1", port, "GET", "dual.example.test", "/"))
+            .as("step 3: the IPv6 address reaches the site on the same port").contains("200 OK").contains("backend");
+        assertThat(InetAddress.getByName(seenHeaders.get("x-real-ip")))
+            .as("step 3: the IPv6 client").isEqualTo(InetAddress.getByName("::1"));
+    }
+
     private void startBackendAndProxy(String hostname, String listenOn) throws Exception {
+        startBackendAndProxy(hostname, listenOn, 0);
+    }
+
+    private void startBackendAndProxy(String hostname, String listenOn, int httpPort) throws Exception {
         backend = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         backend.createContext("/", exchange -> {
             exchange.getRequestHeaders().forEach((name, values) -> {
@@ -164,7 +206,7 @@ class ProxyProtocolHttpTest {
             Models.get(SiteDomainModel.class).save(domain);
         }
 
-        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, httpPort);
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 0);
         proxy = new ProxyServer();
         proxy.start();

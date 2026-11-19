@@ -17,6 +17,8 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketAddress;
 import java.net.SocketException;
+import java.net.StandardProtocolFamily;
+import java.nio.channels.ServerSocketChannel;
 import be.elevenways.protoblast.common.time.Pace;
 import java.time.Duration;
 import java.util.List;
@@ -60,6 +62,15 @@ public final class PublicTcpListener implements AutoCloseable {
         ServerSocket create() throws IOException;
     }
 
+    /**
+     * The JDK's own socket: on an IPv6 host it is dual-stack, so "0.0.0.0" also holds every IPv6 address of the port.
+     */
+    public static final ServerSocketFactory EVERY_FAMILY = ServerSocket::new;
+
+    /** An AF_INET socket: "0.0.0.0" holds the IPv4 addresses only, leaving the port's IPv6 addresses free to bind. */
+    public static final ServerSocketFactory IPV4_ONLY =
+        () -> ServerSocketChannel.open(StandardProtocolFamily.INET).socket();
+
     private final String bindAddress;
     private final int port;
     private final int prologueTimeoutMillis;
@@ -80,7 +91,7 @@ public final class PublicTcpListener implements AutoCloseable {
     private volatile Backoff acceptBackoff = Backoff.exponential(
             Duration.ofMillis(DEFAULT_ACCEPT_BACKOFF_INITIAL_MILLIS), 2,
             Duration.ofMillis(DEFAULT_ACCEPT_BACKOFF_MAX_MILLIS));
-    private volatile ServerSocketFactory serverSocketFactory = ServerSocket::new;
+    private volatile ServerSocketFactory serverSocketFactory;
 
     private volatile boolean running;
     private volatile ServerSocket listener;
@@ -93,9 +104,9 @@ public final class PublicTcpListener implements AutoCloseable {
                              ConnectionRouter router, Supplier<List<String>> trustedProxySources,
                              ConnectionIdentities connectionIdentities, Predicate<String> bannedIpCheck,
                              int maxConnections, int maxPendingPrologues,
-                             Consumer<IOException> listenerFailureHandler) {
+                             Consumer<IOException> listenerFailureHandler, ServerSocketFactory sockets) {
         this(bindAddress, port, prologueTimeoutMillis, router, trustedProxySources, connectionIdentities,
-            bannedIpCheck, maxConnections, maxPendingPrologues, listenerFailureHandler, true);
+            bannedIpCheck, maxConnections, maxPendingPrologues, listenerFailureHandler, true, sockets);
     }
 
     /**
@@ -106,14 +117,15 @@ public final class PublicTcpListener implements AutoCloseable {
                                        Consumer<IOException> listenerFailureHandler) {
         // The router reads nothing; the deadline only bounds a router that would (DNS is the connect's own budget).
         return new PublicTcpListener(bindAddress, port, 10_000, router, List::of, new ConnectionIdentities(),
-            ip -> false, maxConnections, maxConnections, listenerFailureHandler, false);
+            ip -> false, maxConnections, maxConnections, listenerFailureHandler, false, EVERY_FAMILY);
     }
 
     private PublicTcpListener(String bindAddress, int port, int prologueTimeoutMillis,
                               ConnectionRouter router, Supplier<List<String>> trustedProxySources,
                               ConnectionIdentities connectionIdentities, Predicate<String> bannedIpCheck,
                               int maxConnections, int maxPendingPrologues,
-                              Consumer<IOException> listenerFailureHandler, boolean readsPrologue) {
+                              Consumer<IOException> listenerFailureHandler, boolean readsPrologue,
+                              ServerSocketFactory sockets) {
         if (prologueTimeoutMillis < 1) {
             throw new IllegalArgumentException("Prologue timeout must be positive");
         }
@@ -125,6 +137,7 @@ public final class PublicTcpListener implements AutoCloseable {
         }
         this.bindAddress = bindAddress;
         this.port = port;
+        this.serverSocketFactory = sockets;
         this.prologueTimeoutMillis = prologueTimeoutMillis;
         this.router = router;
         this.trustedProxySources = trustedProxySources;
