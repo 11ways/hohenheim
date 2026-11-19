@@ -17,7 +17,7 @@ import be.elevenways.zenit.cms.server.page.SettingsPage;
 import be.elevenways.zenit.cms.server.task.TaskAdmin;
 import be.elevenways.zenit.common.security.Permission;
 import be.elevenways.zenit.common.ui.Icon;
-import be.elevenways.zenit.notifications.server.cms.NotificationHubAdmin;
+import be.elevenways.zenit.delivery.server.cms.DeliveryAdmin;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -180,7 +180,7 @@ public final class HohenheimPanel extends Panel {
         // grant; an operator holding "*" sees it, a delegated admin only through an explicit notifications.deliveries.*
         // grant (a stored comms.deliveries.* grant is its alias). Hohenheim is no
         // hub, so the hub's projects entry is not mounted.
-        PanelEntry deliveries = NotificationHubAdmin.install(NotificationHubAdmin.Permissions.MODULE)
+        PanelEntry deliveries = DeliveryAdmin.install(DeliveryAdmin.Permissions.MODULE)
                 .deliveryLog(NavGroup.SYSTEM, 93);
         peers.add(deliveries);
         addIf(peers, BanParts.admin(), Role.FIREWALL);

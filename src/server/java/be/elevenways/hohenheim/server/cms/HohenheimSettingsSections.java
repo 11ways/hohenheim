@@ -8,8 +8,8 @@ import be.elevenways.zenit.cms.server.page.SettingsPage;
 import be.elevenways.zenit.common.brand.Brands;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.setting.SettingGroup;
-import be.elevenways.zenit.notifications.NotificationSettings;
-import be.elevenways.zenit.notifications.server.cms.NotificationSettingsLabels;
+import be.elevenways.zenit.delivery.DeliverySettings;
+import be.elevenways.zenit.delivery.server.cms.DeliverySettingsLabels;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -42,7 +42,7 @@ public enum HohenheimSettingsSections {
     HTTPS("https", HohenheimMicrocopy.SETTINGS_SECTION.of("section_https"), HohenheimSettings.Ssl.GROUP),
     BACKUPS("backups", HohenheimMicrocopy.SETTINGS_SECTION.of("section_backups"),
         HohenheimSettings.Database.GROUP, HohenheimSettings.Backup.GROUP),
-    NOTIFICATIONS(label -> SettingsPage.frameworkGroup(NotificationSettingsLabels.MOUNT_KEY, label, NotificationSettings.ROOT),
+    NOTIFICATIONS(label -> SettingsPage.frameworkGroup(DeliverySettingsLabels.MOUNT_KEY, label, DeliverySettings.ROOT),
         "notifications", HohenheimMicrocopy.SETTINGS_SECTION.of("section_notifications")),
     DNS("dns", HohenheimMicrocopy.SETTINGS_SECTION.of("section_dns"), HohenheimSettings.Dns.GROUP),
     BLOCKING("blocking", HohenheimMicrocopy.SETTINGS_SECTION.of("section_blocking"),

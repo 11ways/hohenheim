@@ -41,7 +41,7 @@ import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.forms.common.edit.CheckMatrix;
-import be.elevenways.zenit.notifications.server.NotifyOutcome;
+import be.elevenways.zenit.delivery.server.DeliveryOutcome;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
@@ -85,13 +85,13 @@ public final class NotificationChannelParts {
     private static final SubjectType<Row> SUBJECT = SubjectType.record(NotificationChannelModel.REF);
 
     /** Sends a test message through one channel; the outcome says whether it was delivered or only handed off. */
-    public static final Operation<Row, Void, NotifyOutcome> TEST = Operation.declare(HohenheimIds.id("test_channel"))
+    public static final Operation<Row, Void, DeliveryOutcome> TEST = Operation.declare(HohenheimIds.id("test_channel"))
         .happened(OperationSentences.of("test_channel"))
         .label(HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("test"))
         .icon(Icon.of("paper-plane"))
         .one(SUBJECT)
         .gate(OperationGate.open())
-        .result(NotifyOutcome.class)
+        .result(DeliveryOutcome.class)
         .facts(OperationFact.REACHES_OUTSIDE)
         .command(CmsCommands.EXTERNAL)
         .register();
@@ -102,7 +102,7 @@ public final class NotificationChannelParts {
             // Outbound copy has no requesting user to follow: it speaks the server's default locale, like every
             // other alert.
             LocaleChain locales = LocaleChain.of(RouteLocales.get().getDefaultLocale());
-            NotifyOutcome outcome = Alerts.testChannelOutcome(row,
+            DeliveryOutcome outcome = Alerts.testChannelOutcome(row,
                 HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("test_subject")
                     .resolve(locales, Zenit.getMessageResolver()),
                 HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("test_body")
@@ -267,7 +267,7 @@ public final class NotificationChannelParts {
             // A channel's delete has one consequence and it is silent: its events stop being delivered.
             .deleteConfirmation(DeleteConfirmation.of(DeleteConfirmation.body(
                 HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("delete_confirm"))))
-            .actions(List.of(PanelAction.<Row, NotifyOutcome>places(TEST, ActionPlacement.ROW,
+            .actions(List.of(PanelAction.<Row, DeliveryOutcome>places(TEST, ActionPlacement.ROW,
                     (request, outcome) -> testWords(Objects.requireNonNull(outcome, "a test answers")))
                 .label(HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("test"))
                 .icon(Icon.of("paper-plane"))
@@ -348,7 +348,7 @@ public final class NotificationChannelParts {
         }
     }
 
-    private static @NonNull CmsActionResult testWords(@NonNull NotifyOutcome outcome) {
+    private static @NonNull CmsActionResult testWords(@NonNull DeliveryOutcome outcome) {
         return outcome.sent()
             ? CmsActionResult.refreshWithToast(testSucceeded(outcome))
             : CmsActionResult.errorToast(HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("test_failed")
@@ -363,7 +363,7 @@ public final class NotificationChannelParts {
      * message to the notifications hub told the operator their channel works while the hub's own row could still
      * say it had no transport for it.
      */
-    static @NonNull Microcopy testSucceeded(@NonNull NotifyOutcome outcome) {
+    static @NonNull Microcopy testSucceeded(@NonNull DeliveryOutcome outcome) {
         return HohenheimMicrocopy.NOTIFICATION_CHANNEL.of(outcome.delivered() ? "test_ok" : "test_accepted");
     }
 }

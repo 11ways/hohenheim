@@ -7,12 +7,12 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.server.PermissionHolders;
 import be.elevenways.zenit.notifications.AdHocRecipient;
-import be.elevenways.zenit.notifications.DeliveryChannel;
+import be.elevenways.zenit.delivery.DeliveryChannel;
 import be.elevenways.zenit.notifications.NotificationRecipient;
-import be.elevenways.zenit.notifications.NotificationTexts;
+import be.elevenways.zenit.delivery.DeliveryTexts;
 import be.elevenways.zenit.notifications.server.NotificationInboxOwners;
 import be.elevenways.zenit.notifications.server.Notifications;
-import be.elevenways.zenit.notifications.server.NotifyOutcome;
+import be.elevenways.zenit.delivery.server.DeliveryOutcome;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -97,7 +97,7 @@ public final class Alerts {
             // can otherwise believe alerting works while receiving nothing.
             Blast.slog("hohenheim.notification.undelivered", Map.of(
                 "event", event.token(),
-                "subject", String.valueOf(NotificationTexts.plain(subject)),
+                "subject", String.valueOf(DeliveryTexts.plain(subject)),
                 "reason", "no_recipients"));
         }
         return queued;
@@ -161,12 +161,12 @@ public final class Alerts {
      * The reason-carrying form of {@link #testChannel}, so the CMS test button
      * can name the failure instead of only reporting one.
      */
-    public static @NonNull NotifyOutcome testChannelOutcome(@NonNull Row row, @NonNull String subject,
+    public static @NonNull DeliveryOutcome testChannelOutcome(@NonNull Row row, @NonNull String subject,
                                                             @Nullable String message) {
         NotificationRecipient recipient = recipientFor(row);
 
         if (recipient == null) {
-            return NotifyOutcome.failed("Channel row has no usable url or format");
+            return DeliveryOutcome.failed("Channel row has no usable url or format");
         }
         return Notifications.notifyNowWithReason(new AlertNotification("test", about(NotificationChannelModel.MODEL_ID,
                 row.get(NotificationChannelModel.ID)), Microcopy.literal(subject),

@@ -6,14 +6,14 @@ import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.server.notification.Alerts;
-import be.elevenways.zenit.notifications.server.transport.DsnOrigin;
-import be.elevenways.zenit.notifications.server.transport.TransportTypes;
-import be.elevenways.zenit.notifications.test.support.FakeTransport;
-import be.elevenways.zenit.notifications.DeliveryChannel;
-import be.elevenways.zenit.notifications.server.DeliveryModel;
+import be.elevenways.zenit.delivery.server.transport.DsnOrigin;
+import be.elevenways.zenit.delivery.server.transport.TransportTypes;
+import be.elevenways.zenit.delivery.test.support.FakeTransport;
+import be.elevenways.zenit.delivery.DeliveryChannel;
+import be.elevenways.zenit.delivery.server.DeliveryModel;
 import be.elevenways.zenit.notifications.server.NotificationDispatcher;
 import be.elevenways.zenit.notifications.server.Notifications;
-import be.elevenways.zenit.notifications.server.NotifyOutcome;
+import be.elevenways.zenit.delivery.server.DeliveryOutcome;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.AfterEach;
@@ -75,7 +75,7 @@ class NotificationChannelTestToastTest {
 
         // 1. A chain whose only transport RELAYS: it took the message and promised to try.
         installWebhookTransport("fake://relay");
-        NotifyOutcome handoff = Alerts.testChannelOutcome(channel, "Test", "hello");
+        DeliveryOutcome handoff = Alerts.testChannelOutcome(channel, "Test", "hello");
         assertThat(handoff.sent()).as("a handoff still went out").isTrue();
         assertThat(handoff.delivered()).as("a relay proves no delivery").isFalse();
 
@@ -92,7 +92,7 @@ class NotificationChannelTestToastTest {
         // 4. A transport that owns the outcome still gets the plain delivered toast.
         Models.get(DeliveryModel.class).find().delete();
         installWebhookTransport("fake://ok");
-        NotifyOutcome delivered = Alerts.testChannelOutcome(channel, "Test", "hello");
+        DeliveryOutcome delivered = Alerts.testChannelOutcome(channel, "Test", "hello");
         assertThat(delivered.delivered()).as("a provider transport proves delivery").isTrue();
         assertThat(Models.get(DeliveryModel.class).find().first().get(DeliveryModel.STATUS))
             .as("a real delivery is recorded as sent").isEqualTo("sent");

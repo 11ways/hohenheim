@@ -27,11 +27,12 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantModel;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.notifications.server.transport.DsnOrigin;
-import be.elevenways.zenit.notifications.server.transport.TransportTypes;
-import be.elevenways.zenit.notifications.DeliveryChannel;
+import be.elevenways.zenit.delivery.server.transport.DsnOrigin;
+import be.elevenways.zenit.delivery.server.transport.TransportTypes;
+import be.elevenways.zenit.delivery.DeliveryChannel;
 import be.elevenways.zenit.notifications.NotificationRecipient;
-import be.elevenways.zenit.notifications.NotificationSettings;
+import be.elevenways.zenit.delivery.DeliverySettings;
+import be.elevenways.zenit.delivery.server.DeliveryModel;
 import be.elevenways.zenit.notifications.server.*;
 import be.elevenways.zenit.common.orm.history.ChangeModel;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -80,8 +81,8 @@ class AlertsTest {
         public void beforeBoot(@NonNull SqlDatasource database) {
             ExecutionIdentity.runDetachedAsSystem(HohenheimSystemPurposes.BOOT, () -> {
                 new DrySettingsWriter(ServerZenitRuntime.settingsFile(PrivateNetworkBoot.FILE))
-                    .setPath(NotificationSettings.Webhook.ALLOW_PRIVATE_NETWORKS.configurationPath(), true).persist();
-                NotificationSettings.Webhook.ALLOW_PRIVATE_NETWORKS.declareAtBoot(true);
+                    .setPath(DeliverySettings.Webhook.ALLOW_PRIVATE_NETWORKS.configurationPath(), true).persist();
+                DeliverySettings.Webhook.ALLOW_PRIVATE_NETWORKS.declareAtBoot(true);
             });
         }
 

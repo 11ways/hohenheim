@@ -5,12 +5,12 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.notifications.Importance;
 import be.elevenways.zenit.notifications.Notification;
-import be.elevenways.zenit.notifications.DeliveryChannel;
+import be.elevenways.zenit.delivery.DeliveryChannel;
 import be.elevenways.zenit.notifications.NotificationRecipient;
-import be.elevenways.zenit.notifications.NotificationTexts;
-import be.elevenways.zenit.notifications.envelope.ChatEnvelope;
-import be.elevenways.zenit.notifications.envelope.InboxEnvelope;
-import be.elevenways.zenit.notifications.envelope.WebhookEnvelope;
+import be.elevenways.zenit.delivery.DeliveryTexts;
+import be.elevenways.zenit.delivery.envelope.ChatEnvelope;
+import be.elevenways.zenit.delivery.envelope.InboxEnvelope;
+import be.elevenways.zenit.delivery.envelope.WebhookEnvelope;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -95,8 +95,8 @@ public final class AlertNotification extends Notification {
     @Override
     public @Nullable WebhookEnvelope toWebhook(@NonNull NotificationRecipient recipient) {
         Map<String, Object> data = new LinkedHashMap<>();
-        data.put("subject", NotificationTexts.plain(this.subject));
-        String message = NotificationTexts.plain(this.message);
+        data.put("subject", DeliveryTexts.plain(this.subject));
+        String message = DeliveryTexts.plain(this.message);
         data.put("message", message == null ? "" : message);
         return new WebhookEnvelope().setEvent(this.event).setData(data);
     }

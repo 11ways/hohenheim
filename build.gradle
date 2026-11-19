@@ -21,7 +21,7 @@ blastApp {
     // <znt-inbox> hydrate, so zenit-auth and zenit-notifications ride the client bundle too; a VM's screen is
     // zenit-kvm's kvm-screen.
     implementation libs.zenit, libs.hawkeye, libs.plumage, libs.zenit.forms, libs.zenit.microcopy, libs.zenit.auth,
-            libs.zenit.cms, libs.zenit.notifications, libs.zenit.media, libs.zenit.kvm
+            libs.zenit.cms, libs.zenit.notifications, libs.zenit.delivery, libs.zenit.media, libs.zenit.kvm
 }
 
 blastGuards {
@@ -195,7 +195,7 @@ dependencies {
     // PanelSurfaces: the stored before/after and twin captures of the /manage entries.
     browserTestImplementation libs.zenit.cms.test.support
     // FakeTransport: notification-channel tests resolve fake:// DSNs, which production never registers.
-    browserTestImplementation libs.zenit.notifications.test.support
+    browserTestImplementation libs.zenit.delivery.test.support
     // The permission editor's capture projection, read by the surface captures through its service file.
     browserTestImplementation libs.zenit.auth.test.support
 }

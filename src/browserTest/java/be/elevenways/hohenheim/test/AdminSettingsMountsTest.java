@@ -14,7 +14,7 @@ import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.server.page.SettingsPage;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.setting.SettingGroup;
-import be.elevenways.zenit.notifications.NotificationSettings;
+import be.elevenways.zenit.delivery.DeliverySettings;
 import be.elevenways.zenit.server.setting.RetiredConfiguration;
 import org.junit.jupiter.api.Test;
 
@@ -130,7 +130,7 @@ class AdminSettingsMountsTest extends HohenheimTestBase {
         String backups = HohenheimSettingsSections.BACKUPS.anchorOf(HohenheimSettings.Database.GROUP);
         assertThat(backups).as("step 5: the backups section anchors its database group")
             .isEqualTo("setting-backups-database");
-        Zenit.SETTINGS_VALUES.setValue(NotificationSettings.Channels.MAIL_TRANSPORTS, DSN);
+        Zenit.SETTINGS_VALUES.setValue(DeliverySettings.Channels.MAIL_TRANSPORTS, DSN);
         try {
             navigateToApp("/admin/settings?section=setting-https," + backups
                 + ",setting-framework-network,setting-notifications-channels");
@@ -151,7 +151,7 @@ class AdminSettingsMountsTest extends HohenheimTestBase {
             assertThat(page.locator("[data-path='framework.network.request_body_size_limit']").count())
                 .as("step 5: the framework keeps its shared key").isEqualTo(1);
         } finally {
-            Zenit.SETTINGS_VALUES.setValue(NotificationSettings.Channels.MAIL_TRANSPORTS, null);
+            Zenit.SETTINGS_VALUES.setValue(DeliverySettings.Channels.MAIL_TRANSPORTS, null);
         }
 
         // 6. Every group Hohenheim's sections offer is listed with its icon, a one-group section's

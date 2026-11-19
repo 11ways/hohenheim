@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.server;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.site.UnknownHostAnswer;
 import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
-import be.elevenways.zenit.notifications.NotificationSettings;
+import be.elevenways.zenit.delivery.DeliverySettings;
 import be.elevenways.zenit.server.orm.DatasourceFactory;
 import be.elevenways.zenit.server.setting.RetiredConfiguration;
 import be.elevenways.zenit.server.setting.RetiredName;
@@ -17,7 +17,7 @@ import java.util.List;
  * AIDEV-NOTE: Hohenheim loaded zenit-comms' private context from settings/comms.dry and COMMS__* because nothing
  * else did. zenit-notifications reads the framework's context now, so its keys live under notifications.* in
  * settings/local.dry (or ZENIT__NOTIFICATIONS__*), and a transport chain left in the old file would silently stop
- * being read. A comms.* key already in local.dry moves through NotificationsRetiredNames. Hohenheim's own
+ * being read. A comms.* key already in local.dry moves through DeliveryRetiredNames. Hohenheim's own
  * settings/hohenheim.dry and HOHENHEIM__* fed a private context the same way until hohenheim.* joined that chain.
  *
  * @author Jelle De Loecker
@@ -38,8 +38,8 @@ public final class HohenheimRetiredNames {
      * out of local.dry and refuses it anywhere else.
      */
     public static final List<RetiredName> RETIRED = RetiredConfiguration.declare(
-        RetiredName.adoptedFile("settings/comms.dry", NotificationSettings.ROOT),
-        RetiredName.variablePrefix("COMMS", NotificationSettings.ROOT),
+        RetiredName.adoptedFile("settings/comms.dry", DeliverySettings.ROOT),
+        RetiredName.variablePrefix("COMMS", DeliverySettings.ROOT),
         RetiredName.adoptedFile("settings/hohenheim.dry", HohenheimSettings.HOHENHEIM),
         RetiredName.variablePrefix("HOHENHEIM", HohenheimSettings.HOHENHEIM),
         RetiredName.movedSetting("hohenheim.proxy.fallback_address", HohenheimSettings.Proxy.UNKNOWN_HOSTS_FORWARD)
