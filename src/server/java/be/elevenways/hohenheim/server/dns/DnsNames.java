@@ -114,6 +114,44 @@ public final class DnsNames {
     }
 
     /**
+     * The host an owner name's attribute leaves hang off (RFC 8552): the name with its leading underscore labels
+     * removed, so {@code _25._tcp.mx.example.com} and {@code _dmarc.example.com} answer to {@code mx.example.com} and
+     * {@code example.com}.
+     *
+     * AIDEV-NOTE: THE one rule for whose an underscore name is. Hostnames never carry an underscore label (a site
+     * domain refuses one), so without it no exact domain row could ever cover an SRV, TLSA, _dmarc or
+     * _acme-challenge name, and the nearest wildcard owner decided it instead of the host's own site. Only LEADING
+     * underscore labels are stripped: a DKIM selector name ({@code sel._domainkey.host}) starts with a plain label
+     * and answers to itself.
+     *
+     * @return the canonical host, or "" when every label is an underscore label
+     */
+    public static @NonNull String attributeHost(@NonNull String fqdn) {
+        String rest = canonicalName(fqdn);
+        while (rest.startsWith("_")) {
+            int dot = rest.indexOf('.');
+            if (dot < 0) {
+                return "";
+            }
+            rest = rest.substring(dot + 1);
+        }
+        return rest;
+    }
+
+    /**
+     * Whether a name has the {@code _<port>._<tcp|udp|sctp>.<host>} shape of a TLSA owner (RFC 6698 section 3), its
+     * host being the {@link #attributeHost} of the name.
+     */
+    public static boolean isServicePortName(@NonNull String fqdn) {
+        String[] labels = canonicalName(fqdn).split("\\.", -1);
+        if (labels.length < 3 || !labels[0].matches("_[0-9]{1,5}") || labels[2].startsWith("_")) {
+            return false;
+        }
+        int port = Integer.parseInt(labels[0].substring(1));
+        return port <= 65535 && List.of("_tcp", "_udp", "_sctp").contains(labels[1]);
+    }
+
+    /**
      * A hostname label (letters, digits, hyphens; no leading or trailing hyphen), or with {@code underscores} an owner
      * label, which also allows underscores (_acme-challenge, _dmarc, ...).
      */

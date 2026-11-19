@@ -42,10 +42,11 @@ class DnsRecordTypeVocabularyTest {
             .as("step 1: ALL_TYPES is exactly the TYPE enum's declared keys, in order")
             .containsExactlyElementsOf(DnsRecordModel.TYPE.getValues().keySet());
         assertThat(types)
-            .as("step 1: and it still carries the eight types this suite reasons about")
+            .as("step 1: and it still carries the nine types this suite reasons about")
             .contains(DnsRecordModel.TYPE_A, DnsRecordModel.TYPE_AAAA,
                 DnsRecordModel.TYPE_CNAME, DnsRecordModel.TYPE_NS, DnsRecordModel.TYPE_MX,
-                DnsRecordModel.TYPE_TXT, DnsRecordModel.TYPE_CAA, DnsRecordModel.TYPE_SRV);
+                DnsRecordModel.TYPE_TXT, DnsRecordModel.TYPE_CAA, DnsRecordModel.TYPE_SRV,
+                DnsRecordModel.TYPE_TLSA);
 
         // 2. THE CODEC: every declared type converts to a wire record. The codec's own
         //    default arm throws dns_type_unknown, so a type nobody taught it fails here.
@@ -106,6 +107,7 @@ class DnsRecordTypeVocabularyTest {
         samples.put(DnsRecordModel.TYPE_TXT, new Sample("v=spf1 -all", null, null, null));
         samples.put(DnsRecordModel.TYPE_CAA, new Sample("0 issue \"letsencrypt.org\"", null, null, null));
         samples.put(DnsRecordModel.TYPE_SRV, new Sample("sip.example.test.", 10, 5, 5060));
+        samples.put(DnsRecordModel.TYPE_TLSA, new Sample("3 1 1 " + "ab".repeat(32), null, null, null));
         return samples;
     }
 }

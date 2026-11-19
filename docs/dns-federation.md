@@ -168,6 +168,17 @@ Owner side: `/api/dns/zones/{origin}/records` (list; POST create; POST
 `/{id}` update; POST `/{id}/delete`) on the admin server, gated to znit_
 API-key principals (csrfExempt is safe for exactly that reason), primary
 zones only (a replica answers 409 `not_primary`, so a fork is impossible).
+A peer's admin key edits every record. A key that is no admin key (a mail
+server publishing its own records) reaches the same routes and is judged by
+the /manage tenant gate (`TenantWrites`): hostname authority over the name
+(an underscore name such as `_25._tcp.mx.example.com` answers to the host it
+hangs off, `mx.example.com`) or a per-record `edit` grant, the tenant type
+allow-list (A, AAAA, CNAME, TXT, SRV, and TLSA at `_<port>._<tcp|udp|sctp>`
+names), `managed_by` and the zone frozen. It lists only the records its
+owner may read, and an unknown zone, a zone it does not reach and another
+owner's record all answer the same 404. Its scopes must cover
+`hohenheim.manage.access`, `cap:hohenheim:site#manage` and, for granted rows,
+`cap:hohenheim:dns_record#edit`.
 Every mutation runs the same `DnsRecordEdits.validate` pipeline as the CMS
 resource, is activity-logged with origin `api`, and bumps the serial --
 which NOTIFYs the secondaries, so the editing instance's own replica

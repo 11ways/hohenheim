@@ -122,11 +122,13 @@ public final class TenantWrites {
     /**
      * The DNS record types a delegated tenant may author. NS/CAA/DS/DNSKEY/MX are absent by
      * DECISION, not by omission: NS delegates a subtree away, CAA disables or redirects
-     * issuance for the whole name, and DS/DNSKEY are the DNSSEC trust root.
+     * issuance for the whole name, and DS/DNSKEY are the DNSSEC trust root. TLSA is allowed at
+     * a service-port name only ({@link #refusesNameShape}): it pins the certificate of one
+     * service of a host, never the host's whole name.
      */
     public static final Set<String> RECORD_TYPES = Set.of(
         DnsRecordModel.TYPE_A, DnsRecordModel.TYPE_AAAA, DnsRecordModel.TYPE_CNAME,
-        DnsRecordModel.TYPE_TXT, DnsRecordModel.TYPE_SRV);
+        DnsRecordModel.TYPE_TXT, DnsRecordModel.TYPE_SRV, DnsRecordModel.TYPE_TLSA);
 
     /**
      * The counterpart DECISION: types a tenant is refused, each with the reason, so
@@ -371,7 +373,7 @@ public final class TenantWrites {
                 boolean authorized = ctx != null && ctx.isAccount()
                     && (ctx.hasCapability(DnsRecordModel.MODEL_ID, doomed.get(DnsRecordModel.ID),
                             HohenheimCapabilities.EDIT)
-                        || HostnameAuthority.canManage(snapshot, ctx, fqdnOf(doomed, doomed)));
+                        || HostnameAuthority.canManageOwnerName(snapshot, ctx, fqdnOf(doomed, doomed)));
                 if (!authorized) {
                     throw Violations.ofField(DnsRecordModel.NAME.getName(), doomed.get(DnsRecordModel.NAME),
                         HohenheimMicrocopy.VIOLATIONS.of("tenant_record_not_authorized"));
@@ -1257,6 +1259,11 @@ public final class TenantWrites {
         if (stored != null) {
             refuseForeignRecordType(stored.get(DnsRecordModel.TYPE));
         }
+        String fqdn = fqdnOf(row, stored);
+        if (refusesNameShape(row.afterWrite(DnsRecordModel.TYPE, stored), fqdn)) {
+            throw Violations.ofField(DnsRecordModel.NAME.getName(), fqdn,
+                HohenheimMicrocopy.VIOLATIONS.of("tenant_tlsa_name"));
+        }
 
         // Moving a row between zones is a takeover primitive: it carries a name a tenant may
         // hold into a zone they do not.
@@ -1321,7 +1328,7 @@ public final class TenantWrites {
 
         HostnameAuthority.Snapshot snapshot = HostnameAuthority.Snapshot.load();
         boolean ownsStoredName = stored != null
-            && HostnameAuthority.canManage(snapshot, ctx, fqdnOf(stored, stored));
+            && HostnameAuthority.canManageOwnerName(snapshot, ctx, fqdnOf(stored, stored));
 
         // A CREATE has no row to hold authority over, so it answers to the claim half
         // alone. (A dyndns grant is authority over the CREDENTIAL table only -- see
@@ -1334,7 +1341,7 @@ public final class TenantWrites {
         String claimed = fqdnOf(row, stored);
         boolean claimsNewName = stored == null
             || !claimed.equals(fqdnOf(stored, stored));
-        if (claimsNewName && !HostnameAuthority.canManage(snapshot, ctx, claimed)) {
+        if (claimsNewName && !HostnameAuthority.canManageOwnerName(snapshot, ctx, claimed)) {
             throw Violations.ofField(DnsRecordModel.NAME.getName(), claimed,
                 HohenheimMicrocopy.VIOLATIONS.of("tenant_record_not_authorized"));
         }
@@ -1402,7 +1409,8 @@ public final class TenantWrites {
         if (!ctx.isAccount()) {
             return false;
         }
-        if (!RECORD_TYPES.contains(String.valueOf(stored.get(DnsRecordModel.TYPE)))) {
+        String type = String.valueOf(stored.get(DnsRecordModel.TYPE));
+        if (!RECORD_TYPES.contains(type) || refusesNameShape(type, fqdnOf(stored, stored))) {
             return false;
         }
         Object recordId = stored.get(DnsRecordModel.ID);
@@ -1412,8 +1420,39 @@ public final class TenantWrites {
         }
         // memoized, not load(): this runs per LIST ROW through updatableBy/deletableBy,
         // and a fresh load is two full table scans. The write lanes stay fresh.
-        return HostnameAuthority.canManage(HostnameAuthority.Snapshot.memoized(ctx), ctx,
+        return HostnameAuthority.canManageOwnerName(HostnameAuthority.Snapshot.memoized(ctx), ctx,
             fqdnOf(stored, stored));
+    }
+
+    /**
+     * Judge a record write's authority and type BEFORE a validation that reads the name's other rows, so a
+     * tenant is told it may not write a name before it is told anything about what that name already holds.
+     *
+     * AIDEV-NOTE: the same {@link #checkRecordWrite} the save hook runs, over a candidate row carrying the
+     * columns that decide it; the hook still runs on the save itself. Without it the duplicate and CNAME
+     * checks of {@code DnsRecordEdits} answered first, and their refusals named records of another owner.
+     *
+     * @param stored the row being edited, null on a create
+     * @throws Violations on any refusal; nothing when the write is not tenant-originated
+     */
+    public static void checkRecordCandidate(int zoneId, @NonNull String owner, @NonNull String type,
+                                            @Nullable Row stored) {
+        if (!isTenantOriginated()) {
+            return;
+        }
+        Row candidate = Models.get(DnsRecordModel.class).createEmptyRow();
+        if (stored != null) {
+            candidate.set(DnsRecordModel.ID, stored.get(DnsRecordModel.ID));
+        }
+        candidate.set(DnsRecordModel.ZONE_ID, zoneId);
+        candidate.set(DnsRecordModel.NAME, owner);
+        candidate.set(DnsRecordModel.TYPE, type);
+        checkRecordWrite(candidate);
+    }
+
+    /** Whether a tenant-authorable type is refused at this name: a TLSA record anywhere but a service-port name. */
+    private static boolean refusesNameShape(@Nullable Object type, @NonNull String fqdn) {
+        return DnsRecordModel.TYPE_TLSA.equals(type) && !DnsNames.isServicePortName(fqdn);
     }
 
     private static void refuseForeignRecordType(@Nullable Object type) {

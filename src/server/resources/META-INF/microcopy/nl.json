@@ -2304,7 +2304,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "A/AAAA: een IP-adres. CNAME/NS/MX/SRV: een hostnaam. TXT: de tekst. CAA: vlaggen tag waarde, bv. 0 issue letsencrypt.org",
+      "text": "A/AAAA: een IP-adres. CNAME/NS/MX/SRV: een hostnaam. TXT: de tekst. CAA: vlaggen tag waarde, bv. 0 issue letsencrypt.org. TLSA: gebruik selector vergelijkingstype hex, bv. 3 1 1 gevolgd door de SHA-256-digest",
       "scope": "help"
     }
   ],
@@ -3863,6 +3863,14 @@
     "text": "De CAA-tag moet issue, issuewild of iodef zijn",
     "scope": "violations"
   },
+  "dns_tlsa_format": {
+    "text": "TLSA-waarden zien eruit als: 3 1 1 gevolgd door de hex-digest (gebruik 0-3, selector 0-1, vergelijkingstype 0-2)",
+    "scope": "violations"
+  },
+  "dns_tlsa_length": {
+    "text": "Een SHA-256-koppeling telt 64 hexcijfers, een SHA-512-koppeling 128",
+    "scope": "violations"
+  },
   "dns_type_unknown": {
     "text": "Onbekend recordtype",
     "scope": "violations"
@@ -4042,7 +4050,11 @@
     "scope": "violations"
   },
   "tenant_record_type": {
-    "text": "Je kan alleen A-, AAAA-, CNAME-, TXT- en SRV-records beheren",
+    "text": "Je kan alleen A-, AAAA-, CNAME-, TXT-, SRV- en TLSA-records beheren",
+    "scope": "violations"
+  },
+  "tenant_tlsa_name": {
+    "text": "Een TLSA-record staat op _poort._tcp, _udp of _sctp voor een hostnaam, bijvoorbeeld _25._tcp.mx.example.com",
     "scope": "violations"
   },
   "tenant_zone_frozen": {
@@ -13338,6 +13350,10 @@
   },
   "srv": {
     "text": "SRV",
+    "scope": "dns_record_type"
+  },
+  "tlsa": {
+    "text": "TLSA",
     "scope": "dns_record_type"
   },
   "slack": {

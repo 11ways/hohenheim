@@ -7,8 +7,11 @@ import be.elevenways.hohenheim.server.dns.DnsValueException;
 import org.junit.jupiter.api.Test;
 import org.xbill.DNS.Name;
 import org.xbill.DNS.Record;
+import org.xbill.DNS.TLSARecord;
 import org.xbill.DNS.TXTRecord;
 
+import java.util.HexFormat;
+import java.util.List;
 import java.util.Locale;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -126,6 +129,64 @@ class DnsRecordCodecTest {
         assertThatThrownBy(() -> convert("@", DnsRecordModel.TYPE_CAA, "issue letsencrypt.org", null, null, null))
             .isInstanceOf(DnsValueException.class)
             .hasFieldOrPropertyWithValue("microcopyKey", "dns_caa_format");
+    }
+
+    /** TLSA: the RFC 6698 presentation form converts, is stored canonical, and every malformed part is refused. */
+    @Test
+    void tlsaValuesParseUsageSelectorMatchingTypeAndDigest() throws Exception {
+        String digest = "0A1B2C3D".repeat(8);
+
+        // 1. A DANE-EE SPKI SHA-256 record converts to the wire type with every field in place.
+        TLSARecord record = (TLSARecord) convert("_25._tcp.mx", DnsRecordModel.TYPE_TLSA, "3 1 1 " + digest,
+            null, null, null);
+        assertThat(record.getCertificateUsage()).as("step 1: usage").isEqualTo(3);
+        assertThat(record.getSelector()).as("step 1: selector").isEqualTo(1);
+        assertThat(record.getMatchingType()).as("step 1: matching type").isEqualTo(1);
+        assertThat(HexFormat.of().formatHex(record.getCertificateAssociationData()))
+            .as("step 1: the association data").isEqualTo(digest.toLowerCase(Locale.ROOT));
+
+        // 2. The stored spelling is canonical: single spaces, lower-case hex, a split digest joined.
+        assertThat(DnsRecordCodec.storedValue(DnsRecordModel.TYPE_TLSA,
+                " 3  1 1 " + digest.substring(0, 32) + " " + digest.substring(32)))
+            .as("step 2: one spelling per record").isEqualTo("3 1 1 " + digest.toLowerCase(Locale.ROOT));
+        assertThat(DnsRecordCodec.storedValue(DnsRecordModel.TYPE_TXT, " Kept As Typed "))
+            .as("step 2: every other type keeps its value").isEqualTo(" Kept As Typed ");
+
+        // 3. Out-of-range fields, bad hex and a digest of the wrong length are refused.
+        for (String bad : List.of("4 1 1 " + digest, "3 2 1 " + digest, "3 1 3 " + digest, "255 1 1 " + digest,
+                "3 1 1", "3 1 1 xyz0", "3 1 1 abc")) {
+            assertThatThrownBy(() -> convert("_25._tcp.mx", DnsRecordModel.TYPE_TLSA, bad, null, null, null))
+                .as("step 3: '%s' is refused", bad)
+                .isInstanceOf(DnsValueException.class)
+                .hasFieldOrPropertyWithValue("microcopyKey", "dns_tlsa_format");
+        }
+        assertThatThrownBy(() -> convert("_25._tcp.mx", DnsRecordModel.TYPE_TLSA, "3 1 2 " + digest,
+                null, null, null))
+            .as("step 3: a SHA-512 match needs 64 bytes")
+            .isInstanceOf(DnsValueException.class)
+            .hasFieldOrPropertyWithValue("microcopyKey", "dns_tlsa_length");
+        assertThat(convert("_443._tcp.www", DnsRecordModel.TYPE_TLSA, "3 0 0 " + "ff".repeat(5), null, null, null))
+            .as("step 3: a full-certificate match takes any length").isNotNull();
+    }
+
+    /** The one rule for underscore names: an attribute leaf answers to its host, and a TLSA owner has one shape. */
+    @Test
+    void attributeLeavesAnswerToTheHostTheyHangOff() {
+        assertThat(DnsNames.attributeHost("_25._tcp.MX.example.com.")).isEqualTo("mx.example.com");
+        assertThat(DnsNames.attributeHost("_dmarc.example.com")).isEqualTo("example.com");
+        assertThat(DnsNames.attributeHost("_x.www.example.com")).isEqualTo("www.example.com");
+        assertThat(DnsNames.attributeHost("www.example.com")).isEqualTo("www.example.com");
+        assertThat(DnsNames.attributeHost("_only")).isEmpty();
+
+        assertThat(DnsNames.isServicePortName("_25._tcp.mx.example.com")).isTrue();
+        assertThat(DnsNames.isServicePortName("_443._udp.example.com")).isTrue();
+        assertThat(DnsNames.isServicePortName("_5060._sctp.sip.example.com")).isTrue();
+        assertThat(DnsNames.isServicePortName("mx.example.com")).as("no prefix").isFalse();
+        assertThat(DnsNames.isServicePortName("_smtp._tcp.mx.example.com")).as("a service, not a port").isFalse();
+        assertThat(DnsNames.isServicePortName("_25._quic.mx.example.com")).as("an unknown transport").isFalse();
+        assertThat(DnsNames.isServicePortName("_70000._tcp.mx.example.com")).as("past the port range").isFalse();
+        assertThat(DnsNames.isServicePortName("_25._tcp._x.example.com")).as("no host after the prefix")
+            .isFalse();
     }
 
     @Test

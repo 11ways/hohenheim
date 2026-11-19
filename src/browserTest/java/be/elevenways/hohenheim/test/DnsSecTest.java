@@ -29,6 +29,7 @@ import org.xbill.DNS.RRset;
 import org.xbill.DNS.Rcode;
 import org.xbill.DNS.Record;
 import org.xbill.DNS.Section;
+import org.xbill.DNS.TLSARecord;
 import org.xbill.DNS.Type;
 
 import java.io.File;
@@ -37,6 +38,7 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import static be.elevenways.hohenheim.test.DnsFixtures.createSignedZone;
 import static be.elevenways.hohenheim.test.DnsFixtures.record;
@@ -56,6 +58,7 @@ class DnsSecTest {
     private static int port;
     private static DNSKEYRecord dnsKey;
 
+    private static final String TLSA_VALUE = "3 1 1 " + "5c".repeat(32);
     @BeforeAll
     static void boot() throws Exception {
         HohenheimEndpoints.init();
@@ -70,6 +73,9 @@ class DnsSecTest {
         record(zoneId, "*.sub", DnsRecordModel.TYPE_A, "192.0.2.20");
         record(zoneId, "_acme-challenge.www", DnsRecordModel.TYPE_TXT, "seed");
         record(zoneId, "child", DnsRecordModel.TYPE_NS, "ns1.signed.example");
+        // A DANE record for the mail host: TLSA is signed like every other RRset.
+        record(zoneId, "mx", DnsRecordModel.TYPE_A, "192.0.2.25");
+        record(zoneId, "_25._tcp.mx", DnsRecordModel.TYPE_TLSA, TLSA_VALUE);
         DnsZoneStore.INSTANCE.reload();
 
         server = new DnsServer();
@@ -136,6 +142,30 @@ class DnsSecTest {
         // The stored key tag matches the DS/DNSKEY footprint the registrar will pin.
         assertThat((Integer) zone.get(DnsZoneModel.DNSSEC_KEY_TAG)).isEqualTo(ds.getFootprint());
         assertThat(ds.getAlgorithm()).isEqualTo(DNSSEC.Algorithm.ECDSAP256SHA256);
+    }
+
+    /** A TLSA answer travels on the wire as TLSA rdata and carries an RRSIG that verifies against the zone key. */
+    @Test
+    void tlsaAnswerIsServedAndSigned() throws Exception {
+        DNSKEYRecord key = apexKey();
+        Message response = query("_25._tcp.mx.signed.example", Type.TLSA);
+        assertThat(response.getHeader().getRcode()).isEqualTo(Rcode.NOERROR);
+
+        RRset tlsaSet = new RRset();
+        RRSIGRecord sig = null;
+        for (Record record : response.getSection(Section.ANSWER)) {
+            if (record instanceof TLSARecord tlsa) {
+                assertThat(tlsa.rdataToString().toLowerCase(Locale.ROOT))
+                    .as("the served rdata is the stored value").isEqualTo(TLSA_VALUE);
+                tlsaSet.addRR(tlsa);
+            }
+            else if (record instanceof RRSIGRecord rrsig && rrsig.getTypeCovered() == Type.TLSA) {
+                sig = rrsig;
+            }
+        }
+        assertThat(tlsaSet.size()).as("one TLSA record answered").isEqualTo(1);
+        assertThat(sig).as("the TLSA answer is signed").isNotNull();
+        DNSSEC.verify(tlsaSet, sig, key);
     }
 
     @Test

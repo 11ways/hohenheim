@@ -266,7 +266,8 @@ public final class ManageDnsRecordParts {
         }
         Integer zoneId = match.zone().get(DnsZoneModel.ID);
         if (existing != null && !zoneId.equals(existing.get(DnsRecordModel.ZONE_ID))) {
-            boolean authorable = HostnameAuthority.canManage(accessContext, fqdn);
+            boolean authorable = HostnameAuthority.canManageOwnerName(HostnameAuthority.Snapshot.load(),
+                accessContext, fqdn);
             throw Violations.ofField(DnsRecordModel.NAME.getName(), fqdn,
                 HohenheimMicrocopy.VIOLATIONS.of(authorable ? "tenant_zone_frozen"
                     : "tenant_record_not_authorized"));

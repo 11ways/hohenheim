@@ -50,6 +50,8 @@ public class DnsRecordModel extends Model {
     public static final String TYPE_TXT = "TXT";
     public static final String TYPE_CAA = "CAA";
     public static final String TYPE_SRV = "SRV";
+    /** DANE certificate association (RFC 6698), its value the presentation form {@code usage selector matching-type hex}. */
+    public static final String TYPE_TLSA = "TLSA";
 
     /** {@link #MANAGED_BY} value for records the ACME DNS-01 flow owns. */
     public static final String MANAGED_BY_ACME = "acme";
@@ -118,6 +120,8 @@ public class DnsRecordModel extends Model {
         .value(TYPE_SRV, v -> v.displayName("SRV").label(HohenheimMicrocopy.DNS_RECORD_TYPE.of("srv"))
             .icon("network-wired").color(ColorHue.PINK)
             .schema(SRV_DATA_SCHEMA))
+        .value(TYPE_TLSA, v -> v.displayName("TLSA").label(HohenheimMicrocopy.DNS_RECORD_TYPE.of("tlsa"))
+            .icon("lock").color(ColorHue.CYAN))
         .build());
     /**
      * THE record-type vocabulary, DERIVED from {@link #TYPE}'s declared values rather than

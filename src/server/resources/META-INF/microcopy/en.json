@@ -2304,7 +2304,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "A/AAAA: an IP address. CNAME/NS/MX/SRV: a hostname. TXT: the text. CAA: flags tag value, e.g. 0 issue letsencrypt.org",
+      "text": "A/AAAA: an IP address. CNAME/NS/MX/SRV: a hostname. TXT: the text. CAA: flags tag value, e.g. 0 issue letsencrypt.org. TLSA: usage selector matching-type hex, e.g. 3 1 1 followed by the SHA-256 digest",
       "scope": "help"
     }
   ],
@@ -3863,6 +3863,14 @@
     "text": "The CAA tag must be issue, issuewild or iodef",
     "scope": "violations"
   },
+  "dns_tlsa_format": {
+    "text": "TLSA values look like: 3 1 1 followed by the hex digest (usage 0-3, selector 0-1, matching type 0-2)",
+    "scope": "violations"
+  },
+  "dns_tlsa_length": {
+    "text": "A SHA-256 association is 64 hex digits and a SHA-512 one 128",
+    "scope": "violations"
+  },
   "dns_type_unknown": {
     "text": "Unknown record type",
     "scope": "violations"
@@ -4042,7 +4050,11 @@
     "scope": "violations"
   },
   "tenant_record_type": {
-    "text": "You can only manage A, AAAA, CNAME, TXT and SRV records",
+    "text": "You can only manage A, AAAA, CNAME, TXT, SRV and TLSA records",
+    "scope": "violations"
+  },
+  "tenant_tlsa_name": {
+    "text": "A TLSA record sits at _port._tcp, _udp or _sctp in front of a hostname, for example _25._tcp.mx.example.com",
     "scope": "violations"
   },
   "tenant_zone_frozen": {
@@ -13338,6 +13350,10 @@
   },
   "srv": {
     "text": "SRV",
+    "scope": "dns_record_type"
+  },
+  "tlsa": {
+    "text": "TLSA",
     "scope": "dns_record_type"
   },
   "slack": {

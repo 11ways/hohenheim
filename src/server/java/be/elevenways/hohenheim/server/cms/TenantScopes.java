@@ -37,12 +37,15 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.RecordCapabilityScope;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleStepModel;
+import be.elevenways.zenit.server.http.HostPattern;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -316,28 +319,29 @@ public final class TenantScopes {
     }
 
     /**
-     * One {@code zone_id = z AND name IN (...)} clause per zone holding a managed hostname.
+     * One {@code zone_id = z AND name IN (...)} clause per zone holding a managed hostname, plus the attribute-leaf
+     * rows ({@code _25._tcp.mx}, {@code _dmarc}) whose host is one of those hostnames.
      *
      * AIDEV-NOTE: the site scope is read as a TRI-STATE, not as an id set. An every-site
      * holder (hohenheim.sites.manage_all) reaches every domain row, and asking for ids there
      * throws by design -- so the domain query drops its site filter instead of being handed
      * an empty set that would have silently produced no clauses at all.
+     *
+     * AIDEV-NOTE: the attribute leaves are an ID list read by ONE query over the underscore
+     * rows of the zones that hold a managed hostname, judged by {@link DnsNames#attributeHost},
+     * the rule the write side asks. A criteria alone cannot say it: {@code _x.www.mx} ends in
+     * {@code .mx} and starts with an underscore, yet answers to {@code www.mx}, which may be
+     * another owner's.
      */
     private static @NonNull List<Criteria> zoneScopedNameCriteria(@NonNull AccessContext ctx) {
-        RecordCapabilityScope sites = HohenheimAccess.capabilityScope(ctx, SiteModel.MODEL_ID,
-            HohenheimCapabilities.MANAGE);
-        if (sites.isNone()) {
+        List<Row> domains = managedDomains(ctx);
+        if (domains.isEmpty()) {
             return List.of();
         }
 
         HostnameAuthority.Snapshot snapshot = HostnameAuthority.Snapshot.load();
         Set<String> hostnames = new LinkedHashSet<>();
-        var domains = Models.get(SiteDomainModel.class).find();
-        if (!sites.isAll()) {
-            domains.where(SiteDomainModel.SITE_ID.in(
-                HohenheimAccess.managedSiteIds(ctx)));
-        }
-        for (Row domain : domains.all()) {
+        for (Row domain : domains) {
             String hostname = domain.get(SiteDomainModel.HOSTNAME);
             if (hostname == null || hostname.isBlank()
                     || !SiteDomainModel.MATCH_EXACT.equals(domain.get(SiteDomainModel.MATCH_TYPE))) {
@@ -356,6 +360,7 @@ public final class TenantScopes {
         }
 
         List<Criteria> perZone = new ArrayList<>();
+        Map<Integer, String> originsHolding = new HashMap<>();
         for (Row zone : Models.get(DnsZoneModel.class).find().all()) {
             String origin = zone.get(DnsZoneModel.ORIGIN);
             Integer zoneId = zone.get(DnsZoneModel.ID);
@@ -372,8 +377,78 @@ public final class TenantScopes {
             if (!owners.isEmpty()) {
                 perZone.add(new CompositeCriteria(CompositeOperator.AND,
                     DnsRecordModel.ZONE_ID.eq(zoneId), DnsRecordModel.NAME.in(owners)));
+                originsHolding.put(zoneId, origin);
             }
         }
+        if (originsHolding.isEmpty()) {
+            return perZone;
+        }
+
+        Set<Integer> leaves = new LinkedHashSet<>();
+        for (Row leaf : Models.get(DnsRecordModel.class).find()
+                .where(DnsRecordModel.ZONE_ID.in(originsHolding.keySet()))
+                .where(DnsRecordModel.NAME.startsWith("_"))
+                .all()) {
+            String origin = originsHolding.get(leaf.get(DnsRecordModel.ZONE_ID));
+            String name = leaf.get(DnsRecordModel.NAME);
+            if (origin != null && name != null
+                    && hostnames.contains(DnsNames.attributeHost(DnsNames.absolute(origin, name)))) {
+                leaves.add(leaf.get(DnsRecordModel.ID));
+            }
+        }
+        if (!leaves.isEmpty()) {
+            perZone.add(DnsRecordModel.ID.in(leaves));
+        }
         return perZone;
+    }
+
+    /** @return the domain rows of the sites the context manages, every one for an every-site holder */
+    private static @NonNull List<Row> managedDomains(@NonNull AccessContext ctx) {
+        RecordCapabilityScope sites = HohenheimAccess.capabilityScope(ctx, SiteModel.MODEL_ID,
+            HohenheimCapabilities.MANAGE);
+        if (sites.isNone()) {
+            return List.of();
+        }
+        var domains = Models.get(SiteDomainModel.class).find();
+        if (!sites.isAll()) {
+            domains.where(SiteDomainModel.SITE_ID.in(HohenheimAccess.managedSiteIds(ctx)));
+        }
+        return domains.all();
+    }
+
+    /**
+     * Whether the context reaches a zone on the record API: it sees a record of it ({@link #DNS_RECORDS}), or a
+     * hostname of a site it manages lies inside it (a host that has no record yet). Anything else is a zone this
+     * context must not learn exists.
+     *
+     * AIDEV-NOTE: the record API answers an unreached zone EXACTLY as an unknown one (404), the rule
+     * ManageDnsRecordParts.resolveZone applies on /manage by answering "no hosted zone" and "not yours" alike.
+     * A domain row the caller manages is its own knowledge (its /manage/domains list shows it), so the zone
+     * holding it discloses nothing new.
+     */
+    public static boolean reachesZone(@NonNull AccessContext ctx, @NonNull Row zone) {
+        Criteria scope = DNS_RECORDS.criteria(ctx);
+        if (scope == null) {
+            return true;
+        }
+        if (Models.get(DnsRecordModel.class).find()
+                .where(DnsRecordModel.ZONE_ID.eq(zone.get(DnsZoneModel.ID)))
+                .where(scope).first() != null) {
+            return true;
+        }
+        String origin = zone.get(DnsZoneModel.ORIGIN);
+        if (origin == null) {
+            return false;
+        }
+        for (Row domain : managedDomains(ctx)) {
+            String pattern = SiteDomainModel.canonicalHostname(domain.get(SiteDomainModel.HOSTNAME),
+                domain.get(SiteDomainModel.MATCH_TYPE));
+            HostPattern wildcard = pattern != null ? HostPattern.tryParse(pattern) : null;
+            String host = wildcard != null ? wildcard.base() : pattern;
+            if (host != null && DnsNames.zoneContains(origin, host)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

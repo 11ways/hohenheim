@@ -1186,14 +1186,20 @@ public class HohenheimEndpoints {
         .build();
 
     // --- DNS records peer/automation API (znit_ bearer keys; the edit-forwarding
-    //     channel other Hohenheim instances use to edit zones this instance owns) ---
+    //     channel other Hohenheim instances use to edit zones this instance owns, and the
+    //     record API of any key whose owner may author records) ---
+    //
+    // AIDEV-NOTE: requiresLogin, never ADMIN_ACCESS, since 2026-11-19: a key that is no admin key
+    // reaches these routes and its writes are judged by the TenantWrites record hooks (the
+    // /manage gate), its reads scoped by TenantScopes (DnsRecordApiHandlers). An admin key -- every
+    // peer's -- passes as an operator, exactly as before.
     public static final Endpoint<Object> API_DNS_RECORDS = Endpoint.<Object>builder()
         .identifier(HohenheimIds.id("api_dns_records"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("dns").addDelimiter().addStatic("zones")
             .addDelimiter().addParameter(DNS_ORIGIN)
             .addDelimiter().addStatic("records").build())
-        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
+        .requiresLogin()
         .build();
 
     /**
@@ -1205,7 +1211,7 @@ public class HohenheimEndpoints {
             .addStatic("api").addDelimiter().addStatic("dns").addDelimiter().addStatic("zones")
             .addDelimiter().addParameter(DNS_ORIGIN)
             .addDelimiter().addStatic("records").build())
-        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
+        .requiresLogin()
         .csrfExempt()
         .build();
 
@@ -1215,7 +1221,7 @@ public class HohenheimEndpoints {
             .addStatic("api").addDelimiter().addStatic("dns").addDelimiter().addStatic("zones")
             .addDelimiter().addParameter(DNS_ORIGIN)
             .addDelimiter().addStatic("records").addDelimiter().addParameter(DNS_RECORD_ID).build())
-        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
+        .requiresLogin()
         .csrfExempt()
         .build();
 
@@ -1226,7 +1232,7 @@ public class HohenheimEndpoints {
             .addDelimiter().addParameter(DNS_ORIGIN)
             .addDelimiter().addStatic("records").addDelimiter().addParameter(DNS_RECORD_ID)
             .addDelimiter().addStatic("delete").build())
-        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
+        .requiresLogin()
         .csrfExempt()
         .build();
 

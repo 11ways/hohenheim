@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DnsRecordCodec;
 import be.elevenways.hohenheim.server.dns.DnsValueException;
@@ -86,6 +87,11 @@ public final class DnsRecordEdits {
             Name originName = Name.fromString(origin + ".");
             long effectiveTtl = DnsRecordCodec.resolveTtl(ttl, zoneTtl);
             DnsRecordCodec.toRecord(originName, owner, type, effectiveTtl, value, priority, weight, port);
+            String stored = DnsRecordCodec.storedValue(type, value);
+            if (!stored.equals(value)) {
+                coerced.put("value", stored);
+                value = stored;
+            }
         }
         catch (TextParseException e) {
             throw Violations.ofField("name", owner, HohenheimMicrocopy.VIOLATIONS.of("dns_name_format"));
@@ -102,6 +108,8 @@ public final class DnsRecordEdits {
         }
 
         Integer selfId = existing != null ? existing.get(DnsRecordModel.ID) : null;
+        // The tenant gate answers before any check that reads this name's other rows.
+        TenantWrites.checkRecordCandidate(zoneId, owner, type, existing);
         checkCnameExclusivity(model, zoneId, owner, type, selfId);
         checkDuplicate(model, zoneId, owner, type, value, selfId);
 

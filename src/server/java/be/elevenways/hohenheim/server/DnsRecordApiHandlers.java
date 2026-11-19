@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.cms.DnsRecordEdits;
+import be.elevenways.hohenheim.server.cms.TenantScopes;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DnsPeerApi;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
@@ -21,8 +22,10 @@ import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.JsonResult;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
 
@@ -30,67 +33,91 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * DNS records peer/automation API: the edit-forwarding channel other Hohenheim
- * instances use to edit zones THIS instance owns (plus a plain automation API).
- * API-key principals only; primary zones only.
+ * instances use to edit zones THIS instance owns, and the record API of any key whose
+ * owner may author records. API-key principals only; primary zones only.
+ *
+ * AIDEV-NOTE: there is no authorization rule in this class. An admin key (a peer, an
+ * operator's automation) passes as an operator does; every other key's write is judged by
+ * the {@code TenantWrites} record hooks on the model save and delete, the gate the /manage
+ * surface rides (hostname authority or a per-record edit grant, the tenant type allow-list,
+ * managed_by and zone frozen). What this class adds for such a key is READ scoping only:
+ * {@link TenantScopes#reachesZone} and {@link TenantScopes#DNS_RECORDS}, so an unknown zone, an
+ * unreached zone, a missing record and another owner's record all answer the one 404.
  */
 final class DnsRecordApiHandlers {
 
     private DnsRecordApiHandlers() {
     }
 
+    /** The zone a route names, as the calling key reaches it. */
+    private record ApiZone(@NonNull AccessContext access, @NonNull Row zone) {
+
+        int id() {
+            return this.zone.get(DnsZoneModel.ID);
+        }
+
+        /** @return the records of this zone the key may read, null for every record */
+        @Nullable Criteria readable() {
+            return TenantScopes.DNS_RECORDS.criteria(this.access);
+        }
+    }
+
     static void init() {
         DnsRecordModel model = Models.get(DnsRecordModel.class);
 
         HohenheimEndpoints.API_DNS_RECORDS.setHandler(conduit -> {
-            Row zone = apiPrimaryZone(conduit);
+            ApiZone zone = apiPrimaryZone(conduit);
             if (zone == null) {
                 return null;
             }
+            var query = model.find().where(DnsRecordModel.ZONE_ID.eq(zone.id()));
+            Criteria readable = zone.readable();
+            if (readable != null) {
+                query.where(readable);
+            }
             List<DnsRecordDto> records = new ArrayList<>();
-            for (Row record : model.find()
-                    .where(DnsRecordModel.ZONE_ID.eq(zone.get(DnsZoneModel.ID)))
-                    .orderBy(DnsRecordModel.NAME, SortOrder.ASC)
-                    .all()) {
+            for (Row record : query.orderBy(DnsRecordModel.NAME, SortOrder.ASC).all()) {
                 records.add(recordDto(record));
             }
             return new JsonResult<Object>(new DnsRecordListResponse(
-                zone.get(DnsZoneModel.ORIGIN), zone.get(DnsZoneModel.SERIAL), records));
+                zone.zone().get(DnsZoneModel.ORIGIN), zone.zone().get(DnsZoneModel.SERIAL), records));
         });
 
         HohenheimEndpoints.API_DNS_RECORD_CREATE.setHandler(conduit -> {
-            Row zone = apiPrimaryZone(conduit);
+            ApiZone zone = apiPrimaryZone(conduit);
             if (zone == null) {
                 return null;
             }
-            int zoneId = zone.get(DnsZoneModel.ID);
+            int zoneId = zone.id();
             Map<String, String> form = HandlerSupport.formMap(conduit);
             Map<String, Object> values = recordValues(form);
             values.put("zone_id", zoneId);
-            String managedBy;
+            Row row = model.createEmptyRow();
             try {
-                managedBy = declaredManagedBy(form);
+                String managedBy = declaredManagedBy(form);
                 DnsRecordEdits.validate(values, null, model);
+                row.set(DnsRecordModel.ZONE_ID, zoneId);
+                if (managedBy != null) {
+                    row.set(DnsRecordModel.MANAGED_BY, managedBy);
+                }
+                applyRecordValues(row, values);
+                model.save(row);
             }
             catch (Violations violations) {
                 return validationError(conduit, violations);
             }
-            Row row = model.createEmptyRow();
-            row.set(DnsRecordModel.ZONE_ID, zoneId);
-            if (managedBy != null) {
-                row.set(DnsRecordModel.MANAGED_BY, managedBy);
-            }
-            applyRecordValues(row, values);
-            model.save(row);
             DnsZoneStore.INSTANCE.bumpSerialAndReload(zoneId);
             return new JsonResult<Object>(
                 new DnsRecordMutationResponse(row.get(DnsRecordModel.ID)));
         });
 
         HohenheimEndpoints.API_DNS_RECORD_UPDATE.setHandler(conduit -> {
-            Row zone = apiPrimaryZone(conduit);
+            ApiZone zone = apiPrimaryZone(conduit);
             if (zone == null) {
                 return null;
             }
@@ -102,19 +129,19 @@ final class DnsRecordApiHandlers {
             Map<String, Object> values = recordValues(HandlerSupport.formMap(conduit));
             try {
                 DnsRecordEdits.validate(values, record, model);
+                applyRecordValues(record, values);
+                model.save(record);
             }
             catch (Violations violations) {
                 return validationError(conduit, violations);
             }
-            applyRecordValues(record, values);
-            model.save(record);
-            DnsZoneStore.INSTANCE.bumpSerialAndReload(zone.get(DnsZoneModel.ID));
+            DnsZoneStore.INSTANCE.bumpSerialAndReload(zone.id());
             return new JsonResult<Object>(
                 new DnsRecordMutationResponse(record.get(DnsRecordModel.ID)));
         });
 
         HohenheimEndpoints.API_DNS_RECORD_DELETE.setHandler(conduit -> {
-            Row zone = apiPrimaryZone(conduit);
+            ApiZone zone = apiPrimaryZone(conduit);
             if (zone == null) {
                 return null;
             }
@@ -122,8 +149,13 @@ final class DnsRecordApiHandlers {
             if (record == null) {
                 return null;
             }
-            model.delete(record);
-            DnsZoneStore.INSTANCE.bumpSerialAndReload(zone.get(DnsZoneModel.ID));
+            try {
+                model.delete(record);
+            }
+            catch (Violations violations) {
+                return validationError(conduit, violations);
+            }
+            DnsZoneStore.INSTANCE.bumpSerialAndReload(zone.id());
             return new JsonResult<Object>(new DnsRecordDeleteResponse("deleted"));
         });
     }
@@ -170,22 +202,21 @@ final class DnsRecordApiHandlers {
             record.get(DnsRecordModel.MANAGED_BY));
     }
 
-    /** Gate + zone resolution shared by every DNS api handler; null = response already written. */
-    private static @org.checkerframework.checker.nullness.qual.Nullable Row apiPrimaryZone(Conduit conduit) {
-        // AIDEV-NOTE: this method authenticates the KIND of principal (api key) and the
-        // zone's primacy -- it does NOT scope which zones a key may edit. The only
-        // authorization is the endpoints' requiresPermission("hohenheim.admin.access")
-        // (HohenheimEndpoints API_DNS_*), which is therefore LOAD-BEARING: relax it, or
-        // mint admin-permissioned keys for a narrower purpose, and every such key can
-        // edit EVERY primary zone. API keys carry no per-zone scope today; adding one
-        // means checking it here, not only on the endpoint.
-        if (ApiConduits.requireKey(conduit) == null) {
+    /**
+     * Key + zone resolution shared by every DNS api handler; null = response already written.
+     *
+     * AIDEV-NOTE: the reach test runs BEFORE the role test, so a replica a key does not reach is the
+     * same 404 as an unknown origin rather than a 409 naming it a replica.
+     */
+    private static @Nullable ApiZone apiPrimaryZone(@NonNull Conduit conduit) {
+        AccessContext access = ApiConduits.requireKey(conduit);
+        if (access == null) {
             return null;
         }
         String rawOrigin = conduit.getParameter(HohenheimEndpoints.DNS_ORIGIN);
         String origin = DnsNames.normalizeOrigin(rawOrigin != null ? rawOrigin : "");
         Row zone = origin != null ? Models.get(DnsZoneModel.class).findByOrigin(origin) : null;
-        if (zone == null) {
+        if (zone == null || !TenantScopes.reachesZone(access, zone)) {
             conduit.notFound();
             return null;
         }
@@ -196,16 +227,21 @@ final class DnsRecordApiHandlers {
                 .finalizeConduit(conduit);
             return null;
         }
-        return zone;
+        return new ApiZone(access, zone);
     }
 
-    private static @org.checkerframework.checker.nullness.qual.Nullable Row apiRecord(
-            Conduit conduit, Row zone, DnsRecordModel model) {
+    /** The route's record inside the zone, as the key may read it; null = the 404 is written. */
+    private static @Nullable Row apiRecord(@NonNull Conduit conduit, @NonNull ApiZone zone,
+                                           @NonNull DnsRecordModel model) {
         Integer recordId = conduit.getParameter(HohenheimEndpoints.DNS_RECORD_ID);
-        Row record = model.find()
+        var query = model.find()
             .where(DnsRecordModel.ID.eq(recordId))
-            .where(DnsRecordModel.ZONE_ID.eq(zone.get(DnsZoneModel.ID)))
-            .first();
+            .where(DnsRecordModel.ZONE_ID.eq(zone.id()));
+        Criteria readable = zone.readable();
+        if (readable != null) {
+            query.where(readable);
+        }
+        Row record = query.first();
         if (record == null) {
             conduit.notFound();
             return null;

@@ -24,6 +24,7 @@ import org.xbill.DNS.Name;
 import org.xbill.DNS.Record;
 import org.xbill.DNS.SOARecord;
 import org.xbill.DNS.SRVRecord;
+import org.xbill.DNS.TLSARecord;
 import org.xbill.DNS.TXTRecord;
 import org.xbill.DNS.TextParseException;
 import org.xbill.DNS.Type;
@@ -345,6 +346,10 @@ public final class DnsZoneFiles {
                 weight = srv.getWeight();
                 port = srv.getPort();
             }
+            case Type.TLSA -> {
+                type = DnsRecordModel.TYPE_TLSA;
+                value = tlsaValue((TLSARecord) record);
+            }
             default -> {
                 skipped.add(record.getName() + " " + Type.string(record.getType())
                     + " (unsupported type)");
@@ -381,5 +386,18 @@ public final class DnsZoneFiles {
 
     private static @NonNull String stripDot(@NonNull Name name) {
         return DnsNames.canonicalName(name.toString());
+    }
+
+    /**
+     * The TLSA value in the spelling the codec stores, or dnsjava's own when it does not parse: the import's codec
+     * pass then refuses that row with the codec's reason instead of this method guessing one.
+     */
+    private static @NonNull String tlsaValue(@NonNull TLSARecord record) {
+        try {
+            return DnsRecordCodec.storedValue(DnsRecordModel.TYPE_TLSA, record.rdataToString());
+        }
+        catch (DnsValueException unparsed) {
+            return record.rdataToString();
+        }
     }
 }

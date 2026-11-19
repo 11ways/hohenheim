@@ -15,6 +15,7 @@ import org.xbill.DNS.NSRecord;
 import org.xbill.DNS.Name;
 import org.xbill.DNS.Record;
 import org.xbill.DNS.SRVRecord;
+import org.xbill.DNS.TLSARecord;
 import org.xbill.DNS.TXTRecord;
 import org.xbill.DNS.TextParseException;
 
@@ -22,6 +23,7 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -113,7 +115,66 @@ public final class DnsRecordCodec {
                 }
                 return new SRVRecord(name, DClass.IN, ttl, priority, srvWeight, port, targetName(data));
             }
+            case DnsRecordModel.TYPE_TLSA -> {
+                Tlsa tlsa = Tlsa.parse(data);
+                return new TLSARecord(name, DClass.IN, ttl, tlsa.usage(), tlsa.selector(), tlsa.matchingType(),
+                    tlsa.association());
+            }
             default -> throw new DnsValueException("type", "dns_type_unknown");
+        }
+    }
+
+    /**
+     * The value as stored: a TLSA value in its canonical presentation form (single spaces, lower-case hex), every
+     * other value unchanged, so a duplicate check and a peer comparison read one spelling per record.
+     *
+     * @throws DnsValueException when a TLSA value does not parse
+     */
+    public static @NonNull String storedValue(@NonNull String type, @NonNull String value) throws DnsValueException {
+        return DnsRecordModel.TYPE_TLSA.equals(type) ? Tlsa.parse(value.trim()).presentation() : value;
+    }
+
+    /**
+     * A TLSA rdata (RFC 6698 section 2): certificate usage 0-3, selector 0-1, matching type 0-2 and the certificate
+     * association data, whose length a hashing matching type fixes (SHA-256 32 bytes, SHA-512 64).
+     *
+     * AIDEV-NOTE: the private-use value 255 of each registry is refused on purpose: nothing Hohenheim serves uses
+     * one, and a typo landing there would publish a record every DANE client ignores.
+     */
+    private record Tlsa(int usage, int selector, int matchingType, byte @NonNull [] association) {
+
+        private static final int[] DIGEST_BYTES = {-1, 32, 64};
+
+        /** @throws DnsValueException with {@code dns_tlsa_format} or {@code dns_tlsa_length} */
+        static @NonNull Tlsa parse(@NonNull String data) throws DnsValueException {
+            String[] parts = data.split("\\s+", 4);
+            if (parts.length < 4) {
+                throw new DnsValueException("value", "dns_tlsa_format");
+            }
+            int usage = field(parts[0], 3);
+            int selector = field(parts[1], 1);
+            int matchingType = field(parts[2], 2);
+            String hex = parts[3].replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
+            if (hex.isEmpty() || hex.length() % 2 != 0 || !hex.matches("[0-9a-f]+")) {
+                throw new DnsValueException("value", "dns_tlsa_format");
+            }
+            byte[] association = HexFormat.of().parseHex(hex);
+            if (DIGEST_BYTES[matchingType] >= 0 && association.length != DIGEST_BYTES[matchingType]) {
+                throw new DnsValueException("value", "dns_tlsa_length");
+            }
+            return new Tlsa(usage, selector, matchingType, association);
+        }
+
+        private static int field(@NonNull String text, int maximum) throws DnsValueException {
+            if (!text.matches("[0-9]{1,3}") || Integer.parseInt(text) > maximum) {
+                throw new DnsValueException("value", "dns_tlsa_format");
+            }
+            return Integer.parseInt(text);
+        }
+
+        @NonNull String presentation() {
+            return this.usage + " " + this.selector + " " + this.matchingType + " "
+                + HexFormat.of().formatHex(this.association);
         }
     }
 

@@ -736,7 +736,7 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
 
         // 6. The peer/automation API refuses a session principal outright, tenant or not.
         assertThat(tenantGet("/api/dns/zones/" + ZONE_ORIGIN + "/records").statusCode())
-            .as("the DNS API is admin-permissioned AND api-key-only").isIn(403, 404);
+            .as("the DNS API is api-key-only").isIn(403, 404);
         assertThat(tenantPost("/api/dns/zones/" + ZONE_ORIGIN + "/records",
             "name=x&type=NS&value=ns.attacker.example.com.").statusCode()).isIn(403, 404);
 

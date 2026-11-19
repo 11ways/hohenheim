@@ -352,4 +352,14 @@ public final class HostnameAuthority {
         }
         return true;
     }
+
+    /**
+     * Whether the context answers for a DNS owner name: {@link #canManage} asked of the host the name's attribute
+     * leaves hang off ({@link DnsNames#attributeHost}), so {@code _25._tcp.mx.example.com} is the owner of
+     * {@code mx.example.com}'s question. Every DNS record lane, read and write, asks this, never {@link #canManage}.
+     */
+    public static boolean canManageOwnerName(@NonNull Snapshot snapshot, @NonNull AccessContext ctx,
+                                             @Nullable String ownerFqdn) {
+        return canManage(snapshot, ctx, ownerFqdn == null ? null : DnsNames.attributeHost(ownerFqdn));
+    }
 }

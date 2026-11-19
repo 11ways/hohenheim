@@ -39,6 +39,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.Locale;
 
 import static be.elevenways.hohenheim.test.DnsFixtures.createZone;
 import static be.elevenways.hohenheim.test.DnsFixtures.record;
@@ -291,6 +292,43 @@ class DnsHardeningTest {
         assertThat(records.find().where(DnsRecordModel.ZONE_ID.eq(importZone))
             .where(DnsRecordModel.NAME.eq("good")).first())
             .as("step 3: the imported row landed").isNotNull();
+    }
+
+    /** A TLSA row imports from a zone file in the codec's stored spelling, exports again, and a bad one refuses. */
+    @Test
+    void aTlsaRecordRoundTripsThroughTheZoneFile() throws Exception {
+        String origin = "import-tlsa.example";
+        int importZone = createZone(origin);
+        Row zone = Models.get(DnsZoneModel.class).findById(importZone);
+        String digest = "9F".repeat(32);
+
+        // 1. A file carrying a TLSA under the mail host imports; the value is stored canonical (lower-case hex).
+        String file = "$ORIGIN " + origin + ".\n"
+            + "mx 300 IN A 192.0.2.25\n"
+            + "_25._tcp.mx 300 IN TLSA 3 1 1 " + digest + "\n";
+        DnsZoneFiles.importText(zone, file, DnsZoneFiles.ApexNsPolicy.KEEP_FILE);
+        Row tlsa = Models.get(DnsRecordModel.class).find().where(DnsRecordModel.ZONE_ID.eq(importZone))
+            .where(DnsRecordModel.NAME.eq("_25._tcp.mx")).first();
+        assertThat(tlsa).as("step 1: the TLSA row landed").isNotNull();
+        assertThat((String) tlsa.get(DnsRecordModel.TYPE)).isEqualTo(DnsRecordModel.TYPE_TLSA);
+        assertThat((String) tlsa.get(DnsRecordModel.VALUE)).as("step 1: in the stored spelling")
+            .isEqualTo("3 1 1 " + digest.toLowerCase(Locale.ROOT));
+
+        // 2. The export writes it back as a TLSA line.
+        String exported = DnsZoneFiles.export(Models.get(DnsZoneModel.class).findById(importZone));
+        assertThat(exported.lines().filter(line -> line.contains("TLSA")).toList())
+            .as("step 2: one TLSA line in the export").singleElement()
+            .satisfies(line -> assertThat(line.toLowerCase(Locale.ROOT))
+                .startsWith("_25._tcp.mx." + origin + ".")
+                .contains("3 1 1 " + digest.toLowerCase(Locale.ROOT)));
+
+        // 3. A TLSA the codec refuses (usage 4 is no DANE usage) refuses the whole import with its reason.
+        Violations refused = catchThrowableOfType(() -> DnsZoneFiles.importText(zone,
+                "$ORIGIN " + origin + ".\n_25._tcp.mx 300 IN TLSA 4 1 1 " + digest + "\n",
+                DnsZoneFiles.ApexNsPolicy.KEEP_FILE),
+            Violations.class);
+        assertThat((Throwable) refused).as("step 3: the bad TLSA refuses the import").isNotNull();
+        assertThat(refused.all().get(0).message().key()).isEqualTo("dns_tlsa_format");
     }
 
     @Test
