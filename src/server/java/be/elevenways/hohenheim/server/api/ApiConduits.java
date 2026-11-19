@@ -152,6 +152,8 @@ public final class ApiConduits {
                      BACKUP_RESTORE_TEMPLATE_REQUIRED, BACKUP_RESTORE_HOST_REFUSED, BACKUP_RESTORE_IN_PLACE_UNSUPPORTED,
                      BACKUP_VOLUMES_CHANGED, BACKUP_RESTORE_REFUSED ->
                     refusal(conduit, Violations.ofForm(refusal.shown()));
+                // No pre-existing wire: core's edge answers its own status and names the certificate it is about.
+                case CERTIFICATE_NAMES_HELD -> throw refusal;
             };
         }
         if (reason instanceof ZenitRefusalReason zenit) {

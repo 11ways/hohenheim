@@ -138,7 +138,7 @@ returned). Say so when delegating; the grant UI does not.
 | GET | `/api/v1/hosts` | Hosts with their memory ledger: budget, booked, free, overcommit (ADMIN-ONLY) -- see Hosts and capacity below |
 | GET | `/api/v1/hosts/{id}` | One host plus every workload booked on it (instances AND database engines) |
 | GET | `/api/v1/certificates` | Certificates the key may read (the `/manage` certificate scope: the ones it ordered, plus `view` grants) -- see Certificates from a signing request below |
-| POST | `/api/v1/certificates` | Order a certificate from the caller's own signing request: `csr` (PEM), `hostnames`, optional `name` |
+| POST | `/api/v1/certificates` | Order a certificate from the caller's own signing request: `csr` (PEM), `hostnames`, optional `name`; the same key for the same names again answers the existing certificate |
 | GET | `/api/v1/certificates/{id}` | Status: names, holder, expiry, the issued key's pin, the last failure |
 | GET | `/api/v1/certificates/{id}/chain` | The public chain (what the admin chain download serves); 404 before issuance |
 | POST | `/api/v1/certificates/{id}/signing-request` | Re-order a requester-held certificate from a NEW request (`csr`, optional `hostnames`): the only way its key changes |
@@ -729,6 +729,18 @@ hostname that reaches its port 80; a wildcard needs DNS-01. The order is synchro
 issued, **202** with the status when the order failed (the row exists, `failure` says why, and the renewal sweep
 retries it with the usual backoff). Rate limit: `hh_certificate_order` (20 per 10 minutes) on both writes,
 `hh_paas_read` on the reads.
+
+One certificate per name set: a key's owner holds at most one certificate from its own signing request for an exact
+set of names (compared case-folded, in any order), the one the renewal sweep renews. Ordering it again with the SAME
+key (a request over the same public key, whatever its bytes: a re-signed ECDSA request is the same order) is a
+replay: **200** with that certificate's status as it stands, whatever it is, and nothing is ordered (a failed first
+order is retried by the sweep, not by asking again; a new `name` is ignored). Ordering it with ANOTHER key is
+**409** `certificate_names_held`, nothing ordered, whose `subject` names the certificate to rotate instead
+(`{"status":409,"code":"certificate_names_held","message":"...","subject":{"kind":"hohenheim:certificate","id":"42",
+"label":"mx.example.be"}}`). A rotation onto a name set another of the owner's certificates holds is refused the
+same way, and the rotated certificate stays as it was. Another name set (a subset, a superset) is another
+certificate. The names are still authorized first, so a replay is refused like an order once the owner no longer
+answers for a name. Certificates whose key Hohenheim holds are no part of the rule.
 
 ```
 {"id":42,"name":"mx.example.be","hostnames":["mx.example.be","mail.example.be"],"status":"active",

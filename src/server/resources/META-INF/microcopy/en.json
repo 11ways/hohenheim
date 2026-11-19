@@ -13530,6 +13530,10 @@
     "text": "The signing request names {$detail}, not exactly the requested hostnames",
     "scope": "violations"
   },
+  "certificate_names_held": {
+    "text": "You already hold a certificate for exactly these names; send the new signing request to that certificate",
+    "scope": "violations"
+  },
   "signing_request_unsupported_content": {
     "text": "The signing request asks for something that would not be honoured ({$detail}); send only its names, as subject alternative names",
     "scope": "violations"

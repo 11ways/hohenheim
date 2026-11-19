@@ -13530,6 +13530,10 @@
     "text": "Het ondertekeningsverzoek noemt {$detail}, niet precies de gevraagde hostnamen",
     "scope": "violations"
   },
+  "certificate_names_held": {
+    "text": "Je hebt al een certificaat voor precies deze namen; stuur het nieuwe ondertekeningsverzoek naar dat certificaat",
+    "scope": "violations"
+  },
   "signing_request_unsupported_content": {
     "text": "Het ondertekeningsverzoek vraagt iets dat niet gehonoreerd zou worden ({$detail}); stuur alleen de namen, als alternatieve namen",
     "scope": "violations"

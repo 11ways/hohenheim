@@ -11,12 +11,13 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  * The refusals Hohenheim answers in its own words: the uniform "not permitted" that never names the missing
  * capability, a dependency that is not ready yet, a build hook shaped after it was revoked, a stored dump a
  * restore cannot use, a database a dump or restore already holds, an unsafe dump staging area, a restore that
- * failed after it began, and an instance backup a restore cannot use where or how it was asked.
+ * failed after it began, an instance backup a restore cannot use where or how it was asked, and a certificate order
+ * for names its requester already holds a certificate for.
  *
  * AIDEV-NOTE: each {@link #code()} is today's {@code /api/v1} wire code, the violation key {@code ApiConduits.refusal}
  * writes, and each message is the same violations copy the service gates throw, so the API answers a refusal of the
- * operation pipeline byte-identical to the service's {@code Violations} of the same key.
- *
+ * operation pipeline byte-identical to the service's {@code Violations} of the same key. A member declared with its
+ * own status (409) is no such pre-existing wire: core's edge answers it, naming its subject.
  * @author Jelle De Loecker
  * @since  0.9.0
  */
@@ -97,7 +98,15 @@ public enum HohenheimRefusalReason implements DomainRefusal.Explained {
      * funnel): the run carries that check's words.
      */
     BACKUP_RESTORE_REFUSED("backup_restore_refused", DomainRefusal.Recovery.NEVER,
-        "The restore was refused");
+        "The restore was refused"),
+
+    /**
+     * The requester already holds a certificate from its own signing request for exactly these names, from another
+     * key: a new key for them is that certificate's rotation, never a second certificate renewed beside it. The
+     * refusal's subject names that certificate.
+     */
+    CERTIFICATE_NAMES_HELD("certificate_names_held", 409, DomainRefusal.Recovery.NEVER,
+        "You already hold a certificate for exactly these names; send the new signing request to that certificate");
 
     static {
         DomainRefusals.declare(values());
@@ -105,12 +114,19 @@ public enum HohenheimRefusalReason implements DomainRefusal.Explained {
 
     private final @NonNull Identifier id;
     private final @NonNull String code;
+    private final int status;
     private final DomainRefusal.@NonNull Recovery recovery;
     private final @NonNull Microcopy message;
 
     HohenheimRefusalReason(@NonNull String key, DomainRefusal.@NonNull Recovery recovery, @NonNull String fallback) {
+        this(key, 422, recovery, fallback);
+    }
+
+    HohenheimRefusalReason(@NonNull String key, int status, DomainRefusal.@NonNull Recovery recovery,
+                           @NonNull String fallback) {
         this.id = HohenheimIds.id(key);
         this.code = key;
+        this.status = status;
         this.recovery = recovery;
         this.message = HohenheimMicrocopy.VIOLATIONS.of(key).withFallback(fallback);
     }
@@ -120,10 +136,10 @@ public enum HohenheimRefusalReason implements DomainRefusal.Explained {
         return this.id;
     }
 
-    /** @return 422, the status {@code /api/v1} answers every instance-tier refusal with */
+    /** @return 422, the status {@code /api/v1} answers every instance-tier refusal with, unless declared otherwise */
     @Override
     public int status() {
-        return 422;
+        return this.status;
     }
 
     @Override

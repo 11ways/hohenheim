@@ -3,13 +3,19 @@ package be.elevenways.hohenheim.server.tls;
 import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.HohenheimRefusalReason;
 import be.elevenways.protoblast.common.async.AsyncFailures;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.thread.JobRunnerGroup;
 import be.elevenways.protoblast.common.time.Backoff;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.time.Pace;
+import be.elevenways.protoblast.common.util.BlastString;
+import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.refusal.RefusalSubject;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
+import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.history.History;
@@ -127,6 +133,12 @@ public class AcmeService {
     private final ConcurrentHashMap<String, OrderFlight> inFlightOrders = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, PendingManualDnsOrder> manualDnsOrders = new ConcurrentHashMap<>();
 
+    /**
+     * Held while THE requester-key name-set rule ({@link #requesterCertificate}) is checked together with the write it
+     * allows: a fresh order's pending row, a rotation's new names. Never held across a CA order.
+     */
+    private final Object nameSets = new Object();
+
     // ACME account sessions keyed by directory and normalized override email ("" = the global account),
     // each email with its own persisted key pair. Guarded by the synchronized ensureAccount.
     private final Map<String, Account> accounts = new HashMap<>();
@@ -179,6 +191,26 @@ public class AcmeService {
 
         /** @return this signing's part of the order key; empty for Hohenheim's own fresh keys */
         String orderKeyPart();
+
+        /**
+         * Applies THE requester-key name-set rule to a fresh order of this signing; run under {@link #nameSets}.
+         *
+         * @param owner the account the order is stored under
+         * @return the owner's certificate this order replays (the same key for the same names), null for a new order;
+         *         always null for Hohenheim's own fresh keys, which no rule binds
+         * @throws DomainRefusal {@link HohenheimRefusalReason#CERTIFICATE_NAMES_HELD} when the owner holds a
+         *                       certificate for exactly these names from another key
+         */
+        @Nullable Integer replayOf(@Nullable PrincipalRef owner, List<String> hostnames);
+
+        /**
+         * Applies THE requester-key name-set rule to a rotation of certificate {@code except} onto these names; run
+         * under {@link #nameSets}. A no-op for Hohenheim's own fresh keys.
+         *
+         * @throws DomainRefusal {@link HohenheimRefusalReason#CERTIFICATE_NAMES_HELD} when the owner holds another
+         *                       certificate for exactly these names, from any key
+         */
+        void requireNamesFree(@Nullable PrincipalRef owner, List<String> hostnames, int except);
     }
 
     /** Hohenheim's own key, made for one order and stored with the certificate. */
@@ -218,6 +250,15 @@ public class AcmeService {
         public String orderKeyPart() {
             return "";
         }
+
+        @Override
+        public @Nullable Integer replayOf(@Nullable PrincipalRef owner, List<String> hostnames) {
+            return null;
+        }
+
+        @Override
+        public void requireNamesFree(@Nullable PrincipalRef owner, List<String> hostnames, int except) {
+        }
     }
 
     /** The requester's key, named by its signing request; Hohenheim never sees the key itself. */
@@ -249,6 +290,88 @@ public class AcmeService {
         public String orderKeyPart() {
             return "csr:" + this.request.publicKeyPin() + "@";
         }
+
+        @Override
+        public @Nullable Integer replayOf(@Nullable PrincipalRef owner, List<String> hostnames) {
+            Row held = requesterCertificate(owner, hostnames, null);
+            if (held == null) {
+                return null;
+            }
+            if (!this.request.publicKeyPin().equals(storedRequestPin(held))) {
+                throw namesHeld(held);
+            }
+            return held.get(CertificateModel.ID);
+        }
+
+        @Override
+        public void requireNamesFree(@Nullable PrincipalRef owner, List<String> hostnames, int except) {
+            Row held = requesterCertificate(owner, hostnames, except);
+            if (held != null) {
+                throw namesHeld(held);
+            }
+        }
+    }
+
+    /**
+     * THE requester-key name-set rule: an owner holds at most ONE certificate from its own signing request per exact
+     * name set, the one the renewal sweep renews. The same key for the same names again is that certificate (a
+     * replay), and another key for them is its rotation, never a second certificate.
+     *
+     * AIDEV-NOTE: a key is compared by its request's public key pin, never by the request's bytes: a request signed
+     * again over the same key (an ECDSA signature differs every time) asks for the same certificate, since the CA
+     * writes everything but the key and the names itself. Names compare as a case-folded set, the way
+     * {@link SigningRequest#read} matches a request to them. Every status counts (a failed first order is a row the
+     * sweep retries). An order stored under no account ({@link CertificateAuthority.Requester#subject} null) has no
+     * owner to compare and is never matched; Hohenheim's own keys are no part of the rule.
+     *
+     * @param except a certificate id to leave out (the one being rotated), or null
+     * @return the owner's requester-key certificate for exactly these names, or null
+     */
+    private static @Nullable Row requesterCertificate(@Nullable PrincipalRef owner, List<String> hostnames,
+                                                      @Nullable Integer except) {
+        if (owner == null) {
+            return null;
+        }
+        Set<String> asked = foldedNames(hostnames);
+        var query = Models.get(CertificateModel.class).find()
+            .where(CertificateModel.PROVIDER.eq(CertificateModel.PROVIDER_LETSENCRYPT))
+            .and(CertificateModel.KEY_HOLDER.eq(CertificateModel.KEY_HOLDER_REQUESTER))
+            .and(CertificateModel.REQUESTER.is(owner));
+        if (except != null) {
+            query.and(CertificateModel.ID.ne(except));
+        }
+        for (Row held : query.orderBy(CertificateModel.ID, SortOrder.ASC).all()) {
+            if (foldedNames(CertificateCoverage.namesOf(held)).equals(asked)) {
+                return held;
+            }
+        }
+        return null;
+    }
+
+    private static Set<String> foldedNames(List<String> hostnames) {
+        Set<String> folded = new HashSet<>();
+        for (String hostname : hostnames) {
+            folded.add(BlastString.lower(hostname.trim()));
+        }
+        return folded;
+    }
+
+    /** @return the key pin of a stored certificate's signing request, null when it no longer reads (never a match) */
+    private static @Nullable String storedRequestPin(Row held) {
+        try {
+            return SigningRequest.read(held.get(CertificateModel.SIGNING_REQUEST_PEM),
+                CertificateCoverage.namesOf(held)).publicKeyPin();
+        } catch (SigningRequest.Refused unreadable) {
+            return null;
+        }
+    }
+
+    /** The refusal naming the certificate that already holds the names: its owner rotates that one instead. */
+    private static DomainRefusal namesHeld(Row held) {
+        int heldId = held.get(CertificateModel.ID);
+        return new DomainRefusal(HohenheimRefusalReason.CERTIFICATE_NAMES_HELD,
+            "Certificate " + heldId + " already holds these names for this requester", null, null,
+            new RefusalSubject(CertificateModel.MODEL_ID, String.valueOf(heldId), held.get(CertificateModel.NICE_NAME)));
     }
 
     /**
@@ -289,20 +412,27 @@ public class AcmeService {
      * AIDEV-NOTE: the row id rides the outcome on failure too, so a caller reads the failure
      * reason off THAT row (its renewal_error) instead of guessing which error row is its own.
      * A request that joined an identical in-flight order names the leader's row, which is the
-     * row whose fate it shared.
+     * row whose fate it shared. A replayed request names the row it already is (THE
+     * requester-key name-set rule, {@link #requesterCertificate}), whatever that row's status.
      *
-     * @param certificateId the certificate row the request wrote or joined, or null when it
-     *                      reached no row (a manual order for the same names is running)
-     * @param issued        whether that row now holds the issued certificate
+     * @param certificateId the certificate row the request wrote, joined or replayed, or null
+     *                      when it reached no row (a manual order for the same names is running)
+     * @param issued        whether this request issued that row's certificate
+     * @param replayed      whether the row already existed and nothing was ordered
      */
-    public record RequestOutcome(@Nullable Integer certificateId, boolean issued) {
+    public record RequestOutcome(@Nullable Integer certificateId, boolean issued, boolean replayed) {
 
         static @NonNull RequestOutcome issued(int certificateId) {
-            return new RequestOutcome(certificateId, true);
+            return new RequestOutcome(certificateId, true, false);
         }
 
         static @NonNull RequestOutcome failed(@Nullable Integer certificateId) {
-            return new RequestOutcome(certificateId != null && certificateId > 0 ? certificateId : null, false);
+            return new RequestOutcome(certificateId != null && certificateId > 0 ? certificateId : null, false, false);
+        }
+
+        /** The request named a certificate that already exists, and nothing was ordered. */
+        static @NonNull RequestOutcome replayed(int certificateId) {
+            return new RequestOutcome(certificateId, false, true);
         }
     }
 
@@ -422,10 +552,45 @@ public class AcmeService {
 
         // Claim the order key BEFORE creating a row: a concurrent identical
         // request shares the leader's certificate row instead of minting a
-        // duplicate ACTIVE record for the same domains.
+        // duplicate ACTIVE record for the same domains. The name-set rule, the claim
+        // and the pending row are one step under nameSets, so a second request for a
+        // name set finds the first one's row instead of racing it.
         String orderKey = certificateOrderKey(hostnames, email, null, signing);
         OrderFlight flight = new OrderFlight(true, new CompletableFuture<>());
-        OrderFlight existing = inFlightOrders.putIfAbsent(orderKey, flight);
+        OrderFlight existing;
+        Row certRow = null;
+        synchronized (this.nameSets) {
+            Integer replayed = signing.replayOf(requester.subject(), hostnames);
+            if (replayed != null) {
+                Blast.log("ACME: certificate", replayed, "already holds", String.join(", ", hostnames),
+                    "from this signing request; nothing is ordered");
+                return RequestOutcome.replayed(replayed);
+            }
+            existing = inFlightOrders.putIfAbsent(orderKey, flight);
+            if (existing == null) {
+                certRow = certModel.createEmptyRow();
+                certRow.set(CertificateModel.NICE_NAME, niceName);
+                certRow.set(CertificateModel.PROVIDER, CertificateModel.PROVIDER_LETSENCRYPT);
+                certRow.set(CertificateModel.STATUS, CertificateModel.STATUS_PENDING);
+                certRow.set(CertificateModel.DOMAIN_NAMES_TEXT, String.join(",", hostnames));
+                certRow.set(CertificateModel.CHALLENGE_TYPE, challengeType);
+                certRow.set(CertificateModel.DNS_PUBLISHER, dnsPublisher);
+                CertificateModel.setRequester(certRow, requester.subject());
+                if (email != null && !email.isBlank()) {
+                    certRow.set(CertificateModel.LETSENCRYPT_EMAIL, email.trim());
+                }
+                signing.pending(certRow);
+                try {
+                    certModel.save(certRow);
+                } catch (RuntimeException | Error unsaved) {
+                    // A claim nobody leads would hold every later identical order on its future forever.
+                    flight.result().completeExceptionally(unsaved);
+                    inFlightOrders.remove(orderKey, flight);
+                    throw unsaved;
+                }
+                flight.certificateId().set(certRow.get(CertificateModel.ID));
+            }
+        }
         if (existing != null) {
             if (!existing.joinable()) {
                 Blast.log("ACME: a manual order for", String.join(", ", hostnames), "is already in progress");
@@ -441,22 +606,7 @@ public class AcmeService {
                 return RequestOutcome.failed(existing.certificateId().get());
             }
         }
-
-        Row certRow = certModel.createEmptyRow();
-        certRow.set(CertificateModel.NICE_NAME, niceName);
-        certRow.set(CertificateModel.PROVIDER, CertificateModel.PROVIDER_LETSENCRYPT);
-        certRow.set(CertificateModel.STATUS, CertificateModel.STATUS_PENDING);
-        certRow.set(CertificateModel.DOMAIN_NAMES_TEXT, String.join(",", hostnames));
-        certRow.set(CertificateModel.CHALLENGE_TYPE, challengeType);
-        certRow.set(CertificateModel.DNS_PUBLISHER, dnsPublisher);
-        CertificateModel.setRequester(certRow, requester.subject());
-        if (email != null && !email.isBlank()) {
-            certRow.set(CertificateModel.LETSENCRYPT_EMAIL, email.trim());
-        }
-        signing.pending(certRow);
-        certModel.save(certRow);
         int certId = certRow.get(CertificateModel.ID);
-        flight.certificateId().set(certId);
 
         try {
             OrderResult result = leadOrder(orderKey, flight, hostnames, email, challengeType,
@@ -520,6 +670,8 @@ public class AcmeService {
      * @param request a signing request already judged for exactly {@code hostnames}
      * @throws CertificateAuthority.Refused when the requester may not obtain these names
      * @throws IllegalArgumentException     when the row is no Let's Encrypt certificate whose requester holds the key
+     * @throws DomainRefusal                {@link HohenheimRefusalReason#CERTIFICATE_NAMES_HELD} when the requester
+     *                                      holds another certificate for exactly these names; the row is unchanged
      */
     public @NonNull ReissueResult reissueFromSigningRequest(@NonNull Row certRow, @NonNull SigningRequest request,
                                                             List<String> hostnames, String challengeType,
@@ -560,6 +712,9 @@ public class AcmeService {
         // The FULL new name set is authorized, never the added ones: the stored row proves
         // an authority that existed when it was issued, and says nothing about this actor.
         Map<String, Integer> declaring = CertificateAuthority.authorize(requester, hostnames);
+        synchronized (this.nameSets) {
+            signing.requireNamesFree(requester.subject(), hostnames, certificateId);
+        }
 
         // AIDEV-NOTE: the row id is part of the key. Without it a re-issue and a fresh
         // request for the same names coalesce onto one order, and the joiner adopts the
@@ -576,19 +731,27 @@ public class AcmeService {
             OrderResult result = leadOrder(orderKey, flight, hostnames, email, challengeType,
                 dnsPublisher, declaring, signing);
 
-            applyIssuedMaterial(certRow, result);
-            certRow.set(CertificateModel.DOMAIN_NAMES_TEXT, String.join(",", hostnames));
-            certRow.set(CertificateModel.CHALLENGE_TYPE, challengeType);
-            certRow.set(CertificateModel.DNS_PUBLISHER, dnsPublisher);
-            certRow.set(CertificateModel.LETSENCRYPT_EMAIL,
-                email != null && !email.isBlank() ? email.trim() : null);
-            CertificateModel.setRequester(certRow, requester.subject());
-            certModel.save(certRow);
+            // The rule is asked again with the write: a fresh order for these names may have landed while this
+            // one ran, and the chain just issued is then dropped rather than stored beside it.
+            synchronized (this.nameSets) {
+                signing.requireNamesFree(requester.subject(), hostnames, certificateId);
+                applyIssuedMaterial(certRow, result);
+                certRow.set(CertificateModel.DOMAIN_NAMES_TEXT, String.join(",", hostnames));
+                certRow.set(CertificateModel.CHALLENGE_TYPE, challengeType);
+                certRow.set(CertificateModel.DNS_PUBLISHER, dnsPublisher);
+                certRow.set(CertificateModel.LETSENCRYPT_EMAIL,
+                    email != null && !email.isBlank() ? email.trim() : null);
+                CertificateModel.setRequester(certRow, requester.subject());
+                certModel.save(certRow);
+            }
 
             certificateStore.loadFromDatabase();
             Blast.log("ACME: certificate re-issued for", String.join(", ", hostnames));
             return new ReissueResult(true, null);
 
+        } catch (DomainRefusal namesHeld) {
+            Blast.log("ACME: re-issue for", String.join(", ", hostnames), "dropped:", namesHeld.getMessage());
+            throw namesHeld;
         } catch (Exception e) {
             String reason = failureReason(e);
             Blast.log("ACME: re-issue failed for", String.join(", ", hostnames), "-", reason);

@@ -34,7 +34,11 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -58,6 +62,9 @@ class CertificateSigningRequestApiTest extends HohenheimHttpTestBase {
     private static final String MAIL = "mail." + ZONE;
     private static final String FOREIGN = "foreign." + ZONE;
     private static final String UNSERVED = "nobody." + ZONE;
+    private static final String SMTP = "smtp." + ZONE;
+    private static final String IMAP = "imap." + ZONE;
+    private static final Pattern SUBJECT_ID = Pattern.compile("\"subject\"\\s*:\\s*\\{[^}]*\"id\"\\s*:\\s*\"(\\d+)\"");
 
     private static FakeAcmeServer ca;
     private static ProxyServer adoptedProxy;
@@ -89,6 +96,8 @@ class CertificateSigningRequestApiTest extends HohenheimHttpTestBase {
         int mailSite = site("csrapi-mail");
         domain(mailSite, MX);
         domain(mailSite, MAIL);
+        domain(mailSite, SMTP);
+        domain(mailSite, IMAP);
         domain(site("csrapi-foreign"), FOREIGN);
 
         UUID mailOwner = ApiSupport.user("csrapi-mail@hohenheim.local", "Mail Host Owner");
@@ -244,6 +253,83 @@ class CertificateSigningRequestApiTest extends HohenheimHttpTestBase {
             .contains(ApiSupport.shippedText(HohenheimMicrocopy.VIOLATIONS.of(neutral)));
     }
 
+    /**
+     * One certificate per name set: the same key for the same names again is that certificate, another key for them is
+     * its rotation, and a rotation onto names another certificate holds is refused the same way.
+     */
+    @Test
+    void aSecondOrderForTheSameNamesIsTheFirstCertificateOrItsRotation() throws Exception {
+        KeyPair key = TestSigningRequests.ec("secp256r1");
+        String first = TestSigningRequests.pem(key, List.of(SMTP, IMAP));
+
+        // 1. The first order creates the certificate.
+        HttpResponse<String> ordered = order(mailKey, first, SMTP + "," + IMAP);
+        assertThat(ordered.statusCode()).as("step 1: issued (%s)", ordered.body()).isEqualTo(201);
+        int certId = ApiSupport.idOf(ordered.body());
+
+        // 2. The same request again, its names in another order and case: the same certificate, 200, no new row.
+        HttpResponse<String> again = order(mailKey, first, IMAP.toUpperCase(Locale.ROOT) + "," + SMTP);
+        assertThat(again.statusCode()).as("step 2: a replay is the certificate as it stands (%s)", again.body())
+            .isEqualTo(200);
+        assertThat(ApiSupport.idOf(again.body())).as("step 2: the same certificate").isEqualTo(certId);
+        assertThat(again.body()).as("step 2: with its status").contains("\"status\":\"active\"");
+
+        // 3. A request signed again over the same key differs byte for byte (ECDSA) and is still the same order.
+        String resigned = TestSigningRequests.pem(key, List.of(SMTP, IMAP));
+        assertThat(resigned).as("step 3: precondition, another request over the same key").isNotEqualTo(first);
+        HttpResponse<String> resent = order(mailKey, resigned, SMTP + "," + IMAP);
+        assertThat(resent.statusCode()).as("step 3: the key decides, not the bytes (%s)", resent.body())
+            .isEqualTo(200);
+        assertThat(ApiSupport.idOf(resent.body())).as("step 3: the same certificate").isEqualTo(certId);
+        assertThat(rowsHolding(SMTP, IMAP)).as("step 3: still one certificate for the names").isEqualTo(1);
+
+        // 4. Another key for the same names is refused, naming the certificate to rotate; nothing is ordered.
+        KeyPair other = TestSigningRequests.ec("secp256r1");
+        HttpResponse<String> conflict = order(mailKey, TestSigningRequests.pem(other, List.of(SMTP, IMAP)),
+            SMTP + "," + IMAP);
+        assertThat(conflict.statusCode()).as("step 4: a conflict (%s)", conflict.body()).isEqualTo(409);
+        assertThat(ApiSupport.codeOf(conflict.body())).as("step 4: by its code")
+            .isEqualTo("certificate_names_held");
+        assertThat(conflict.body()).as("step 4: a certificate subject")
+            .contains("\"kind\":\"" + CertificateModel.MODEL_ID + "\"");
+        assertThat(subjectIdOf(conflict.body())).as("step 4: naming the held certificate").isEqualTo(certId);
+        assertThat(conflict.body()).as("step 4: in the shipped words")
+            .contains(ApiSupport.shippedText(HohenheimMicrocopy.VIOLATIONS.of("certificate_names_held")));
+        assertThat(rowsHolding(SMTP, IMAP)).as("step 4: and no second certificate").isEqualTo(1);
+
+        // 5. The rotation the refusal points to takes the new key; ordering with it afterwards is a replay again.
+        HttpResponse<String> rotated = keyPost(mailKey, "/api/v1/certificates/" + certId + "/signing-request",
+            "csr=" + encoded(TestSigningRequests.pem(other, List.of(SMTP, IMAP))));
+        assertThat(rotated.statusCode()).as("step 5: rotated (%s)", rotated.body()).isEqualTo(200);
+        HttpResponse<String> afterRotation = order(mailKey, TestSigningRequests.pem(other, List.of(SMTP, IMAP)),
+            SMTP + "," + IMAP);
+        assertThat(afterRotation.statusCode()).as("step 5: the new key replays (%s)", afterRotation.body())
+            .isEqualTo(200);
+        assertThat(ApiSupport.idOf(afterRotation.body())).as("step 5: onto the same certificate").isEqualTo(certId);
+        assertThat(order(mailKey, first, SMTP + "," + IMAP).statusCode())
+            .as("step 5: and the old key is now the conflict").isEqualTo(409);
+
+        // 6. Another name set is another certificate; rotating it onto the held names is refused the same way.
+        KeyPair third = TestSigningRequests.ec("secp256r1");
+        HttpResponse<String> smtpOnly = order(mailKey, TestSigningRequests.pem(third, List.of(SMTP)), SMTP);
+        assertThat(smtpOnly.statusCode()).as("step 6: a certificate for another name set (%s)", smtpOnly.body())
+            .isEqualTo(201);
+        int smtpId = ApiSupport.idOf(smtpOnly.body());
+        assertThat(smtpId).as("step 6: a row of its own").isNotEqualTo(certId);
+        String smtpChain = Models.get(CertificateModel.class).findById(smtpId).get(CertificateModel.CERTIFICATE_PEM);
+        HttpResponse<String> widened = keyPost(mailKey, "/api/v1/certificates/" + smtpId + "/signing-request",
+            "csr=" + encoded(TestSigningRequests.pem(third, List.of(SMTP, IMAP))) + "&hostnames="
+                + encoded(SMTP + "," + IMAP));
+        assertThat(widened.statusCode()).as("step 6: rotating onto held names conflicts (%s)", widened.body())
+            .isEqualTo(409);
+        assertThat(subjectIdOf(widened.body())).as("step 6: naming the holder").isEqualTo(certId);
+        Row smtpAfter = Models.get(CertificateModel.class).findById(smtpId);
+        assertThat(CertificateCoverage.namesOf(smtpAfter)).as("step 6: the rotated one is unchanged")
+            .containsExactly(SMTP);
+        assertThat((String) smtpAfter.get(CertificateModel.CERTIFICATE_PEM)).as("step 6: chain and all")
+            .isEqualTo(smtpChain);
+    }
+
     // -- fixtures -------------------------------------------------------------
 
     private HttpResponse<String> order(String key, String csr, String hostnames) throws Exception {
@@ -257,6 +343,20 @@ class CertificateSigningRequestApiTest extends HohenheimHttpTestBase {
     private static String leafPin(Row cert) throws Exception {
         return SigningRequest.publicKeyPin(CertificatePem.chainOf(cert.get(CertificateModel.CERTIFICATE_PEM)).get(0)
             .getPublicKey());
+    }
+
+    /** @return the requester-key certificates whose names are exactly these */
+    private static long rowsHolding(String... names) {
+        Set<String> asked = Set.of(names);
+        return Models.get(CertificateModel.class).find()
+            .where(CertificateModel.KEY_HOLDER.eq(CertificateModel.KEY_HOLDER_REQUESTER)).all().stream()
+            .filter(row -> Set.copyOf(CertificateCoverage.namesOf(row)).equals(asked)).count();
+    }
+
+    private static int subjectIdOf(String json) {
+        Matcher matcher = SUBJECT_ID.matcher(json);
+        assertThat(matcher.find()).as("a refusal subject in %s", json).isTrue();
+        return Integer.parseInt(matcher.group(1));
     }
 
     private static AcmeService acme() {

@@ -82,9 +82,10 @@ final class CertificateApiHandlers {
                 conduit.notFound();
                 return null;
             }
-            // Created either way: a failed first order is a stored certificate the renewal sweep retries, and its
-            // status says why it is not issued yet.
-            conduit.setResponseStatus(outcome.issued() ? 201 : 202);
+            // A replay (the same key for the same names, THE requester-key name-set rule in AcmeService) is the
+            // existing certificate as it stands, 200. A new row is created either way: a failed first order is a
+            // stored certificate the renewal sweep retries, and its status says why it is not issued yet.
+            conduit.setResponseStatus(outcome.replayed() ? 200 : outcome.issued() ? 201 : 202);
             return ApiConduits.json(projection(conduit, cert));
         });
 

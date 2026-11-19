@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.HohenheimRefusalReason;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -260,8 +261,11 @@ public final class CertificateOperationHandlers {
      * refusal in front of the checks that would otherwise tell.
      *
      * @param signingRequestPem the requester's PKCS#10 in PEM, refused on the {@code csr} field when it does not read
-     * @return the row the order wrote, issued or failed (a failed row renews like every other: the sweep retries it)
+     * @return the row the order wrote, issued or failed (a failed row renews like every other: the sweep retries it),
+     *         or the requester's existing certificate this request replays, unchanged
      * @throws Violations a refusal before any row was written
+     * @throws DomainRefusal {@link HohenheimRefusalReason#CERTIFICATE_NAMES_HELD} when the requester holds a
+     *                       certificate for exactly these names from another key: that one is rotated instead
      */
     public static AcmeService.@NonNull RequestOutcome orderFromSigningRequest(@Nullable String signingRequestPem,
                                                                             @NonNull List<String> hostnames,
@@ -293,6 +297,8 @@ public final class CertificateOperationHandlers {
      *
      * @param hostnames the names to order; empty re-orders the names the certificate covers now
      * @throws Violations a refusal; the certificate is unchanged
+     * @throws DomainRefusal {@link HohenheimRefusalReason#CERTIFICATE_NAMES_HELD} when the requester holds another
+     *                       certificate for exactly these names; the certificate is unchanged
      */
     public static void reorderFromSigningRequest(@NonNull Row cert, @Nullable String signingRequestPem,
                                                  @NonNull List<String> hostnames, @NonNull AccessContext access) {
