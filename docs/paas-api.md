@@ -81,7 +81,8 @@ returned). Say so when delegating; the grant UI does not.
 - Responses are enumerated whitelists, never row dumps. Site settings
   (environment maps, webhook secrets, api keys) never appear.
 - Rate limits: reads 120/min, variable writes 30/min, deploy/rollback 10/min,
-  per principal.
+  per principal. The DNS record API (`/api/dns/zones/{origin}/records*`) is limited
+  per KEY for every key that is no admin key (`hh_dns_record_api`, below).
 
 ## Endpoints
 
@@ -148,8 +149,15 @@ returned). Say so when delegating; the grant UI does not.
 | POST | `/api/v1/certificates/{id}/signing-request` | Re-order a requester-held certificate from a NEW request (`csr`, optional `hostnames`): the only way its key changes |
 | POST | `/api/v1/sites/{id}/domains/{domain}/certificate` | Order the certificate the address row's "Get a certificate" orders, whose key Hohenheim holds (ADMIN-ONLY, 403 otherwise) -- see Certificates for an address below |
 
-Also present (older lanes, admin-permission-gated): `/api/sites`,
-`/api/sites/{id}/deploy` and `/api/dns/...`.
+Also present (older lanes, admin-permission-gated): `/api/sites` and
+`/api/sites/{id}/deploy`. The DNS record API `/api/dns/zones/{origin}/records[/{id}[/delete]]`
+takes any key and judges a key that is no admin key by the /manage tenant gate
+(`docs/dns-federation.md`, Central editing); its rate limit is `hh_dns_record_api`,
+60 requests per minute PER KEY (an anonymous caller per address), shared by its four
+routes, answered 429 with `Retry-After` once spent. An admin key -- every DNS peer's
+edit-forwarding key is one -- is never limited: `DnsRecordApiHandlers` registers a
+`RateLimitPolicies` resolver that lifts the policy for it, zenit's per-request seam, so
+the exemption is the framework's rate-limit lane and no handler counts anything.
 
 The instance file API under `/api/v1/instances/{id}/files` is a v1 route
 (`API_INSTANCE_FILES` and `API_INSTANCE_FILE_CONTENT`,

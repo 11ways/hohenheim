@@ -18,6 +18,7 @@ import be.elevenways.hohenheim.server.cms.TenantScopes;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DnsPeerApi;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -28,6 +29,9 @@ import be.elevenways.zenit.common.result.JsonResult;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.common.routing.Endpoint;
+import be.elevenways.zenit.server.http.RateLimitPolicies;
+import be.elevenways.zenit.server.http.RateLimitPolicyResolver;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -51,6 +55,13 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 final class DnsRecordApiHandlers {
 
+    /**
+     * Lifts {@link HohenheimEndpoints#DNS_RECORD_API_LIMIT} for an admin key, which is every DNS peer's: a peer
+     * forwarding an operator's edits or an ACME challenge is never throttled, every other key spends its own budget.
+     */
+    private static final RateLimitPolicyResolver ADMIN_KEYS_UNLIMITED = (conduit, endpoint, declared) ->
+        ApiConduits.isApiKey(conduit) && HohenheimAccess.isAdmin(AccessContext.of(conduit)) ? null : declared;
+
     private DnsRecordApiHandlers() {
     }
 
@@ -68,6 +79,10 @@ final class DnsRecordApiHandlers {
     }
 
     static void init() {
+        for (Endpoint<?> route : List.of(HohenheimEndpoints.API_DNS_RECORDS, HohenheimEndpoints.API_DNS_RECORD_CREATE,
+                HohenheimEndpoints.API_DNS_RECORD_UPDATE, HohenheimEndpoints.API_DNS_RECORD_DELETE)) {
+            RateLimitPolicies.registry().add(route.getId(), DnsRecordApiHandlers.class, ADMIN_KEYS_UNLIMITED);
+        }
         DnsRecordModel model = Models.get(DnsRecordModel.class);
 
         HohenheimEndpoints.API_DNS_RECORDS.setHandler(conduit -> {

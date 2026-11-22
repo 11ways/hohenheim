@@ -179,6 +179,10 @@ owner may read, and an unknown zone, a zone it does not reach and another
 owner's record all answer the same 404. Its scopes must cover
 `hohenheim.manage.access`, `cap:hohenheim:site#manage` and, for granted rows,
 `cap:hohenheim:dns_record#edit`.
+Every key that is no admin key is rate limited on these routes per KEY
+(`hh_dns_record_api`, 60 requests a minute shared by the four routes, then 429); a
+peer's admin key is never limited (`DnsRecordApiHandlers`, a `RateLimitPolicies`
+resolver), so edit forwarding and forwarded ACME challenges never wait on a budget.
 Every mutation runs the same `DnsRecordEdits.validate` pipeline as the CMS
 resource, is activity-logged with origin `api`, and bumps the serial --
 which NOTIFYs the secondaries, so the editing instance's own replica

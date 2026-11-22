@@ -1331,7 +1331,15 @@ public class HohenheimEndpoints {
     // AIDEV-NOTE: requiresLogin, never ADMIN_ACCESS, since 2026-11-19: a key that is no admin key
     // reaches these routes and its writes are judged by the TenantWrites record hooks (the
     // /manage gate), its reads scoped by TenantScopes (DnsRecordApiHandlers). An admin key -- every
-    // peer's -- passes as an operator, exactly as before.
+    // peer's -- passes as an operator, exactly as before, and is never limited: DnsRecordApiHandlers registers the
+    // resolver that lifts DNS_RECORD_API_LIMIT for it, so the limit binds every other key, per key.
+
+    /** The DNS record API's budget per key (anonymous callers per address), shared by its four routes. */
+    public static final RateLimitPolicy DNS_RECORD_API_LIMIT =
+        RateLimitPolicy.of(60, Duration.ofMinutes(1))
+            .keyBy(RateLimitPolicy.KeyBy.CREDENTIAL)
+            .named("hh_dns_record_api");
+
     public static final Endpoint<Object> API_DNS_RECORDS = Endpoint.<Object>builder()
         .identifier(HohenheimIds.id("api_dns_records"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
@@ -1339,6 +1347,7 @@ public class HohenheimEndpoints {
             .addDelimiter().addParameter(DNS_ORIGIN)
             .addDelimiter().addStatic("records").build())
         .requiresLogin()
+        .rateLimit(DNS_RECORD_API_LIMIT)
         .build();
 
     /**
@@ -1352,6 +1361,7 @@ public class HohenheimEndpoints {
             .addDelimiter().addStatic("records").build())
         .requiresLogin()
         .csrfExempt()
+        .rateLimit(DNS_RECORD_API_LIMIT)
         .build();
 
     public static final Endpoint<Object> API_DNS_RECORD_UPDATE = Endpoint.<Object>builder()
@@ -1362,6 +1372,7 @@ public class HohenheimEndpoints {
             .addDelimiter().addStatic("records").addDelimiter().addParameter(DNS_RECORD_ID).build())
         .requiresLogin()
         .csrfExempt()
+        .rateLimit(DNS_RECORD_API_LIMIT)
         .build();
 
     public static final Endpoint<Object> API_DNS_RECORD_DELETE = Endpoint.<Object>builder()
@@ -1373,6 +1384,7 @@ public class HohenheimEndpoints {
             .addDelimiter().addStatic("delete").build())
         .requiresLogin()
         .csrfExempt()
+        .rateLimit(DNS_RECORD_API_LIMIT)
         .build();
 
     /**

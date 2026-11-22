@@ -1,12 +1,14 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimCapabilities;
+import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.dns.DnsRecordDto;
 import be.elevenways.hohenheim.dns.DnsRecordListResponse;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.CapabilityScopes;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -182,6 +184,72 @@ class DnsRecordApiTenantKeyTest extends HohenheimTestBase {
         assertAccepted(keyPost(adminKey, "/api/dns/zones/" + HIDDEN_ZONE + "/records",
             form("name", "mail", "type", "MX", "value", "mx." + ZONE + ".", "priority", "10")),
             "step 10: an admin key writes MX in any zone");
+    }
+
+    /**
+     * Journey: a key that is no admin key spends its own budget on the record API and is refused once it is spent,
+     * while an admin key, every DNS peer's, is never limited and another key keeps its own budget.
+     */
+    @Test
+    void theRecordApiLimitsEveryKeyButAnAdminsAndEachKeyApart() throws Exception {
+        UUID owner = user("dns-key-budget@keyapi.test", "DNS Key Budget");
+        String spent = ApiKeyService.create(owner, "dns-key-budget", List.of("hohenheim.manage.access"), null)
+            .plaintext();
+        String other = ApiKeyService.create(owner, "dns-key-budget-other", List.of("hohenheim.manage.access"), null)
+            .plaintext();
+        UUID adminId = Models.get(UserModel.class).find()
+            .where(UserModel.EMAIL.eq("test@hohenheim.local")).first().get(UserModel.ID);
+        String peer = ApiKeyService.create(adminId, "dns-key-budget-peer", List.of("hohenheim.*"), null).plaintext();
+        int budget = HohenheimEndpoints.DNS_RECORD_API_LIMIT.requests();
+        Now.Stopwatch spending = Now.stopwatch();
+
+        // 1. Within its budget the key is answered for what it asks (its owner reaches no zone: the 404).
+        for (int i = 0; i < budget; i++) {
+            assertThat(keyGet(spent, RECORDS).statusCode()).as("step 1: request %s is answered", i + 1)
+                .isEqualTo(404);
+        }
+
+        // 2. Spent, it is refused on every route of the API, the writes included. The bucket refills continuously,
+        //    so the few requests the refill paid for since the budget was spent are answered too, and no more.
+        assertThat(answeredUntilRefused(() -> keyGet(spent, RECORDS).statusCode(), spending))
+            .as("step 2: the next read is refused once the refill is spent").isTrue();
+        Now.Stopwatch refused = Now.stopwatch();
+        assertThat(answeredUntilRefused(() -> keyPost(spent, RECORDS,
+            form("name", "x", "type", "A", "value", "192.0.2.1")).statusCode(), refused))
+            .as("step 2: and so is a write").isTrue();
+
+        // 3. The budget is the key's: another key of the same account is answered.
+        assertThat(keyGet(other, RECORDS).statusCode()).as("step 3: another key is answered").isEqualTo(404);
+
+        // 4. An admin key goes past the budget and is never refused for it.
+        for (int i = 0; i <= budget + 1; i++) {
+            assertThat(keyGet(peer, RECORDS).statusCode()).as("step 4: admin request %s", i + 1).isEqualTo(200);
+        }
+    }
+
+    /**
+     * Sends until the limit refuses, failing on an answer the refill since {@code since} did not pay for.
+     *
+     * @return true once refused
+     */
+    private static boolean answeredUntilRefused(ThrowingStatus send, Now.Stopwatch since) throws Exception {
+        long tokenNanos = HohenheimEndpoints.DNS_RECORD_API_LIMIT.window().toNanos()
+            / HohenheimEndpoints.DNS_RECORD_API_LIMIT.requests();
+        int answered = 0;
+        int status;
+        while ((status = send.status()) != 429) {
+            assertThat(status).as("an answered request is answered for what it asks").isEqualTo(404);
+            answered++;
+            assertThat((long) answered).as("answered only as far as the refill paid")
+                .isLessThanOrEqualTo(since.elapsedNanos() / tokenNanos + 1);
+        }
+        return true;
+    }
+
+    /** One request of the journey, answering its status. */
+    @FunctionalInterface
+    private interface ThrowingStatus {
+        int status() throws Exception;
     }
 
     // --- plumbing ---------------------------------------------------------------------
