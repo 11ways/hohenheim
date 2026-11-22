@@ -2,7 +2,11 @@ package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.server.api.ApiConduits;
+import be.elevenways.hohenheim.server.api.PaasApi;
+import be.elevenways.hohenheim.server.api.SiteApi;
+import be.elevenways.hohenheim.server.cms.CertificateOperations;
 import be.elevenways.hohenheim.server.cms.CertificateOperationHandlers;
 import be.elevenways.hohenheim.server.cms.TenantScopes;
 import be.elevenways.hohenheim.server.tls.AcmeService;
@@ -12,13 +16,18 @@ import be.elevenways.hohenheim.server.tls.RenewalFailure;
 import be.elevenways.hohenheim.server.tls.SigningRequest;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.operation.ZenitPlacementSurface;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.http.body.FormSubmissionRawValues;
+import be.elevenways.zenit.server.operation.OperationPipeline;
+import be.elevenways.zenit.server.operation.OperationRequest;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -27,16 +36,24 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.ToIntFunction;
 
 /**
  * The certificate API: a key orders a certificate from its own signing request, reads its status and fetches its chain;
- * the key it holds never reaches Hohenheim.
+ * the key it holds never reaches Hohenheim. An admin key also orders the certificate an address row's "Get a
+ * certificate" orders, whose key Hohenheim holds.
  *
  * AIDEV-NOTE: a key reads exactly the certificates of THE /manage certificate scope ({@link TenantScopes#CERTIFICATES}:
  * the walk, where a requester owns what it ordered), and a certificate outside it answers the route's 404 whether it
  * exists or not. The chain is the admin chain download's own body ({@link CertificateHandlers#sendChain}). No key is
  * ever part of a projection: a certificate whose key Hohenheim holds reads its status and chain like any other, and
  * its key stays the interactive-only bundle's.
+ *
+ * AIDEV-NOTE: the address order is the row action's operation ({@link CertificateOperations#REQUEST_FOR_DOMAIN}) run
+ * through the pipeline, so its applicability (an exact, included name on a site this proxy terminates TLS for), its
+ * admin-only authorizer, its availability and its hh_le_request budget are the panel's. The one thing asked here is
+ * that authorizer's own refusal ({@code CertificateOperationHandlers.adminRefusal}), once the site is admitted and
+ * BEFORE the address is looked up, so a refused key cannot tell a known address from an unknown one.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -77,16 +94,47 @@ final class CertificateApiHandlers {
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             }
-            Row cert = Models.get(CertificateModel.class).findById(outcome.certificateId());
-            if (cert == null) {
-                conduit.notFound();
-                return null;
-            }
             // A replay (the same key for the same names, THE requester-key name-set rule in AcmeService) is the
             // existing certificate as it stands, 200. A new row is created either way: a failed first order is a
             // stored certificate the renewal sweep retries, and its status says why it is not issued yet.
-            conduit.setResponseStatus(outcome.replayed() ? 200 : outcome.issued() ? 201 : 202);
-            return ApiConduits.json(projection(conduit, cert));
+            int status = outcome.replayed() ? 200 : outcome.issued() ? 201 : 202;
+            return answer(conduit, outcome.certificateId(), cert -> status);
+        });
+
+        HohenheimEndpoints.API_V1_SITE_DOMAIN_CERTIFICATE.setHandler(conduit -> {
+            AccessContext ctx = ApiConduits.requireKey(conduit);
+            Row site = ctx == null ? null : PaasApi.visibleSite(conduit, ctx);
+            if (site == null) {
+                return null;
+            }
+            // The order's own authority before the address is looked up: a site manager it refuses is told the same
+            // for every address of the site, an existing one or not.
+            DomainRefusal withheld = CertificateOperationHandlers.adminRefusal(ctx);
+            if (withheld != null) {
+                return ApiConduits.refusal(conduit, withheld);
+            }
+            Row domain = SiteApi.domainOf(conduit, site);
+            if (domain == null) {
+                return null;
+            }
+            // The dialog's own input; the names default to the address itself, as the row's dialog opens with it.
+            Map<String, Object> order = new LinkedHashMap<>(FormSubmissionRawValues.fromConduit(conduit));
+            order.putIfAbsent("domains", String.valueOf((Object) domain.get(SiteDomainModel.HOSTNAME)));
+            Integer certId;
+            try {
+                certId = OperationPipeline.invoke(OperationRequest.of(CertificateOperations.REQUEST_FOR_DOMAIN,
+                        ZenitPlacementSurface.HTTP_API)
+                    .caller(ctx)
+                    .subjects(List.of(domain))
+                    .form(order)).value();
+            } catch (Violations refused) {
+                return ApiConduits.refusal(conduit, refused);
+            } catch (DomainRefusal refused) {
+                return ApiConduits.refusal(conduit, refused);
+            }
+            // Issued now, or written and waiting: a manual DNS-01 order waits for its TXT records.
+            return answer(conduit, certId,
+                cert -> CertificateModel.STATUS_ACTIVE.equals(cert.get(CertificateModel.STATUS)) ? 201 : 202);
         });
 
         HohenheimEndpoints.API_CERTIFICATE.setHandler(conduit -> {
@@ -121,6 +169,23 @@ final class CertificateApiHandlers {
             Row reordered = Models.get(CertificateModel.class).findById(cert.get(CertificateModel.ID));
             return ApiConduits.json(projection(conduit, reordered != null ? reordered : cert));
         });
+    }
+
+    /**
+     * A placed order's answer: the certificate it wrote, with the status its row earns; the route's 404 when the row is
+     * gone.
+     *
+     * @return the answer, or null when the response has already been ended
+     */
+    private static @Nullable ActionResult<Object> answer(@NonNull Conduit conduit, @Nullable Integer certId,
+                                                         @NonNull ToIntFunction<Row> status) {
+        Row cert = certId == null ? null : Models.get(CertificateModel.class).findById(certId);
+        if (cert == null) {
+            conduit.notFound();
+            return null;
+        }
+        conduit.setResponseStatus(status.applyAsInt(cert));
+        return ApiConduits.json(projection(conduit, cert));
     }
 
     /** @return the submitted {@code hostnames}, comma- or whitespace-separated, blanks dropped */

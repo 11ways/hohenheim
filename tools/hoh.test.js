@@ -214,6 +214,17 @@ const server = http.createServer((req, res) => {
                     { key: 'PLAIN', kind: 'plain', value: 'visible' },
                     { key: 'TOKEN', kind: 'secret', has_value: true }] });
         }
+        if (req.url === '/api/v1/sites/11/domains/21/certificate' && req.method === 'POST') {
+            return respond(201, { id: 81, name: 'earl', hostnames: ['earl.example'], status: 'active',
+                key_holder: 'hohenheim', challenge: 'http', failure: null });
+        }
+        if (req.url === '/api/v1/certificates/81' && req.method === 'GET') {
+            return respond(200, { id: 81, name: 'earl', hostnames: ['earl.example'], status: 'active' });
+        }
+        if (req.url === '/api/v1/certificates' && req.method === 'GET') {
+            return respond(200, { certificates: [{ id: 81, name: 'earl', status: 'active',
+                key_holder: 'hohenheim', challenge: 'http', expires_on: null }] });
+        }
         if (req.url === '/api/v1/instances/51/volumes' && req.method === 'GET') {
             return respond(200, { id: 51, volumes: [{ name: 'data', container_path: '/data', quota_mb: 512,
                 exclusive: false, used_bytes: null, observed_at: null }] });
@@ -571,6 +582,21 @@ server.listen(0, '127.0.0.1', async () => {
         check('volume delete --yes acts', r.status === 0
             && requests.at(-1).url === '/api/v1/instances/51/volumes/delete'
             && requests.at(-1).body === 'name=data', r.stdout + r.stderr);
+
+        // 12h. an address's certificate: the dialog's fields verbatim, then the record to poll.
+        r = await run(['site', 'domain', 'certificate', '11', '21', 'challenge_type=http']);
+        check('domain certificate posts', r.status === 0 && r.stdout.includes('earl.example')
+            && r.stdout.includes('active'), r.stdout + r.stderr);
+        check('domain certificate hit the address lane with its fields',
+            requests.at(-1).method === 'POST'
+                && requests.at(-1).url === '/api/v1/sites/11/domains/21/certificate'
+                && requests.at(-1).body === 'challenge_type=http', requests.at(-1).body);
+        r = await run(['certificate', '81']);
+        check('certificate reads the status', r.status === 0 && r.stdout.includes('"active"'),
+            r.stdout + r.stderr);
+        r = await run(['certificates']);
+        check('certificates lists them', r.status === 0 && r.stdout.includes('earl')
+            && requests.at(-1).url === '/api/v1/certificates', r.stdout + r.stderr);
 
         // 13. help: prints AND exits clean. It used to print the whole page and then
         //     die on `.catch` of undefined, because the handler is synchronous -- so

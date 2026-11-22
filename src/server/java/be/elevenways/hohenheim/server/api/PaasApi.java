@@ -362,7 +362,7 @@ public final class PaasApi {
      *
      * @return the row, or null when the response has already been ended
      */
-    static @Nullable Row visibleSite(@NonNull Conduit conduit,
+    public static @Nullable Row visibleSite(@NonNull Conduit conduit,
                                      @NonNull AccessContext ctx) {
         Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
         Row site = siteId == null ? null : Models.get(SiteModel.class).find()

@@ -146,6 +146,7 @@ returned). Say so when delegating; the grant UI does not.
 | GET | `/api/v1/certificates/{id}` | Status: names, holder, expiry, the issued key's pin, the last failure |
 | GET | `/api/v1/certificates/{id}/chain` | The public chain (what the admin chain download serves); 404 before issuance |
 | POST | `/api/v1/certificates/{id}/signing-request` | Re-order a requester-held certificate from a NEW request (`csr`, optional `hostnames`): the only way its key changes |
+| POST | `/api/v1/sites/{id}/domains/{domain}/certificate` | Order the certificate the address row's "Get a certificate" orders, whose key Hohenheim holds (ADMIN-ONLY, 403 otherwise) -- see Certificates for an address below |
 
 Also present (older lanes, admin-permission-gated): `/api/sites`,
 `/api/sites/{id}/deploy` and `/api/dns/...`.
@@ -858,6 +859,39 @@ answers for a name. Certificates whose key Hohenheim holds are no part of the ru
 (`POST .../signing-request`) re-orders onto the same certificate and touches it only when the new chain is issued,
 so publish the new key's TLSA record first.
 
+
+## Certificates for an address
+
+`POST /api/v1/sites/{id}/domains/{domain}/certificate` is the address row's "Get a
+certificate": the SAME operation (`hohenheim:request_domain_certificate`) through the
+pipeline, with the dialog's input, so its decisions are the row action's. It is offered for
+an exact, included address of a site this proxy terminates TLS for; it is ADMIN-ONLY (the
+operation's authorizer: certificates are installation administration, so a key that is no
+admin key is refused 403 even on an address its owner manages, and the same 403 for an address of that site that does
+not exist, as the refusal is asked before the address is looked up); it is unavailable while
+Let's Encrypt is switched off (422 `letsencrypt_disabled`); and who may obtain each name is
+the certificate authority's answer inside the order. A site the key does not manage is the uniform 404; so, for an
+admin key, is an address the site does not hold, and an address of a managed site
+when the key's scopes leave out the address view (`hohenheim:site_domain#view`), because the
+operation reads its address through that scope. The key is Hohenheim's and the proxy
+serves the certificate; nothing about it is a requester-held order.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `domains` | string, repeatable | The names; absent = the address itself |
+| `nice_name` | string | The certificate's name; absent = the first name |
+| `letsencrypt_email` | string | The ACME account email; absent = the installation's (`invalid_email`) |
+| `challenge_type` | enum | `http` (HTTP-01, the default) or `dns` (DNS-01; a wildcard needs it, `wildcard_requires_dns`) |
+| `dns_publisher` | enum | For DNS-01: `manual` (the default: the order waits for TXT records published by hand, shown on the certificate's page in the panel), `internal` (a zone this controller is primary for: `zone_not_hosted`, `zone_not_primary`, `dns_server_disabled`) or `command` (`hook_not_configured`) |
+
+The answer is the certificate projection above: **201** when issued, **202** when the
+order is written and waiting (a manual DNS-01 order). Poll `GET /api/v1/certificates/{id}`
+(`hoh certificate <id>`). A refused order is a 422 whose code is the dialog's: the input
+refusals above, `invalid_hostnames`, `does_not_point_here` / `does_not_resolve` (an
+HTTP-01 name that visibly points elsewhere), `proxy_unavailable`, the authority's
+`hostname_not_served` / `hostname_not_managed` / `excluded_hostnames`, and the CA's own
+failure in its sentence. Rate limits: `hh_certificate_order` on the route, beside the
+operation's own `hh_le_request` budget (5 per hour per principal) the panel's orders spend.
 ## Environment variables are admin-only
 
 Project membership plus instance-manage scope would NOT be enough here.
@@ -975,6 +1009,8 @@ hoh site create Earl hohenheim:address settings.forward_host=127.0.0.1 \
 hoh site domains 11
 hoh site domain add 11 earl.example custom_headers.0.key=Host custom_headers.0.value=earl.phoenix
 hoh site domain remove 11 21 [--yes]  # asks for the site slug
+hoh site domain certificate 11 21 challenge_type=http   # admin; the address row's "Get a certificate"
+hoh certificates | hoh certificate 81  # status of what the key may read
 hoh site delete 11 [--yes]            # admin; asks for the site slug
 hoh deploy 7
 hoh rollback 7 [--yes]

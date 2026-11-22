@@ -231,7 +231,8 @@ const siteVerbs = {
 
     async domain([verb, siteId, ...rest]) {
         const usage = 'Usage: hoh site domain add <site-id> <hostname> [field=value ...]'
-            + ' | hoh site domain remove <site-id> <domain-id> [--yes]';
+            + ' | hoh site domain remove <site-id> <domain-id> [--yes]'
+            + ' | hoh site domain certificate <site-id> <domain-id> [field=value ...]';
         if (verb === 'add') {
             const [hostname, ...pairs] = rest;
             if (!siteId || !hostname) die(usage);
@@ -249,6 +250,19 @@ const siteVerbs = {
             await confirmSlug(siteId, `Remove domain ${domainId} from`);
             const result = await post(`/api/v1/sites/${siteId}/domains/${domainId}/delete`);
             console.log(`Domain ${result.id} removed from site ${result.site_id}.`);
+            return;
+        }
+        if (verb === 'certificate') {
+            // The address row's "Get a certificate": the dialog's fields verbatim (domains, nice_name,
+            // letsencrypt_email, challenge_type, dns_publisher); the names default to the address.
+            const [domainId, ...pairs] = rest;
+            if (!siteId || !domainId) die(usage);
+            const cert = await post(`/api/v1/sites/${siteId}/domains/${domainId}/certificate`,
+                fieldsOf(pairs, usage));
+            if (flags.json) return emit(cert);
+            console.log(`Certificate ${cert.id} "${cert.name}" for ${(cert.hostnames || []).join(', ')}:`
+                + ` ${cert.status}.`);
+            if (cert.status !== 'active') console.log(`Watch it with: hoh certificate ${cert.id}`);
             return;
         }
         die(usage);
@@ -806,6 +820,16 @@ const commands = {
         emit(await get(`/api/v1/instances/${first}`));
     },
 
+    async certificates() {
+        emit(await get('/api/v1/certificates'), 'certificates',
+            ['id', 'name', 'status', 'key_holder', 'challenge', 'expires_on']);
+    },
+
+    async certificate([id]) {
+        if (!id) die('Usage: hoh certificate <certificate-id>');
+        emit(await get(`/api/v1/certificates/${id}`));
+    },
+
     async volume([first, ...rest]) {
         if (volumeVerbs[first]) return volumeVerbs[first](rest);
         die('Usage: hoh volume list|declare|update|delete <app-id> ...');
@@ -904,6 +928,9 @@ Usage: hoh [--context <name>] <command> [args] [--json] [--yes]
   site domains <site-id>             Hostnames of a site
   site domain add <id> <host> [f=v]  Add a hostname (custom_headers.0.key=Host ...)
   site domain remove <id> <dom-id>   Remove a hostname (asks for the slug)
+  site domain certificate <id> <dom-id> [f=v..]  Order a certificate for the address (admin):
+                                     domains, nice_name, letsencrypt_email, challenge_type,
+                                     dns_publisher; the names default to the address
   dns zones                          DNS zones this controller holds (admin)
   dns zone create <origin> [f=v..]   Create a primary zone (admin): apex NS seeded from
                                      the declared dns.nameservers
@@ -917,6 +944,7 @@ Usage: hoh [--context <name>] <command> [args] [--json] [--yes]
   build-log <site-id> <build-id>     One build's captured log
   deployments <site-id>              Git deployment records
   deploy-log <site-id> <deploy-id>   One git deploy's captured log
+  certificates | certificate <id>    Certificates this key may read; one with its status
   instances | instance <id>          Instances you hold manage on
   instance create <name> <kind> [f=v]  Create a workload (admin): settings.* per kind
   instance show <id>                 One instance

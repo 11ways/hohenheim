@@ -877,6 +877,23 @@ public class HohenheimEndpoints {
         .rateLimit(ROUTE_WRITE_LIMIT)
         .build();
 
+    /**
+     * Orders a certificate whose key Hohenheim holds for one address of the site: the address row's "Get a
+     * certificate", the same operation and its own authority. csrfExempt is safe: the handler refuses non-API-key
+     * principals.
+     */
+    public static final Endpoint<Object> API_V1_SITE_DOMAIN_CERTIFICATE = Endpoint.<Object>builder()
+        .identifier(HohenheimIds.id("api_v1_site_domain_certificate"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addDelimiter().addStatic("domains").addDelimiter().addParameter(DOMAIN_ID)
+            .addDelimiter().addStatic("certificate").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(CERTIFICATE_ORDER_LIMIT)
+        .build();
+
     // --- PaaS API v1: access lists and their rule tree ---
     //
     // The other half of the proxy tier's write lane, added for the same migration: a

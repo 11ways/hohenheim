@@ -482,7 +482,17 @@ public final class CertificateOperationHandlers {
     }
 
     private static <S, I> @NonNull Authorizer<S, I> admin() {
-        return (subject, input, access) -> HohenheimAccess.isAdmin(access) ? null
+        return (subject, input, access) -> adminRefusal(access);
+    }
+
+    /**
+     * What every certificate operation refuses a caller who is no installation admin, whatever it names: what a route
+     * asks before it looks a subject up, so a refused caller is told the same for a known and an unknown one.
+     *
+     * @return the refusal, or null for an admin
+     */
+    public static @Nullable DomainRefusal adminRefusal(@NonNull AccessContext access) {
+        return HohenheimAccess.isAdmin(access) ? null
             : new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "certificates are installation administration");
     }
 }

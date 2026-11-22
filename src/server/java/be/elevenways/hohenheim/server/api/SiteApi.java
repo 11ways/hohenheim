@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.cms.SiteParts;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
+import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -163,21 +164,12 @@ public final class SiteApi {
             if (ctx == null) {
                 return null;
             }
-            Row site = PaasApi.visibleSite(conduit, ctx);
-            if (site == null) {
-                return null;
-            }
-            int siteId = site.get(SiteModel.ID);
-            Integer domainId = conduit.getParameter(HohenheimEndpoints.DOMAIN_ID);
-            // A row of ANOTHER site answers exactly like a missing one (PaasApi.childRow's rule).
-            Row domain = domainId == null ? null : Models.get(SiteDomainModel.class).find()
-                .where(SiteDomainModel.ID.eq(domainId))
-                .where(SiteDomainModel.SITE_ID.eq(siteId))
-                .first();
+            Row domain = visibleDomain(conduit, ctx);
             if (domain == null) {
-                conduit.notFound();
                 return null;
             }
+            int siteId = domain.get(SiteDomainModel.SITE_ID);
+            int domainId = domain.get(SiteDomainModel.ID);
             Panel panel = ApiConduits.adminPanel();
             PanelResource<Row> domains = ApiConduits.rowEntry(conduit, panel, HohenheimSlugs.DOMAINS);
             if (domains == null) {
@@ -195,6 +187,35 @@ public final class SiteApi {
                 return ApiConduits.refusal(conduit, refused);
             }
         });
+    }
+
+    /**
+     * The route's address row when the key manages its site, the response ended with the uniform 404 otherwise: a row
+     * of ANOTHER site answers exactly like a missing one (PaasApi.childRow's rule).
+     *
+     * @return the domain row, or null when the response has already been ended
+     */
+    public static @Nullable Row visibleDomain(@NonNull Conduit conduit, @NonNull AccessContext ctx) {
+        Row site = PaasApi.visibleSite(conduit, ctx);
+        return site == null ? null : domainOf(conduit, site);
+    }
+
+    /**
+     * The route's address row of the site the route already admitted, the response ended with the uniform 404 when
+     * the site has no such row.
+     *
+     * @return the domain row, or null when the response has already been ended
+     */
+    public static @Nullable Row domainOf(@NonNull Conduit conduit, @NonNull Row site) {
+        Integer domainId = conduit.getParameter(HohenheimEndpoints.DOMAIN_ID);
+        Row domain = domainId == null ? null : Models.get(SiteDomainModel.class).find()
+            .where(SiteDomainModel.ID.eq(domainId))
+            .where(SiteDomainModel.SITE_ID.eq(site.get(SiteModel.ID)))
+            .first();
+        if (domain == null) {
+            conduit.notFound();
+        }
+        return domain;
     }
 
     /** Every domain row of a site, oldest first, as the enumerated projection. */

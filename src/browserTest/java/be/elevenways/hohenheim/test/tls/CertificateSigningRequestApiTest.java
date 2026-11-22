@@ -20,6 +20,7 @@ import be.elevenways.zenit.auth.CapabilityScopes;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ApiKeyService;
+import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.Zenit;
@@ -31,6 +32,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.net.URLEncoder;
+import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
@@ -74,6 +76,7 @@ class CertificateSigningRequestApiTest extends HohenheimHttpTestBase {
     private static final String IMAP = "imap." + ZONE;
     private static final String POP = "pop." + ZONE;
     private static final String SUBMISSION = "submission." + ZONE;
+    private static final String WEB = "www." + ZONE;
     private static final Pattern SUBJECT_ID = Pattern.compile("\"subject\"\\s*:\\s*\\{[^}]*\"id\"\\s*:\\s*\"(\\d+)\"");
 
     private static FakeAcmeServer ca;
@@ -428,6 +431,71 @@ class CertificateSigningRequestApiTest extends HohenheimHttpTestBase {
         }
     }
 
+    /**
+     * The address row's "Get a certificate" over the API: an admin key orders the certificate Hohenheim holds the key
+     * of, through the row's own operation, and is answered the record to poll; a key that is no admin is refused by
+     * that operation even on an address it manages, a key that does not manage the site is told nothing exists, and
+     * a caller without a key is refused before anything is ordered.
+     */
+    @Test
+    void anAdminKeyOrdersTheCertificateAnAddressRowOrders() throws Exception {
+        int webSite = site("csrapi-web");
+        int webDomain = domain(webSite, WEB);
+        String route = "/api/v1/sites/" + webSite + "/domains/" + webDomain + "/certificate";
+        Row mx = Models.get(SiteDomainModel.class).find().where(SiteDomainModel.HOSTNAME.eq(MX)).first();
+        String mxRoute = "/api/v1/sites/" + mx.get(SiteDomainModel.SITE_ID) + "/domains"
+            + "/" + mx.get(SiteDomainModel.ID) + "/certificate";
+        // A /manage tenant of the mail site: the site lane sees a site only through the /manage gate as well, and an
+        // operation reads its address subject through the address model's own visibility scope, so the key names it.
+        UUID tenant = ApiSupport.user("csrapi-address-tenant@hohenheim.local", "Address Tenant");
+        GrantService.createDirectGrant(GrantSubjectType.USER, tenant, "hohenheim.manage.access", true);
+        RecordGrants.grant(GrantSubjectType.USER, tenant, SiteModel.MODEL_ID, mx.get(SiteDomainModel.SITE_ID),
+            HohenheimCapabilities.MANAGE, true);
+        String tenantKey = ApiKeyService.create(tenant, "csrapi-address-tenant", List.of("hohenheim.manage.access",
+            CapabilityScopes.format(SiteModel.MODEL_ID, HohenheimCapabilities.MANAGE),
+            CapabilityScopes.format(SiteDomainModel.MODEL_ID, HohenheimCapabilities.VIEW)), null).plaintext();
+
+        // 1. Refusals first, and none of them orders anything: a key that is no admin on the address its owner
+        //    manages (the row action's own authorizer, asked before the address is looked up, so an address of the
+        //    site that does not exist answers the same), a key that does not manage the site (the uniform 404), an
+        //    address of another site under this site's route (404) and a caller with no key at all.
+        assertThat(keyPost(tenantKey, mxRoute, "").statusCode()).as("step 1: a site manager's key is refused")
+            .isEqualTo(403);
+        assertThat(keyPost(tenantKey, "/api/v1/sites/" + mx.get(SiteDomainModel.SITE_ID) + "/domains/0/certificate",
+            "").statusCode()).as("step 1: and told the same for an address that does not exist").isEqualTo(403);
+        assertThat(keyPost(strangerKey, mxRoute, "").statusCode()).as("step 1: a stranger is told nothing")
+            .isEqualTo(404);
+        assertThat(keyPost(adminKey, "/api/v1/sites/" + webSite + "/domains/" + mx.get(SiteDomainModel.ID)
+            + "/certificate", "").statusCode()).as("step 1: another site's address under this site is 404")
+            .isEqualTo(404);
+        assertThat(keyPost(adminKey, "/api/v1/sites/" + webSite + "/domains/0/certificate", "").statusCode())
+            .as("step 1: an unknown address is the same 404").isEqualTo(404);
+        assertThat(sendRequest(requestTo(route).header("Content-Type", "application/x-www-form-urlencoded")
+            .POST(HttpRequest.BodyPublishers.ofString(""))).statusCode())
+            .as("step 1: a caller without a key is refused").isEqualTo(401);
+        assertThat(Models.get(CertificateModel.class).find().where(CertificateModel.DOMAIN_NAMES_TEXT.eq(WEB))
+            .first()).as("step 1: and nothing was ordered").isNull();
+
+        // 2. The admin key orders it: the names default to the address, the key is Hohenheim's, and the answer is the
+        //    certificate record a client polls.
+        HttpResponse<String> ordered = keyPost(adminKey, route, "challenge_type=http");
+        assertThat(ordered.statusCode()).as("step 2: issued (%s)", ordered.body()).isEqualTo(201);
+        int certId = ApiSupport.idOf(ordered.body());
+        Row cert = Models.get(CertificateModel.class).findById(certId);
+        assertThat(CertificateCoverage.namesOf(cert)).as("step 2: for the address").containsExactly(WEB);
+        assertThat(CertificateModel.keyHeldHere(cert)).as("step 2: Hohenheim holds the key").isTrue();
+        assertThat(ordered.body()).as("step 2: the answer is the record, never its key")
+            .contains("\"status\":\"active\"").doesNotContain("PRIVATE KEY");
+        HttpResponse<String> polled = keyGet(adminKey, "/api/v1/certificates/" + certId);
+        assertThat(polled.statusCode()).as("step 2: and its status reads back").isEqualTo(200);
+
+        // 3. The dialog's refusals answer by name: a wildcard needs DNS-01.
+        HttpResponse<String> wildcard = keyPost(adminKey, route, "domains=*." + ZONE + "&challenge_type=http");
+        assertThat(wildcard.statusCode()).as("step 3: refused (%s)", wildcard.body()).isEqualTo(422);
+        assertThat(ApiSupport.codeOf(wildcard.body())).as("step 3: by the dialog's key")
+            .isEqualTo("wildcard_requires_dns");
+    }
+
     // -- fixtures -------------------------------------------------------------
 
     private HttpResponse<String> order(String key, String csr, String hostnames) throws Exception {
@@ -485,11 +553,12 @@ class CertificateSigningRequestApiTest extends HohenheimHttpTestBase {
         return site.get(SiteModel.ID);
     }
 
-    private static void domain(int siteId, String hostname) {
+    private static int domain(int siteId, String hostname) {
         Row domain = Models.get(SiteDomainModel.class).createEmptyRow();
         domain.set(SiteDomainModel.SITE_ID, siteId);
         domain.set(SiteDomainModel.HOSTNAME, hostname);
         domain.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
         Models.get(SiteDomainModel.class).save(domain);
+        return domain.get(SiteDomainModel.ID);
     }
 }
