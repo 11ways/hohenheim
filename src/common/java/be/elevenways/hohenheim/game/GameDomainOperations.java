@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.game;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.KeptFromAssistants;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.GameDomainModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -12,6 +13,8 @@ import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
 import be.elevenways.zenit.common.operation.OperationGate;
+import be.elevenways.zenit.common.operation.OperationFact;
+import be.elevenways.zenit.common.operation.OperationVerb;
 import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -72,6 +75,7 @@ public final class GameDomainOperations {
             .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
             .input(INPUT)
             .result(Integer.class)
+            .notForAssistants(KeptFromAssistants.RELATION_PICK)
             .command(COMMAND.onDatasource("default"))
             .register();
 
@@ -80,6 +84,7 @@ public final class GameDomainOperations {
             .happened(OperationSentences.of("update_game_domain"))
             .label(HohenheimMicrocopy.GAME_DOMAIN.of("save"))
             .one(MAPPING)
+            .notForAssistants(KeptFromAssistants.RELATION_PICK)
             .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
             .input(INPUT)
             .command(COMMAND)
@@ -90,6 +95,8 @@ public final class GameDomainOperations {
             .happened(OperationSentences.of("delete_game_domain"))
             .label(HohenheimMicrocopy.GAME_DOMAIN.of("delete"))
             .one(MAPPING)
+            .verb(OperationVerb.DELETE)
+            .facts(OperationFact.DESTRUCTIVE)
             .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
             .command(COMMAND)
             .register();

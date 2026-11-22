@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimVerbs;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationFact;
@@ -36,6 +37,7 @@ public final class GitProviderOperations {
             .label(HohenheimMicrocopy.GIT_PROVIDER.of("test_connection"))
             .icon(Icon.of("plug-circle-check"))
             .one(PROVIDER)
+            .verb(HohenheimVerbs.CHECK)
             .gate(OperationGate.open().subjectCapability(HohenheimCapabilities.MANAGE))
             .result(ConnectionTest.class)
             .facts(OperationFact.REACHES_OUTSIDE, OperationFact.READ_ONLY)

@@ -58,6 +58,7 @@ import be.elevenways.zenit.common.edit.FormSection;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationFact;
+import be.elevenways.zenit.common.operation.OperationVerb;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -101,8 +102,15 @@ public final class ServerParts {
     public static final Operation<Row, Void, Integer> DELETE = Operation.declare(HohenheimIds.id("delete_server"))
         .happened(OperationSentences.of("delete_server"))
         .label(CmsMicrocopy.of("delete"))
-        .one(SubjectType.record(ServerModel.REF)).gate(OperationGate.permission(HohenheimPanel.ACCESS))
+        .one(SubjectType.record(ServerModel.REF)).verb(OperationVerb.DELETE)
+        .gate(OperationGate.permission(HohenheimPanel.ACCESS))
         .result(Integer.class).facts(OperationFact.DESTRUCTIVE).command(CmsCommands.TRANSACTIONAL).register();
+
+    /** @return the host operations an assistant's tools place: probe, admit, cordon, uncordon, drain and reap */
+    public static @NonNull List<Operation<Row, Void, Microcopy>> lifecycleForAssistants() {
+        return ServerLifecycleActions.forAssistants();
+    }
+
     static {
         OperationHandlers.attach(DELETE)
             .availability(Availability.batch((servers, access) -> DeleteImpact.serversInUse(servers))).handle(call -> {

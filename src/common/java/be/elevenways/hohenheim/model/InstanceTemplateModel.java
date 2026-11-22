@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
 import be.elevenways.protoblast.common.i18n.wording.Noun;
 import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
@@ -53,6 +54,10 @@ public class InstanceTemplateModel extends Model {
     public static final ModelRef<InstanceTemplateModel> REF = ModelRef.of(InstanceTemplateModel.class, MODEL_ID);
 
     public static final Schema SCHEMA = new Schema();
+
+    /** THE short code a template is named by in an assistant's tools: "TP12". */
+    public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
+        RecordCodeBehaviour.allocated(MODEL_ID, "TP"));
 
     /** {@link #REINSTALL_POLICY}: a reinstall keeps the instance's volumes and their data. */
     public static final String REINSTALL_PRESERVE = "preserve";

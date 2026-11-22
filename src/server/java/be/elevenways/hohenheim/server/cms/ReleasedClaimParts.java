@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimVerbs;
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StoredRows;
@@ -73,6 +74,7 @@ public final class ReleasedClaimParts {
         .label(HohenheimMicrocopy.RELEASED_CLAIM.of("lift"))
         .icon(Icon.of("unlock"))
         .one(SUBJECT)
+        .verb(HohenheimVerbs.LIFT)
         .gate(OperationGate.open())
         .facts(OperationFact.DESTRUCTIVE)
         // Placed as a row action: a resubmitted click answers from the receipt instead of lifting twice.

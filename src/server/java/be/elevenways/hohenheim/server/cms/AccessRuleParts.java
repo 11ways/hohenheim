@@ -39,6 +39,8 @@ import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
 import be.elevenways.zenit.common.operation.OperationFact;
+import be.elevenways.zenit.common.operation.OperationVerb;
+import be.elevenways.zenit.auth.server.cms.AuthAdminOperations;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.operation.SubjectType;
@@ -85,6 +87,10 @@ public final class AccessRuleParts {
 
     private static final SubjectType<Row> LIST = SubjectType.record(AccessListModel.REF);
 
+    /** Why the adds are kept from assistants. */
+    private static final String PER_TYPE_FORM = "its form is the rule type's own fields, a password among them, which"
+        + " no tool input projects; its tool comes once one does";
+
     /** What a rule MEANS, the one form its edit page and both add dialogs ask. */
     private static final FormSpec FORM = FormSpec.builder()
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(AccessRuleModel.TYPE))
@@ -113,6 +119,7 @@ public final class AccessRuleParts {
         .label(HohenheimMicrocopy.ACCESS_RULE.of("add_action"))
         .icon(Icon.of("plus"))
         .one(LIST)
+        .notForAssistants(PER_TYPE_FORM)
         .gate(OperationGate.open())
         .input(INPUT)
         .result(Integer.class)
@@ -127,6 +134,7 @@ public final class AccessRuleParts {
             .description(HohenheimMicrocopy.ACCESS_RULE.of("add_inside_title"))
             .icon(Icon.of("plus"))
             .one(SUBJECT)
+            .notForAssistants(PER_TYPE_FORM)
             .gate(OperationGate.open())
             .input(INPUT)
             .result(Integer.class)
@@ -143,6 +151,7 @@ public final class AccessRuleParts {
         .label(HohenheimMicrocopy.ACCESS_RULE.of("toggle"))
         .icon(Icon.of("power-off"))
         .one(SUBJECT)
+        .verb(AuthAdminOperations.Verbs.TOGGLE_ENABLED)
         .gate(OperationGate.open())
         // Placed as a row action: a resubmitted click answers from the receipt instead of switching back.
         .command(COMMAND)
@@ -155,6 +164,7 @@ public final class AccessRuleParts {
             .label(CmsMicrocopy.of("delete"))
             .icon(Icon.TRASH)
             .one(SUBJECT)
+            .verb(OperationVerb.DELETE)
             .gate(OperationGate.open())
             .facts(OperationFact.DESTRUCTIVE)
             .result(Integer.class)

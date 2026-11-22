@@ -124,6 +124,8 @@ public final class ProtectPath {
         .happened(HohenheimMicrocopy.PROTECT_PATH.of("happened"))
         .icon(Icon.of("lock"))
         .one(SiteOperations.SITE)
+        .notForAssistants("its form takes the passwords of the people who may pass, and an assistant is never"
+            + " sent a secret: they are typed on the site's page only")
         .gate(OperationGate.open())
         .input(INPUT)
         .result(Integer.class)

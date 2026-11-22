@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.CertCoverage;
 import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimVerbs;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimSlugs;
@@ -143,6 +144,7 @@ public final class DomainParts {
         .label(HohenheimMicrocopy.SITE_DOMAINS.of("check_reach"))
         .icon(Icon.of("rotate"))
         .one(SUBJECT)
+        .verb(HohenheimVerbs.TEST)
         .gate(OperationGate.open())
         .facts(OperationFact.REACHES_OUTSIDE)
         .command(CmsCommands.EXTERNAL)

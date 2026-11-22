@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.KeptFromAssistants;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
@@ -13,6 +14,7 @@ import be.elevenways.zenit.common.operation.OperationCommand;
 import be.elevenways.zenit.common.orm.command.CommandExecution;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
+import be.elevenways.zenit.common.operation.OperationVerb;
 import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -58,17 +60,19 @@ public final class VolumeOperations {
         .label(HohenheimMicrocopy.INSTANCE_VOLUME.of("singular"))
         .noSubject().gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS)
             .parentCapability("instance_id", InstanceModel.MODEL_ID, HohenheimCapabilities.CONFIG))
-        .input(INPUT).result(Integer.class).command(COMMAND.onDatasource("default")).register();
+        .notForAssistants(KeptFromAssistants.RELATION_PICK).input(INPUT).result(Integer.class)
+        .command(COMMAND.onDatasource("default")).register();
     public static final Operation<Row, Declaration, Void> UPDATE =
             Operation.declare(HohenheimIds.id("redeclare_volume"))
         .happened(OperationSentences.of("redeclare_volume"))
         .label(HohenheimMicrocopy.INSTANCE_VOLUME.of("singular"))
-        .one(SUBJECT).gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
+        .one(SUBJECT).notForAssistants(KeptFromAssistants.RELATION_PICK)
+        .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
         .input(INPUT).patchable().command(COMMAND).register();
     public static final Operation<Row, Void, Void> DESTROY = Operation.declare(HohenheimIds.id("destroy_volume"))
         .happened(OperationSentences.of("destroy_volume"))
         .label(HohenheimMicrocopy.INSTANCE_VOLUME.of("destroy"))
-        .icon(Icon.of("trash-can")).one(SUBJECT)
+        .icon(Icon.of("trash-can")).one(SUBJECT).verb(OperationVerb.DELETE)
         .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
         .facts(OperationFact.DESTRUCTIVE, OperationFact.REACHES_OUTSIDE)
         .command(COMMAND.execution(CommandExecution.OUTSIDE_TRANSACTION)).register();

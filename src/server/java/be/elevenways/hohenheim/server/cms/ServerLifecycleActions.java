@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimVerbs;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostAdmission;
@@ -20,6 +21,8 @@ import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.common.operation.Operation;
+import be.elevenways.zenit.common.operation.OperationFact;
+import be.elevenways.zenit.common.operation.OperationVerb;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -30,9 +33,11 @@ import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.operation.OperationHandlers;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
 
@@ -51,15 +56,24 @@ import java.util.stream.Collectors;
  * @since 0.1.0
  */
 final class ServerLifecycleActions {
+    /** Every operation {@link #place} declared, in order; filled before {@link #PLACED} by declaration order. */
+    private static final List<Operation<Row, Void, Microcopy>> DECLARED = new ArrayList<>();
     private static final List<PanelAction<Row>> PLACED = declarePlaced();
     private ServerLifecycleActions() {}
     static @NonNull List<PanelAction<Row>> placed() { return PLACED; }
+
+    /** @return the host operations an assistant's tools place: every one declared here that is not kept from them */
+    static @NonNull List<Operation<Row, Void, Microcopy>> forAssistants() {
+        return DECLARED.stream().filter(operation -> operation.notForAssistants() == null).toList();
+    }
 
     private static List<PanelAction<Row>> declarePlaced() {
         ConfirmationSpec acknowledge = ConfirmationSpec.verb(HohenheimMicrocopy.SERVER.of("acknowledge"),
             HohenheimMicrocopy.SERVER.of("acknowledge_generic"), ActionStyle.DESTRUCTIVE);
         return List.of(
-            place("acknowledge_posture", HohenheimMicrocopy.SERVER.of("acknowledge"), row -> {
+            place("acknowledge_posture", HohenheimMicrocopy.SERVER.of("acknowledge"),
+                kept("acknowledging a host's weak security posture is a person's own decision, confirmed by typing"
+                    + " the host's name"), row -> {
                 HostPostureAcknowledgement.record(row);
                 return HohenheimMicrocopy.SERVER.of("posture_acknowledged").withArg("name", row.get(ServerModel.NAME));
             }, row -> ServerModel.postureNeedsAcknowledgement(row) && !ServerModel.postureAcknowledged(row))
@@ -70,7 +84,7 @@ final class ServerLifecycleActions {
                     .of("acknowledge_body").withArg("name", row.get(ServerModel.NAME)))
                     .withTypedConfirmation(row.get(ServerModel.NAME)))
                 .build(),
-            place("probe_server", HohenheimMicrocopy.SERVER.of("probe_now"), row -> {
+            place("probe_server", HohenheimMicrocopy.SERVER.of("probe_now"), verb(HohenheimVerbs.TEST), row -> {
                 String name = row.get(ServerModel.NAME);
                 String label = ServerModel.isIncus(row) ? "Incus" : "Docker";
                 ServerService.Summary summary = new ServerService().probeAndStore(name);
@@ -86,21 +100,22 @@ final class ServerLifecycleActions {
             }, row -> true).description(HohenheimMicrocopy.SERVER.of("probe_now_hint")).icon(Icon.of("heart-pulse"))
                 .inlineInRow(false)
                 .inlineOnRecord(false).build(),
-            place("check_host", HohenheimMicrocopy.SERVER.of("check_and_admit"), ServerLifecycleActions::checkHost,
+            place("check_host", HohenheimMicrocopy.SERVER.of("check_and_admit"), verb(HohenheimVerbs.ADMIT),
+                ServerLifecycleActions::checkHost,
                 row -> true)
                 .dynamicLabel(row -> HohenheimMicrocopy.SERVER.of(awaitsAdmission(row) ? "check_and_admit"
                     : "check_again"))
                 .description(HohenheimMicrocopy.SERVER.of("check_and_admit_hint"))
                 // The first inline verb leads by position, not by a filled style (InstanceActions' deploy note).
                 .icon(Icon.of("stethoscope")).build(),
-            place("cordon_server", HohenheimMicrocopy.SERVER.of("cordon"), row -> {
+            place("cordon_server", HohenheimMicrocopy.SERVER.of("cordon"), verb(OperationVerb.PAUSE), row -> {
                 setAdmission(row, ServerModel.ADMISSION_CORDONED, HohenheimActivityAction.ADMISSION_CORDONED);
                 return HohenheimMicrocopy.SERVER.of("host_cordoned").withArg("name", row.get(ServerModel.NAME));
             }, row -> ServerModel.ADMISSION_ADMITTED.equals(row.get(ServerModel.ADMISSION)))
                 .icon(Icon.of("circle-pause")).style(ActionStyle.DESTRUCTIVE)
                 .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.SERVER.of("cordon"),
                     HohenheimMicrocopy.SERVER.of("cordon_confirm"), ActionStyle.DESTRUCTIVE)).build(),
-            place("drain_server", HohenheimMicrocopy.SERVER.of("drain"), row -> {
+            place("drain_server", HohenheimMicrocopy.SERVER.of("drain"), verb(HohenheimVerbs.DRAIN), row -> {
                 // AIDEV-NOTE: fenced updateAll writes fire no hook; InstanceMigrations records the moves explicitly.
                 InstanceMigrations.DrainReport report = new InstanceMigrations().drain(row.get(ServerModel.ID));
                 if (report.complete()) return HohenheimMicrocopy.SERVER.of("host_drained")
@@ -114,13 +129,14 @@ final class ServerLifecycleActions {
                 .icon(Icon.of("truck-arrow-right")).style(ActionStyle.DESTRUCTIVE)
                 .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.SERVER.of("drain"),
                     HohenheimMicrocopy.SERVER.of("drain_confirm"), ActionStyle.DESTRUCTIVE)).build(),
-            place("uncordon_server", HohenheimMicrocopy.SERVER.of("uncordon"), row -> {
+            place("uncordon_server", HohenheimMicrocopy.SERVER.of("uncordon"), verb(OperationVerb.RESUME), row -> {
                 HostAdmission.requireAdmittable(row);
                 setAdmission(row, ServerModel.ADMISSION_ADMITTED, HohenheimActivityAction.ADMISSION_UNCORDONED);
                 return HohenheimMicrocopy.SERVER.of("host_admitted").withArg("name", row.get(ServerModel.NAME));
             }, row -> ServerModel.ADMISSION_CORDONED.equals(row.get(ServerModel.ADMISSION)))
                 .icon(Icon.of("circle-play")).build(),
-            place("reap_controller_objects", HohenheimMicrocopy.SERVER.of("reap_controller_objects"), row -> {
+            place("reap_controller_objects", HohenheimMicrocopy.SERVER.of("reap_controller_objects"),
+                builder -> builder.verb(HohenheimVerbs.REAP).facts(OperationFact.DESTRUCTIVE), row -> {
                 IncusReaper.Reaped[] reaped = {ReapIncusControllers.reapIncludingUnstamped(row)};
                 return HohenheimMicrocopy.SERVER.of("controller_objects_reaped")
                     .withArg("name", row.get(ServerModel.NAME))
@@ -130,16 +146,32 @@ final class ServerLifecycleActions {
                     HohenheimMicrocopy.SERVER.of("reap_controller_objects_confirm"), ActionStyle.DESTRUCTIVE)).build());
     }
 
+    /**
+     * @param assistants what the operation declares for assistants: its verb ({@link #verb}), or why none gets it
+     *                   ({@link #kept})
+     */
     static PanelAction.OperationBuilder<Row, Microcopy> place(String id, Microcopy label,
-            Function<Row, Microcopy> handler, Predicate<Row> applies) {
-        Operation<Row, Void, Microcopy> operation = Operation.declare(HohenheimIds.id(id))
+            UnaryOperator<Operation.Builder<Row, Void, Microcopy>> assistants, Function<Row, Microcopy> handler,
+            Predicate<Row> applies) {
+        Operation<Row, Void, Microcopy> operation = assistants.apply(Operation.declare(HohenheimIds.id(id))
             .happened(OperationSentences.of(id)).label(label)
             .one(SubjectType.record(ServerModel.REF)).gate(OperationGate.permission(HohenheimPanel.ACCESS))
             .command(CmsCommands.EXTERNAL)
-            .result(Microcopy.class).register();
+            .result(Microcopy.class)).register();
+        DECLARED.add(operation);
         OperationHandlers.attach(operation).applies(applies::test).handle(call -> handler.apply(call.subject()));
         return PanelAction.<Row, Microcopy>places(operation, ActionPlacement.ROW,
             (request, told) -> CmsActionResult.refreshWithToast(told));
+    }
+
+    /** @return the declaration naming the operation's assistant tool by the verb */
+    static UnaryOperator<Operation.Builder<Row, Void, Microcopy>> verb(OperationVerb verb) {
+        return builder -> builder.verb(verb);
+    }
+
+    /** @return the declaration keeping the operation from assistants, and why */
+    static UnaryOperator<Operation.Builder<Row, Void, Microcopy>> kept(String why) {
+        return builder -> builder.notForAssistants(why);
     }
 
     /**

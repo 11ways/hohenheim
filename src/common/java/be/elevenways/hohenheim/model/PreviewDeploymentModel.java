@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
 import be.elevenways.protoblast.common.i18n.wording.Noun;
 import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
@@ -40,6 +41,10 @@ public class PreviewDeploymentModel extends Model {
     public static final ModelRef<PreviewDeploymentModel> REF = ModelRef.of(PreviewDeploymentModel.class, MODEL_ID);
 
     public static final Schema SCHEMA = new Schema();
+
+    /** THE short code a preview is named by in an assistant's tools: "PV12". */
+    public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
+        RecordCodeBehaviour.allocated(MODEL_ID, "PV"));
 
     public static final String STATUS_DEPLOYING = "deploying";
     public static final String STATUS_RUNNING = "running";

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
 import be.elevenways.protoblast.common.i18n.wording.Noun;
 import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
@@ -42,6 +43,10 @@ public class RuntimeImageModel extends Model {
     public static final ModelRef<RuntimeImageModel> REF = ModelRef.of(RuntimeImageModel.class, MODEL_ID);
 
     public static final Schema SCHEMA = new Schema();
+
+    /** THE short code a runtime image is named by in an assistant's tools: "RI12". */
+    public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
+        RecordCodeBehaviour.allocated(MODEL_ID, "RI"));
 
     /** {@link #UID_MODE}: the workload runs as the instance's mapped host uid. */
     public static final String UID_MAPPED = "mapped";

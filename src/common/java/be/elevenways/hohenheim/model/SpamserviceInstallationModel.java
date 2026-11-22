@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 
 import be.elevenways.protoblast.common.i18n.wording.Noun;
@@ -27,6 +28,11 @@ import java.util.Map;
 public class SpamserviceInstallationModel extends Model {
 
     public static final Identifier MODEL_ID = HohenheimIds.id("spamservice_installation");
+
+    /** The installation model's reference: the noun of the Spamservice lifecycle operations. */
+    public static final ModelRef<SpamserviceInstallationModel> REF = ModelRef.of(SpamserviceInstallationModel.class,
+        MODEL_ID);
+
     public static final int SINGLETON_ID = 1;
     public static final Schema SCHEMA = new Schema();
 

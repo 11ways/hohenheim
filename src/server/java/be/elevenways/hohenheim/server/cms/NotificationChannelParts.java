@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimVerbs;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
@@ -90,6 +91,7 @@ public final class NotificationChannelParts {
         .label(HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("test"))
         .icon(Icon.of("paper-plane"))
         .one(SUBJECT)
+        .verb(HohenheimVerbs.TEST)
         .gate(OperationGate.open())
         .result(DeliveryOutcome.class)
         .facts(OperationFact.REACHES_OUTSIDE)
@@ -141,6 +143,8 @@ public final class NotificationChannelParts {
             .label(HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("route_events"))
             .icon(Icon.of("route"))
             .noSubject()
+            .notForAssistants("its grid names every channel by its stored number, not a code; its tool comes once"
+                + " the grid names channels by their codes")
             .gate(OperationGate.permission(HohenheimPanel.ACCESS))
             .input(OperationInput.of(ROUTES_FORM, Routes.class, values -> new Routes(routesOf(values.get(ROUTES)))))
             .result(Integer.class)

@@ -58,6 +58,10 @@ final class ServerTrustActions {
             "incus_cert_pinned_toast", "incus_cert_unchanged_toast", "incus_cert_confirmed_toast",
             "incus_cert_repinned_toast", "incus_identity_rotated_toast", "incus_cert_mismatch"));
     static final List<TrustLane> TRUST_LANES = List.of(INCUS_LANE, SSH_LANE);
+
+    /** Why no trust step is offered to assistants. */
+    private static final String PERSON_PINS = "a host's identity is pinned, confirmed, repinned or rotated by a person"
+        + " who compares its fingerprint out of band, never by an assistant";
     private static final List<PanelAction<Row>> PLACED = declarePlaced();
     private ServerTrustActions() {}
     static @NonNull List<PanelAction<Row>> placed() { return PLACED; }
@@ -72,7 +76,7 @@ final class ServerTrustActions {
             ConfirmationSpec rotate = ConfirmationSpec.verb(HohenheimMicrocopy.SERVER.of(lane.copy().rotate()),
                 HohenheimMicrocopy.SERVER.of(lane.copy().rotate() + "_generic"), ActionStyle.DESTRUCTIVE);
             actions.add(ServerLifecycleActions.place("scan_" + lane.id(),
-                HohenheimMicrocopy.SERVER.of(lane.copy().scan()), row -> {
+                HohenheimMicrocopy.SERVER.of(lane.copy().scan()), ServerLifecycleActions.kept(PERSON_PINS), row -> {
                 ensureLaneIdentity(row, lane);
                 HostKeys.ScanResult result = lane.scan().apply(row);
                 if (result.outcome() == HostKeys.ScanOutcome.MISMATCH) {
@@ -87,7 +91,7 @@ final class ServerTrustActions {
             }, lane.applies()).description(HohenheimMicrocopy.SERVER.of(lane.copy().scan() + "_hint"))
                 .icon(Icon.of("fingerprint")).inlineInRow(false).build());
             actions.add(ServerLifecycleActions.place("confirm_" + lane.id(),
-                HohenheimMicrocopy.SERVER.of(lane.copy().confirm()), row -> {
+                HohenheimMicrocopy.SERVER.of(lane.copy().confirm()), ServerLifecycleActions.kept(PERSON_PINS), row -> {
                 lane.confirm().accept(row);
                 return HohenheimMicrocopy.SERVER.of(lane.copy().confirmedToast())
                     .withArg("name", row.get(ServerModel.NAME));
@@ -103,7 +107,7 @@ final class ServerTrustActions {
                     .withTypedConfirmation(row.get(lane.slot().fingerprint())))
                 .build());
             actions.add(ServerLifecycleActions.place("repin_" + lane.id(),
-                HohenheimMicrocopy.SERVER.of(lane.copy().repin()), row -> {
+                HohenheimMicrocopy.SERVER.of(lane.copy().repin()), ServerLifecycleActions.kept(PERSON_PINS), row -> {
                 lane.repin().accept(row);
                 return HohenheimMicrocopy.SERVER.of(lane.copy().repinnedToast())
                     .withArg("fingerprint", row.get(lane.slot().fingerprint()));
@@ -121,7 +125,7 @@ final class ServerTrustActions {
                         .withTypedConfirmation(fingerprint);
                 }).build());
             actions.add(ServerLifecycleActions.place("rotate_" + lane.id(),
-                HohenheimMicrocopy.SERVER.of(lane.copy().rotate()), row -> {
+                HohenheimMicrocopy.SERVER.of(lane.copy().rotate()), ServerLifecycleActions.kept(PERSON_PINS), row -> {
                 lane.rotate().accept(row);
                 return HohenheimMicrocopy.SERVER.of(lane.copy().rotatedToast())
                     .withArg("name", row.get(ServerModel.NAME));

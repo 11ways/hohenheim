@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
 import be.elevenways.protoblast.common.i18n.wording.Noun;
 import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
@@ -36,6 +37,10 @@ public class GitProviderModel extends Model {
     public static final ModelRef<GitProviderModel> REF = ModelRef.of(GitProviderModel.class, MODEL_ID);
 
     public static final Schema SCHEMA = new Schema();
+
+    /** THE short code a git connection is named by in an assistant's tools: "G12". */
+    public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
+        RecordCodeBehaviour.allocated(MODEL_ID, "G"));
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 

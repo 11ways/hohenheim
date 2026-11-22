@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.security.BanState;
 import be.elevenways.hohenheim.server.security.BanService;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.KeptFromAssistants;
 import be.elevenways.hohenheim.server.security.HohenheimSecurity;
 import be.elevenways.hohenheim.server.security.IpLiterals;
 import be.elevenways.hohenheim.server.security.ThreatScorer;
@@ -121,6 +122,7 @@ public final class BanParts {
         .label(HohenheimMicrocopy.BAN.of("lift"))
         .icon(Icon.of("unlock"))
         .one(SUBJECT)
+        .notForAssistants(KeptFromAssistants.BAN)
         .gate(OperationGate.open())
         // Placed as a row action: a resubmitted click answers from the receipt instead of lifting twice.
         .command(OperationCommand.perSubject().execution(CommandExecution.OUTSIDE_TRANSACTION))

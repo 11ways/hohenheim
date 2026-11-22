@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 
@@ -42,6 +43,10 @@ public class InstanceBackupModel extends Model {
     public static final ModelRef<InstanceBackupModel> REF = ModelRef.of(InstanceBackupModel.class, MODEL_ID);
 
     public static final Schema SCHEMA = new Schema();
+
+    /** THE short code a backup is named by in an assistant's tools: "BK12". */
+    public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
+        RecordCodeBehaviour.allocated(MODEL_ID, "BK"));
 
     public static final String STATUS_UPLOADING = BackupStatus.UPLOADING.key();
     public static final String STATUS_COMPLETE = BackupStatus.COMPLETE.key();

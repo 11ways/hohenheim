@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
 import be.elevenways.protoblast.common.i18n.wording.Noun;
 import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
@@ -43,6 +44,10 @@ public class InstanceDatabaseModel extends Model {
     public static final ModelRef<InstanceDatabaseModel> REF = ModelRef.of(InstanceDatabaseModel.class, MODEL_ID);
 
     public static final Schema SCHEMA = new Schema();
+
+    /** THE short code an app's database link is named by in an assistant's tools: "DL12". */
+    public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
+        RecordCodeBehaviour.allocated(MODEL_ID, "DL"));
 
     /** Default {@link #ENV_PREFIX} when none is given; the site lane's spelling. */
     public static final String DEFAULT_PREFIX = "DB";

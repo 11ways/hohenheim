@@ -36,6 +36,10 @@ public final class InstanceScheduleOperations {
     /** One chain step of a record schedule. */
     public static final SubjectType<Row> STEP = SubjectType.record(RecordScheduleStepModel.REF);
 
+    /** Why the schedule operations are kept from assistants. */
+    private static final String UNCODED = "a record schedule is zenit core's model, which declares no record code"
+        + " yet; its tool comes once it does";
+
     /** Fires the chain now; offered on an enabled schedule. The result is the run's status. */
     public static final Operation<Row, Void, String> RUN_SCHEDULE =
         Operation.declare(HohenheimIds.id("run_schedule"))
@@ -43,6 +47,7 @@ public final class InstanceScheduleOperations {
             .label(HohenheimMicrocopy.INSTANCE_SCHEDULE.of("run_now"))
             .icon(Icon.of("play"))
             .one(SCHEDULE)
+            .notForAssistants(InstanceScheduleOperations.UNCODED)
             .gate(OperationGate.open())
             .result(String.class)
             .command(COMMAND.execution(CommandExecution.OUTSIDE_TRANSACTION))
@@ -55,6 +60,7 @@ public final class InstanceScheduleOperations {
             .label(CmsMicrocopy.of("delete"))
             .icon(Icon.TRASH)
             .one(SCHEDULE)
+            .notForAssistants(InstanceScheduleOperations.UNCODED)
             .gate(OperationGate.open())
             .result(Integer.class)
             .command(COMMAND)
@@ -67,6 +73,7 @@ public final class InstanceScheduleOperations {
             .label(CmsMicrocopy.of("delete"))
             .icon(Icon.TRASH)
             .one(STEP)
+            .notForAssistants(InstanceScheduleOperations.UNCODED)
             .gate(OperationGate.open())
             .result(Integer.class)
             .command(COMMAND)

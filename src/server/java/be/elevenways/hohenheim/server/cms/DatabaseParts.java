@@ -18,6 +18,7 @@ import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.ui.BadgeVariant;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimVerbs;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -67,6 +68,7 @@ import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationFact;
+import be.elevenways.zenit.common.operation.OperationVerb;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.operation.SubjectType;
@@ -204,6 +206,7 @@ public final class DatabaseParts {
         .label(CmsMicrocopy.of("delete"))
         .icon(Icon.TRASH)
         .one(DATABASE)
+        .verb(OperationVerb.DELETE)
         .gate(OperationGate.open())
         .facts(OperationFact.DESTRUCTIVE)
         .result(Integer.class)
@@ -218,6 +221,7 @@ public final class DatabaseParts {
             .description(HohenheimMicrocopy.DATABASE.of("move_shared_hint"))
             .icon(Icon.of("layer-group"))
             .one(DATABASE)
+            .verb(HohenheimVerbs.MOVE_TO_SHARED)
             .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
             .command(CmsCommands.EXTERNAL)
             .register();
@@ -233,6 +237,7 @@ public final class DatabaseParts {
             .description(HohenheimMicrocopy.DATABASE.of("finish_old_engine_hint"))
             .icon(Icon.of("broom"))
             .one(DATABASE)
+            .verb(HohenheimVerbs.FINISH_OLD_ENGINE)
             .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
             .command(CmsCommands.EXTERNAL)
             .register();
@@ -248,6 +253,7 @@ public final class DatabaseParts {
             .description(HohenheimMicrocopy.DATABASE.of("back_up_now_hint"))
             .icon(Icon.of("box-archive"))
             .one(DATABASE)
+            .verb(HohenheimVerbs.BACK_UP)
             .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
             .command(CmsCommands.EXTERNAL)
             .register();
@@ -260,6 +266,7 @@ public final class DatabaseParts {
             .description(HohenheimMicrocopy.DATABASE.of("force_delete_hint"))
             .icon(Icon.of("triangle-exclamation"))
             .one(DATABASE)
+            .verb(HohenheimVerbs.FORCE_DELETE)
             .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
             .facts(OperationFact.DESTRUCTIVE)
             .command(CmsCommands.EXTERNAL)
@@ -272,6 +279,7 @@ public final class DatabaseParts {
             .label(CmsMicrocopy.of("delete"))
             .icon(Icon.TRASH)
             .one(ENGINE)
+            .verb(OperationVerb.DELETE)
             .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
             .facts(OperationFact.DESTRUCTIVE)
             .result(Integer.class)
@@ -286,6 +294,7 @@ public final class DatabaseParts {
             .description(HohenheimMicrocopy.DATABASE_ENGINE.of("force_delete_hint"))
             .icon(Icon.of("triangle-exclamation"))
             .one(ENGINE)
+            .verb(HohenheimVerbs.FORCE_DELETE)
             .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
             .facts(OperationFact.DESTRUCTIVE)
             .command(CmsCommands.EXTERNAL)
@@ -322,6 +331,7 @@ public final class DatabaseParts {
             .description(HohenheimMicrocopy.DATABASE.of("change_password_hint"))
             .icon(Icon.of("key"))
             .one(DATABASE)
+            .notForAssistants("its one input is the new password, and an assistant is never sent a secret")
             .gate(OperationGate.open().subjectCapability(HohenheimCapabilities.MANAGE))
             .input(OperationInput.of(FormSpec.builder().add(NEW_PASSWORD).build(), PasswordInput.class,
                     values -> new PasswordInput(values.get(NEW_PASSWORD.getName()) instanceof Secret typed

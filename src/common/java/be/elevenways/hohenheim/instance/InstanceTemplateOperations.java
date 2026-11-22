@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimVerbs;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.FormStep;
@@ -14,6 +15,7 @@ import be.elevenways.zenit.common.operation.OperationCommand;
 import be.elevenways.zenit.common.orm.command.CommandExecution;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
+import be.elevenways.zenit.common.operation.OperationVerb;
 import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -82,6 +84,7 @@ public final class InstanceTemplateOperations {
             .label(HohenheimMicrocopy.INSTANCE_TEMPLATE.of("create_instance"))
             .icon(Icon.of("plus"))
             .one(TEMPLATE)
+            .verb(HohenheimVerbs.CREATE_APP)
             .gate(OperationGate.open())
             .input(OperationInput.of(INPUT, CreateFromTemplate.class, values -> new CreateFromTemplate(
                 values.get(NAME), values.get(SERVER_ID), values.get(PROJECT_ID), values.get(ENVIRONMENT_ID),
@@ -104,6 +107,7 @@ public final class InstanceTemplateOperations {
             .label(HohenheimMicrocopy.INSTANCE_TEMPLATE.of("approve"))
             .icon(Icon.of("circle-check"))
             .one(TEMPLATE)
+            .verb(OperationVerb.APPROVE)
             .gate(OperationGate.open())
             .command(COMMAND)
             .register();
@@ -115,6 +119,7 @@ public final class InstanceTemplateOperations {
             .label(HohenheimMicrocopy.INSTANCE_TEMPLATE.of("unapprove"))
             .icon(Icon.of("circle-xmark"))
             .one(TEMPLATE)
+            .verb(OperationVerb.DECLINE)
             .gate(OperationGate.open())
             .command(COMMAND)
             .register();

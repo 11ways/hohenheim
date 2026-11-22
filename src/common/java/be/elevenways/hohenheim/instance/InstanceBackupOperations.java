@@ -4,6 +4,8 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimVerbs;
+import be.elevenways.hohenheim.KeptFromAssistants;
 import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.zenit.cms.common.CmsMicrocopy;
@@ -14,6 +16,7 @@ import be.elevenways.zenit.common.operation.OperationCommand;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.orm.command.CommandExecution;
 import be.elevenways.zenit.common.operation.OperationGate;
+import be.elevenways.zenit.common.operation.OperationVerb;
 import be.elevenways.zenit.common.operation.OperationSteps;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -55,12 +58,14 @@ public final class InstanceBackupOperations {
             .label(HohenheimMicrocopy.INSTANCE_BACKUP.of("restore_new"))
             .icon(Icon.of("clone"))
             .one(BACKUP)
+            .verb(HohenheimVerbs.RESTORE_TO_NEW)
             .gate(OperationGate.open())
             .input(OperationInput.of(FormSpec.builder().add(InstanceTemplateOperations.SERVER_ID).build(),
                 RestoreInput.class, values -> new RestoreInput(values.get(InstanceTemplateOperations.SERVER_ID))))
             .result(Restored.class)
             .command(COMMAND)
             .rateLimit(HohenheimEndpoints.DEPLOY_LIMIT)
+            .notForAssistants(KeptFromAssistants.BACKGROUND_RUN)
             .background(OperationSteps.of(
                 OperationSteps.step("restore", HohenheimMicrocopy.INSTANCE_BACKUP.of("restore_new_step"))))
             .register();
@@ -79,11 +84,13 @@ public final class InstanceBackupOperations {
             .label(HohenheimMicrocopy.INSTANCE_BACKUP.of("restore_in_place"))
             .icon(Icon.of("clock-rotate-left"))
             .one(BACKUP)
+            .verb(HohenheimVerbs.RESTORE_IN_PLACE)
             .gate(OperationGate.open())
             .facts(OperationFact.DESTRUCTIVE, OperationFact.REACHES_OUTSIDE)
             .result(Integer.class)
             .command(COMMAND)
             .rateLimit(HohenheimEndpoints.DEPLOY_LIMIT)
+            .notForAssistants(KeptFromAssistants.BACKGROUND_RUN)
             .background(OperationSteps.of(
                 OperationSteps.step("restore", HohenheimMicrocopy.INSTANCE_BACKUP.of("restore_in_place_step"))))
             .register();
@@ -101,6 +108,8 @@ public final class InstanceBackupOperations {
             .label(CmsMicrocopy.of("delete"))
             .icon(Icon.TRASH)
             .one(BACKUP)
+            .verb(OperationVerb.DELETE)
+            .facts(OperationFact.DESTRUCTIVE)
             .gate(OperationGate.open())
             .result(Integer.class)
             .command(COMMAND)

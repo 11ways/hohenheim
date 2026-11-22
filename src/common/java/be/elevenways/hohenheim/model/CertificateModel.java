@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
 import be.elevenways.protoblast.common.i18n.wording.Noun;
 import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
@@ -36,6 +37,10 @@ public class CertificateModel extends Model {
     public static final ModelRef<CertificateModel> REF = ModelRef.of(CertificateModel.class, MODEL_ID);
 
     public static final Schema SCHEMA = new Schema();
+
+    /** THE short code a certificate is named by in an assistant's tools: "C12". */
+    public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
+        RecordCodeBehaviour.allocated(MODEL_ID, "C"));
 
     /** {@link #STATUS} value for an active certificate. */
     public static final String STATUS_ACTIVE = "active";

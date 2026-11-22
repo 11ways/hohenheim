@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
 import be.elevenways.protoblast.common.i18n.wording.Noun;
 import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
@@ -39,6 +40,10 @@ public class DatabaseModel extends Model {
     public static final ModelRef<DatabaseModel> REF = ModelRef.of(DatabaseModel.class, MODEL_ID);
 
     public static final Schema SCHEMA = new Schema();
+
+    /** THE short code a database is named by in an assistant's tools: "DB12". */
+    public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
+        RecordCodeBehaviour.allocated(MODEL_ID, "DB"));
 
     /** {@link #STATUS} value while the container is being provisioned. */
     public static final String STATUS_PROVISIONING = "provisioning";

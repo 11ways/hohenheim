@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimVerbs;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
@@ -63,6 +64,7 @@ public final class BackupTargetParts {
             .label(HohenheimMicrocopy.BACKUP_TARGET.of("test_connection"))
             .icon(Icon.of("plug-circle-check"))
             .one(SUBJECT)
+            .verb(HohenheimVerbs.TEST)
             .gate(OperationGate.open())
             .result(TestOutcome.class)
             .facts(OperationFact.REACHES_OUTSIDE)

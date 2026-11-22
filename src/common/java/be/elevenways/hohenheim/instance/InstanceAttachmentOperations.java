@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.instance;
 
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimVerbs;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.zenit.cms.common.CmsMicrocopy;
@@ -10,6 +11,7 @@ import be.elevenways.zenit.common.operation.OperationCommand;
 import be.elevenways.zenit.common.orm.command.CommandExecution;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
+import be.elevenways.zenit.common.operation.OperationVerb;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.ui.Icon;
@@ -38,6 +40,7 @@ public final class InstanceAttachmentOperations {
             .label(CmsMicrocopy.of("delete"))
             .icon(Icon.TRASH)
             .one(DEVICE)
+            .verb(HohenheimVerbs.DETACH)
             .gate(OperationGate.open())
             .result(Integer.class)
             .command(COMMAND)
@@ -51,6 +54,7 @@ public final class InstanceAttachmentOperations {
             .label(CmsMicrocopy.of("delete"))
             .icon(Icon.TRASH)
             .one(DATABASE_LINK)
+            .verb(OperationVerb.DELETE)
             .gate(OperationGate.open())
             .result(Integer.class)
             .command(COMMAND)

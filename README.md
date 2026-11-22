@@ -25,6 +25,8 @@ It has feature parity with the Node version and goes well beyond it:
 - **Notifications**, an **automation API** (hashed `znit_` keys), **native IP
   banning** (threat scoring + nftables enforcement, spamservice-backed IP
   reputation), and a full admin UI.
+- **Tools for assistants**: one MCP server, `/zn/mcp/hohenheim`, whose tools
+  are the panel's own operations; see [`docs/mcp.md`](docs/mcp.md).
 
 Each subsystem has a deeper design doc under [`docs/`](docs/).
 

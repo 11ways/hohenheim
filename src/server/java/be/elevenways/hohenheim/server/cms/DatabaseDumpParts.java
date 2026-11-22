@@ -1,9 +1,11 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimVerbs;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSources;
+import be.elevenways.hohenheim.KeptFromAssistants;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.model.DatabaseDumpModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -26,6 +28,7 @@ import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
 import be.elevenways.zenit.common.operation.OperationFact;
+import be.elevenways.zenit.common.operation.OperationVerb;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.operation.OperationSteps;
@@ -84,11 +87,13 @@ public final class DatabaseDumpParts {
             .label(HohenheimMicrocopy.DATABASE_DUMP.of("dump_restore_new"))
             .icon(Icon.of("clone"))
             .one(DUMP)
+            .verb(HohenheimVerbs.RESTORE_TO_NEW)
             .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
             .input(OperationInput.of(FormSpec.builder().add(NEW_NAME).build(), RestoreInput.class,
                 values -> new RestoreInput(values.get(NEW_NAME.getName()) instanceof String name ? name : null)))
             .result(Integer.class)
             .command(COMMAND)
+            .notForAssistants(KeptFromAssistants.BACKGROUND_RUN)
             .background(OperationSteps.of(
                 OperationSteps.step("restore", HohenheimMicrocopy.DATABASE_DUMP.of("dump_restore_new_step"))))
             .register();
@@ -100,10 +105,12 @@ public final class DatabaseDumpParts {
             .label(HohenheimMicrocopy.DATABASE_DUMP.of("dump_restore_in_place"))
             .icon(Icon.of("clock-rotate-left"))
             .one(DUMP)
+            .verb(HohenheimVerbs.RESTORE_IN_PLACE)
             .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
             .facts(OperationFact.DESTRUCTIVE)
             .result(Integer.class)
             .command(COMMAND)
+            .notForAssistants(KeptFromAssistants.BACKGROUND_RUN)
             .background(OperationSteps.of(
                 OperationSteps.step("restore", HohenheimMicrocopy.DATABASE_DUMP.of("dump_restore_in_place_step"))))
             .register();
@@ -115,6 +122,7 @@ public final class DatabaseDumpParts {
             .label(HohenheimMicrocopy.DATABASE_DUMP.of("dump_delete"))
             .icon(Icon.TRASH)
             .one(DUMP)
+            .verb(OperationVerb.DELETE)
             .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
             .facts(OperationFact.DESTRUCTIVE)
             .result(Integer.class)

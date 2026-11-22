@@ -2,7 +2,9 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimVerbs;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.KeptFromAssistants;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.app.PutOnlineGroup;
 import be.elevenways.hohenheim.app.PutOnlineReach;
@@ -597,6 +599,14 @@ public final class PutOnline {
                                  @Nullable Map<String, Object> settings) {
     }
 
+    /** Why the flows taking an uploaded certificate are kept from assistants. */
+    private static final String TAKES_KEY = "its form can take an uploaded certificate's private key, and an assistant"
+        + " is never sent a secret";
+
+    /** Why the kind-led flows are kept from assistants. */
+    private static final String KIND_SETTINGS = "its settings are the chosen kind's own form, which no tool input"
+        + " projects yet; its tool comes once one does";
+
     /** Puts one template online: the app, its address, its certificate, then the first deploy. */
     public static final Operation<Row, FromTemplate, Integer> PUT_ONLINE =
         Operation.declare(HohenheimIds.id("put_online"))
@@ -604,6 +614,7 @@ public final class PutOnline {
             .happened(HohenheimMicrocopy.PUT_ONLINE.of("happened"))
             .icon(Icon.of("rocket"))
             .one(InstanceTemplateOperations.TEMPLATE)
+            .notForAssistants(TAKES_KEY)
             .gate(OperationGate.open())
             .input(OperationInput.of(TEMPLATE_INPUT, FromTemplate.class, values -> new FromTemplate(
                 values.get(InstanceTemplateOperations.NAME), values.get(HOSTNAME),
@@ -627,6 +638,7 @@ public final class PutOnline {
             .happened(HohenheimMicrocopy.PUT_ONLINE.of("happened"))
             .icon(Icon.of("rocket"))
             .one(InstanceTemplateOperations.TEMPLATE)
+            .verb(HohenheimVerbs.PUT_SERVICE_ONLINE)
             .gate(OperationGate.open())
             .input(OperationInput.of(SERVICE_INPUT, Service.class, values -> new Service(
                 values.get(InstanceTemplateOperations.NAME), values.get(InstanceTemplateOperations.SERVER_ID),
@@ -639,6 +651,7 @@ public final class PutOnline {
             .rateLimit(HohenheimEndpoints.INSTANCE_CREATE_LIMIT)
             .facts(OperationFact.REACHES_OUTSIDE)
             .command(OperationCommand.perSubject().execution(CommandExecution.OUTSIDE_TRANSACTION))
+            .notForAssistants(KeptFromAssistants.BACKGROUND_RUN)
             .background(SERVICE_STEPS)
             .register();
 
@@ -649,6 +662,7 @@ public final class PutOnline {
             .happened(HohenheimMicrocopy.PUT_ONLINE.of("happened"))
             .icon(Icon.of("rocket"))
             .noSubject()
+            .notForAssistants(TAKES_KEY)
             .gate(OperationGate.open())
             .input(OperationInput.of(ADDRESS_INPUT, Address.class, values -> new Address(values.get(SiteModel.NAME),
                 values.get(HOSTNAME), values.get(SiteModel.UPSTREAM_KIND),
@@ -669,6 +683,7 @@ public final class PutOnline {
             .happened(HohenheimMicrocopy.PUT_ONLINE.of("happened"))
             .icon(Icon.of("rocket"))
             .noSubject()
+            .notForAssistants(KeptFromAssistants.RELATION_PICK)
             .gate(OperationGate.open())
             .input(OperationInput.of(STREAM_INPUT, Stream.class, values -> new Stream(values.get(SiteModel.NAME),
                 values.get(StreamUpstreamKind.FORWARD_HOST), values.get(StreamUpstreamKind.FORWARD_PORT),
@@ -687,6 +702,7 @@ public final class PutOnline {
             .happened(HohenheimMicrocopy.PUT_ONLINE.of("happened"))
             .icon(Icon.of("rocket"))
             .noSubject()
+            .notForAssistants(TAKES_KEY)
             .gate(OperationGate.open())
             .input(OperationInput.of(WORKLOAD_INPUT, Workload.class, values -> new Workload(
                 values.get(InstanceTemplateOperations.NAME), values.get(HOSTNAME),
@@ -710,6 +726,7 @@ public final class PutOnline {
             .happened(HohenheimMicrocopy.PUT_ONLINE.of("machine_happened"))
             .icon(Icon.of("rocket"))
             .noSubject()
+            .notForAssistants(KIND_SETTINGS)
             .gate(OperationGate.open())
             .input(OperationInput.of(MACHINE_INPUT, Machine.class, values -> new Machine(
                 values.get(InstanceTemplateOperations.NAME), values.get(InstanceTemplateOperations.SERVER_ID),
@@ -732,6 +749,7 @@ public final class PutOnline {
             .happened(HohenheimMicrocopy.PUT_ONLINE.of("happened"))
             .icon(Icon.of("rocket"))
             .noSubject()
+            .notForAssistants(KIND_SETTINGS)
             .gate(OperationGate.open())
             .input(OperationInput.of(WORKLOAD_SERVICE_INPUT, WorkloadService.class, values -> new WorkloadService(
                 values.get(InstanceTemplateOperations.NAME), values.get(InstanceTemplateOperations.SERVER_ID),
@@ -756,6 +774,8 @@ public final class PutOnline {
             .happened(HohenheimMicrocopy.SITE_REPOSITORY.of("deploy_from_repository_happened"))
             .icon(Icon.of("code-branch"))
             .one(SiteOperations.SITE)
+            .notForAssistants("its settings are the static site kind's, which can carry secret build variables, and"
+                + " an assistant is never sent a secret")
             .gate(OperationGate.open())
             .input(OperationInput.of(REPOSITORY_INPUT, FromRepository.class, values -> new FromRepository(
                 values.get(InstanceTemplateOperations.SERVER_ID), values.get(InstanceModel.KIND),

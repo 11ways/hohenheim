@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
 import be.elevenways.protoblast.common.i18n.wording.Noun;
 import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
@@ -32,6 +33,10 @@ public class StackServiceModel extends Model {
     public static final ModelRef<StackServiceModel> REF = ModelRef.of(StackServiceModel.class, MODEL_ID);
 
     public static final Schema SCHEMA = new Schema();
+
+    /** THE short code a stack service is named by in an assistant's tools: "SS12". */
+    public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
+        RecordCodeBehaviour.allocated(MODEL_ID, "SS"));
 
     /** {@code depends_on} condition: the dependency's container is running. */
     public static final String CONDITION_STARTED = "started";

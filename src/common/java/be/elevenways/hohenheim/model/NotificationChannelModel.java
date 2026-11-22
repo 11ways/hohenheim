@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
 import be.elevenways.protoblast.common.i18n.wording.Noun;
 import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
@@ -28,6 +29,10 @@ public class NotificationChannelModel extends Model {
     public static final ModelRef<NotificationChannelModel> REF = ModelRef.of(NotificationChannelModel.class, MODEL_ID);
 
     public static final Schema SCHEMA = new Schema();
+
+    /** THE short code a notification channel is named by in an assistant's tools: "NC12". */
+    public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
+        RecordCodeBehaviour.allocated(MODEL_ID, "NC"));
 
     /** {@link #KIND} value for HTTP webhook delivery (the only transport today). */
     public static final String KIND_WEBHOOK = "webhook";

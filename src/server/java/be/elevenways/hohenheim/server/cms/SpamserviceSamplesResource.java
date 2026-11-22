@@ -60,6 +60,10 @@ public final class SpamserviceSamplesResource {
     static final Identifier ID = HohenheimIds.id("spamservice_sample");
     static final SubjectType<SampleSummary> SAMPLE = SubjectType.of(ID, SampleSummary.class, SampleSummary::id);
 
+    /** Why the sample operations are kept from assistants. */
+    private static final String OUTSIDE_RECORD = "a sample lives in the spam service, not in a record with a code;"
+        + " its tool comes once samples have codes";
+
     private static final UuidField CLIENT_ID = UuidField.builder("client_id")
         .label(HohenheimMicrocopy.SPAMSERVICE_SAMPLE.of("client")).build();
     private static final StringField IP = StringField.builder("ip")
@@ -88,6 +92,7 @@ public final class SpamserviceSamplesResource {
         .label(HohenheimMicrocopy.SPAMSERVICE_SAMPLE.of("mark_spam"))
         .icon(Icon.of("triangle-exclamation"))
         .one(SAMPLE)
+        .notForAssistants(OUTSIDE_RECORD)
         .gate(OperationGate.permission(HohenheimPanel.ACCESS))
         .command(COMMAND)
         .register();
@@ -98,6 +103,7 @@ public final class SpamserviceSamplesResource {
         .label(HohenheimMicrocopy.SPAMSERVICE_SAMPLE.of("mark_ham"))
         .icon(Icon.of("check"))
         .one(SAMPLE)
+        .notForAssistants(OUTSIDE_RECORD)
         .gate(OperationGate.permission(HohenheimPanel.ACCESS))
         .command(COMMAND)
         .register();
@@ -109,6 +115,7 @@ public final class SpamserviceSamplesResource {
         .label(HohenheimMicrocopy.SPAMSERVICE_SAMPLE.of("rescore"))
         .icon(Icon.of("rotate"))
         .one(SAMPLE)
+        .notForAssistants(OUTSIDE_RECORD)
         .gate(OperationGate.permission(HohenheimPanel.ACCESS))
         .result(String.class)
         .command(COMMAND)

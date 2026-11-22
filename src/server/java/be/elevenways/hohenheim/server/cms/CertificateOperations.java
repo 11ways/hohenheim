@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimVerbs;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -24,6 +25,7 @@ import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationFact;
+import be.elevenways.zenit.common.operation.OperationVerb;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.operation.SubjectType;
@@ -115,6 +117,8 @@ public final class CertificateOperations {
         .description(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("uses_production"))
         .icon(Icon.of("lock"))
         .noSubject()
+        .verb(OperationVerb.CREATE)
+        .noun(CertificateModel.REF)
         .gate(OperationGate.open())
         .input(ORDER)
         .result(Integer.class)
@@ -131,6 +135,7 @@ public final class CertificateOperations {
             .description(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("uses_production"))
             .icon(Icon.of("lock"))
             .one(DOMAIN)
+            .verb(HohenheimVerbs.ORDER_CERTIFICATE)
             .gate(OperationGate.open())
             .input(ORDER)
             .result(Integer.class)
@@ -147,6 +152,7 @@ public final class CertificateOperations {
         .description(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("uses_production"))
         .icon(Icon.of("rotate"))
         .one(CERTIFICATE)
+        .verb(HohenheimVerbs.REISSUE)
         .gate(OperationGate.open())
         .input(ORDER)
         .result(Integer.class)
@@ -163,6 +169,7 @@ public final class CertificateOperations {
         .description(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("verify_dns_hint"))
         .icon(Icon.of("circle-check"))
         .one(CERTIFICATE)
+        .verb(HohenheimVerbs.CONTINUE_ORDER)
         .gate(OperationGate.open())
         .result(Integer.class)
         .facts(OperationFact.REACHES_OUTSIDE)
@@ -178,6 +185,7 @@ public final class CertificateOperations {
         .description(HohenheimMicrocopy.CERTIFICATE.of("renew_now_description"))
         .icon(Icon.of("rotate-right"))
         .one(CERTIFICATE)
+        .verb(HohenheimVerbs.RENEW)
         .gate(OperationGate.open())
         .result(Integer.class)
         .facts(OperationFact.REACHES_OUTSIDE)

@@ -174,6 +174,10 @@ dependencies {
     // SFTP to app files: zenit-sftp's server over this host's InstanceSftpRealm.
     serverImplementation libs.zenit.sftp.server
 
+    // The assistants' MCP server, derived from the operations and record sources (HohenheimMcpModule).
+    // Server-only: no browser code touches it.
+    serverImplementation libs.zenit.ai.server
+
     // The live-lane report is a TestExecutionListener, so the launcher API has to be on
     // the COMPILE path here, not merely on the runtime one Gradle supplies.
     browserTestImplementation libs.junit.launcher
@@ -198,6 +202,8 @@ dependencies {
     browserTestImplementation libs.zenit.delivery.test.support
     // The permission editor's capture projection, read by the surface captures through its service file.
     browserTestImplementation libs.zenit.auth.test.support
+    // zenit-ai's MCP HTTP session: the assistant journey talks to the hohenheim server over real HTTP.
+    browserTestImplementation libs.zenit.ai.test.support
 }
 
 // The runtime-image build contexts ride the SERVER resources, so a host that has to

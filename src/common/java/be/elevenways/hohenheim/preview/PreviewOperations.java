@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimVerbs;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
@@ -38,6 +39,7 @@ public final class PreviewOperations {
         .label(HohenheimMicrocopy.SCHEDULE_ACTION.of("expire_preview").withFallback("Expire preview"))
         .icon(Icon.of("hourglass-end"))
         .one(PREVIEW)
+        .verb(HohenheimVerbs.EXPIRE)
         .gate(OperationGate.open().subjectCapability(HohenheimCapabilities.MANAGE))
         .result(String.class)
         .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)

@@ -23,6 +23,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.SiteRedirectModel;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.hohenheim.HohenheimCapabilities;
+import be.elevenways.hohenheim.KeptFromAssistants;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -331,7 +332,8 @@ public final class ManagePanel extends Panel {
         // persistence path was ever hohenheim-specific.
         var dnsRecords = RecordSource.of(DnsRecordModel.REF)
             .search(DnsRecordModel.NAME, DnsRecordModel.VALUE)
-            .scopedBy(TenantScopes.DNS_RECORDS);
+            .scopedBy(TenantScopes.DNS_RECORDS)
+            .notForAssistants(KeptFromAssistants.DNS_RECORD);
         RecordSourceRegistry.INSTANCE.override(adminCreatable(dnsRecords, admin, HohenheimSlugs.DNS_RECORDS).build());
 
         // Certificates: this REPLACES the common ADMIN_ACCESS-gated registration (which the

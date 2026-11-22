@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimVerbs;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.activity.OperationSentences;
@@ -88,6 +89,10 @@ public final class BuildHookParts {
 
     private static final SubjectType<Row> SUBJECT = SubjectType.record(BuildHookModel.REF);
 
+    /** Why the create and regenerate are kept from assistants. */
+    private static final String SHOWS_TOKEN = "it answers the hook's new token once, and an assistant is never sent a"
+        + " secret";
+
     private static final OperationCommand COMMAND = OperationCommand.perSubject();
 
     /** The hook form: its application is the fixed parent (named, never posted from elsewhere), its name typed. */
@@ -105,6 +110,7 @@ public final class BuildHookParts {
         .happened(OperationSentences.of("build_hook_create"))
         .label(HohenheimMicrocopy.BUILD_HOOK.of("build_hook_create"))
         .noSubject()
+        .notForAssistants(SHOWS_TOKEN)
         .gate(OperationGate.open()
             .parentCapability(BuildHookModel.INSTANCE_ID.getName(), InstanceModel.MODEL_ID,
                 HohenheimCapabilities.MANAGE))
@@ -121,6 +127,7 @@ public final class BuildHookParts {
         .label(HohenheimMicrocopy.BUILD_HOOK.of("build_hook_regenerate"))
         .icon(Icon.of("rotate"))
         .one(SUBJECT)
+        .notForAssistants(SHOWS_TOKEN)
         .gate(OperationGate.open())
         .result(SecretResult.<UUID>type())
         .command(COMMAND)
@@ -133,6 +140,7 @@ public final class BuildHookParts {
         .label(HohenheimMicrocopy.BUILD_HOOK.of("build_hook_revoke"))
         .icon(Icon.of("xmark"))
         .one(SUBJECT)
+        .verb(HohenheimVerbs.REVOKE)
         .gate(OperationGate.open())
         .command(COMMAND)
         .register();

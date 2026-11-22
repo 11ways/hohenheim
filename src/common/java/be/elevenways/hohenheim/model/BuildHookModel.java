@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.i18n.wording.Noun;
@@ -35,6 +36,10 @@ public class BuildHookModel extends Model {
     public static final ModelRef<BuildHookModel> REF = ModelRef.of(BuildHookModel.class, MODEL_ID);
 
     public static final Schema SCHEMA = new Schema();
+
+    /** THE short code a build hook is named by in an assistant's tools: "BH12". */
+    public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
+        RecordCodeBehaviour.allocated(MODEL_ID, "BH"));
 
     public static final UuidField ID = SCHEMA.addField(UuidField.builder("id").build());
 

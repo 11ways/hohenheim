@@ -3,6 +3,8 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.KeptFromAssistants;
+import be.elevenways.hohenheim.HohenheimVerbs;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
@@ -12,6 +14,7 @@ import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationFact;
+import be.elevenways.zenit.common.operation.OperationVerb;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.operation.SubjectType;
@@ -33,19 +36,20 @@ public final class DnsOperations {
     public static final Operation<Row, Void, Integer> DELETE_ZONE =
             Operation.declare(HohenheimIds.id("delete_dns_zone"))
         .happened(OperationSentences.of("delete_dns_zone"))
-        .label(CmsMicrocopy.of("delete")).icon(Icon.TRASH).one(ZONE)
+        .label(CmsMicrocopy.of("delete")).icon(Icon.TRASH).one(ZONE).verb(OperationVerb.DELETE)
         .gate(OperationGate.open()).facts(OperationFact.DESTRUCTIVE).result(Integer.class)
         .command(CmsCommands.TRANSACTIONAL).register();
     public static final Operation<Row, Void, Integer> DELETE_RECORD =
             Operation.declare(HohenheimIds.id("delete_dns_record"))
         .happened(OperationSentences.of("delete_dns_record"))
         .label(CmsMicrocopy.of("delete")).icon(Icon.TRASH).one(RECORD)
+        .notForAssistants(KeptFromAssistants.DNS_RECORD)
         .gate(OperationGate.open()).facts(OperationFact.DESTRUCTIVE).result(Integer.class)
         .command(CmsCommands.TRANSACTIONAL).register();
     public static final Operation<Row, Void, Integer> DELETE_PEER =
             Operation.declare(HohenheimIds.id("delete_dns_peer"))
         .happened(OperationSentences.of("delete_dns_peer"))
-        .label(CmsMicrocopy.of("delete")).icon(Icon.TRASH).one(PEER)
+        .label(CmsMicrocopy.of("delete")).icon(Icon.TRASH).one(PEER).verb(OperationVerb.DELETE)
         .gate(OperationGate.open()).facts(OperationFact.DESTRUCTIVE).result(Integer.class)
         .command(CmsCommands.TRANSACTIONAL).register();
     public static final Operation<Row, Void, CmsActionResult> CHECK_HEALTH =
@@ -53,27 +57,31 @@ public final class DnsOperations {
         .happened(OperationSentences.of("check_dns_health"))
         .label(HohenheimMicrocopy.DNS_ZONE.of("check_health"))
         .description(HohenheimMicrocopy.DNS_ZONE.of("check_health_hint"))
-        .icon(Icon.of("stethoscope")).one(ZONE).gate(OperationGate.open()).result(CmsActionResult.class)
+        .icon(Icon.of("stethoscope")).one(ZONE).verb(HohenheimVerbs.TEST).gate(OperationGate.open())
+        .result(CmsActionResult.class)
         .command(CmsCommands.EXTERNAL).register();
     public static final Operation<Row, Void, CmsActionResult> MINT_DYNAMIC_TOKEN =
             Operation.declare(HohenheimIds.id("dyndns_token"))
         .happened(OperationSentences.of("dyndns_token"))
         .label(HohenheimMicrocopy.DNS_RECORD.of("dyndns_token")).icon(Icon.of("rotate"))
-        .one(RECORD).gate(OperationGate.open()).result(CmsActionResult.class)
+        .one(RECORD).notForAssistants(KeptFromAssistants.DNS_RECORD).gate(OperationGate.open())
+        .result(CmsActionResult.class)
         .command(CmsCommands.TRANSACTIONAL).register();
     public static final Operation<Row, Void, CmsActionResult> REVOKE_DYNAMIC_TOKEN =
             Operation.declare(HohenheimIds.id("dyndns_revoke"))
         .happened(OperationSentences.of("dyndns_revoke"))
         .label(HohenheimMicrocopy.DNS_RECORD.of("dyndns_revoke"))
         .description(HohenheimMicrocopy.DNS_RECORD.of("dyndns_revoke_hint"))
-        .icon(Icon.of("ban")).one(RECORD).gate(OperationGate.open()).result(CmsActionResult.class)
+        .icon(Icon.of("ban")).one(RECORD).notForAssistants(KeptFromAssistants.DNS_RECORD).gate(OperationGate.open())
+        .result(CmsActionResult.class)
         .command(CmsCommands.TRANSACTIONAL).register();
     public static final Operation<Row, Void, CmsActionResult> NEGOTIATE_KEY =
             Operation.declare(HohenheimIds.id("negotiate_transfer_key"))
         .happened(OperationSentences.of("negotiate_transfer_key"))
         .label(HohenheimMicrocopy.DNS_PEER.of("negotiate_key"))
         .description(HohenheimMicrocopy.DNS_PEER.of("negotiate_key_hint"))
-        .icon(Icon.of("key")).one(PEER).gate(OperationGate.open()).result(CmsActionResult.class)
+        .icon(Icon.of("key")).one(PEER).verb(HohenheimVerbs.NEGOTIATE_KEY).gate(OperationGate.open())
+        .result(CmsActionResult.class)
         .command(CmsCommands.EXTERNAL).register();
 
     public record RemoteInput(String action, String record_id, String name, String type, String ttl, String value,
@@ -101,7 +109,7 @@ public final class DnsOperations {
         .declare(HohenheimIds.id("edit_remote_dns_record"))
         .happened(OperationSentences.of("edit_remote_dns_record"))
         .label(HohenheimMicrocopy.DNS_REMOTE.of("save_remote"))
-        .one(ZONE).gate(OperationGate.open())
+        .one(ZONE).notForAssistants(KeptFromAssistants.DNS_RECORD).gate(OperationGate.open())
         .input(OperationInput.of(remoteForm(), RemoteInput.class, v -> new RemoteInput(
             (String) v.coerced().get("action"), (String) v.coerced().get("record_id"),
             (String) v.coerced().get("name"), (String) v.coerced().get("type"), (String) v.coerced().get("ttl"),

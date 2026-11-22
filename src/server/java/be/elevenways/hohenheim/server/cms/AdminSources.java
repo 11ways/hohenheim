@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSources;
+import be.elevenways.hohenheim.KeptFromAssistants;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
@@ -71,7 +72,8 @@ public final class AdminSources {
             .project(BanModel.IP, BanModel.SOURCE, BanModel.ACTIVE,
                 BanModel.EXPIRES_AT, BanModel.CREATED_AT)
             .vocabularyFrom(BanParts::filterVocabulary)
-            .sortable(BanModel.CREATED_AT), BanModel.class).build());
+            .sortable(BanModel.CREATED_AT)
+            .notForAssistants(KeptFromAssistants.BAN), BanModel.class).build());
 
         // Backup targets, for the instance form's target pick: BackupTargetParts is a panel resource, whose one
         // source is panel-qualified, so the model's own source is this one, creatable through the admin entry's

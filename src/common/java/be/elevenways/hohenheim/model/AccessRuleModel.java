@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
 import be.elevenways.protoblast.common.i18n.wording.Noun;
 import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
@@ -49,6 +50,10 @@ public class AccessRuleModel extends Model {
     public static final ModelRef<AccessRuleModel> REF = ModelRef.of(AccessRuleModel.class, MODEL_ID);
 
     public static final Schema SCHEMA = new Schema();
+
+    /** THE short code an access rule is named by in an assistant's tools: "RU12". */
+    public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
+        RecordCodeBehaviour.allocated(MODEL_ID, "RU"));
 
     /** A nested group of rules, combined by its own satisfy mode. */
     public static final String TYPE_GROUP = "group";

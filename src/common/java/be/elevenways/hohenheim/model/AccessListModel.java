@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
 import be.elevenways.protoblast.common.i18n.wording.Noun;
 import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
@@ -33,6 +34,10 @@ public class AccessListModel extends Model {
     public static final ModelRef<AccessListModel> REF = ModelRef.of(AccessListModel.class, MODEL_ID);
 
     public static final Schema SCHEMA = new Schema();
+
+    /** THE short code an access list is named by in an assistant's tools: "AL12". */
+    public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
+        RecordCodeBehaviour.allocated(MODEL_ID, "AL"));
 
     /** {@link #SATISFY} value: any matching rule grants access. */
     public static final String SATISFY_ANY = "any";

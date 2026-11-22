@@ -81,6 +81,10 @@ public final class SpamserviceClientKeysResource {
     static final SubjectType<ManagedClientKey> KEY = SubjectType.of(ID, ManagedClientKey.class,
         SpamserviceClientKeysResource::keyOf);
 
+    /** Why the key operations are kept from assistants. */
+    private static final String OUTSIDE_RECORD = "a key lives in the spam service, not in a record with a code; its"
+        + " tool comes once keys have codes";
+
     private static final UuidField CLIENT_ID = UuidField.builder("client_id").required()
         .label(HohenheimMicrocopy.SPAMSERVICE_KEY.of("client")).build();
     private static final StringField NAME = StringField.builder("name").required()
@@ -127,6 +131,7 @@ public final class SpamserviceClientKeysResource {
         .happened(OperationSentences.of("spamservice_key_create"))
         .label(HohenheimMicrocopy.SPAMSERVICE_KEY.of("create_key"))
         .noSubject()
+        .notForAssistants("it answers the new key once, and an assistant is never sent a secret")
         .gate(OperationGate.permission(HohenheimPanel.ACCESS))
         .input(OperationInput.of(FORM, KeyInput.class, values -> new KeyInput(values.get("client_id"),
             values.get("name") instanceof String name ? name : null, values.get("key"),
@@ -144,6 +149,7 @@ public final class SpamserviceClientKeysResource {
         .label(HohenheimMicrocopy.SPAMSERVICE_KEY.of("enable"))
         .icon(Icon.of("check"))
         .one(KEY)
+        .notForAssistants(OUTSIDE_RECORD)
         .gate(OperationGate.permission(HohenheimPanel.ACCESS))
         .command(COMMAND)
         .register();
@@ -154,6 +160,7 @@ public final class SpamserviceClientKeysResource {
         .label(HohenheimMicrocopy.SPAMSERVICE_KEY.of("revoke"))
         .icon(Icon.of("xmark"))
         .one(KEY)
+        .notForAssistants(OUTSIDE_RECORD)
         .gate(OperationGate.permission(HohenheimPanel.ACCESS))
         .command(COMMAND)
         .register();

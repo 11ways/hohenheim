@@ -23,6 +23,7 @@ import be.elevenways.zenit.common.edit.FormSection;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationFact;
+import be.elevenways.zenit.common.operation.OperationVerb;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -48,6 +49,7 @@ public final class RuntimeImageParts {
         .happened(OperationSentences.of("delete_runtime_image"))
         .label(CmsMicrocopy.of("delete"))
         .one(SubjectType.record(RuntimeImageModel.REF))
+        .verb(OperationVerb.DELETE)
         .gate(OperationGate.permission(HohenheimPanel.ACCESS))
         .result(Integer.class).facts(OperationFact.DESTRUCTIVE).command(CmsCommands.TRANSACTIONAL).register();
 

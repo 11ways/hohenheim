@@ -32,6 +32,7 @@ import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.OperationFact;
+import be.elevenways.zenit.common.operation.OperationVerb;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.ui.Icon;
@@ -55,7 +56,8 @@ public final class ReconcileFindingParts {
     public static final Operation<Row, Void, Void> REMOVE = Operation.declare(HohenheimIds.id("remove_orphan"))
         .happened(OperationSentences.of("remove_orphan"))
         .label(HohenheimMicrocopy.RECONCILE_FINDING.of("remove_orphan"))
-        .one(SubjectType.record(ReconcileFindingModel.REF)).gate(OperationGate.permission(HohenheimPanel.ACCESS))
+        .one(SubjectType.record(ReconcileFindingModel.REF)).verb(OperationVerb.DELETE)
+        .gate(OperationGate.permission(HohenheimPanel.ACCESS))
         .facts(OperationFact.DESTRUCTIVE, OperationFact.REACHES_OUTSIDE).command(CmsCommands.EXTERNAL).register();
     static {
         OperationHandlers.attach(REMOVE).applies(row -> ReconcileFindingModel.BUCKET_ORPHANED

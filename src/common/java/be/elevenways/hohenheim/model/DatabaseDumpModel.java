@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
@@ -42,6 +43,10 @@ public class DatabaseDumpModel extends Model {
     public static final ModelRef<DatabaseDumpModel> REF = ModelRef.of(DatabaseDumpModel.class, MODEL_ID);
 
     public static final Schema SCHEMA = new Schema();
+
+    /** THE short code a database dump is named by in an assistant's tools: "DD12". */
+    public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
+        RecordCodeBehaviour.allocated(MODEL_ID, "DD"));
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 

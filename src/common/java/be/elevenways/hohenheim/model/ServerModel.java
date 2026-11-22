@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
 import be.elevenways.protoblast.common.i18n.wording.Noun;
 import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
@@ -58,6 +59,10 @@ public class ServerModel extends Model {
     public static final ModelRef<ServerModel> REF = ModelRef.of(ServerModel.class, MODEL_ID);
 
     public static final Schema SCHEMA = new Schema();
+
+    /** THE short code a server is named by in an assistant's tools: "SR12". */
+    public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
+        RecordCodeBehaviour.allocated(MODEL_ID, "SR"));
 
     /** {@link #MODE} token of {@link HostMode#LOCAL}: the implicit local Docker daemon. */
     public static final String MODE_LOCAL = "local";

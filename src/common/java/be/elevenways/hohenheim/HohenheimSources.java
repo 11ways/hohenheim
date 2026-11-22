@@ -160,6 +160,8 @@ public final class HohenheimSources implements ZenitModule {
                     SystemUserModel.NAME.eq("spamservice"),
                     SystemUserModel.UID.gt(0)))
                 .permission(ADMIN_ACCESS)
+                .notForAssistants("the one pick of the spam service's own system user, a narrowed copy of the"
+                    + " system users list that is listed")
                 .build());
 
         // The admin dashboard's recent-activity records widget: the shared

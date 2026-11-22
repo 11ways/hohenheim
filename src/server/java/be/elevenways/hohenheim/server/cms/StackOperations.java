@@ -5,6 +5,8 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimVerbs;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StackDeploymentModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
@@ -18,6 +20,7 @@ import be.elevenways.zenit.cms.common.CmsMicrocopy;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
+import be.elevenways.zenit.common.operation.OperationVerb;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -62,6 +65,7 @@ public final class StackOperations {
         .label(HohenheimMicrocopy.STACK.of("deploy"))
         .icon(Icon.of("rocket"))
         .one(STACK)
+        .verb(HohenheimVerbs.DEPLOY)
         .gate(OPERATOR)
         .facts(OperationFact.REACHES_OUTSIDE)
         .command(CmsCommands.EXTERNAL)
@@ -73,6 +77,7 @@ public final class StackOperations {
         .label(HohenheimMicrocopy.STACK.of("stop"))
         .icon(Icon.of("circle-stop"))
         .one(STACK)
+        .verb(HohenheimVerbs.STOP)
         .gate(OPERATOR)
         .facts(OperationFact.REACHES_OUTSIDE)
         .command(CmsCommands.EXTERNAL)
@@ -84,6 +89,7 @@ public final class StackOperations {
         .label(HohenheimMicrocopy.STACK.of("rollback"))
         .icon(Icon.of("clock-rotate-left"))
         .one(STACK)
+        .verb(HohenheimVerbs.ROLL_BACK)
         .gate(OPERATOR)
         .facts(OperationFact.REACHES_OUTSIDE)
         .command(CmsCommands.EXTERNAL)
@@ -96,6 +102,7 @@ public final class StackOperations {
             .label(HohenheimMicrocopy.STACK.of("purge_volumes"))
             .icon(Icon.of("hard-drive"))
             .one(STACK)
+            .verb(HohenheimVerbs.PURGE_VOLUMES)
             .gate(OPERATOR)
             .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)
             .command(CmsCommands.EXTERNAL)
@@ -107,6 +114,7 @@ public final class StackOperations {
         .label(HohenheimMicrocopy.STACK.of("refresh_status"))
         .icon(Icon.of("rotate"))
         .one(STACK)
+        .verb(HohenheimVerbs.REFRESH)
         .gate(OPERATOR)
         .result(String.class)
         .facts(OperationFact.REACHES_OUTSIDE)
@@ -120,6 +128,8 @@ public final class StackOperations {
             .label(HohenheimMicrocopy.STACK.of("reclaim_images"))
             .icon(Icon.of("broom"))
             .noSubject()
+            .verb(HohenheimVerbs.RECLAIM_IMAGES)
+            .noun(ServerModel.REF)
             .gate(OPERATOR)
             .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)
             .command(CmsCommands.EXTERNAL)
@@ -131,6 +141,7 @@ public final class StackOperations {
         .label(CmsMicrocopy.of("delete"))
         .icon(Icon.TRASH)
         .one(STACK)
+        .verb(OperationVerb.DELETE)
         .gate(OPERATOR)
         .result(Integer.class)
         .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)
@@ -144,6 +155,7 @@ public final class StackOperations {
             .label(CmsMicrocopy.of("delete"))
             .icon(Icon.TRASH)
             .one(SERVICE)
+            .verb(OperationVerb.DELETE)
             .gate(OPERATOR)
             .result(Integer.class)
             .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)

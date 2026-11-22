@@ -5,6 +5,8 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimVerbs;
+import be.elevenways.hohenheim.KeptFromAssistants;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.operation.Operation;
@@ -12,6 +14,7 @@ import be.elevenways.zenit.common.operation.OperationCommand;
 import be.elevenways.zenit.common.orm.command.CommandExecution;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
+import be.elevenways.zenit.common.operation.OperationVerb;
 import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.operation.OperationSteps;
 import be.elevenways.zenit.common.operation.SubjectType;
@@ -46,6 +49,7 @@ public final class SiteOperations {
         .label(HohenheimMicrocopy.SITE.of("enable").withFallback("Enable"))
         .icon(Icon.of("power-off"))
         .one(SITE)
+        .verb(OperationVerb.RESUME)
         .gate(OperationGate.open())
         .facts(OperationFact.REACHES_OUTSIDE)
         .command(COMMAND)
@@ -57,6 +61,7 @@ public final class SiteOperations {
         .label(HohenheimMicrocopy.SITE.of("disable").withFallback("Disable"))
         .icon(Icon.of("power-off"))
         .one(SITE)
+        .verb(OperationVerb.PAUSE)
         .gate(OperationGate.open())
         .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)
         .command(COMMAND)
@@ -73,6 +78,7 @@ public final class SiteOperations {
             .label(HohenheimMicrocopy.SITE.of("stop_forcing_https").withFallback("Stop forcing HTTPS"))
             .icon(Icon.of("unlock"))
             .one(SITE)
+            .verb(HohenheimVerbs.STOP_FORCING_HTTPS)
             .gate(OperationGate.open())
             .facts(OperationFact.REACHES_OUTSIDE)
             .command(COMMAND)
@@ -90,6 +96,7 @@ public final class SiteOperations {
         .label(HohenheimMicrocopy.SITE.of("clone").withFallback("Clone"))
         .icon(Icon.of("copy"))
         .one(SITE)
+        .verb(HohenheimVerbs.CLONE)
         .gate(OperationGate.open())
         .input(OperationInput.of(FormSpec.builder().add(CLONE_NAME).build(), CloneInput.class,
             values -> new CloneInput(Texts.trimmedOrNull(values.get(CLONE_NAME)))))
@@ -118,10 +125,12 @@ public final class SiteOperations {
             .label(HohenheimMicrocopy.SITE.of("rollback").withFallback("Roll back"))
             .icon(Icon.of("clock-rotate-left"))
             .one(SITE)
+            .verb(HohenheimVerbs.ROLL_BACK)
             .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
             .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)
             .command(COMMAND.execution(CommandExecution.OUTSIDE_TRANSACTION))
             .rateLimit(HohenheimEndpoints.DEPLOY_LIMIT)
+            .notForAssistants(KeptFromAssistants.BACKGROUND_RUN)
             .background(OperationSteps.of(
                 OperationSteps.step("switch", HohenheimMicrocopy.DEPLOYMENTS.of("rollback_step"))))
             .register();

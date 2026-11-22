@@ -2,7 +2,9 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.HohenheimVerbs;
 import be.elevenways.hohenheim.activity.OperationSentences;
+import be.elevenways.hohenheim.model.SpamserviceInstallationModel;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -10,6 +12,7 @@ import be.elevenways.spamservice.client.ServiceStatus;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
+import be.elevenways.zenit.common.operation.OperationVerb;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.operation.OperationHandlers;
@@ -32,13 +35,14 @@ public final class SpamserviceOperations {
     private static final OperationGate OPERATOR = OperationGate.permission(HohenheimPanel.ACCESS);
 
     /** Starts the managed Spamservice process. */
-    public static final Operation<Void, Void, Void> START = lifecycle("start", "play", false);
+    public static final Operation<Void, Void, Void> START = lifecycle("start", "play", false, HohenheimVerbs.START);
 
     /** Stops the managed Spamservice process. */
-    public static final Operation<Void, Void, Void> STOP = lifecycle("stop", "stop", true);
+    public static final Operation<Void, Void, Void> STOP = lifecycle("stop", "stop", true, HohenheimVerbs.STOP);
 
     /** Restarts the managed Spamservice process. */
-    public static final Operation<Void, Void, Void> RESTART = lifecycle("restart", "rotate", true);
+    public static final Operation<Void, Void, Void> RESTART =
+        lifecycle("restart", "rotate", true, HohenheimVerbs.RESTART);
 
     /** Calls the management status endpoint; the result is the status the service reports. */
     public static final Operation<Void, Void, String> TEST = Operation.declare(HohenheimIds.id("spamservice_test"))
@@ -47,6 +51,8 @@ public final class SpamserviceOperations {
         .description(HohenheimMicrocopy.SPAMSERVICE.of("test_hint"))
         .icon(Icon.of("stethoscope"))
         .noSubject()
+        .verb(HohenheimVerbs.TEST)
+        .noun(SpamserviceInstallationModel.REF)
         .gate(OPERATOR)
         .result(String.class)
         .facts(OperationFact.REACHES_OUTSIDE)
@@ -86,13 +92,15 @@ public final class SpamserviceOperations {
     }
 
     private static @NonNull Operation<Void, Void, Void> lifecycle(@NonNull String name, @NonNull String icon,
-                                                                 boolean destructive) {
+                                                                 boolean destructive, @NonNull OperationVerb verb) {
         Operation.Builder<Void, Void, Void> builder = Operation.declare(HohenheimIds.id("spamservice_" + name))
             .happened(OperationSentences.of("spamservice_" + name))
             .label(HohenheimMicrocopy.SPAMSERVICE.of(name))
             .description(HohenheimMicrocopy.SPAMSERVICE.of(name + "_hint"))
             .icon(Icon.of(icon))
             .noSubject()
+            .verb(verb)
+            .noun(SpamserviceInstallationModel.REF)
             .gate(OPERATOR);
         if (destructive) {
             builder.facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE);

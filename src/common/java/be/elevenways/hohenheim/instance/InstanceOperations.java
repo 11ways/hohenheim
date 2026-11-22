@@ -7,6 +7,8 @@ import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimRefusalReason;
+import be.elevenways.hohenheim.HohenheimVerbs;
+import be.elevenways.hohenheim.KeptFromAssistants;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.zenit.cms.common.CmsMicrocopy;
 import be.elevenways.zenit.common.edit.FormSpec;
@@ -18,6 +20,7 @@ import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.operation.OperationSteps;
+import be.elevenways.zenit.common.operation.OperationVerb;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.StringField;
@@ -62,6 +65,7 @@ public final class InstanceOperations {
         .label(HohenheimMicrocopy.POWER_OPERATION.of("start").withFallback("Start"))
         .icon(Icon.of("play"))
         .one(INSTANCE)
+        .verb(HohenheimVerbs.START)
         .gate(gate(HohenheimCapabilities.POWER))
         .result(PowerResult.class)
         .facts(OperationFact.REACHES_OUTSIDE, OperationFact.IDEMPOTENT)
@@ -86,10 +90,12 @@ public final class InstanceOperations {
         .label(HohenheimMicrocopy.INSTANCE.of("deploy").withFallback("Deploy"))
         .icon(Icon.of("play"))
         .one(INSTANCE)
+        .verb(HohenheimVerbs.DEPLOY)
         .gate(gate(HohenheimCapabilities.POWER))
         .facts(OperationFact.REACHES_OUTSIDE)
         .command(COMMAND_FACET)
         .rateLimit(HohenheimEndpoints.DEPLOY_LIMIT)
+        .notForAssistants(KeptFromAssistants.BACKGROUND_RUN)
         .background(OperationSteps.of(
             OperationSteps.step("deploy", HohenheimMicrocopy.DEPLOYMENTS.of("deploy_step"))))
         .register();
@@ -99,6 +105,7 @@ public final class InstanceOperations {
         .label(HohenheimMicrocopy.POWER_OPERATION.of("stop").withFallback("Stop"))
         .icon(Icon.of("stop"))
         .one(INSTANCE)
+        .verb(HohenheimVerbs.STOP)
         .gate(gate(HohenheimCapabilities.POWER))
         .result(PowerResult.class)
         .facts(OperationFact.REACHES_OUTSIDE, OperationFact.IDEMPOTENT, OperationFact.DESTRUCTIVE)
@@ -111,6 +118,7 @@ public final class InstanceOperations {
             .label(HohenheimMicrocopy.POWER_OPERATION.of("restart").withFallback("Restart"))
             .icon(Icon.of("rotate-right"))
             .one(INSTANCE)
+            .verb(HohenheimVerbs.RESTART)
             .gate(gate(HohenheimCapabilities.POWER))
             .result(PowerResult.class)
             .command(COMMAND_FACET)
@@ -122,6 +130,7 @@ public final class InstanceOperations {
         .label(HohenheimMicrocopy.SCHEDULE_ACTION.of("backup").withFallback("Backup"))
         .icon(Icon.of("box-archive"))
         .one(INSTANCE)
+        .verb(HohenheimVerbs.BACK_UP)
         .gate(gate(HohenheimCapabilities.BACKUPS))
         .result(Integer.class)
         .command(COMMAND_FACET)
@@ -139,6 +148,7 @@ public final class InstanceOperations {
             .label(HohenheimMicrocopy.DEPLOYMENTS.of("connect_webhook"))
             .icon(Icon.of("plug"))
             .one(INSTANCE)
+            .verb(HohenheimVerbs.CONNECT_WEBHOOK)
             .gate(gate(HohenheimCapabilities.CONFIG))
             .result(Boolean.class)
             .command(COMMAND_FACET)
@@ -156,6 +166,7 @@ public final class InstanceOperations {
             .label(HohenheimMicrocopy.SCHEDULE_ACTION.of("snapshot").withFallback("Snapshot"))
             .icon(Icon.of("camera"))
             .one(INSTANCE)
+            .verb(HohenheimVerbs.SNAPSHOT)
             .gate(gate(HohenheimCapabilities.SNAPSHOTS))
             .input(OperationInput.of(FormSpec.builder().add(NOTE).build(), SnapshotInput.class,
                 values -> new SnapshotInput(values.get(NOTE))))
@@ -184,6 +195,7 @@ public final class InstanceOperations {
             .label(HohenheimMicrocopy.SCHEDULE_ACTION.of("console_command").withFallback("Console command"))
             .icon(Icon.of("terminal"))
             .one(INSTANCE)
+            .verb(HohenheimVerbs.CONSOLE_COMMAND)
             .gate(gate(HohenheimCapabilities.CONSOLE))
             .input(OperationInput.of(FormSpec.builder().add(COMMAND).build(), ConsoleCommandInput.class,
                 values -> new ConsoleCommandInput(values.get(COMMAND))))
@@ -215,6 +227,7 @@ public final class InstanceOperations {
             .label(HohenheimMicrocopy.INSTANCE_EXEC.of("run").withFallback("Run"))
             .icon(Icon.of("code"))
             .one(INSTANCE)
+            .verb(HohenheimVerbs.EXEC)
             .gate(gate(HohenheimCapabilities.EXEC))
             .input(OperationInput.of(FormSpec.builder().add(EXEC_COMMAND).build(), ExecInput.class,
                 values -> new ExecInput(values.get(EXEC_COMMAND))))
@@ -236,10 +249,12 @@ public final class InstanceOperations {
             .label(HohenheimMicrocopy.INSTANCE.of("rollback").withFallback("Roll back"))
             .icon(Icon.of("clock-rotate-left"))
             .one(INSTANCE)
+            .verb(HohenheimVerbs.ROLL_BACK)
             .gate(gate(HohenheimCapabilities.POWER))
             .command(COMMAND_FACET)
             .facts(OperationFact.REACHES_OUTSIDE)
             .rateLimit(HohenheimEndpoints.DEPLOY_LIMIT)
+            .notForAssistants(KeptFromAssistants.BACKGROUND_RUN)
             .background(OperationSteps.of(
                 OperationSteps.step("switch", HohenheimMicrocopy.DEPLOYMENTS.of("rollback_step"))))
             .register();
@@ -254,6 +269,7 @@ public final class InstanceOperations {
             .label(HohenheimMicrocopy.INSTANCE.of("install").withFallback("Install"))
             .icon(Icon.of("wand-magic-sparkles"))
             .one(INSTANCE)
+            .verb(HohenheimVerbs.INSTALL)
             .gate(OperationGate.open())
             .command(COMMAND_FACET)
             .facts(OperationFact.REACHES_OUTSIDE)
@@ -269,6 +285,7 @@ public final class InstanceOperations {
             .label(HohenheimMicrocopy.INSTANCE.of("reinstall").withFallback("Reinstall"))
             .icon(Icon.of("rotate"))
             .one(INSTANCE)
+            .verb(HohenheimVerbs.REINSTALL)
             .gate(OperationGate.open())
             .command(COMMAND_FACET)
             .facts(OperationFact.REACHES_OUTSIDE)
@@ -284,6 +301,7 @@ public final class InstanceOperations {
             .label(HohenheimMicrocopy.INSTANCE.of("capture_template").withFallback("Capture as template"))
             .icon(Icon.of("box-archive"))
             .one(INSTANCE)
+            .verb(HohenheimVerbs.CAPTURE_TEMPLATE)
             .gate(OperationGate.open())
             .result(Integer.class)
             .command(COMMAND_FACET)
@@ -300,9 +318,10 @@ public final class InstanceOperations {
             .label(HohenheimMicrocopy.INSTANCE.of("delete_with_data").withFallback("Delete with data"))
             .icon(Icon.of("trash-can"))
             .one(INSTANCE)
+            .verb(HohenheimVerbs.DELETE_WITH_DATA)
             .gate(OperationGate.open())
             .command(COMMAND_FACET)
-            .facts(OperationFact.REACHES_OUTSIDE)
+            .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)
             .register();
 
     /**
@@ -317,6 +336,7 @@ public final class InstanceOperations {
         .label(CmsMicrocopy.of("delete"))
         .icon(Icon.TRASH)
         .one(INSTANCE)
+        .verb(OperationVerb.DELETE)
         .gate(OperationGate.open())
         .result(Integer.class)
         .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)
@@ -342,6 +362,8 @@ public final class InstanceOperations {
             .label(HohenheimMicrocopy.INSTANCE_MIGRATE.of("migrate").withFallback("Migrate"))
             .icon(Icon.of("truck-fast"))
             .one(INSTANCE)
+            .notForAssistants("names its destination host by a stored number, not a code; its tool comes once the"
+                + " input names a host by its code")
             .gate(OperationGate.open())
             .input(OperationInput.of(FormSpec.builder().add(TARGET_SERVER).build(), MigrateInput.class,
                 values -> new MigrateInput(values.get(TARGET_SERVER))))
@@ -385,6 +407,7 @@ public final class InstanceOperations {
             .label(HohenheimMicrocopy.INSTANCE_DEVICE.of("add_media"))
             .icon(Icon.of("compact-disc"))
             .one(INSTANCE)
+            .verb(HohenheimVerbs.ATTACH_MEDIA)
             .gate(OperationGate.open())
             .input(OperationInput.of(FormSpec.builder().add(DRIVE_MEDIA).build(), InstallMediaInput.class,
                 values -> new InstallMediaInput(values.get(DRIVE_MEDIA))))
@@ -408,6 +431,7 @@ public final class InstanceOperations {
             .label(HohenheimMicrocopy.INSTANCE_DEVICE.of("remove_media"))
             .icon(Icon.of("compact-disc"))
             .one(INSTANCE)
+            .verb(HohenheimVerbs.DETACH_MEDIA)
             .gate(OperationGate.open())
             .command(COMMAND_FACET)
             .facts(OperationFact.REACHES_OUTSIDE)
@@ -439,6 +463,7 @@ public final class InstanceOperations {
         .label(HohenheimMicrocopy.INSTANCE.of("shell").withFallback("Shell"))
         .icon(Icon.of("terminal"))
         .one(INSTANCE)
+        .notForAssistants("opens an interactive shell in the browser, which no tool call can hold")
         .gate(gate(HohenheimCapabilities.SHELL))
         .facts(OperationFact.REACHES_OUTSIDE)
         .register();
@@ -450,6 +475,7 @@ public final class InstanceOperations {
             .label(HohenheimMicrocopy.INSTANCE.of("framebuffer").withFallback("Framebuffer"))
             .icon(Icon.of("display"))
             .one(INSTANCE)
+            .notForAssistants("opens a machine's screen in the browser, which no tool call can hold")
             .gate(gate(HohenheimCapabilities.CONSOLE))
             .facts(OperationFact.REACHES_OUTSIDE)
             .register();
@@ -461,6 +487,7 @@ public final class InstanceOperations {
             .label(HohenheimMicrocopy.SCHEDULE_ACTION.of("app_update").withFallback("App update"))
             .icon(Icon.of("arrow-up-from-bracket"))
             .one(INSTANCE)
+            .verb(HohenheimVerbs.UPDATE_APP)
             .gate(gate(HohenheimCapabilities.CONFIG))
             .result(String.class)
             .command(COMMAND_FACET)

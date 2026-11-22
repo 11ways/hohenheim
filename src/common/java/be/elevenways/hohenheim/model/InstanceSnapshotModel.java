@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
 import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 
 import be.elevenways.protoblast.common.i18n.wording.Noun;
@@ -33,6 +34,10 @@ public class InstanceSnapshotModel extends Model {
     public static final ModelRef<InstanceSnapshotModel> REF = ModelRef.of(InstanceSnapshotModel.class, MODEL_ID);
 
     public static final Schema SCHEMA = new Schema();
+
+    /** THE short code a snapshot is named by in an assistant's tools: "SN12". */
+    public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
+        RecordCodeBehaviour.allocated(MODEL_ID, "SN"));
 
     /** The {@link #STATUS} vocabulary; each member states whether a snapshot in it can be restored. */
     public enum Status {

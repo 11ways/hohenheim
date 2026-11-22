@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
 import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 
 import be.elevenways.protoblast.common.i18n.wording.Noun;
@@ -60,6 +61,10 @@ public class InstanceModel extends Model {
     public static final ModelRef<InstanceModel> REF = ModelRef.of(InstanceModel.class, MODEL_ID);
 
     public static final Schema SCHEMA = new Schema();
+
+    /** THE short code an app is named by in an assistant's tools: "AP12". */
+    public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
+        RecordCodeBehaviour.allocated(MODEL_ID, "AP"));
 
     /** {@link #STATUS}: record exists, nothing was ever deployed. */
     public static final String STATUS_CREATED = "created";
