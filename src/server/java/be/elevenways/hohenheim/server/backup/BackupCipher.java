@@ -9,9 +9,6 @@ import org.bouncycastle.crypto.params.AEADParameters;
 import org.bouncycastle.crypto.params.KeyParameter;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
-import javax.crypto.Cipher;
-import javax.crypto.spec.GCMParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -19,7 +16,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 
@@ -28,54 +24,77 @@ import java.security.SecureRandom;
  * goes through: four magic bytes naming the format, the key id (2-byte length + UTF-8), a 12-byte IV, then the
  * ciphertext. Magic and key id ride as GCM additional data, so a header swap is an authentication failure.
  *
- * AIDEV-NOTE: decryption STREAMS through BouncyCastle's GCM, never the JDK Cipher: the JDK's AES/GCM decrypt holds
- * back ALL ciphertext until doFinal, so an artifact larger than the heap could be written and never read back.
- * BouncyCastle releases plaintext as it goes and checks the tag at the end; the plaintext lands in a file
- * {@link #decrypt} deletes when the tag fails, so nothing unauthenticated ever reaches a restore. Encryption keeps the
- * JDK cipher, which streams on that side. The format is standard AES-256-GCM with a 128-bit tag.
+ * AIDEV-NOTE: BOTH directions stream through BouncyCastle's GCM ({@link #gcm}), never the JDK Cipher. The JDK's
+ * AES/GCM decrypt holds back ALL ciphertext until doFinal, so an artifact larger than the heap could be written and
+ * never read back; its encrypt counts its input in an int and throws "SunJCE provider only supports input size up to
+ * 2147483647 bytes" past 2 GiB (GaloisCounterMode.GCMEncrypt.checkDataLength), which failed every nightly dump of a
+ * database over 2 GiB from 2026-11-08 on. BouncyCastle releases output as it goes and checks the tag at the end; the
+ * plaintext lands in a file {@link #decrypt} deletes when the tag fails, so nothing unauthenticated ever reaches a
+ * restore. The format is standard AES-256-GCM with a 128-bit tag, byte-identical to what the JDK cipher wrote, so
+ * every artifact written before still opens. One key and IV cover at most {@link #MAX_PLAINTEXT_BYTES}: a larger
+ * plaintext is refused before a byte is written, never cut into an artifact that cannot be read back.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
  */
 public final class BackupCipher {
 
+    /**
+     * The most plaintext one AES-GCM key and IV may cover (NIST SP 800-38D: 2^39 - 256 bits), the 2^32 - 2 counter
+     * blocks BouncyCastle's GCM counts down before it refuses with "Attempt to process too many blocks".
+     */
+    public static final long MAX_PLAINTEXT_BYTES = ((1L << 32) - 2) * 16;
+
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final int GCM_TAG_BITS = 128;
     private static final int IV_BYTES = 12;
+    private static final int CHUNK_BYTES = 64 * 1024;
 
     private BackupCipher() {
     }
 
-    /** Encrypt {@code plainFile} into {@code outFile} under the keyring's active key, stamped with {@code magic}. */
+    /**
+     * Encrypt {@code plainFile} into {@code outFile} under the keyring's active key, stamped with {@code magic}.
+     *
+     * @throws IOException naming the size and {@link #MAX_PLAINTEXT_BYTES} when the plaintext is larger than one GCM
+     *                     key and IV may cover; {@code outFile} is removed whenever the encryption does not finish
+     */
     public static void encrypt(byte @NonNull [] magic, @NonNull Path plainFile, @NonNull Path outFile,
                                @NonNull EncryptionKeyring keyring) throws IOException {
+        long size = Files.size(plainFile);
+        if (size > MAX_PLAINTEXT_BYTES) {
+            throw tooLarge(plainFile, size, MAX_PLAINTEXT_BYTES);
+        }
         String keyId = keyring.activeKeyId();
+        byte[] keyIdBytes = keyId.getBytes(StandardCharsets.UTF_8);
         byte[] iv = new byte[IV_BYTES];
         RANDOM.nextBytes(iv);
-        try (OutputStream out = Files.newOutputStream(outFile,
-                StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
-            byte[] keyIdBytes = keyId.getBytes(StandardCharsets.UTF_8);
-            out.write(magic);
-            out.write((keyIdBytes.length >> 8) & 0xFF);
-            out.write(keyIdBytes.length & 0xFF);
-            out.write(keyIdBytes);
-            out.write(iv);
-
-            Cipher cipher = gcm(magic, keyring.activeKey(), iv, keyIdBytes);
-            byte[] buffer = new byte[64 * 1024];
-            try (InputStream in = Files.newInputStream(plainFile)) {
-                int read;
-                while ((read = in.read(buffer)) >= 0) {
-                    byte[] chunk = cipher.update(buffer, 0, read);
-                    if (chunk != null && chunk.length > 0) {
-                        out.write(chunk);
+        GCMModeCipher cipher = gcm(true, magic, keyring.activeKey().getEncoded(), iv, keyIdBytes);
+        try (InputStream in = Files.newInputStream(plainFile)) {
+            OutputStream out = Files.newOutputStream(outFile,
+                StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            // Removed only once this call has opened it: an outFile it never reached stays as it was.
+            boolean written = false;
+            try {
+                try (out) {
+                    out.write(magic);
+                    out.write((keyIdBytes.length >> 8) & 0xFF);
+                    out.write(keyIdBytes.length & 0xFF);
+                    out.write(keyIdBytes);
+                    out.write(iv);
+                    // The file may have grown since it was measured: the limit holds on what is actually read.
+                    stream(cipher, in, out, plainFile, MAX_PLAINTEXT_BYTES);
+                    try {
+                        finish(cipher, out);
+                    } catch (InvalidCipherTextException impossible) {
+                        throw new IOException("Backup encryption failed", impossible);
                     }
                 }
-            }
-            try {
-                out.write(cipher.doFinal());
-            } catch (GeneralSecurityException impossible) {
-                throw new IOException("Backup encryption failed", impossible);
+                written = true;
+            } finally {
+                if (!written) {
+                    Files.deleteIfExists(outFile);
+                }
             }
         }
     }
@@ -83,8 +102,8 @@ public final class BackupCipher {
     /**
      * Decrypt {@code encrypted} into {@code plainOut}, verifying the GCM tag over the whole ciphertext.
      *
-     * @throws IOException naming the corruption (wrong magic, truncated header, unknown key, failed tag); the
-     *                     plaintext file is removed before it is thrown
+     * @throws IOException naming the corruption (wrong magic, truncated header, unknown key, failed tag, longer than
+     *                     any artifact can be); the plaintext file is removed before it is thrown
      */
     public static void decrypt(byte @NonNull [] magic, @NonNull Path encrypted, @NonNull Path plainOut,
                                @NonNull EncryptionKeyring keyring) throws IOException {
@@ -112,34 +131,17 @@ public final class BackupCipher {
                     + "', which this controller's keyring does not contain; restore needs"
                     + " the keyring the backup was written under");
             }
-            GCMModeCipher cipher = GCMBlockCipher.newInstance(AESEngine.newInstance());
-            cipher.init(false, new AEADParameters(
-                new KeyParameter(keyring.keyById(keyId).getEncoded()), GCM_TAG_BITS, iv));
-            cipher.processAADBytes(magic, 0, magic.length);
-            cipher.processAADBytes(keyIdBytes, 0, keyIdBytes.length);
+            GCMModeCipher cipher = gcm(false, magic, keyring.keyById(keyId).getEncoded(), iv, keyIdBytes);
             try (OutputStream out = Files.newOutputStream(plainOut,
                     StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
-                byte[] buffer = new byte[64 * 1024];
-                byte[] chunk = new byte[cipher.getUpdateOutputSize(buffer.length)];
-                int read;
-                while ((read = in.read(buffer)) >= 0) {
-                    int needed = cipher.getUpdateOutputSize(read);
-                    if (chunk.length < needed) {
-                        chunk = new byte[needed];
-                    }
-                    int produced = cipher.processBytes(buffer, 0, read, chunk, 0);
-                    out.write(chunk, 0, produced);
-                }
-                byte[] tail = new byte[cipher.getOutputSize(0)];
-                int produced;
+                stream(cipher, in, out, encrypted, MAX_PLAINTEXT_BYTES + GCM_TAG_BITS / 8);
                 try {
-                    produced = cipher.doFinal(tail, 0);
+                    finish(cipher, out);
                 } catch (InvalidCipherTextException tampered) {
                     throw new IOException("Backup artifact fails authentication: the ciphertext"
                         + " does not match its GCM tag. The backup is corrupt or tampered with"
                         + " and is refused whole -- nothing was restored from it", tampered);
                 }
-                out.write(tail, 0, produced);
             }
             verified = true;
         } finally {
@@ -149,15 +151,53 @@ public final class BackupCipher {
         }
     }
 
-    private static Cipher gcm(byte[] magic, SecretKeySpec key, byte[] iv, byte[] aadKeyId) throws IOException {
-        try {
-            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            cipher.init(Cipher.ENCRYPT_MODE, key, new GCMParameterSpec(GCM_TAG_BITS, iv));
-            cipher.updateAAD(magic);
-            cipher.updateAAD(aadKeyId);
-            return cipher;
-        } catch (GeneralSecurityException error) {
-            throw new IOException("AES-GCM unavailable or key invalid", error);
+    /** The one GCM construction of both directions: magic, then key id, as the additional data. */
+    private static @NonNull GCMModeCipher gcm(boolean forEncryption, byte @NonNull [] magic, byte @NonNull [] key,
+                                              byte @NonNull [] iv, byte @NonNull [] keyIdBytes) {
+        GCMModeCipher cipher = GCMBlockCipher.newInstance(AESEngine.newInstance());
+        cipher.init(forEncryption, new AEADParameters(new KeyParameter(key), GCM_TAG_BITS, iv));
+        cipher.processAADBytes(magic, 0, magic.length);
+        cipher.processAADBytes(keyIdBytes, 0, keyIdBytes.length);
+        return cipher;
+    }
+
+    /**
+     * Feeds all of {@code in} through {@code cipher} into {@code out}, a chunk at a time.
+     *
+     * @throws IOException naming {@code source} once more than {@code maxInputBytes} were read, before the chunk
+     *                     that crosses the limit reaches the cipher
+     */
+    private static void stream(@NonNull GCMModeCipher cipher, @NonNull InputStream in, @NonNull OutputStream out,
+                               @NonNull Path source, long maxInputBytes) throws IOException {
+        byte[] buffer = new byte[CHUNK_BYTES];
+        byte[] chunk = new byte[cipher.getUpdateOutputSize(buffer.length)];
+        long total = 0;
+        int read;
+        while ((read = in.read(buffer)) >= 0) {
+            total += read;
+            if (total > maxInputBytes) {
+                throw tooLarge(source, total, maxInputBytes);
+            }
+            int needed = cipher.getUpdateOutputSize(read);
+            if (chunk.length < needed) {
+                chunk = new byte[needed];
+            }
+            int produced = cipher.processBytes(buffer, 0, read, chunk, 0);
+            out.write(chunk, 0, produced);
         }
+    }
+
+    /** Writes what the cipher still holds: the tag when encrypting, the last plaintext once the tag held. */
+    private static void finish(@NonNull GCMModeCipher cipher, @NonNull OutputStream out)
+            throws IOException, InvalidCipherTextException {
+        byte[] tail = new byte[cipher.getOutputSize(0)];
+        int produced = cipher.doFinal(tail, 0);
+        out.write(tail, 0, produced);
+    }
+
+    private static @NonNull IOException tooLarge(@NonNull Path source, long bytes, long limit) {
+        return new IOException("Backup input " + source + " is at least " + bytes + " bytes, over the " + limit
+            + "-byte limit of one AES-GCM key and IV (" + MAX_PLAINTEXT_BYTES
+            + " bytes of plaintext, plus the tag in an artifact); refused, and nothing of it is kept");
     }
 }

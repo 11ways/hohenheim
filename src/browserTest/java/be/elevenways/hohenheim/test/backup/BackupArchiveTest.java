@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.backup;
 
 import be.elevenways.hohenheim.server.backup.BackupArchive;
+import be.elevenways.hohenheim.server.backup.BackupCipher;
 import be.elevenways.hohenheim.server.backup.BackupManifest;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.DockerContainerKind;
@@ -10,10 +11,15 @@ import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import javax.crypto.Cipher;
+import javax.crypto.spec.GCMParameterSpec;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.GeneralSecurityException;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -30,7 +36,8 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * directions (an older manifest reads, a newer one is refused), then every refusal
  * lane -- a flipped ciphertext byte (GCM), a flipped payload checksum (manifest pin),
  * and a foreign keyring. Every refusal must happen inside openVerified, which is what
- * runs BEFORE any live state changes.
+ * runs BEFORE any live state changes. {@link BackupCipher}'s byte format is pinned here
+ * against the JDK AES/GCM it was written with until 2026-11-23, and its size limit too.
  */
 class BackupArchiveTest {
 
@@ -341,9 +348,9 @@ class BackupArchiveTest {
         byte[] payload = new byte[3 * 1024 * 1024 + 123];
         new Random(20260923L).nextBytes(payload);
 
-        // 1. A payload spanning dozens of 64 KiB cipher chunks, written by the (unchanged)
-        //    JDK encryptor -- the byte format every production archive already has -- opens
-        //    and extracts byte-for-byte through the streaming decryptor.
+        // 1. A payload spanning dozens of 64 KiB cipher chunks opens and extracts byte-for-byte
+        //    through the streaming decryptor (the format every production archive already has is
+        //    pinned by theCipherFormatIsTheJdkGcmFormatBothWaysAndAHeaderSwapOrBadTagFails).
         Path archive = buildArchive(keyring, payload);
         Path work = tmp.resolve("work");
         BackupArchive.Opened opened = BackupArchive.openVerified(archive, work, keyring);
@@ -378,6 +385,111 @@ class BackupArchiveTest {
             .as("step 3: a truncated archive fails authentication")
             .isInstanceOf(IOException.class)
             .hasMessageContaining("refused whole");
+    }
+
+    /**
+     * BackupCipher streams through BouncyCastle in both directions since the JDK encryptor refused every dump over
+     * 2 GiB; the bytes must stay those of the JDK AES/GCM that wrote every earlier artifact.
+     */
+    @Test
+    void theCipherFormatIsTheJdkGcmFormatBothWaysAndAHeaderSwapOrBadTagFails() throws Exception {
+        EncryptionKeyring keyring = EncryptionKeyring.loadOrCreate(tmp.resolve("ring.keys"));
+        byte[] magic = BackupArchive.MAGIC;
+        byte[] payload = new byte[3 * 1024 * 1024 + 123];
+        new Random(20261123L).nextBytes(payload);
+        Path plain = tmp.resolve("plain.bin");
+        Files.write(plain, payload);
+
+        // 1. What BackupCipher writes is the header and the JDK AES/GCM under the IV it chose, byte for byte.
+        Path written = tmp.resolve("written.hib");
+        BackupCipher.encrypt(magic, plain, written, keyring);
+        byte[] bytes = Files.readAllBytes(written);
+        int ivEnd = magic.length + 2 + keyring.activeKeyId().getBytes(StandardCharsets.UTF_8).length + 12;
+        assertThat(bytes)
+            .as("step 1: the new encryptor writes exactly what the JDK encryptor wrote under the same IV")
+            .isEqualTo(jdkArtifact(magic, keyring, Arrays.copyOfRange(bytes, ivEnd - 12, ivEnd), payload));
+
+        // 2. An artifact the JDK encryptor wrote decrypts to its plaintext.
+        byte[] iv = new byte[12];
+        new Random(7L).nextBytes(iv);
+        Path old = tmp.resolve("old.hib");
+        Files.write(old, jdkArtifact(magic, keyring, iv, payload));
+        Path back = tmp.resolve("back.bin");
+        BackupCipher.decrypt(magic, old, back, keyring);
+        assertThat(Files.readAllBytes(back))
+            .as("step 2: an artifact of the previous encryptor still opens")
+            .isEqualTo(payload);
+
+        // 3. The header rewritten to another kind's magic fails authentication: the magic is GCM additional data.
+        byte[] otherMagic = {'H', 'X', 'B', '1'};
+        byte[] swapped = bytes.clone();
+        System.arraycopy(otherMagic, 0, swapped, 0, otherMagic.length);
+        Path swappedFile = tmp.resolve("swapped.hib");
+        Files.write(swappedFile, swapped);
+        Path swappedOut = tmp.resolve("swapped.bin");
+        assertThat(catchThrowable(() -> BackupCipher.decrypt(otherMagic, swappedFile, swappedOut, keyring)))
+            .as("step 3: a swapped header is an authentication refusal")
+            .isInstanceOf(IOException.class)
+            .hasMessageContaining("refused whole");
+        assertThat(swappedOut).as("step 3: no plaintext survives it").doesNotExist();
+
+        // 4. A wrong tag fails the same way.
+        byte[] badTag = bytes.clone();
+        badTag[badTag.length - 1] ^= 0x01;
+        Path badTagFile = tmp.resolve("bad-tag.hib");
+        Files.write(badTagFile, badTag);
+        Path badTagOut = tmp.resolve("bad-tag.bin");
+        assertThat(catchThrowable(() -> BackupCipher.decrypt(magic, badTagFile, badTagOut, keyring)))
+            .as("step 4: a wrong tag is an authentication refusal")
+            .isInstanceOf(IOException.class)
+            .hasMessageContaining("refused whole");
+        assertThat(badTagOut).as("step 4: no plaintext survives it").doesNotExist();
+    }
+
+    /** The previous implementation's artifact: the header, then the JDK AES/GCM ciphertext and tag. */
+    private static byte[] jdkArtifact(byte[] magic, EncryptionKeyring keyring, byte[] iv, byte[] payload)
+            throws GeneralSecurityException {
+        byte[] keyId = keyring.activeKeyId().getBytes(StandardCharsets.UTF_8);
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(Cipher.ENCRYPT_MODE, keyring.activeKey(), new GCMParameterSpec(128, iv));
+        cipher.updateAAD(magic);
+        cipher.updateAAD(keyId);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        out.writeBytes(magic);
+        out.write(keyId.length >> 8);
+        out.write(keyId.length & 0xFF);
+        out.writeBytes(keyId);
+        out.writeBytes(iv);
+        out.writeBytes(cipher.doFinal(payload));
+        return out.toByteArray();
+    }
+
+    /**
+     * A plaintext past what one GCM key and IV may cover is refused before a byte is read or written: the file is
+     * sparse, so the test stores nothing.
+     */
+    @Test
+    void aPlaintextPastTheGcmLimitIsRefusedNamingItsSizeAndTheLimit() throws IOException {
+        assertThat(BackupCipher.MAX_PLAINTEXT_BYTES)
+            .as("the limit is NIST SP 800-38D's 2^39 - 256 bits")
+            .isEqualTo((1L << 36) - 32);
+        EncryptionKeyring keyring = EncryptionKeyring.loadOrCreate(tmp.resolve("ring.keys"));
+        Path huge = tmp.resolve("huge.bin");
+        long size = BackupCipher.MAX_PLAINTEXT_BYTES + 1;
+        try (RandomAccessFile file = new RandomAccessFile(huge.toFile(), "rw")) {
+            file.setLength(size);
+        }
+        Path out = tmp.resolve("huge.hib");
+        try {
+            assertThat(catchThrowable(() -> BackupCipher.encrypt(BackupArchive.MAGIC, huge, out, keyring)))
+                .as("an over-limit plaintext is refused, naming its size and the limit")
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining(String.valueOf(size))
+                .hasMessageContaining(String.valueOf(BackupCipher.MAX_PLAINTEXT_BYTES));
+            assertThat(out).as("no artifact is left behind").doesNotExist();
+        } finally {
+            Files.delete(huge);
+        }
     }
 
     @Test
