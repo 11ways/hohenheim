@@ -42,5 +42,5 @@
 # ranked by use), plumage +16761 (Phosphor glyphs +7922 of the default Mochi look: Mochi and Y2k are chosenByDefault
 # theme packages and Hohenheim names no theme), TeaVM classlib +14159, domino +3572, elsewhere -22. No java.math, no new
 # server-only class. Standard 5 percent headroom.
-cms.js.raw=11378006 measured=10836196
-cms.js.gzip=2705744 measured=2576899
+cms.js.raw=12456822 measured=11863640
+cms.js.gzip=2937504 measured=2797622
