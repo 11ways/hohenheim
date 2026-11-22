@@ -272,7 +272,7 @@ control EDIT%20soa_expire at=10 kind=zenitforms:control/number input=number requ
 control EDIT%20dnssec_enabled at=11 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control EDIT%20delegation_status at=12 kind=zenitforms:form/select input=select required=false readonly=true options=matches,apex_undeclared,soa_mname_unlisted,parent_unreachable,not_delegated,listed_not_delegated,delegated_not_listed,ns_stale_serial,missing_glue,ns_unreachable binding=searchable:false,clearable:true,presentation:DEFAULT
 control EDIT%20delegation_checked_at at=13 kind=zenitforms:control/datetime input=datetime required=false readonly=true options= binding=
-control EDIT%20delegation_detail at=14 kind=zenitforms:control/string input=multiline required=false readonly=true options= binding=
+control EDIT%20delegation_detail at=14 kind=zenitforms:control/text input=multiline required=false readonly=true options= binding=
 
 case admin.dns-zones.operator.replica admin dns-zones operator
 admission - verdict=admitted
