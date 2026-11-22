@@ -214,6 +214,21 @@ const server = http.createServer((req, res) => {
                     { key: 'PLAIN', kind: 'plain', value: 'visible' },
                     { key: 'TOKEN', kind: 'secret', has_value: true }] });
         }
+        if (req.url === '/api/v1/instances/51/volumes' && req.method === 'GET') {
+            return respond(200, { id: 51, volumes: [{ name: 'data', container_path: '/data', quota_mb: 512,
+                exclusive: false, used_bytes: null, observed_at: null }] });
+        }
+        if (req.url === '/api/v1/instances/51/volumes' && req.method === 'POST') {
+            return respond(200, { id: 51, status: 'declared', volume: { name: 'data',
+                container_path: '/data', quota_mb: 512, exclusive: false } });
+        }
+        if (req.url === '/api/v1/instances/51/volumes/update') {
+            return respond(200, { id: 51, status: 'redeclared', volume: { name: 'data',
+                container_path: '/data', quota_mb: 1024, exclusive: false } });
+        }
+        if (req.url === '/api/v1/instances/51/volumes/delete') {
+            return respond(200, { id: 51, status: 'deleted', name: 'data' });
+        }
         respond(404, {});
     });
 });
@@ -526,6 +541,36 @@ server.listen(0, '127.0.0.1', async () => {
         check('an unmeasured host says so instead of reading as empty', r.status === 0
             && r.stdout.includes('UNMEASURED') && r.stdout.includes('no placement budget'),
             r.stdout + r.stderr);
+
+        // 12g. app volumes: declare / update pass their fields verbatim, list renders, and the
+        //      delete -- which takes the data with it -- carries the typed-name interlock.
+        r = await run(['volume', 'declare', '51', 'data', '/data', 'quota_mb=512']);
+        check('volume declare posts', r.status === 0 && r.stdout.includes('"data" declared on app 51'),
+            r.stdout + r.stderr);
+        check('volume declare hit the declare lane with its fields',
+            requests.at(-1).method === 'POST' && requests.at(-1).url === '/api/v1/instances/51/volumes'
+                && requests.at(-1).body.includes('name=data')
+                && requests.at(-1).body.includes('container_path=%2Fdata')
+                && requests.at(-1).body.includes('quota_mb=512'), requests.at(-1).body);
+        r = await run(['volume', 'update', '51', 'data', 'quota_mb=1024']);
+        check('volume update posts to the redeclare lane', r.status === 0
+            && requests.at(-1).url === '/api/v1/instances/51/volumes/update'
+            && requests.at(-1).body.includes('quota_mb=1024'), r.stdout + r.stderr);
+        r = await run(['volume', 'list', '51']);
+        check('volume list renders', r.status === 0 && r.stdout.includes('/data'), r.stdout + r.stderr);
+        const beforeVolumeDelete = requests.length;
+        r = await run(['volume', 'delete', '51', 'data']);
+        check('volume delete refuses without confirmation', r.status === 1, r.stdout + r.stderr);
+        check('and never sent the delete',
+            !requests.slice(beforeVolumeDelete).some(q => q.url.endsWith('/delete')));
+        r = await run(['volume', 'delete', '51', 'nope', '--yes']);
+        check('volume delete of an unknown name is refused before any delete',
+            r.status === 1 && !requests.slice(beforeVolumeDelete).some(q => q.url.endsWith('/delete')),
+            r.stderr);
+        r = await run(['volume', 'delete', '51', 'data', '--yes']);
+        check('volume delete --yes acts', r.status === 0
+            && requests.at(-1).url === '/api/v1/instances/51/volumes/delete'
+            && requests.at(-1).body === 'name=data', r.stdout + r.stderr);
 
         // 13. help: prints AND exits clean. It used to print the whole page and then
         //     die on `.catch` of undefined, because the handler is synchronous -- so

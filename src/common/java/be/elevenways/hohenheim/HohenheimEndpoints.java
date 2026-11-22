@@ -1091,6 +1091,55 @@ public class HohenheimEndpoints {
         .rateLimit(PAAS_WRITE_LIMIT)
         .build();
 
+    // An app's volumes: the Volumes tab's declare, redeclare and delete operations, whose own gates ask the admin
+    // permission and the app's config capability. The volume is named in the body (`name`), as a device is.
+
+    public static final Endpoint<Object> API_INSTANCE_VOLUMES = Endpoint.<Object>builder()
+        .identifier(HohenheimIds.id("api_instance_volumes"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
+            .addDelimiter().addStatic("volumes").build())
+        .requiresLogin()
+        .rateLimit(PAAS_READ_LIMIT)
+        .build();
+
+    /** csrfExempt is safe: the handler refuses non-API-key principals. */
+    public static final Endpoint<Object> API_INSTANCE_VOLUME_DECLARE = Endpoint.<Object>builder()
+        .identifier(HohenheimIds.id("api_instance_volume_declare"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
+            .addDelimiter().addStatic("volumes").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(PAAS_WRITE_LIMIT)
+        .build();
+
+    /** csrfExempt is safe: the handler refuses non-API-key principals. */
+    public static final Endpoint<Object> API_INSTANCE_VOLUME_REDECLARE = Endpoint.<Object>builder()
+        .identifier(HohenheimIds.id("api_instance_volume_redeclare"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
+            .addDelimiter().addStatic("volumes").addDelimiter().addStatic("update").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(PAAS_WRITE_LIMIT)
+        .build();
+
+    /** Deletes the volume WITH its data. csrfExempt is safe: the handler refuses non-API-key principals. */
+    public static final Endpoint<Object> API_INSTANCE_VOLUME_DESTROY = Endpoint.<Object>builder()
+        .identifier(HohenheimIds.id("api_instance_volume_destroy"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
+            .addDelimiter().addStatic("volumes").addDelimiter().addStatic("delete").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(PAAS_WRITE_LIMIT)
+        .build();
+
     public static final Endpoint<Object> API_ENVIRONMENT_VARIABLES = Endpoint.<Object>builder()
         .identifier(HohenheimIds.id("api_environment_variables"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)

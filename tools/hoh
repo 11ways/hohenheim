@@ -343,6 +343,60 @@ const instanceVerbs = {
     },
 };
 
+// -- volume verbs (hoh volume list|declare|update|delete) ---------------------
+//
+// An app's declared volumes, the Volumes tab's own operations. Deleting one
+// deletes its data, so it carries the same typed-name interlock as the other
+// destroy verbs.
+
+const volumeColumns = ['name', 'container_path', 'quota_mb', 'exclusive', 'used_bytes', 'observed_at'];
+
+const volumeVerbs = {
+
+    async list([appId]) {
+        if (!appId) die('Usage: hoh volume list <app-id>');
+        emit(await get(`/api/v1/instances/${appId}/volumes`), 'volumes', volumeColumns);
+    },
+
+    async declare([appId, name, containerPath, ...pairs]) {
+        const usage = 'Usage: hoh volume declare <app-id> <name> <container-path> [quota_mb=N] [exclusive=true]';
+        if (!appId || !name || !containerPath) die(usage);
+        const form = fieldsOf(pairs, usage);
+        form.name = name;
+        form.container_path = containerPath;
+        const result = await post(`/api/v1/instances/${appId}/volumes`, form);
+        if (flags.json) return emit(result);
+        console.log(`Volume "${result.volume.name}" declared on app ${result.id}`
+            + ` at ${result.volume.container_path}.`);
+    },
+
+    async update([appId, name, ...pairs]) {
+        const usage = 'Usage: hoh volume update <app-id> <name> [container_path=...] [quota_mb=N] [exclusive=...]';
+        if (!appId || !name) die(usage);
+        const form = fieldsOf(pairs, usage);
+        form.name = name;
+        const result = await post(`/api/v1/instances/${appId}/volumes/update`, form);
+        if (flags.json) return emit(result);
+        console.log(`Volume "${result.volume.name}" of app ${result.id} redeclared.`);
+    },
+
+    async delete([appId, name]) {
+        if (!appId || !name) die('Usage: hoh volume delete <app-id> <name> [--yes]');
+        const list = await get(`/api/v1/instances/${appId}/volumes`);
+        if (!(list.volumes || []).some(v => v.name === name)) die('Not found (or not yours).');
+        if (!flags.yes) {
+            const typed = await ask(`Delete volume "${name}" and all its data.`
+                + ' Type the volume name to confirm: ');
+            if (typed === null) {
+                die('Refusing to delete without confirmation (pass --yes in scripts).');
+            }
+            if (typed.trim() !== name) die('Name mismatch; nothing was done.');
+        }
+        const result = await post(`/api/v1/instances/${appId}/volumes/delete`, { name });
+        console.log(`Volume "${result.name}" of app ${result.id} ${result.status}.`);
+    },
+};
+
 // -- managed database verbs (hoh database list|move|delete, hoh engine list) --
 //
 // The move and the delete both carry the NAME interlock the rollback note above
@@ -752,6 +806,11 @@ const commands = {
         emit(await get(`/api/v1/instances/${first}`));
     },
 
+    async volume([first, ...rest]) {
+        if (volumeVerbs[first]) return volumeVerbs[first](rest);
+        die('Usage: hoh volume list|declare|update|delete <app-id> ...');
+    },
+
     async database([first, ...rest]) {
         if (databaseVerbs[first]) return databaseVerbs[first](rest);
         die('Usage: hoh database list | hoh database wait <id> | hoh database move <id>'
@@ -862,6 +921,11 @@ Usage: hoh [--context <name>] <command> [args] [--json] [--yes]
   instance create <name> <kind> [f=v]  Create a workload (admin): settings.* per kind
   instance show <id>                 One instance
   instance delete <id> [--yes]       Destroy a workload (asks for the name)
+  volume list <app-id>               An app's declared volumes
+  volume declare <app-id> <name> <path> [quota_mb=N] [exclusive=true]  Declare a volume
+                                     (admin, with the app's config capability)
+  volume update <app-id> <name> [f=v..]  Redeclare: container_path, quota_mb, exclusive
+  volume delete <app-id> <name> [--yes]  Delete a volume WITH its data (asks for the name)
   access-list list | access-list <id>  Access lists you hold manage on
   access-list create <name> [f=v..]  Create a list (name, satisfy, shared for admins)
   access-list delete <id> [--yes]    Delete a list and its rules (asks for the name)

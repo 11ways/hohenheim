@@ -309,6 +309,7 @@ public final class InstanceApi {
         }));
 
         initDeviceLane();
+        InstanceVolumeApi.init();
     }
 
     /**
@@ -446,12 +447,12 @@ public final class InstanceApi {
     // -- visibility -----------------------------------------------------------
 
     /** A handler of a route naming one instance, reached once the key and the record's visibility passed. */
-    private interface VisibleInstanceHandler {
+    interface VisibleInstanceHandler {
         @Nullable ActionResult<Object> handle(@NonNull Conduit conduit, @NonNull AccessContext ctx, @NonNull Row row);
     }
 
     /** @return the route handler that asks the key, then {@link #visibleInstance}, before {@code handler} runs */
-    private static Endpoint.@NonNull Handler<Object> onVisibleInstance(@NonNull VisibleInstanceHandler handler) {
+    static Endpoint.@NonNull Handler<Object> onVisibleInstance(@NonNull VisibleInstanceHandler handler) {
         return conduit -> {
             AccessContext ctx = ApiConduits.requireKey(conduit);
             if (ctx == null) {

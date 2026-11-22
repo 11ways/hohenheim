@@ -127,6 +127,10 @@ returned). Say so when delegating; the grant UI does not.
 | GET | `/api/v1/instances/{id}/variables` | Variables; secret VALUES are never returned |
 | POST | `/api/v1/instances/{id}/variables` | `key`, `value`, `kind=plain|secret` (default plain) |
 | POST | `/api/v1/instances/{id}/variables/delete` | `key=...` |
+| GET | `/api/v1/instances/{id}/volumes` | The app's declared volumes (whoever may see the app) -- see App volumes below |
+| POST | `/api/v1/instances/{id}/volumes` | Declare a volume: `name`, `container_path`, optional `quota_mb`, `exclusive` (admin, with the app's `config` capability) |
+| POST | `/api/v1/instances/{id}/volumes/update` | Redeclare the volume `name`: only the fields sent change |
+| POST | `/api/v1/instances/{id}/volumes/delete` | Delete the volume `name` WITH its data |
 | GET/POST | `/api/v1/environments/{id}/variables[/delete]` | Same shape, but ADMIN-ONLY (`hohenheim.admin.access`, as narrowed by the key's scopes) -- see Environment variables below |
 
 | GET | `/api/v1/databases` | Managed databases the key holds `view` on -- see Managed databases below |
@@ -521,6 +525,50 @@ that app's delete (`app_delete_has_followers`), server change (`app_server_chang
 (`app_kind_change_has_followers`) are refused, and a backup of the container cannot be restored to a new instance
 (`restore_follows_app`). A start before the app's first deploy is refused `image_from_app_not_deployed`.
 
+## App volumes
+
+An app's volumes are its Volumes tab over the API: the SAME three operations
+(`hohenheim:declare_volume`, `hohenheim:redeclare_volume`, `hohenheim:destroy_volume`,
+`VolumeOperations`) run through the operation pipeline, so their own gates decide: the
+admin permission, and for a declaration the app's `config` capability, asked again by the
+handlers (`VolumeDeclarationOperations`). The route resolves the app at `view` first, as
+the instance lane does, so an app the key may not see is the uniform 404; a key that may
+see it reads its volumes (the /manage twin shows them read-only) and is refused every write
+with 403. A volume is named in the body (`name`), as a device is; a name the app does not
+declare is the 404. Rate limits: `hh_paas_read` on the list, `hh_paas_write` on the writes.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `name` | string, required | One plain path segment (`volume_name_invalid` otherwise); the host directory is `<data_path>/volumes/<app id>/<name>` |
+| `container_path` | string, required | Where the app's releases mount it; two volumes at one path refuse `volume_container_path_conflict` at deploy |
+| `quota_mb` | integer | The size limit; positive (`volume_quota_invalid`), absent = no limit |
+| `exclusive` | boolean | At most one workload holds it at a time (a release drains the old one first) |
+
+The app is the ROUTE's: `instance_id` is fixed by the route, so a declaration naming
+another app is refused `fixed`, and a redeclaration naming one `volume_rehome_unsupported`.
+On a redeclaration and a delete, `name` SELECTS the volume, so it never renames one. A kind
+that mounts no volumes refuses `volume_kind_unsupported`. Each answer carries the volume:
+
+```
+{"id":51,"status":"declared","volume":{"name":"data","container_path":"/data",
+ "quota_mb":512,"exclusive":false,"used_bytes":null,"observed_at":null}}
+```
+
+`used_bytes` and `observed_at` are the last measurement, null until one was taken. The
+host directory is absent by name, as the instance projection keeps the host out.
+
+`POST .../volumes/delete` DELETES THE DATA: the directory goes at the host first, then the
+declaration, so a removal the host refuses keeps the record (`volume_backend_unimplemented`
+and the backend's own refusals are 422). A workspace's `home` refuses
+`volume_home_protected`. The server demands no phrase -- the dialog's typed name is a
+client interlock -- so `hoh volume delete` asks for the volume's name (`--yes` skips it).
+
+A declaration writes the record only. The directory is created, its quota applied, when
+the app's first release mounts it (`InstanceVolumes.mountsFor`, at deploy), and the file
+API (`/api/v1/instances/{id}/files`) reaches an app's volumes through its serving release's
+container, so files cannot be placed into a volume before the app's first deploy has
+passed.
+
 ## Managed databases
 
 An operator scripting a migration (a teardown, a move onto a shared engine) needs
@@ -909,6 +957,10 @@ hoh instances | hoh instance 3 | hoh instance show 3
 hoh instance create earl hohenheim:application \
     settings.repository_url=https://example.test/earl.git settings.branch=main  # admin
 hoh instance delete 3 [--yes]         # destroys the workload; asks for the name
+hoh volume list 51
+hoh volume declare 51 data /data quota_mb=512 [exclusive=true]   # admin, with the app's config capability
+hoh volume update 51 data quota_mb=1024
+hoh volume delete 51 data [--yes]     # deletes the data; asks for the volume name
 hoh access-list list | hoh access-list 31
 hoh access-list create Staff satisfy=all shared=true   # shared is admin-only
 hoh access-list rule add 31 basic_auth data.username=earl data.password=hunter2 enabled=true
