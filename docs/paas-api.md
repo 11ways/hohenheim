@@ -243,6 +243,34 @@ to the delegated columns by the write pipeline (`hostname`, `force_ssl`,
 `hsts_enabled`, `hsts_subdomains`, `exclude_from_letsencrypt`; anything else is a
 422 naming the column), exact match type only, no path, no listener restriction.
 
+### Where a site connects: the operator tier
+
+Some targets dial with any-address reach (a loopback or LAN backend, a controller
+path), so WHERE an operator-owned record connects is written under
+`hohenheim.admin.system` alone (`OperatorTrustedWrites`): a site's `upstream_kind`,
+`settings` and `trusted_upstream`, a git provider's base URL, an app's local source.
+`hohenheim.admin.system` is NOT delegable, unlike `hohenheim.admin.access`: a delegated
+admin keeps every other column, and the installation operator (the bootstrap account,
+which holds `*`) is the one who holds it. A site the API or the panel creates as an
+admin is operator-owned (no one is granted `manage` on it), so creating one that serves
+an app (`hohenheim:instance`), or an address upstream, is that tier's act; a write
+without it is the 422 `operator_trusted_target` on the first target column it touches
+("Only the installation operator can change where this record connects").
+
+A key reaches exactly the panel's decision, because a key's authority is its OWNER's
+grants intersected with its SCOPES (`PermissionResolver`). The panel session of the
+operator carries `*` unnarrowed, so the panel passes; the operator's key passes only
+when its scopes cover `hohenheim.admin.system`. A key scoped `hohenheim.admin.access`
+alone is an admin key for every admin-only route and is still refused here -- that is
+the refusal an operator key met on a live install. To automate site creation, the
+operator mints a key on their own account (`/account/api-keys`) whose scopes include
+`hohenheim.admin.system` beside `hohenheim.admin.access` (or `hohenheim.*`). Nobody
+else can mint that authority: a delegated admin's key with the same scope carries
+nothing its owner lacks, so it is refused exactly as its owner is in the panel, and a
+tenant's key never reaches the admin-only create at all (403). The rule is the same for
+every upstream kind and every guarded record. `SiteApiTest.anAppSiteNeedsTheOperatorTierOnTheKeyAsOnThePanel`
+pins all four answers.
+
 ### `POST /api/v1/sites`
 
 | Field | Type | Notes |

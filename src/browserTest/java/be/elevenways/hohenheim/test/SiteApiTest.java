@@ -1,14 +1,18 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimSources;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.proxy.RouteClaims;
+import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.zenit.auth.CapabilityScopes;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ApiKeyService;
+import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.security.AccountabilityOrigin;
 import be.elevenways.zenit.common.orm.history.ChangeOp;
@@ -407,5 +411,71 @@ class SiteApiTest extends HohenheimHttpTestBase {
             .isNull();
         assertThat(keyPost(keyTenant, "/api/v1/sites/" + tenantSiteId + "/domains/" + domainId + "/delete", "")
             .statusCode()).as("step 4: a second removal remains a missing-record 404").isEqualTo(404);
+    }
+
+    /**
+     * Where an operator-owned site connects is the non-delegable {@code hohenheim.admin.system} tier's, and a key
+     * reaches the panel's decision exactly: the operator's key carries that tier only when its scopes cover it, and
+     * no key lends it to an owner who lacks it.
+     */
+    @Test
+    void anAppSiteNeedsTheOperatorTierOnTheKeyAsOnThePanel() throws Exception {
+        UUID operatorId = Models.get(UserModel.class).find()
+            .where(UserModel.EMAIL.eq("test@hohenheim.local")).first().get(UserModel.ID);
+        String adminOnly = ApiKeyService.create(operatorId, PREFIX + "admin-only",
+            List.of(HohenheimSources.ADMIN_ACCESS.value()), null).plaintext();
+        String operator = ApiKeyService.create(operatorId, PREFIX + "operator",
+            List.of(HohenheimSources.ADMIN_ACCESS.value(), HohenheimSources.ADMIN_SYSTEM.value()), null).plaintext();
+        UUID delegateId = user("site-api-delegate@surface.test", "Site Api Delegate");
+        GrantService.createDirectGrant(GrantSubjectType.USER, delegateId, HohenheimSources.ADMIN_ACCESS.value(), true);
+        String delegate = ApiKeyService.create(delegateId, PREFIX + "delegate", List.of("hohenheim.*"), null)
+            .plaintext();
+        Row app = Models.get(InstanceModel.class).createEmptyRow();
+        app.set(InstanceModel.NAME, PREFIX + "app");
+        app.set(InstanceModel.KIND, ApplicationKind.ID.toString());
+        app.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "alpine", "tag", "latest")));
+        app.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);
+        Models.get(InstanceModel.class).save(app);
+        String appSite = form("upstream_kind", "hohenheim:instance", "instance_id",
+            String.valueOf((Object) app.get(InstanceModel.ID)));
+        try {
+            // 1. The operator's key scoped to the admin permission alone: the refusal a live install met, on the
+            //    upstream.
+            HttpResponse<String> narrow = keyPost(adminOnly, "/api/v1/sites", "name=" + PREFIX + "narrow&" + appSite);
+            assertThat(narrow.statusCode()).as("step 1: refused (%s)", narrow.body()).isEqualTo(422);
+            assertThat(codeOf(narrow.body())).as("step 1: by the operator-tier rule")
+                .isEqualTo("operator_trusted_target");
+            assertThat(fieldOf(narrow.body())).as("step 1: on the upstream").isEqualTo("upstream_kind");
+
+            // 2. A delegated admin's key covering everything still carries only what its owner holds.
+            HttpResponse<String> delegated = keyPost(delegate, "/api/v1/sites", "name=" + PREFIX + "delegated&"
+                + appSite);
+            assertThat(delegated.statusCode()).as("step 2: refused (%s)", delegated.body()).isEqualTo(422);
+            assertThat(codeOf(delegated.body())).as("step 2: by the same rule").isEqualTo("operator_trusted_target");
+
+            // 3. A tenant's key never reaches the operator's create at all.
+            assertThat(keyPost(keyTenant, "/api/v1/sites", "name=" + PREFIX + "tenant-app&" + appSite).statusCode())
+                .as("step 3: a tenant is refused").isEqualTo(403);
+
+            // 4. The operator's key whose scopes cover the operator tier creates the site the panel creates, and
+            //    the site remembers that the operator tier set where it connects.
+            HttpResponse<String> created = keyPost(operator, "/api/v1/sites", "name=" + PREFIX + "app-site&"
+                + appSite);
+            assertThat(created.statusCode()).as("step 4: created (%s)", created.body()).isEqualTo(200);
+            Row site = Models.get(SiteModel.class).findById(idOf(created.body()));
+            assertThat((Object) site.get(SiteModel.INSTANCE_ID)).as("step 4: serving the app")
+                .isEqualTo(app.get(InstanceModel.ID));
+            assertThat((Object) site.get(SiteModel.TARGET_TRUSTED)).as("step 4: aimed by the operator tier")
+                .isEqualTo(true);
+            assertThat(Models.get(SiteModel.class).find()
+                    .where(SiteModel.NAME.in(PREFIX + "narrow", PREFIX + "delegated", PREFIX + "tenant-app")).all())
+                .as("step 4: and none of the refused creates left a site").isEmpty();
+        } finally {
+            for (Row site : Models.get(SiteModel.class).find().withTrashed()
+                    .where(SiteModel.INSTANCE_ID.eq(app.get(InstanceModel.ID))).all()) {
+                HardDeletes.byId(Models.get(SiteModel.class), site.get(SiteModel.ID));
+            }
+            HardDeletes.byId(Models.get(InstanceModel.class), app.get(InstanceModel.ID));
+        }
     }
 }
