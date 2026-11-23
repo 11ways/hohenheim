@@ -54,6 +54,7 @@ import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.host.HostFixtures;
+import be.elevenways.hohenheim.test.MicrocopyText;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -476,7 +477,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
                 assertThat(((Select<?>) media).options().resolve(EditContext.of(TenantConduits.operator())))
                     .as("step 5: offering the ISO on the host that holds it").anySatisfy(option -> {
                         assertThat(option.value()).isEqualTo("debian.iso");
-                        assertThat(option.group()).isEqualTo(PREFIX + "socket-host");
+                        assertThat(MicrocopyText.say(option.group())).isEqualTo(PREFIX + "socket-host");
                     });
 
                 // 6. With no ISO on any host, both picks say so in words from the one home: the record's pick names

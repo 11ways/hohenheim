@@ -83,10 +83,6 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
         for (Row site : sites.find().withTrashed().where(SiteModel.NAME.startsWith(PREFIX)).all()) {
             HardDeletes.byId(sites, site.get(SiteModel.ID));
         }
-        InstanceModel instances = Models.get(InstanceModel.class);
-        for (Row instance : instances.find().withTrashed().where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
-            HardDeletes.byId(instances, instance.get(InstanceModel.ID));
-        }
     }
 
     /**

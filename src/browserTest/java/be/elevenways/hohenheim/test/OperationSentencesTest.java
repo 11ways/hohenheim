@@ -4,13 +4,18 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.data.RecordSource;
+import be.elevenways.zenit.common.data.RecordSourceRegistry;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.Operations;
 import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
+import be.elevenways.zenit.server.operation.RecordSourceOperations;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -30,10 +35,18 @@ class OperationSentencesTest extends HohenheimHttpTestBase {
         ShippedCatalogs catalogs = new ShippedCatalogs();
         List<String> missing = new ArrayList<>();
         int seen = 0;
+        // A source's list tool is zenit core's declaration in the source's namespace, made on the first tool list
+        // (RecordSourceOperations.list), so whether it is registered here depends on which class ran before: it is a
+        // read that records nothing, and none of it is Hohenheim's words.
+        Set<Identifier> coreLists = new HashSet<>();
+        for (RecordSource<?> source : RecordSourceRegistry.INSTANCE.all()) {
+            Operation<?, ?, ?> list = RecordSourceOperations.declaredList(source);
+            if (list != null) coreLists.add(list.id());
+        }
 
         // 1. The registry is the set: every operation this product registered at boot.
         for (Identifier id : Operations.registry().ids()) {
-            if (!namespace.equals(id.getNamespace())) {
+            if (!namespace.equals(id.getNamespace()) || coreLists.contains(id)) {
                 continue;
             }
             seen++;
