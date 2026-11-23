@@ -14,10 +14,18 @@ import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.InstanceBackupModel;
+import be.elevenways.hohenheim.model.DatabaseDumpModel;
+import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.InstanceTemplateModel;
+import be.elevenways.hohenheim.site.SiteOperations;
+import be.elevenways.hohenheim.instance.InstanceBackupOperations;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.cms.DatabaseDumpParts;
+import be.elevenways.hohenheim.server.cms.PutOnline;
 import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.mcp.HohenheimMcpModule;
@@ -40,6 +48,10 @@ import be.elevenways.zenit.auth.server.ApiKeyService;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationRunStatus;
+import be.elevenways.zenit.common.operation.OperationRunModel;
+import be.elevenways.zenit.common.operation.SubjectType;
+import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -63,6 +75,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -454,6 +467,135 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                     .isEqualTo(rival.call("read", Map.of("ids", List.of(noRun))).text().replace(noRun, "<code>"));
             }
         }
+    }
+
+    /**
+     * Runs over records that state no readers of their own (a site's rollback, a backup's and a dump's restore in
+     * place, a service put online refused while its template was the subject, an address put online over the site it
+     * made) are their starter's alone: another tenant learns of each exactly what he learns of a run that does not
+     * exist, by the panel's run page, its live part, run_read and read.
+     */
+    @Test
+    void anotherTenantReadsNoRunOverARecordThatStatesNoReaders() throws Exception {
+        URI endpoint = URI.create(baseUrl() + "/zn/mcp/" + HohenheimMcpModule.SERVER_NAME);
+        McpHostServer server = Objects.requireNonNull(McpHostServers.routed(HohenheimMcpModule.SERVER_NAME));
+        UUID ownerId = user(PREFIX + letters() + "@surface.test", "Run Owner");
+        UUID rivalId = user(PREFIX + letters() + "@surface.test", "Run Rival");
+        int siteId = site(PREFIX + "runs-" + letters());
+        int rivalSite = site(PREFIX + "rival-" + letters());
+        RecordGrants.grant(GrantSubjectType.USER, ownerId, SiteModel.MODEL_ID, siteId, HohenheimCapabilities.MANAGE,
+            true);
+        RecordGrants.grant(GrantSubjectType.USER, rivalId, SiteModel.MODEL_ID, rivalSite,
+            HohenheimCapabilities.MANAGE, true);
+        int appId = record(InstanceModel.class, row -> {
+            row.set(InstanceModel.NAME, PREFIX + "app-" + letters());
+            row.set(InstanceModel.KIND, "hohenheim:docker_container");
+            row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "alpine", "tag", "latest")));
+            row.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);
+        });
+        int backupId = record(InstanceBackupModel.class, row -> {
+            row.set(InstanceBackupModel.INSTANCE_ID, appId);
+            row.set(InstanceBackupModel.STATUS, "complete");
+        });
+        int dumpId = record(DatabaseDumpModel.class, row -> {
+            row.set(DatabaseDumpModel.DATABASE_NAME, PREFIX + "db");
+            row.set(DatabaseDumpModel.ENGINE, DatabaseModel.ENGINE_POSTGRES);
+            row.set(DatabaseDumpModel.STATUS, "complete");
+        });
+        int templateId = record(InstanceTemplateModel.class, row -> {
+            row.set(InstanceTemplateModel.NAME, PREFIX + "template-" + letters());
+            row.set(InstanceTemplateModel.KIND, "hohenheim:docker_container");
+            row.set(InstanceTemplateModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "alpine", "tag", "latest")));
+            // Approved, so every tenant may choose it: the open read that leaked the run admitted the rival.
+            row.set(InstanceTemplateModel.APPROVED_AT, Now.instant());
+            row.set(InstanceTemplateModel.APPROVED_BY_USER_ID, TenantConduits.operatorUser().get(UserModel.ID));
+        });
+        try {
+            // 1. The owner of the site started five runs, one per kind of subject that states no readers.
+            Map<String, Long> runs = new LinkedHashMap<>();
+            runs.put("site rollback", run(SiteOperations.ROLLBACK_RELEASE, SiteOperations.SITE, siteId, ownerId,
+                OperationRunStatus.SUCCEEDED));
+            runs.put("backup restore", run(InstanceBackupOperations.RESTORE_BACKUP_IN_PLACE,
+                InstanceBackupOperations.BACKUP, backupId, ownerId, OperationRunStatus.FAILED));
+            runs.put("dump restore", run(DatabaseDumpParts.RESTORE_IN_PLACE, DatabaseDumpParts.DUMP, dumpId, ownerId,
+                OperationRunStatus.SUCCEEDED));
+            runs.put("service put online", run(PutOnline.PUT_SERVICE_ONLINE,
+                Objects.requireNonNull(PutOnline.PUT_SERVICE_ONLINE.subjectType()), templateId, ownerId,
+                OperationRunStatus.REFUSED));
+            runs.put("address put online", run(PutOnline.PUT_ADDRESS_ONLINE, SiteOperations.SITE, siteId, ownerId,
+                OperationRunStatus.SUCCEEDED));
+            AccessContext owner = AccessContext.of(TenantConduits.stubFor(new UserPrincipal(ownerId, "Run Owner")));
+            String ownerSession = sessionFor(ownerId).token();
+            String rivalSession = sessionFor(rivalId).token();
+            McpHttpSession ownerTools = presetSession(server, endpoint, ownerId, "Run Owner");
+            McpHttpSession rival = presetSession(server, endpoint, rivalId, "Run Rival");
+            String runRead = Objects.requireNonNull(OperationRunOperations.READ.assistantName());
+            String noRun = "RUN999999";
+            long noRunId = 999_999_999L;
+            String page = "/manage/" + HohenheimSlugs.SITES + "/run/";
+            String part = "/zn/live/zenit.cms_operation_run/manage," + HohenheimSlugs.SITES + ",";
+            int missingPage = httpGet(page + noRunId, rivalSession).statusCode();
+            int missingPart = httpGet(part + noRunId, rivalSession).statusCode();
+            assertThat(List.of(missingPage, missingPart)).as("step 1: no run is found by either route")
+                .allMatch(status -> status == 404);
+            for (Map.Entry<String, Long> started : runs.entrySet()) {
+                String what = started.getKey();
+                long id = started.getValue();
+                String code = code(OperationRunModel.MODEL_ID, (int) id, owner);
+
+                // 2. Its starter reads it by every route.
+                assertThat(ownerTools.call(runRead, Map.of("id", code)).error()).as("step 2: " + what + " by its tool")
+                    .isFalse();
+                assertThat(httpGet(page + id, ownerSession).statusCode()).as("step 2: " + what + " by its page")
+                    .isEqualTo(200);
+                assertThat(httpGet(part + id, ownerSession).statusCode()).as("step 2: " + what + " by its part")
+                    .isEqualTo(200);
+
+                // 3. THE ASSERTION: another tenant admitted to the same panel entry reads it as no run at all.
+                McpHttpSession.Answer hidden = rival.call(runRead, Map.of("id", code));
+                assertThat(hidden.error()).as("step 3: " + what + " refused by run_read").isTrue();
+                assertThat(hidden.text().replace(code, "<code>")).as("step 3: " + what + " names nothing to him")
+                    .isEqualTo(rival.call(runRead, Map.of("id", noRun)).text().replace(noRun, "<code>"));
+                assertThat(rival.call("read", Map.of("ids", List.of(code))).text().replace(code, "<code>"))
+                    .as("step 3: nor does a read of " + what)
+                    .isEqualTo(rival.call("read", Map.of("ids", List.of(noRun))).text().replace(noRun, "<code>"));
+                assertThat(httpGet(page + id, rivalSession).statusCode()).as("step 3: " + what + "'s page")
+                    .isEqualTo(missingPage);
+                assertThat(httpGet(part + id, rivalSession).statusCode()).as("step 3: " + what + "'s live part")
+                    .isEqualTo(missingPart);
+            }
+        } finally {
+            HardDeletes.byId(Models.get(InstanceBackupModel.class), backupId);
+            HardDeletes.byId(Models.get(DatabaseDumpModel.class), dumpId);
+            HardDeletes.byId(Models.get(InstanceTemplateModel.class), templateId);
+            HardDeletes.byId(Models.get(InstanceModel.class), appId);
+        }
+    }
+
+    /** @return the id of a row of the model saved with what {@code fill} sets */
+    private static int record(Class<? extends Model> model, Consumer<Row> fill) {
+        Row row = Models.get(model).createEmptyRow();
+        fill.accept(row);
+        Models.get(model).save(row);
+        return (Integer) Objects.requireNonNull(Models.get(model).getPrimaryKeyValue(row));
+    }
+
+    /** @return the id of an ended run of the operation over the subject, stored as its pipeline stores one */
+    private static long run(Operation<?, ?, ?> operation, SubjectType<?> type, int key, UUID starter,
+                            OperationRunStatus status) {
+        OperationRunModel runs = Models.get(OperationRunModel.class);
+        Row row = runs.createEmptyRow();
+        row.set(OperationRunModel.OPERATION, operation.id().toString());
+        row.set(OperationRunModel.INVOCATION_ID, UUID.randomUUID());
+        OperationRunModel.CALLER_PRINCIPAL.write(row, PrincipalRef.account(starter));
+        row.set(OperationRunModel.SUBJECT_TYPE, type.id().toString());
+        row.set(OperationRunModel.SUBJECT_KEY, String.valueOf(key));
+        row.set(OperationRunModel.STATUS, status.storageKey());
+        row.set(OperationRunModel.PROGRESS, 1.0);
+        row.set(OperationRunModel.CLAIM_FENCE, 1L);
+        row.set(OperationRunModel.STARTED_AT, Now.instant());
+        row.set(OperationRunModel.ENDED_AT, Now.instant());
+        return runs.save(row).get(OperationRunModel.ID);
     }
 
     /** A session of a key the account mints from the "Hohenheim assistant" preset, as its API keys page does. */
