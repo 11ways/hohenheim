@@ -1,21 +1,51 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimCapabilities;
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSources;
+import be.elevenways.hohenheim.model.DatabaseDumpModel;
+import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.InstanceBackupModel;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.StackModel;
+import be.elevenways.hohenheim.server.HohenheimRoles;
+import be.elevenways.hohenheim.server.HohenheimRoles.Role;
+import be.elevenways.hohenheim.test.ApiSupport;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.registry.Registry;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
+import be.elevenways.zenit.auth.model.UserPrincipal;
+import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.server.page.CmsRecordSources;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.server.operation.RecordCodes;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
+import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -151,6 +181,175 @@ class ManageSourceRegistrationTest extends HohenheimTestBase {
             RecordSourceRegistry.INSTANCE.restoreSnapshot(registered);
             deriveFrameworkDefaults();
         }
+    }
+
+    /**
+     * Every coded kind says who reads it on each role set a live host runs, and each viewer reads the same codes on
+     * every one of them: an operator all, a tenant what his /manage panel reads, a stranger none.
+     *
+     * AIDEV-NOTE: a boot is process-global, so each role set is a replay of Hohenheim's share of one: its sources
+     * dropped, its two panels built anew under the role snapshot, its registrations run in boot order and zenit-cms's
+     * derivation over the new panels. The full set is the control: the real boot passes, so it must pass here too.
+     */
+    @Test
+    void everyCodedKindIsReadAlikeOnEveryRoleSetALiveHostRuns() {
+        Set<Role> booted = EnumSet.noneOf(Role.class);
+        for (Role role : Role.values()) {
+            if (HohenheimRoles.enabled(role)) {
+                booted.add(role);
+            }
+        }
+        List<RecordSourceRegistry.Entry> registered = RecordSourceRegistry.INSTANCE.snapshot();
+        List<Registry.Entry<Panel>> panels = PanelRegistry.snapshot();
+        int appId = saved(InstanceModel.class, row -> {
+            row.set(InstanceModel.NAME, "coded-reads-app");
+            row.set(InstanceModel.KIND, "hohenheim:docker_container");
+            row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "alpine", "tag", "latest")));
+            row.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);
+        });
+        int backupId = saved(InstanceBackupModel.class, row -> {
+            row.set(InstanceBackupModel.INSTANCE_ID, appId);
+            row.set(InstanceBackupModel.STATUS, "complete");
+        });
+        int dumpId = saved(DatabaseDumpModel.class, row -> {
+            row.set(DatabaseDumpModel.DATABASE_NAME, "coded_reads_db");
+            row.set(DatabaseDumpModel.ENGINE, DatabaseModel.ENGINE_POSTGRES);
+            row.set(DatabaseDumpModel.STATUS, "complete");
+        });
+        UUID tenantId = ApiSupport.user("coded-reads-tenant-" + UUID.randomUUID() + "@surface.test", "Coded Tenant");
+        RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, appId,
+            HohenheimCapabilities.BACKUPS, true);
+        UUID strangerId = ApiSupport.user("coded-reads-stranger-" + UUID.randomUUID() + "@surface.test",
+            "Coded Stranger");
+        Map<String, AccessContext> viewers = new LinkedHashMap<>();
+        viewers.put("operator", TenantConduits.operator());
+        viewers.put("tenant", AccessContext.of(TenantConduits.stubFor(new UserPrincipal(tenantId, "Coded Tenant"))));
+        viewers.put("stranger",
+            AccessContext.of(TenantConduits.stubFor(new UserPrincipal(strangerId, "Coded Stranger"))));
+        String backup = String.valueOf(backupId);
+        String dump = String.valueOf(dumpId);
+        try {
+            // 1. The booted host, every role on: each viewer's codes are what his own panel reads. The backup is
+            //    read by the operator's admin list and the tenant's /manage list; the dump only by the admin list,
+            //    which is also what the dump's derived reference source (its read before this landing) says.
+            Map<String, Set<Identifier>> full = judgement(viewers, backupId, dumpId);
+            assertThat(full).as("step 1: an operator reads both, a tenant his backup, a stranger nothing")
+                .isEqualTo(Map.of("operator", Set.of(InstanceBackupModel.MODEL_ID, DatabaseDumpModel.MODEL_ID),
+                    "tenant", Set.of(InstanceBackupModel.MODEL_ID), "stranger", Set.of()));
+            Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN));
+            Panel manage = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.MANAGE));
+            RecordSource<?> adminBackups = Objects.requireNonNull(CmsRecordSources.panelSource(admin,
+                Objects.requireNonNull(admin.entryBySlug(HohenheimSlugs.INSTANCE_BACKUPS))));
+            RecordSource<?> manageBackups = Objects.requireNonNull(CmsRecordSources.panelSource(manage,
+                Objects.requireNonNull(manage.entryBySlug(HohenheimSlugs.INSTANCE_BACKUPS))));
+            RecordSource<?> dumps = Objects.requireNonNull(
+                RecordSourceRegistry.INSTANCE.referenceSourceFor(DatabaseDumpModel.MODEL_ID));
+            assertThat(adminBackups.readableAmong(viewers.get("operator"), List.of(backup)))
+                .as("step 1: the operator's admin list reads the backup").isNotEmpty();
+            assertThat(manageBackups.readableAmong(viewers.get("tenant"), List.of(backup)))
+                .as("step 1: the tenant's /manage list reads the backup").isNotEmpty();
+            assertThat(manageBackups.readableAmong(viewers.get("stranger"), List.of(backup)))
+                .as("step 1: a stranger's does not").isEmpty();
+            assertThat(dumps.readableAmong(viewers.get("operator"), List.of(dump)))
+                .as("step 1: the dump's own source admits the operator").isNotEmpty();
+            assertThat(dumps.readableAmong(viewers.get("tenant"), List.of(dump)))
+                .as("step 1: and no tenant").isEmpty();
+
+            // 2. Each live role set: every coded kind it stores says who reads it, and every viewer reads exactly
+            //    the codes the full host gives him.
+            Map<String, Set<Role>> shapes = new LinkedHashMap<>();
+            shapes.put("every role (the control)", EnumSet.allOf(Role.class));
+            shapes.put("stacks off (Robbedoes)", EnumSet.complementOf(EnumSet.of(Role.STACKS)));
+            shapes.put("dns, proxy and firewall (Kuifje)", EnumSet.of(Role.DNS, Role.PROXY, Role.FIREWALL));
+            shapes.put("no role", EnumSet.noneOf(Role.class));
+            for (Map.Entry<String, Set<Role>> shape : shapes.entrySet()) {
+                replayBoot(shape.getValue(), registered, panels);
+                assertThat(RecordCodes.kindsWithoutARead())
+                    .as("step 2, " + shape.getKey() + ": THE ASSERTION -- no coded kind goes unread").isEmpty();
+                assertThat(judgement(viewers, backupId, dumpId))
+                    .as("step 2, " + shape.getKey() + ": each viewer reads the codes the full host gives him")
+                    .isEqualTo(full);
+                if (!shape.getValue().contains(Role.STACKS)) {
+                    assertThat(RecordSourceRegistry.INSTANCE.referenceSourceFor(StackModel.MODEL_ID))
+                        .as("step 2, " + shape.getKey() + ": the replay really left the stacks' surface out")
+                        .isNull();
+                }
+            }
+        } finally {
+            roles(booted);
+            PanelRegistry.restoreSnapshot(panels);
+            RecordSourceRegistry.INSTANCE.restoreSnapshot(registered);
+            deriveFrameworkDefaults();
+            HardDeletes.byId(Models.get(InstanceBackupModel.class), backupId);
+            HardDeletes.byId(Models.get(DatabaseDumpModel.class), dumpId);
+            HardDeletes.byId(Models.get(InstanceModel.class), appId);
+        }
+    }
+
+    /** @return per viewer, the kinds of the backup and the dump whose code he reads */
+    private static Map<String, Set<Identifier>> judgement(Map<String, AccessContext> viewers, int backupId,
+                                                         int dumpId) {
+        Map<String, Set<Identifier>> read = new LinkedHashMap<>();
+        viewers.forEach((name, viewer) -> {
+            Set<Identifier> kinds = new HashSet<>();
+            if (RecordCodes.code(InstanceBackupModel.MODEL_ID, String.valueOf(backupId), viewer) != null) {
+                kinds.add(InstanceBackupModel.MODEL_ID);
+            }
+            if (RecordCodes.code(DatabaseDumpModel.MODEL_ID, String.valueOf(dumpId), viewer) != null) {
+                kinds.add(DatabaseDumpModel.MODEL_ID);
+            }
+            read.put(name, kinds);
+        });
+        return read;
+    }
+
+    /**
+     * Hohenheim's share of a boot under the role set, over the booted registries: its sources and its two panels
+     * dropped, then built again in HohenheimHostWiring's order and derived by zenit-cms as CmsBoot does.
+     */
+    private static void replayBoot(Set<Role> enabled, List<RecordSourceRegistry.Entry> registered,
+                                   List<Registry.Entry<Panel>> panels) {
+        roles(enabled);
+        List<RecordSourceRegistry.Entry> others = new ArrayList<>();
+        for (RecordSourceRegistry.Entry entry : registered) {
+            if (!HohenheimIds.PRODUCT.namespace().equals(entry.source().modelId().getNamespace())) {
+                others.add(entry);
+            }
+        }
+        List<Registry.Entry<Panel>> otherPanels = new ArrayList<>();
+        for (Registry.Entry<Panel> entry : panels) {
+            if (!(entry.value() instanceof HohenheimPanel) && !(entry.value() instanceof ManagePanel)) {
+                otherPanels.add(entry);
+            }
+        }
+        PanelRegistry.restoreSnapshot(otherPanels);
+        RecordSourceRegistry.INSTANCE.restoreSnapshot(others);
+        CmsRecordSources.resetForTests();
+        HohenheimSources.register();
+        Panel admin = new HohenheimPanel();
+        Panel manage = new ManagePanel();
+        AdminSources.declare();
+        ManagePanel.declareSources();
+        // Process-wide and declared by the real boot already, as on every host whatever its roles: a no-op here.
+        RoleGatedKindReads.declare();
+        CmsRecordSources.ensureRegistered(admin);
+        CmsRecordSources.ensureRegistered(manage);
+    }
+
+    /** Declare the node's role set and snapshot it, the way a boot's settings load does. */
+    private static void roles(Set<Role> enabled) {
+        for (Role role : Role.values()) {
+            Zenit.SETTINGS_VALUES.setValue(role.setting(), enabled.contains(role));
+        }
+        HohenheimRoles.capture();
+    }
+
+    /** @return the id of a row of the model saved with what {@code fill} sets */
+    private static int saved(Class<? extends Model> model, Consumer<Row> fill) {
+        Row row = Models.get(model).createEmptyRow();
+        fill.accept(row);
+        Models.get(model).save(row);
+        return (Integer) Objects.requireNonNull(Models.get(model).getPrimaryKeyValue(row));
     }
 
     /** Empty the registry and the CMS derivation memo, the state a new process starts in. */

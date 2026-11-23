@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server;
 import be.elevenways.hohenheim.server.cms.AdminSources;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
+import be.elevenways.hohenheim.server.cms.RoleGatedKindReads;
 import be.elevenways.hohenheim.server.security.HohenheimSecurity;
 import be.elevenways.zenit.auth.server.ZenitAuthModule;
 import be.elevenways.zenit.cms.server.boot.CmsBoot;
@@ -75,6 +76,8 @@ public final class HohenheimHostWiring implements ZenitModule {
         // record source must both exist before STARTHTTP binds.
         ManagePanel.installEligibility();
         ManagePanel.registerSiteSource();
+        // Who reads the codes of the kinds a role's panel entries alone used to judge, on every role set alike.
+        RoleGatedKindReads.declare();
         // GET /: operators land on /admin (landingWeight 50), manage-only
         // tenants on /manage (default 100), nobody-with-a-panel gets a refusal.
         CmsPanels.installLandingRedirect();
