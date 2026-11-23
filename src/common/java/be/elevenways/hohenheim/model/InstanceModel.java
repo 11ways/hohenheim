@@ -755,7 +755,18 @@ public class InstanceModel extends Model {
             case EXIT_CODE, MESSAGE -> detail;
             case NONE, PLAIN, HOST_ISOLATION -> null;
         };
-        return Texts.blankAsNull(kept == null ? null : kept.strip().lines().findFirst().orElse(null));
+        return Texts.blankAsNull(kept == null ? null : firstLine(kept.strip()));
+    }
+
+    /** @return the text up to its first line break; String.lines() is missing in the browser build */
+    private static @NonNull String firstLine(@NonNull String text) {
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '\n' || c == '\r') {
+                return text.substring(0, i);
+            }
+        }
+        return text;
     }
 
     /** @return the cause's history fact, its body the first line of the detail the cause declares, else none */
