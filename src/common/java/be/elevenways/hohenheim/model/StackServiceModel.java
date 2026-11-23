@@ -15,6 +15,7 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
+import be.elevenways.zenit.common.peer.SharedWithPeersBehaviour;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.List;
@@ -33,6 +34,10 @@ public class StackServiceModel extends Model {
     public static final ModelRef<StackServiceModel> REF = ModelRef.of(StackServiceModel.class, MODEL_ID);
 
     public static final Schema SCHEMA = new Schema();
+
+    /** A linked master keeps a stored record of these rows (docs/cluster.md says which kinds and why). */
+    public static final SharedWithPeersBehaviour KEPT_BY_MASTER =
+        SCHEMA.addBehaviour(SharedWithPeersBehaviour.of(MODEL_ID));
 
     /** THE short code a stack service is named by in an assistant's tools: "SS12". */
     public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(

@@ -5,6 +5,7 @@ import be.elevenways.protoblast.common.i18n.wording.Noun;
 import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
+import be.elevenways.zenit.common.peer.SharedWithPeersBehaviour;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -46,6 +47,10 @@ public class EnvironmentModel extends Model {
     public static final ModelRef<EnvironmentModel> REF = ModelRef.of(EnvironmentModel.class, MODEL_ID);
 
     public static final Schema SCHEMA = new Schema();
+
+    /** A linked master keeps a stored record of these rows (docs/cluster.md says which kinds and why). */
+    public static final SharedWithPeersBehaviour KEPT_BY_MASTER =
+        SCHEMA.addBehaviour(SharedWithPeersBehaviour.of(MODEL_ID));
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 

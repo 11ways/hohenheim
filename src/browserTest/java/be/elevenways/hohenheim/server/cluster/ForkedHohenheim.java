@@ -4,7 +4,11 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.cluster.LinkFailure;
 import be.elevenways.hohenheim.cluster.LinkState;
 import be.elevenways.hohenheim.model.ControllerIdentityModel;
+import be.elevenways.hohenheim.model.EnvironmentModel;
+import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.LinkedServerModel;
+import be.elevenways.hohenheim.model.ProjectModel;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.HohenheimRoles;
@@ -12,23 +16,32 @@ import be.elevenways.hohenheim.server.HohenheimSettingsBoot;
 import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.cms.LinkedServerParts;
+import be.elevenways.hohenheim.server.cms.SiteWrites;
+import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolvers;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.server.process.RunningProcess;
 import be.elevenways.protoblast.server.process.Subprocess;
+import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.auth.server.ApiKeyService;
+import be.elevenways.zenit.auth.test.TestSessions;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.operation.SecretResult;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.peer.SharedModels;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
+import be.elevenways.zenit.common.session.SessionToken;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.ServerZenitRuntime;
+import be.elevenways.zenit.server.http.SessionCookies;
 import be.elevenways.zenit.server.http.ZenitHttpServer;
 import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.zenit.server.operation.OperationRequest;
@@ -50,6 +63,7 @@ import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
@@ -304,6 +318,86 @@ final class ForkedHohenheim implements AutoCloseable {
                     Now.setOffset(Duration.ofMinutes(Long.parseLong(words[1])));
                     yield "ok";
                 }
+                // "site NAME" makes a site through the site create operation, as an administrator's form does.
+                case "site" -> "site " + OperationPipeline.invoke(OperationRequest.of(SiteWrites.CREATE,
+                        CmsPlacementSurface.ADMIN_ACTION).caller(TestAccessContexts.allAllowed())
+                    .form(Map.of("name", words[1], "upstream_kind", "hohenheim:static",
+                        "settings", Map.of("root_path", "/tmp/" + words[1]), "enabled", false))).value();
+                // "sites N" stores N sites in ONE transaction: one commit, so one nudge and one sync.
+                case "sites" -> {
+                    int many = Integer.parseInt(words[1]);
+                    SiteModel sites = Models.get(SiteModel.class);
+                    sites.getResolvedDatasource().withTransaction(transaction -> {
+                        for (int at = 0; at < many; at++) {
+                            String name = "batch-" + Now.millis() + "-" + at;
+                            Row site = sites.createEmptyRow();
+                            site.set(SiteModel.NAME, name);
+                            site.set(SiteModel.SLUG, name);
+                            site.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
+                            site.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
+                            site.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp/" + name));
+                            site.set(SiteModel.ENABLED, false);
+                            sites.save(site);
+                        }
+                    });
+                    yield "ok";
+                }
+                case "describe" -> {
+                    Row site = Models.get(SiteModel.class).findById(Integer.parseInt(words[1]));
+                    site.set(SiteModel.DESCRIPTION, words[2]);
+                    Models.get(SiteModel.class).save(site);
+                    yield "ok";
+                }
+                case "unsite" -> "unsite " + OperationPipeline.invoke(OperationRequest.of(SiteWrites.DELETE,
+                        CmsPlacementSurface.ADMIN_ACTION).caller(TestAccessContexts.allAllowed())
+                    .subjects(List.of(Models.get(SiteModel.class).findById(Integer.parseInt(words[1]))))).value();
+                // "secret VALUE" stores an environment's variable holding VALUE as its secret.
+                case "secret" -> {
+                    Row project = Models.get(ProjectModel.class).createEmptyRow();
+                    project.set(ProjectModel.NAME, "kept-project-" + Now.millis());
+                    Models.get(ProjectModel.class).save(project);
+                    Row environment = Models.get(EnvironmentModel.class).createEmptyRow();
+                    environment.set(EnvironmentModel.PROJECT_ID, project.get(ProjectModel.ID));
+                    environment.set(EnvironmentModel.NAME, "kept-environment");
+                    Models.get(EnvironmentModel.class).save(environment);
+                    Row variable = Models.get(InstanceVariableModel.class).createEmptyRow();
+                    variable.set(InstanceVariableModel.ENVIRONMENT_ID, environment.get(EnvironmentModel.ID));
+                    variable.set(InstanceVariableModel.KEY, "KEPT_SECRET");
+                    variable.set(InstanceVariableModel.KIND, InstanceVariableModel.KIND_SECRET);
+                    variable.set(InstanceVariableModel.SECRET_VALUE, words[1]);
+                    Models.get(InstanceVariableModel.class).save(variable);
+                    yield "variable " + variable.get(InstanceVariableModel.ID);
+                }
+                // Every shared kind this server holds rows of, as "model=count" sorted, joined by semicolons.
+                case "counts" -> {
+                    List<String> counts = new ArrayList<>();
+                    for (Model model : SharedModels.served()) {
+                        long count = model.find().noCache().count();
+                        if (count > 0) {
+                            counts.add(model.getModelId() + "=" + count);
+                        }
+                    }
+                    Collections.sort(counts);
+                    yield "counts " + String.join(";", counts);
+                }
+                // Waits until every nudge this server asked has been sent to its master.
+                case "settle" -> "settled " + ClusterNudge.awaitIdle(Duration.ofSeconds(50));
+                // Asks its MASTER for that master's shared generations with the key it holds: it is not their master.
+                case "read-master" -> {
+                    Row master = LinkedServers.master();
+                    if (master == null) {
+                        yield "none";
+                    }
+                    LinkCalls.Answer answer = LinkCalls.generations(master.get(LinkedServerModel.BASE_URL),
+                        master.get(LinkedServerModel.LINK_KEY));
+                    yield "status " + (answer instanceof LinkCalls.Answered answered ? answered.status() : -1);
+                }
+                // "api-key" mints an API key of this server's administrator, as its key page does.
+                case "api-key" -> "api-key " + ApiKeyService.create(TenantConduits.operatorUser().get(UserModel.ID),
+                    "cluster-refusal-admin", List.of("hohenheim.*"), null).plaintext();
+                // "session" signs this server's administrator in: the Cookie header its browser then sends.
+                case "session" -> "session " + SessionCookies.requestHeaderValue(Zenit.getSessionStore().get(
+                    SessionToken.of(TestSessions.signedIn(TenantConduits.operatorUser().get(UserModel.ID)))));
                 default -> "unknown " + command;
             };
         }

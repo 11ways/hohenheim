@@ -20,6 +20,7 @@ import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.peer.SharedWithPeersBehaviour;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -44,6 +45,10 @@ public class InstanceDeviceModel extends Model {
     public static final ModelRef<InstanceDeviceModel> REF = ModelRef.of(InstanceDeviceModel.class, MODEL_ID);
 
     public static final Schema SCHEMA = new Schema();
+
+    /** A linked master keeps a stored record of these rows (docs/cluster.md says which kinds and why). */
+    public static final SharedWithPeersBehaviour KEPT_BY_MASTER =
+        SCHEMA.addBehaviour(SharedWithPeersBehaviour.of(MODEL_ID));
 
     /** THE short code a device is named by in an assistant's tools: "DV12". */
     public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
@@ -155,8 +160,8 @@ public class InstanceDeviceModel extends Model {
     }
 
     private static final Noun NOUN = new Noun(Map.of(
-        "en", new Noun.Forms("instance device", "instance devices", Map.of(NounFact.ARTICLE, "an")),
-        "nl", new Noun.Forms("instantieapparaat", "instantieapparaten", Map.of(NounFact.GENDER, "neuter"))));
+        "en", new Noun.Forms("app device", "app devices", Map.of(NounFact.ARTICLE, "an")),
+        "nl", new Noun.Forms("app-apparaat", "app-apparaten", Map.of(NounFact.GENDER, "neuter"))));
 
     @Override public @NonNull Noun noun() { return NOUN; }
 

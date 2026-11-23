@@ -7,6 +7,7 @@ import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 
 import be.elevenways.protoblast.common.i18n.wording.Noun;
 import be.elevenways.protoblast.common.i18n.wording.NounFact;
+import be.elevenways.zenit.common.peer.SharedWithPeersBehaviour;
 import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
@@ -44,6 +45,10 @@ public class InstanceBackupModel extends Model {
     public static final ModelRef<InstanceBackupModel> REF = ModelRef.of(InstanceBackupModel.class, MODEL_ID);
 
     public static final Schema SCHEMA = new Schema();
+
+    /** A linked master keeps a stored record of these rows (docs/cluster.md says which kinds and why). */
+    public static final SharedWithPeersBehaviour KEPT_BY_MASTER =
+        SCHEMA.addBehaviour(SharedWithPeersBehaviour.of(MODEL_ID));
 
     /** THE short code a backup is named by in an assistant's tools: "BK12". */
     public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
@@ -101,8 +106,8 @@ public class InstanceBackupModel extends Model {
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 
     private static final Noun NOUN = new Noun(Map.of(
-        "en", new Noun.Forms("instance backup", "instance backups", Map.of(NounFact.ARTICLE, "an")),
-        "nl", new Noun.Forms("instantieback-up", "instantieback-ups", Map.of(NounFact.GENDER, "common"))));
+        "en", new Noun.Forms("app backup", "app backups", Map.of(NounFact.ARTICLE, "an")),
+        "nl", new Noun.Forms("app-back-up", "app-back-ups", Map.of(NounFact.GENDER, "common"))));
 
     @Override public @NonNull Noun noun() { return NOUN; }
 

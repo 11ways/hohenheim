@@ -24,8 +24,10 @@ import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.ListScope;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.zenit.cms.common.resource.ResourceList;
 import be.elevenways.zenit.cms.common.resource.ResourceReads;
+import be.elevenways.zenit.cms.common.resource.ResourceTabs;
 import be.elevenways.zenit.cms.common.resource.StorePages;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
@@ -63,14 +65,15 @@ import java.util.UUID;
 /**
  * The Servers list: this server first, then every Hohenheim it is linked to, with Let another Hohenheim manage this
  * server and Add a Hohenheim server as buttons, Check now and Remove on each row, and the card saying who manages
- * this server.
+ * this server; a row opens the server's own page (LinkedServerPage).
  *
  * AIDEV-NOTE: a typed store, never a row list: its first row is this server, which no table holds (precedent
  * AppParts). Its columns are the model's own fields (labels, empty-cell words), the name's headed by the record's
- * noun as the board heads it; only the line under the name and the state are the list's own. Every action is a
- * placed operation over LinkedServers; the join code is answered once, as a SecretResult the placement parks for the
- * next render of this list alone (core's SecretDisclosures), whose card shows it through plumage's one-time reveal;
- * it is never stored. Administrators only (HohenheimSources.OPERATOR).
+ * noun as the board heads it; only the line under the name and the state are the list's own. Apps and Sites are each
+ * server's own counts as it last told them (InstallationCounts), this server's read now, never counted from what this
+ * server keeps of another. Every action is a placed operation over LinkedServers; the join code is answered once, as
+ * a SecretResult the placement parks for the next render of this list alone (core's SecretDisclosures), whose card
+ * shows it through plumage's one-time reveal; it is never stored. Administrators only (HohenheimSources.OPERATOR).
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -105,9 +108,12 @@ public final class LinkedServerParts {
      * @param state      the state cell
      * @param version    the version it runs, null when it never answered
      * @param lastAnswer when it last answered, null for this server and one never answering
+     * @param apps       how many apps that server counts, as it last said; null before it said
+     * @param sites      how many sites that server holds, as it last said; null before it said
      */
     public record ServerRow(@NonNull String key, @NonNull String name, @Nullable Microcopy note,
-                            @NonNull StateLineCell state, @Nullable String version, @Nullable Instant lastAnswer) {
+                            @NonNull StateLineCell state, @Nullable String version, @Nullable Instant lastAnswer,
+                            @Nullable Integer apps, @Nullable Integer sites) {
 
         /** @return whether this is this server's own row */
         public boolean own() {
@@ -235,9 +241,12 @@ public final class LinkedServerParts {
                 .renderer(HohenheimTemplateIds.CELL_STATE_LINE).build())
             .column(ColumnSpec.fromField(LinkedServerModel.BUILD).build())
             .column(ColumnSpec.fromField(LinkedServerModel.LAST_SEEN_AT).build())
+            .column(ColumnSpec.fromField(LinkedServerModel.APPS).build())
+            .column(ColumnSpec.fromField(LinkedServerModel.SITES).build())
             .build();
         return PanelResource.builder(HohenheimIds.id("linked_server"), HohenheimSlugs.LINKED_SERVERS, SUBJECT)
-            .label(HohenheimMicrocopy.LINKED_SERVER.of("linked_servers_plural"))
+            // The cluster's own name: a record's trail then names the cluster and its landing once (Servers / Kuifje).
+            .label(HohenheimMicrocopy.NAV_CLUSTER.of("servers"))
             .recordLabel(SERVER)
             .icon(Icon.of("server"))
             .navGroup(NavGroup.DEFAULT)
@@ -246,6 +255,7 @@ public final class LinkedServerParts {
                     (row, column) -> values(row).get(column.name())),
                     LiveFeed.of(AccessContext::isAccount, LinkedServerModel.MODEL_ID))
                 .chrome(ListChrome.MINIMAL)
+                .rowLinkToTab(RecordOverview.SLUG)
                 .widgetsBelow(LinkedServerParts::joinCard)
                 .build())
             .reads(ResourceReads.<ServerRow>typed(ServerRow::key)
@@ -253,6 +263,7 @@ public final class LinkedServerParts {
                 .values(LinkedServerParts::values)
                 .build()
                 .title(row -> Microcopy.literalOrNull(row.name())))
+            .tabs(ResourceTabs.of(List.of(LinkedServerPage.overview(), new LinkedServerPage.Remembered())))
             .actions(List.of(offerJoinAction(), addAction(), checkAction(), removeAction()))
             .build();
     }
@@ -265,9 +276,9 @@ public final class LinkedServerParts {
             .icon(Icon.of("plus"))
             .style(ActionStyle.PRIMARY)
             .inlineInHeader(true)
-            .confirmation(ConfirmationSpec.of(HohenheimMicrocopy.LINKED_SERVER.of("linked_server_add"),
-                HohenheimMicrocopy.LINKED_SERVER.of("linked_server_add_confirm"),
-                HohenheimMicrocopy.LINKED_SERVER.of("linked_server_add_body"), ActionStyle.PRIMARY))
+            .confirmation(ConfirmationSpec.builder().title(HohenheimMicrocopy.LINKED_SERVER.of("linked_server_add"))
+                .confirmLabel(HohenheimMicrocopy.LINKED_SERVER.of("linked_server_add_confirm"))
+                .style(ActionStyle.PRIMARY).build())
             .build();
     }
 
@@ -326,12 +337,19 @@ public final class LinkedServerParts {
     static @NonNull List<ServerRow> rows() {
         String version = LinkedServers.ownVersion();
         List<ServerRow> rows = new ArrayList<>();
-        rows.add(new ServerRow(OWN_KEY, LinkedServers.ownName(),
-            HohenheimMicrocopy.LINKED_SERVER.of("linked_server_this_server"), LinkState.ownCell(), version, null));
+        rows.add(ownRow(version));
         for (Row linked : LinkedServers.all()) {
             rows.add(rowOf(linked, version));
         }
         return rows;
+    }
+
+    /** @return this server's own row, its counts read as it tells them to the servers it is linked to */
+    private static @NonNull ServerRow ownRow(@NonNull String version) {
+        InstallationCounts counts = InstallationCounts.read();
+        return new ServerRow(OWN_KEY, LinkedServers.ownName(),
+            HohenheimMicrocopy.LINKED_SERVER.of("linked_server_this_server"), LinkState.ownCell(), version, null,
+            counts.apps(), counts.sites());
     }
 
     private static @NonNull ServerRow rowOf(@NonNull Row linked, @NonNull String version) {
@@ -340,13 +358,14 @@ public final class LinkedServerParts {
             LinkedServers.roleOf(linked) == LinkRole.MANAGED_BY
                 ? HohenheimMicrocopy.LINKED_SERVER.of("linked_server_manages_this") : null,
             LinkState.cell(linked, version), linked.get(LinkedServerModel.BUILD),
-            linked.get(LinkedServerModel.LAST_SEEN_AT));
+            linked.get(LinkedServerModel.LAST_SEEN_AT), linked.get(LinkedServerModel.APPS),
+            linked.get(LinkedServerModel.SITES));
     }
 
     /** @return the row of this key, null for no such server */
     static @Nullable ServerRow load(@NonNull String key) {
         if (OWN_KEY.equals(key)) {
-            return rows().getFirst();
+            return ownRow(LinkedServers.ownVersion());
         }
         UUID id;
         try {
@@ -374,6 +393,8 @@ public final class LinkedServerParts {
         values.put(STATE_COLUMN, row.state());
         values.put(LinkedServerModel.BUILD.getName(), row.version());
         values.put(LinkedServerModel.LAST_SEEN_AT.getName(), row.lastAnswer());
+        values.put(LinkedServerModel.APPS.getName(), row.apps());
+        values.put(LinkedServerModel.SITES.getName(), row.sites());
         return values;
     }
 

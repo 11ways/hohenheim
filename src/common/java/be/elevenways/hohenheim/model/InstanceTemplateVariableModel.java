@@ -16,6 +16,7 @@ import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.peer.SharedWithPeersBehaviour;
 import be.elevenways.zenit.common.validation.validator.Regex;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -40,6 +41,10 @@ public class InstanceTemplateVariableModel extends Model {
     }
 
     public static final Schema SCHEMA = new Schema();
+
+    /** A linked master keeps a stored record of these rows (docs/cluster.md says which kinds and why). */
+    public static final SharedWithPeersBehaviour KEPT_BY_MASTER =
+        SCHEMA.addBehaviour(SharedWithPeersBehaviour.of(MODEL_ID));
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 

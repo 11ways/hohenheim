@@ -1,8 +1,8 @@
 # Linked Hohenheim servers
 
 Several complete Hohenheims can be linked so one panel manages them all later. This page describes the link
-itself: how two servers join, what they say to each other, the states a link shows and how it ends. Nothing else is
-shared yet: no record of another server is listed, no page of another server is shown.
+itself: how two servers join, what they say to each other, the states a link shows and how it ends, and what a
+master remembers of the servers it manages. Lists that mix servers and pages of another server's things come later.
 
 ## Words
 
@@ -37,7 +37,7 @@ server asks; it grants no permission. Each side also pins the other's controller
 
 ## The calls on the wire
 
-All three are `POST` with a JSON body over https; redirects are never followed and the certificate is verified.
+Every call is a `POST` with a JSON body over https; redirects are never followed and the certificate is verified.
 Linked servers are reached on the public internet only, unless the host declares
 `hohenheim.cluster.allow_private_networks` in its host network declaration.
 
@@ -46,12 +46,22 @@ Linked servers are reached on the public internet only, unless the host declares
 | join | `/api/cluster/join` | the join code in the body | `name`, `token`, `build`, `time` and the key the master presents from now on; or `refusal` |
 | status | `/api/cluster/status` | `Authorization: Bearer <link key>` | `name`, `token`, `build`, `time` |
 | leave | `/api/cluster/leave` | `Authorization: Bearer <link key>` | `left`; the called side deletes its row |
+| generations | `/api/cluster/generations` | the key of this server's master | `generations`: per shared kind (model id) its stored generation |
+| rows | `/api/cluster/rows` | the key of this server's master | one page of one kind's rows: `before`, `after` (the kind's generation around the page), `rows` (`key`, `code`, `title`, `document`) and `next` |
+| changed | `/api/cluster/changed` | the key of a server this one manages | `asked`; the master syncs that server |
 
 The join body carries `code`, the master's `name`, `base_url`, `token`, `build` and `key` (the key the managed
 server presents to the master). A join refusal answers one of `no_such_code`, `expired`, `too_many_tries` (429),
 `has_master`, `manages_others`, `busy` (409) or `unreadable` (422); `busy` means another server is being linked
 there at this moment. Wrong codes from one address spend a failure budget of five tries per fifteen minutes; once it
 is spent, no code is looked at. An unknown key answers 401 and names nothing.
+
+The status answer also carries `apps` and `sites`: the server's own counts, as its dashboard (Apps) and its Sites
+list count them for an administrator. A rows body carries `model`, `after` (the previous page's `next`, or null) and
+`limit` (the master asks 200 rows a page; a page answer is read up to 32 MiB). Generations and rows answer only this
+server's master: a request with no key, with an API key or any other bearer that is no link key, or with a wrong key
+answers 401; a server this one manages, presenting its own valid key, answers 403. Changed answers only a server
+this one manages and 403 to its master. A refusal names its reason's code alone.
 
 ## Checking each other
 
@@ -69,6 +79,7 @@ every minute too, so its return is noticed within a minute. **Check now** asks a
 | Refuses this server since ... | it answered, refusing this server's key |
 | Not the server that joined | it answered with another controller identity: another database answers there |
 | Runs another version | it answered, running another version than this server |
+| Restored to an earlier state | its database was restored: a kind it shares holds an earlier state than the master keeps |
 
 The Servers page says "Does not answer since ..." from the first failed call. The alert (`linked_server_down`) and
 the dashboard's attention item come only once the server has failed for two minutes, the same grace a site outage
@@ -76,6 +87,57 @@ waits (`Alerts.DOWN_AFTER`), and at once after "Not the server that joined". One
 again (`linked_server_recovered`), only when the first was sent. "Runs another version" is an attention item at once
 and sends no alert. After "Not the server that joined" nothing more is sent to that address, not even by Check now
 or Remove, until an administrator adds the server again.
+
+## What the master remembers
+
+A master keeps its own lasting record of everything a server it manages has, so it knows what should be where also
+while that server is silent. The record is core's (`PeerRecords`, tables `zenit_peer_records` and
+`zenit_peer_models`): no model of Hohenheim reads it, so the master's own proxy, nameserver, certificates,
+supervisors, backups and tasks never act on another server's things.
+
+What is shared is declared per kind (`SharedWithPeersBehaviour` on the model): a kind a person or an assistant
+declares, which says what should exist. Shared: access lists and their rules, backup targets, build hooks, database
+engines, databases, DynDNS credentials, DNS peers, records, zones and zone secondaries, environments, game domains,
+Git connections, apps (instances) with their attached databases, devices, files, quotas, variables and volumes, app
+templates with their databases, files, variables and volumes, notification channels, projects, protected paths,
+runtime images, hosts, site sign-in providers, sites with their addresses and redirects, stacks with their files and
+services, and the backups and database dumps (which say what exists off the server). Not shared: what the system
+produces (artifact and build operations, artifact sources, blocked addresses, certificates, install media fetches,
+app logs and snapshots, port allocations, preview deployments, reconcile findings, release operations, released
+addresses, site outages and sessions, stack deployments, webhook deliveries) and what belongs to the install itself
+(its controller identity, its Spamservice installation, its system users, its linked servers and join codes). A kind
+added later is not shared until someone declares it.
+
+The master takes in everything at once when a server is added, in the background. After that the managed server
+tells its master after every committed change of a shared kind (changed; at most one call on its way and one
+waiting), and the master syncs it: per kind it compares the generation (a counter every committed write advances)
+and reads a changed kind's rows again whole, a page at a time. The minute check syncs after every good status answer
+too, so a lost nudge heals within a minute. A server that does not answer is not retried in between. One sync per
+server runs at a time (a lease per server); a nudge during a sync causes exactly one more after it.
+
+The server's page (its name in the Servers list) shows its facts and, in a card under them, "What <master> remembers
+of <server>": per kind, named by the reader's word for it (apps, hosts, templates), the number of records kept, each
+opening the remembered codes and names fifty at a time, and since when the record is in step. The kinds stand in the
+order the panel's sidebar declares their entries (a kind whose entry stands under another, like sites under Apps, at
+that entry's place), then the kinds without a place there by their word. How changes arrive stands under that card. A
+record's full definition is kept but never shown on a page.
+
+When a kind's generation is lower than the one the master keeps, that server's database was restored to an earlier
+state. Nothing is taken in for that kind, nothing kept changes and nothing is repaired: the Servers list shows
+"Restored to an earlier state", the dashboard raises one attention item and one alert is sent
+(`linked_server_restored`), once. Kinds one version shares and the other does not are named on the server's page
+and never guessed.
+
+The master's database now holds the full definitions of the servers it manages, their secrets included (encrypted
+at rest with the master's keyring). Its backups matter as much as theirs.
+
+A shared kind that the system rewrites on a schedule makes the master read that whole kind again after each such
+write. Known today, left as they are: hosts (the host probe stamps `last_seen_at` and the last error at every
+probe), apps (status reconciliation stamps `status` and `status_observed_at`; the disk observation writes
+`disk_used_bytes` and `disk_observed_at` every ten minutes), app volumes (`used_bytes`, `observed_at`, measured),
+DNS zones (a secondary's refresh stamps `last_checked_at`, `last_transfer_at` and `serial`), DNS zone secondaries
+(every transfer and notify stamps `last_axfr_*` and `last_notify_*`), build hooks (`last_triggered_at` at every call)
+and backups and database dumps (a scheduled run adds rows and moves their status).
 
 ## Removing
 
@@ -85,6 +147,9 @@ or Remove, until an administrator adds the server again.
 - it did not answer: the link is gone here, and the other server keeps it until it is removed there too;
 - another database answers at the address: nothing is sent, the link is gone here.
 
+Removing a link also forgets, in the same step, everything the master kept of that server.
+
 ## After an update
 
-Nothing to do: the new tables start empty and an upgraded server is linked to nothing.
+Nothing to do: the new tables and columns start empty and an upgraded server is linked to nothing. A master that
+is already linked reads its servers' counts at the next check and takes in their records at the next sync.

@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.model.LinkedServerCodeModel;
 import be.elevenways.hohenheim.model.LinkedServerModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.MachineName;
+import be.elevenways.hohenheim.server.cms.InstallationCounts;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
@@ -472,24 +473,34 @@ public final class LinkedServers {
         server.set(LinkedServerModel.LINK_KEY_DIGEST, digestOf(theirKey));
         server.set(LinkedServerModel.REMOTE_TOKEN, token);
         server.set(LinkedServerModel.BUILD, text(joined.get("build")));
+        server.set(LinkedServerModel.APPS, count(joined.get("apps")));
+        server.set(LinkedServerModel.SITES, count(joined.get("sites")));
         server.set(LinkedServerModel.LAST_SEEN_AT, Now.instant());
         Models.get(LinkedServerModel.class).insert(server, Change.PLAIN);
+        // The master takes in everything that server has at once, in the background, so the add answers now.
+        ClusterRecords.request(server.get(LinkedServerModel.ID));
         return server;
     }
 
     // --- Status and leave: the called side ---
 
-    /** @return what this server answers a linked server's status call: its name, identity, version and time */
+    /**
+     * @return what this server answers a linked server's status call: its name, identity, version, time and the two
+     *         counts its own dashboard and Sites list show (InstallationCounts)
+     */
     public static @NonNull Map<String, Object> ownStatus() {
         return ownStatus(null);
     }
 
     private static @NonNull Map<String, Object> ownStatus(@Nullable String key) {
+        InstallationCounts counts = InstallationCounts.read();
         Map<String, Object> status = new LinkedHashMap<>();
         status.put("name", ownName());
         status.put("token", ControllerIdentity.token());
         status.put("build", ownVersion());
         status.put("time", Now.instant().toString());
+        status.put("apps", counts.apps());
+        status.put("sites", counts.sites());
         if (key != null) {
             status.put("key", key);
         }
@@ -582,17 +593,25 @@ public final class LinkedServers {
         };
     }
 
-    /** The server answered: its version and when are stamped, and one whose stop was alerted alerts its return. */
+    /**
+     * The server answered: its version, its two counts and when are stamped, one whose stop was alerted alerts its
+     * return, and a server this one manages is synced.
+     */
     private static void answered(@NonNull Row row, @NonNull Map<String, Object> status) {
         Instant now = Now.instant();
         Instant failingSince = row.get(LinkedServerModel.FAILING_SINCE);
         Instant alertedAt = row.get(LinkedServerModel.ALERTED_AT);
         int won = asRead(row).assign(LinkedServerModel.LAST_SEEN_AT, now)
             .assign(LinkedServerModel.BUILD, text(status.get("build")))
+            .assign(LinkedServerModel.APPS, count(status.get("apps")))
+            .assign(LinkedServerModel.SITES, count(status.get("sites")))
             .assign(LinkedServerModel.FAILING_SINCE, null)
             .assign(LinkedServerModel.LAST_FAILURE, null)
             .assign(LinkedServerModel.ALERTED_AT, null)
             .updateAll();
+        if (roleOf(row) == LinkRole.MANAGES) {
+            ClusterRecords.request(row.get(LinkedServerModel.ID));
+        }
         if (won == 0 || failingSince == null || alertedAt == null) {
             return;
         }
@@ -655,9 +674,13 @@ public final class LinkedServers {
         return Removal.KEPT_THERE;
     }
 
+    /** Removes a linked server's row and, in the same step, everything this server keeps of it. */
     private static void forget(@NonNull Row row) {
         UUID id = row.get(LinkedServerModel.ID);
-        Models.get(LinkedServerModel.class).find().where(LinkedServerModel.ID.eq(id)).delete();
+        Models.get(LinkedServerModel.class).getResolvedDatasource().withTransaction(transaction -> {
+            Models.get(LinkedServerModel.class).find().where(LinkedServerModel.ID.eq(id)).delete();
+            ClusterRecords.forget(id);
+        });
     }
 
     // --- Helpers ---
@@ -703,6 +726,12 @@ public final class LinkedServers {
 
     private static @Nullable String text(@Nullable Object value) {
         return value instanceof String string ? Texts.trimmedOrNull(string) : null;
+    }
+
+    /** @return a count a status answer carries, null when it carries none (an older version answering) */
+    private static @Nullable Integer count(@Nullable Object value) {
+        return value instanceof Number number && number.longValue() >= 0 && number.longValue() <= Integer.MAX_VALUE
+            ? (int) number.longValue() : null;
     }
 
     /** The one-row update every state move starts from. */

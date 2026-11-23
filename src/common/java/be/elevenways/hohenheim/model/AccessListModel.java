@@ -13,6 +13,7 @@ import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.peer.SharedWithPeersBehaviour;
 import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -34,6 +35,10 @@ public class AccessListModel extends Model {
     public static final ModelRef<AccessListModel> REF = ModelRef.of(AccessListModel.class, MODEL_ID);
 
     public static final Schema SCHEMA = new Schema();
+
+    /** A linked master keeps a stored record of these rows (docs/cluster.md says which kinds and why). */
+    public static final SharedWithPeersBehaviour KEPT_BY_MASTER =
+        SCHEMA.addBehaviour(SharedWithPeersBehaviour.of(MODEL_ID));
 
     /** THE short code an access list is named by in an assistant's tools: "AL12". */
     public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(

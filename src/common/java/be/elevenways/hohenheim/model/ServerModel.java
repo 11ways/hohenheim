@@ -20,6 +20,7 @@ import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
 import be.elevenways.zenit.common.orm.datasource.context.SaveToDatasource;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.ModelRef;
+import be.elevenways.zenit.common.peer.SharedWithPeersBehaviour;
 import be.elevenways.zenit.common.security.PrincipalField;
 import be.elevenways.zenit.common.security.PrincipalKinds;
 import be.elevenways.zenit.common.security.PrincipalRef;
@@ -59,6 +60,10 @@ public class ServerModel extends Model {
     public static final ModelRef<ServerModel> REF = ModelRef.of(ServerModel.class, MODEL_ID);
 
     public static final Schema SCHEMA = new Schema();
+
+    /** A linked master keeps a stored record of these rows (docs/cluster.md says which kinds and why). */
+    public static final SharedWithPeersBehaviour KEPT_BY_MASTER =
+        SCHEMA.addBehaviour(SharedWithPeersBehaviour.of(MODEL_ID));
 
     /** THE short code a server is named by in an assistant's tools: "SR12". */
     public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
@@ -1074,9 +1079,10 @@ public class ServerModel extends Model {
         return HohenheimIds.id(String.valueOf(serverId)).toString();
     }
 
+    /** What a reader calls a server row: a host, as the panel names it; a server is a whole Hohenheim install. */
     private static final Noun NOUN = new Noun(Map.of(
-        "en", new Noun.Forms("server", "servers", Map.of(NounFact.ARTICLE, "a")),
-        "nl", new Noun.Forms("server", "servers", Map.of(NounFact.GENDER, "common"))));
+        "en", new Noun.Forms("host", "hosts", Map.of(NounFact.ARTICLE, "a")),
+        "nl", new Noun.Forms("host", "hosts", Map.of(NounFact.GENDER, "common"))));
 
     @Override public @NonNull Noun noun() { return NOUN; }
 

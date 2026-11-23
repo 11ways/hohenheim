@@ -14,6 +14,7 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.peer.SharedWithPeersBehaviour;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.List;
@@ -34,6 +35,10 @@ public class SiteAuthProviderModel extends Model {
     }
 
     public static final Schema SCHEMA = new Schema();
+
+    /** A linked master keeps a stored record of these rows (docs/cluster.md says which kinds and why). */
+    public static final SharedWithPeersBehaviour KEPT_BY_MASTER =
+        SCHEMA.addBehaviour(SharedWithPeersBehaviour.of(MODEL_ID));
 
     /** PermissionSuggestionSources key: the assigned Proteus realm's vocabulary (registered server-side). */
     public static final Identifier PROTEUS_SUGGESTION_SOURCE = HohenheimIds.id("proteus_realm");

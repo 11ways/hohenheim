@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.model.ModelRef;
+import be.elevenways.zenit.common.peer.SharedWithPeersBehaviour;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
@@ -40,6 +41,10 @@ public class DatabaseModel extends Model {
     public static final ModelRef<DatabaseModel> REF = ModelRef.of(DatabaseModel.class, MODEL_ID);
 
     public static final Schema SCHEMA = new Schema();
+
+    /** A linked master keeps a stored record of these rows (docs/cluster.md says which kinds and why). */
+    public static final SharedWithPeersBehaviour KEPT_BY_MASTER =
+        SCHEMA.addBehaviour(SharedWithPeersBehaviour.of(MODEL_ID));
 
     /** THE short code a database is named by in an assistant's tools: "DB12". */
     public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(

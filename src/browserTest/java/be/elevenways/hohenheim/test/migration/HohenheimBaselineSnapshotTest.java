@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.migration.M001_HohenheimBaseline;
 import be.elevenways.hohenheim.migration.M002_AfterBaseline;
 import be.elevenways.hohenheim.migration.M003_CertificateSigningRequests;
 import be.elevenways.hohenheim.migration.M004_SiteOutages;
+import be.elevenways.hohenheim.migration.M005_LinkedServers;
 import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationKey;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
@@ -27,7 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * ({@value #CHAIN_RESOURCE}): rendered once on 2026-10-21 from a fresh SQLite database the old chain migrated through
  * auto-discovery (hohenheim 718bedc3), kept to the tables the baseline creates so another stream's schema change never
  * touches it. It is history, never regenerated; an appended migration changes neither side. The baseline runs with
- * no other stream, which also proves it depends on no other stream's table; the published M002, M003 and M004 run with
+ * no other stream, which also proves it depends on no other stream's table; the published M002 to M005 run with
  * it (a runner admits no chain short of its published migration) and are rolled back through their own down() before
  * the compare.
  *
@@ -52,8 +53,9 @@ class HohenheimBaselineSnapshotTest {
         db.deleteOnExit();
         SqliteDatasource datasource = new SqliteDatasource(TestSqliteFiles.url(db.toPath()));
         List<Supplier<Migration>> migrations = List.of(M001_HohenheimBaseline::new, M002_AfterBaseline::new,
-            M003_CertificateSigningRequests::new, M004_SiteOutages::new);
+            M003_CertificateSigningRequests::new, M004_SiteOutages::new, M005_LinkedServers::new);
         new MigrationRunner(datasource, migrations).migrate().requireSuccess();
+        new MigrationRunner(datasource, migrations).rollback(MigrationKey.of(new M005_LinkedServers())).requireSuccess();
         new MigrationRunner(datasource, migrations).rollback(MigrationKey.of(new M004_SiteOutages())).requireSuccess();
         new MigrationRunner(datasource, migrations).rollback(MigrationKey.of(new M003_CertificateSigningRequests()))
             .requireSuccess();

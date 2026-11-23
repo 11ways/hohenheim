@@ -11,7 +11,9 @@ import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.zenit.common.orm.field.BooleanField;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
 import be.elevenways.zenit.common.orm.field.EnumField;
+import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
+import be.elevenways.zenit.common.orm.field.TextField;
 import be.elevenways.zenit.common.orm.field.UuidField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.ModelRef;
@@ -83,6 +85,28 @@ public class LinkedServerModel extends Model {
 
     /** When this run of failures was alerted; null while it answers and inside the grace before the alert. */
     public static final DateTimeField ALERTED_AT = SCHEMA.addField(DateTimeField.builder().name("alerted_at").build());
+
+    /** How many apps that server's own dashboard counts, as its last status answer said; kept while it is silent. */
+    public static final IntegerField APPS = SCHEMA.addField(IntegerField.builder().name("apps")
+        .label(HohenheimMicrocopy.LINKED_SERVER.of("linked_server_apps")).build());
+
+    /** How many sites that server holds, as its last status answer said; kept while it is silent. */
+    public static final IntegerField SITES = SCHEMA.addField(IntegerField.builder().name("sites")
+        .label(HohenheimMicrocopy.LINKED_SERVER.of("linked_server_sites")).build());
+
+    /** Since when the record of that server is in step; null before its first sync and once a kind went back. */
+    public static final DateTimeField IN_STEP_SINCE = SCHEMA.addField(DateTimeField.builder().name("in_step_since")
+        .build());
+
+    /** The kinds whose generation went back on that server (its database was restored), model ids joined by commas. */
+    public static final TextField WENT_BACK = SCHEMA.addField(TextField.builder().name("went_back").build());
+
+    /** When a kind first went back: the one restored alert's mark; null while none did. */
+    public static final DateTimeField RESTORED_AT = SCHEMA.addField(DateTimeField.builder().name("restored_at")
+        .build());
+
+    /** The kinds one side shares and the other does not (the two builds differ), model ids joined by commas. */
+    public static final TextField SKIPPED = SCHEMA.addField(TextField.builder().name("skipped").build());
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());

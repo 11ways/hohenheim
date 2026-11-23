@@ -2,11 +2,15 @@ package be.elevenways.hohenheim.server.cluster;
 
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.cluster.ClusterEndpoints;
 import be.elevenways.hohenheim.cluster.JoinRefusal;
 import be.elevenways.hohenheim.cluster.LinkRole;
 import be.elevenways.hohenheim.cluster.LinkState;
+import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.LinkedServerModel;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.cms.ClusterAttention;
 import be.elevenways.hohenheim.server.cms.LinkedServerParts;
@@ -17,12 +21,21 @@ import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.i18n.MessageResolvers;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.util.Uuids;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
+import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
+import be.elevenways.zenit.common.orm.field.StringField;
+import be.elevenways.zenit.common.orm.field.TextField;
 import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.migration.FrozenModel;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.peer.PeerModelSyncModel;
+import be.elevenways.zenit.common.peer.PeerRecordModel;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.routing.Endpoint;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.delivery.DeliveryChannel;
@@ -32,8 +45,11 @@ import be.elevenways.zenit.notifications.server.NotificationDispatcher;
 import be.elevenways.zenit.notifications.server.Notifications;
 import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.zenit.server.operation.OperationRequest;
+import be.elevenways.zenit.server.peer.PeerRecords;
+import be.elevenways.zenit.server.peer.SharedRowsPage;
 import be.elevenways.zenit.server.security.SecureTokens;
 import be.elevenways.zenit.server.setting.ServerSettings;
+import be.elevenways.zenit.test.support.DatasourceProbe;
 import be.elevenways.zenit.test.support.OutboundFixture;
 import be.elevenways.zenit.test.support.OutboundTlsStub;
 import be.elevenways.zenit.test.support.ServedApp;
@@ -50,11 +66,16 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -73,7 +94,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  * Two real Hohenheims linked end to end: this JVM's served app is the master Robbedoes, a forked JVM is Kuifje; they
  * join with a one-time code, check each other, alert past the outage grace when one stops and again when it answers,
  * refuse another database at the address, part with and without the other side answering, make one link at a time,
- * and refuse what the one-master rule and the join code forbid; a sweep asks silent servers at the same time.
+ * and refuse what the one-master rule and the join code forbid; a sweep asks silent servers at the same time. The
+ * master keeps its own record of what Kuifje has, its rows read a page at a time over the link.
  *
  * AIDEV-NOTE: each side reaches the other the way production does, an https call through its one pinned fetcher:
  * the other's host name is an OutboundFixture TLS stub routed to a TlsRelay in front of the other's plain port. Time
@@ -123,9 +145,10 @@ class LinkedServersJourneyTest {
         channel.set(NotificationChannelModel.EVENTS, List.of());
         channels.save(channel);
 
-        // The master's calls to Kuifje: its name over TLS, relayed to whichever child listens now.
+        // The master's calls to Kuifje: its name over TLS, relayed to whichever child listens now (none yet).
         relay = TlsRelay.open();
         child = OutboundFixture.routeTls(CHILD_HOST, relay.port());
+        relay.start(child.serverContext(), closedPort());
     }
 
     @AfterAll
@@ -146,14 +169,278 @@ class LinkedServersJourneyTest {
         }
         HardDeletes.where(Models.get(NotificationChannelModel.class),
             NotificationChannelModel.NAME.eq("cluster-alerts"));
+        awaitSyncs();
+        for (Row linked : Models.get(LinkedServerModel.class).find().all()) {
+            ClusterRecords.forget(linked.get(LinkedServerModel.ID));
+        }
         Models.get(LinkedServerModel.class).find().delete();
+    }
+
+    /**
+     * The master keeps its own record of everything Kuifje has: it takes it all in at the add, hears of every change
+     * on Kuifje at once, keeps it while Kuifje is silent, notices once that Kuifje's database was put back to an
+     * earlier state and applies nothing then, forgets it with the link, and hands Kuifje's rows to nobody but its
+     * master.
+     */
+    @Test
+    void theMasterRemembersWhatALinkedServerHas(@TempDir Path directory, TestReporter reporter) throws Exception {
+        Path kuifjeDb = directory.resolve("kuifje.db");
+        ForkedHohenheim kuifje = boot(directory, kuifjeDb, true, reporter);
+        relay.retarget(kuifje.port());
+        try {
+            // 1. Kuifje holds a site before it is linked; the add takes in everything it has, in the background,
+            //    and the kept counts per kind equal Kuifje's own; the list's Sites column is Kuifje's own count.
+            String early = after("site ", kuifje.ask("site early-site"));
+            add(codeOf(kuifje.ask("offer")));
+            awaitSyncs();
+            Row server = only();
+            String peer = ClusterRecords.peerKey(server);
+            String masterKey = server.get(LinkedServerModel.LINK_KEY);
+            String own = kuifje.ask("counts");
+            assertThat(kept(peer)).as("step 1: the master keeps what Kuifje has, kind by kind").isEqualTo(own);
+            assertThat(PeerRecords.read(peer, SiteModel.MODEL_ID, early)).as("step 1: the site made before the link")
+                .isNotNull();
+            assertThat((Object) server.get(LinkedServerModel.IN_STEP_SINCE)).as("step 1: in step").isNotNull();
+            assertThat((Integer) server.get(LinkedServerModel.SITES)).as("step 1: Kuifje's own count of sites")
+                .isEqualTo(Integer.parseInt(countOf(own, SiteModel.MODEL_ID)));
+
+            // 2. A site made on Kuifje through its real operation is known here at once: Kuifje nudges, the master
+            //    syncs; nobody runs the minute check.
+            String made = after("site ", kuifje.ask("site later-site"));
+            settle(kuifje);
+            PeerRecords.KeptRecord kept = PeerRecords.read(peer, SiteModel.MODEL_ID, made);
+            assertThat(kept).as("step 2: the new site is kept").isNotNull();
+            assertThat(kept.title()).as("step 2: under its name").isEqualTo("later-site");
+
+            // 3. A change and a removal there are followed.
+            assertThat(kuifje.ask("describe " + made + " described-on-kuifje")).isEqualTo("ok");
+            settle(kuifje);
+            assertThat(PeerRecords.read(peer, SiteModel.MODEL_ID, made).document())
+                .as("step 3: the change is kept").contains("described-on-kuifje");
+            assertThat(kuifje.ask("unsite " + made)).startsWith("unsite ");
+            settle(kuifje);
+            assertThat(PeerRecords.read(peer, SiteModel.MODEL_ID, made)).as("step 3: the removal is followed").isNull();
+            assertThat(kept(peer)).as("step 3: in step again").isEqualTo(kuifje.ask("counts"));
+
+            //    The master's statements per sync stay flat as Kuifje's rows grow: one site or six, in one commit.
+            DatasourceProbe probe = DatasourceProbe.on((SqlDatasource) Models.get(PeerRecordModel.class)
+                .getResolvedDatasource());
+            ForkedHohenheim writer = kuifje;
+            DatasourceProbe.Statements one = probe.statementsOf(() -> grow(writer, 1));
+            DatasourceProbe.Statements six = probe.statementsOf(() -> grow(writer, 6));
+            for (String table : List.of(PeerRecordModel.TABLE, PeerModelSyncModel.TABLE)) {
+                assertThat(six.executedNaming(table)).as("step 3: statements on %s for six sites as for one", table)
+                    .isEqualTo(one.executedNaming(table)).isPositive();
+            }
+
+            //    The wire pages: Kuifje's sites read three at a time through the master's own wire come over more
+            //    than one page, each once, exactly the sites the master keeps.
+            LinkWire wire = new LinkWire(CHILD_ADDRESS, masterKey);
+            List<String> paged = new ArrayList<>();
+            int pages = 0;
+            String cursor = null;
+            do {
+                SharedRowsPage page = wire.rows(SiteModel.MODEL_ID, cursor, 3);
+                page.rows().forEach(row -> paged.add(row.key()));
+                cursor = page.next();
+                pages++;
+            } while (cursor != null && pages < 100);
+            assertThat(cursor).as("step 3: the pages end").isNull();
+            assertThat(pages).as("step 3: more than one page").isGreaterThan(1);
+            assertThat(paged).as("step 3: every site once, the ones the master keeps").doesNotHaveDuplicates()
+                .containsExactlyInAnyOrderElementsOf(keptKeys(peer, SiteModel.MODEL_ID));
+
+            // 4. A secret value of an app variable is readable through the master's record and not in its table.
+            String secret = "kept-secret-" + SecureTokens.randomToken(8);
+            String variable = after("variable ", kuifje.ask("secret " + secret));
+            settle(kuifje);
+            assertThat(PeerRecords.read(peer, InstanceVariableModel.MODEL_ID, variable).document())
+                .as("step 4: readable through the record").contains(secret);
+            assertThat(storedDocument(peer, InstanceVariableModel.MODEL_ID, variable))
+                .as("step 4: encrypted in the master's table").doesNotContain(secret);
+
+            // 5. Kuifje is down: everything kept stays, and so do its counts.
+            String keptBefore = kept(peer);
+            Integer sitesBefore = only().get(LinkedServerModel.SITES);
+            kuifje.close();
+            LinkedServers.sweep();
+            awaitSyncs();
+            assertThat(stateOf(only())).as("step 5: Kuifje does not answer").isEqualTo(LinkState.NOT_ANSWERING);
+            assertThat(kept(peer)).as("step 5: everything kept stays").isEqualTo(keptBefore);
+            assertThat((Integer) only().get(LinkedServerModel.SITES)).as("step 5: its count stays")
+                .isEqualTo(sitesBefore);
+
+            // 6. Kuifje's database is put back to an earlier state: the copy taken now, before one more site the
+            //    master takes in. The state, the attention item and the alert come once; nothing kept changes.
+            Path earlier = directory.resolve("kuifje-earlier.db");
+            copy(kuifjeDb, earlier);
+            kuifje = boot(directory, kuifjeDb, false, reporter);
+            relay.retarget(kuifje.port());
+            after("site ", kuifje.ask("site after-copy"));
+            settle(kuifje);
+            String keptBeforeRestore = kept(peer);
+            kuifje.close();
+            Path restored = directory.resolve("kuifje-restored.db");
+            copy(earlier, restored);
+            kuifje = boot(directory, restored, false, reporter);
+            relay.retarget(kuifje.port());
+            int restoredBefore = count("linked_server_restored_subject");
+            LinkedServers.sweep();
+            awaitSyncs();
+            assertThat(stateOf(only())).as("step 6: restored to an earlier state").isEqualTo(LinkState.RESTORED);
+            assertThat(english(LinkState.RESTORED.label(null))).isEqualTo("Restored to an earlier state");
+            assertThat(ClusterRecords.kinds(only().get(LinkedServerModel.WENT_BACK))).as("step 6: the sites went back")
+                .contains(SiteModel.MODEL_ID);
+            List<AttentionItem> items = new ArrayList<>();
+            ClusterAttention.linkedServers(items);
+            assertThat(items).as("step 6: one attention item").hasSize(1);
+            assertThat(english(items.getFirst().title())).isEqualTo("Kuifje was restored to an earlier state");
+            LinkedServers.sweep();
+            awaitSyncs();
+            assertThat(count("linked_server_restored_subject") - restoredBefore).as("step 6: one alert, once")
+                .isEqualTo(1);
+            assertThat(kept(peer)).as("step 6: nothing kept changes").isEqualTo(keptBeforeRestore);
+
+            // 7. Refusals at the three calls. An administrator signed in on Kuifje (a session cookie, never a link
+            //    key) is refused 403 before any call answers: the framework's CSRF guard exempts a self-authenticating
+            //    call for non-interactive callers only. Generations and rows answer the called server's master
+            //    alone: that administrator's own API key and a wrong key are 401; Kuifje, a server the master manages,
+            //    presenting its own valid key to the master's generations is 403. Changed answers only a server the
+            //    called one manages: the master presenting its valid key to Kuifje's changed is 403.
+            String cookie = after("session ", kuifje.ask("session"));
+            String panel = "/admin/" + HohenheimSlugs.LINKED_SERVERS;
+            assertThat(statusAtKuifje(kuifje, panel, cookie, false)).as("step 7: the cookie signs the administrator in")
+                .isEqualTo(200);
+            assertThat(statusAtKuifje(kuifje, panel, null, false)).as("step 7: nobody is signed in without it")
+                .isNotEqualTo(200);
+            for (Endpoint<Object> call : List.of(ClusterEndpoints.GENERATIONS, ClusterEndpoints.ROWS,
+                    ClusterEndpoints.CHANGED)) {
+                assertThat(statusAtKuifje(kuifje, call.toUrl(), cookie, true))
+                    .as("step 7: %s, a signed-in administrator", call.toUrl()).isEqualTo(403);
+            }
+            List<String> notLinkKeys = List.of(after("api-key ", kuifje.ask("api-key")), SecureTokens.randomToken(32));
+            for (String key : notLinkKeys) {
+                assertThat(statusOf(LinkCalls.generations(CHILD_ADDRESS, key))).as("step 7: generations, no link key")
+                    .isEqualTo(401);
+                assertThat(statusOf(LinkCalls.rows(CHILD_ADDRESS, key, SiteModel.MODEL_ID.toString(), null, 10)))
+                    .as("step 7: rows, no link key").isEqualTo(401);
+                assertThat(statusOf(LinkCalls.changed(CHILD_ADDRESS, key))).as("step 7: changed, no link key")
+                    .isEqualTo(401);
+            }
+            assertThat(kuifje.ask("read-master")).as("step 7: a managed server reads nothing of its master")
+                .isEqualTo("status 403");
+            assertThat(statusOf(LinkCalls.changed(CHILD_ADDRESS, masterKey)))
+                .as("step 7: a master does not nudge the server it manages").isEqualTo(403);
+            assertThat(statusOf(LinkCalls.generations(CHILD_ADDRESS, masterKey)))
+                .as("step 7: its master reads it").isEqualTo(200);
+
+            // 8. Removing the link forgets everything kept of Kuifje.
+            assertThat(remove(only())).isEqualTo(LinkedServers.Removal.LEFT.token());
+            awaitSyncs();
+            assertThat(kept(peer)).as("step 8: nothing of Kuifje is kept").isEqualTo("counts ");
+            assertThat(PeerRecords.read(peer, SiteModel.MODEL_ID, early)).isNull();
+        } finally {
+            kuifje.close();
+        }
+    }
+
+    /** Makes {@code count} sites on Kuifje in one commit and waits until the master took them in. */
+    private static void grow(ForkedHohenheim kuifje, int count) {
+        try {
+            assertThat(kuifje.ask("sites " + count)).isEqualTo("ok");
+            settle(kuifje);
+        } catch (Exception failed) {
+            throw new IllegalStateException(failed);
+        }
+    }
+
+    /** Waits until Kuifje told its master of every change, and the master's syncs it caused ended. */
+    private static void settle(ForkedHohenheim kuifje) throws Exception {
+        assertThat(kuifje.ask("settle")).as("Kuifje told its master").isEqualTo("settled true");
+        awaitSyncs();
+    }
+
+    /** Waits, the framework's way, until every sync this master asked ended. */
+    private static void awaitSyncs() {
+        assertThat(ClusterRecords.awaitIdle(Duration.ofSeconds(60))).as("the master's syncs ended").isTrue();
+    }
+
+    /** @return what the master keeps of a linked server, kind by kind, as Kuifje's "counts" answers its own */
+    private static String kept(String peer) {
+        List<String> counts = new ArrayList<>();
+        PeerRecords.counts(peer).forEach((model, count) -> {
+            if (count > 0) {
+                counts.add(model + "=" + count);
+            }
+        });
+        Collections.sort(counts);
+        return "counts " + String.join(";", counts);
+    }
+
+    /** @return the keys of the records (up to 500) the master keeps of one kind of a linked server */
+    private static List<String> keptKeys(String peer, Identifier model) {
+        return PeerRecords.page(peer, model, null, 500).entries().stream().map(PeerRecords.KeptEntry::key).toList();
+    }
+
+    /**
+     * @param cookie the Cookie header sent, null for none
+     * @param post   whether it is a cluster call (a POST with an empty JSON body and no link key) or a page read
+     * @return the status Kuifje answers on its own port, no redirect followed
+     */
+    private static int statusAtKuifje(ForkedHohenheim kuifje, String path, String cookie, boolean post)
+            throws Exception {
+        HttpRequest.Builder request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + kuifje.port() + path));
+        if (cookie != null) {
+            request.header("Cookie", cookie);
+        }
+        if (post) {
+            request.header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString("{}"));
+        }
+        try (HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build()) {
+            return client.send(request.build(), HttpResponse.BodyHandlers.discarding()).statusCode();
+        }
+    }
+
+    /** @return the count one kind has in a "counts" answer */
+    private static String countOf(String counts, Identifier model) {
+        for (String entry : counts.substring("counts ".length()).split(";")) {
+            if (entry.startsWith(model + "=")) {
+                return entry.substring(entry.indexOf('=') + 1);
+            }
+        }
+        return "0";
+    }
+
+    /** @return what an answer says after its word */
+    private static String after(String word, String answer) {
+        assertThat(answer).as("the child answered %s", word.trim()).startsWith(word);
+        return answer.substring(word.length());
+    }
+
+    /** @return the HTTP status a call was answered with, -1 when nothing came back */
+    private static int statusOf(LinkCalls.Answer answer) {
+        return answer instanceof LinkCalls.Answered answered ? answered.status() : -1;
+    }
+
+    /** @return the master's stored document column of one kept record, as its table holds it */
+    private static String storedDocument(String peer, Identifier model, String key) {
+        StringField peerField = StringField.builder("peer").build();
+        StringField modelField = StringField.builder("model").build();
+        StringField recordKey = StringField.builder("record_key").build();
+        TextField document = TextField.builder().name("document").build();
+        List<Row> rows = new ArrayList<>();
+        Db.run(Models.get(PeerRecordModel.class).getResolvedDatasource(), () -> rows.addAll(
+            new FrozenModel(PeerRecordModel.TABLE, peerField, modelField, recordKey, document).find()
+                .where(peerField.eq(peer)).where(modelField.eq(model.toString())).where(recordKey.eq(key)).all()));
+        assertThat(rows).as("one stored record").hasSize(1);
+        return String.valueOf((Object) rows.getFirst().get(document));
     }
 
     @Test
     void twoHohenheimsJoinCheckEachOtherAndPart(@TempDir Path directory, TestReporter reporter) throws Exception {
         Path kuifjeDb = directory.resolve("kuifje.db");
         ForkedHohenheim kuifje = boot(directory, kuifjeDb, true, reporter);
-        relay.start(child.serverContext(), kuifje.port());
+        relay.retarget(kuifje.port());
         try {
             // 1. The managed side issues a join code: twelve letters shown as three groups of four.
             String code = codeOf(kuifje.ask("offer"));
@@ -244,6 +531,8 @@ class LinkedServersJourneyTest {
             assertThat(english(LinkState.OTHER_SERVER.label(null))).isEqualTo("Not the server that joined");
             assertThat(count("linked_server_down_subject") - downBeforeCopy).as("step 7: alerted at once")
                 .isEqualTo(1);
+            // A sync an earlier good answer asked may still be on its way: it ends before the count is taken.
+            awaitSyncs();
             int sent = relay.accepted();
             assertThat(LinkedServers.sweep()).as("step 7: the sweep asks it nothing").isZero();
             assertThat(check(other)).isEqualTo(LinkState.OTHER_SERVER.token());

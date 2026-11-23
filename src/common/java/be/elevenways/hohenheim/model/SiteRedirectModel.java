@@ -18,6 +18,7 @@ import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.peer.SharedWithPeersBehaviour;
 import be.elevenways.zenit.common.ui.ColorHue;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -50,6 +51,10 @@ public class SiteRedirectModel extends Model {
     public static final String DEFAULT_STATUS = "301";
 
     public static final Schema SCHEMA = new Schema();
+
+    /** A linked master keeps a stored record of these rows (docs/cluster.md says which kinds and why). */
+    public static final SharedWithPeersBehaviour KEPT_BY_MASTER =
+        SCHEMA.addBehaviour(SharedWithPeersBehaviour.of(MODEL_ID));
 
     /** THE short code a redirect is named by in an assistant's tools: "RD12". */
     public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(

@@ -6,6 +6,7 @@ import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.zenit.common.orm.model.ModelRef;
+import be.elevenways.zenit.common.peer.SharedWithPeersBehaviour;
 import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimViolations;
@@ -50,6 +51,10 @@ public class AccessRuleModel extends Model {
     public static final ModelRef<AccessRuleModel> REF = ModelRef.of(AccessRuleModel.class, MODEL_ID);
 
     public static final Schema SCHEMA = new Schema();
+
+    /** A linked master keeps a stored record of these rows (docs/cluster.md says which kinds and why). */
+    public static final SharedWithPeersBehaviour KEPT_BY_MASTER =
+        SCHEMA.addBehaviour(SharedWithPeersBehaviour.of(MODEL_ID));
 
     /** THE short code an access rule is named by in an assistant's tools: "RU12". */
     public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(

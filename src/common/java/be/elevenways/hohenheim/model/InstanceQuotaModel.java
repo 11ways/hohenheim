@@ -18,6 +18,7 @@ import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.peer.SharedWithPeersBehaviour;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -58,6 +59,10 @@ public class InstanceQuotaModel extends Model {
     }
 
     public static final Schema SCHEMA = new Schema();
+
+    /** A linked master keeps a stored record of these rows (docs/cluster.md says which kinds and why). */
+    public static final SharedWithPeersBehaviour KEPT_BY_MASTER =
+        SCHEMA.addBehaviour(SharedWithPeersBehaviour.of(MODEL_ID));
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 
@@ -146,8 +151,8 @@ public class InstanceQuotaModel extends Model {
     }
 
     private static final Noun NOUN = new Noun(Map.of(
-        "en", new Noun.Forms("instance quota", "instance quotas", Map.of(NounFact.ARTICLE, "an")),
-        "nl", new Noun.Forms("instantiequotum", "instantiequota", Map.of(NounFact.GENDER, "neuter"))));
+        "en", new Noun.Forms("app quota", "app quotas", Map.of(NounFact.ARTICLE, "an")),
+        "nl", new Noun.Forms("app-quotum", "app-quota", Map.of(NounFact.GENDER, "neuter"))));
 
     @Override public @NonNull Noun noun() { return NOUN; }
 

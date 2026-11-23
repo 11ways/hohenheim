@@ -118,6 +118,10 @@ public final class HohenheimWidgets {
     public static final DisplayWidget JOIN_CODE = register("join_code", HohenheimTemplateIds.WIDGET_JOIN_CODE,
         HohenheimMicrocopy.LINKED_SERVER.of("linked_server_join_code"), "key");
 
+    /** What a master remembers of a linked server: each kind with how many records it keeps, opening their names. */
+    public static final DisplayWidget REMEMBERED = register("remembered", HohenheimTemplateIds.WIDGET_REMEMBERED,
+        HohenheimMicrocopy.LINKED_SERVER.of("linked_server_remembered"), "database");
+
     private HohenheimWidgets() {
     }
 

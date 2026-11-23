@@ -6,8 +6,12 @@ column note at=1 shown=false hidden=true sortable=false filterable=false copyabl
 column state at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column build at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column last_seen_at at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column apps at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column sites at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 header hohenheim:linked_server_offer_join at=0 verb=invoke band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/invoke/hohenheim.linked_server_offer_join
-header hohenheim:linked_server_add at=1 verb=invoke band=inline style=PRIMARY disabled= confirm=style:PRIMARY,title:linked_server_add%252Cscope%3Dlinked_server,body:linked_server_add_body%252Cscope%3Dlinked_server,confirm:linked_server_add_confirm%252Cscope%3Dlinked_server,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:true target=/{panel}/{entry}/invoke/hohenheim.linked_server_add
+header hohenheim:linked_server_add at=1 verb=invoke band=inline style=PRIMARY disabled= confirm=style:PRIMARY,title:linked_server_add%252Cscope%3Dlinked_server,body:,confirm:linked_server_add_confirm%252Cscope%3Dlinked_server,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:true target=/{panel}/{entry}/invoke/hohenheim.linked_server_add
+tab overview at=0 landing=false view=false
+tab remembered at=1 landing=false view=false
 
 case admin.linked-servers.tenant admin linked-servers tenant v2
 admission - verdict=zenit:forbidden

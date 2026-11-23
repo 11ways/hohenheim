@@ -94,6 +94,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.orm.query.rules.RelationRules;
 import be.elevenways.zenit.common.orm.query.rules.RuleVocabulary;
 import be.elevenways.zenit.common.orm.query.rules.SchemaVocabulary;
@@ -178,7 +179,7 @@ public final class InstanceParts {
             // source, so a default-filter-only exclusion would put release rows into every instance picker of the
             // panel. Because the rows 404 here, nothing may link to one directly: recordRoute is the one way a
             // surface links an instance row. Kind-filtering on "release" yields the framework's empty state.
-            .scope(RowScope.within(() -> InstanceModel.KIND.ne(ReleaseKind.ID.toString())))
+            .scope(RowScope.within(InstanceParts::listedByOperator))
             .reads(runtimeReads(InstanceParts::filterVocabulary))
             // Same shape as sites: an instance fleet outgrows a filter row, so it keeps the rule builder and
             // per-operator saved views.
@@ -924,6 +925,14 @@ public final class InstanceParts {
     /** Whether this row's lifecycle belongs to a product tier rather than an operator. */
     static boolean isGenerated(@NonNull Row row) {
         return row.get(InstanceModel.GENERATED_BY) != null;
+    }
+
+    /**
+     * Which instances the operator's Instances list and its record source hold: every one but release rows, whose
+     * application's Deploys tab is their surface. The installation's own app count reads the same rows.
+     */
+    static @NonNull Criteria listedByOperator() {
+        return InstanceModel.KIND.ne(ReleaseKind.ID.toString());
     }
 
     /**

@@ -1,0 +1,45 @@
+{#- The names a master remembers of one kind of a linked server, a page at a time: code and name, from the master's own
+    record, so it reads the same while that server is silent. Never a record's document. -#}
+{% declare title: String %}
+{% declare page: RememberedNames %}
+{% declare head: RecordHeadState = null %}
+{% extend "zenitcms:shell" var:title=title %}
+
+{% block "main" %}
+<section class="cms-resource-list-page">
+    {% if head != null %}{% render "zenitcms:record-head" var:head=head %}{% /if %}
+    <pl-card data-hh-remembered-names>
+        <pl-card-header>
+            <pl-card-title>{{ page.heading }}</pl-card-title>
+        </pl-card-header>
+        <pl-card-content>
+            {% if page.names %}
+            <pl-table>
+                <pl-table-header><pl-table-row>
+                    <pl-table-head>{{ t("linked_server_code", scope: "linked_server") }}</pl-table-head>
+                    <pl-table-head>{{ t("linked_server_name", scope: "linked_server") }}</pl-table-head>
+                </pl-table-row></pl-table-header>
+                <pl-table-body>
+                    {% each page.names as name %}
+                    <pl-table-row>
+                        <pl-table-cell>{{ name.code }}</pl-table-cell>
+                        <pl-table-cell>{{ name.name }}</pl-table-cell>
+                    </pl-table-row>
+                    {% /each %}
+                </pl-table-body>
+            </pl-table>
+            {% else %}
+            <pl-empty-state icon="database">
+                <pl-empty-state-title>{{ t("linked_server_remembers_none_of_kind", scope: "linked_server") }}</pl-empty-state-title>
+            </pl-empty-state>
+            {% /if %}
+        </pl-card-content>
+    </pl-card>
+    <div class="cms-form-actions">
+        <pl-button variant="outline" use:Zenit.route={% page.back %}>{{ t("linked_server_back", scope: "linked_server") }}</pl-button>
+        {% if page.next != null %}
+        <pl-button variant="outline" use:Zenit.route={% page.next %}>{{ t("linked_server_next_page", scope: "linked_server") }}</pl-button>
+        {% /if %}
+    </div>
+</section>
+{% /block %}

@@ -17,6 +17,7 @@ import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.peer.SharedWithPeersBehaviour;
 import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.security.KnownValueRedactor;
@@ -50,6 +51,10 @@ public class InstanceVariableModel extends Model {
     }
 
     public static final Schema SCHEMA = new Schema();
+
+    /** A linked master keeps a stored record of these rows (docs/cluster.md says which kinds and why). */
+    public static final SharedWithPeersBehaviour KEPT_BY_MASTER =
+        SCHEMA.addBehaviour(SharedWithPeersBehaviour.of(MODEL_ID));
 
     /** {@link #KIND}: the value is visible data ({@code plain_value}). */
     public static final String KIND_PLAIN = "plain";
@@ -187,8 +192,8 @@ public class InstanceVariableModel extends Model {
     }
 
     private static final Noun NOUN = new Noun(Map.of(
-        "en", new Noun.Forms("instance variable", "instance variables", Map.of(NounFact.ARTICLE, "an")),
-        "nl", new Noun.Forms("instantievariabele", "instantievariabelen", Map.of(NounFact.GENDER, "common"))));
+        "en", new Noun.Forms("app variable", "app variables", Map.of(NounFact.ARTICLE, "an")),
+        "nl", new Noun.Forms("app-variabele", "app-variabelen", Map.of(NounFact.GENDER, "common"))));
 
     @Override public @NonNull Noun noun() { return NOUN; }
 

@@ -70,6 +70,10 @@ public final class HohenheimTemplateIds {
     public static final Identifier WIDGET_STAT = Identifier.of("hohenheim", "cms/widget-stat");
     public static final Identifier WIDGET_TENANT_USAGE = Identifier.of("hohenheim", "cms/widget-tenant-usage");
     public static final Identifier WIDGET_JOIN_CODE = Identifier.of("hohenheim", "cms/widget-join-code");
+    public static final Identifier WIDGET_REMEMBERED = Identifier.of("hohenheim", "cms/widget-remembered");
+    /** A linked server's page of the names its master remembers of one kind. */
+    public static final Identifier LINKED_SERVER_REMEMBERED =
+        Identifier.of("hohenheim", "cms/linked-server-remembered");
 
     // List-cell partials; a column names one through its renderer.
     public static final Identifier CELL_STATE_LINE = Identifier.of("hohenheim", "cms/cell/state-line");

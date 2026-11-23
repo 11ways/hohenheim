@@ -79,8 +79,8 @@ public class InstanceLogModel extends Model {
     }
 
     private static final Noun NOUN = new Noun(Map.of(
-        "en", new Noun.Forms("instance log", "instance logs", Map.of(NounFact.ARTICLE, "an")),
-        "nl", new Noun.Forms("instantielog", "instantielogs", Map.of(NounFact.GENDER, "neuter"))));
+        "en", new Noun.Forms("app log", "app logs", Map.of(NounFact.ARTICLE, "an")),
+        "nl", new Noun.Forms("app-log", "app-logs", Map.of(NounFact.GENDER, "neuter"))));
 
     @Override public @NonNull Noun noun() { return NOUN; }
 

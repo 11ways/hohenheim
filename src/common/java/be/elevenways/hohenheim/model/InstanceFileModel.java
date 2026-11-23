@@ -13,6 +13,7 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.peer.SharedWithPeersBehaviour;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.List;
@@ -38,6 +39,10 @@ public class InstanceFileModel extends Model {
     }
 
     public static final Schema SCHEMA = new Schema();
+
+    /** A linked master keeps a stored record of these rows (docs/cluster.md says which kinds and why). */
+    public static final SharedWithPeersBehaviour KEPT_BY_MASTER =
+        SCHEMA.addBehaviour(SharedWithPeersBehaviour.of(MODEL_ID));
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 
@@ -97,8 +102,8 @@ public class InstanceFileModel extends Model {
     }
 
     private static final Noun NOUN = new Noun(Map.of(
-        "en", new Noun.Forms("instance file", "instance files", Map.of(NounFact.ARTICLE, "an")),
-        "nl", new Noun.Forms("instantiebestand", "instantiebestanden", Map.of(NounFact.GENDER, "neuter"))));
+        "en", new Noun.Forms("app file", "app files", Map.of(NounFact.ARTICLE, "an")),
+        "nl", new Noun.Forms("app-bestand", "app-bestanden", Map.of(NounFact.GENDER, "neuter"))));
 
     @Override public @NonNull Noun noun() { return NOUN; }
 

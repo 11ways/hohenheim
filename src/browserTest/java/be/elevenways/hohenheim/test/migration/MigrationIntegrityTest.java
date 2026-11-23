@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.migration.M001_HohenheimBaseline;
 import be.elevenways.hohenheim.migration.M002_AfterBaseline;
 import be.elevenways.hohenheim.migration.M003_CertificateSigningRequests;
 import be.elevenways.hohenheim.migration.M004_SiteOutages;
+import be.elevenways.hohenheim.migration.M005_LinkedServers;
 import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationException;
 import be.elevenways.zenit.common.orm.migration.MigrationKey;
@@ -333,7 +334,7 @@ class MigrationIntegrityTest {
         SqliteDatasource datasource = emptyDatabase("rollback");
         // The chain up to its published migration, the least a runner admits of this stream.
         List<Supplier<Migration>> chain = List.of(M001_HohenheimBaseline::new, M002_AfterBaseline::new,
-            M003_CertificateSigningRequests::new, M004_SiteOutages::new);
+            M003_CertificateSigningRequests::new, M004_SiteOutages::new, M005_LinkedServers::new);
 
         // 1. Build the whole schema on its own; it depends on nothing outside itself.
         assertThat(new MigrationRunner(datasource, chain).migrate().isSuccess()).as("step 1: the schema builds")
@@ -344,7 +345,8 @@ class MigrationIntegrityTest {
         // 2. Rolling the chain back is refused up front at the baseline, and every table survives it, the published
         //    migrations' own included: no down() ran.
         assertThatThrownBy(() -> new MigrationRunner(datasource, chain).rollback(List.of(
-                MigrationKey.of(new M004_SiteOutages()), MigrationKey.of(new M003_CertificateSigningRequests()),
+                MigrationKey.of(new M005_LinkedServers()), MigrationKey.of(new M004_SiteOutages()),
+                MigrationKey.of(new M003_CertificateSigningRequests()),
                 MigrationKey.of(new M002_AfterBaseline()), MigrationKey.of(new M001_HohenheimBaseline()))))
             .as("step 2: the irreversible baseline refuses its rollback")
             .isInstanceOf(MigrationException.class);
@@ -361,17 +363,18 @@ class MigrationIntegrityTest {
     void theSiteOutagesMigrationAddsItsTableAndItsDownTakesItAway() throws Exception {
         SqliteDatasource datasource = emptyDatabase("site-outages");
         List<Supplier<Migration>> chain = List.of(M001_HohenheimBaseline::new, M002_AfterBaseline::new,
-            M003_CertificateSigningRequests::new, M004_SiteOutages::new);
+            M003_CertificateSigningRequests::new, M004_SiteOutages::new, M005_LinkedServers::new);
         String outageTable = "SELECT COUNT(*) AS c FROM sqlite_master WHERE type = 'table' AND name = 'site_outages'";
         String sites = "SELECT name FROM pragma_table_info('sites')";
         String instances = "SELECT name FROM pragma_table_info('instances')";
 
         // 1. The chain through M004 builds, a site stored before it included, and the sites table keeps its columns.
-        //    A runner admits no chain short of the published M004, so the database before it is the whole chain with
-        //    M004 rolled back.
+        //    A runner admits no chain short of the published M005, so the database before M004 is the whole chain
+        //    with M005 and M004 rolled back; M005 only adds tables of its own, which apply again with M004.
         assertThat(new MigrationRunner(datasource, chain).migrate().isSuccess())
             .as("step 1: the published chain builds").isTrue();
-        assertThat(new MigrationRunner(datasource, chain).rollback(MigrationKey.of(new M004_SiteOutages()))
+        assertThat(new MigrationRunner(datasource, chain).rollback(List.of(MigrationKey.of(new M005_LinkedServers()),
+                MigrationKey.of(new M004_SiteOutages())))
             .isSuccess()).as("step 1: and stands before M004").isTrue();
         datasource.rawUpdate("INSERT INTO sites (name, slug, upstream_kind) VALUES ('before', 'before',"
             + " 'hohenheim:instance')");
@@ -393,7 +396,8 @@ class MigrationIntegrityTest {
             .as("step 2: an existing site holds no state").isEqualTo(0L);
 
         // 3. Its down() takes exactly the table away, and the site stays.
-        assertThat(new MigrationRunner(datasource, chain).rollback(MigrationKey.of(new M004_SiteOutages()))
+        assertThat(new MigrationRunner(datasource, chain).rollback(List.of(MigrationKey.of(new M005_LinkedServers()),
+                MigrationKey.of(new M004_SiteOutages())))
             .isSuccess()).as("step 3: the rollback succeeds").isTrue();
         assertThat(scalar(datasource, outageTable)).as("step 3: the table is gone").isEqualTo(0L);
         assertThat(columnsOf(datasource, sites)).as("step 3: the sites table is as it was")
@@ -450,13 +454,14 @@ class MigrationIntegrityTest {
             .isNotEmpty()
             .allSatisfy(entry -> assertThat(entry).endsWith(" stream=" + HohenheimMigration.STREAM));
         assertThat(found)
-            .as("step 1: and the stream is the published baseline, its published successors and the one open"
-                + " migration, M005")
+            .as("step 1: and the stream is the published baseline, its published successors through M005, and the"
+                + " one open migration, M006")
             .containsExactly("M001_HohenheimBaseline stream=" + HohenheimMigration.STREAM,
                 "M002_AfterBaseline stream=" + HohenheimMigration.STREAM,
                 "M003_CertificateSigningRequests stream=" + HohenheimMigration.STREAM,
                 "M004_SiteOutages stream=" + HohenheimMigration.STREAM,
-                "M005_LinkedServers stream=" + HohenheimMigration.STREAM);
+                "M005_LinkedServers stream=" + HohenheimMigration.STREAM,
+                "M006_SharedRecords stream=" + HohenheimMigration.STREAM);
 
         // 2. The deployed high-water mark. Every migration at or below DEPLOYED_THROUGH is
         //    APPLIED somewhere, so its structural checksum is recorded in that install's

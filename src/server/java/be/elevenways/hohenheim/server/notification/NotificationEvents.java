@@ -66,7 +66,9 @@ public enum NotificationEvents {
     /** LinkedServers raises this ONCE per run of failed calls, when a linked server stops answering. */
     LINKED_SERVER_DOWN("linked_server_down"),
     /** LinkedServers raises this when a linked server that stopped answering answers again. */
-    LINKED_SERVER_RECOVERED("linked_server_recovered");
+    LINKED_SERVER_RECOVERED("linked_server_recovered"),
+    /** ClusterRecords raises this ONCE per link, when a managed server's database was restored to an earlier state. */
+    LINKED_SERVER_RESTORED("linked_server_restored");
 
     /** Every declared event token, in declaration order; DERIVED, never hand-listed. */
     public static final List<String> ALL =

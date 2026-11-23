@@ -155,8 +155,8 @@ public class InstanceSnapshotModel extends Model {
     }
 
     private static final Noun NOUN = new Noun(Map.of(
-        "en", new Noun.Forms("instance snapshot", "instance snapshots", Map.of(NounFact.ARTICLE, "an")),
-        "nl", new Noun.Forms("instantiesnapshot", "instantiesnapshots", Map.of(NounFact.GENDER, "common"))));
+        "en", new Noun.Forms("app snapshot", "app snapshots", Map.of(NounFact.ARTICLE, "an")),
+        "nl", new Noun.Forms("app-snapshot", "app-snapshots", Map.of(NounFact.GENDER, "common"))));
 
     @Override public @NonNull Noun noun() { return NOUN; }
 

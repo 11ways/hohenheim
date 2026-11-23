@@ -20,6 +20,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.peer.SharedWithPeersBehaviour;
 import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -55,6 +56,10 @@ public class InstanceTemplateModel extends Model {
     public static final ModelRef<InstanceTemplateModel> REF = ModelRef.of(InstanceTemplateModel.class, MODEL_ID);
 
     public static final Schema SCHEMA = new Schema();
+
+    /** A linked master keeps a stored record of these rows (docs/cluster.md says which kinds and why). */
+    public static final SharedWithPeersBehaviour KEPT_BY_MASTER =
+        SCHEMA.addBehaviour(SharedWithPeersBehaviour.of(MODEL_ID));
 
     /** THE short code a template is named by in an assistant's tools: "TP12". */
     public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
@@ -280,9 +285,10 @@ public class InstanceTemplateModel extends Model {
         return find().orderBy(NAME, SortOrder.ASC).all();
     }
 
+    /** What a reader calls an instance template: a template, as the panel names it. */
     private static final Noun NOUN = new Noun(Map.of(
-        "en", new Noun.Forms("instance template", "instance templates", Map.of(NounFact.ARTICLE, "an")),
-        "nl", new Noun.Forms("instantiesjabloon", "instantiesjablonen", Map.of(NounFact.GENDER, "neuter"))));
+        "en", new Noun.Forms("template", "templates", Map.of(NounFact.ARTICLE, "a")),
+        "nl", new Noun.Forms("sjabloon", "sjablonen", Map.of(NounFact.GENDER, "neuter"))));
 
     @Override public @NonNull Noun noun() { return NOUN; }
 

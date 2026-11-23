@@ -39,6 +39,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -155,6 +156,42 @@ final class AppDirectory {
     }
 
     /**
+     * The records the apps are made of, from the rows the Sites, Instances and Stacks entries hold: the instances that
+     * are no generated workload, the sites serving none of those, and the stacks. THE rule of what an app is, read by
+     * the Apps list and by the installation's own app count ({@link InstallationCounts}).
+     *
+     * @param workloads the instances that are apps, in the order given
+     * @param websites  the sites that are apps of their own, in the order given
+     * @param stacks    the stacks, each one app
+     */
+    record Members(@NonNull List<Row> workloads, @NonNull List<Row> websites, @NonNull List<Row> stacks) {
+
+        static @NonNull Members of(@NonNull List<Row> sites, @NonNull List<Row> instances, @NonNull List<Row> stacks) {
+            List<Row> workloads = new ArrayList<>();
+            Set<Integer> workloadIds = new HashSet<>();
+            for (Row instance : instances) {
+                if (!InstanceParts.isGenerated(instance)) {
+                    workloads.add(instance);
+                    workloadIds.add(instance.get(InstanceModel.ID));
+                }
+            }
+            List<Row> websites = new ArrayList<>();
+            for (Row site : sites) {
+                Integer instanceId = site.get(SiteModel.INSTANCE_ID);
+                if (instanceId == null || !workloadIds.contains(instanceId)) {
+                    websites.add(site);
+                }
+            }
+            return new Members(workloads, websites, stacks);
+        }
+
+        /** @return how many apps these records make */
+        int apps() {
+            return this.workloads.size() + this.websites.size() + this.stacks.size();
+        }
+    }
+
+    /**
      * @return how many of these apps have a problem: the Apps tile's "with a problem" and the Apps entry's sidebar
      *         badge, one count
      */
@@ -184,14 +221,10 @@ final class AppDirectory {
     private static @NonNull List<App> readUncached(@NonNull Panel panel, @NonNull AccessContext access) {
         boolean delegated = HohenheimSlugs.MANAGE.equals(panel.slug());
         Wording words = Wording.of(access);
-        List<Row> sites = listed(panel, HohenheimSlugs.SITES, access);
-        List<Row> instances = new ArrayList<>();
-        for (Row instance : listed(panel, HohenheimSlugs.INSTANCES, access)) {
-            if (!InstanceParts.isGenerated(instance)) {
-                instances.add(instance);
-            }
-        }
-        List<Row> stacks = listed(panel, HohenheimSlugs.STACKS, access);
+        Members records = Members.of(listed(panel, HohenheimSlugs.SITES, access),
+            listed(panel, HohenheimSlugs.INSTANCES, access), listed(panel, HohenheimSlugs.STACKS, access));
+        List<Row> instances = records.workloads();
+        List<Row> stacks = records.stacks();
 
         Set<String> working = AppHealth.workingNames();
         // The HTTPS column's certificate rows, read once for the whole list (and only when a main name asks), shared
@@ -201,13 +234,7 @@ final class AppDirectory {
         for (Row instance : instances) {
             workloads.put(instance.get(InstanceModel.ID), instance);
         }
-        List<Row> websites = new ArrayList<>();
-        for (Row site : sites) {
-            Integer instanceId = site.get(SiteModel.INSTANCE_ID);
-            if (instanceId == null || !workloads.containsKey(instanceId)) {
-                websites.add(site);
-            }
-        }
+        List<Row> websites = records.websites();
         // AIDEV-NOTE: a workload's address is read from EVERY live site serving it, listed for this viewer or not.
         // The names are the app's public face, which its visitors already type; reading them grants nothing on the
         // site record, whose row and page stay hidden from a viewer the Sites entry does not list it for. Without this

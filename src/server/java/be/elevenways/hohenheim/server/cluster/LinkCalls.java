@@ -16,14 +16,16 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
  * THE way this server calls another Hohenheim it is linked to: one pinned fetcher, a deadline, TLS verified, no
  * redirect followed, the public internet unless the host declared private networks for linked servers.
  *
- * AIDEV-NOTE: a log line names at most the address's origin, never a key or a path; "nothing was sent" and "sent,
- * no answer" are told apart by FetchOutcome's requestSent alone.
+ * AIDEV-NOTE: a log line names at most the address's origin, never a key, a path or any part of an answer (a rows
+ * answer carries every secret of its kind); "nothing was sent" and "sent, no answer" are told apart by FetchOutcome's
+ * requestSent alone.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -33,8 +35,12 @@ final class LinkCalls {
     /** How long one call may take, connecting included. */
     static final Duration DEADLINE = Duration.ofSeconds(10);
 
-    /** The largest answer read: a status is a few hundred bytes. */
-    private static final long MAX_ANSWER_BYTES = 64 * 1024;
+    /**
+     * The largest answer read, the size of one page of shared rows (PeerRecords.PAGE rows, every value of each in
+     * clear): 32 MiB, so a row averages 160 KiB before a page is refused. A status answer is a few hundred bytes; the
+     * one fetcher holds one limit, so the largest answer sets it.
+     */
+    static final long MAX_ANSWER_BYTES = 32L * 1024 * 1024;
 
     private static volatile @Nullable PinnedFetcher fetcher;
 
@@ -71,6 +77,35 @@ final class LinkCalls {
     /** @return the answer of the server at {@code baseUrl} to this server ending the link */
     static @NonNull Answer leave(@NonNull String baseUrl, @NonNull String key) {
         return call(baseUrl, ClusterEndpoints.LEAVE, Map.of(), key);
+    }
+
+    /**
+     * @param key the key presented, null for none
+     * @return the answer of the server at {@code baseUrl} to its master asking the generation of every shared kind
+     */
+    static @NonNull Answer generations(@NonNull String baseUrl, @Nullable String key) {
+        return call(baseUrl, ClusterEndpoints.GENERATIONS, Map.of(), key);
+    }
+
+    /**
+     * @param key the key presented, null for none
+     * @return the answer of the server at {@code baseUrl} to its master asking one page of one shared kind's rows
+     */
+    static @NonNull Answer rows(@NonNull String baseUrl, @Nullable String key, @NonNull String model,
+                                @Nullable String after, int limit) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("model", model);
+        body.put("after", after);
+        body.put("limit", limit);
+        return call(baseUrl, ClusterEndpoints.ROWS, body, key);
+    }
+
+    /**
+     * @param key the key presented, null for none
+     * @return the answer of the master at {@code baseUrl} to this server saying it changed a shared kind
+     */
+    static @NonNull Answer changed(@NonNull String baseUrl, @Nullable String key) {
+        return call(baseUrl, ClusterEndpoints.CHANGED, Map.of(), key);
     }
 
     private static @NonNull Answer call(@NonNull String baseUrl, @NonNull Endpoint<?> endpoint,

@@ -31,6 +31,7 @@ import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.peer.SharedWithPeersBehaviour;
 import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.zenit.common.ui.ColorHue;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -63,6 +64,10 @@ public class InstanceModel extends Model {
     public static final ModelRef<InstanceModel> REF = ModelRef.of(InstanceModel.class, MODEL_ID);
 
     public static final Schema SCHEMA = new Schema();
+
+    /** A linked master keeps a stored record of these rows (docs/cluster.md says which kinds and why). */
+    public static final SharedWithPeersBehaviour KEPT_BY_MASTER =
+        SCHEMA.addBehaviour(SharedWithPeersBehaviour.of(MODEL_ID));
 
     /** THE short code an app is named by in an assistant's tools: "AP12". */
     public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
@@ -972,9 +977,10 @@ public class InstanceModel extends Model {
         model.find().withTrashed().where(ID.in(trashed)).assign(reference, null).updateAll();
     }
 
+    /** What a reader calls an instance: an app, never "instance", in every language. */
     private static final Noun NOUN = new Noun(Map.of(
-        "en", new Noun.Forms("instance", "instances", Map.of(NounFact.ARTICLE, "an")),
-        "nl", new Noun.Forms("instantie", "instanties", Map.of(NounFact.GENDER, "common"))));
+        "en", new Noun.Forms("app", "apps", Map.of(NounFact.ARTICLE, "an")),
+        "nl", new Noun.Forms("app", "apps", Map.of(NounFact.GENDER, "common"))));
 
     @Override public @NonNull Noun noun() { return NOUN; }
 

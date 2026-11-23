@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.model.LinkedServerModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.zenit.common.ui.BadgeVariant;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -38,7 +39,13 @@ public enum LinkState implements StateBadge {
     OTHER_SERVER("other_server", BadgeVariant.DESTRUCTIVE),
 
     /** It answers, running another version than this server. */
-    OTHER_VERSION("other_version", BadgeVariant.WARNING);
+    OTHER_VERSION("other_version", BadgeVariant.WARNING),
+
+    /**
+     * Its database was restored to an earlier state: a kind's generation went below what this server keeps, and
+     * nothing of that kind is taken until a person decides.
+     */
+    RESTORED("restored", BadgeVariant.WARNING);
 
     private final String token;
     private final BadgeVariant variant;
@@ -61,7 +68,7 @@ public enum LinkState implements StateBadge {
     /** @return whether the dashboard raises an attention item for a server in this state */
     public boolean needsAttention() {
         return switch (this) {
-            case NOT_ANSWERING, REFUSING, OTHER_SERVER, OTHER_VERSION -> true;
+            case NOT_ANSWERING, REFUSING, OTHER_SERVER, OTHER_VERSION, RESTORED -> true;
             case REACHABLE, NOT_CHECKED -> false;
         };
     }
@@ -74,7 +81,7 @@ public enum LinkState implements StateBadge {
         Microcopy label = HohenheimMicrocopy.LINKED_SERVER.of("linked_server_state_" + this.token);
         return switch (this) {
             case NOT_ANSWERING, REFUSING -> label.withArg("since", Objects.requireNonNullElse(since, Instant.EPOCH));
-            case REACHABLE, NOT_CHECKED, OTHER_SERVER, OTHER_VERSION -> label;
+            case REACHABLE, NOT_CHECKED, OTHER_SERVER, OTHER_VERSION, RESTORED -> label;
         };
     }
 
@@ -91,6 +98,9 @@ public enum LinkState implements StateBadge {
                 case REFUSED -> REFUSING;
                 case OTHER_SERVER -> OTHER_SERVER;
             };
+        }
+        if (Texts.trimmedOrNull(row.get(LinkedServerModel.WENT_BACK)) != null) {
+            return RESTORED;
         }
         if (row.get(LinkedServerModel.LAST_SEEN_AT) == null) {
             return NOT_CHECKED;

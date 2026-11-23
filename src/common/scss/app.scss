@@ -387,6 +387,12 @@
         min-width: 0;
     }
 
+    // A sentence standing under a page's cards, saying how they come to be (a linked server's page).
+    .hh-band-note {
+        color: var(--pl-color-text-muted);
+        font-size: var(--pl-font-size-sm);
+    }
+
     // A dashboard column holding several widgets (the tenant board's apps over its recent changes) sets them apart.
     .hh-dashboard-band .widget-columns > .widget-section {
         display: flex;

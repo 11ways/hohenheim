@@ -11,6 +11,7 @@ import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.peer.SharedWithPeersBehaviour;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.Map;
@@ -30,6 +31,10 @@ public class DnsDyndnsCredentialModel extends Model {
 
     public static final Identifier MODEL_ID = HohenheimIds.id("dns_dyndns_credential");
     public static final Schema SCHEMA = new Schema();
+
+    /** A linked master keeps a stored record of these rows (docs/cluster.md says which kinds and why). */
+    public static final SharedWithPeersBehaviour KEPT_BY_MASTER =
+        SCHEMA.addBehaviour(SharedWithPeersBehaviour.of(MODEL_ID));
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final IntegerField RECORD_ID = SCHEMA.addField(

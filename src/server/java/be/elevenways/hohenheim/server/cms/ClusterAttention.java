@@ -21,9 +21,10 @@ import static be.elevenways.hohenheim.server.cms.AttentionItems.item;
 
 /**
  * The linked servers' attention items: one per linked server that does not answer or refuses this server past the
- * outage grace (the moment its alert was sent), is another server than the one that joined, or runs another version.
+ * outage grace (the moment its alert was sent), is another server than the one that joined, runs another version or
+ * was restored to an earlier state.
  *
- * AIDEV-NOTE: role-free like the link itself; it reads the state the probe stored and calls nobody.
+ * AIDEV-NOTE: role-free like the link itself; it reads the state the probe and the sync stored and calls nobody.
  *
  * @author Jelle De Loecker
  * @since  0.10.0

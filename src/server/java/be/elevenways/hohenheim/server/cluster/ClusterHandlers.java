@@ -2,29 +2,49 @@ package be.elevenways.hohenheim.server.cluster;
 
 import be.elevenways.hohenheim.cluster.ClusterEndpoints;
 import be.elevenways.hohenheim.cluster.JoinRefusal;
+import be.elevenways.hohenheim.cluster.LinkRole;
+import be.elevenways.hohenheim.model.LinkedServerModel;
 import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.peer.SharedRowsReader;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.JsonResult;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.CallerChannel;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
+import be.elevenways.zenit.common.security.PermissionChecker;
 import be.elevenways.zenit.common.security.Principal;
 import be.elevenways.zenit.common.security.StoredRecordPrincipal;
+import be.elevenways.zenit.server.peer.SharedRow;
+import be.elevenways.zenit.server.peer.SharedRows;
+import be.elevenways.zenit.server.peer.SharedRowsPage;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
- * Answers the three calls of ClusterEndpoints: join (the code is the credential), status and leave (the link key is).
+ * Answers the calls of ClusterEndpoints: join (the code is the credential), and every other call (the link key is).
  *
  * AIDEV-NOTE: an unknown key answers 401, naming nothing. A join's refusal answers its JoinRefusal token: 429 for a
  * spent failure budget, 409 for a server that cannot get a master or is linking another at this moment, 422
  * otherwise. The code is the gate of a join, so its write is system work; a leave runs as the linked server its key
  * names, which holds no permission.
+ *
+ * AIDEV-NOTE: generations and rows hand out every secret of the shared kinds, so they answer the linked server whose
+ * row says it is THIS server's master and nobody else: no key, an API key or any other bearer that is no link key,
+ * and a wrong key are 401 (only a link key's digest is ever looked up); a server this one manages, presenting its own
+ * valid key, is 403. The answer is read as that master (a LinkedInstallPrincipal of the one SharedRowsReader declared
+ * here), and core refuses every other principal again. "changed" is the opposite way: only a server this one manages
+ * may nudge it. A refusal answers the reason's code alone, never its diagnostic, and nothing of a row is ever logged.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -34,8 +54,56 @@ public final class ClusterHandlers {
     private ClusterHandlers() {
     }
 
-    /** Installs the handlers of the three cluster calls. */
+    /** The one reader of shared rows in this process, declared at its first use whatever installs the handlers. */
+    private static final class Reader {
+        static final SharedRowsReader READER = SharedRowsReader.declare(ClusterHandlers.class);
+    }
+
+    /** Installs the handlers of the cluster calls, and the nudge that tells this server's master of a change. */
     public static void init() {
+        ClusterNudge.install();
+        ClusterEndpoints.GENERATIONS.setHandler(conduit -> asMaster(conduit, (master, caller) -> {
+            Map<String, Object> generations = new LinkedHashMap<>();
+            SharedRows.generations(caller)
+                .forEach((model, generation) -> generations.put(model.toString(), generation));
+            return new JsonResult<>(Map.of("generations", generations));
+        }));
+        ClusterEndpoints.ROWS.setHandler(conduit -> asMaster(conduit, (master, caller) -> {
+            Map<String, Object> body = bodyOf(conduit);
+            Identifier model = body != null && body.get("model") instanceof String id ? Identifier.tryParse(id) : null;
+            if (model == null || !(body.get("limit") instanceof Number limit) || limit.longValue() < 1
+                    || limit.longValue() > SharedRows.MAX_PAGE) {
+                return refusal(conduit, ZenitRefusalReason.BAD_REQUEST);
+            }
+            String after = body.get("after") instanceof String cursor ? cursor : null;
+            SharedRowsPage page = SharedRows.rows(caller, model, after, (int) limit.longValue());
+            List<Map<String, Object>> rows = new ArrayList<>(page.rows().size());
+            for (SharedRow row : page.rows()) {
+                Map<String, Object> shared = new LinkedHashMap<>();
+                shared.put("key", row.key());
+                shared.put("code", row.code());
+                shared.put("title", row.title());
+                shared.put("document", row.document());
+                rows.add(shared);
+            }
+            Map<String, Object> answer = new LinkedHashMap<>();
+            answer.put("before", page.generationBefore());
+            answer.put("after", page.generationAfter());
+            answer.put("rows", rows);
+            answer.put("next", page.next());
+            return new JsonResult<>(answer);
+        }));
+        ClusterEndpoints.CHANGED.setHandler(conduit -> {
+            Row row = LinkedServers.byKey(keyOf(conduit));
+            if (row == null) {
+                return unknownKey(conduit);
+            }
+            if (LinkedServers.roleOf(row) != LinkRole.MANAGES) {
+                return refusal(conduit, ZenitRefusalReason.FORBIDDEN);
+            }
+            ClusterRecords.request(row.get(LinkedServerModel.ID));
+            return new JsonResult<>(Map.of("asked", true));
+        });
         ClusterEndpoints.JOIN.setHandler(ClusterHandlers::join);
         ClusterEndpoints.STATUS.setHandler(conduit -> {
             if (LinkedServers.byKey(keyOf(conduit)) == null) {
@@ -53,6 +121,40 @@ public final class ClusterHandlers {
                 CallerChannel.ofRequest(conduit)), () -> LinkedServers.left(row));
             return new JsonResult<>(Map.of("left", true));
         });
+    }
+
+    /** What a call only this server's master may make answers, given that master's row and its caller context. */
+    private interface MasterCall {
+        @NonNull ActionResult<Object> answer(@NonNull Row master, @NonNull AccessContext caller);
+    }
+
+    /**
+     * Answers a call of this server's master, read as that master: 401 for a key that names no linked server, 403
+     * for one that is not this server's master, the refusal's code for what core refuses.
+     */
+    private static @NonNull ActionResult<Object> asMaster(@NonNull Conduit conduit, @NonNull MasterCall call) {
+        Row row = LinkedServers.byKey(keyOf(conduit));
+        if (row == null) {
+            return unknownKey(conduit);
+        }
+        if (LinkedServers.roleOf(row) != LinkRole.MANAGED_BY) {
+            return refusal(conduit, ZenitRefusalReason.FORBIDDEN);
+        }
+        AccessContext caller = AccessContext.detached(Reader.READER.principal(row.get(LinkedServerModel.ID),
+            String.valueOf((Object) row.get(LinkedServerModel.NAME))), PermissionChecker.DENY_ALL);
+        try {
+            return ExecutionIdentity.supply(ExecutionIdentity.caller(caller, CallerChannel.ofRequest(conduit)),
+                () -> call.answer(row, caller));
+        } catch (DomainRefusal refused) {
+            return refusal(conduit, refused.reason());
+        }
+    }
+
+    /** @return a refusal answered by its reason's status and code alone */
+    private static @NonNull ActionResult<Object> refusal(@NonNull Conduit conduit,
+                                                         DomainRefusal.@NonNull Reason reason) {
+        conduit.setResponseStatus(reason.status());
+        return new JsonResult<>(Map.of("refusal", reason.code()));
     }
 
     private static @Nullable ActionResult<Object> join(@NonNull Conduit conduit) {

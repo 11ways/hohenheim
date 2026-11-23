@@ -1,0 +1,24 @@
+{#- What a master remembers of a linked server, inside the card under that server's facts: each kind it keeps a
+    record of with how many, the kind opening the names it remembers. Never a record's document. -#}
+{% declare widget: WidgetInstance %}
+{% declare data: List<RememberedKind> = null %}
+{% if data %}
+<pl-table data-hh-remembered>
+    <pl-table-header><pl-table-row>
+        <pl-table-head>{{ t("linked_server_kind", scope: "linked_server") }}</pl-table-head>
+        <pl-table-head>{{ t("linked_server_remembered", scope: "linked_server") }}</pl-table-head>
+    </pl-table-row></pl-table-header>
+    <pl-table-body>
+        {% each data as kind %}
+        <pl-table-row>
+            <pl-table-cell><a use:Zenit.route={% kind.target %}>{{ kind.kind }}</a></pl-table-cell>
+            <pl-table-cell>{{ t("linked_server_remembered_count", scope: "linked_server", count: kind.count) }}</pl-table-cell>
+        </pl-table-row>
+        {% /each %}
+    </pl-table-body>
+</pl-table>
+{% else %}
+<pl-empty-state icon="database">
+    <pl-empty-state-title>{{ t("linked_server_remembers_nothing", scope: "linked_server") }}</pl-empty-state-title>
+</pl-empty-state>
+{% /if %}
