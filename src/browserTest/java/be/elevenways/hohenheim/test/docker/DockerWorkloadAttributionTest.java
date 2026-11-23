@@ -9,7 +9,9 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
+import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
+import be.elevenways.hohenheim.server.runtime.NetworkPosture;
 import be.elevenways.hohenheim.server.runtime.WorkloadAttribution.WorkloadClaim;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
@@ -119,6 +121,33 @@ class DockerWorkloadAttributionTest {
                 .as("step 4: the same record id of ANOTHER controller is FOREIGN --"
                     + " ids are per-database, the controller token is what disambiguates")
                 .isEqualTo(WorkloadClaim.FOREIGN);
+        });
+    }
+
+    /**
+     * A destroyed workload takes its leftover one-shot siblings with it (a pre-deploy or install container a crash
+     * left), but only the ones the daemon attributes to the very record its handle names: a same-named foreign
+     * container is left alone.
+     */
+    @Test
+    void aDestroyRemovesItsOwnLeftoverOneShotsAndNeverAForeignOne() throws Exception {
+        Db.run(datasource, () -> {
+            FakeDockerDaemon daemon = new FakeDockerDaemon();
+            DockerInstanceRuntime runtime = new DockerInstanceRuntime(new DockerClient(daemon),
+                new WorkloadNetworkPolicy((args, stdin) -> {
+                    throw new AssertionError("nft must never run for a shared-bridge workload");
+                }, () -> true), NetworkPosture.SHARED_BRIDGE, Egress.OPEN);
+            String handle = FakeDockerDaemon.handleOf(41888);
+            daemon.seedContainer(handle + "-predeploy", OwnerLabels.of(InstanceModel.MODEL_ID, 41888));
+            daemon.seedContainer(handle + "-install", OwnerLabels.of(InstanceModel.MODEL_ID, 999999998));
+            try {
+                runtime.destroy(handle);
+            } catch (IOException unexpected) {
+                throw new AssertionError("a destroy of an absent workload settles", unexpected);
+            }
+            assertThat(List.of(daemon.exists(handle + "-predeploy"), daemon.exists(handle + "-install")))
+                .as("the record's own leftover one-shot is gone, a foreign same-named one stays")
+                .containsExactly(false, true);
         });
     }
 }

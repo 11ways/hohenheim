@@ -34,7 +34,12 @@ public final class ContainerSettings {
 
     /** The command split on whitespace, or null when none is set (the image's own command runs). */
     public static @Nullable List<String> commandLine(@NonNull Map<String, Object> settings) {
-        String command = trimmed(settings.get("command"));
+        return commandLine(settings, "command");
+    }
+
+    /** The command stored under {@code key} split on whitespace, no shell; null when none is set. */
+    public static @Nullable List<String> commandLine(@NonNull Map<String, Object> settings, @NonNull String key) {
+        String command = trimmed(settings.get(key));
         return command.isEmpty() ? null : List.of(command.split("\\s+"));
     }
 

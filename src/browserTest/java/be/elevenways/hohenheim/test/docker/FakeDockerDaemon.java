@@ -11,9 +11,13 @@ import be.elevenways.hohenheim.server.instance.DockerContainerKind;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
+import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.LinkNetworkSupport;
+import be.elevenways.hohenheim.server.runtime.NetworkPosture;
+import be.elevenways.hohenheim.server.runtime.PreDeploySupport;
+import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.instance.ForwardingKindHandler;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
@@ -22,6 +26,7 @@ import be.elevenways.hohenheim.server.runtime.WorkloadLiveness;
 import be.elevenways.hohenheim.server.util.Json;
 import be.elevenways.protoblast.common.dry.Dry;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.time.Now;
 import com.sun.net.httpserver.HttpServer;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -32,6 +37,7 @@ import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -158,6 +164,25 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
     /** Consumed by the next exec start: run once the engine took the command, before the daemon answers. */
     private volatile @Nullable Runnable duringNextExec;
 
+    /** A one-shot (a container created through the daemon API, not the runtime face): what its start answers. */
+    private record OneShotAnswer(int exitCode, @NonNull String output, boolean hangs) {
+    }
+
+    /** Consumed by the next container the daemon API starts; unscripted, a one-shot exits 0 and prints nothing. */
+    private @Nullable OneShotAnswer nextOneShot;
+
+    /** name -> the create body the daemon API received, as parsed JSON. */
+    private final Map<String, Map<String, Object>> createBodies = new LinkedHashMap<>();
+
+    /** name -> the exit code a finished one-shot reports. */
+    private final Map<String, Integer> exitCodes = new LinkedHashMap<>();
+
+    /** name -> what a one-shot printed. */
+    private final Map<String, String> outputs = new LinkedHashMap<>();
+
+    /** one-shots that never end by themselves; each inspect of one moves the clock past any time limit. */
+    private final Set<String> hanging = new LinkedHashSet<>();
+
     // -- scripting ------------------------------------------------------------
 
     /**
@@ -176,6 +201,33 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
      */
     public void duringNextStart(@NonNull Runnable work) {
         this.duringNextStart = work;
+    }
+
+    /** The NEXT one-shot the daemon API starts exits with this code after printing {@code output}. */
+    public void answerNextOneShot(int exitCode, @NonNull String output) {
+        this.nextOneShot = new OneShotAnswer(exitCode, output, false);
+    }
+
+    /**
+     * The NEXT one-shot the daemon API starts never ends by itself and prints {@code output}; each inspect of it moves
+     * the clock offset forward 31 minutes, past any one-shot time limit, so a waiter's deadline passes with no real
+     * wait. The caller restores the offset.
+     */
+    public void hangNextOneShot(@NonNull String output) {
+        this.nextOneShot = new OneShotAnswer(0, output, true);
+    }
+
+    /** The create body the daemon API received for this container name; null when none was created. */
+    public @Nullable Map<String, Object> createBodyOf(@NonNull String name) {
+        return this.createBodies.get(name);
+    }
+
+    /**
+     * Place a container under this name with these owner labels, as a crash left a one-shot behind; created through
+     * the daemon API's bookkeeping, so a destroy's sweep can find it.
+     */
+    public void seedContainer(@NonNull String name, @NonNull Map<String, String> labels) {
+        this.workloads.put(name, new Workload(name, Map.copyOf(labels), "fake", 0));
     }
 
     /** Report this workload as RUNNING with a dead process inside (the OOM-kill shape). */
@@ -349,7 +401,24 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
         return new FakeReleaseRuntime();
     }
 
-    private final class FakeReleaseRuntime implements InstanceRuntime, LinkNetworkSupport {
+    private final class FakeReleaseRuntime implements InstanceRuntime, LinkNetworkSupport, PreDeploySupport {
+
+        /**
+         * The one-shot runs through the REAL Docker driver over this daemon's API face, so its container body (the
+         * release's spec, the command replaced, no port, no health check) is the production one; the shared bridge
+         * posture leaves the network policy out, which this fake does not model.
+         */
+        @Override
+        public PreDeploySupport.@NonNull Outcome runPreDeploy(@NonNull InstanceSpec spec, @NonNull List<String> argv,
+                                                             @NonNull Map<String, String> env, long timeoutMs,
+                                                             int tailLines, @NonNull BeforeStart beforeStart)
+                throws IOException {
+            return new DockerInstanceRuntime(new DockerClient(FakeDockerDaemon.this),
+                new WorkloadNetworkPolicy((args, stdin) -> {
+                    throw new AssertionError("nft must never run for a shared-bridge one-shot");
+                }, () -> true), NetworkPosture.SHARED_BRIDGE, Egress.OPEN)
+                .runPreDeploy(spec, argv, env, timeoutMs, tailLines, beforeStart);
+        }
 
         /**
          * A database attachment's link network joins the workload to its engine before start
@@ -751,6 +820,52 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
             this.calls.add("stop:" + handle);
             return response(204, "", "application/json");
         }
+        if ("POST".equals(method) && "/containers/create".equals(path)) {
+            String name = param(query, "name");
+            if (this.workloads.containsKey(name)) {
+                return json(409, Map.of("message", "Conflict: the name " + name + " is in use"));
+            }
+            Map<String, Object> request = parse(body);
+            Workload created = new Workload(name, stringLabels(request.get("Labels")),
+                String.valueOf(request.get("Image")), 0);
+            Map<String, String> env = new LinkedHashMap<>();
+            for (String entry : strings(request.get("Env"))) {
+                int eq = entry.indexOf('=');
+                env.put(eq < 0 ? entry : entry.substring(0, eq), eq < 0 ? "" : entry.substring(eq + 1));
+            }
+            created.env = Map.copyOf(env);
+            this.workloads.put(name, created);
+            this.createBodies.put(name, request);
+            this.calls.add("create:" + name);
+            return json(201, Map.of("Id", name));
+        }
+        if ("POST".equals(method) && path.startsWith("/containers/") && path.endsWith("/start")) {
+            String name = path.substring("/containers/".length(), path.length() - "/start".length());
+            Workload workload = this.workloads.get(name);
+            if (workload == null) {
+                return json(404, Map.of("message", "No such container: " + name));
+            }
+            OneShotAnswer answer = this.nextOneShot != null ? this.nextOneShot : new OneShotAnswer(0, "", false);
+            this.nextOneShot = null;
+            this.outputs.put(name, answer.output());
+            if (answer.hangs()) {
+                workload.running = true;
+                this.hanging.add(name);
+            } else {
+                workload.running = false;
+                this.exitCodes.put(name, answer.exitCode());
+            }
+            this.calls.add("start:" + name);
+            return response(204, "", "application/json");
+        }
+        if ("GET".equals(method) && path.startsWith("/containers/") && path.endsWith("/logs")) {
+            String name = path.substring("/containers/".length(), path.length() - "/logs".length());
+            if (!this.workloads.containsKey(name)) {
+                return json(404, Map.of("message", "No such container: " + name));
+            }
+            return FakeContainerFiles.raw(200, Map.of("Content-Type", "application/vnd.docker.multiplexed-stream"),
+                FakeContainerFiles.frame(1, this.outputs.getOrDefault(name, "")));
+        }
         if ("DELETE".equals(method) && path.startsWith("/containers/")) {
             String handle = path.substring("/containers/".length());
             Workload workload = this.workloads.remove(handle);
@@ -758,6 +873,8 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
                 return json(404, Map.of("message", "No such container: " + handle));
             }
             unbind(workload);
+            this.hanging.remove(handle);
+            leaveLinkNetworks(handle);
             this.calls.add("destroy:" + handle);
             return response(204, "", "application/json");
         }
@@ -836,6 +953,10 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
         // The daemon's own answer to "is the process inside still alive": a container it
         // reports RUNNING with this flag set is exactly what the reuse lane must refuse.
         state.put("OOMKilled", this.workloadDead.contains(workload.name));
+        state.put("ExitCode", this.exitCodes.getOrDefault(workload.name, 0));
+        if (this.hanging.contains(workload.name)) {
+            Now.setOffset(Now.offset().plus(Duration.ofMinutes(31)));
+        }
         Map<String, Object> inspect = new LinkedHashMap<>();
         inspect.put("Id", workload.name);
         inspect.put("Name", "/" + workload.name);

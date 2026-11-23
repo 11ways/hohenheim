@@ -890,6 +890,216 @@ class ApplicationReleaseContractTest {
 
     // -- fixture plumbing -----------------------------------------------------
 
+    /**
+     * The command before each deploy: run in a one-shot of the candidate made from its own spec, gating the forward
+     * deploy it precedes, and never run by a reuse, a restart, a rollback or a restore.
+     */
+    @Test
+    void aPreDeployCommandGatesEveryForwardDeployJourney() {
+        Db.run(datasource, () -> {
+            int applicationId = application("predeploy-app");
+            Duration offset = Now.offset();
+            try {
+                // 1. The first deploy runs it in a one-shot beside the created candidate, before the candidate
+                //    starts: the release's own image, the command split on spaces, no port and no health check.
+                daemon.answerNextOneShot(0, "applied 2 migrations\n");
+                converge(applicationId, withPreDeploy(settingsFor("v1"), "migrate --up"));
+                Row first = latestOp(applicationId);
+                int firstId = servingOf(applicationId).get(InstanceModel.ID);
+                String firstShot = FakeDockerDaemon.handleOf(firstId) + "-predeploy";
+                assertThat(daemon.callsFor(firstShot))
+                    .as("step 1: the one-shot was created, run and removed")
+                    .containsExactly("create:" + firstShot, "start:" + firstShot, "destroy:" + firstShot);
+                Map<String, Object> body = daemon.createBodyOf(firstShot);
+                assertThat(List.of(String.valueOf(body.get("Image")), String.valueOf(body.get("Cmd")),
+                        body.containsKey("ExposedPorts"), body.containsKey("Healthcheck")))
+                    .as("step 1: the release's image, the command, no port, no health check")
+                    .containsExactly(FakeDockerDaemon.digestOf("fake/app:v1"), "[migrate, --up]", false, false);
+                assertThat(String.valueOf((Object) first.get(ReleaseOperationModel.STEP_LOG)))
+                    .as("step 1: the log names the command and its limit, then how it ended and what it printed")
+                    .contains("pre-deploy command: migrate --up (limit 5m0s)")
+                    .contains("pre-deploy command exited 0 after ")
+                    .contains("  applied 2 migrations");
+                assertThat(first.get(ReleaseOperationModel.STATUS))
+                    .as("step 1: and the release went on and succeeded")
+                    .isEqualTo(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED));
+
+                // 2. An unchanged converge reuses the release and a restart restarts it: no one-shot either time.
+                int oneShots = daemon.callCount("api:POST /containers/create");
+                converge(applicationId, withPreDeploy(settingsFor("v1"), "migrate --up"));
+                new InstanceService().restart(applicationId, DeployTrigger.MANUAL);
+                assertThat(daemon.callCount("api:POST /containers/create"))
+                    .as("step 2: a reuse and a restart run no command").isEqualTo(oneShots);
+
+                // 3. Editing ONLY the command is a changed spec: the next deploy is a new release that runs it.
+                converge(applicationId, withPreDeploy(settingsFor("v1"), "migrate --again"));
+                int secondId = servingOf(applicationId).get(InstanceModel.ID);
+                assertThat(secondId).as("step 3: a new release serves").isNotEqualTo(firstId);
+                assertThat(String.valueOf(daemon.createBodyOf(FakeDockerDaemon.handleOf(secondId) + "-predeploy")
+                        .get("Cmd")))
+                    .as("step 3: and it ran the edited command").isEqualTo("[migrate, --again]");
+                await("step 3: the release settles", () -> ReleaseSettling.settled(applicationId));
+
+                // 4. A command that ends with an error stops the deploy: the operation fails, the candidate and its
+                //    one-shot are gone, the candidate never started, and the current release keeps serving.
+                daemon.answerNextOneShot(1, "column legacy_token does not exist\n");
+                converge(applicationId, withPreDeploy(settingsFor("v2"), "migrate --again"));
+                Row failed = latestOp(applicationId);
+                int failedCandidate = failed.get(ReleaseOperationModel.CANDIDATE_INSTANCE_ID);
+                String failedHandle = FakeDockerDaemon.handleOf(failedCandidate);
+                assertThat(failed.get(ReleaseOperationModel.STATUS))
+                    .as("step 4: the deploy failed")
+                    .isEqualTo(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.FAILED));
+                assertThat(String.valueOf((Object) failed.get(ReleaseOperationModel.STEP_LOG)))
+                    .as("step 4: the log carries the exit and the output, then the refusal")
+                    .contains("pre-deploy command exited 1 after ")
+                    .contains("  column legacy_token does not exist")
+                    .contains("candidate refused: ");
+                assertThat(List.of(daemon.exists(failedHandle), daemon.exists(failedHandle + "-predeploy"),
+                        daemon.callsFor(failedHandle).contains("start:" + failedHandle)))
+                    .as("step 4: no candidate container, no one-shot, and the candidate never started")
+                    .containsExactly(false, false, false);
+                assertThat((Object) servingOf(applicationId).get(InstanceModel.ID))
+                    .as("step 4: the current release keeps serving").isEqualTo(secondId);
+                assertThat(daemon.isRunning(FakeDockerDaemon.handleOf(secondId)))
+                    .as("step 4: and runs").isTrue();
+
+                // 5. A command still running when its time is up is ended and stops the deploy, with no real wait:
+                //    the daemon's clock passes the limit at the first look.
+                daemon.hangNextOneShot("still migrating\n");
+                Map<String, Object> limited = withPreDeploy(settingsFor("v3"), "migrate --again");
+                limited.put("pre_deploy_timeout", 10);
+                converge(applicationId, limited);
+                Now.setOffset(offset);
+                Row timedOut = latestOp(applicationId);
+                String timedOutShot = FakeDockerDaemon.handleOf(
+                    (Integer) timedOut.get(ReleaseOperationModel.CANDIDATE_INSTANCE_ID)) + "-predeploy";
+                assertThat(timedOut.get(ReleaseOperationModel.STATUS))
+                    .as("step 5: the deploy failed")
+                    .isEqualTo(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.FAILED));
+                assertThat(String.valueOf((Object) timedOut.get(ReleaseOperationModel.STEP_LOG)))
+                    .as("step 5: the log names the limit and that the command was ended")
+                    .contains("pre-deploy command: migrate --again (limit 10s)")
+                    .contains("pre-deploy command still running after 10s; ended")
+                    .contains("  still migrating");
+                assertThat(daemon.exists(timedOutShot)).as("step 5: the one-shot was removed").isFalse();
+                assertThat((Object) servingOf(applicationId).get(InstanceModel.ID))
+                    .as("step 5: the current release keeps serving").isEqualTo(secondId);
+
+                // 6. A rollback to the retired release, which stores a command too, runs none.
+                oneShots = daemon.callCount("api:POST /containers/create");
+                ReleaseEngine.rollback(applicationId, DeployTrigger.MANUAL);
+                Row rollback = latestOp(applicationId);
+                assertThat(rollback.get(ReleaseOperationModel.KIND))
+                    .as("step 6: a rollback ran").isEqualTo(ReleaseOperationModel.KIND_ROLLBACK);
+                assertThat(daemon.callCount("api:POST /containers/create"))
+                    .as("step 6: and created no one-shot").isEqualTo(oneShots);
+                assertThat(String.valueOf((Object) rollback.get(ReleaseOperationModel.STEP_LOG)))
+                    .as("step 6: its log says so").contains("rollback: pre-deploy command not run");
+                await("step 6: the rollback settles", () -> ReleaseSettling.settled(applicationId));
+            } finally {
+                Now.setOffset(offset);
+                ApplicationReleases.destroyFor(applicationId);
+            }
+
+            // 7. A restore of an imported image never runs the command either.
+            int restoredId = application("predeploy-restore");
+            try {
+                Row restoredApp = Models.get(InstanceModel.class).findById(restoredId);
+                restoredApp.set(InstanceModel.SETTINGS, withPreDeploy(settingsFor("v1"), "migrate --up"));
+                Models.get(InstanceModel.class).save(restoredApp);
+                int oneShots = daemon.callCount("api:POST /containers/create");
+                ApplicationReleases.restore(restoredId, "sha256:" + "b".repeat(64), ignored -> { });
+                assertThat(servingOf(restoredId)).as("step 7: the restored release serves").isNotNull();
+                assertThat(daemon.callCount("api:POST /containers/create"))
+                    .as("step 7: and no one-shot ran").isEqualTo(oneShots);
+            } finally {
+                ApplicationReleases.destroyFor(restoredId);
+            }
+        });
+    }
+
+    /**
+     * An app's own drain window: the old version keeps running that long after a switch with nothing locked, so a
+     * rollback and a Stop inside it are not refused and end it early; unset, the installation's window applies.
+     */
+    @Test
+    void anAppsOwnDrainWindowKeepsTheOldVersionWithNothingLockedJourney() {
+        Db.run(datasource, () -> {
+            int applicationId = application("drain-window-app");
+            Duration offset = Now.offset();
+            try {
+                converge(applicationId, settingsFor("v1"));
+                int firstId = servingOf(applicationId).get(InstanceModel.ID);
+
+                // 1. The app declares 290 s while the installation says 0: the old version keeps running.
+                converge(applicationId, withDrain(settingsFor("v2"), 290));
+                Row swap = latestOp(applicationId);
+                int secondId = servingOf(applicationId).get(InstanceModel.ID);
+                Poll.never("step 1: the old version keeps running inside the app's window", Duration.ofMillis(800),
+                    () -> !daemon.isRunning(FakeDockerDaemon.handleOf(firstId)));
+                assertThat(swap.get(ReleaseOperationModel.STATUS))
+                    .as("step 1: the operation is still draining")
+                    .isEqualTo(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.DRAINING));
+
+                // 2. Once 290 s passed (moved time), it is stopped and the operation completes.
+                Now.setOffset(offset.plusSeconds(300));
+                await("step 2: the drain completes after the app's window", () -> ReleaseOperationModel.LIFECYCLE
+                    .is(reload(swap).get(ReleaseOperationModel.STATUS), OperationStatus.SUCCEEDED));
+                assertThat(daemon.isRunning(FakeDockerDaemon.handleOf(firstId)))
+                    .as("step 2: the old version is stopped").isFalse();
+
+                // 3. Unset, the installation's window applies.
+                Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, 120);
+                converge(applicationId, settingsFor("v3"));
+                Row unset = latestOp(applicationId);
+                Poll.never("step 3: the old version keeps running inside the installation's window",
+                    Duration.ofMillis(500), () -> !daemon.isRunning(FakeDockerDaemon.handleOf(secondId)));
+                Now.setOffset(offset.plusSeconds(600));
+                await("step 3: the drain completes after the installation's window", () -> ReleaseOperationModel
+                    .LIFECYCLE.is(reload(unset).get(ReleaseOperationModel.STATUS), OperationStatus.SUCCEEDED));
+                Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, 0);
+
+                // 4. Inside a 290 s window a rollback is NOT refused: it completes the pending drain at once.
+                converge(applicationId, withDrain(settingsFor("v4"), 290));
+                Row pending = latestOp(applicationId);
+                ReleaseEngine.rollback(applicationId, DeployTrigger.MANUAL);
+                assertThat(reload(pending).get(ReleaseOperationModel.STATUS))
+                    .as("step 4: the rollback completed the pending drain")
+                    .isEqualTo(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED));
+                assertThat(settingsOf(servingOf(applicationId)).get("image"))
+                    .as("step 4: and rolled back").isEqualTo(FakeDockerDaemon.digestOf("fake/app:v3"));
+                Row rollback = latestOp(applicationId);
+
+                // 5. Inside the rollback's own window a Stop is NOT refused, and stops the old version too.
+                int drainingId = ReleaseEngine.newestRetired(applicationId).get(InstanceModel.ID);
+                assertThat(daemon.isRunning(FakeDockerDaemon.handleOf(drainingId)))
+                    .as("step 5: the version rolled away from still runs in its window").isTrue();
+                new InstanceService().stop(applicationId);
+                assertThat(List.of(daemon.isRunning(FakeDockerDaemon.handleOf(drainingId)),
+                        daemon.isRunning(FakeDockerDaemon.handleOf(servingOf(applicationId).get(InstanceModel.ID)))))
+                    .as("step 5: the Stop stopped both").containsExactly(false, false);
+                Now.setOffset(offset.plusSeconds(1200));
+                await("step 5: the rollback's drain still completes", () -> ReleaseOperationModel.LIFECYCLE
+                    .is(reload(rollback).get(ReleaseOperationModel.STATUS), OperationStatus.SUCCEEDED));
+            } finally {
+                Now.setOffset(offset);
+                Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, 0);
+                ApplicationReleases.destroyFor(applicationId);
+            }
+        });
+    }
+
+    private static Map<String, Object> withPreDeploy(Map<String, Object> settings, String command) {
+        settings.put("pre_deploy_command", command);
+        return settings;
+    }
+
+    private static Map<String, Object> withDrain(Map<String, Object> settings, int seconds) {
+        settings.put("drain_seconds", seconds);
+        return settings;
+    }
+
     /** The application record the engine's fingerprint, activity and ownership resolve to. */
     private static int application(String name) {
         Row application = Models.get(InstanceModel.class).createEmptyRow();

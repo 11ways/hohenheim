@@ -10,6 +10,7 @@ import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
 import be.elevenways.zenit.common.orm.model.Schema;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -26,13 +27,17 @@ class GitSourceFieldsOfferedTest {
 
     @Test
     void eachKindOffersTheSourceFieldsItsLaneReads() {
-        // 1. An application builds its Dockerfile or a buildpack: there is no build command to run, so no folder to
-        //    run it in and no environment that exists only while it runs. Its previews and timeout stay.
+        // 1. An application builds its Dockerfile or a buildpack: there is no build command to run and no environment
+        //    that exists only while it runs. Its folder is offered as the build CONTEXT, with its own help; its
+        //    previews and timeout stay.
         assertThat(offered(ApplicationKind.SETTINGS_SCHEMA))
-            .as("step 1: the application offers no build command, folder or build-only environment")
-            .doesNotContain(GitSourceSchema.BUILD_COMMAND, GitSourceSchema.BUILD_DIRECTORY,
-                GitSourceSchema.BUILD_ENVIRONMENT_VARIABLES)
-            .contains(GitSourceSchema.BUILD_TIMEOUT, GitSourceSchema.PREVIEWS_ENABLED);
+            .as("step 1: the application offers no build command or build-only environment, but its build folder")
+            .doesNotContain(GitSourceSchema.BUILD_COMMAND, GitSourceSchema.BUILD_ENVIRONMENT_VARIABLES)
+            .contains(GitSourceSchema.BUILD_DIRECTORY, GitSourceSchema.BUILD_TIMEOUT,
+                GitSourceSchema.PREVIEWS_ENABLED);
+        assertThat(helpKey(ApplicationKind.SETTINGS_SCHEMA))
+            .as("step 1: the application's folder says it is the build context")
+            .isEqualTo("build_context_directory");
 
         // 2. A static site runs its build command in its build folder; its build stage takes no environment.
         assertThat(offered(StaticSiteKind.SETTINGS_SCHEMA))
@@ -46,6 +51,14 @@ class GitSourceFieldsOfferedTest {
             .contains(GitSourceSchema.BUILD_COMMAND, GitSourceSchema.BUILD_DIRECTORY,
                 GitSourceSchema.BUILD_ENVIRONMENT_VARIABLES)
             .doesNotContain(GitSourceSchema.PREVIEWS_ENABLED);
+        assertThat(List.of(helpKey(StaticSiteKind.SETTINGS_SCHEMA), helpKey(WorkspaceKind.SETTINGS_SCHEMA)))
+            .as("step 3: and both keep the folder's working-directory help")
+            .containsExactly("build_directory", "build_directory");
+    }
+
+    /** @return the microcopy key of the build folder's help text in this schema */
+    private static String helpKey(Schema schema) {
+        return schema.getFields().get(GitSourceSchema.BUILD_DIRECTORY).getAttribute(FieldAttributes.HELP).key();
     }
 
     /** @return the names of the fields an edit view shows (no declared views means every view) */

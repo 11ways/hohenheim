@@ -22,6 +22,7 @@ import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
+import be.elevenways.hohenheim.server.docker.InstanceDatabaseNetworks;
 import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostLeases;
@@ -32,6 +33,7 @@ import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
+import be.elevenways.hohenheim.server.runtime.PreDeploySupport;
 import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
 import be.elevenways.hohenheim.server.runtime.WorkloadAttribution;
 import be.elevenways.hohenheim.server.source.GitCheckout;
@@ -53,6 +55,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -315,6 +318,41 @@ public final class InstanceService {
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimCapabilities.CONFIG);
         return operation(instanceId,
             () -> deployWorkloadNow(instanceId, DeployTrigger.SYSTEM, restoreVolumes));
+    }
+
+    /**
+     * Run a command once in a one-shot container of a release that is created but not deployed, under the release's
+     * operation lock: its own spec with the command replaced, its variables in the environment, its database links
+     * joined before start ({@link PreDeploySupport}).
+     *
+     * @param argv      the command split on whitespace, never substituted
+     * @param timeoutMs the time limit; the one-shot is force-removed when it passes
+     * @return the outcome, a timed-out run included
+     * @throws Violations {@code release_pre_deploy_unavailable} on a driver without one-shots,
+     *         {@code instance_deploy_failed} when the daemon refuses or cannot be reached
+     */
+    public PreDeploySupport.@NonNull Outcome runPreDeploy(int instanceId, @NonNull List<String> argv,
+                                                         long timeoutMs, int tailLines) {
+        return operation(instanceId, () -> {
+            HohenheimAccess.requireOperationCapability(instanceId, HohenheimCapabilities.POWER);
+            Resolved resolved = resolve(instanceId);
+            resolved.requireImage();
+            if (!(resolved.runtime() instanceof PreDeploySupport support)) {
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("release_pre_deploy_unavailable"));
+            }
+            this.leases.requireFence(resolved.serverId());
+            Map<String, String> env = new LinkedHashMap<>(resolved.spec().env());
+            env.putAll(resolved.variables());
+            try {
+                // The volume directories the one-shot binds must exist before its create, as for the workload's own.
+                resolved.handler().prepareForDeploy(instanceId, ServerModel.nameOf(resolved.serverId()),
+                    resolved.settings());
+                return support.runPreDeploy(resolved.spec(), argv, env, timeoutMs, tailLines,
+                    oneShot -> InstanceDatabaseNetworks.attachLinks(resolved, instanceId, oneShot));
+            } catch (IOException failed) {
+                throw HohenheimViolations.instanceRefusal("instance_deploy_failed", resolved.row(), failed);
+            }
+        });
     }
 
     /**

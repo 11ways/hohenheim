@@ -2,12 +2,15 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.Map;
@@ -23,7 +26,8 @@ import static be.elevenways.hohenheim.RawValues.trimmed;
  * rendered in the form and stored, and read by NOTHING: an operator who set a build timeout
  * or a build directory got the defaults with no hint that the value was ignored. They are
  * honoured through here, by their own help text: the directory is the build COMMAND's
- * working directory (the workspace lane; a Dockerfile build has no build command), the
+ * working directory (the workspace and static-site lanes) or a Dockerfile or buildpack build's context
+ * ({@link #buildContext}, the application lane, which runs no build command), the
  * environment exists only while that command runs, and the timeout can only SHORTEN a build
  * -- the host's build quota still caps it.
  *
@@ -70,6 +74,35 @@ public final class SourceBuildDetail {
      */
     public static void requireContainedDirectory(@NonNull Map<String, Object> settings) {
         workingDirectory(settings, "/checkout");
+    }
+
+    /**
+     * The context a release or preview build of a checkout reads: the declared build folder for a Dockerfile or
+     * buildpack build, the checkout itself for a static site, whose builder runs its build command in that folder.
+     *
+     * AIDEV-NOTE: the folder's REAL path is checked against the checkout's, so a symlink in the repository cannot
+     * hand the builder a context outside it; the textual check of {@link #workingDirectory} alone cannot see that.
+     *
+     * @throws Violations {@code source_build_directory_invalid} for a folder outside the checkout, a symlink leaving
+     *         it, or a path that is not an existing folder
+     */
+    public static @NonNull Path buildContext(@NonNull Map<String, Object> settings, @NonNull Path checkoutRoot) {
+        if (BuildOperationModel.KIND_STATIC.equals(BuildOperationModel.kindOrDefault(settings.get("builder")))
+                || declaredDirectory(settings) == null) {
+            return checkoutRoot;
+        }
+        Path folder = Path.of(workingDirectory(settings, checkoutRoot.toString()));
+        try {
+            Path real = folder.toRealPath();
+            if (Files.isDirectory(real) && real.startsWith(checkoutRoot.toRealPath())) {
+                return folder;
+            }
+        } catch (IOException unresolvable) {
+            // absent or unreadable: refused below like any other folder that is not inside the checkout
+        }
+        throw Violations.ofField(GitSourceSchema.BUILD_DIRECTORY,
+            trimmed(settings.get(GitSourceSchema.BUILD_DIRECTORY)),
+            HohenheimMicrocopy.VIOLATIONS.of("source_build_directory_invalid"));
     }
 
     /**

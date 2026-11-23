@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.app.PutOnlineGroup;
 import be.elevenways.hohenheim.HohenheimFormSections;
@@ -51,10 +52,10 @@ import java.util.Map;
 public final class ApplicationKind implements InstanceKindHandler {
 
     public static final Identifier ID = HohenheimIds.id("application");
-    // Its release builds a Dockerfile or a buildpack, so no build command (nor its folder or build-only environment)
-    // is ever run: the source offers only its preview lane.
-    public static final Schema SETTINGS_SCHEMA =
-        GitSourceSchema.addTo(new Schema(), EnumSet.of(GitSourceSchema.Offer.PREVIEWS));
+    // Its release builds a Dockerfile or a buildpack, so no build command (nor its build-only environment) is ever
+    // run: the source offers its preview lane and the folder the build reads as its context.
+    public static final Schema SETTINGS_SCHEMA = GitSourceSchema.addTo(new Schema(),
+        EnumSet.of(GitSourceSchema.Offer.PREVIEWS, GitSourceSchema.Offer.BUILD_CONTEXT));
 
     /**
      * A prebuilt image to release instead of building one.
@@ -140,6 +141,51 @@ public final class ApplicationKind implements InstanceKindHandler {
 
     public static final IntegerField MEMORY_LIMIT_MB = SETTINGS_SCHEMA.addField(InstanceKindFields.memoryLimit());
 
+    /** The shortest and longest time a pre-deploy command may be given, and what an empty field gives it. */
+    public static final int PRE_DEPLOY_TIMEOUT_MIN = 10;
+    public static final int PRE_DEPLOY_TIMEOUT_MAX = 1800;
+    public static final int PRE_DEPLOY_TIMEOUT_DEFAULT = 300;
+
+    /** The bounds of an app's own drain window. */
+    public static final int DRAIN_SECONDS_MIN = 0;
+    public static final int DRAIN_SECONDS_MAX = 600;
+
+    /**
+     * A command run once in a one-shot container of the new release before each forward deploy (a migration).
+     *
+     * AIDEV-NOTE: carried onto the release by ApplicationReleases.desiredSettings, so editing only this makes the
+     * next deploy a new release that runs it; ReleaseEngine runs it for a forward release only, never a rollback, a
+     * restore, a reuse, a preview or a restart. Never {{KEY}}-substituted (InstanceVariables substitutes command and
+     * cloud_init only): the variables reach it through the environment.
+     */
+    public static final StringField PRE_DEPLOY_COMMAND = SETTINGS_SCHEMA.addField(
+        StringField.builder().name(InstanceKindFields.PRE_DEPLOY_COMMAND)
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("pre_deploy_command"))
+            .help(HohenheimMicrocopy.HELP.of("pre_deploy_command")).build());
+
+    public static final IntegerField PRE_DEPLOY_TIMEOUT = SETTINGS_SCHEMA.addField(
+        IntegerField.builder().name(InstanceKindFields.PRE_DEPLOY_TIMEOUT).suffix("s")
+            .validator(Range.of(PRE_DEPLOY_TIMEOUT_MIN, PRE_DEPLOY_TIMEOUT_MAX))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("pre_deploy_timeout"))
+            .help(HohenheimMicrocopy.HELP.of("pre_deploy_timeout").withArg("min", PRE_DEPLOY_TIMEOUT_MIN)
+                .withArg("max", PRE_DEPLOY_TIMEOUT_MAX).withArg("default", PRE_DEPLOY_TIMEOUT_DEFAULT))
+            .build());
+
+    /**
+     * How long the superseded release keeps running after a switch, for this app alone.
+     *
+     * AIDEV-NOTE: read off the APPLICATION when the drain is scheduled (ReleaseEngine.scheduleDrain), never carried
+     * onto the release: no lock is held during the window, and a newer operation, a Stop or boot recovery still ends
+     * it early. Empty means the installation's releases.drain_seconds.
+     */
+    public static final IntegerField DRAIN_SECONDS = SETTINGS_SCHEMA.addField(
+        IntegerField.builder().name("drain_seconds").suffix("s")
+            .validator(Range.of(DRAIN_SECONDS_MIN, DRAIN_SECONDS_MAX))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("drain_seconds"))
+            .help(HohenheimMicrocopy.HELP.of("drain_seconds").withArg("min", DRAIN_SECONDS_MIN)
+                .withArg("max", DRAIN_SECONDS_MAX))
+            .build());
+
     /**
      * Which console every release's primary process gets; copied onto each release's
      * settings by {@code ApplicationReleases}. {@link ConsoleKind} is the vocabulary's home.
@@ -167,15 +213,33 @@ public final class ApplicationKind implements InstanceKindHandler {
             HohenheimMicrocopy.FORM_SECTION.of("variables_description"), List.of(
             ENVIRONMENT_VARIABLES.getName(), GitSourceSchema.PREVIEW_ENVIRONMENT_VARIABLES)));
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.BUILD, List.of(
-            DOCKERFILE.getName(), BUILD_ARGUMENTS.getName(), GitSourceSchema.BUILD_TIMEOUT,
-            GitSourceSchema.SHALLOW_CLONE, GitSourceSchema.SUBMODULES)));
+            GitSourceSchema.BUILD_DIRECTORY, DOCKERFILE.getName(), BUILD_ARGUMENTS.getName(),
+            GitSourceSchema.BUILD_TIMEOUT, GitSourceSchema.SHALLOW_CLONE, GitSourceSchema.SUBMODULES)));
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.DEPLOYMENT, List.of(
             GitSourceSchema.WEBHOOK_SECRET, GitSourceSchema.POLL_INTERVAL, HEALTH_PATH.getName(),
+            PRE_DEPLOY_COMMAND.getName(), PRE_DEPLOY_TIMEOUT.getName(), DRAIN_SECONDS.getName(),
             KEEP_RELEASES.getName())));
         SETTINGS_SCHEMA.addSection(
             HohenheimFormSections.collapsed(HohenheimFormSections.RUNTIME, HohenheimFormSections.limitsNote(), List.of(
                 MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName(),
                 CONSOLE_KIND.getName(), COMMAND.getName(), WORKDIR.getName())));
+    }
+
+    /** @return the pre-deploy command's time limit in seconds: the stored value clamped to its bounds, else 300 */
+    public static int preDeployTimeoutSeconds(@NonNull Map<String, ?> settings) {
+        Integer stored = RawValues.parsedInt(settings.get(PRE_DEPLOY_TIMEOUT.getName()));
+        return stored == null ? PRE_DEPLOY_TIMEOUT_DEFAULT
+            : Math.clamp(stored, PRE_DEPLOY_TIMEOUT_MIN, PRE_DEPLOY_TIMEOUT_MAX);
+    }
+
+    /**
+     * @param installation the installation's {@code releases.drain_seconds}
+     * @return the app's drain window in seconds, clamped to its bounds, so a stored out-of-range value can never hold a
+     *         superseded release for longer; the installation's value when the app stores none
+     */
+    public static int drainSeconds(@NonNull Map<String, ?> settings, int installation) {
+        Integer stored = RawValues.parsedInt(settings.get(DRAIN_SECONDS.getName()));
+        return stored == null ? Math.max(0, installation) : Math.clamp(stored, DRAIN_SECONDS_MIN, DRAIN_SECONDS_MAX);
     }
 
     /**

@@ -92,6 +92,14 @@ public final class ReleaseKind implements InstanceKindHandler {
     public static final StringField HEALTH_PATH = SETTINGS_SCHEMA.addField(
         StringField.builder().name("health_path").filterable(false).build());
 
+    /** The app's command before each forward deploy, copied per release; ReleaseEngine runs it, the release never. */
+    public static final StringField PRE_DEPLOY_COMMAND = SETTINGS_SCHEMA.addField(
+        StringField.builder().name(InstanceKindFields.PRE_DEPLOY_COMMAND).filterable(false).build());
+
+    /** That command's time limit in seconds, copied per release when the app sets one. */
+    public static final IntegerField PRE_DEPLOY_TIMEOUT = SETTINGS_SCHEMA.addField(
+        IntegerField.builder().name(InstanceKindFields.PRE_DEPLOY_TIMEOUT).filterable(false).build());
+
     public static final StringField TAG = SETTINGS_SCHEMA.addField(
         StringField.builder().name("tag").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("image_tag"))
             .help(HohenheimMicrocopy.HELP.of("image_tag")).build());

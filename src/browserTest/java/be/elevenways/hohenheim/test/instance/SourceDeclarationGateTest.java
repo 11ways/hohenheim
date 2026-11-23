@@ -11,7 +11,11 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -62,6 +66,45 @@ class SourceDeclarationGateTest extends HohenheimHttpTestBase {
             assertThat(catchThrowable(() ->
                     SourceBuildDetail.workingDirectory(settings, "/home/app")))
                 .as("step 4: " + escape + " is refused by name")
+                .isInstanceOf(Violations.class)
+                .hasMessageContaining("source_build_directory_invalid");
+        }
+    }
+
+    /**
+     * The build folder of a Dockerfile or buildpack build is its context, checked on the real filesystem: a static
+     * site keeps the checkout as its context, and a folder that is a symlink out of the checkout or a file is refused.
+     */
+    @Test
+    void aBuildFolderIsTheBuildContextOfADockerfileOrBuildpackBuild(@TempDir Path tmp) throws IOException {
+        Path checkout = Files.createDirectories(tmp.resolve("checkout"));
+        Files.createDirectories(checkout.resolve("cloud"));
+        Files.writeString(checkout.resolve("README"), "a file, not a folder");
+        Path outside = Files.createDirectories(tmp.resolve("outside"));
+        Files.createSymbolicLink(checkout.resolve("escape"), outside);
+        Map<String, Object> settings = new LinkedHashMap<>();
+
+        // 1. Nothing declared, or a static site whatever it declares: the checkout itself.
+        assertThat(SourceBuildDetail.buildContext(settings, checkout))
+            .as("step 1: no folder builds the checkout root").isEqualTo(checkout);
+        settings.put("build_directory", "cloud");
+        settings.put("builder", "static_site");
+        assertThat(SourceBuildDetail.buildContext(settings, checkout))
+            .as("step 1: a static site's folder is its build command's, never its context").isEqualTo(checkout);
+
+        // 2. A Dockerfile build (the default builder) and a buildpack build read the declared folder.
+        settings.remove("builder");
+        assertThat(SourceBuildDetail.buildContext(settings, checkout))
+            .as("step 2: the Dockerfile build's context is the folder").isEqualTo(checkout.resolve("cloud"));
+        settings.put("builder", "nixpacks");
+        assertThat(SourceBuildDetail.buildContext(settings, checkout))
+            .as("step 2: and so is the buildpack build's").isEqualTo(checkout.resolve("cloud"));
+
+        // 3. A symlink leaving the checkout, a file, a missing folder and a climbing path are refused by name.
+        for (String refused : new String[] {"escape", "README", "missing", "../outside"}) {
+            settings.put("build_directory", refused);
+            assertThat(catchThrowable(() -> SourceBuildDetail.buildContext(settings, checkout)))
+                .as("step 3: " + refused + " is refused by name")
                 .isInstanceOf(Violations.class)
                 .hasMessageContaining("source_build_directory_invalid");
         }

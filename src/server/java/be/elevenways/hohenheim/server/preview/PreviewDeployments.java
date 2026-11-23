@@ -32,6 +32,7 @@ import be.elevenways.hohenheim.server.instance.PlaintextEnvironments;
 import be.elevenways.hohenheim.model.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
+import be.elevenways.hohenheim.server.instance.SourceBuildDetail;
 import be.elevenways.hohenheim.server.instance.UnfinishedDestroys;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.proxy.ProxyReloadHooks;
@@ -316,7 +317,7 @@ public final class PreviewDeployments {
                 ServerModel.LOCAL_HOST_NAME)
                 .run(new BuildRequest(PreviewDeploymentModel.MODEL_ID, previewId,
                     BuildOperationModel.kindOrDefault(siteSettings.get("builder")),
-                    checkout.toPath(),
+                    SourceBuildDetail.buildContext(siteSettings, checkout.toPath()),
                     trimmed(siteSettings.get("dockerfile")).isEmpty()
                         ? null : trimmed(siteSettings.get("dockerfile")),
                     ControllerScope.handle(ControllerScope.KIND_PREVIEW, previewId) + ":latest",

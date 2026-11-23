@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.instance.variable.StringVariableType;
 import be.elevenways.hohenheim.model.InstanceTemplateDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.instance.InstanceImagePolicy;
@@ -732,5 +733,60 @@ class InstanceTemplatePolicyTest extends HohenheimHttpTestBase {
                     + " gate must be what refuses it")
                 .contains("image_requires_capability");
         }
+    }
+
+    /**
+     * The app settings that decide what runs around a deploy (the command before it, its time limit, the build folder,
+     * the drain window) are operator-only: a tenant holding config on the app is refused each one, by name, through
+     * the model write the panel, the API and the assistant tools all share; the operator's same write lands.
+     */
+    @Test
+    void anApplicationsDeploySettingsAreOperatorOnly() {
+        Model instances = Models.get(InstanceModel.class);
+        int[] created = new int[1];
+        TenantConduits.as(adminPrincipal, () -> {
+            Row row = instances.createEmptyRow();
+            row.set(InstanceModel.NAME, PREFIX + "app-deploy-settings");
+            row.set(InstanceModel.KIND, "hohenheim:application");
+            row.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+            row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "alpine", "tag", "latest")));
+            instances.save(row);
+            created[0] = row.get(InstanceModel.ID);
+        });
+        RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, created[0],
+            HohenheimCapabilities.CONFIG, true);
+        Map<String, Object> writes = new LinkedHashMap<>();
+        writes.put("pre_deploy_command", "migrate --up");
+        writes.put("pre_deploy_timeout", 600);
+        writes.put("build_directory", "cloud");
+        writes.put("drain_seconds", 290);
+
+        // 1. Each key alone, written by the tenant: refused on its own key, nothing stored.
+        writes.forEach((key, value) -> {
+            Throwable refused = catchThrowable(() -> TenantConduits.as(tenantPrincipal, () -> {
+                Row row = instances.findById(created[0]);
+                Map<String, Object> settings = settingsOf(row);
+                settings.put(key, value);
+                row.set(InstanceModel.SETTINGS, settings);
+                instances.save(row);
+            }));
+            assertThat(violationKeys(refused))
+                .as("step 1: a tenant may not set settings.%s", key)
+                .contains("settings." + key + "=").contains("tenant_field_frozen");
+            assertThat(settingsOf(instances.findById(created[0]))).as("step 1: nothing stored for %s", key)
+                .doesNotContainKey(key);
+        });
+
+        // 2. The operator's write of all four lands.
+        TenantConduits.as(adminPrincipal, () -> {
+            Row row = instances.findById(created[0]);
+            Map<String, Object> settings = settingsOf(row);
+            settings.putAll(writes);
+            row.set(InstanceModel.SETTINGS, settings);
+            instances.save(row);
+        });
+        Map<String, Object> stored = settingsOf(instances.findById(created[0]));
+        writes.forEach((key, value) -> assertThat(String.valueOf(stored.get(key)))
+            .as("step 2: an operator sets %s", key).isEqualTo(String.valueOf(value)));
     }
 }

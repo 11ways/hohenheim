@@ -131,8 +131,9 @@ class InstanceSettingsSectionTest {
 
         // 3. An application's Configuration reads: an open source section (where the code comes from, what it builds
         //    into, deploy-on-push and previews), the variables per lane open beside it, and only what has a working
-        //    default folded. Its release builds a Dockerfile or a buildpack, so no build command, build folder or
-        //    build-only environment is in any section (GitSourceSchema.Offer: declared, offered in no view).
+        //    default folded. Its release builds a Dockerfile or a buildpack, so no build command or build-only
+        //    environment is in any section (GitSourceSchema.Offer: declared, offered in no view); its build folder
+        //    leads the build fold as the build context (board FO117).
         assertThat(visibleRun(ApplicationKind.SETTINGS_SCHEMA))
             .as("step 3: every application field belongs to a named section").isEmpty();
         assertThat(ApplicationKind.SETTINGS_SCHEMA.getSections()).extracting(FormSection::id)
@@ -149,9 +150,15 @@ class InstanceSettingsSectionTest {
         assertThat(sectionMembers(ApplicationKind.SETTINGS_SCHEMA, HohenheimFormSections.VARIABLES))
             .as("step 3: the variables per lane: running, previews only")
             .containsExactly("environment_variables", "preview_environment_variables");
+        assertThat(sectionMembers(ApplicationKind.SETTINGS_SCHEMA, HohenheimFormSections.BUILD))
+            .as("step 3: the build fold leads with the build folder")
+            .containsExactly("build_directory", "dockerfile", "build_arguments", "build_timeout", "shallow_clone",
+                "submodules");
         assertThat(sectionMembers(ApplicationKind.SETTINGS_SCHEMA, HohenheimFormSections.DEPLOYMENT))
-            .as("step 3: and the deployment fold keeps the webhook secret, the release gate and retention")
-            .containsExactly("webhook_secret", "poll_interval", "health_path", "keep_releases");
+            .as("step 3: and the deployment fold keeps the webhook secret, the release gate, what runs around a"
+                + " deploy and retention")
+            .containsExactly("webhook_secret", "poll_interval", "health_path", "pre_deploy_command",
+                "pre_deploy_timeout", "drain_seconds", "keep_releases");
 
         // 4. FALSIFICATION: a schema-declared section that does not survive derivation
         //    folds nothing, because the rendered form is built from the DERIVED spec.

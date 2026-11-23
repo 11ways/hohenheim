@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.application;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.DeployTrigger;
@@ -206,7 +207,7 @@ public final class ApplicationReleases {
                 }
                 desired.settings().put("source_fingerprint", fingerprint);
                 return ReleaseEngine.initialRelease(applicationId, application.get(InstanceModel.NAME),
-                    serverId, desired, fingerprint, restoreVolumes);
+                    serverId, desired, fingerprint, restoreVolumes, false);
             });
         } catch (RuntimeException unchecked) {
             throw unchecked;
@@ -282,7 +283,7 @@ public final class ApplicationReleases {
                     DesiredSpec desired = desiredSettings(docker, application, settings);
                     desired.settings().put("source_fingerprint", fingerprint);
                     return ReleaseEngine.initialRelease(applicationId, applicationName, serverId,
-                        desired, fingerprint);
+                        desired, fingerprint, null, true);
                 }
 
                 // Changed source over an existing release: the health-gated lane.
@@ -691,7 +692,8 @@ public final class ApplicationReleases {
                 build = new SandboxedBuilds(docker, serverName).run(new BuildRequest(
                     InstanceModel.MODEL_ID, applicationId,
                     BuildOperationModel.kindOrDefault(settings.get("builder")),
-                    artifactContext != null ? artifactContext : Path.of(buildContext),
+                    artifactContext != null ? artifactContext
+                        : SourceBuildDetail.buildContext(settings, Path.of(buildContext)),
                     trimmed(settings.get("dockerfile")), tag,
                     // The build sees build arguments, never the workload's secret environment.
                     EnvVars.toMap(settings.get("build_arguments")),
@@ -766,6 +768,17 @@ public final class ApplicationReleases {
         String healthPath = trimmed(settings.get("health_path"));
         if (!healthPath.isEmpty()) {
             desired.put("health_path", healthPath);
+        }
+        // Carried only when set, so an app without them converges to an unchanged release; a changed command is a
+        // changed spec, so the next deploy makes a new release and runs it. The limit rides only with a command, so
+        // a limit for no command changes no release.
+        String preDeploy = trimmed(settings.get(InstanceKindFields.PRE_DEPLOY_COMMAND));
+        if (!preDeploy.isEmpty()) {
+            desired.put(InstanceKindFields.PRE_DEPLOY_COMMAND, preDeploy);
+            Integer preDeployTimeout = RawValues.parsedInt(settings.get(InstanceKindFields.PRE_DEPLOY_TIMEOUT));
+            if (preDeployTimeout != null) {
+                desired.put(InstanceKindFields.PRE_DEPLOY_TIMEOUT, preDeployTimeout);
+            }
         }
 
         // Already resolved, using InstanceVariables' shared precedence, before fingerprinting.

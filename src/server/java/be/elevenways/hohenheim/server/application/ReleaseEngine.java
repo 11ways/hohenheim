@@ -24,6 +24,7 @@ import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
+import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
@@ -228,18 +229,14 @@ public final class ReleaseEngine {
     /**
      * First release: only a healthy candidate is promoted to serving, even when there is
      * no previous workload to protect.
+     *
+     * @param restoreVolumes the volumes a restore fills before the first start; null for a deploy
+     * @param preDeploy      whether the app's command before each deploy runs: a first deploy runs it, a restore never
      */
     static ApplicationReleases.@NonNull Release initialRelease(int applicationId,
-                                                             @Nullable String applicationName,
-                                                             int serverId,
-                                                             ApplicationReleases.@NonNull DesiredSpec spec,
-                                                             @NonNull String ownerFingerprint) {
-        return initialRelease(applicationId, applicationName, serverId, spec, ownerFingerprint, null);
-    }
-
-    static ApplicationReleases.@NonNull Release initialRelease(int applicationId,
             @Nullable String applicationName, int serverId, ApplicationReleases.@NonNull DesiredSpec spec,
-            @NonNull String ownerFingerprint, InstanceService.@Nullable RestoreVolumes restoreVolumes) {
+            @NonNull String ownerFingerprint, InstanceService.@Nullable RestoreVolumes restoreVolumes,
+            boolean preDeploy) {
         Map<String, Object> desired = spec.settings();
         Row op = newOperation(ReleaseOperationModel.KIND_RELEASE, applicationId,
             ownerFingerprint, ownerFingerprint);
@@ -255,6 +252,9 @@ public final class ReleaseEngine {
                 transition(op,
                     ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.DEPLOYING),
                     "instance " + instanceId + " created");
+                if (preDeploy) {
+                    PreDeployCommand.run(op, instanceId, desired);
+                }
                 InstanceService instances = new InstanceService();
                 InstanceStatus status = restoreVolumes == null ? instances.deploy(instanceId)
                     : instances.deployRestored(instanceId, restoreVolumes);
@@ -485,6 +485,13 @@ public final class ReleaseEngine {
                 ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.DEPLOYING),
                 "candidate instance " + candidateId + " created beside serving instance "
                     + servingId);
+            // The command before each deploy runs for a forward release only: a rollback returns to a release whose
+            // command already ran against the data it then served (its stored settings still carry it).
+            if (ReleaseOperationModel.KIND_RELEASE.equals(op.get(ReleaseOperationModel.KIND))) {
+                PreDeployCommand.run(op, candidateId, desired);
+            } else if (!trimmed(desired.get(InstanceKindFields.PRE_DEPLOY_COMMAND)).isEmpty()) {
+                step(op, "rollback: pre-deploy command not run");
+            }
             InstanceStatus candidateStatus = instances.deploy(candidateId);
             transition(op, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.PROBING),
                 "probing candidate HTTP health");
@@ -576,9 +583,15 @@ public final class ReleaseEngine {
     private static void scheduleDrain(int applicationId, int opId, int retiredId,
                                       @NonNull String servingImage,
                                       @Nullable Datasource datasource) {
-        Integer seconds = Zenit.SETTINGS_VALUES.getValue(
+        // The APPLICATION's own window when it declares one, read now (never a snapshot on the release), else the
+        // installation's. No lock is held while it elapses.
+        Integer installation = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Releases.DRAIN_SECONDS);
-        long waitMs = Math.max(0, (seconds != null ? seconds : 15) * 1000L);
+        Row application = Models.get(InstanceModel.class).findById(applicationId);
+        int seconds = ApplicationKind.drainSeconds(
+            application != null ? InstanceModel.settingsOf(application) : Map.of(),
+            installation != null ? installation : 15);
+        long waitMs = seconds * 1000L;
         Runnable drain = () -> ExecutionIdentity.runDetachedAsSystem(HohenheimSystemPurposes.RELEASE_DRAIN, () -> {
             // The drain is an operation of the application like any other: it runs holding
             // the application's lock, QUEUED behind whatever is running, and re-reads its

@@ -1,6 +1,9 @@
 package be.elevenways.hohenheim.server.runtime;
 
 import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.ControllerScope;
+import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerPtyExec;
 import be.elevenways.hohenheim.server.docker.DockerTransport;
@@ -59,7 +62,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 public final class DockerInstanceRuntime
         implements InstanceRuntime, VolumeSnapshotSupport, WorkloadAttribution,
-                   FileStagingSupport, InstallSupport,
+                   FileStagingSupport, InstallSupport, PreDeploySupport,
                    ConsoleStreamSupport, LinkNetworkSupport, InstanceFileSupport,
                    StatsStreamSupport, ExecSupport, PtySupport {
 
@@ -205,6 +208,9 @@ public final class DockerInstanceRuntime
 
     @Override
     public void destroy(@NonNull String handle) throws IOException {
+        // A one-shot sibling a controller crash or a lost removal left behind dies with its workload, and first: it
+        // sits on the workload's network, which the teardown below could not remove while it is attached.
+        removeOneShotsBeside(handle);
         try {
             this.docker.stopContainer(handle, 10);
         } catch (IOException ignored) {
@@ -948,10 +954,32 @@ public final class DockerInstanceRuntime
         return RawValues.intOr(state.get("ExitCode"), -1);
     }
 
-    // -- InstallSupport -------------------------------------------------------
+    // -- one-shot siblings (install, pre-deploy) ---------------------------------
 
-    /** How often the install waiter re-inspects the one-shot workload. */
-    private static final long INSTALL_POLL_MS = 500;
+    /** How often the one-shot waiter re-inspects its workload. */
+    private static final long ONE_SHOT_POLL_MS = 500;
+
+    /**
+     * The one-shot siblings a workload may have: the container-name suffixes {@link #destroy} enumerates.
+     *
+     * AIDEV-NOTE: a closed driver-internal pair, not a growing vocabulary; a new one-shot is one member here and the
+     * destroy sweep covers it.
+     */
+    private enum OneShot {
+        INSTALL("install"),
+        PRE_DEPLOY("predeploy");
+
+        private final String suffix;
+
+        OneShot(String suffix) {
+            this.suffix = suffix;
+        }
+
+        /** @return the sibling's container name beside the workload {@code handle} */
+        String beside(String handle) {
+            return handle + "-" + this.suffix;
+        }
+    }
 
     @Override
     public @NonNull InstallOutcome runInstall(@NonNull InstanceSpec spec,
@@ -972,7 +1000,7 @@ public final class DockerInstanceRuntime
             spec.ownerLabels(), this.egress);
         this.docker.ensureImage(installImage, null);
 
-        String handle = spec.handle() + "-install";
+        String handle = OneShot.INSTALL.beside(spec.handle());
         // Idempotent resume: a leftover install container WE own is replaced; a
         // same-named foreign container stays a refusal inside removeIfOwnedBy.
         OwnerLabels.removeIfOwnedBy(this.docker, handle, owner.model(), owner.id());
@@ -1019,10 +1047,54 @@ public final class DockerInstanceRuntime
         }
         containerSpec.put("HostConfig", hostConfig);
 
-        this.docker.createContainer(handle, containerSpec, spec.hardening());
+        PreDeploySupport.Outcome outcome = runToCompletion(handle, containerSpec, spec.hardening(), timeoutMs, 100,
+            ignored -> { }, "install");
+        if (outcome.timedOut()) {
+            throw new IOException("Install step for '" + spec.handle()
+                + "' exceeded its " + timeoutMs + "ms timeout and was removed");
+        }
+        return new InstallOutcome(outcome.exitCode(), outcome.outputTail());
+    }
+
+    @Override
+    public PreDeploySupport.@NonNull Outcome runPreDeploy(@NonNull InstanceSpec spec, @NonNull List<String> argv,
+                                                         @NonNull Map<String, String> env, long timeoutMs,
+                                                         int tailLines, @NonNull BeforeStart beforeStart)
+            throws IOException {
+        SpecFeature.requireSupported(spec, FEATURES, "docker");
+        OwnerLabels.Owner owner = OwnerLabels.parse(spec.ownerLabels());
+        if (owner == null) {
+            throw new IOException("InstanceSpec '" + spec.handle() + "' carries no valid owner"
+                + " labels; an unattributable pre-deploy container is forbidden by design");
+        }
+        // The release's own network and posture, exactly as create() derives them for the release itself.
+        String network = this.posture == NetworkPosture.PRIVATE
+            ? WorkloadNetworks.ensure(this.docker, this.policy, spec.handle(), spec.ownerLabels(), this.egress)
+            : null;
+        this.docker.ensureImage(spec.image(), null);
+        String handle = OneShot.PRE_DEPLOY.beside(spec.handle());
+        OwnerLabels.removeIfOwnedBy(this.docker, handle, owner.model(), owner.id());
+        return runToCompletion(handle, buildSpec(spec.asOneShot(argv, env), network), spec.hardening(), timeoutMs,
+            tailLines, beforeStart, "pre-deploy");
+    }
+
+    /**
+     * THE one create, start, wait, tail and remove of a one-shot sibling.
+     *
+     * @param what the one-shot's name in a refusal ("install", "pre-deploy")
+     * @return the outcome; timed out when the limit passed while it still ran, its tail read before the removal
+     */
+    private PreDeploySupport.@NonNull Outcome runToCompletion(@NonNull String handle,
+                                                             @NonNull Map<String, Object> containerSpec,
+                                                             ContainerHardening.@NonNull Profile hardening,
+                                                             long timeoutMs, int tailLines,
+                                                             @NonNull BeforeStart beforeStart,
+                                                             @NonNull String what) throws IOException {
+        this.docker.createContainer(handle, containerSpec, hardening);
         try {
+            beforeStart.run(handle);
             this.docker.startContainer(handle);
-            long deadline = Now.millis() + timeoutMs;
+            Now.Deadline deadline = Now.deadline(Duration.ofMillis(timeoutMs));
             while (true) {
                 Map<String, Object> inspect = this.docker.inspectContainer(handle);
                 Object state = inspect.get("State");
@@ -1030,31 +1102,69 @@ public final class DockerInstanceRuntime
                     && Boolean.TRUE.equals(s.get("Running"));
                 if (!running) {
                     int exitCode = RawValues.intOr(RawValues.map(state).get("ExitCode"), -1);
-                    String tail = "";
-                    try {
-                        tail = this.docker.containerLogs(handle, true, true, 100);
-                    } catch (IOException unreadable) {
-                        tail = "(install output unreadable: " + unreadable.getMessage() + ")";
-                    }
-                    return new InstallOutcome(exitCode, tail);
+                    return new PreDeploySupport.Outcome(false, exitCode, tailOf(handle, tailLines, what));
                 }
-                if (Now.millis() > deadline) {
-                    throw new IOException("Install step for '" + spec.handle()
-                        + "' exceeded its " + timeoutMs + "ms timeout and was removed");
+                if (deadline.passed()) {
+                    return new PreDeploySupport.Outcome(true, -1, tailOf(handle, tailLines, what));
                 }
                 try {
-                    Pace.sleep(Duration.ofMillis(INSTALL_POLL_MS));
+                    Pace.sleep(Duration.ofMillis(ONE_SHOT_POLL_MS));
                 } catch (InterruptedException interrupted) {
                     Thread.currentThread().interrupt();
-                    throw new IOException("Install wait interrupted for '" + spec.handle() + "'");
+                    throw new IOException(what + " wait interrupted for '" + handle + "'");
                 }
             }
         } finally {
             try {
                 this.docker.removeContainer(handle, true);
             } catch (IOException ignored) {
-                // A leftover install container is re-removed by the next attempt's
-                // removeIfOwnedBy; never mask the run's real outcome with cleanup noise.
+                // A leftover one-shot is re-removed by the next attempt's removeIfOwnedBy and by
+                // destroy; never mask the run's real outcome with cleanup noise.
+            }
+        }
+    }
+
+    /** The one-shot's last output lines; a note in their place when the daemon cannot give them. */
+    private @NonNull String tailOf(@NonNull String handle, int tailLines, @NonNull String what) {
+        try {
+            return this.docker.containerLogs(handle, true, true, tailLines);
+        } catch (IOException unreadable) {
+            return "(" + what + " output unreadable: " + unreadable.getMessage() + ")";
+        }
+    }
+
+    /**
+     * Remove every one-shot sibling a destroyed workload left behind, ONLY when the daemon attributes it to the very
+     * record the workload's handle names; a same-named foreign container is left alone and logged.
+     */
+    private void removeOneShotsBeside(@NonNull String handle) {
+        ControllerScope.Scoped scoped = ControllerScope.parse(handle);
+        if (scoped == null || !scoped.isOurs() || !ControllerScope.KIND_INSTANCE.equals(scoped.kind())) {
+            return;
+        }
+        for (OneShot shot : OneShot.values()) {
+            String sibling = shot.beside(handle);
+            try {
+                Map<String, Object> inspect;
+                try {
+                    inspect = this.docker.inspectContainer(sibling);
+                } catch (DockerClient.ApiException e) {
+                    if (e.isNotFound()) {
+                        continue;
+                    }
+                    throw e;
+                }
+                OwnerLabels.Owner owner = OwnerLabels.parse(inspect.get("Config") instanceof Map<?, ?> config
+                    && config.get("Labels") instanceof Map<?, ?> labels ? labels : null);
+                if (OwnerLabels.matches(owner, InstanceModel.MODEL_ID, scoped.discriminator())) {
+                    this.docker.removeContainer(sibling, true);
+                } else {
+                    Blast.log("INSTANCE: left container", sibling, "alone at the destroy of", handle,
+                        "- it is not attributably ours");
+                }
+            } catch (IOException unremoved) {
+                Blast.log("INSTANCE: could not remove the leftover", sibling, "of", handle, "-",
+                    unremoved.getMessage());
             }
         }
     }

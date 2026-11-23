@@ -39,7 +39,10 @@ public final class GitSourceSchema {
         BUILD_COMMAND,
 
         /** Environment variables that exist only while the build command runs. */
-        BUILD_ENVIRONMENT
+        BUILD_ENVIRONMENT,
+
+        /** The folder a Dockerfile or buildpack build reads as its context ({@code build_directory}, own help). */
+        BUILD_CONTEXT
     }
 
     public static final String REPOSITORY_URL = "repository_url";
@@ -169,9 +172,13 @@ public final class GitSourceSchema {
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("build_command"))
             .help(HohenheimMicrocopy.HELP.of("build_command")), offers, Offer.BUILD_COMMAND).build());
 
+        // One folder, two meanings by lane: the build command's working directory, or a Dockerfile or buildpack
+        // build's context (SourceBuildDetail.buildContext). A kind offers at most one, each with its own help.
         schema.addField(offered(PathField.builder().name(BUILD_DIRECTORY)
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("build_directory"))
-            .help(HohenheimMicrocopy.HELP.of("build_directory")), offers, Offer.BUILD_COMMAND).build());
+            .help(HohenheimMicrocopy.HELP.of(offers.contains(Offer.BUILD_CONTEXT)
+                ? "build_context_directory" : "build_directory")),
+            offers, EnumSet.of(Offer.BUILD_COMMAND, Offer.BUILD_CONTEXT)).build());
 
         schema.addField(IntegerField.builder().name(BUILD_TIMEOUT).suffix("s")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("build_timeout"))
@@ -236,7 +243,18 @@ public final class GitSourceSchema {
     private static <B extends Field.Builder<?, ?, ?, B>> @NonNull B offered(@NonNull B builder,
                                                                           @NonNull Set<Offer> offers,
                                                                           @NonNull Offer part) {
-        return offers.contains(part) ? builder
-            : builder.attribute(FieldAttributes.VISIBLE_IN, EnumSet.noneOf(EditView.class));
+        return offered(builder, offers, EnumSet.of(part));
+    }
+
+    /** {@link #offered(Field.Builder, Set, Offer)} for a field offered when the kind names any of these parts. */
+    private static <B extends Field.Builder<?, ?, ?, B>> @NonNull B offered(@NonNull B builder,
+                                                                          @NonNull Set<Offer> offers,
+                                                                          @NonNull Set<Offer> parts) {
+        for (Offer part : parts) {
+            if (offers.contains(part)) {
+                return builder;
+            }
+        }
+        return builder.attribute(FieldAttributes.VISIBLE_IN, EnumSet.noneOf(EditView.class));
     }
 }

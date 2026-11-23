@@ -8714,6 +8714,52 @@
     "text": "Deze applicatie heeft geen draaiende release om verkeer van weg te schakelen",
     "scope": "violations"
   },
+  "build_context_directory": {
+    "text": "Map in de repository die de buildcontext is voor een build met een Dockerfile of buildpack. Het pad naar de Dockerfile wordt binnen die map gelezen. Leeg gebruikt de hoofdmap van de repository.",
+    "scope": "help"
+  },
+  "pre_deploy_command": [
+    {
+      "text": "Opdracht voor elke uitrol",
+      "scope": "hohenheim_field"
+    },
+    {
+      "text": "Loopt een keer voor elke uitrol, in een tijdelijke container van de nieuwe versie, met de variabelen en volumes van de app. Eindigt de opdracht met een fout of is de tijd om, dan stopt de uitrol en blijft de huidige versie draaien. Zolang de opdracht loopt, worden Stoppen, Herstarten en Terugrollen van deze app geweigerd. Een app met een exclusief volume ligt stil terwijl de opdracht loopt. De opdracht wordt meteen afgebroken als de tijd om is, en ook als Hohenheim zelf herstart terwijl ze loopt. Loopt niet bij terugrollen, herstellen, een preview of een herstart. Gesplitst op spaties, zonder shell; \\{\\{KEY\\}\\} wordt niet vervangen, de variabelen staan in de omgeving. Leeg voert niets uit.",
+      "scope": "help"
+    }
+  ],
+  "pre_deploy_timeout": [
+    {
+      "text": "Tijdslimiet voor die opdracht",
+      "scope": "hohenheim_field"
+    },
+    {
+      "text": "Van {$min} tot {$max} seconden. Leeg is {$default}.",
+      "scope": "help"
+    }
+  ],
+  "drain_seconds": [
+    {
+      "text": "Tijd om aanvragen af te werken na een uitrol",
+      "scope": "hohenheim_field"
+    },
+    {
+      "text": "Nadat een uitrol of een terugrol de bezoekers naar de nieuwe versie stuurde, blijft de oude versie nog zo lang draaien zodat haar aanvragen kunnen aflopen; daarna wordt ze gestopt. Een nieuwere uitrol, een terugrol, Stoppen of een herstart van Hohenheim kort die tijd in. Van {$min} tot {$max} seconden. Leeg gebruikt de instelling van de installatie.",
+      "scope": "help"
+    }
+  ],
+  "release_pre_deploy_failed": {
+    "text": "De opdracht voor de uitrol eindigde met code {$exit}. De uitrol is gestopt.",
+    "scope": "violations"
+  },
+  "release_pre_deploy_timed_out": {
+    "text": "De opdracht voor de uitrol liep na {$limit :duration style=hours precision=exact} nog. Ze is afgebroken en de uitrol is gestopt.",
+    "scope": "violations"
+  },
+  "release_pre_deploy_unavailable": {
+    "text": "Deze server kan geen opdracht voor een uitrol uitvoeren.",
+    "scope": "violations"
+  },
   "members": [
     {
       "text": "Leden",

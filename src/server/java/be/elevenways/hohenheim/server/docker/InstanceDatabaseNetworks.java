@@ -103,6 +103,17 @@ public final class InstanceDatabaseNetworks {
      */
     public static void attachLinksBeforeStart(InstanceService.@NonNull Resolved resolved,
                                               int instanceId) throws IOException {
+        attachLinks(resolved, instanceId, resolved.spec().handle());
+    }
+
+    /**
+     * {@link #attachLinksBeforeStart} for any container of the record: its workload, or a one-shot beside it (a
+     * pre-deploy command), which joins the same link networks under its own name.
+     *
+     * @throws IOException as {@link #attachLinksBeforeStart} does
+     */
+    public static void attachLinks(InstanceService.@NonNull Resolved resolved, int instanceId,
+                                   @NonNull String containerHandle) throws IOException {
         // A release's links live on its APPLICATION; every other instance owns its own.
         int ownerId = ApplicationReleases.linkOwnerOf(resolved.row());
         List<Row> links = Models.get(InstanceDatabaseModel.class).findByInstanceId(ownerId);
@@ -139,7 +150,7 @@ public final class InstanceDatabaseNetworks {
             support.ensureLinkNetwork(handle,
                 OwnerLabels.of(InstanceDatabaseModel.MODEL_ID, link.get(InstanceDatabaseModel.ID)),
                 Egress.NONE);
-            support.connectToLinkNetwork(handle, resolved.spec().handle(), List.of());
+            support.connectToLinkNetwork(handle, containerHandle, List.of());
             if (databaseHandle == null) {
                 // No engine instance yet: the network is ensured and the instance side
                 // joined, and reattachForDatabase joins the engine when it is provisioned.

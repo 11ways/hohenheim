@@ -8714,6 +8714,52 @@
     "text": "This application has no running release to switch traffic away from",
     "scope": "violations"
   },
+  "build_context_directory": {
+    "text": "Folder inside the repository that is the build context for a Dockerfile or buildpack build. The Dockerfile path is read inside it. Empty uses the repository root.",
+    "scope": "help"
+  },
+  "pre_deploy_command": [
+    {
+      "text": "Command before each deploy",
+      "scope": "hohenheim_field"
+    },
+    {
+      "text": "Runs once before every deploy, in a temporary container made from the new version, with the app's variables and volumes. If it ends with an error or runs out of time, the deploy stops and the current version keeps serving. While it runs, Stop, Restart and Roll back of this app are refused. An app with an exclusive volume is stopped while the command runs. The command is ended at once when its time is up, and when Hohenheim itself restarts during it. Not run on a rollback, a restore, a preview or a restart. Split on spaces, no shell; \\{\\{KEY\\}\\} is not replaced, the variables are in the environment. Empty runs nothing.",
+      "scope": "help"
+    }
+  ],
+  "pre_deploy_timeout": [
+    {
+      "text": "Time limit for that command",
+      "scope": "hohenheim_field"
+    },
+    {
+      "text": "From {$min} to {$max} seconds. Empty is {$default}.",
+      "scope": "help"
+    }
+  ],
+  "drain_seconds": [
+    {
+      "text": "Time to finish requests after a deploy",
+      "scope": "hohenheim_field"
+    },
+    {
+      "text": "After a deploy or a rollback moved visitors to the new version, the old version keeps running this long so its requests can finish, then it is stopped. A newer deploy, a rollback, a Stop or a restart of Hohenheim ends that time early. From {$min} to {$max} seconds. Empty uses the installation's setting.",
+      "scope": "help"
+    }
+  ],
+  "release_pre_deploy_failed": {
+    "text": "The command before the deploy ended with exit code {$exit}. The deploy was stopped.",
+    "scope": "violations"
+  },
+  "release_pre_deploy_timed_out": {
+    "text": "The command before the deploy was still running after {$limit :duration style=hours precision=exact}. It was ended and the deploy was stopped.",
+    "scope": "violations"
+  },
+  "release_pre_deploy_unavailable": {
+    "text": "This server cannot run a command before a deploy.",
+    "scope": "violations"
+  },
   "members": [
     {
       "text": "Members",

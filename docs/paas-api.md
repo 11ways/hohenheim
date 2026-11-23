@@ -428,7 +428,22 @@ Settings per kind (every key optional unless said otherwise):
 - `hohenheim:application`: the git source below plus `image`, `tag`, `builder`
   (`dockerfile`/`nixpacks`), `dockerfile`, `build_arguments` (a map),
   `container_port`, `health_path`, `environment_variables` (secret),
+  `pre_deploy_command`, `pre_deploy_timeout` (10..1800 seconds, empty is 300),
+  `drain_seconds` (0..600, empty uses the installation's `releases.drain_seconds`),
   `keep_releases` (1..10, default 2), `memory_limit_mb`, `cpu_limit`, `console_kind`.
+  For an application, `build_directory` is the build CONTEXT of a Dockerfile or
+  Nixpacks build (the `dockerfile` path is read inside it; empty is the repository
+  root), not a build command's working directory. `pre_deploy_command` runs once
+  before every forward deploy in a one-shot container of the new release (split on
+  spaces, no shell, `{{KEY}}` not replaced, the variables in its environment); a
+  non-zero exit (`release_pre_deploy_failed`) or a time-out
+  (`release_pre_deploy_timed_out`) stops the deploy and the current release keeps
+  serving. It never runs on a rollback, a restore, a preview or a restart, and
+  changing only it makes the next deploy a new release. `drain_seconds` is how long
+  the superseded release keeps running after a deploy or rollback switched traffic;
+  a newer deploy, a rollback, a Stop or a controller restart ends it early. All
+  three, and `build_directory`, are operator-only: a tenant write is refused
+  (`tenant_field_frozen`).
 - `hohenheim:workspace`: the git source below plus `start_command`, `container_port`,
   `home_quota_mb`, `environment_variables` (secret), `memory_limit_mb`, `cpu_limit`,
   `console_kind`.

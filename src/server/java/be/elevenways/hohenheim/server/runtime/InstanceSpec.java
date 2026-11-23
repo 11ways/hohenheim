@@ -386,6 +386,19 @@ public record InstanceSpec(@NonNull String handle,
             this.networkLimitMbit, this.runUser, this.tty, this.workdir, this.home, this.networkMode);
     }
 
+    /**
+     * This workload's spec for a one-shot run beside it: the same image, user, workdir, storage, limits, hardening
+     * and owner labels, running {@code command} with {@code env}, publishing no port, with no health check and no
+     * pseudo-terminal (nobody attaches to it).
+     */
+    public @NonNull InstanceSpec asOneShot(@NonNull List<String> command, @NonNull Map<String, String> env) {
+        return new InstanceSpec(this.handle, this.image, command, env, this.volumes,
+            this.binds, List.of(), this.limits, this.hardening, this.ownerLabels,
+            this.cloudInitUserData, this.imageFingerprint, this.imageOrigin, this.secureBoot,
+            this.guestAgent, this.tmpfs, null, this.rootDiskGb,
+            this.networkLimitMbit, this.runUser, false, this.workdir, this.home, this.networkMode);
+    }
+
     private static @NonNull List<PortPublication> listOf(@Nullable PortPublication one) {
         return one == null ? List.of() : List.of(one);
     }

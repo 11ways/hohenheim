@@ -43,6 +43,12 @@ public final class InstanceKindFields {
 
     public static final String CPU_LIMIT = "cpu_limit";
 
+    /** An app's command before each forward deploy, declared on the app and carried onto each release. */
+    public static final String PRE_DEPLOY_COMMAND = "pre_deploy_command";
+
+    /** That command's time limit in seconds, declared and carried the same way. */
+    public static final String PRE_DEPLOY_TIMEOUT = "pre_deploy_timeout";
+
     private InstanceKindFields() {
     }
 
