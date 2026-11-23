@@ -31,7 +31,6 @@ import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.operation.Operation;
-import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectArity;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -68,21 +67,19 @@ public final class EnvironmentParts {
 
     private static final SubjectType<Row> SUBJECT = SubjectType.record(EnvironmentModel.REF);
 
-    private static final OperationGate OPERATOR = OperationGate.permission(HohenheimSources.ADMIN_ACCESS);
-
     // AIDEV-NOTE: applicability is the form's typed condition, never a replacement for field authorization;
     // physical retirement remains the row writer's existing beforeSave policy.
 
     /** Deletes an environment nothing groups under; offered dead, naming the holders, while something does. */
     public static final Operation<Row, Void, Integer> DELETE =
-        RowDeleteOperations.declare(EnvironmentModel.REF, SubjectArity.ONE, OPERATOR)
+        RowDeleteOperations.declare(EnvironmentModel.REF, SubjectArity.ONE, HohenheimSources.OPERATOR)
             .id(HohenheimIds.id("delete_environment"))
             .availability(Availability.batch((environments, access) -> DeleteImpact.environmentsInUse(environments)))
             .register();
 
     /** Removes one environment-owned variable; anything running keeps its value until its next deploy. */
     public static final Operation<Row, Void, Integer> DELETE_VARIABLE =
-        RowDeleteOperations.delete(InstanceVariableModel.REF, SubjectArity.ONE, OPERATOR);
+        RowDeleteOperations.delete(InstanceVariableModel.REF, SubjectArity.ONE, HohenheimSources.OPERATOR);
 
     /** The environment list's quick-add entries; the project rides along as a preset. */
     private static final QuickCreateSpec ENVIRONMENT_QUICK_CREATE = QuickCreateSpec

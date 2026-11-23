@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.database.DatabaseContainerKind;
 import be.elevenways.hohenheim.server.instance.DockerContainerKind;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
+import be.elevenways.hohenheim.server.runtime.ConsoleStreamSupport;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.Egress;
@@ -195,6 +196,12 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
     /** one-shots that never end by themselves; each inspect of one moves the clock past any time limit. */
     private final Set<String> hanging = new LinkedHashSet<>();
 
+    /** handle -> what the workload printed, read back by a daemon keeping console logs ({@link #keepConsoleLogs}). */
+    private final Map<String, String> consoleLogs = new ConcurrentHashMap<>();
+
+    /** Whether the runtime face reads a workload's printed log back; see {@link #keepConsoleLogs}. */
+    private volatile boolean keepsConsoleLogs;
+
     // -- scripting ------------------------------------------------------------
 
     /**
@@ -255,6 +262,22 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
      */
     public void hangNextOneShot(@NonNull String output) {
         this.nextOneShot = new OneShotAnswer(0, output, true);
+    }
+
+    /**
+     * Let the runtime face read a workload's printed log back, the daemon's own log read behind an app's log tail.
+     *
+     * AIDEV-NOTE: opt-in, because a runtime with a console face opens a console session at every deploy whose app
+     * asks one (a readiness line, a stop command, the restart crash policy); this one keeps a log and streams no
+     * console, so its consumer's app declares none of the three.
+     */
+    public void keepConsoleLogs() {
+        this.keepsConsoleLogs = true;
+    }
+
+    /** The workload under {@code handle} prints {@code text}: its log read answers it from then on. */
+    public void print(@NonNull String handle, @NonNull String text) {
+        this.consoleLogs.merge(handle, text, String::concat);
     }
 
     /** The create body the daemon API received for this container name; null when none was created. */
@@ -438,10 +461,10 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
 
     /** The runtime the release kind deploys through while {@link #install()} is in force. */
     @NonNull InstanceRuntime runtime() {
-        return new FakeReleaseRuntime();
+        return this.keepsConsoleLogs ? new FakeLoggingRuntime() : new FakeReleaseRuntime();
     }
 
-    private final class FakeReleaseRuntime implements InstanceRuntime, LinkNetworkSupport, PreDeploySupport,
+    private class FakeReleaseRuntime implements InstanceRuntime, LinkNetworkSupport, PreDeploySupport,
             ImageIdentitySupport {
 
         /** The image a created workload runs, as the daemon identifies it (its local id). */
@@ -608,6 +631,33 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
                 throw new IOException("no workload " + handle);
             }
             return workload;
+        }
+    }
+
+    /** The runtime face of a daemon that keeps console logs: a log read back, never a streamed console. */
+    private final class FakeLoggingRuntime extends FakeReleaseRuntime implements ConsoleStreamSupport {
+
+        @Override
+        public @NonNull Console openConsole(@NonNull String handle) throws IOException {
+            throw new IOException("this fake keeps " + handle + "'s log and streams no console");
+        }
+
+        @Override
+        public @NonNull String consoleTail(@NonNull String handle, int lines) throws IOException {
+            if (!FakeDockerDaemon.this.workloads.containsKey(handle)) {
+                throw new IOException("no workload " + handle);
+            }
+            List<String> printed = List.of(FakeDockerDaemon.this.consoleLogs.getOrDefault(handle, "").split("\n"));
+            return String.join("\n", printed.subList(Math.max(0, printed.size() - lines), printed.size()));
+        }
+
+        @Override
+        public @Nullable Integer exitCode(@NonNull String handle) throws IOException {
+            Workload workload = FakeDockerDaemon.this.workloads.get(handle);
+            if (workload == null) {
+                throw new IOException("no workload " + handle);
+            }
+            return workload.running ? null : 0;
         }
     }
 

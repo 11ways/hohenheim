@@ -12,6 +12,7 @@ import be.elevenways.zenit.cms.common.resource.ActivitySources;
 import be.elevenways.zenit.common.ZenitModule;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
+import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.orm.query.criteria.CompositeCriteria;
 import be.elevenways.zenit.common.orm.query.criteria.CompositeOperator;
 import be.elevenways.zenit.common.security.Permission;
@@ -31,6 +32,12 @@ public final class HohenheimSources implements ZenitModule {
      */
     public static final Permission ADMIN_ACCESS = Permission.declare("hohenheim.admin.access",
         HohenheimMicrocopy.PERMISSION.of("hohenheim_admin_access"), Permission.Delegation.DELEGABLE);
+
+    /**
+     * THE gate of an operator-only operation: admission needs {@link #ADMIN_ACCESS}, so a tool list or a button
+     * offers the operation to an operator alone and every surface refuses anyone else before the subject loads.
+     */
+    public static final OperationGate OPERATOR = OperationGate.permission(ADMIN_ACCESS);
 
     /**
      * Editing the installation's operator-trusted settings: the Proteus login ({@code hohenheim.auth_proteus}, whose

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.instance;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimCapabilities;
@@ -37,8 +38,10 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * and answers success, and a database that is not ready is the start handler's retriable refusal, so the API and a
  * schedule step answer as they did before. What the admin hides or deadens is the admin placement's presentation.
  *
- * AIDEV-NOTE: every gate refuses with {@link HohenheimRefusalReason#INSTANCE_NOT_PERMITTED}, the instance tier's
- * uniform refusal, never core's forbidden: no surface may become a capability oracle.
+ * AIDEV-NOTE: every capability gate refuses with {@link HohenheimRefusalReason#INSTANCE_NOT_PERMITTED}, the instance
+ * tier's uniform refusal, never core's forbidden: no surface may become a capability oracle. An operator verb's gate
+ * is {@link HohenheimSources#OPERATOR}, whose admission refuses everyone else forbidden before the subject loads, as
+ * its authorizer did, so a tool list or a button never offers it to a tenant.
  *
  * @author Jelle De Loecker
  * @since  0.9.0
@@ -139,8 +142,8 @@ public final class InstanceOperations {
 
     /**
      * Registers the app's push webhook at the git provider its source is bound to; true when it was created rather
-     * than brought up to date. Gated on CONFIG: it stores the webhook secret when the app has none, and changes what
-     * the forge sends where.
+     * than brought up to date. Gated on CONFIG, as it stores the webhook secret when the app has none and changes what
+     * the forge sends where, and an operator verb besides ({@link HohenheimSources#OPERATOR}).
      */
     public static final Operation<Row, Void, Boolean> CONNECT_WEBHOOK =
         Operation.declare(HohenheimIds.id("connect_push_webhook"))
@@ -149,7 +152,7 @@ public final class InstanceOperations {
             .icon(Icon.of("plug"))
             .one(INSTANCE)
             .verb(HohenheimVerbs.CONNECT_WEBHOOK)
-            .gate(gate(HohenheimCapabilities.CONFIG))
+            .gate(gate(HohenheimCapabilities.CONFIG).and(HohenheimSources.OPERATOR))
             .result(Boolean.class)
             .command(COMMAND_FACET)
             .facts(OperationFact.REACHES_OUTSIDE, OperationFact.IDEMPOTENT)
@@ -260,7 +263,7 @@ public final class InstanceOperations {
             .register();
 
     /**
-     * Run (or resume, or retry) the template's install step; OPERATOR-ONLY through its authorizer, applicable while the
+     * Run (or resume, or retry) the template's install step; OPERATOR-ONLY through its gate, applicable while the
      * install is neither absent nor done.
      */
     public static final Operation<Row, Void, Void> INSTALL =
@@ -270,7 +273,7 @@ public final class InstanceOperations {
             .icon(Icon.of("wand-magic-sparkles"))
             .one(INSTANCE)
             .verb(HohenheimVerbs.INSTALL)
-            .gate(OperationGate.open())
+            .gate(HohenheimSources.OPERATOR)
             .command(COMMAND_FACET)
             .facts(OperationFact.REACHES_OUTSIDE)
             .register();
@@ -286,7 +289,7 @@ public final class InstanceOperations {
             .icon(Icon.of("rotate"))
             .one(INSTANCE)
             .verb(HohenheimVerbs.REINSTALL)
-            .gate(OperationGate.open())
+            .gate(HohenheimSources.OPERATOR)
             .command(COMMAND_FACET)
             .facts(OperationFact.REACHES_OUTSIDE)
             .register();
@@ -302,7 +305,7 @@ public final class InstanceOperations {
             .icon(Icon.of("box-archive"))
             .one(INSTANCE)
             .verb(HohenheimVerbs.CAPTURE_TEMPLATE)
-            .gate(OperationGate.open())
+            .gate(HohenheimSources.OPERATOR)
             .result(Integer.class)
             .command(COMMAND_FACET)
             .facts(OperationFact.REACHES_OUTSIDE)
@@ -319,7 +322,7 @@ public final class InstanceOperations {
             .icon(Icon.of("trash-can"))
             .one(INSTANCE)
             .verb(HohenheimVerbs.DELETE_WITH_DATA)
-            .gate(OperationGate.open())
+            .gate(HohenheimSources.OPERATOR)
             .command(COMMAND_FACET)
             .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)
             .register();
@@ -352,7 +355,7 @@ public final class InstanceOperations {
     /**
      * The cold move of one instance to another host: what the migrate tab places, once per destination row.
      *
-     * AIDEV-NOTE: OPERATOR-ONLY, twice over: its server authorizer refuses anyone else, and InstanceMigrations
+     * AIDEV-NOTE: OPERATOR-ONLY, twice over: its gate refuses anyone else, and InstanceMigrations
      * refuses every tenant-originated call by name. Placement is an operator authority, the same decision
      * InstancePlacement records for creates. The result is the destination, so the toast can name it.
      */
@@ -364,7 +367,7 @@ public final class InstanceOperations {
             .one(INSTANCE)
             .notForAssistants("names its destination host by a stored number, not a code; its tool comes once the"
                 + " input names a host by its code")
-            .gate(OperationGate.open())
+            .gate(HohenheimSources.OPERATOR)
             .input(OperationInput.of(FormSpec.builder().add(TARGET_SERVER).build(), MigrateInput.class,
                 values -> new MigrateInput(values.get(TARGET_SERVER))))
             .result(Integer.class)
@@ -397,7 +400,7 @@ public final class InstanceOperations {
     /**
      * Puts an ISO from the record's host in the machine's drive, the driver booting it before the root disk.
      *
-     * AIDEV-NOTE: OPERATOR-ONLY (its server authorizer; InstanceDevices.attachCdrom refuses a tenant underneath):
+     * AIDEV-NOTE: OPERATOR-ONLY (its gate; InstanceDevices.attachCdrom refuses a tenant underneath):
      * media provenance is arbitrary bootable code. The record is the subject, so the form never asks which instance,
      * and a CD has no size.
      */
@@ -408,7 +411,7 @@ public final class InstanceOperations {
             .icon(Icon.of("compact-disc"))
             .one(INSTANCE)
             .verb(HohenheimVerbs.ATTACH_MEDIA)
-            .gate(OperationGate.open())
+            .gate(HohenheimSources.OPERATOR)
             .input(OperationInput.of(FormSpec.builder().add(DRIVE_MEDIA).build(), InstallMediaInput.class,
                 values -> new InstallMediaInput(values.get(DRIVE_MEDIA))))
             .command(COMMAND_FACET)
@@ -432,7 +435,7 @@ public final class InstanceOperations {
             .icon(Icon.of("compact-disc"))
             .one(INSTANCE)
             .verb(HohenheimVerbs.DETACH_MEDIA)
-            .gate(OperationGate.open())
+            .gate(HohenheimSources.OPERATOR)
             .command(COMMAND_FACET)
             .facts(OperationFact.REACHES_OUTSIDE)
             .register();
@@ -518,7 +521,7 @@ public final class InstanceOperations {
     private InstanceOperations() {
     }
 
-    private static @NonNull OperationGate gate(@NonNull String capability) {
+    static @NonNull OperationGate gate(@NonNull String capability) {
         return OperationGate.open().subjectCapability(capability)
             .refusing(HohenheimRefusalReason.INSTANCE_NOT_PERMITTED);
     }

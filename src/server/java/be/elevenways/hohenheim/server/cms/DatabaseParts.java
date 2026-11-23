@@ -222,7 +222,7 @@ public final class DatabaseParts {
             .icon(Icon.of("layer-group"))
             .one(DATABASE)
             .verb(HohenheimVerbs.MOVE_TO_SHARED)
-            .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
+            .gate(HohenheimSources.OPERATOR)
             .command(CmsCommands.EXTERNAL)
             .register();
 
@@ -238,7 +238,7 @@ public final class DatabaseParts {
             .icon(Icon.of("broom"))
             .one(DATABASE)
             .verb(HohenheimVerbs.FINISH_OLD_ENGINE)
-            .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
+            .gate(HohenheimSources.OPERATOR)
             .command(CmsCommands.EXTERNAL)
             .register();
 
@@ -254,7 +254,7 @@ public final class DatabaseParts {
             .icon(Icon.of("box-archive"))
             .one(DATABASE)
             .verb(HohenheimVerbs.BACK_UP)
-            .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
+            .gate(HohenheimSources.OPERATOR)
             .command(CmsCommands.EXTERNAL)
             .register();
 
@@ -267,7 +267,7 @@ public final class DatabaseParts {
             .icon(Icon.of("triangle-exclamation"))
             .one(DATABASE)
             .verb(HohenheimVerbs.FORCE_DELETE)
-            .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
+            .gate(HohenheimSources.OPERATOR)
             .facts(OperationFact.DESTRUCTIVE)
             .command(CmsCommands.EXTERNAL)
             .register();
@@ -280,7 +280,7 @@ public final class DatabaseParts {
             .icon(Icon.TRASH)
             .one(ENGINE)
             .verb(OperationVerb.DELETE)
-            .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
+            .gate(HohenheimSources.OPERATOR)
             .facts(OperationFact.DESTRUCTIVE)
             .result(Integer.class)
             .command(CmsCommands.EXTERNAL)
@@ -295,7 +295,7 @@ public final class DatabaseParts {
             .icon(Icon.of("triangle-exclamation"))
             .one(ENGINE)
             .verb(HohenheimVerbs.FORCE_DELETE)
-            .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
+            .gate(HohenheimSources.OPERATOR)
             .facts(OperationFact.DESTRUCTIVE)
             .command(CmsCommands.EXTERNAL)
             .register();

@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
+import be.elevenways.hohenheim.instance.InstanceVariableOperations;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.VariableKind;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -15,12 +17,15 @@ import be.elevenways.hohenheim.server.instance.variable.VariableTypeHandler;
 import be.elevenways.hohenheim.server.instance.variable.VariableTypes;
 import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -207,6 +212,25 @@ public final class InstanceVariables {
     }
 
     /**
+     * Removes one direct value from an instance and records it on the instance, the one unset every surface runs.
+     *
+     * @throws Violations {@code instance_not_permitted}, {@code variable_not_found} for a key it holds nothing under
+     */
+    public void unset(int instanceId, @NonNull String key) {
+        if (!this.removeValue(instanceId, null, key)) {
+            throw Violations.ofField("key", key, HohenheimMicrocopy.VIOLATIONS.of("variable_not_found"));
+        }
+        History.event(Models.get(InstanceModel.class), instanceId, Change.fact(
+            HohenheimActivityAction.VARIABLE_DELETED, Map.of(HohenheimActivityAction.VARIABLE_KEY, key)));
+    }
+
+    /** Records on the instance that one of its variables was set, as every surface's set does once it wrote it. */
+    public static void recordSet(int instanceId, @NonNull String key) {
+        History.event(Models.get(InstanceModel.class), instanceId, Change.fact(HohenheimActivityAction.VARIABLE_SET,
+            Map.of(HohenheimActivityAction.VARIABLE_KEY, key)));
+    }
+
+    /**
      * THE capability gate on a direct variable write: {@code config} on the owning
      * instance, asked on the SERVICE so every surface answers to it.
      *
@@ -298,6 +322,51 @@ public final class InstanceVariables {
                 into.put(key, value);
             }
         }
+    }
+
+    /**
+     * THE list view of variable rows: key, kind, and the value ONLY of a plain row.
+     *
+     * AIDEV-NOTE: a secret's value has NO representation here, deliberately: a read that echoes a stored secret makes
+     * every CI log, shell history, proxy cache and assistant transcript a leak. Secrets are write-only: {@code set}
+     * says one is stored, and env injection is the only reader. The API's variable list and the variable list
+     * operation both read this.
+     */
+    public static @NonNull List<InstanceVariableOperations.Variable> listed(@NonNull List<Row> rows) {
+        List<InstanceVariableOperations.Variable> variables = new ArrayList<>();
+        for (Row row : rows) {
+            // Fail closed: a kind nobody recognizes reads as a SECRET, value withheld.
+            VariableKind kind = VariableKind.of(row.get(InstanceVariableModel.KIND));
+            String key = String.valueOf((Object) row.get(InstanceVariableModel.KEY));
+            if (kind.isSecret()) {
+                String stored = row.get(InstanceVariableModel.SECRET_VALUE);
+                variables.add(new InstanceVariableOperations.Variable(key, kind, null,
+                    stored != null && !stored.isEmpty()));
+            } else {
+                String value = row.get(InstanceVariableModel.PLAIN_VALUE);
+                variables.add(new InstanceVariableOperations.Variable(key, kind, value, value != null));
+            }
+        }
+        return variables;
+    }
+
+    /**
+     * Sets one PLAIN value on an instance, the variable operation's write: a key that holds a secret is refused,
+     * never silently turned plain, since nobody could tell the secret was lost.
+     *
+     * AIDEV-NOTE: the refusal lives in this lane alone; the v1 API's set keeps replacing whatever the key holds
+     * ({@link #setValue}), as it always did.
+     *
+     * @throws Violations {@code variable_holds_secret}, plus every refusal of {@link #setValue}
+     */
+    public void setPlainValue(int instanceId, @NonNull String key, @NonNull String value) {
+        requireVariableAuthority(instanceId);
+        for (Row existing : rowsForKey(Models.get(InstanceVariableModel.class), instanceId, null, key)) {
+            if (VariableKind.of(existing.get(InstanceVariableModel.KIND)).isSecret()) {
+                throw Violations.ofField("key", key, HohenheimMicrocopy.VIOLATIONS.of("variable_holds_secret"));
+            }
+        }
+        this.setValue(instanceId, null, key, VariableKind.PLAIN.token(), value);
     }
 
     /**

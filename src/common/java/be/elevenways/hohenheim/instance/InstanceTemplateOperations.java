@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.instance;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimEndpoints;
@@ -99,7 +100,7 @@ public final class InstanceTemplateOperations {
      * THE operator act that makes a template tenant-selectable: an accountable stamp of who approved it and when.
      *
      * AIDEV-NOTE: the id is the former row action's, so an admin surface comparison sees the same action moved to the
-     * invoke route; operator-only through its server authorizer, applicable while the template is unapproved.
+     * invoke route; operator-only through its gate, applicable while the template is unapproved.
      */
     public static final Operation<Row, Void, Void> APPROVE_TEMPLATE =
         Operation.declare(HohenheimIds.id("approve_template"))
@@ -108,7 +109,7 @@ public final class InstanceTemplateOperations {
             .icon(Icon.of("circle-check"))
             .one(TEMPLATE)
             .verb(OperationVerb.APPROVE)
-            .gate(OperationGate.open())
+            .gate(HohenheimSources.OPERATOR)
             .command(COMMAND)
             .register();
 
@@ -120,7 +121,7 @@ public final class InstanceTemplateOperations {
             .icon(Icon.of("circle-xmark"))
             .one(TEMPLATE)
             .verb(OperationVerb.DECLINE)
-            .gate(OperationGate.open())
+            .gate(HohenheimSources.OPERATOR)
             .command(COMMAND)
             .register();
 

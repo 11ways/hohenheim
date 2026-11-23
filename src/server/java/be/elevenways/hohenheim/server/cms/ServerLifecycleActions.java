@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
@@ -23,7 +24,6 @@ import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationVerb;
-import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.history.Change;
@@ -155,7 +155,7 @@ final class ServerLifecycleActions {
             Predicate<Row> applies) {
         Operation<Row, Void, Microcopy> operation = assistants.apply(Operation.declare(HohenheimIds.id(id))
             .happened(OperationSentences.of(id)).label(label)
-            .one(SubjectType.record(ServerModel.REF)).gate(OperationGate.permission(HohenheimPanel.ACCESS))
+            .one(SubjectType.record(ServerModel.REF)).gate(HohenheimSources.OPERATOR)
             .command(CmsCommands.EXTERNAL)
             .result(Microcopy.class)).register();
         DECLARED.add(operation);

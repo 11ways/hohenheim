@@ -248,7 +248,9 @@ public final class ManagePanel extends Panel {
         // both the admin site entry and its delegated twin (SiteParts); this server-side
         // declaration replaces it deliberately, because its scope reads zenit-auth grants
         // unavailable to the common/browser registration lane.
+        // Its status and whether it is switched on are projected: what an assistant's list and read say of a site.
         RecordSourceRegistry.INSTANCE.override(RecordSource.of(SiteModel.REF)
+            .project(SiteModel.NAME, SiteModel.STATUS, SiteModel.ENABLED)
             .search(SiteModel.NAME, SiteModel.SLUG)
             .scopedBy(TenantScopes.SITES)
             .build());
@@ -357,11 +359,15 @@ public final class ManagePanel extends Panel {
         // owning record, and a picker offering it was a tenant read the list refused. Its scope
         // is INSTANCE_READERS, never the live-only INSTANCES: the archived lane keeps trashed rows
         // out of every pick and search, while a stored reference still names its trashed instance.
+        // The status is projected as well: what an assistant's list and read say of an app.
         RecordSourceRegistry.INSTANCE.override(RecordSource.of(InstanceModel.REF)
-            .project(InstanceModel.NAME, InstanceModel.KIND)
+            .project(InstanceModel.NAME, InstanceModel.KIND, InstanceModel.STATUS)
             .search(InstanceModel.NAME)
             .scopedBy(TenantScopes.INSTANCE_READERS)
             .build());
+
+        // Deploys and builds, named by their codes in an assistant's read: scoped by the record they are for.
+        DeployReads.declareSources();
 
         // Templates: exposed by TWO entries (InstanceTemplateParts.admin and .manage),
         // so a derived default would be boot-order-decided --

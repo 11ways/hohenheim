@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
+import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.protoblast.common.i18n.MessageResolvers;
@@ -65,7 +67,12 @@ import static be.elevenways.hohenheim.RawValues.trimmed;
 public class BuildOperationModel extends Model {
 
     public static final Identifier MODEL_ID = HohenheimIds.id("build_operation");
+    public static final ModelRef<BuildOperationModel> REF = ModelRef.of(BuildOperationModel.class, MODEL_ID);
     public static final Schema SCHEMA = new Schema();
+
+    /** THE short code a build is named by in an assistant's tools: "BU12". */
+    public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
+        RecordCodeBehaviour.allocated(MODEL_ID, "BU"));
 
     /** A Dockerfile build inside the sandbox (the shipped builder). */
     public static final String KIND_DOCKERFILE = "dockerfile";

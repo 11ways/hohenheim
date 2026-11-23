@@ -19848,5 +19848,28 @@
       "scope": "hohenheim",
       "target": "happened"
     }
-  ]
+  ],
+  "read_instance_log": { "text": "{$actor} read the log of {$subject}", "scope": "hohenheim", "target": "happened" },
+  "list_instance_deploys": { "text": "{$actor} listed the deploys of {$subject}", "scope": "hohenheim", "target": "happened" },
+  "read_build_log": { "text": "{$actor} read the log of build {$subject}", "scope": "hohenheim", "target": "happened" },
+  "read_deploy_log": { "text": "{$actor} read the log of deploy {$subject}", "scope": "hohenheim", "target": "happened" },
+  "list_instance_variables": { "text": "{$actor} listed the variables of {$subject}", "scope": "hohenheim", "target": "happened" },
+  "set_instance_variable": { "text": "{$actor} set a variable of {$subject}", "scope": "hohenheim", "target": "happened" },
+  "unset_instance_variable": { "text": "{$actor} removed a variable of {$subject}", "scope": "hohenheim", "target": "happened" },
+  "read_log": [
+    {"text": "Read the log", "scope": "instance"},
+    {"text": "Read the build log", "scope": "build_operation"},
+    {"text": "Read the deploy log", "scope": "release_operation"}
+  ],
+  "list_deploys": {"text": "List deploys", "scope": "instance"},
+  "list": {"text": "List variables", "scope": "instance_variable"},
+  "set": {"text": "Set a variable", "scope": "instance_variable"},
+  "unset": {"text": "Remove a variable", "scope": "instance_variable"},
+  "reaches_at_deploy": {"text": "The app gets the change at its next deploy.", "scope": "instance_variable"},
+  "log_lines": [
+    {"text": "Lines", "scope": "hohenheim_field"},
+    {"text": "How many of the newest lines to read; left empty, the usual window.", "scope": "help"}
+  ],
+  "history_page": {"text": "Page", "scope": "hohenheim_field"},
+  "variable_holds_secret": {"text": "This key holds a secret, which an assistant cannot replace; remove it first if a plain value should take its place", "scope": "violations"}
 }

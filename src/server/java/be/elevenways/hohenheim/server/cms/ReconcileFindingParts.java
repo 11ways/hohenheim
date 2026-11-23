@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
@@ -30,7 +31,6 @@ import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.operation.Operation;
-import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationVerb;
 import be.elevenways.zenit.common.operation.SubjectType;
@@ -57,7 +57,7 @@ public final class ReconcileFindingParts {
         .happened(OperationSentences.of("remove_orphan"))
         .label(HohenheimMicrocopy.RECONCILE_FINDING.of("remove_orphan"))
         .one(SubjectType.record(ReconcileFindingModel.REF)).verb(OperationVerb.DELETE)
-        .gate(OperationGate.permission(HohenheimPanel.ACCESS))
+        .gate(HohenheimSources.OPERATOR)
         .facts(OperationFact.DESTRUCTIVE, OperationFact.REACHES_OUTSIDE).command(CmsCommands.EXTERNAL).register();
     static {
         OperationHandlers.attach(REMOVE).applies(row -> ReconcileFindingModel.BUCKET_ORPHANED

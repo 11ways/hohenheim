@@ -4,9 +4,11 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.instance.InstanceAttachmentOperations;
 import be.elevenways.hohenheim.instance.InstanceBackupOperations;
+import be.elevenways.hohenheim.instance.InstanceLogOperations;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.instance.InstanceSnapshotOperations;
 import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
+import be.elevenways.hohenheim.instance.InstanceVariableOperations;
 import be.elevenways.hohenheim.instance.VolumeOperations;
 import be.elevenways.hohenheim.game.GameDomainOperations;
 import be.elevenways.hohenheim.model.AccessListModel;
@@ -183,7 +185,14 @@ public final class HohenheimMcpModule implements ZenitModule {
             .answersWith(BackupTargetParts.TEST, HohenheimMcpAnswers::tested)
             .answersWith(NotificationChannelParts.TEST, HohenheimMcpAnswers::delivered)
             .answersWith(DnsOperations.CHECK_HEALTH, HohenheimMcpAnswers::told)
-            .answersWith(DnsOperations.NEGOTIATE_KEY, HohenheimMcpAnswers::told);
+            .answersWith(DnsOperations.NEGOTIATE_KEY, HohenheimMcpAnswers::told)
+            .answersWith(InstanceLogOperations.READ_LOG, HohenheimMcpAnswers::log)
+            .answersWith(InstanceLogOperations.LIST_DEPLOYS, HohenheimMcpAnswers::deploys)
+            .answersWith(InstanceLogOperations.READ_BUILD_LOG, HohenheimMcpAnswers::log)
+            .answersWith(InstanceLogOperations.READ_DEPLOY_LOG, HohenheimMcpAnswers::log)
+            .answersWith(InstanceVariableOperations.LIST_VARIABLES, HohenheimMcpAnswers::variables)
+            .answersWith(InstanceVariableOperations.SET_VARIABLE, HohenheimMcpAnswers::variableWritten)
+            .answersWith(InstanceVariableOperations.UNSET_VARIABLE, HohenheimMcpAnswers::variableWritten);
         for (var operation : ServerParts.lifecycleForAssistants()) {
             set.answersWith(operation, HohenheimMcpAnswers::said);
         }

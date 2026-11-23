@@ -13,7 +13,6 @@ import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
 import be.elevenways.zenit.common.orm.command.CommandExecution;
 import be.elevenways.zenit.common.operation.OperationFact;
-import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.OperationVerb;
 import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.operation.SubjectType;
@@ -58,7 +57,7 @@ public final class VolumeOperations {
             Operation.declare(HohenheimIds.id("declare_volume"))
         .happened(OperationSentences.of("declare_volume"))
         .label(HohenheimMicrocopy.INSTANCE_VOLUME.of("singular"))
-        .noSubject().gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS)
+        .noSubject().gate(HohenheimSources.OPERATOR
             .parentCapability("instance_id", InstanceModel.MODEL_ID, HohenheimCapabilities.CONFIG))
         .notForAssistants(KeptFromAssistants.RELATION_PICK).input(INPUT).result(Integer.class)
         .command(COMMAND.onDatasource("default")).register();
@@ -67,13 +66,13 @@ public final class VolumeOperations {
         .happened(OperationSentences.of("redeclare_volume"))
         .label(HohenheimMicrocopy.INSTANCE_VOLUME.of("singular"))
         .one(SUBJECT).notForAssistants(KeptFromAssistants.RELATION_PICK)
-        .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
+        .gate(HohenheimSources.OPERATOR)
         .input(INPUT).patchable().command(COMMAND).register();
     public static final Operation<Row, Void, Void> DESTROY = Operation.declare(HohenheimIds.id("destroy_volume"))
         .happened(OperationSentences.of("destroy_volume"))
         .label(HohenheimMicrocopy.INSTANCE_VOLUME.of("destroy"))
         .icon(Icon.of("trash-can")).one(SUBJECT).verb(OperationVerb.DELETE)
-        .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
+        .gate(HohenheimSources.OPERATOR)
         .facts(OperationFact.DESTRUCTIVE, OperationFact.REACHES_OUTSIDE)
         .command(COMMAND.execution(CommandExecution.OUTSIDE_TRANSACTION)).register();
 

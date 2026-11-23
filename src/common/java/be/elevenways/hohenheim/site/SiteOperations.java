@@ -126,7 +126,7 @@ public final class SiteOperations {
             .icon(Icon.of("clock-rotate-left"))
             .one(SITE)
             .verb(HohenheimVerbs.ROLL_BACK)
-            .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
+            .gate(HohenheimSources.OPERATOR)
             .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)
             .command(COMMAND.execution(CommandExecution.OUTSIDE_TRANSACTION))
             .rateLimit(HohenheimEndpoints.DEPLOY_LIMIT)

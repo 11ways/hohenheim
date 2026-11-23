@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimRefusalReason;
 import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.instance.InstanceLogOperations;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.instance.InstanceOperations.ConsoleCommandInput;
 import be.elevenways.hohenheim.instance.InstanceOperations.ExecInput;
@@ -18,11 +19,13 @@ import be.elevenways.hohenheim.instance.InstanceOperations.ExecRun;
 import be.elevenways.hohenheim.instance.InstanceOperations.PowerResult;
 import be.elevenways.hohenheim.instance.InstanceOperations.SnapshotInput;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.ai.server.mcp.host.McpToolSurface;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
 import be.elevenways.zenit.common.operation.PlacementSurface;
 import be.elevenways.zenit.common.operation.ZenitPlacementSurface;
@@ -39,6 +42,7 @@ import be.elevenways.zenit.server.task.record.SchedulePlacements;
 import be.elevenways.zenit.server.task.record.RecordSchedules;
 import be.elevenways.zenit.server.task.record.StepFailure;
 import be.elevenways.hohenheim.instance.InstanceOperations.MigrateInput;
+import be.elevenways.hohenheim.instance.InstanceVariableOperations;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -82,18 +86,16 @@ public final class InstanceOperationHandlers {
     /**
      * The deploy trigger per surface: the trigger decides {@link DeployStartPolicy}, so a surface missing here fails
      * closed rather than guessing. The admin's placed instance actions ({@code InstanceActions}) are a person's
-     * click: MANUAL.
+     * click: MANUAL. An assistant's tool call is a key acting for its account, as an API call is: API.
      */
     private static final Map<Identifier, DeployTrigger> TRIGGERS = Map.of(
         ZenitPlacementSurface.SCHEDULE_STEP.id(), DeployTrigger.SCHEDULE,
         ZenitPlacementSurface.HTTP_API.id(), DeployTrigger.API,
+        McpToolSurface.MCP_TOOL.id(), DeployTrigger.API,
         CmsPlacementSurface.ADMIN_ACTION.id(), DeployTrigger.MANUAL);
 
     /** The note a scheduled snapshot carries when its step stores none. */
     static final String SCHEDULED_NOTE = "scheduled";
-
-    /** The operator verbs (placement, install lifecycle, capture, destroy with data) answer to an operator alone. */
-    private static final String OPERATOR_VERB = "an operator verb";
 
     private static final RecordSource<InstanceModel> SUBJECTS = RecordSource.of(InstanceModel.REF)
         .id(HohenheimIds.id("instance_operation_subjects")).project(InstanceModel.ID).openToAllLoggedIn()
@@ -117,7 +119,6 @@ public final class InstanceOperationHandlers {
         OperationHandlers.attach(InstanceOperations.CONNECT_WEBHOOK).source(SUBJECTS)
                 .applies(row -> authored(row) && GitWebhookProvisioning.applies(row))
                 .availability((row, access) -> GitWebhookProvisioning.refusal(row))
-                .authorize(HohenheimAccess.operatorOnly(OPERATOR_VERB))
             .handle(call -> GitWebhookProvisioning.connect(instanceId(call)));
         OperationHandlers.attach(InstanceOperations.SNAPSHOT).source(SUBJECTS)
                 .applies(InstanceOperationHandlers::authored)
@@ -158,7 +159,6 @@ public final class InstanceOperationHandlers {
                 (instance, held) -> !held && authored(instance) && InstanceKinds.handlerOf(instance) != null
                     && InstanceKinds.handlerOf(instance).supportsInstallMedia())))
             .inputScope(InstanceOperationHandlers::hostMedia)
-            .authorize(HohenheimAccess.operatorOnly(OPERATOR_VERB))
             .handle(call -> {
                 int instanceId = instanceId(call);
                 new InstanceDevices().attachInstallMedia(instanceId,
@@ -170,7 +170,6 @@ public final class InstanceOperationHandlers {
         OperationHandlers.attach(InstanceOperations.DETACH_INSTALL_MEDIA).source(SUBJECTS)
             .applies(Applicability.batch((instances, access, source) -> byInstallMedia(instances,
                 (instance, held) -> held && authored(instance))))
-            .authorize(HohenheimAccess.operatorOnly(OPERATOR_VERB))
             .handle(call -> {
                 int instanceId = instanceId(call);
                 new InstanceDevices().detachInstallMedia(instanceId);
@@ -182,7 +181,6 @@ public final class InstanceOperationHandlers {
             .applies(instance -> authored(instance) && instance.get(InstanceModel.TEMPLATE_ID) != null
                 && !InstanceModel.INSTALL_NONE.equals(instance.get(InstanceModel.INSTALL_STATE))
                 && !InstanceModel.INSTALL_INSTALLED.equals(instance.get(InstanceModel.INSTALL_STATE)))
-            .authorize(HohenheimAccess.operatorOnly(OPERATOR_VERB))
             .handle(call -> {
                 new InstanceInstalls().install(instanceId(call));
                 return null;
@@ -191,7 +189,6 @@ public final class InstanceOperationHandlers {
             .applies(instance -> authored(instance) && instance.get(InstanceModel.TEMPLATE_ID) != null
                 && (InstanceModel.INSTALL_INSTALLED.equals(instance.get(InstanceModel.INSTALL_STATE))
                     || InstanceModel.INSTALL_FAILED.equals(instance.get(InstanceModel.INSTALL_STATE))))
-            .authorize(HohenheimAccess.operatorOnly(OPERATOR_VERB))
             .handle(call -> {
                 new InstanceInstalls().reinstall(instanceId(call));
                 return null;
@@ -200,14 +197,12 @@ public final class InstanceOperationHandlers {
             .applies(instance -> authored(instance)
                 && InstanceModel.STATUS_STOPPED.equals(instance.get(InstanceModel.STATUS))
                 && capturable(instance))
-            .authorize(HohenheimAccess.operatorOnly(OPERATOR_VERB))
             .handle(call -> new InstanceTemplateCapture().capture(instanceId(call)));
         // Dead, with the reason on screen, for an app containers take their image from (new 2026-11-23: this
         // operation had no availability before); the service refuses a direct invoke in the same words.
         OperationHandlers.attach(InstanceOperations.DESTROY_WITH_DATA).source(SUBJECTS)
             .applies(InstanceOperationHandlers::authored)
             .availability(Availability.batch((instances, access) -> DeleteImpact.applicationsFollowed(instances)))
-            .authorize(HohenheimAccess.operatorOnly(OPERATOR_VERB))
             .handle(call -> {
                 new InstanceService().destroyWithData(instanceId(call));
                 return null;
@@ -224,7 +219,6 @@ public final class InstanceOperationHandlers {
                 return 1;
             });
         OperationHandlers.attach(InstanceOperations.MIGRATE).source(SUBJECTS)
-            .authorize(HohenheimAccess.operatorOnly(OPERATOR_VERB))
             .handle(InstanceOperationHandlers::migrate);
         OperationHandlers.attach(InstanceOperations.EXEC).source(SUBJECTS)
             .applies(InstanceOperationHandlers::authored)
@@ -232,6 +226,22 @@ public final class InstanceOperationHandlers {
         OperationHandlers.attach(InstanceOperations.APP_UPDATE).source(SUBJECTS)
                 .applies(InstanceOperationHandlers::authored)
             .handle(InstanceOperationHandlers::appUpdate);
+        // The app's own reads and writes, each through the service the API route reaches, which asks its capability
+        // again (console for the log, config for a variable write).
+        OperationHandlers.attach(InstanceLogOperations.READ_LOG).source(SUBJECTS)
+            .applies(InstanceOperationHandlers::authored)
+            .handle(call -> InstanceConsoles.tail(instanceId(call),
+                InstanceConsoles.tailLines(call.input() == null ? null : call.input().lines())));
+        OperationHandlers.attach(InstanceVariableOperations.LIST_VARIABLES).source(SUBJECTS)
+            .applies(InstanceOperationHandlers::authored)
+            .handle(call -> new InstanceVariableOperations.Variables(InstanceVariables.listed(
+                Models.get(InstanceVariableModel.class).findByInstanceId(instanceId(call)))));
+        OperationHandlers.attach(InstanceVariableOperations.SET_VARIABLE).source(SUBJECTS)
+            .applies(InstanceOperationHandlers::authored)
+            .handle(InstanceOperationHandlers::setVariable);
+        OperationHandlers.attach(InstanceVariableOperations.UNSET_VARIABLE).source(SUBJECTS)
+            .applies(InstanceOperationHandlers::authored)
+            .handle(InstanceOperationHandlers::unsetVariable);
         // Sessions, offered and never invoked: their sockets ask offered() (see InstanceOperations.OPEN_SHELL).
         OperationHandlers.attach(InstanceOperations.OPEN_SHELL).applies(InstanceOperationHandlers::authored)
             .handle(InstanceOperationHandlers::session);
@@ -306,7 +316,7 @@ public final class InstanceOperationHandlers {
      * Whether an operation applies to this instance at all: a generated instance (a product tier's lowered runtime) is
      * managed only through its owning record's surface, on every surface (the API never lists it either).
      */
-    private static boolean authored(@NonNull Row instance) {
+    public static boolean authored(@NonNull Row instance) {
         return instance.get(InstanceModel.GENERATED_BY) == null;
     }
 
@@ -439,6 +449,35 @@ public final class InstanceOperationHandlers {
     /** @return the update script's bounded output, shown to the operator */
     private static @NonNull String appUpdate(@NonNull OperationCall<Row, Void> call) {
         return new InstanceAppUpdates().update(instanceId(call));
+    }
+
+    /**
+     * Sets one plain variable and records it on the app, as the API's set does.
+     *
+     * @throws Violations {@code variable_key_required}, {@code variable_holds_secret}
+     */
+    private static @NonNull String setVariable(
+            @NonNull OperationCall<Row, InstanceVariableOperations.SetInput> call) {
+        InstanceVariableOperations.SetInput input = Objects.requireNonNull(call.input(), "the set has its input");
+        String key = Objects.requireNonNullElse(input.key(), "").strip();
+        int instanceId = instanceId(call);
+        new InstanceVariables().setPlainValue(instanceId, key, Objects.requireNonNullElse(input.plain_value(), ""));
+        InstanceVariables.recordSet(instanceId, key);
+        return key;
+    }
+
+    /**
+     * Removes one variable and records it on the app, as the API's delete does.
+     *
+     * @throws Violations {@code variable_not_found} for a key the app holds no variable under
+     */
+    private static @NonNull String unsetVariable(
+            @NonNull OperationCall<Row, InstanceVariableOperations.UnsetInput> call) {
+        String key = Objects.requireNonNullElse(Objects.requireNonNull(call.input(), "the unset has its input").key(),
+            "").strip();
+        int instanceId = instanceId(call);
+        new InstanceVariables().unset(instanceId, key);
+        return key;
     }
 
     /**

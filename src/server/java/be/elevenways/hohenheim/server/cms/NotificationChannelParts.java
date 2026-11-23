@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.server.page.SettingsPage;
@@ -145,7 +146,7 @@ public final class NotificationChannelParts {
             .noSubject()
             .notForAssistants("its grid names every channel by its stored number, not a code; its tool comes once"
                 + " the grid names channels by their codes")
-            .gate(OperationGate.permission(HohenheimPanel.ACCESS))
+            .gate(HohenheimSources.OPERATOR)
             .input(OperationInput.of(ROUTES_FORM, Routes.class, values -> new Routes(routesOf(values.get(ROUTES)))))
             .result(Integer.class)
             .command(CmsCommands.TRANSACTIONAL)

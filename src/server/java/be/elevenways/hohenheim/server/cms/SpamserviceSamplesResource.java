@@ -27,7 +27,6 @@ import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
 import be.elevenways.zenit.common.orm.command.CommandExecution;
-import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.field.BooleanField;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
@@ -93,7 +92,7 @@ public final class SpamserviceSamplesResource {
         .icon(Icon.of("triangle-exclamation"))
         .one(SAMPLE)
         .notForAssistants(OUTSIDE_RECORD)
-        .gate(OperationGate.permission(HohenheimPanel.ACCESS))
+        .gate(HohenheimSources.OPERATOR)
         .command(COMMAND)
         .register();
 
@@ -104,7 +103,7 @@ public final class SpamserviceSamplesResource {
         .icon(Icon.of("check"))
         .one(SAMPLE)
         .notForAssistants(OUTSIDE_RECORD)
-        .gate(OperationGate.permission(HohenheimPanel.ACCESS))
+        .gate(HohenheimSources.OPERATOR)
         .command(COMMAND)
         .register();
 
@@ -116,7 +115,7 @@ public final class SpamserviceSamplesResource {
         .icon(Icon.of("rotate"))
         .one(SAMPLE)
         .notForAssistants(OUTSIDE_RECORD)
-        .gate(OperationGate.permission(HohenheimPanel.ACCESS))
+        .gate(HohenheimSources.OPERATOR)
         .result(String.class)
         .command(COMMAND)
         .register();

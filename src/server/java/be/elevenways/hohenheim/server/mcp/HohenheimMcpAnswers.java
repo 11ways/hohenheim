@@ -1,6 +1,9 @@
 package be.elevenways.hohenheim.server.mcp;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.instance.InstanceLogOperations;
 import be.elevenways.hohenheim.instance.InstanceOperations;
+import be.elevenways.hohenheim.instance.InstanceVariableOperations;
 import be.elevenways.hohenheim.server.cms.BackupTargetParts;
 import be.elevenways.hohenheim.source.GitProviderOperations;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -8,6 +11,9 @@ import be.elevenways.zenit.ai.server.mcp.host.McpResponse;
 import be.elevenways.zenit.ai.server.mcp.host.McpToolContext;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.delivery.server.DeliveryOutcome;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -85,5 +91,53 @@ final class HohenheimMcpAnswers {
     static @NonNull McpResponse said(@NonNull McpToolContext context, @Nullable Microcopy message) {
         McpResponse response = McpResponse.create();
         return message == null ? response.line("done") : response.line(context.access().text(message));
+    }
+
+    /** What a workload printed or a build or a deploy wrote; the daemon cuts a live log to the lines asked. */
+    static @NonNull McpResponse log(@NonNull McpToolContext context, @Nullable String log) {
+        McpResponse response = McpResponse.create();
+        if (log == null || log.isBlank()) return response.line("log: empty");
+        return response.untrusted("log", log);
+    }
+
+    /** One page of an app's deploys, newest first, each named by its code. */
+    static @NonNull McpResponse deploys(@NonNull McpToolContext context,
+                                        InstanceLogOperations.@Nullable Deploys deploys) {
+        McpResponse response = McpResponse.create();
+        if (deploys == null || deploys.deploys().isEmpty()) return response.line("deploys: none");
+        StringBuilder rows = new StringBuilder();
+        for (InstanceLogOperations.Deploy deploy : deploys.deploys()) {
+            List<String> facts = new ArrayList<>(List.of(deploy.kind(), deploy.status()));
+            if (!deploy.commit().isEmpty()) facts.add(deploy.commit());
+            if (!deploy.trigger().isEmpty()) facts.add(deploy.trigger());
+            if (deploy.started() != null) facts.add(context.text().moment(deploy.started()));
+            if (!deploy.length().isEmpty()) facts.add(deploy.length());
+            rows.append("- ").append(deploy.code()).append(' ').append(String.join(", ", facts));
+            if (!deploy.failure().isEmpty()) rows.append(": ").append(deploy.failure());
+            rows.append('\n');
+        }
+        response.untrusted("deploys", rows.toString().stripTrailing());
+        if (deploys.pages() > 1) response.line("page: " + deploys.page() + " of " + deploys.pages());
+        return response;
+    }
+
+    /** An app's own variables: a plain one with its value, a secret only as set or not. */
+    static @NonNull McpResponse variables(@NonNull McpToolContext context,
+                                          InstanceVariableOperations.@Nullable Variables variables) {
+        McpResponse response = McpResponse.create();
+        if (variables == null || variables.variables().isEmpty()) return response.line("variables: none");
+        StringBuilder rows = new StringBuilder();
+        for (InstanceVariableOperations.Variable variable : variables.variables()) {
+            rows.append("- ").append(variable.key()).append(variable.kind().isSecret()
+                ? (variable.set() ? " (secret, set)" : " (secret, not set)")
+                : " = " + Objects.requireNonNullElse(variable.value(), "")).append('\n');
+        }
+        return response.untrusted("variables", rows.toString().stripTrailing());
+    }
+
+    /** The key a variable write changed, and when the app sees it. */
+    static @NonNull McpResponse variableWritten(@NonNull McpToolContext context, @Nullable String key) {
+        return McpResponse.create().untrustedLine("variable: ", "key", key)
+            .line(context.text().words(HohenheimMicrocopy.INSTANCE_VARIABLE.of("reaches_at_deploy")));
     }
 }

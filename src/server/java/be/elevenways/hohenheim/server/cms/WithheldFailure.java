@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.routing.RouteScope;
+import be.elevenways.zenit.common.security.AccessContext;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -20,8 +21,9 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * failures. The delegated panel is told THAT it failed, which is the fact a tenant can act on; the
  * operator reads the reason on /admin -- the InstanceOverview install_error shape. The question
  * is about the SURFACE (CmsSupport.isDelegatedPanel), never about the viewer, so an operator opening
- * /manage sees exactly what a tenant sees there. Two shapes of the one rule: a stored reason read at
- * render time (of + shown) and a live exception worded at write time (operatorDetail).
+ * /manage sees exactly what a tenant sees there. Off every panel (an assistant's tool) the WORK decides, as it does
+ * for a live exception. Three shapes of the one rule: a stored reason read at render time (of + shown), the same read
+ * off a panel (ofWork + shown) and a live exception worded at write time (operatorDetail).
  *
  * @author Jelle De Loecker
  * @since 0.1.0
@@ -78,6 +80,16 @@ public final class WithheldFailure {
                 .asString(conduit)
             : "";
         return new WithheldFailure(delegated, withheld);
+    }
+
+    /**
+     * The rule off every panel: the work decides ({@link TenantWrites#actsAsOperator}), as {@link #operatorDetail}
+     * does, so declared system work and an operator read the stored text and a tenant's key the tenant-safe sentence.
+     */
+    static @NonNull WithheldFailure ofWork(@NonNull AccessContext access) {
+        boolean withholds = !TenantWrites.actsAsOperator();
+        return new WithheldFailure(withholds,
+            withholds ? access.text(HohenheimMicrocopy.DELEGATED.of("failure_withheld")) : "");
     }
 
     /** @return whether this render withholds daemon-worded text */

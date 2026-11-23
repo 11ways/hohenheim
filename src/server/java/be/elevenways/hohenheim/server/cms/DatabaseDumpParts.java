@@ -9,7 +9,6 @@ import be.elevenways.hohenheim.KeptFromAssistants;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.model.DatabaseDumpModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.database.DatabaseBackups;
 import be.elevenways.hohenheim.server.database.DatabaseRestores;
 import be.elevenways.hohenheim.server.database.DatabaseService;
@@ -29,7 +28,6 @@ import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationVerb;
-import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.operation.OperationSteps;
 import be.elevenways.zenit.common.operation.SubjectType;
@@ -88,7 +86,7 @@ public final class DatabaseDumpParts {
             .icon(Icon.of("clone"))
             .one(DUMP)
             .verb(HohenheimVerbs.RESTORE_TO_NEW)
-            .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
+            .gate(HohenheimSources.OPERATOR)
             .input(OperationInput.of(FormSpec.builder().add(NEW_NAME).build(), RestoreInput.class,
                 values -> new RestoreInput(values.get(NEW_NAME.getName()) instanceof String name ? name : null)))
             .result(Integer.class)
@@ -106,7 +104,7 @@ public final class DatabaseDumpParts {
             .icon(Icon.of("clock-rotate-left"))
             .one(DUMP)
             .verb(HohenheimVerbs.RESTORE_IN_PLACE)
-            .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
+            .gate(HohenheimSources.OPERATOR)
             .facts(OperationFact.DESTRUCTIVE)
             .result(Integer.class)
             .command(COMMAND)
@@ -123,7 +121,7 @@ public final class DatabaseDumpParts {
             .icon(Icon.TRASH)
             .one(DUMP)
             .verb(OperationVerb.DELETE)
-            .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
+            .gate(HohenheimSources.OPERATOR)
             .facts(OperationFact.DESTRUCTIVE)
             .result(Integer.class)
             .command(COMMAND)
@@ -132,7 +130,6 @@ public final class DatabaseDumpParts {
     static {
         OperationHandlers.attach(RESTORE_TO_NEW)
             .applies(DatabaseDumpModel::isRestorable)
-            .authorize(HohenheimAccess.operatorOnly("restoring a stored dump is an operator act"))
             .handle(call -> {
                 String name = Objects.requireNonNull(call.input(), "the restore names its database").name();
                 Row created = DatabaseRestores.restoreToNew(new DatabaseService(),
@@ -145,7 +142,6 @@ public final class DatabaseDumpParts {
         OperationHandlers.attach(RESTORE_IN_PLACE)
             .applies(dump -> DatabaseDumpModel.isRestorable(dump)
                 && dump.get(DatabaseDumpModel.DATABASE_ID) != null)
-            .authorize(HohenheimAccess.operatorOnly("restoring a stored dump is an operator act"))
             .handle(call -> {
                 Row before = DatabaseRestores.restoreInPlace(new DatabaseService(),
                     call.subject().get(DatabaseDumpModel.ID));
@@ -157,7 +153,6 @@ public final class DatabaseDumpParts {
         // A row still uploading is its upload's to settle: deleting it would orphan the artifact the upload commits.
         OperationHandlers.attach(DELETE)
             .applies(DatabaseDumpModel::isSettled)
-            .authorize(HohenheimAccess.operatorOnly("deleting a stored dump is an operator act"))
             .handle(call -> {
                 DatabaseBackups.delete(call.subject());
                 return 1;

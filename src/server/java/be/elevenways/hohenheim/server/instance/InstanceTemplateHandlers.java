@@ -82,9 +82,6 @@ public final class InstanceTemplateHandlers {
         .project(InstanceTemplateModel.NAME, InstanceTemplateModel.KIND)
         .scopedBy(TenantScopes.INSTANCE_TEMPLATES).build();
 
-    /** Approval is authority over what the whole installation may run: operators alone, from every surface. */
-    private static final String APPROVAL = "template approval is an operator act";
-
     static {
         OperationHandlers.attach(InstanceTemplateOperations.CREATE_INSTANCE_FROM_TEMPLATE)
             .source(SELECTABLE_TEMPLATES)
@@ -92,11 +89,9 @@ public final class InstanceTemplateHandlers {
             .handle(InstanceTemplateHandlers::createFromTemplate);
         OperationHandlers.attach(InstanceTemplateOperations.APPROVE_TEMPLATE)
             .applies(template -> template.get(InstanceTemplateModel.APPROVED_AT) == null)
-            .authorize(HohenheimAccess.operatorOnly(APPROVAL))
             .handle(InstanceTemplateHandlers::approve);
         OperationHandlers.attach(InstanceTemplateOperations.UNAPPROVE_TEMPLATE)
             .applies(template -> template.get(InstanceTemplateModel.APPROVED_AT) != null)
-            .authorize(HohenheimAccess.operatorOnly(APPROVAL))
             .handle(InstanceTemplateHandlers::unapprove);
     }
 

@@ -72,6 +72,12 @@ public final class InstanceConsoles {
     /** ... within this window stop the auto-restarts until the next manual deploy. */
     private static final long FLAP_WINDOW_MS = 60_000;
 
+    /** How many of the newest log lines a read returns when it asks for none. */
+    public static final int DEFAULT_TAIL_LINES = 200;
+
+    /** The most log lines one read returns: the daemon cuts the log, so no answer carries more. */
+    public static final int MOST_TAIL_LINES = 2000;
+
     /**
      * The pumps and readiness checks: a runtime member whose stop first closes every session as the hub's own close
      * ({@link #closeAllAtStop}), so each pump writes its episode down and ends before the datasources close, and a
@@ -407,6 +413,11 @@ public final class InstanceConsoles {
             templateValue(resolved.row(), InstanceTemplateModel.STOP_COMMAND));
         return open(support, resolved, workloadId, stopCommand,
             service.leases(), Db.currentOrDefault());
+    }
+
+    /** @return the asked count within one read's window ({@link #MOST_TAIL_LINES}), the default for none */
+    public static int tailLines(@Nullable Integer asked) {
+        return asked == null ? DEFAULT_TAIL_LINES : Math.max(1, Math.min(asked, MOST_TAIL_LINES));
     }
 
     /**

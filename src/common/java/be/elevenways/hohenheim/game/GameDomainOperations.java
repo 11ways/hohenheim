@@ -12,7 +12,6 @@ import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
-import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationVerb;
 import be.elevenways.zenit.common.operation.OperationInput;
@@ -72,7 +71,7 @@ public final class GameDomainOperations {
             .happened(OperationSentences.of("create_game_domain"))
             .label(HohenheimMicrocopy.GAME_DOMAIN.of("create"))
             .noSubject()
-            .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
+            .gate(HohenheimSources.OPERATOR)
             .input(INPUT)
             .result(Integer.class)
             .notForAssistants(KeptFromAssistants.RELATION_PICK)
@@ -85,7 +84,7 @@ public final class GameDomainOperations {
             .label(HohenheimMicrocopy.GAME_DOMAIN.of("save"))
             .one(MAPPING)
             .notForAssistants(KeptFromAssistants.RELATION_PICK)
-            .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
+            .gate(HohenheimSources.OPERATOR)
             .input(INPUT)
             .command(COMMAND)
             .register();
@@ -97,7 +96,7 @@ public final class GameDomainOperations {
             .one(MAPPING)
             .verb(OperationVerb.DELETE)
             .facts(OperationFact.DESTRUCTIVE)
-            .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
+            .gate(HohenheimSources.OPERATOR)
             .command(COMMAND)
             .register();
 

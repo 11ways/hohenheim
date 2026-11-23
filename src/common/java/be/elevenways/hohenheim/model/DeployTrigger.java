@@ -38,9 +38,9 @@ public enum DeployTrigger {
     MANUAL("manual", null, true, true, false, "user", BadgeVariant.INFO),
 
     /**
-     * An API key holder asked over {@code /api/v1} or the PaaS API: a deliberate request
+     * An API key holder asked over {@code /api/v1}, the PaaS API or an assistant's tool call: a deliberate request
      * from a credential an operator issued, so it may start what it deploys -- and it
-     * keeps its own word so the activity row still says WHICH surface asked.
+     * keeps its own word so the activity row still says that a key, not a click, asked.
      */
     API("api", null, true, true, false, "key", BadgeVariant.INFO),
 

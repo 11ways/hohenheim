@@ -4,7 +4,6 @@ import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.zenit.common.operation.Operation;
-import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectArity;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.task.record.RecordScheduleRunModel;
@@ -22,19 +21,17 @@ import be.elevenways.zenit.server.operation.RowDeleteOperations;
  */
 public final class InstanceChildDeletes {
 
-    private static final OperationGate OPERATOR = OperationGate.permission(HohenheimSources.ADMIN_ACCESS);
-
     /** Removes one config file of an instance; a generated one is refused by the model's attribution guard. */
     public static final Operation<Row, Void, Integer> FILE =
-        RowDeleteOperations.delete(InstanceFileModel.REF, SubjectArity.ONE, OPERATOR);
+        RowDeleteOperations.delete(InstanceFileModel.REF, SubjectArity.ONE, HohenheimSources.OPERATOR);
 
     /** Removes one quota override. */
     public static final Operation<Row, Void, Integer> QUOTA =
-        RowDeleteOperations.delete(InstanceQuotaModel.REF, SubjectArity.ONE, OPERATOR);
+        RowDeleteOperations.delete(InstanceQuotaModel.REF, SubjectArity.ONE, HohenheimSources.OPERATOR);
 
     /** Removes one schedule run, which is cleanup: a run is evidence and never edited. */
     public static final Operation<Row, Void, Integer> SCHEDULE_RUN =
-        RowDeleteOperations.delete(RecordScheduleRunModel.REF, SubjectArity.ONE, OPERATOR);
+        RowDeleteOperations.delete(RecordScheduleRunModel.REF, SubjectArity.ONE, HohenheimSources.OPERATOR);
 
     private InstanceChildDeletes() {
     }

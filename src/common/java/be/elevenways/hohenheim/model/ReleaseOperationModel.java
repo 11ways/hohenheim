@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
+import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.protoblast.common.i18n.wording.Noun;
 import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
@@ -56,7 +58,12 @@ import java.util.Set;
 public class ReleaseOperationModel extends Model {
 
     public static final Identifier MODEL_ID = HohenheimIds.id("release_operation");
+    public static final ModelRef<ReleaseOperationModel> REF = ModelRef.of(ReleaseOperationModel.class, MODEL_ID);
     public static final Schema SCHEMA = new Schema();
+
+    /** THE short code a deploy (a release or a rollback) is named by in an assistant's tools: "RL12". */
+    public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
+        RecordCodeBehaviour.allocated(MODEL_ID, "RL"));
 
     /** A forward release of a new spec. */
     public static final String KIND_RELEASE = "release";

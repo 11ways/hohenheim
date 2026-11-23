@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.instance.DeviceType;
 import be.elevenways.hohenheim.instance.InstanceOperations.PowerResult;
 import be.elevenways.hohenheim.instance.InstanceOperations;
+import be.elevenways.hohenheim.instance.InstanceVariableOperations;
 import be.elevenways.hohenheim.instance.VariableKind;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -287,31 +288,23 @@ public final class InstanceApi {
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             }
-            History.event(Models.get(InstanceModel.class), instanceId, Change.fact(HohenheimActivityAction.VARIABLE_SET,
-                Map.of(HohenheimActivityAction.VARIABLE_KEY, key)));
+            InstanceVariables.recordSet(instanceId, key);
             return ApiConduits.json(Map.of("id", instanceId, "status", "set", "key", key));
         }));
 
         HohenheimEndpoints.API_INSTANCE_VARIABLE_DELETE.setHandler(onVisibleInstance((conduit, ctx, row) -> {
             int instanceId = row.get(InstanceModel.ID);
             String key = ApiConduits.formValue(conduit, "key");
-            boolean removed;
             try {
                 // AIDEV-NOTE: this lane alone used to run the service call OUTSIDE a
                 // Violations catch, so a typed refusal escaped the handler and came back
                 // as the framework's generic error render instead of this API's named
                 // refusal -- the same act, two different answer shapes, and the one that
                 // escaped carried resolved prose where every sibling carries the key.
-                removed = new InstanceVariables().removeValue(instanceId, null, key);
+                new InstanceVariables().unset(instanceId, key);
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             }
-            if (!removed) {
-                return ApiConduits.refusal(conduit, Violations.ofField("key", key,
-                    HohenheimMicrocopy.VIOLATIONS.of("variable_not_found")));
-            }
-            History.event(Models.get(InstanceModel.class), instanceId, Change.fact(
-                HohenheimActivityAction.VARIABLE_DELETED, Map.of(HohenheimActivityAction.VARIABLE_KEY, key)));
             return ApiConduits.json(Map.of("id", instanceId, "status", "deleted", "key", key));
         }));
 
@@ -533,28 +526,19 @@ public final class InstanceApi {
     }
 
     /**
-     * The enumerated variable view: key, kind, and the value ONLY for plain rows.
-     *
-     * AIDEV-NOTE: a secret's value has NO representation here, deliberately -- a GET
-     * that echoes a stored secret makes every CI log, shell history and proxy cache a
-     * leak, and it is the ONE surface redaction doctrine cannot reach once emitted.
-     * Secrets are write-only over the API: {@code has_value} says one is stored,
-     * re-setting it is the recovery, and env injection is the only reader. This is the
-     * same posture as the provisioning page, which never puts the value in its vars.
+     * The enumerated variable view: key, kind, and the value ONLY for plain rows, the wire shape of
+     * {@link InstanceVariables#listed}, which says why a secret's value has no representation here.
      */
     public static @NonNull List<Map<String, Object>> variableProjection(@NonNull List<Row> rows) {
         List<Map<String, Object>> variables = new ArrayList<>();
-        for (Row row : rows) {
+        for (InstanceVariableOperations.Variable variable : InstanceVariables.listed(rows)) {
             Map<String, Object> entry = new LinkedHashMap<>();
-            // Fail closed: a kind nobody recognizes projects as a SECRET, value withheld.
-            VariableKind kind = VariableKind.of(row.get(InstanceVariableModel.KIND));
-            entry.put("key", row.get(InstanceVariableModel.KEY));
-            entry.put("kind", kind.token());
-            if (kind.isSecret()) {
-                String stored = row.get(InstanceVariableModel.SECRET_VALUE);
-                entry.put("has_value", stored != null && !stored.isEmpty());
+            entry.put("key", variable.key());
+            entry.put("kind", variable.kind().token());
+            if (variable.kind().isSecret()) {
+                entry.put("has_value", variable.set());
             } else {
-                entry.put("value", row.get(InstanceVariableModel.PLAIN_VALUE));
+                entry.put("value", variable.value());
             }
             variables.add(entry);
         }
@@ -573,10 +557,10 @@ public final class InstanceApi {
             HohenheimMicrocopy.VIOLATIONS.of("device_type_unknown").withArg("type", type)));
     }
 
-    /** The requested tail length, clamped to a sane window (default 200, max 2000). */
+    /** The requested tail length, clamped to the log read's window (InstanceConsoles.tailLines). */
     static int clampLines(@NonNull Conduit conduit) {
         String raw = conduit.getQueryParam("lines");
-        int lines = 200;
+        Integer lines = null;
         if (raw != null && !raw.isEmpty()) {
             try {
                 lines = Integer.parseInt(raw);
@@ -584,7 +568,7 @@ public final class InstanceApi {
                 // An unparsable request keeps the default; the window is advisory.
             }
         }
-        return Math.max(1, Math.min(lines, 2000));
+        return InstanceConsoles.tailLines(lines);
     }
 
     private static @NonNull String templateNameOf(@NonNull Row instance) {

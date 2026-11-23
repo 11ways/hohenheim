@@ -267,8 +267,7 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         int instanceId = instance.get(InstanceModel.ID);
         boolean releaseManaged = InstanceKinds.isReleaseManaged(instance.get(InstanceModel.KIND));
         WithheldFailure failures = WithheldFailure.of(request);
-        Lane lane = releaseManaged ? releaseLane(instance, failures, reader, requestedPage)
-            : workspaceLane(instanceId, failures, requestedPage);
+        Lane lane = lane(instance, failures, reader, requestedPage);
         // One page of history needs no pager, and an undrawn one must not ride the hydration payload either.
         BoundEndpoint<?> tab = CmsRoutes.subpage(request.panelSlug(), HohenheimSlugs.INSTANCES, instanceId,
             HohenheimSlugs.Tab.DEPLOYMENTS);
@@ -300,13 +299,38 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
     }
 
     /**
+     * One record's history on one page, as its reader may read it under {@code failures}: the lane its kind keeps (an
+     * application's releases and unreleased builds, a workspace's builds). THE reader of a deploy history, which this
+     * tab and the deploy list off every panel ({@code DeployReads}) both read.
+     */
+    static @NonNull Lane lane(@NonNull Row instance, @NonNull WithheldFailure failures, @NonNull AccessContext reader,
+                              int requestedPage) {
+        return InstanceKinds.isReleaseManaged(instance.get(InstanceModel.KIND))
+            ? releaseLane(instance, failures, reader, requestedPage)
+            : workspaceLane(instance.get(InstanceModel.ID), failures, requestedPage);
+    }
+
+    /**
+     * One history row with the record it shows: a release operation, or a build that never became one.
+     *
+     * @param model {@link ReleaseOperationModel#MODEL_ID} or {@link BuildOperationModel#MODEL_ID}
+     */
+    record Entry(@NonNull Identifier model, int id, InstanceDeploys.@NonNull Deploy deploy) {
+    }
+
+    /**
      * One lane's page of history and what serves now: the page window, how many rows the whole history holds, whether
      * a deploy runs now, and the band's facts (empty commits while nothing serves).
      */
-    private record Lane(@NonNull List<InstanceDeploys.Deploy> deployments, @NonNull PageWindow window, long total,
-                        boolean deploying, @NonNull String currentCommit, @NonNull String keptCommit,
-                        @NonNull String liveSinceIso, boolean canRollback, boolean keptSameCommit,
-                        boolean keptNewer) {
+    record Lane(@NonNull List<Entry> entries, @NonNull PageWindow window, long total,
+                boolean deploying, @NonNull String currentCommit, @NonNull String keptCommit,
+                @NonNull String liveSinceIso, boolean canRollback, boolean keptSameCommit,
+                boolean keptNewer) {
+
+        /** @return the page's rows as the tab draws them */
+        @NonNull List<InstanceDeploys.Deploy> deployments() {
+            return this.entries.stream().map(Entry::deploy).toList();
+        }
     }
 
     /**
@@ -392,7 +416,7 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         Map<Integer, String> commits = legacyCommits(operations);
         Map<PrincipalRef, String> triggerers = triggerers(operations, reader);
         Map<Object, Row> ranBuilds = buildsRun(operations, builds);
-        List<InstanceDeploys.Deploy> deployments = new ArrayList<>();
+        List<Entry> deployments = new ArrayList<>();
         for (Row row : operations) {
             Integer candidate = row.get(ReleaseOperationModel.CANDIDATE_INSTANCE_ID);
             String ownCommit = row.get(ReleaseOperationModel.COMMIT_SHA);
@@ -408,7 +432,8 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
             // log of a build row: without it a release that runs the wrong thing cannot be traced to its build.
             Row build = builtImages.get(Objects.toString(row.get(ReleaseOperationModel.IMAGE_ID), ""));
             Started started = startedBy(row, triggerers);
-            deployments.add(deploy("release-" + row.get(ReleaseOperationModel.ID),
+            deployments.add(new Entry(ReleaseOperationModel.MODEL_ID, row.get(ReleaseOperationModel.ID),
+                deploy("release-" + row.get(ReleaseOperationModel.ID),
                 mark == null ? status : new InstanceDeploys.Status(status.value(),
                     CmsSupport.resolvedTextOrDefault(mark.label), status.variant(), status.colorSet(), status.known()),
                 ownCommit != null ? ownCommit : candidate == null ? null : commits.get(candidate),
@@ -425,12 +450,12 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
                 // they cannot fix a build.
                 DeployDetail.of(failures.shown(row.get(ReleaseOperationModel.FAILURE_REASON)),
                     failures.operatorOnly(row.get(ReleaseOperationModel.STEP_LOG)),
-                    build == null ? null : build.get(BuildOperationModel.LOG))));
+                    build == null ? null : build.get(BuildOperationModel.LOG)))));
         }
         for (Row row : unreleased) {
-            deployments.add(buildDeploy(row, failures));
+            deployments.add(buildEntry(row, failures));
         }
-        deployments.sort(Comparator.comparing(InstanceDeploys.Deploy::startedAtIso).reversed());
+        deployments.sort(Comparator.comparing((Entry entry) -> entry.deploy().startedAtIso()).reversed());
         // The engine orders releases by their instance id (newestRetired): after a rollback the kept release is the
         // newer one, so the one step goes forward to it, never "back".
         return new Lane(deployments, window, releaseCount + unreleasedCount, inFlight,
@@ -982,9 +1007,9 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
             .count() > 0;
         Row latest = model.latestSuccess(InstanceModel.MODEL_ID.toString(), instanceId);
         Instant liveSince = latest == null ? null : latest.get(BuildOperationModel.FINISHED_AT);
-        List<InstanceDeploys.Deploy> deployments = new ArrayList<>();
+        List<Entry> deployments = new ArrayList<>();
         for (Row row : operations) {
-            deployments.add(buildDeploy(row, failures));
+            deployments.add(buildEntry(row, failures));
         }
         return new Lane(deployments, window, total, deploying,
             latest == null ? "" : shortSha(latest.get(BuildOperationModel.SOURCE_REF)), "",
@@ -995,18 +1020,20 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
      * One checkout-and-build row: its log is the output of the record's own checkout and build, which its owner needs
      * to fix a build, so it stays visible where a release's daemon step log does not.
      */
-    private static InstanceDeploys.@NonNull Deploy buildDeploy(@NonNull Row row, @NonNull WithheldFailure failures) {
-        return deploy("build-" + row.get(BuildOperationModel.ID),
-            statusOf(BuildOperationModel.STATUS, row.get(BuildOperationModel.STATUS)),
-            row.get(BuildOperationModel.SOURCE_REF), row.get(BuildOperationModel.DURATION_MS),
-            row.get(BuildOperationModel.STARTED_AT),
-            // The release lane's What column names each row; a build that has not (yet) become a release is a build.
-            CmsSupport.resolvedTextOrDefault(HohenheimMicrocopy.DEPLOYMENTS.of("kind_build")), false,
-            BuildOperationModel.LIFECYCLE.stored(OperationStatus::inFlight)
-                .contains(Objects.toString(row.get(BuildOperationModel.STATUS), "")),
-            Started.NONE, "",
-            DeployDetail.of(failures.shown(row.get(BuildOperationModel.FAILURE_REASON)),
-                row.get(BuildOperationModel.LOG), null));
+    private static @NonNull Entry buildEntry(@NonNull Row row, @NonNull WithheldFailure failures) {
+        return new Entry(BuildOperationModel.MODEL_ID, row.get(BuildOperationModel.ID),
+            deploy("build-" + row.get(BuildOperationModel.ID),
+                statusOf(BuildOperationModel.STATUS, row.get(BuildOperationModel.STATUS)),
+                row.get(BuildOperationModel.SOURCE_REF), row.get(BuildOperationModel.DURATION_MS),
+                row.get(BuildOperationModel.STARTED_AT),
+                // The release lane's What column names each row; a build that has not (yet) become a release is a
+                // build.
+                CmsSupport.resolvedTextOrDefault(HohenheimMicrocopy.DEPLOYMENTS.of("kind_build")), false,
+                BuildOperationModel.LIFECYCLE.stored(OperationStatus::inFlight)
+                    .contains(Objects.toString(row.get(BuildOperationModel.STATUS), "")),
+                Started.NONE, "",
+                DeployDetail.of(failures.shown(row.get(BuildOperationModel.FAILURE_REASON)),
+                    row.get(BuildOperationModel.LOG), null)));
     }
 
     /**
@@ -1060,7 +1087,8 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
     /** A git object name, full or abbreviated; anything else in a commit slot is a ref. */
     private static final Pattern COMMIT_SHA = Pattern.compile("[0-9a-fA-F]{7,64}");
 
-    private static String shortSha(Object sha) {
+    /** @return a commit's short form as this tab shows it; empty for none */
+    static @NonNull String shortSha(@Nullable Object sha) {
         String value = sha != null ? String.valueOf(sha) : "";
         return value.length() > 8 ? value.substring(0, 8) : value;
     }

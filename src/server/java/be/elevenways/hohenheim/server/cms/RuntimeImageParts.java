@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
@@ -24,7 +25,6 @@ import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationVerb;
-import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -50,7 +50,7 @@ public final class RuntimeImageParts {
         .label(CmsMicrocopy.of("delete"))
         .one(SubjectType.record(RuntimeImageModel.REF))
         .verb(OperationVerb.DELETE)
-        .gate(OperationGate.permission(HohenheimPanel.ACCESS))
+        .gate(HohenheimSources.OPERATOR)
         .result(Integer.class).facts(OperationFact.DESTRUCTIVE).command(CmsCommands.TRANSACTIONAL).register();
 
     static {

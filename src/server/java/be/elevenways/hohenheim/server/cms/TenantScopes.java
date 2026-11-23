@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.BuildHookModel;
+import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
@@ -18,6 +19,7 @@ import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
+import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.SiteRedirectModel;
@@ -29,6 +31,9 @@ import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.common.data.RowScope;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.IntegerField;
+import be.elevenways.zenit.common.orm.field.StringField;
+import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.CompositeCriteria;
 import be.elevenways.zenit.common.orm.query.criteria.CompositeOperator;
@@ -222,6 +227,14 @@ public final class TenantScopes {
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(PreviewDeploymentModel.class),
             InstanceModel.MODEL_ID, HohenheimCapabilities.MANAGE, PreviewDeploymentModel.APPLICATION_ID::in));
 
+    /** Deploys (release operations); tenants only those of the apps they view and the sites they manage. */
+    public static final RowScope DEPLOYS = RowScope.perPrincipal(ctx -> ownedOperations(ctx,
+        Models.get(ReleaseOperationModel.class), ReleaseOperationModel.FOR_MODEL, ReleaseOperationModel.FOR_ID));
+
+    /** Builds; tenants only those of the apps they view and the sites they manage, the two owners a build has. */
+    public static final RowScope BUILDS = RowScope.perPrincipal(ctx -> ownedOperations(ctx,
+        Models.get(BuildOperationModel.class), BuildOperationModel.FOR_MODEL, BuildOperationModel.FOR_ID));
+
     /** The access lists a tenant OWNS: the /manage list. */
     public static final RowScope MANAGED_ACCESS_LISTS = RowScope.perPrincipal(
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(AccessListModel.class),
@@ -275,6 +288,26 @@ public final class TenantScopes {
             ids.add(String.valueOf(id));
         }
         return RecordScheduleModel.RECORD_ID.in(ids);
+    }
+
+    /**
+     * The operation records (deploys, builds) of the owners a principal reads: an app it may view, the reader of its
+     * Deploys tab, or a site it manages, the reader of the site's deploy and build routes.
+     *
+     * @return null for an unconstrained scope, else a criteria that never widens past the two owner sets
+     */
+    private static @Nullable Criteria ownedOperations(@NonNull AccessContext ctx, @NonNull Model model,
+                                                      @NonNull StringField forModel, @NonNull IntegerField forId) {
+        Criteria apps = HohenheimAccess.grantScope(ctx, model, InstanceModel.MODEL_ID, HohenheimCapabilities.VIEW,
+            forId::in);
+        Criteria sites = HohenheimAccess.managedSiteScope(ctx, model, forId::in);
+        if (apps == null && sites == null) {
+            return null;
+        }
+        Criteria ownedApps = forModel.eq(InstanceModel.MODEL_ID.toString());
+        Criteria ownedSites = forModel.eq(SiteModel.MODEL_ID.toString());
+        return Criteria.or(apps == null ? ownedApps : Criteria.and(ownedApps, apps),
+            sites == null ? ownedSites : Criteria.and(ownedSites, sites));
     }
 
     /**

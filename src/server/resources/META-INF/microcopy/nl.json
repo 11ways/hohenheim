@@ -19848,5 +19848,28 @@
       "scope": "hohenheim",
       "target": "happened"
     }
-  ]
+  ],
+  "read_instance_log": { "text": "{$actor} las de log van {$subject}", "scope": "hohenheim", "target": "happened" },
+  "list_instance_deploys": { "text": "{$actor} bekeek de deploys van {$subject}", "scope": "hohenheim", "target": "happened" },
+  "read_build_log": { "text": "{$actor} las de log van build {$subject}", "scope": "hohenheim", "target": "happened" },
+  "read_deploy_log": { "text": "{$actor} las de log van deploy {$subject}", "scope": "hohenheim", "target": "happened" },
+  "list_instance_variables": { "text": "{$actor} bekeek de variabelen van {$subject}", "scope": "hohenheim", "target": "happened" },
+  "set_instance_variable": { "text": "{$actor} stelde een variabele van {$subject} in", "scope": "hohenheim", "target": "happened" },
+  "unset_instance_variable": { "text": "{$actor} verwijderde een variabele van {$subject}", "scope": "hohenheim", "target": "happened" },
+  "read_log": [
+    {"text": "Log lezen", "scope": "instance"},
+    {"text": "Buildlog lezen", "scope": "build_operation"},
+    {"text": "Deploylog lezen", "scope": "release_operation"}
+  ],
+  "list_deploys": {"text": "Deploys tonen", "scope": "instance"},
+  "list": {"text": "Variabelen tonen", "scope": "instance_variable"},
+  "set": {"text": "Variabele instellen", "scope": "instance_variable"},
+  "unset": {"text": "Variabele verwijderen", "scope": "instance_variable"},
+  "reaches_at_deploy": {"text": "De app krijgt de wijziging bij de volgende deploy.", "scope": "instance_variable"},
+  "log_lines": [
+    {"text": "Regels", "scope": "hohenheim_field"},
+    {"text": "Hoeveel van de nieuwste regels u leest; leeg gelaten, het gewone venster.", "scope": "help"}
+  ],
+  "history_page": {"text": "Pagina", "scope": "hohenheim_field"},
+  "variable_holds_secret": {"text": "Deze sleutel bevat een geheim, dat een assistent niet kan vervangen; verwijder het eerst als er een gewone waarde in de plaats moet komen", "scope": "violations"}
 }

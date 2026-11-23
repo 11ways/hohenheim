@@ -25,6 +25,10 @@ public final class KeptFromAssistants {
     public static final String BACKGROUND_RUN = "it runs in the background, and an assistant's tool places only an"
         + " operation that answers inside its request; its tool comes once tools place runs";
 
+    /** A deploy or a build, listed per app by its deploy list rather than across every app. */
+    public static final String DEPLOY_HISTORY = "deploys and builds are listed per app, newest first, by the app's"
+        + " deploy list, which names each by its code for a read";
+
     private KeptFromAssistants() {
     }
 }

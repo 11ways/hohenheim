@@ -36,7 +36,6 @@ import be.elevenways.zenit.common.operation.OperationCommand;
 import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.operation.SecretResult;
 import be.elevenways.zenit.common.orm.command.CommandExecution;
-import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.field.BooleanField;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
@@ -132,7 +131,7 @@ public final class SpamserviceClientKeysResource {
         .label(HohenheimMicrocopy.SPAMSERVICE_KEY.of("create_key"))
         .noSubject()
         .notForAssistants("it answers the new key once, and an assistant is never sent a secret")
-        .gate(OperationGate.permission(HohenheimPanel.ACCESS))
+        .gate(HohenheimSources.OPERATOR)
         .input(OperationInput.of(FORM, KeyInput.class, values -> new KeyInput(values.get("client_id"),
             values.get("name") instanceof String name ? name : null, values.get("key"),
             values.get("active") instanceof Boolean active ? active : null,
@@ -150,7 +149,7 @@ public final class SpamserviceClientKeysResource {
         .icon(Icon.of("check"))
         .one(KEY)
         .notForAssistants(OUTSIDE_RECORD)
-        .gate(OperationGate.permission(HohenheimPanel.ACCESS))
+        .gate(HohenheimSources.OPERATOR)
         .command(COMMAND)
         .register();
 
@@ -161,7 +160,7 @@ public final class SpamserviceClientKeysResource {
         .icon(Icon.of("xmark"))
         .one(KEY)
         .notForAssistants(OUTSIDE_RECORD)
-        .gate(OperationGate.permission(HohenheimPanel.ACCESS))
+        .gate(HohenheimSources.OPERATOR)
         .command(COMMAND)
         .register();
 

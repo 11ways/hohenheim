@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.activity.OperationSentences;
@@ -244,13 +245,13 @@ public final class SiteWrites {
      * hook runs and the quota re-books the slot (refused by name over the cap), exactly as the legacy trash did.
      */
     public static final Operation<Row, Void, Integer> RESTORE =
-        ArchiveOperations.restore(SiteModel.REF, SubjectArity.ONE, OperationGate.permission(HohenheimPanel.ACCESS));
+        ArchiveOperations.restore(SiteModel.REF, SubjectArity.ONE, HohenheimSources.OPERATOR);
     public static final Operation<Row, Void, Integer> RESTORE_MANY =
-        ArchiveOperations.restore(SiteModel.REF, SubjectArity.MANY, OperationGate.permission(HohenheimPanel.ACCESS));
+        ArchiveOperations.restore(SiteModel.REF, SubjectArity.MANY, HohenheimSources.OPERATOR);
     public static final Operation<Row, Void, Integer> PURGE =
-        ArchiveOperations.purge(SiteModel.REF, SubjectArity.ONE, OperationGate.permission(HohenheimPanel.ACCESS));
+        ArchiveOperations.purge(SiteModel.REF, SubjectArity.ONE, HohenheimSources.OPERATOR);
     public static final Operation<Row, Void, Integer> PURGE_MANY =
-        ArchiveOperations.purge(SiteModel.REF, SubjectArity.MANY, OperationGate.permission(HohenheimPanel.ACCESS));
+        ArchiveOperations.purge(SiteModel.REF, SubjectArity.MANY, HohenheimSources.OPERATOR);
 
     private SiteWrites() {
     }

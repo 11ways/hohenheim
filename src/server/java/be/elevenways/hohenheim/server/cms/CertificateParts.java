@@ -22,7 +22,6 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.common.operation.Operation;
-import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.operation.SubjectArity;
 import be.elevenways.zenit.common.operation.SubjectType;
@@ -91,7 +90,7 @@ public final class CertificateParts {
 
     /** Canonical O2 delete: the same model removal and hooks as the generated legacy verb. */
     public static final Operation<Row, Void, Integer> DELETE = RowDeleteOperations.delete(CertificateModel.REF,
-        SubjectArity.ONE, OperationGate.permission(HohenheimSources.ADMIN_ACCESS));
+        SubjectArity.ONE, HohenheimSources.OPERATOR);
 
     /** The certificate list's state column. */
     static final String STATE_COLUMN = "state";

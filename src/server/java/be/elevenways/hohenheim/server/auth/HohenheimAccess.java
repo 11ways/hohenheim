@@ -14,15 +14,12 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
-import be.elevenways.zenit.common.refusal.DomainRefusal;
-import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.KnownCapability;
 import be.elevenways.zenit.common.security.Permission;
 import be.elevenways.zenit.common.security.Principal;
 import be.elevenways.zenit.common.security.RecordCapabilityScope;
 import be.elevenways.zenit.common.validation.Violations;
-import be.elevenways.zenit.server.operation.Authorizer;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -126,16 +123,6 @@ public final class HohenheimAccess {
      */
     public static boolean isAdmin(@NonNull AccessContext ctx) {
         return ctx.hasPermission(HohenheimPanel.ACCESS);
-    }
-
-    /**
-     * An operation authorizer admitting operators alone, from every surface; anyone else is refused FORBIDDEN.
-     *
-     * @param diagnostic the refusal's diagnostic, naming the operator act
-     */
-    public static <S, I> @NonNull Authorizer<S, I> operatorOnly(@NonNull String diagnostic) {
-        return (subject, input, access) -> isAdmin(access) ? null
-            : new DomainRefusal(ZenitRefusalReason.FORBIDDEN, diagnostic);
     }
 
     /**

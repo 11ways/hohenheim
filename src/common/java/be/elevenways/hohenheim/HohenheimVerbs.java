@@ -168,6 +168,26 @@ public final class HohenheimVerbs {
     /** Removes the objects this controller left on the subject (a host) that no record names. */
     public static final OperationVerb REAP = OperationVerb.declare(HohenheimVerbs.class, "reap", Effect.DESTROYS);
 
+    /** Reads the subject's log: what a workload printed, or what a build or a deploy wrote. */
+    public static final OperationVerb READ_LOG = OperationVerb.declare(HohenheimVerbs.class, "read_log",
+        Effect.READS);
+
+    /** Lists the subject's deploys and the builds that never became one, newest first. */
+    public static final OperationVerb LIST_DEPLOYS = OperationVerb.declare(HohenheimVerbs.class, "list_deploys",
+        Effect.READS);
+
+    /** Lists the subject's own variables. */
+    public static final OperationVerb LIST_VARIABLES = OperationVerb.declare(HohenheimVerbs.class,
+        "list_variables", Effect.READS);
+
+    /** Sets one plain variable on the subject. */
+    public static final OperationVerb SET_VARIABLE = OperationVerb.declare(HohenheimVerbs.class, "set_variable",
+        Effect.WRITES);
+
+    /** Removes one variable from the subject. */
+    public static final OperationVerb UNSET_VARIABLE = OperationVerb.declare(HohenheimVerbs.class,
+        "unset_variable", Effect.DESTROYS);
+
     private HohenheimVerbs() {
     }
 }

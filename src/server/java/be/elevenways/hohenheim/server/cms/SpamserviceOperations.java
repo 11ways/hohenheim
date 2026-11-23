@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.HohenheimVerbs;
@@ -11,7 +12,6 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.spamservice.client.ServiceStatus;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationFact;
-import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.OperationVerb;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
@@ -32,8 +32,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 public final class SpamserviceOperations {
 
-    private static final OperationGate OPERATOR = OperationGate.permission(HohenheimPanel.ACCESS);
-
     /** Starts the managed Spamservice process. */
     public static final Operation<Void, Void, Void> START = lifecycle("start", "play", false, HohenheimVerbs.START);
 
@@ -53,7 +51,7 @@ public final class SpamserviceOperations {
         .noSubject()
         .verb(HohenheimVerbs.TEST)
         .noun(SpamserviceInstallationModel.REF)
-        .gate(OPERATOR)
+        .gate(HohenheimSources.OPERATOR)
         .result(String.class)
         .facts(OperationFact.REACHES_OUTSIDE)
         .command(CmsCommands.EXTERNAL)
@@ -101,7 +99,7 @@ public final class SpamserviceOperations {
             .noSubject()
             .verb(verb)
             .noun(SpamserviceInstallationModel.REF)
-            .gate(OPERATOR);
+            .gate(HohenheimSources.OPERATOR);
         if (destructive) {
             builder.facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE);
         } else {

@@ -25,7 +25,6 @@ import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.operation.Operation;
-import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.operation.SubjectArity;
 import be.elevenways.zenit.common.operation.SubjectType;
@@ -61,7 +60,7 @@ public final class AuthProviderParts {
     /** Deletes a provider no site and no access rule names; offered dead while one does. */
     public static final Operation<Row, Void, Integer> DELETE =
         RowDeleteOperations.declare(SiteAuthProviderModel.REF, SubjectArity.ONE,
-                OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
+                HohenheimSources.OPERATOR)
             .id(HohenheimIds.id("delete_auth_provider"))
             .availability(Availability.batch((providers, access) -> DeleteImpact.authProvidersInUse(providers)))
             .register();
