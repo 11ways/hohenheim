@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
 import be.elevenways.hohenheim.server.security.HohenheimSecurity;
 import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.auth.server.Accounts;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -30,7 +31,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * The Access pages read by what an operator asks of them: a list by what it lets in and where it is used, the blocked
- * addresses that are blocked now, and the sign-in providers beside people in one Access area.
+ * addresses that are blocked now, and the sign-in providers beside people in one Access area, where a person's
+ * address can be confirmed.
  *
  * @author Jelle De Loecker
  * @since  0.2.0
@@ -227,6 +229,12 @@ class AccessPagesJourneyTest extends HohenheimHttpTestBase {
         String invite = people.substring(people.indexOf("data-action-id=\"zenit:invite_user\""));
         assertThat(invite.substring(0, invite.indexOf('>'))).as("step 4: the invite is a secondary button")
             .contains("variant=\"secondary\"");
+
+        // 5. A person whose address nobody confirmed is offered "Confirm address" on the People list, the local half of
+        //    joining a Proteus sign-in to the account by its address.
+        UUID unconfirmed = Accounts.create("people-" + suffix + "@example.com", "People " + suffix, true);
+        assertThat(adminGet("/admin/users?q=people-" + suffix).body()).as("step 5: the row offers Confirm address")
+            .contains("/admin/users/invoke/zenit.confirm_address?ids=" + unconfirmed);
     }
 
     private static Row site(String name) {
