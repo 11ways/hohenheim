@@ -828,8 +828,8 @@ public final class InstanceConsoles {
                 InstanceModel.STATUS_STOPPED, "observed stop, exit " + exitCode, null, null);
             return;
         }
-        boolean restart = InstanceModel.CRASH_RESTART
-            .equals(row.get(InstanceModel.CRASH_POLICY));
+        boolean restart = InstanceModel.CRASH_RESTART.equals(row.get(InstanceModel.CRASH_POLICY))
+            && InstanceModel.roleRestartsOnCrash(row.get(InstanceModel.RUNTIME_ROLE));
         if (!restart) {
             if (!stampIfAnyRunning(leases, serverId, name, instanceId,
                 exitCode == 0 ? InstanceModel.STATUS_STOPPED : InstanceModel.STATUS_ERROR,

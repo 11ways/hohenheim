@@ -625,6 +625,19 @@ public class InstanceModel extends Model {
     }
 
     /**
+     * Whether the crash policy restarts a crashed release in this role: never a candidate, whose fate is the release
+     * engine's health gate, nor a retired one, which never starts again.
+     *
+     * AIDEV-NOTE: a candidate restarted by its crash policy was redeployed again and again under the gate's probe,
+     * which then judged a container that was not the one it created; the gate refuses it on its first crash instead.
+     *
+     * @return false for {@link #ROLE_CANDIDATE} and {@link #ROLE_RETIRED}
+     */
+    public static boolean roleRestartsOnCrash(@Nullable String role) {
+        return roleStartsAgain(role) && !ROLE_CANDIDATE.equals(role);
+    }
+
+    /**
      * Whether a release in this role books workload memory on its host and owner: only one that starts again
      * ({@link #roleStartsAgain}), since booking a retired one only kept memory from workloads that could run.
      */

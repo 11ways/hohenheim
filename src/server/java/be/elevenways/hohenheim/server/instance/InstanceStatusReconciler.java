@@ -238,7 +238,8 @@ public final class InstanceStatusReconciler {
         // watching. The crash policy decides what that becomes -- the SAME vocabulary the
         // console watch enforces for supervised workloads, one lane later.
         boolean restart = changed && InstanceModel.CRASH_RESTART
-            .equals(fresh.get(InstanceModel.CRASH_POLICY));
+            .equals(fresh.get(InstanceModel.CRASH_POLICY))
+            && InstanceModel.roleRestartsOnCrash(fresh.get(InstanceModel.RUNTIME_ROLE));
         boolean flapping = restart && InstanceConsoles.flapExceeded(instanceId);
         boolean crashed = changed && (!restart || flapping);
         if (crashed) {
