@@ -14,7 +14,7 @@ import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.instance.ImageOrigin;
-import be.elevenways.hohenheim.model.DeployTrigger;
+import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
 import be.elevenways.hohenheim.server.instance.InstallMedia;
 import be.elevenways.hohenheim.server.instance.InstanceDevices;
 import be.elevenways.hohenheim.server.instance.InstanceInstalls;
@@ -769,7 +769,7 @@ final class PutOnlineHandlers {
     /** The app's first deploy, through the deploy funnel; a refused or failed one is the run's words. */
     private static void firstRelease(@NonNull OperationCall<?, ?> call, int appId) {
         try {
-            new InstanceService().deploy(appId, DeployTrigger.MANUAL);
+            new InstanceService().deploy(appId, InstanceOperationHandlers.triggerOf(call.surface()));
         } catch (Violations refused) {
             throw refusedAs("release", refused);
         }
@@ -854,7 +854,7 @@ final class PutOnlineHandlers {
     private static void firstStart(@NonNull OperationCall<?, ?> call, int instanceId, @Nullable Microcopy note,
                                    @Nullable String hostname, @Nullable HttpsChoice choice) {
         try {
-            new InstanceService().deploy(instanceId, DeployTrigger.MANUAL);
+            new InstanceService().deploy(instanceId, InstanceOperationHandlers.triggerOf(call.surface()));
         } catch (Violations | DomainRefusal notStarted) {
             Blast.log("PUT_ONLINE: first deploy of", instanceId, "did not start:", notStarted.getMessage());
             call.reportOutcome(message("not_started"));

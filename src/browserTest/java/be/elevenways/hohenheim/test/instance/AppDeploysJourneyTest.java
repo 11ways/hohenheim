@@ -295,7 +295,9 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
                 .as("step 2b: and the band says why")
                 .contains("The previous release runs the same commit, aaaa1111, so there is nothing earlier to go"
                     + " back to.")
-                .doesNotContain("Roll back to");
+                // The band's own label: the record menu's dead Roll back ships its confirm sentence ("Roll back to
+                // the previous release?") in the page's microcopy seed, which is no offer.
+                .doesNotContain("Roll back to release");
         } finally {
             commitOf(keptId, KEPT_SHA);
         }

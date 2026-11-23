@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.ArrayList;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.server.auth.BasicCredentials;
-import be.elevenways.hohenheim.model.DeployTrigger;
+import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.AccessListModel;
@@ -287,7 +287,7 @@ public final class SiteOperationHandlers {
         if (instanceId == null) {
             throw Violations.ofForm(NO_INSTANCE);
         }
-        ReleaseEngine.rollback(instanceId, DeployTrigger.MANUAL);
+        ReleaseEngine.rollback(instanceId, InstanceOperationHandlers.triggerOf(call.surface()));
         call.reportStepDone(HohenheimMicrocopy.DEPLOYMENTS.of("rollback_done"));
         return null;
     }

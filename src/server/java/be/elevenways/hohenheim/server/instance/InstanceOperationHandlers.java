@@ -136,7 +136,7 @@ public final class InstanceOperationHandlers {
             .availability(Availability.keyed((Row instance) -> instance.get(InstanceModel.ID),
                 ReleaseEngine::rollbackRefusals))
             .handle(call -> {
-                ReleaseEngine.rollback(instanceId(call), DeployTrigger.MANUAL);
+                ReleaseEngine.rollback(instanceId(call), triggerOf(call.surface()));
                 call.reportStepDone(HohenheimMicrocopy.DEPLOYMENTS.of("rollback_done"));
                 return null;
             });
