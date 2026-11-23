@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.model;
 
 import be.elevenways.protoblast.common.i18n.wording.Noun;
 import be.elevenways.protoblast.common.i18n.wording.NounFact;
+import be.elevenways.zenit.common.operation.AssistantNoun;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -33,6 +34,10 @@ public class InstanceTemplateVariableModel extends Model {
     /** The instance template variable model's reference: its class and MODEL_ID, resolved at first use. */
     public static final ModelRef<InstanceTemplateVariableModel> REF =
         ModelRef.of(InstanceTemplateVariableModel.class, MODEL_ID);
+
+    static {
+        AssistantNoun.declare(MODEL_ID, InstanceTemplateVariableModel.class, "template_variable");
+    }
 
     public static final Schema SCHEMA = new Schema();
 

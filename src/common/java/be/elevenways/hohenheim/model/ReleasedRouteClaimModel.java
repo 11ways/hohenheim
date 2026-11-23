@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.operation.AssistantNoun;
 import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
 import be.elevenways.protoblast.common.i18n.wording.Noun;
 import be.elevenways.protoblast.common.i18n.wording.NounFact;
@@ -50,6 +51,10 @@ public class ReleasedRouteClaimModel extends Model {
     /** THE short code a quarantined name is named by in an assistant's tools: "RC12". */
     public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
         RecordCodeBehaviour.allocated(MODEL_ID, "RC"));
+
+    static {
+        AssistantNoun.declare(MODEL_ID, ReleasedRouteClaimModel.class, "released_address");
+    }
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 

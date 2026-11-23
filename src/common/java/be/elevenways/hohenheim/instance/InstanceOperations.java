@@ -9,7 +9,6 @@ import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimRefusalReason;
 import be.elevenways.hohenheim.HohenheimVerbs;
-import be.elevenways.hohenheim.KeptFromAssistants;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.zenit.cms.common.CmsMicrocopy;
 import be.elevenways.zenit.common.edit.FormSpec;
@@ -76,7 +75,8 @@ public final class InstanceOperations {
         .register();
 
     /**
-     * Deploy an instance from the panel (its Deploy row action and its Deploys tab); POWER on the record.
+     * Deploy an instance from the panel (its Deploy row action and its Deploys tab) or an assistant's tool, which
+     * answers the run's code; POWER on the record.
      *
      * AIDEV-NOTE: a background run beside {@link #START}, not START itself: a deploy is health-gated and outlives any
      * request, while START answers the API and a schedule step with the instance's status in the call
@@ -98,7 +98,6 @@ public final class InstanceOperations {
         .facts(OperationFact.REACHES_OUTSIDE)
         .command(COMMAND_FACET)
         .rateLimit(HohenheimEndpoints.DEPLOY_LIMIT)
-        .notForAssistants(KeptFromAssistants.BACKGROUND_RUN)
         .background(OperationSteps.of(
             OperationSteps.step("deploy", HohenheimMicrocopy.DEPLOYMENTS.of("deploy_step"))))
         .register();
@@ -240,7 +239,8 @@ public final class InstanceOperations {
             .register();
 
     /**
-     * Roll a release-managed instance back to its retained release; POWER on the record.
+     * Roll a release-managed instance back to its retained release, from the panel or an assistant's tool; POWER on
+     * the record.
      *
      * AIDEV-NOTE: a background run, as the gated swap outlives any request (a candidate boots and is probed before
      * the switch): the caller lands on the run's page and the Deploys tab shows the release it starts with its live
@@ -257,7 +257,6 @@ public final class InstanceOperations {
             .command(COMMAND_FACET)
             .facts(OperationFact.REACHES_OUTSIDE)
             .rateLimit(HohenheimEndpoints.DEPLOY_LIMIT)
-            .notForAssistants(KeptFromAssistants.BACKGROUND_RUN)
             .background(OperationSteps.of(
                 OperationSteps.step("switch", HohenheimMicrocopy.DEPLOYMENTS.of("rollback_step"))))
             .register();

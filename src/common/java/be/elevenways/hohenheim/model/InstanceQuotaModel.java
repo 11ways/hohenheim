@@ -4,6 +4,7 @@ import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 
 import be.elevenways.protoblast.common.i18n.wording.Noun;
 import be.elevenways.protoblast.common.i18n.wording.NounFact;
+import be.elevenways.zenit.common.operation.AssistantNoun;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -51,6 +52,10 @@ public class InstanceQuotaModel extends Model {
     public static final Identifier MODEL_ID = HohenheimIds.id("instance_quota");
     /** The instance quota model's reference: its class and MODEL_ID, resolved at first use. */
     public static final ModelRef<InstanceQuotaModel> REF = ModelRef.of(InstanceQuotaModel.class, MODEL_ID);
+
+    static {
+        AssistantNoun.declare(MODEL_ID, InstanceQuotaModel.class, "app_quota");
+    }
 
     public static final Schema SCHEMA = new Schema();
 

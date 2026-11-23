@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.operation.AssistantNoun;
 import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
 import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 
@@ -48,6 +49,10 @@ public class InstanceVolumeModel extends Model {
     /** THE short code a volume is named by in an assistant's tools: "VO12". */
     public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
         RecordCodeBehaviour.allocated(MODEL_ID, "VO"));
+
+    static {
+        AssistantNoun.declare(MODEL_ID, InstanceVolumeModel.class, "app_volume");
+    }
 
     /** The volume every workspace carries: its {@code /home/site} data directory. */
     public static final String HOME_VOLUME = "home";

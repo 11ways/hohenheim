@@ -75,8 +75,9 @@ import java.util.Set;
 
 /**
  * Hohenheim's one assistant connection, {@code /zn/mcp/hohenheim}: its record sources listed, its operations placed
- * under the names their verbs and nouns derive, and zenit-auth's account tools, admitted by a key with the scope
- * {@code mcp:hohenheim}, which the API keys page offers as the "Hohenheim assistant" preset.
+ * under the names their verbs and nouns derive (a background one answering its run's code, followed with
+ * {@code run_read}), and zenit-auth's account tools, admitted by a key with the scope {@code mcp:hohenheim}, which the
+ * API keys page offers as the "Hohenheim assistant" preset.
  *
  * AIDEV-NOTE: nothing here names a tool, a permission or a scope: the names derive from each operation's verb and noun
  * (McpToolSet), every call is the operation's own gate and authorizer, and the preset is zenit-ai's. An operation or
@@ -146,6 +147,7 @@ public final class HohenheimMcpModule implements ZenitModule {
             if (source != null) sources.add(source);
         }
         List<Operation<?, ?, ?>> placed = new ArrayList<>(List.of(
+            InstanceOperations.DEPLOY, InstanceOperations.ROLLBACK,
             InstanceOperations.BACKUP, InstanceOperations.CONNECT_WEBHOOK, InstanceOperations.SNAPSHOT,
             InstanceOperations.INSTALL, InstanceOperations.REINSTALL, InstanceOperations.CAPTURE_TEMPLATE,
             InstanceOperations.DESTROY_WITH_DATA, InstanceOperations.DELETE, InstanceOperations.ATTACH_INSTALL_MEDIA,
@@ -192,7 +194,8 @@ public final class HohenheimMcpModule implements ZenitModule {
             .answersWith(InstanceLogOperations.READ_DEPLOY_LOG, HohenheimMcpAnswers::log)
             .answersWith(InstanceVariableOperations.LIST_VARIABLES, HohenheimMcpAnswers::variables)
             .answersWith(InstanceVariableOperations.SET_VARIABLE, HohenheimMcpAnswers::variableWritten)
-            .answersWith(InstanceVariableOperations.UNSET_VARIABLE, HohenheimMcpAnswers::variableWritten);
+            .answersWith(InstanceVariableOperations.UNSET_VARIABLE, HohenheimMcpAnswers::variableWritten)
+            .answersWith(InstanceVariableOperations.GENERATE_SECRET, HohenheimMcpAnswers::variableWritten);
         for (var operation : ServerParts.lifecycleForAssistants()) {
             set.answersWith(operation, HohenheimMcpAnswers::said);
         }

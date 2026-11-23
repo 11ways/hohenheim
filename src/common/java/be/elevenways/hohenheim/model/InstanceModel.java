@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.operation.AssistantNoun;
 import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
 import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 
@@ -66,6 +67,11 @@ public class InstanceModel extends Model {
     /** THE short code an app is named by in an assistant's tools: "AP12". */
     public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
         RecordCodeBehaviour.allocated(MODEL_ID, "AP"));
+
+    static {
+        // Users call it an app, never an instance: the word every assistant tool over it is named by.
+        AssistantNoun.declare(MODEL_ID, InstanceModel.class, "app");
+    }
 
     /** {@link #STATUS}: record exists, nothing was ever deployed. */
     public static final String STATUS_CREATED = "created";

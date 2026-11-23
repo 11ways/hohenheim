@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.operation.AssistantNoun;
 import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
 import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
@@ -73,6 +74,10 @@ public class BuildOperationModel extends Model {
     /** THE short code a build is named by in an assistant's tools: "BU12". */
     public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
         RecordCodeBehaviour.allocated(MODEL_ID, "BU"));
+
+    static {
+        AssistantNoun.declare(MODEL_ID, BuildOperationModel.class, "build");
+    }
 
     /** A Dockerfile build inside the sandbox (the shipped builder). */
     public static final String KIND_DOCKERFILE = "dockerfile";

@@ -19,12 +19,14 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.List;
 
 /**
- * An app's own variables read and written one key at a time: the list, a plain value set, a key removed.
+ * An app's own variables read and written one key at a time: the list, a plain value set, a secret generated, a key
+ * removed.
  *
- * AIDEV-NOTE: no operation here takes a secret value (a secret is typed in a web form only, Jelle 2026-11-01): the
- * list names a secret and says only whether it holds a value, the set writes a plain value and refuses a key that
- * holds a secret rather than turning it plain, and the unset removes either kind. The service's own config check
- * (InstanceVariables) still answers for every write.
+ * AIDEV-NOTE: no operation here takes or answers a secret value (a secret is typed in a web form only, Jelle
+ * 2026-11-01): the list names a secret and says only whether it holds a value, the set writes a plain value and
+ * refuses a key that holds a secret rather than turning it plain, the generate has the server make a secret for a key
+ * that holds nothing (never over a value nobody could get back) and answers its key alone, and the unset removes
+ * either kind. The service's own config check (InstanceVariables) still answers for every write.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -59,6 +61,10 @@ public final class InstanceVariableOperations {
 
     /** @param key the variable's name */
     public record UnsetInput(@Nullable String key) {
+    }
+
+    /** @param key the variable's name */
+    public record GenerateInput(@Nullable String key) {
     }
 
     /** The app's own variables: a plain one with its value, a secret one only as set or not. */
@@ -104,6 +110,24 @@ public final class InstanceVariableOperations {
                 values -> new UnsetInput(values.get(InstanceVariableModel.KEY))))
             .result(String.class)
             .facts(OperationFact.DESTRUCTIVE)
+            .command(COMMAND)
+            .register();
+
+    /**
+     * Has the server make a secret value for a key the app holds nothing under, which reaches its workload at the next
+     * deploy; answers the key, never the value.
+     */
+    public static final Operation<Row, GenerateInput, String> GENERATE_SECRET =
+        Operation.declare(HohenheimIds.id("generate_instance_secret"))
+            .happened(OperationSentences.of("generate_instance_secret"))
+            .label(HohenheimMicrocopy.INSTANCE_VARIABLE.of("generate_secret"))
+            .icon(Icon.of("key"))
+            .one(InstanceOperations.INSTANCE)
+            .verb(HohenheimVerbs.GENERATE_SECRET)
+            .gate(InstanceOperations.gate(HohenheimCapabilities.CONFIG))
+            .input(OperationInput.of(FormSpec.builder().add(InstanceVariableModel.KEY).build(), GenerateInput.class,
+                values -> new GenerateInput(values.get(InstanceVariableModel.KEY))))
+            .result(String.class)
             .command(COMMAND)
             .register();
 

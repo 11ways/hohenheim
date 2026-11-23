@@ -370,6 +370,24 @@ public final class InstanceVariables {
     }
 
     /**
+     * Has the server make a secret value for one key the instance holds no value under, as a template's generated
+     * secret is made; never over a value, which nobody could get back once replaced.
+     *
+     * @throws Violations {@code variable_holds_value}, plus every refusal of {@link #setValue}
+     */
+    public void generateSecret(int instanceId, @NonNull String key) {
+        requireVariableAuthority(instanceId);
+        for (InstanceVariableOperations.Variable held : listed(rowsForKey(Models.get(InstanceVariableModel.class),
+                instanceId, null, key))) {
+            if (held.set()) {
+                throw Violations.ofField("key", key, HohenheimMicrocopy.VIOLATIONS.of("variable_holds_value"));
+            }
+        }
+        this.setValue(instanceId, null, key, VariableKind.SECRET.token(),
+            SecureTokens.randomToken(SecretVariableType.generateBytes(Map.of())));
+    }
+
+    /**
      * The deploy-facing view of an instance's settings with its variables applied:
      * variables merge into {@code environment_variables} (variable wins over the
      * baseline) and {@code {{KEY}}} tokens substitute inside {@code command} and

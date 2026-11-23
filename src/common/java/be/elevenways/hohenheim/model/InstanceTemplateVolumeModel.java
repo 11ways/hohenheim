@@ -4,6 +4,7 @@ import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 
 import be.elevenways.protoblast.common.i18n.wording.Noun;
 import be.elevenways.protoblast.common.i18n.wording.NounFact;
+import be.elevenways.zenit.common.operation.AssistantNoun;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -37,6 +38,10 @@ public class InstanceTemplateVolumeModel extends Model {
     /** The instance template volume model's reference: its class and MODEL_ID, resolved at first use. */
     public static final ModelRef<InstanceTemplateVolumeModel> REF =
         ModelRef.of(InstanceTemplateVolumeModel.class, MODEL_ID);
+
+    static {
+        AssistantNoun.declare(MODEL_ID, InstanceTemplateVolumeModel.class, "template_volume");
+    }
 
     public static final Schema SCHEMA = new Schema();
 

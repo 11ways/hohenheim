@@ -130,7 +130,7 @@ public final class SiteOperations {
             .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)
             .command(COMMAND.execution(CommandExecution.OUTSIDE_TRANSACTION))
             .rateLimit(HohenheimEndpoints.DEPLOY_LIMIT)
-            .notForAssistants(KeptFromAssistants.BACKGROUND_RUN)
+            .notForAssistants(KeptFromAssistants.RUN_READERS)
             .background(OperationSteps.of(
                 OperationSteps.step("switch", HohenheimMicrocopy.DEPLOYMENTS.of("rollback_step"))))
             .register();

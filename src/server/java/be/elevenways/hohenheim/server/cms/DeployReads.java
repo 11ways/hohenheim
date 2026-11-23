@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
+import be.elevenways.zenit.common.operation.AssistantNoun;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
@@ -190,9 +191,7 @@ public final class DeployReads {
 
     /** @return the assistant's word for the record a deploy or a build is for, null for an owner it names none of */
     private static @Nullable String ownerWord(@NonNull Identifier owner) {
-        if (InstanceModel.MODEL_ID.equals(owner)) {
-            return "app";
-        }
-        return SiteModel.MODEL_ID.equals(owner) ? "site" : null;
+        boolean named = InstanceModel.MODEL_ID.equals(owner) || SiteModel.MODEL_ID.equals(owner);
+        return named ? AssistantNoun.of(owner) : null;
     }
 }

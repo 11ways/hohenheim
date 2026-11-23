@@ -19859,6 +19859,7 @@
   "list_instance_variables": { "text": "{$actor} listed the variables of {$subject}", "scope": "hohenheim", "target": "happened" },
   "set_instance_variable": { "text": "{$actor} set a variable of {$subject}", "scope": "hohenheim", "target": "happened" },
   "unset_instance_variable": { "text": "{$actor} removed a variable of {$subject}", "scope": "hohenheim", "target": "happened" },
+  "generate_instance_secret": { "text": "{$actor} generated a secret for {$subject}", "scope": "hohenheim", "target": "happened" },
   "read_log": [
     {"text": "Read the log", "scope": "instance"},
     {"text": "Read the build log", "scope": "build_operation"},
@@ -19868,11 +19869,13 @@
   "list": {"text": "List variables", "scope": "instance_variable"},
   "set": {"text": "Set a variable", "scope": "instance_variable"},
   "unset": {"text": "Remove a variable", "scope": "instance_variable"},
+  "generate_secret": {"text": "Generate a secret", "scope": "instance_variable"},
   "reaches_at_deploy": {"text": "The app gets the change at its next deploy.", "scope": "instance_variable"},
   "log_lines": [
     {"text": "Lines", "scope": "hohenheim_field"},
     {"text": "How many of the newest lines to read; left empty, the usual window.", "scope": "help"}
   ],
   "history_page": {"text": "Page", "scope": "hohenheim_field"},
-  "variable_holds_secret": {"text": "This key holds a secret, which an assistant cannot replace; remove it first if a plain value should take its place", "scope": "violations"}
+  "variable_holds_secret": {"text": "This key holds a secret, which an assistant cannot replace; remove it first if a plain value should take its place", "scope": "violations"},
+  "variable_holds_value": {"text": "This key already holds a value; a generated secret never replaces one, as nobody could get the old value back", "scope": "violations"}
 }

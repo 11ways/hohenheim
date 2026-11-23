@@ -14,7 +14,9 @@ import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
+import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.cms.DatabaseDumpParts;
 import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
@@ -23,6 +25,7 @@ import be.elevenways.hohenheim.test.application.FakeApps;
 import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.zenit.ai.server.mcp.host.McpCoverage;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostServer;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostServers;
@@ -36,6 +39,7 @@ import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.ApiKeyService;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.operation.Operation;
+import be.elevenways.zenit.common.operation.OperationRunStatus;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -43,6 +47,7 @@ import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.CredentialPresets;
 import be.elevenways.zenit.common.security.KnownValueRedactor;
+import be.elevenways.zenit.server.operation.OperationRunOperations;
 import be.elevenways.zenit.server.operation.RecordCodes;
 import be.elevenways.zenit.test.support.DatasourceProbe;
 import org.junit.jupiter.api.AfterAll;
@@ -58,6 +63,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static be.elevenways.hohenheim.test.ApiSupport.user;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -65,7 +72,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Hohenheim's one assistant connection: every operation is a tool or says why not, every source is listed or says why
  * not, a real API key holding the "Hohenheim assistant" preset lists, reads and writes through the operations' own
- * gates, a key without the server's scope never gets in, and a customer who is no operator runs his own app with it.
+ * gates, a key without the server's scope never gets in, and a customer who is no operator runs, deploys and rolls back
+ * his own app with it.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -76,6 +84,9 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
 
     /** A secret of the customer's app, long enough to be masked wherever the app prints it. */
     private static final String SECRET = "hh-mcp-secret-7c1e9a5b";
+
+    /** A run's code, as a background tool's answer names it. */
+    private static final Pattern RUN_CODE = Pattern.compile("RUN\\d+");
 
     @AfterAll
     static void cleanUp() {
@@ -106,13 +117,14 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
         assertThat(unlisted).as("sources no tool lists and none keeps from assistants").isEmpty();
     }
 
-    /** Every tool that deploys (a start, a restart, a deploy) asks under the API trigger, known before any call. */
+    /** Every tool that deploys (a start, a restart, a deploy, a rollback) asks under the API trigger, known at boot. */
     @Test
     void everyDeployingToolHasItsTrigger() {
         assertThat(HohenheimMcpModule.tools()).as("the boot module built the tools").isNotNull();
+        List<Operation<?, ?, ?>> deployingOperations = List.of(InstanceOperations.START, InstanceOperations.RESTART,
+            InstanceOperations.DEPLOY, InstanceOperations.ROLLBACK);
         Set<String> deploying = new HashSet<>();
-        for (Operation<?, ?, ?> operation : List.of(InstanceOperations.START, InstanceOperations.RESTART,
-                InstanceOperations.DEPLOY)) {
+        for (Operation<?, ?, ?> operation : deployingOperations) {
             if (operation.assistantName() != null) deploying.add(operation.assistantName());
         }
         List<String> placed = new ArrayList<>();
@@ -123,8 +135,8 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                     .as(tool.name() + " deploys under the API trigger").isEqualTo(DeployTrigger.API);
             }
         }
-        assertThat(placed).as("the start and the restart are tools").contains(
-            InstanceOperations.START.assistantName(), InstanceOperations.RESTART.assistantName());
+        assertThat(placed).as("the start, the restart, the deploy and the rollback are tools")
+            .containsExactlyInAnyOrderElementsOf(deploying).hasSize(deployingOperations.size());
     }
 
     @Test
@@ -145,10 +157,10 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
         String key = ApiKeyService.create(operator, operatorId, PREFIX + "assistant", scopes, null).plaintext();
         McpHttpSession session = McpHttpSession.open(endpoint, bearer(key));
 
-        // 2. The tools derive from the sources, the operations and zenit-auth's accounts.
+        // 2. The tools derive from the sources, the operations and zenit-auth's accounts; an app is an app.
         assertThat(session.toolNames()).as("step 2: the tools")
-            .contains("read", "site_list", "site_pause", "site_resume", "instance_start", "certificate_renew",
-                "user_whoami");
+            .contains("read", "site_list", "site_pause", "site_resume", "app_start", "app_deploy", "run_read",
+                "certificate_renew", "user_whoami");
 
         // 3. Listing sites by a word names the site by its code; reading that code reads the site.
         String code = RecordCodes.codes(SiteModel.MODEL_ID, List.of(String.valueOf(siteId)), operator)
@@ -186,7 +198,9 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
      * A customer who is no operator, holding manage on his own app and its site, runs the app through a key of the
      * "Hohenheim assistant" preset: he sees status, starts and restarts it under the API trigger, reads its log with
      * its secret masked, its deploys and a build's log without the daemon's words, sets and removes a plain variable,
-     * is told of another tenant's app what he is told of none, and is never offered an operator's verb.
+     * has a secret generated he is never sent, is told of another tenant's app what he is told of none, is never
+     * offered an operator's verb, and deploys and rolls back his app as runs he follows by their codes, which another
+     * tenant reads as codes naming nothing.
      */
     @Test
     void aCustomerRunsHisOwnAppThroughTheAssistantPreset() throws Exception {
@@ -217,13 +231,12 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             McpHttpSession session = presetSession(server, endpoint, customerId, "Mcp Customer");
 
             // 2. His list holds his app and its status, and no other tenant's app; his site's list its status.
-            McpHttpSession.Answer listed = session.call(InstanceModel.MODEL_ID.getPath() + "_list",
-                Map.of("search", PREFIX));
+            McpHttpSession.Answer listed = session.call("app_list", Map.of("search", PREFIX));
             assertThat(listed.error()).as("step 2: " + listed.text()).isFalse();
             assertThat(listed.text()).as("step 2: his app, with its status").contains(appCode).contains(name)
                 .containsAnyOf(MicrocopyText.say(InstanceStatus.CREATED.label()), InstanceModel.STATUS_CREATED)
                 .doesNotContain(otherName).doesNotContain(otherCode);
-            McpHttpSession.Answer sites = session.call(SiteModel.MODEL_ID.getPath() + "_list", Map.of("search", name));
+            McpHttpSession.Answer sites = session.call("site_list", Map.of("search", name));
             assertThat(sites.text()).as("step 2: his site, with its status").contains(siteCode)
                 .containsAnyOf(MicrocopyText.say(HohenheimMicrocopy.SITE_STATUS.of(SiteModel.STATUS_ACTIVE)),
                     SiteModel.STATUS_ACTIVE);
@@ -236,15 +249,20 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                     .doesNotContainPattern("(?<![A-Za-z0-9])[0-9]+(?![0-9])");
             }
 
-            // 4. His tools are his app's; not one operator verb is offered to him.
+            // 4. His tools are his app's, each named "app", never "instance"; not one operator verb is offered to him.
             List<String> tools = session.toolNames();
-            assertThat(tools).as("step 4: his tools").contains("read", InstanceOperations.START.assistantName(),
+            System.out.println("MCP tools of a customer: " + String.join(", ", tools));
+            assertThat(tools).as("step 4: his tools").contains("read", "app_list", "app_deploy", "app_roll_back",
+                OperationRunOperations.READ.assistantName(), InstanceOperations.START.assistantName(),
                 InstanceOperations.RESTART.assistantName(), InstanceLogOperations.READ_LOG.assistantName(),
                 InstanceLogOperations.LIST_DEPLOYS.assistantName(),
                 InstanceLogOperations.READ_BUILD_LOG.assistantName(),
                 InstanceVariableOperations.LIST_VARIABLES.assistantName(),
                 InstanceVariableOperations.SET_VARIABLE.assistantName(),
-                InstanceVariableOperations.UNSET_VARIABLE.assistantName());
+                InstanceVariableOperations.UNSET_VARIABLE.assistantName(),
+                InstanceVariableOperations.GENERATE_SECRET.assistantName());
+            assertThat(tools).as("step 4: no tool is named after an instance")
+                .noneMatch(tool -> tool.startsWith("instance_"));
             for (Operation<?, ?, ?> operatorOnly : List.of(InstanceOperations.INSTALL, InstanceOperations.REINSTALL,
                     InstanceOperations.CAPTURE_TEMPLATE, InstanceOperations.DESTROY_WITH_DATA,
                     InstanceOperations.ATTACH_INSTALL_MEDIA, InstanceOperations.DETACH_INSTALL_MEDIA,
@@ -338,6 +356,23 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                 Map.of("id", appCode, "key", "GREETING", "plain_value", "hello")).error())
                 .as("step 8: and is refused the set").isTrue();
 
+            // 8b. The server makes a secret for a key holding none: nobody is sent it, and it never replaces a value.
+            String generate = InstanceVariableOperations.GENERATE_SECRET.assistantName();
+            McpHttpSession.Answer generated = session.call(generate, Map.of("id", appCode, "key", "SESSION_KEY"));
+            assertThat(generated.error()).as("step 8b: " + generated.text()).isFalse();
+            String made = new InstanceVariables().valuesFor(appId).get("SESSION_KEY");
+            assertThat(made).as("step 8b: a value was made").isNotBlank();
+            assertThat(generated.text()).as("step 8b: the answer names the key, never the value")
+                .contains("SESSION_KEY").doesNotContain(made);
+            assertThat(session.call(listVariables, Map.of("id", appCode)).text()).as("step 8b: listed as a set secret")
+                .contains("SESSION_KEY (secret, set)").doesNotContain(made);
+            assertThat(session.call(generate, Map.of("id", appCode, "key", "API_TOKEN")).error())
+                .as("step 8b: a held value is never replaced").isTrue();
+            assertThat(new InstanceVariables().valuesFor(appId)).as("step 8b: the secret stays")
+                .containsEntry("API_TOKEN", SECRET).containsEntry("SESSION_KEY", made);
+            assertThat(viewer.call(generate, Map.of("id", appCode, "key", "VIEWER_KEY")).error())
+                .as("step 8b: a viewer is refused").isTrue();
+
             // 9. Another tenant's app answers as an app that does not exist.
             String missing = "AP999999";
             for (Operation<?, ?, ?> asked : List.of(InstanceOperations.START, InstanceLogOperations.READ_LOG,
@@ -365,6 +400,59 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                 Map.of("id", failedCode));
             assertThat(stepLog.error()).as("step 11: " + stepLog.text()).isFalse();
             assertThat(stepLog.text()).as("step 11: the step log").contains(steps);
+            List<String> operatorTools = operatorSession.toolNames();
+            System.out.println("MCP tools of an operator: " + String.join(", ", operatorTools));
+            assertThat(operatorTools).as("step 11: the operator's tools hold the runs and no instance name")
+                .contains("app_deploy", "app_roll_back", OperationRunOperations.READ.assistantName())
+                .noneMatch(tool -> tool.startsWith("instance_"));
+
+            // 12. He deploys his app's next version by its tool: the call answers its run's code at once, he follows
+            //     the run to its end, and his deploy list holds the new deploy, recorded under the API trigger.
+            FakeApps.setSettings(appId, "v2");
+            settle("step 12");
+            String deployRun = startedRun(session, InstanceOperations.DEPLOY, appCode, "step 12");
+            assertThat(followed(session, deployRun, "step 12").text()).as("step 12: the run ended well")
+                .contains("status: " + OperationRunStatus.SUCCEEDED.storageKey()).contains("subject: " + appCode);
+            Row deployed = newestRelease(appId);
+            assertThat(deployed.get(ReleaseOperationModel.TRIGGER)).as("step 12: recorded under the API trigger")
+                .isEqualTo(DeployTrigger.API.word());
+            String deployedCode = code(ReleaseOperationModel.MODEL_ID, deployed.get(ReleaseOperationModel.ID),
+                operator);
+            assertThat(session.call(InstanceLogOperations.LIST_DEPLOYS.assistantName(), Map.of("id", appCode)).text())
+                .as("step 12: his deploy list holds the new deploy").contains(deployedCode);
+
+            // 13. He rolls it back the same way: a run he follows to its end, a rollback in his deploy list.
+            settle("step 13");
+            String rollbackRun = startedRun(session, InstanceOperations.ROLLBACK, appCode, "step 13");
+            assertThat(followed(session, rollbackRun, "step 13").text()).as("step 13: the run ended well")
+                .contains("status: " + OperationRunStatus.SUCCEEDED.storageKey()).contains("subject: " + appCode);
+            Row rolledBack = newestRelease(appId);
+            assertThat(rolledBack.get(ReleaseOperationModel.KIND)).as("step 13: a rollback")
+                .isEqualTo(ReleaseOperationModel.KIND_ROLLBACK);
+            assertThat(rolledBack.get(ReleaseOperationModel.TRIGGER)).as("step 13: recorded under the API trigger")
+                .isEqualTo(DeployTrigger.API.word());
+            String rolledBackCode = code(ReleaseOperationModel.MODEL_ID, rolledBack.get(ReleaseOperationModel.ID),
+                operator);
+            assertThat(session.call(InstanceLogOperations.LIST_DEPLOYS.assistantName(), Map.of("id", appCode)).text())
+                .as("step 13: his deploy list holds the rollback").contains(rolledBackCode);
+            settle("step 13");
+
+            // 14. Another tenant reads either run's code exactly as a code naming nothing, by either tool.
+            UUID rivalId = user(PREFIX + letters() + "@surface.test", "Mcp Rival");
+            RecordGrants.grant(GrantSubjectType.USER, rivalId, InstanceModel.MODEL_ID, otherId,
+                HohenheimCapabilities.MANAGE, true);
+            McpHttpSession rival = presetSession(server, endpoint, rivalId, "Mcp Rival");
+            String runRead = Objects.requireNonNull(OperationRunOperations.READ.assistantName());
+            String noRun = "RUN999999";
+            for (String run : List.of(deployRun, rollbackRun)) {
+                McpHttpSession.Answer hidden = rival.call(runRead, Map.of("id", run));
+                assertThat(hidden.error()).as("step 14: " + run + " refused to another tenant").isTrue();
+                assertThat(hidden.text().replace(run, "<code>")).as("step 14: " + run + " names nothing to him")
+                    .isEqualTo(rival.call(runRead, Map.of("id", noRun)).text().replace(noRun, "<code>"));
+                assertThat(rival.call("read", Map.of("ids", List.of(run))).text().replace(run, "<code>"))
+                    .as("step 14: nor does a read of " + run)
+                    .isEqualTo(rival.call("read", Map.of("ids", List.of(noRun))).text().replace(noRun, "<code>"));
+            }
         }
     }
 
@@ -377,6 +465,38 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
         assertThat(scopes).as("the preset admits the server").contains(McpScopes.server("hohenheim"));
         String key = ApiKeyService.create(account, accountId, PREFIX + letters(), scopes, null).plaintext();
         return McpHttpSession.open(endpoint, bearer(key));
+    }
+
+    /** @return the code of the run a background tool's call started on the app, as its answer names it */
+    private static String startedRun(McpHttpSession session, Operation<?, ?, ?> operation, String appCode,
+                                     String step) {
+        McpHttpSession.Answer started = session.call(Objects.requireNonNull(operation.assistantName()),
+            Map.of("id", appCode));
+        assertThat(started.error()).as(step + ": " + started.text()).isFalse();
+        Matcher run = RUN_CODE.matcher(started.text());
+        assertThat(run.find()).as(step + ": the answer names its run: " + started.text()).isTrue();
+        assertThat(started.text()).as(step + ": started on his app").contains(appCode + ": " + run.group());
+        return run.group();
+    }
+
+    /** @return what the run's read tool tells of the run once it is no longer running */
+    private static McpHttpSession.Answer followed(McpHttpSession session, String run, String step) {
+        String read = Objects.requireNonNull(OperationRunOperations.READ.assistantName());
+        String running = "status: " + OperationRunStatus.RUNNING.storageKey();
+        McpHttpSession.Answer ended = Poll.value(step + ": " + run + " ends", Duration.ofSeconds(20),
+            Duration.ofMillis(50), () -> {
+                McpHttpSession.Answer answer = session.call(read, Map.of("id", run));
+                return answer.text().contains(running) ? null : answer;
+            });
+        assertThat(ended.error()).as(step + ": " + ended.text()).isFalse();
+        return ended;
+    }
+
+    /** Waits on the release engine's drains and the background pool, so a deploy is not refused as one under way. */
+    private static void settle(String step) {
+        assertThat(ReleaseEngine.awaitDrainsIdle(Duration.ofSeconds(20))).as(step + ": the drains settled").isTrue();
+        assertThat(HandlerSupport.awaitBackgroundIdle(Duration.ofSeconds(20))).as(step + ": the background settled")
+            .isTrue();
     }
 
     private static String code(Identifier model, int id, AccessContext reader) {

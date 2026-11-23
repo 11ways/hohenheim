@@ -65,7 +65,7 @@ public final class InstanceBackupOperations {
             .result(Restored.class)
             .command(COMMAND)
             .rateLimit(HohenheimEndpoints.DEPLOY_LIMIT)
-            .notForAssistants(KeptFromAssistants.BACKGROUND_RUN)
+            .notForAssistants(KeptFromAssistants.RUN_READERS)
             .background(OperationSteps.of(
                 OperationSteps.step("restore", HohenheimMicrocopy.INSTANCE_BACKUP.of("restore_new_step"))))
             .register();
@@ -90,7 +90,7 @@ public final class InstanceBackupOperations {
             .result(Integer.class)
             .command(COMMAND)
             .rateLimit(HohenheimEndpoints.DEPLOY_LIMIT)
-            .notForAssistants(KeptFromAssistants.BACKGROUND_RUN)
+            .notForAssistants(KeptFromAssistants.RUN_READERS)
             .background(OperationSteps.of(
                 OperationSteps.step("restore", HohenheimMicrocopy.INSTANCE_BACKUP.of("restore_in_place_step"))))
             .register();

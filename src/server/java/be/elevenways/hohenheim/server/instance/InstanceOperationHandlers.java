@@ -242,6 +242,9 @@ public final class InstanceOperationHandlers {
         OperationHandlers.attach(InstanceVariableOperations.UNSET_VARIABLE).source(SUBJECTS)
             .applies(InstanceOperationHandlers::authored)
             .handle(InstanceOperationHandlers::unsetVariable);
+        OperationHandlers.attach(InstanceVariableOperations.GENERATE_SECRET).source(SUBJECTS)
+            .applies(InstanceOperationHandlers::authored)
+            .handle(InstanceOperationHandlers::generateSecret);
         // Sessions, offered and never invoked: their sockets ask offered() (see InstanceOperations.OPEN_SHELL).
         OperationHandlers.attach(InstanceOperations.OPEN_SHELL).applies(InstanceOperationHandlers::authored)
             .handle(InstanceOperationHandlers::session);
@@ -477,6 +480,21 @@ public final class InstanceOperationHandlers {
             "").strip();
         int instanceId = instanceId(call);
         new InstanceVariables().unset(instanceId, key);
+        return key;
+    }
+
+    /**
+     * Has the server make a secret for one key and records it on the app as a set; answers the key, never the value.
+     *
+     * @throws Violations {@code variable_key_required}, {@code variable_holds_value}
+     */
+    private static @NonNull String generateSecret(
+            @NonNull OperationCall<Row, InstanceVariableOperations.GenerateInput> call) {
+        String key = Objects.requireNonNullElse(Objects.requireNonNull(call.input(), "the generate has its input")
+            .key(), "").strip();
+        int instanceId = instanceId(call);
+        new InstanceVariables().generateSecret(instanceId, key);
+        InstanceVariables.recordSet(instanceId, key);
         return key;
     }
 

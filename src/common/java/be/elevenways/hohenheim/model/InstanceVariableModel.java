@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.model;
 
 import be.elevenways.protoblast.common.i18n.wording.Noun;
 import be.elevenways.protoblast.common.i18n.wording.NounFact;
+import be.elevenways.zenit.common.operation.AssistantNoun;
 import be.elevenways.zenit.common.orm.RecordRef;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
@@ -43,6 +44,10 @@ public class InstanceVariableModel extends Model {
     public static final Identifier MODEL_ID = HohenheimIds.id("instance_variable");
     /** The instance variable model's reference: its class and MODEL_ID, resolved at first use. */
     public static final ModelRef<InstanceVariableModel> REF = ModelRef.of(InstanceVariableModel.class, MODEL_ID);
+
+    static {
+        AssistantNoun.declare(MODEL_ID, InstanceVariableModel.class, "app_variable");
+    }
 
     public static final Schema SCHEMA = new Schema();
 

@@ -26,13 +26,25 @@ and history as the panel's button, so an assistant can never do more than its
 key's owner.
 
 Records are named by short codes, never by internal ids: `S14` is a site, `AP33`
-an app, `SR2` a server, `Z8` a DNS zone, `C12` a certificate. The list tools
-show the codes and most take a search word, so a hostname (`site_domain_list`)
-or an app's name leads to its code in one call; the `read` tool reads any record
-by its code.
+an app, `SR2` a server, `Z8` a DNS zone, `C12` a certificate, `RL5` a deploy. The
+list tools show the codes and most take a search word, so a hostname
+(`address_list`) or an app's name (`app_list`) leads to its code in one call; the
+`read` tool reads any record by its code.
+
+Work that outlives a call, such as deploying an app or rolling it back
+(`app_deploy`, `app_roll_back`), answers at once with the code of its run
+(`RUN12`). The `run_read` tool reads that run: its status, its steps and how it
+ended. A run is read by whoever started it and by whoever may read its app,
+nobody else; to anyone else its code names nothing.
 
 Some panel actions have no tool yet, and say why on the operation itself: the
 ones that open a shell or a screen in the browser, the ones that take or reveal
 a secret (passwords, private keys, tokens), the ones whose input is a file's raw
-body (putting a file into an app's volume), and the ones on records that carry no
-code (single DNS records and bans).
+body (putting a file into an app's volume), the ones on records that carry no
+code (single DNS records and bans), and the background work whose run another
+customer could read (a site's rollback, the restores of backups and database
+dumps, putting a service online).
+
+No tool takes a secret value. An app's plain variables are set and removed with
+tools, and `app_generate_secret` has the server make a secret for a key that holds
+none; its value is never shown, and it never replaces an existing value.

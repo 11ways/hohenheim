@@ -4,7 +4,7 @@ import be.elevenways.zenit.common.operation.OperationVerb;
 import be.elevenways.zenit.common.operation.OperationVerb.Effect;
 
 /**
- * Hohenheim's own operation verbs, the second word of an assistant tool's name ({@code instance_start}), where core's
+ * Hohenheim's own operation verbs, the second word of an assistant tool's name ({@code app_start}), where core's
  * vocabulary ({@link OperationVerb}) has no word for the act.
  *
  * AIDEV-NOTE: a key is a stored spelling once a tool carries it, and the registry is process-wide: an operation
@@ -187,6 +187,10 @@ public final class HohenheimVerbs {
     /** Removes one variable from the subject. */
     public static final OperationVerb UNSET_VARIABLE = OperationVerb.declare(HohenheimVerbs.class,
         "unset_variable", Effect.DESTROYS);
+
+    /** Has the server make a secret value for a key of the subject that holds none; nobody is ever sent the value. */
+    public static final OperationVerb GENERATE_SECRET = OperationVerb.declare(HohenheimVerbs.class,
+        "generate_secret", Effect.WRITES);
 
     private HohenheimVerbs() {
     }

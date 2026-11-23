@@ -91,7 +91,7 @@ public final class DatabaseDumpParts {
                 values -> new RestoreInput(values.get(NEW_NAME.getName()) instanceof String name ? name : null)))
             .result(Integer.class)
             .command(COMMAND)
-            .notForAssistants(KeptFromAssistants.BACKGROUND_RUN)
+            .notForAssistants(KeptFromAssistants.RUN_READERS)
             .background(OperationSteps.of(
                 OperationSteps.step("restore", HohenheimMicrocopy.DATABASE_DUMP.of("dump_restore_new_step"))))
             .register();
@@ -108,7 +108,7 @@ public final class DatabaseDumpParts {
             .facts(OperationFact.DESTRUCTIVE)
             .result(Integer.class)
             .command(COMMAND)
-            .notForAssistants(KeptFromAssistants.BACKGROUND_RUN)
+            .notForAssistants(KeptFromAssistants.RUN_READERS)
             .background(OperationSteps.of(
                 OperationSteps.step("restore", HohenheimMicrocopy.DATABASE_DUMP.of("dump_restore_in_place_step"))))
             .register();

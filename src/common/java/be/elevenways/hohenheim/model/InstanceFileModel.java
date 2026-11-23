@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.model;
 
 import be.elevenways.protoblast.common.i18n.wording.Noun;
 import be.elevenways.protoblast.common.i18n.wording.NounFact;
+import be.elevenways.zenit.common.operation.AssistantNoun;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -31,6 +32,10 @@ public class InstanceFileModel extends Model {
     public static final Identifier MODEL_ID = HohenheimIds.id("instance_file");
     /** The instance file model's reference: its class and MODEL_ID, resolved at first use. */
     public static final ModelRef<InstanceFileModel> REF = ModelRef.of(InstanceFileModel.class, MODEL_ID);
+
+    static {
+        AssistantNoun.declare(MODEL_ID, InstanceFileModel.class, "app_file");
+    }
 
     public static final Schema SCHEMA = new Schema();
 

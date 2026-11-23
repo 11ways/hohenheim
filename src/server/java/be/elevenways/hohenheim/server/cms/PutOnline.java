@@ -651,7 +651,7 @@ public final class PutOnline {
             .rateLimit(HohenheimEndpoints.INSTANCE_CREATE_LIMIT)
             .facts(OperationFact.REACHES_OUTSIDE)
             .command(OperationCommand.perSubject().execution(CommandExecution.OUTSIDE_TRANSACTION))
-            .notForAssistants(KeptFromAssistants.BACKGROUND_RUN)
+            .notForAssistants(KeptFromAssistants.RUN_READERS)
             .background(SERVICE_STEPS)
             .register();
 

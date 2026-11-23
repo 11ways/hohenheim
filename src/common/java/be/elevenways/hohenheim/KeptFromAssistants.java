@@ -21,9 +21,14 @@ public final class KeptFromAssistants {
     public static final String BAN = "a ban has no code, as a never-reused number per ban would be wasted; its tool"
         + " comes later, naming the ban by its address";
 
-    /** An operation that runs in the background, which zenit-ai's tools cannot place yet. */
-    public static final String BACKGROUND_RUN = "it runs in the background, and an assistant's tool places only an"
-        + " operation that answers inside its request; its tool comes once tools place runs";
+    /**
+     * A background operation whose run another tenant could read: a run is read by every reader of its subject, and
+     * this subject is read beyond its owner (a site, a backup or a dump states no readers of its own; a template is
+     * every tenant's to choose).
+     */
+    public static final String RUN_READERS = "its run is read by every reader of its subject, and that subject is read"
+        + " beyond its owner, so another tenant could read the run by its code; its tool comes once the subject states"
+        + " who reads it";
 
     /** A deploy or a build, listed per app by its deploy list rather than across every app. */
     public static final String DEPLOY_HISTORY = "deploys and builds are listed per app, newest first, by the app's"

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.operation.AssistantNoun;
 import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
 import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 
@@ -47,6 +48,10 @@ public class InstanceDeviceModel extends Model {
     /** THE short code a device is named by in an assistant's tools: "DV12". */
     public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
         RecordCodeBehaviour.allocated(MODEL_ID, "DV"));
+
+    static {
+        AssistantNoun.declare(MODEL_ID, InstanceDeviceModel.class, "app_device");
+    }
 
     public static final String TYPE_DISK = "disk";
     public static final String TYPE_NIC = "nic";

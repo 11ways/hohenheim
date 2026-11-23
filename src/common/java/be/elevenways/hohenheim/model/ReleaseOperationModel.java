@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.operation.AssistantNoun;
 import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
 import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.protoblast.common.i18n.wording.Noun;
@@ -64,6 +65,10 @@ public class ReleaseOperationModel extends Model {
     /** THE short code a deploy (a release or a rollback) is named by in an assistant's tools: "RL12". */
     public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
         RecordCodeBehaviour.allocated(MODEL_ID, "RL"));
+
+    static {
+        AssistantNoun.declare(MODEL_ID, ReleaseOperationModel.class, "deploy");
+    }
 
     /** A forward release of a new spec. */
     public static final String KIND_RELEASE = "release";

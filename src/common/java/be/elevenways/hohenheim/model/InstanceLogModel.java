@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.model;
 
 import be.elevenways.protoblast.common.i18n.wording.Noun;
 import be.elevenways.protoblast.common.i18n.wording.NounFact;
+import be.elevenways.zenit.common.operation.AssistantNoun;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -37,6 +38,11 @@ import java.util.Map;
 public class InstanceLogModel extends Model {
 
     public static final Identifier MODEL_ID = HohenheimIds.id("instance_log");
+
+    static {
+        AssistantNoun.declare(MODEL_ID, InstanceLogModel.class, "app_log");
+    }
+
     public static final Schema SCHEMA = new Schema();
 
     public static final IntegerField ID = SCHEMA.addField(

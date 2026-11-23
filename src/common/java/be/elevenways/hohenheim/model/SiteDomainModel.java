@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.operation.AssistantNoun;
 import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
 import be.elevenways.protoblast.common.i18n.wording.Noun;
 import be.elevenways.protoblast.common.i18n.wording.NounFact;
@@ -34,6 +35,10 @@ public class SiteDomainModel extends Model {
     /** THE short code a site's address is named by in an assistant's tools: "D12". */
     public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
         RecordCodeBehaviour.allocated(MODEL_ID, "D"));
+
+    static {
+        AssistantNoun.declare(MODEL_ID, SiteDomainModel.class, "address");
+    }
 
     /** {@link #MATCH_TYPE} value for an exact hostname match. */
     public static final String MATCH_EXACT = "exact";
