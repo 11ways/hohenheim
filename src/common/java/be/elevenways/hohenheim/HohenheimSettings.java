@@ -508,6 +508,13 @@ public class HohenheimSettings {
                 + "mitigation against DNS reflection abuse. Every second limited response is answered "
                 + "truncated so legitimate clients retry over TCP (never limited). 0 disables")
             .build();
+
+        /**
+         * Explicit operator opt-in for DNS peers whose Hohenheim answers on a private network; without it the
+         * edit-forwarding channel reaches the public internet only. Declared without a label, like the Proteus one.
+         */
+        public static final Consumer PEER_ALLOW_PRIVATE_NETWORKS = PrivateNetworkOptIn.consumer(
+            HohenheimIds.id("dns_peer_private_networks"), "hohenheim.dns.peer_allow_private_networks");
     }
 
     // --- Logging ---

@@ -18,14 +18,20 @@ import be.elevenways.hohenheim.server.dns.DnsServer;
 import be.elevenways.hohenheim.server.dns.DnsZoneSnapshot;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.dns.InternalDnsTxtPublisher;
+import be.elevenways.hohenheim.server.dns.DnsPeerApi;
 import be.elevenways.hohenheim.server.dns.SecondaryZoneService;
 import be.elevenways.hohenheim.server.tls.DnsTxtRecord;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.test.support.OutboundFixture;
+import be.elevenways.zenit.test.support.OutboundTlsStub;
+import be.elevenways.zenit.test.support.PrivateNetworkBootFixture;
+import be.elevenways.zenit.test.support.StubHost;
 import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
+import com.sun.net.httpserver.HttpsConfigurator;
+import com.sun.net.httpserver.HttpsServer;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -510,6 +516,86 @@ class DnsFederationTest {
         }
     }
 
+    /**
+     * The edit-forwarding channel carries an administrator's key, so it speaks https to the public internet only and
+     * never follows a redirect; a refused address is told in words before anything is sent, a redirect after the one
+     * request, and no message names the key or a path.
+     */
+    @Test
+    void thePeerChannelRefusesPlainHttpLocalAddressesAndRedirects() throws Exception {
+        // A fresh host boot: no private-network opt-in is declared, whatever another test left.
+        try (PrivateNetworkBootFixture boot = new PrivateNetworkBootFixture()) {
+            peerChannelRefusals();
+        }
+    }
+
+    private void peerChannelRefusals() throws Exception {
+        String records = "{\"zone\":\"lan.example\",\"serial\":1,\"records\":[{\"id\":1,\"name\":\"www\","
+            + "\"type\":\"A\",\"ttl\":300,\"value\":\"192.0.2.1\",\"enabled\":true}]}";
+
+        // 1. A plain http address is refused before anything is sent, in words that say https is required.
+        try (StubHost plain = StubHost.start("plain-peer.example.test")) {
+            plain.serveAny(StubHost.Answer.ok("application/json", records));
+            DnsPeerApi api = peerApi("plain-peer", plain.url(""));
+            assertThatThrownBy(() -> api.listRecords("lan.example")).as("step 1: http is refused")
+                .isInstanceOf(DnsPeerApi.PeerApiException.class)
+                .hasMessageStartingWith("Peer address refused: it must start with https://")
+                .satisfies(thrown -> assertThat(thrown.getMessage()).doesNotContain("test-peer-key", "/api/"));
+            assertThat(plain.hits()).as("step 1: nothing was sent").isZero();
+        }
+
+        // 2. Without the host's opt-in a loopback address and a private one are refused; the private one names the
+        //    declaration that would admit it.
+        try (StubHost local = StubHost.startSecure("local-peer.example.test")) {
+            DnsPeerApi loopback = peerApi("loopback-peer", local.loopbackUrl(""));
+            assertThatThrownBy(() -> loopback.listRecords("lan.example")).as("step 2: loopback is refused")
+                .isInstanceOf(DnsPeerApi.PeerApiException.class)
+                .hasMessageStartingWith("Peer address refused:");
+            assertThat(local.hits()).as("step 2: nothing was sent").isZero();
+        }
+        DnsPeerApi lan = peerApi("lan-peer", "https://10.0.0.5:8443");
+        assertThatThrownBy(() -> lan.listRecords("lan.example")).as("step 2: a private network is refused")
+            .isInstanceOf(DnsPeerApi.PeerApiException.class)
+            .hasMessageContaining(HohenheimSettings.Dns.PEER_ALLOW_PRIVATE_NETWORKS.configurationPath() + " = true");
+
+        // 3. With the opt-in declared at host boot, the private peer answers; this host stays refused.
+        try (StubHost office = StubHost.startSecure("10.0.0.5")) {
+            PrivateNetworkBootFixture.declare(HohenheimSettings.Dns.PEER_ALLOW_PRIVATE_NETWORKS, true);
+            office.serveAny(StubHost.Answer.ok("application/json", records));
+            assertThat(peerApi("lan-peer-admitted", office.url("")).listRecords("lan.example"))
+                .as("step 3: the private peer is read").singleElement()
+                .satisfies(record -> assertThat(record.value()).isEqualTo("192.0.2.1"));
+            assertThat(office.last().headers().get("Authorization")).as("step 3: with the peer's key")
+                .isEqualTo("Bearer test-peer-key");
+            DnsPeerApi stillLoopback = peerApi("loopback-peer-opted-in", office.loopbackUrl(""));
+            assertThatThrownBy(() -> stillLoopback.listRecords("lan.example")).as("step 3: loopback still refused")
+                .isInstanceOf(DnsPeerApi.PeerApiException.class)
+                .hasMessageStartingWith("Peer address refused:");
+        }
+
+        // 4. A redirect is not followed: the peer's answer is refused, and the key never reaches its target.
+        try (StubHost target = StubHost.startSecure("redirect-target.example.test");
+             StubHost moved = StubHost.startSecure("moved-peer.example.test")) {
+            target.serveAny(StubHost.Answer.ok("application/json", records));
+            moved.serveAny(StubHost.Answer.redirect(target.url("/api/dns/zones/lan.example/records")));
+            DnsPeerApi api = peerApi("moved-peer", moved.url(""));
+            assertThatThrownBy(() -> api.listRecords("lan.example")).as("step 4: the redirect is refused")
+                .isInstanceOf(DnsPeerApi.PeerApiException.class)
+                .hasMessageContaining("redirect")
+                .satisfies(thrown -> assertThat(thrown.getMessage()).doesNotContain("test-peer-key", "/api/"));
+            assertThat(moved.hits()).as("step 4: the peer was asked once").isEqualTo(1);
+            assertThat(target.hits()).as("step 4: the redirect's target got nothing, the key included").isZero();
+        }
+    }
+
+    /** A Hohenheim peer at {@code baseUrl} with the fixtures' key, and its client. */
+    private static DnsPeerApi peerApi(String name, String baseUrl) {
+        int peerId = DnsFixtures.apiPeer(name, baseUrl);
+        DnsPeerApi api = DnsPeerApi.forPeer(Models.get(DnsPeerModel.class).findById(peerId));
+        assertThat(api).as("a client for " + name).isNotNull();
+        return api;
+    }
+
     /** The TXT values the serving snapshot of the origin answers for the name. */
     private static List<String> txtValues(String origin, String name) throws Exception {
         DnsZoneSnapshot snapshot = DnsZoneStore.INSTANCE.getZone(origin);
@@ -548,7 +634,9 @@ class DnsFederationTest {
         private final DnsZoneStore store = DnsZoneStore.createDetached();
         private final Map<Integer, DnsRecordDto> records = new LinkedHashMap<>();
         private final DnsServer dns;
-        private final HttpServer http;
+        private final HttpsServer http;
+        /** The record API answers https under a public-looking name, the only address the peer channel accepts. */
+        private final OutboundTlsStub route;
         private int nextId = 1;
         private long serial = 10;
 
@@ -566,13 +654,15 @@ class DnsFederationTest {
                     (zoneId, requested) -> requested.equals(expectedKeyName) ? key : null));
             this.dns.start("127.0.0.1", 0);
 
-            this.http = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+            this.http = HttpsServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+            this.route = OutboundFixture.routeTls("primary." + origin + ".test", this.http.getAddress().getPort());
+            this.http.setHttpsConfigurator(new HttpsConfigurator(this.route.serverContext()));
             this.http.createContext("/", this::handle);
             this.http.start();
         }
 
         String baseUrl() {
-            return "http://127.0.0.1:" + this.http.getAddress().getPort();
+            return "https://" + this.route.fixture().host() + ":" + this.http.getAddress().getPort();
         }
 
         int dnsPort() {
@@ -584,10 +674,10 @@ class DnsFederationTest {
         }
 
         void stop() {
+            this.route.close();
             this.http.stop(0);
             this.dns.stop();
         }
-
         private synchronized void handle(HttpExchange exchange) throws IOException {
             String path = exchange.getRequestURI().getPath();
             String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);

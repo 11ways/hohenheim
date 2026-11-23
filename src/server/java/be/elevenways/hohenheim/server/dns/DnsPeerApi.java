@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.dns;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.dns.DnsRecordDto;
 import be.elevenways.hohenheim.dns.DnsPeerKeyResponse;
 import be.elevenways.hohenheim.dns.DnsPeerMirrorResponse;
@@ -8,17 +9,19 @@ import be.elevenways.hohenheim.dns.DnsRecordListResponse;
 import be.elevenways.hohenheim.dns.DnsValidationErrorResponse;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
+import be.elevenways.protoblast.common.http.HttpMethod;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.routing.RouteTarget;
+import be.elevenways.zenit.common.validation.UrlProblem;
+import be.elevenways.zenit.server.net.FetchOutcome;
+import be.elevenways.zenit.server.net.FetchRequest;
+import be.elevenways.zenit.server.net.OutboundUrlGuard;
+import be.elevenways.zenit.server.net.PinnedFetcher;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.net.URI;
 import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -30,6 +33,11 @@ import java.util.Map;
  * HTTP client for a peer Hohenheim's DNS-records API: the edit-forwarding
  * channel that lets this instance edit zones the peer owns. Authenticates
  * with the peer's stored znit_ API key.
+ *
+ * AIDEV-NOTE: the key is an administrator's, so every call rides one {@link PinnedFetcher}: https only, the public
+ * internet unless the host boot declares {@link HohenheimSettings.Dns#PEER_ALLOW_PRIVATE_NETWORKS}, the connection
+ * pinned to the vetted address, and a redirect never followed (its target would receive the bearer). Messages name
+ * at most the peer's origin, never the key or a path.
  */
 public final class DnsPeerApi {
 
@@ -77,17 +85,29 @@ public final class DnsPeerApi {
         return List.copyOf(fields);
     }
 
-    private static final HttpClient HTTP = HttpClient.newBuilder()
-        .connectTimeout(Duration.ofSeconds(10))
-        .followRedirects(HttpClient.Redirect.NEVER)
-        .build();
+    /** The whole exchange, DNS, connect, request and answer together. */
+    private static final Duration DEADLINE = Duration.ofSeconds(15);
+
+    /** One connection attempt to one address of the peer. */
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
 
     private final String baseUrl;
     private final String apiKey;
+    /**
+     * AIDEV-NOTE: built per client, never a static: the opt-in is an immutable host-boot fact, but a static would
+     * freeze whatever was read when this class happened to load, which may precede that declaration.
+     */
+    private final PinnedFetcher fetcher;
 
     private DnsPeerApi(String baseUrl, String apiKey) {
         this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         this.apiKey = apiKey;
+        this.fetcher = PinnedFetcher.builder(
+                OutboundUrlGuard.optingIn(HohenheimSettings.Dns.PEER_ALLOW_PRIVATE_NETWORKS).forSchemes("https"))
+            .connectTimeout(CONNECT_TIMEOUT)
+            .deadline(DEADLINE)
+            .redirects(PinnedFetcher.Redirects.handBack())
+            .build();
     }
 
     /**
@@ -120,7 +140,7 @@ public final class DnsPeerApi {
     /** @return the owner's live record rows for the zone */
     public @NonNull List<DnsRecordDto> listRecords(@NonNull String origin) {
         DnsRecordListResponse response = parseQuietly(
-            request("GET", HohenheimEndpoints.API_DNS_RECORDS.toUrl(
+            request(HttpMethod.GET, HohenheimEndpoints.API_DNS_RECORDS.toUrl(
             Map.of(HohenheimEndpoints.DNS_ORIGIN, origin)), null), DnsRecordListResponse.class);
         if (response == null || response.records() == null) {
             throw new PeerApiException("Unexpected response from peer", null, null);
@@ -135,18 +155,18 @@ public final class DnsPeerApi {
     }
 
     public void createRecord(@NonNull String origin, @NonNull Map<String, String> fields) {
-        request("POST", HohenheimEndpoints.API_DNS_RECORD_CREATE.toUrl(
+        request(HttpMethod.POST, HohenheimEndpoints.API_DNS_RECORD_CREATE.toUrl(
             Map.of(HohenheimEndpoints.DNS_ORIGIN, origin)), fields);
     }
 
     public void updateRecord(@NonNull String origin, int recordId, @NonNull Map<String, String> fields) {
-        request("POST", HohenheimEndpoints.API_DNS_RECORD_UPDATE.toUrl(Map.of(
+        request(HttpMethod.POST, HohenheimEndpoints.API_DNS_RECORD_UPDATE.toUrl(Map.of(
             HohenheimEndpoints.DNS_ORIGIN, origin,
             HohenheimEndpoints.DNS_RECORD_ID, recordId)), fields);
     }
 
     public void deleteRecord(@NonNull String origin, int recordId) {
-        request("POST", HohenheimEndpoints.API_DNS_RECORD_DELETE.toUrl(Map.of(
+        request(HttpMethod.POST, HohenheimEndpoints.API_DNS_RECORD_DELETE.toUrl(Map.of(
             HohenheimEndpoints.DNS_ORIGIN, origin,
             HohenheimEndpoints.DNS_RECORD_ID, recordId)), Map.of());
     }
@@ -177,7 +197,7 @@ public final class DnsPeerApi {
         fields.put("transfer_port", String.valueOf(transferPort));
 
         DnsPeerKeyResponse response = parseQuietly(
-            request("POST", HohenheimEndpoints.API_DNS_PEER_KEY.toUrl(), fields),
+            request(HttpMethod.POST, HohenheimEndpoints.API_DNS_PEER_KEY.toUrl(), fields),
             DnsPeerKeyResponse.class);
         if (response == null || response.key_name() == null || response.key_name().isBlank()) {
             throw new PeerApiException("Unexpected response from peer", null, null);
@@ -199,7 +219,8 @@ public final class DnsPeerApi {
         fields.put("signature", signature);
         fields.put("origins", String.join("\n", origins));
         DnsPeerMirrorResponse response = parseQuietly(
-            request("POST", HohenheimEndpoints.API_DNS_PEER_MIRROR.toUrl(), fields), DnsPeerMirrorResponse.class);
+            request(HttpMethod.POST, HohenheimEndpoints.API_DNS_PEER_MIRROR.toUrl(), fields),
+            DnsPeerMirrorResponse.class);
         if (response == null || response.created() == null || response.removed() == null
             || response.conflicts() == null) {
             throw new PeerApiException("Unexpected response from peer", null, null);
@@ -207,43 +228,58 @@ public final class DnsPeerApi {
         return response;
     }
 
-    private @Nullable String request(@NonNull String method, @NonNull String path,
+    private @Nullable String request(@NonNull HttpMethod method, @NonNull String path,
                                      @Nullable Map<String, String> formFields) {
-        HttpRequest.Builder builder = HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl + path))
-            .timeout(Duration.ofSeconds(15))
-            .header("Authorization", "Bearer " + apiKey);
-        if ("GET".equals(method)) {
-            builder.GET();
-        }
-        else {
-            builder.header("Content-Type", "application/x-www-form-urlencoded")
-                .POST(HttpRequest.BodyPublishers.ofString(encodeForm(formFields)));
+        FetchRequest request = HttpMethod.GET.equals(method)
+            ? FetchRequest.get(this.baseUrl + path)
+            : new FetchRequest(method, this.baseUrl + path, Map.of(),
+                encodeForm(formFields).getBytes(StandardCharsets.UTF_8))
+                .withHeader("Content-Type", "application/x-www-form-urlencoded");
+        FetchOutcome outcome = this.fetcher.fetch(request.withHeader("Authorization", "Bearer " + this.apiKey));
+        FetchOutcome.Fetched response = switch (outcome) {
+            case FetchOutcome.Fetched fetched -> fetched;
+            case FetchOutcome.Refused refused -> throw new PeerApiException(refusalOf(refused), null, null);
+            case FetchOutcome.Redirected redirected -> throw new PeerApiException("Peer answered with a redirect (HTTP "
+                + redirected.status() + "), which is never followed", null, null);
+            case FetchOutcome.Failed failed -> throw new PeerApiException(failed.requestSent()
+                ? "Peer did not answer (the request was sent): " + failed.reason()
+                : "Peer unreachable: " + failed.reason(), null, null);
+        };
+
+        String body = new String(response.body(), StandardCharsets.UTF_8);
+        if (response.status() >= 200 && response.status() < 300) {
+            return body;
         }
 
-        HttpResponse<String> response;
-        try {
-            response = HTTP.send(builder.build(), HttpResponse.BodyHandlers.ofString());
-        }
-        catch (Exception e) {
-            throw new PeerApiException("Peer unreachable: " + e.getMessage(), null, null);
-        }
-
-        if (response.statusCode() >= 200 && response.statusCode() < 300) {
-            return response.body();
-        }
-
-        DnsValidationErrorResponse refusal = parseQuietly(
-            response.body(), DnsValidationErrorResponse.class);
+        DnsValidationErrorResponse refusal = parseQuietly(body, DnsValidationErrorResponse.class);
         if (refusal != null && (refusal.error() != null || refusal.message() != null
             || refusal.key() != null || refusal.field() != null)) {
             throw new PeerApiException(
                 refusal.message() != null
                     ? refusal.message()
-                    : "Peer refused the edit (" + response.statusCode() + ")",
+                    : "Peer refused the edit (" + response.status() + ")",
                 refusal.key(), refusal.field());
         }
-        throw new PeerApiException("Peer returned HTTP " + response.statusCode(), null, null);
+        throw new PeerApiException("Peer returned HTTP " + response.status(), null, null);
+    }
+
+    /**
+     * @return the words of a peer address the guard refused before anything was sent, naming at most its origin; a
+     *         name that did not resolve keeps the words of any other unreachable peer
+     */
+    private @NonNull String refusalOf(FetchOutcome.@NonNull Refused refused) {
+        if (OutboundUrlGuard.RefusalKind.of(refused.problem()) != OutboundUrlGuard.RefusalKind.POLICY) {
+            return "Peer unreachable: " + refused.reason();
+        }
+        if (refused.problem() == UrlProblem.SCHEME_NOT_ALLOWED) {
+            return "Peer address refused: it must start with https:// (" + refused.reason() + ")";
+        }
+        if (OutboundUrlGuard.awaitsOptIn(HohenheimSettings.Dns.PEER_ALLOW_PRIVATE_NETWORKS, this.baseUrl)) {
+            return "Peer address refused: a peer on a private network needs the host declaration "
+                + HohenheimSettings.Dns.PEER_ALLOW_PRIVATE_NETWORKS.configurationPath() + " = true ("
+                + refused.reason() + ")";
+        }
+        return "Peer address refused: " + refused.reason();
     }
 
     private static <T> @Nullable T parseQuietly(@Nullable String body, @NonNull Class<T> type) {

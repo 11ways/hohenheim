@@ -28,7 +28,10 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
-import com.sun.net.httpserver.HttpServer;
+import be.elevenways.zenit.test.support.OutboundFixture;
+import be.elevenways.zenit.test.support.OutboundTlsStub;
+import com.sun.net.httpserver.HttpsConfigurator;
+import com.sun.net.httpserver.HttpsServer;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.xbill.DNS.TSIG;
@@ -45,6 +48,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static be.elevenways.hohenheim.test.DnsFixtures.apiPeer;
 import static be.elevenways.hohenheim.test.DnsFixtures.createZone;
@@ -64,18 +68,27 @@ class DnsCentralEditTest extends HohenheimTestBase {
     /** One recorded call on the scripted peer. */
     record StubCall(String method, String path, String authorization, String body) {}
 
-    /** Minimal scripted peer: records every call, answers from a settable script. */
+    /**
+     * A scripted peer serving https under a public-looking name ({@link OutboundFixture#routeTls}), recording every
+     * call and answering from a settable script.
+     */
     private static final class PeerStub implements AutoCloseable {
-        final HttpServer server;
+        private static final AtomicInteger NEXT = new AtomicInteger();
+        final HttpsServer server;
+        final OutboundTlsStub route;
         final List<StubCall> calls = new CopyOnWriteArrayList<>();
         volatile int status = 200;
         volatile String body = "{}";
         /** Answers for one path, over {@link #body}: a caller that asks two endpoints in one go. */
         final Map<String, String> bodies = new ConcurrentHashMap<>();
+        private boolean answering = true;
         private boolean closed;
 
         PeerStub() throws Exception {
-            server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+            server = HttpsServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+            route = OutboundFixture.routeTls("peer-" + NEXT.incrementAndGet() + ".central.example.test",
+                server.getAddress().getPort());
+            server.setHttpsConfigurator(new HttpsConfigurator(route.serverContext()));
             server.createContext("/", exchange -> {
                 String requestBody = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
                 calls.add(new StubCall(exchange.getRequestMethod(),
@@ -94,7 +107,15 @@ class DnsCentralEditTest extends HohenheimTestBase {
         }
 
         String baseUrl() {
-            return "http://127.0.0.1:" + server.getAddress().getPort();
+            return "https://" + route.fixture().host() + ":" + server.getAddress().getPort();
+        }
+
+        /** The peer goes away while its name still routes here: a connection to it is refused at once. */
+        synchronized void stopAnswering() {
+            if (answering) {
+                answering = false;
+                server.stop(0);
+            }
         }
 
         /** Idempotent: a journey may stop the peer on purpose before its own cleanup runs. */
@@ -102,7 +123,8 @@ class DnsCentralEditTest extends HohenheimTestBase {
         public synchronized void close() {
             if (!closed) {
                 closed = true;
-                server.stop(0);
+                route.close();
+                stopAnswering();
             }
         }
     }
@@ -362,7 +384,7 @@ class DnsCentralEditTest extends HohenheimTestBase {
         assertThat(readOnly.get("editRecord")).as("and opens no edit form").isNull();
 
         // An unreachable owner degrades the tab to the read-only replica view.
-        stub.close();
+        stub.stopAnswering();
         var fallback = adminGet("/admin/dns-zones/" + zoneId + "/page/records");
         assertThat(fallback.statusCode()).isEqualTo(200);
         assertThat(fallback.body()).doesNotContain("add-remote-record-link");

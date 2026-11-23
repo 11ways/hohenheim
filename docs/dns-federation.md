@@ -197,9 +197,23 @@ key (same catalogs on both instances). When the peer is unconfigured or
 unreachable, the tab degrades to the read-only replica snapshot -- DNS keeps
 serving; only editing needs the owner online.
 
+The calls carry an administrator's API key, so `DnsPeerApi` makes them through
+one zenit `PinnedFetcher` per client: the `base_url` must be `https://` (a stored
+`http://` address is refused before anything is sent, in words that say so),
+the peer must be on the public internet unless the host boot declares
+`hohenheim.dns.peer_allow_private_networks = true` (in
+`settings/host-network.dry`; loopback and link-local stay refused either way),
+the connection goes to the address the guard vetted, and a redirect is never
+followed, so the key never reaches another host. One exchange lasts at most
+15 s, a connection attempt 10 s. A failure says whether the request was sent
+("Peer did not answer (the request was sent)") or not ("Peer unreachable");
+no message names more than the peer's origin.
+
 Verification: `DnsCentralEditTest` (real HTTP) covers the API CRUD +
 serial bumps + session-cookie refusal + 422s + the 409 replica guard, and
-the read-through/forwarding/fallback flows against a scripted peer.
+the read-through/forwarding/fallback flows against a scripted peer, served over
+https through zenit's `OutboundFixture`; `DnsFederationTest` proves the
+refusals (http, loopback, a private network without the opt-in, a redirect).
 
 Signed zones federate unchanged: a primary's DNSKEY, RRSIGs and NSEC records
 ride the existing AXFR as ordinary records, and the secondary detects the
