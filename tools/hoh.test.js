@@ -26,7 +26,7 @@ const server = http.createServer((req, res) => {
     req.on('data', chunk => body += chunk);
     req.on('end', () => {
         requests.push({ method: req.method, url: req.url, body,
-            key: req.headers['x-api-key'] });
+            key: req.headers['x-api-key'], type: req.headers['content-type'] });
         const respond = (status, payload) => {
             res.writeHead(status, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify(payload));
@@ -239,6 +239,11 @@ const server = http.createServer((req, res) => {
         }
         if (req.url === '/api/v1/instances/51/volumes/delete') {
             return respond(200, { id: 51, status: 'deleted', name: 'data' });
+        }
+        if (req.url.startsWith('/api/v1/instances/51/volumes/put?') && req.method === 'POST') {
+            const query = new URL(req.url, 'http://stub').searchParams;
+            return respond(200, { id: 51, volume: query.get('name'), path: query.get('path'),
+                bytes: Buffer.byteLength(body), status: 'written', type: req.headers['content-type'] });
         }
         respond(404, {});
     });
@@ -582,6 +587,22 @@ server.listen(0, '127.0.0.1', async () => {
         check('volume delete --yes acts', r.status === 0
             && requests.at(-1).url === '/api/v1/instances/51/volumes/delete'
             && requests.at(-1).body === 'name=data', r.stdout + r.stderr);
+
+        // 12g'. a put sends the local file as the raw body, the volume and the path in the query.
+        const putFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'hoh-put-')), 'app.sqlite');
+        fs.writeFileSync(putFile, 'SQLite format 3');
+        r = await run(['volume', 'put', '51', 'data', putFile, 'db/app.sqlite']);
+        check('volume put reports the write', r.status === 0
+            && r.stdout.includes('Put 15 bytes into volume "data" of app 51 at db/app.sqlite'), r.stdout + r.stderr);
+        check('volume put hit the put lane with the raw file',
+            requests.at(-1).method === 'POST'
+                && requests.at(-1).url === '/api/v1/instances/51/volumes/put?name=data&path=db%2Fapp.sqlite'
+                && requests.at(-1).body === 'SQLite format 3'
+                && requests.at(-1).type === 'application/octet-stream', JSON.stringify(requests.at(-1)));
+        const beforePut = requests.length;
+        r = await run(['volume', 'put', '51', 'data', putFile + '.missing', 'app.sqlite']);
+        check('volume put of an unreadable file is refused before any request',
+            r.status === 1 && requests.length === beforePut, r.stderr);
 
         // 12h. an address's certificate: the dialog's fields verbatim, then the record to poll.
         r = await run(['site', 'domain', 'certificate', '11', '21', 'challenge_type=http']);

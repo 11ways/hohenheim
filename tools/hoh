@@ -95,7 +95,11 @@ async function api(method, apiPath, form) {
     if (!ctx.token) die('No API key configured for this context (hoh login, or HOH_TOKEN).');
     const headers = { 'X-Api-Key': ctx.token };
     let body;
-    if (form) {
+    if (Buffer.isBuffer(form)) {
+        // A file's bytes as the raw body (hoh volume put): the route reads no form.
+        headers['Content-Type'] = 'application/octet-stream';
+        body = form;
+    } else if (form) {
         headers['Content-Type'] = 'application/x-www-form-urlencoded';
         body = new URLSearchParams(form).toString();
     }
@@ -357,7 +361,7 @@ const instanceVerbs = {
     },
 };
 
-// -- volume verbs (hoh volume list|declare|update|delete) ---------------------
+// -- volume verbs (hoh volume list|declare|update|delete|put) ---------------------
 //
 // An app's declared volumes, the Volumes tab's own operations. Deleting one
 // deletes its data, so it carries the same typed-name interlock as the other
@@ -408,6 +412,22 @@ const volumeVerbs = {
         }
         const result = await post(`/api/v1/instances/${appId}/volumes/delete`, { name });
         console.log(`Volume "${result.name}" of app ${result.id} ${result.status}.`);
+    },
+
+    async put([appId, name, file, filePath]) {
+        const usage = 'Usage: hoh volume put <app-id> <volume> <local-file> <path-in-volume>';
+        if (!appId || !name || !file || !filePath) die(usage);
+        let content;
+        try {
+            content = fs.readFileSync(file);
+        } catch (e) {
+            die(`Cannot read ${file}: ${e.message}`);
+        }
+        const query = new URLSearchParams({ name, path: filePath }).toString();
+        const result = await post(`/api/v1/instances/${appId}/volumes/put?${query}`, content);
+        if (flags.json) return emit(result);
+        console.log(`Put ${result.bytes} bytes into volume "${result.volume}" of app ${result.id}`
+            + ` at ${result.path}.`);
     },
 };
 
@@ -832,7 +852,7 @@ const commands = {
 
     async volume([first, ...rest]) {
         if (volumeVerbs[first]) return volumeVerbs[first](rest);
-        die('Usage: hoh volume list|declare|update|delete <app-id> ...');
+        die('Usage: hoh volume list|declare|update|delete|put <app-id> ...');
     },
 
     async database([first, ...rest]) {
@@ -954,6 +974,8 @@ Usage: hoh [--context <name>] <command> [args] [--json] [--yes]
                                      (admin, with the app's config capability)
   volume update <app-id> <name> [f=v..]  Redeclare: container_path, quota_mb, exclusive
   volume delete <app-id> <name> [--yes]  Delete a volume WITH its data (asks for the name)
+  volume put <app-id> <name> <file> <path>  Put a local file into a volume (admin), also
+                                     before the first deploy
   access-list list | access-list <id>  Access lists you hold manage on
   access-list create <name> [f=v..]  Create a list (name, satisfy, shared for admins)
   access-list delete <id> [--yes]    Delete a list and its rules (asks for the name)

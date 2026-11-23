@@ -1157,6 +1157,22 @@ public class HohenheimEndpoints {
         .rateLimit(PAAS_WRITE_LIMIT)
         .build();
 
+    /**
+     * Puts one file into a declared volume, the raw body streamed to disk; {@code name} and {@code path} travel as
+     * query parameters, as every file route's path does. csrfExempt is safe: the handler refuses non-API-key
+     * principals.
+     */
+    public static final Endpoint<Object> API_INSTANCE_VOLUME_PUT = Endpoint.<Object>builder()
+        .identifier(HohenheimIds.id("api_instance_volume_put"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
+            .addDelimiter().addStatic("volumes").addDelimiter().addStatic("put").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(INSTANCE_FILES_WRITE_LIMIT)
+        .build();
+
     public static final Endpoint<Object> API_ENVIRONMENT_VARIABLES = Endpoint.<Object>builder()
         .identifier(HohenheimIds.id("api_environment_variables"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)

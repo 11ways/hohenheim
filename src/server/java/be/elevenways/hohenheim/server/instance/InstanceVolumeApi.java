@@ -7,10 +7,12 @@ import be.elevenways.hohenheim.model.InstanceVolumeModel;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.ZenitPlacementSurface;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.http.body.FormSubmissionRawValues;
 import be.elevenways.zenit.server.operation.OperationPipeline;
@@ -31,9 +33,10 @@ import static be.elevenways.hohenheim.server.instance.InstanceApi.onVisibleInsta
  *
  * AIDEV-NOTE: no authorization decision here, InstanceApi's rule 1. The declare, redeclare and delete operations
  * ({@link VolumeOperations}) gate on the admin permission, the declare also on the app's {@code config} capability,
- * and their handlers ({@code VolumeDeclarationOperations}) ask {@code config} again; this class only resolves the
- * route's app at {@code view} (the uniform 404, and the read-only /manage twin's scope for the listing) and the volume
- * by name inside it.
+ * and their handlers ({@code VolumeDeclarationOperations}) ask {@code config} of the volume's app; this class only
+ * resolves the route's app at {@code view} (the uniform 404, and the read-only /manage twin's scope for the listing),
+ * asks the operation's own refusal on that app BEFORE it looks the named volume up (so a caller it refuses is told
+ * the same for a known and an unknown name), and then the volume by name inside it.
  *
  * AIDEV-NOTE: the operations are invoked directly, never through ResourceWrites over the admin volume entry: that
  * entry's parent is FIXED and a fixed parent is read from the request's {@code parent} query, which an API route does
@@ -85,7 +88,7 @@ final class InstanceVolumeApi {
         HohenheimEndpoints.API_INSTANCE_VOLUME_REDECLARE.setHandler(onVisibleInstance((conduit, ctx, row) -> {
             int instanceId = row.get(InstanceModel.ID);
             Map<String, Object> form = FormSubmissionRawValues.fromConduit(conduit);
-            Row volume = namedVolume(conduit, instanceId, form);
+            Row volume = namedVolume(conduit, ctx, VolumeOperations.UPDATE, instanceId, form);
             if (volume == null) {
                 return null;
             }
@@ -107,7 +110,8 @@ final class InstanceVolumeApi {
 
         HohenheimEndpoints.API_INSTANCE_VOLUME_DESTROY.setHandler(onVisibleInstance((conduit, ctx, row) -> {
             int instanceId = row.get(InstanceModel.ID);
-            Row volume = namedVolume(conduit, instanceId, FormSubmissionRawValues.fromConduit(conduit));
+            Row volume = namedVolume(conduit, ctx, VolumeOperations.DESTROY, instanceId,
+                FormSubmissionRawValues.fromConduit(conduit));
             if (volume == null) {
                 return null;
             }
@@ -127,12 +131,19 @@ final class InstanceVolumeApi {
     }
 
     /**
-     * The volume of the route's app the body names; an unnamed, unknown or other app's volume is the route's 404.
+     * The volume of the route's app the body names, once {@code operation} would not refuse the caller on the app; an
+     * unnamed, unknown or other app's volume is the route's 404.
      *
      * @return the volume row, or null when the response has already been ended
      */
-    private static @Nullable Row namedVolume(@NonNull Conduit conduit, int instanceId,
+    private static @Nullable Row namedVolume(@NonNull Conduit conduit, @NonNull AccessContext ctx,
+                                             @NonNull Operation<Row, ?, ?> operation, int instanceId,
                                              @NonNull Map<String, Object> form) {
+        DomainRefusal refused = VolumeDeclarationOperations.declarationRefusalOnApp(operation, ctx, instanceId);
+        if (refused != null) {
+            ApiConduits.refusal(conduit, refused);
+            return null;
+        }
         String name = HandlerSupport.submittedString(form, InstanceVolumeModel.NAME.getName());
         Row volume = name.isEmpty() ? null : Models.get(InstanceVolumeModel.class).find()
             .where(InstanceVolumeModel.INSTANCE_ID.eq(instanceId))

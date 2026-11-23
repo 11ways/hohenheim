@@ -5,28 +5,45 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.instance.VolumeOperations;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.InstanceVolumeModel;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.hohenheim.server.cms.HohenheimFlash;
 import be.elevenways.hohenheim.server.util.PosixPaths;
+import be.elevenways.protoblast.diagnostic.FileTrees;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.operation.ZenitPlacementSurface;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.result.ActionResult;
+import be.elevenways.zenit.common.routing.RequestBodyTooLargeException;
 import be.elevenways.zenit.common.routing.RouteLocation;
 import be.elevenways.zenit.common.routing.ReturnPath;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.http.HttpConduit;
 import be.elevenways.zenit.server.http.ReturnTarget;
 import be.elevenways.zenit.server.http.body.FormSubmissionRawValues;
+import be.elevenways.zenit.server.operation.OperationPipeline;
+import be.elevenways.zenit.server.operation.OperationRequest;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * The two file-manager transports: the Files tab's HTML lane and the {@code /api/v1}
@@ -52,6 +69,7 @@ public final class InstanceFileEndpoints {
     public static void init() {
         initHtmlLane();
         initApiLane();
+        VolumeFileOperations.init();
     }
 
     // -- HTML lane ------------------------------------------------------------
@@ -182,6 +200,73 @@ public final class InstanceFileEndpoints {
             }
             return ApiConduits.json(Map.of("id", instanceId, "path", path, "action", action));
         });
+
+        HohenheimEndpoints.API_INSTANCE_VOLUME_PUT.setHandler(conduit -> {
+            Row instance = apiInstance(conduit);
+            if (instance == null) {
+                return null;
+            }
+            return putIntoVolume(conduit, instance);
+        });
+    }
+
+    /**
+     * The volume put: the operation's refusal on the app (its gate, then {@code files.write}) before the volume is
+     * looked up, its whole preflight before a byte of the body is read, then the body streamed to a spool file under
+     * the file manager's cap and the operation invoked.
+     *
+     * @return the answer, or null when the response has already been ended
+     */
+    private static @Nullable ActionResult<Object> putIntoVolume(@NonNull Conduit conduit, @NonNull Row instance) {
+        AccessContext ctx = AccessContext.of(conduit);
+        int instanceId = instance.get(InstanceModel.ID);
+        DomainRefusal withheld = VolumeFileOperations.refusalOnApp(ctx, instanceId);
+        if (withheld != null) {
+            return ApiConduits.refusal(conduit, withheld, instance);
+        }
+        String name = trimmed(conduit.getQueryParam("name"));
+        Row volume = name.isEmpty() ? null : Models.get(InstanceVolumeModel.class).find()
+            .where(InstanceVolumeModel.INSTANCE_ID.eq(instanceId))
+            .where(InstanceVolumeModel.NAME.eq(name))
+            .first();
+        if (volume == null || !(conduit instanceof HttpConduit http)) {
+            conduit.notFound();
+            return null;
+        }
+        String path = trimmed(conduit.getQueryParam("path"));
+        Path upload = null;
+        try {
+            OperationPipeline.validate(putRequest(ctx, volume, path), VolumeOperations.PUT_FORM.entryNames());
+            InstanceFiles.putPath(instanceId, String.valueOf((Object) volume.get(InstanceVolumeModel.CONTAINER_PATH)),
+                path);
+            upload = Files.createTempFile("hohenheim-volume-put", ".part");
+            long bytes = http.streamBodyTo(upload, InstanceFiles.maxFileBytes());
+            OperationPipeline.invoke(putRequest(ctx, volume, path).attachment(VolumeFileOperations.UPLOAD, upload));
+            return ApiConduits.json(Map.of("id", instanceId, "volume", name, "path", path, "bytes", bytes,
+                "status", "written"));
+        } catch (RequestBodyTooLargeException tooLarge) {
+            return ApiConduits.refusal(conduit, Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_too_large")
+                .withArg("bytes", InstanceFiles.maxFileBytes())));
+        } catch (Violations refused) {
+            return ApiConduits.refusal(conduit, refused);
+        } catch (DomainRefusal refused) {
+            return ApiConduits.refusal(conduit, refused, instance);
+        } catch (IOException unspooled) {
+            return ApiConduits.refusal(conduit, Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_failed")
+                .withArg("reason", HohenheimViolations.reasonOf(unspooled))));
+        } finally {
+            if (upload != null) {
+                FileTrees.deleteQuietly(upload);
+            }
+        }
+    }
+
+    private static @NonNull OperationRequest<Row, VolumeOperations.Placement, Void> putRequest(
+            @NonNull AccessContext ctx, @NonNull Row volume, @NonNull String path) {
+        return OperationRequest.of(VolumeOperations.PUT_FILE, ZenitPlacementSurface.HTTP_API)
+            .caller(ctx)
+            .subjects(List.of(volume))
+            .form(Map.of(VolumeOperations.FILE_PATH.getName(), path));
     }
 
     // -- the ONE dispatch both lanes share ------------------------------------

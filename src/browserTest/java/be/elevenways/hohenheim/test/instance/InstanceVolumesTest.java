@@ -166,9 +166,43 @@ class InstanceVolumesTest {
         });
     }
 
-    /** A declaration edit is a partial, versioned operation that keeps the volume's name. */
+    /**
+     * A declaration creates its directory first, so a host that cannot deliver a volume refuses it by name; on one
+     * that can, a declaration edit is a partial, versioned operation that keeps the volume's name.
+     */
     @Test
-    void aDeclarationEditIsPartialVersionedAndKeepsItsName() {
+    void aDeclarationEditIsPartialVersionedAndKeepsItsName() throws Exception {
+        Db.run(datasource, () -> {
+            Row unplaced = Models.get(InstanceModel.class).createEmptyRow();
+            unplaced.set(InstanceModel.NAME, "volume-no-backend-owner");
+            unplaced.set(InstanceModel.KIND, "hohenheim:application");
+            unplaced.set(InstanceModel.SETTINGS, Map.of());
+            unplaced.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);
+            unplaced.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+            Models.get(InstanceModel.class).save(unplaced);
+            int unplacedId = unplaced.get(InstanceModel.ID);
+
+            // 0. A host whose volume backend cannot deliver a volume refuses the declaration by name, and no row is
+            //    written that no deploy could mount.
+            setBackend(VolumeBackend.NONE);
+            assertThatThrownBy(() -> OperationPipeline.invoke(OperationRequest.of(VolumeOperations.CREATE,
+                CmsPlacementSurface.ADMIN_ACTION).caller(TenantConduits.operator()).form(Map.of("instance_id",
+                unplacedId, "name", "nowhere", "container_path", "/nowhere"))))
+                .as("step 0: refused").isInstanceOf(Violations.class)
+                .satisfies(error -> assertThat(((Violations) error).all().get(0).message().key())
+                    .isEqualTo("volume_backend_unimplemented"));
+            assertThat(InstanceVolumes.declaredFor(unplacedId)).as("step 0: nothing declared").isEmpty();
+            InstanceRowCleanup.delete(unplacedId);
+        });
+        FakeHostVolumes.install();
+        try {
+            declarationEdits();
+        } finally {
+            FakeHostVolumes.uninstall();
+        }
+    }
+
+    private void declarationEdits() {
         Db.run(datasource, () -> {
             Row owner = Models.get(InstanceModel.class).createEmptyRow();
             owner.set(InstanceModel.NAME, "volume-edit-owner");

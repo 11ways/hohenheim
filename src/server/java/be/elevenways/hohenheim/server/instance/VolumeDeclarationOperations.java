@@ -14,8 +14,10 @@ import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.operation.OperationHandlers;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -31,12 +33,16 @@ import java.util.Objects;
  * @since 0.1.0
  */
 public final class VolumeDeclarationOperations {
+
+    /** The capability on the volume's app that redeclaring and deleting a volume ask, beside the admin permission. */
+    private static final String OWNER_CAPABILITY = HohenheimCapabilities.CONFIG;
+
     static {
         OperationHandlers.attach(VolumeOperations.CREATE).handle(call -> {
             Declaration input = Objects.requireNonNull(call.input());
             int owner = requireOwner(input.instance_id());
             HohenheimAccess.requireOperationCapability(owner, HohenheimCapabilities.CONFIG);
-            Row volume = InstanceVolumes.declare(owner, Objects.requireNonNull(input.name()),
+            Row volume = InstanceVolumes.declareOnHost(owner, Objects.requireNonNull(input.name()),
                 Objects.requireNonNull(input.container_path()), VolumeOperations.quotaBytes(input.quota_mb()),
                 Boolean.TRUE.equals(input.exclusive()));
             History.event(Models.get(InstanceModel.class), owner, Change.fact(HohenheimActivityAction.VOLUME_DECLARED,
@@ -45,9 +51,8 @@ public final class VolumeDeclarationOperations {
         });
         OperationHandlers.attach(VolumeOperations.UPDATE)
             .patchBase((row, access) -> declaration(Objects.requireNonNull(row)))
-            .authorize((row, input, access) -> HohenheimAccess.reachesRecord(access, InstanceModel.MODEL_ID,
-                row.get(InstanceVolumeModel.INSTANCE_ID), HohenheimCapabilities.CONFIG) ? null
-                : new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "Volume owner configuration is not authorized"))
+            .authorize((row, input, access) -> ownerRefusal(access, row.get(InstanceVolumeModel.INSTANCE_ID),
+                OWNER_CAPABILITY))
             .handle(call -> {
                 Row volume = call.subject();
                 Declaration input = Objects.requireNonNull(call.input());
@@ -69,15 +74,52 @@ public final class VolumeDeclarationOperations {
                     HohenheimActivityAction.VOLUME_REDECLARED, Map.of(HohenheimActivityAction.VOLUME_KEY, name)));
                 return null;
             });
-        OperationHandlers.attach(VolumeOperations.DESTROY).handle(call -> {
-            destroy(call.subject());
-            return null;
-        });
+        OperationHandlers.attach(VolumeOperations.DESTROY)
+            .authorize((row, input, access) -> ownerRefusal(access, row.get(InstanceVolumeModel.INSTANCE_ID),
+                OWNER_CAPABILITY))
+            .handle(call -> {
+                destroy(call.subject());
+                return null;
+            });
     }
 
     private VolumeDeclarationOperations() {}
 
     public static void init() {}
+
+    /**
+     * What redeclaring or deleting ({@code operation}) refuses the caller on every volume of the app, asked before a
+     * volume is looked up so a known and an unknown name answer alike.
+     *
+     * @return the refusal, or null when the caller may go on to name a volume
+     */
+    public static @Nullable DomainRefusal declarationRefusalOnApp(@NonNull Operation<Row, ?, ?> operation,
+                                                                  @NonNull AccessContext access, int instanceId) {
+        return refusalOnApp(operation, access, instanceId, OWNER_CAPABILITY);
+    }
+
+    /**
+     * What a volume operation refuses the caller on every volume of the app: its gate's admission, then
+     * {@code capability} on the app, the authority its authorizer asks of each volume.
+     *
+     * @return the refusal, or null when the caller may go on to name a volume
+     */
+    public static @Nullable DomainRefusal refusalOnApp(@NonNull Operation<Row, ?, ?> operation,
+                                                       @NonNull AccessContext access, int instanceId,
+                                                       @NonNull String capability) {
+        if (!operation.gate().admits(access)) {
+            return new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "operation " + operation.id()
+                + " refused at admission");
+        }
+        return ownerRefusal(access, instanceId, capability);
+    }
+
+    /** @return the refusal of a caller without {@code capability} on the volume's app, or null */
+    public static @Nullable DomainRefusal ownerRefusal(@NonNull AccessContext access, @Nullable Integer instanceId,
+                                                       @NonNull String capability) {
+        return HohenheimAccess.reachesRecord(access, InstanceModel.MODEL_ID, instanceId, capability) ? null
+            : new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "the volume's app withholds " + capability);
+    }
 
     public static @NonNull Declaration declaration(@NonNull Row row) {
         return new Declaration(row.get(InstanceVolumeModel.INSTANCE_ID), row.get(InstanceVolumeModel.NAME),

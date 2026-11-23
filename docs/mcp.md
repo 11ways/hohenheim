@@ -33,5 +33,6 @@ by its code.
 
 Some panel actions have no tool yet, and say why on the operation itself: the
 ones that open a shell or a screen in the browser, the ones that take or reveal
-a secret (passwords, private keys, tokens), and the ones on records that carry no
+a secret (passwords, private keys, tokens), the ones whose input is a file's raw
+body (putting a file into an app's volume), and the ones on records that carry no
 code (single DNS records and bans).

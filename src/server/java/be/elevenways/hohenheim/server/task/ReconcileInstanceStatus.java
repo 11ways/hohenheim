@@ -4,6 +4,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.server.HohenheimRoles;
+import be.elevenways.hohenheim.server.files.VolumeHelper;
 import be.elevenways.hohenheim.server.instance.InstanceStatusReconciler;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -73,6 +74,8 @@ public class ReconcileInstanceStatus extends ScheduledTask {
     @Override
     public void executor(TaskContext ctx) {
         List<InstanceStatusReconciler.Outcome> outcomes = new InstanceStatusReconciler().sweep();
+        // The file lane's short-lived helpers end here when their own removal failed: one listing per host.
+        VolumeHelper.removeExitedEverywhere();
         long corrected = outcomes.stream()
             .filter(o -> o.verdict() == InstanceStatusReconciler.Verdict.CORRECTED).count();
         long unasked = outcomes.stream()

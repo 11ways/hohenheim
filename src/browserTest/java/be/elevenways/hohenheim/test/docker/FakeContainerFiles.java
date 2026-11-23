@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test.docker;
 import be.elevenways.hohenheim.server.docker.DockerStreamConnection;
 import be.elevenways.hohenheim.server.docker.DockerStreamTransport;
 import be.elevenways.hohenheim.server.docker.DockerTransport;
+import be.elevenways.hohenheim.server.docker.PinnedImages;
 import be.elevenways.hohenheim.server.util.Json;
 import be.elevenways.hohenheim.server.util.Tar;
 import be.elevenways.protoblast.common.dry.Dry;
@@ -60,20 +61,42 @@ public final class FakeContainerFiles implements DockerTransport, DockerStreamTr
         }
     }
 
-    private final @NonNull String handle;
+    private @NonNull String handle;
     private @NonNull Map<String, String> labels;
+    /** Whether the code under test creates the one container, naming it ({@link #createdByCaller}). */
+    private boolean createdByCaller;
+    private @Nullable Map<String, Object> createBody;
+    private boolean removed;
     private final TreeMap<String, Node> nodes = new TreeMap<>();
     private final List<String> calls = new ArrayList<>();
     private final List<String> targets = new ArrayList<>();
     private final Map<String, byte[]> answers = new LinkedHashMap<>();
     private final Map<String, List<String>> execs = new LinkedHashMap<>();
     private final List<String> lastPutEntries = new ArrayList<>();
+    /** Exited containers the daemon lists beside the one container, by name, with their labels. */
+    private final Map<String, Map<String, String>> exited = new LinkedHashMap<>();
     private int execCounter;
 
     public FakeContainerFiles(@NonNull String handle, @NonNull Map<String, String> labels) {
         this.handle = handle;
         this.labels = Map.copyOf(labels);
         this.nodes.put("/", new Node(Kind.DIRECTORY, new byte[0], "", 0755));
+    }
+
+    /**
+     * A daemon whose ONE container the code under test creates, starts and removes itself (a short-lived helper):
+     * the create names it and carries its labels, and the filesystem is what that container's binds hold, kept
+     * from one such container to the next as a bound host directory is.
+     */
+    public static @NonNull FakeContainerFiles createdByCaller() {
+        FakeContainerFiles daemon = new FakeContainerFiles("", Map.of());
+        daemon.createdByCaller = true;
+        return daemon;
+    }
+
+    /** The body of the last container create, or null when none was asked. */
+    public synchronized @Nullable Map<String, Object> lastCreate() {
+        return this.createBody;
     }
 
     // -- scripting ------------------------------------------------------------
@@ -105,6 +128,17 @@ public final class FakeContainerFiles implements DockerTransport, DockerStreamTr
     /** Re-label the container (a same-named FOREIGN container). */
     public synchronized void relabel(@NonNull Map<String, String> labels) {
         this.labels = Map.copyOf(labels);
+    }
+
+    /** An exited container beside the one container, as a helper whose removal failed leaves one behind. */
+    public synchronized @NonNull FakeContainerFiles exited(@NonNull String name, @NonNull Map<String, String> labels) {
+        this.exited.put(name, Map.copyOf(labels));
+        return this;
+    }
+
+    /** @return the names of the exited containers still on the daemon */
+    public synchronized @NonNull List<String> exitedNames() {
+        return List.copyOf(this.exited.keySet());
     }
 
     /** The node's content as text, or null when absent or not a file. */
@@ -158,6 +192,50 @@ public final class FakeContainerFiles implements DockerTransport, DockerStreamTr
         String query = target.contains("?") ? target.substring(target.indexOf('?') + 1) : "";
         String body = headEnd < 0 ? "" : text.substring(headEnd + 4);
         String container = "/containers/" + this.handle;
+        if ("GET".equals(method) && "/images/json".equals(path)) {
+            // The pinned helper image, present by its digest as a pull by digest leaves it.
+            String pinned = PinnedImages.ALPINE;
+            String digested = pinned.substring(0, pinned.indexOf(':')) + pinned.substring(pinned.indexOf('@'));
+            return json(200, List.of(Map.of("Id", "sha256:helper", "RepoDigests", List.of(digested))));
+        }
+        if ("GET".equals(method) && "/containers/json".equals(path)) {
+            List<Map<String, Object>> listed = new ArrayList<>();
+            if (!this.handle.isEmpty() && !this.removed) {
+                listed.add(Map.of("Names", List.of("/" + this.handle), "State", "running", "Labels", this.labels));
+            }
+            this.exited.forEach((name, labels) -> listed.add(Map.of("Names", List.of("/" + name), "State",
+                "exited", "Labels", labels)));
+            return json(200, listed);
+        }
+        if ("DELETE".equals(method) && path.startsWith("/containers/")
+                && this.exited.remove(path.substring("/containers/".length())) != null) {
+            this.calls.add("remove:" + path.substring("/containers/".length()));
+            return raw(204, Map.of(), new byte[0]);
+        }
+        if (this.createdByCaller && "POST".equals(method) && "/containers/create".equals(path)) {
+            this.handle = param(query, "name");
+            this.createBody = parse(body);
+            Map<String, String> created = new LinkedHashMap<>();
+            if (this.createBody.get("Labels") instanceof Map<?, ?> given) {
+                given.forEach((key, value) -> created.put(String.valueOf(key), String.valueOf(value)));
+            }
+            this.labels = Map.copyOf(created);
+            this.removed = false;
+            this.calls.add("create:" + this.handle);
+            return json(201, Map.of("Id", this.handle));
+        }
+        if (this.removed && (path.equals(container) || path.startsWith(container + "/"))) {
+            return json(404, Map.of("message", "No such container"));
+        }
+        if ("POST".equals(method) && path.equals(container + "/start")) {
+            this.calls.add("start:" + this.handle);
+            return raw(204, Map.of(), new byte[0]);
+        }
+        if ("DELETE".equals(method) && path.equals(container)) {
+            this.calls.add("remove:" + this.handle);
+            this.removed = true;
+            return raw(204, Map.of(), new byte[0]);
+        }
 
         if ("GET".equals(method) && path.equals(container + "/json")) {
             Map<String, Object> config = new LinkedHashMap<>();

@@ -4,8 +4,10 @@ import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.instance.VolumeOperations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
+import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
@@ -87,10 +89,19 @@ class InstanceVolumeApiTest extends HohenheimHttpTestBase {
         HardDeletes.byId(Models.get(InstanceModel.class), otherAppId);
     }
 
-    /** Journey: the doors, then a volume declared, redeclared and deleted with its data. */
+    /** Journey: the doors, then a volume declared (its directory with it), redeclared and deleted with its data. */
     @Test
     void anAppsVolumesAreTheVolumesTabsOperations() throws Exception {
         String volumes = "/api/v1/instances/" + appId + "/volumes";
+        FakeHostVolumes hosts = FakeHostVolumes.install();
+        try {
+            journey(volumes, hosts);
+        } finally {
+            FakeHostVolumes.uninstall();
+        }
+    }
+
+    private void journey(String volumes, FakeHostVolumes hosts) throws Exception {
 
         // 1. Nobody who may not see the app learns it exists: a site manager without the app, an unknown app and
         //    a caller with no key are refused, and nothing is declared.
@@ -122,6 +133,9 @@ class InstanceVolumeApiTest extends HohenheimHttpTestBase {
         assertThat((Object) volume(appId, "data").get(InstanceVolumeModel.QUOTA_BYTES))
             .as("step 3: stored as the panel stores it").isEqualTo(VolumeOperations.quotaBytes(512));
         assertThat(keyGet(viewerKey, volumes).body()).as("step 3: the viewer now reads it").contains("\"data\"");
+        assertThat(hosts.directoryOf(ServerModel.nameOf(ServerModel.localServerId()),
+            InstanceVolumes.hostPathFor(appId, "data"))).as("step 3: the declaration created its directory")
+            .isDirectory();
         HttpResponse<String> elsewhere = keyPost(adminKey, volumes, declaration("stray", "/stray")
             + "&instance_id=" + otherAppId);
         assertThat(elsewhere.statusCode()).as("step 3: another app is refused (%s)", elsewhere.body())
@@ -132,36 +146,38 @@ class InstanceVolumeApiTest extends HohenheimHttpTestBase {
         assertThat(badName.statusCode()).as("step 3: a path for a name is refused").isEqualTo(422);
         assertThat(codeOf(badName.body())).as("step 3: by name").isEqualTo("volume_name_invalid");
 
-        // 4. Redeclared: only what the body names changes; the viewer is refused and an unknown name is the 404.
+        // 4. Redeclared: only what the body names changes; the viewer is refused for a known and an unknown name
+        //    alike (the refusal on the app comes before the lookup), and an unknown name is the 404 only to a caller
+        //    who may redeclare.
         HttpResponse<String> redeclared = keyPost(adminKey, volumes + "/update", form("name", "data",
             "quota_mb", "1024"));
         assertThat(redeclared.statusCode()).as("step 4: redeclared (%s)", redeclared.body()).isEqualTo(200);
         assertThat(redeclared.body()).as("step 4: the new limit").contains("\"quota_mb\":1024");
         assertThat((String) volume(appId, "data").get(InstanceVolumeModel.CONTAINER_PATH))
             .as("step 4: the path it left out is kept").isEqualTo("/data");
-        assertThat(keyPost(viewerKey, volumes + "/update", form("name", "data", "quota_mb", "1")).statusCode())
-            .as("step 4: the viewer is refused").isEqualTo(403);
+        for (String name : List.of("data", "nope")) {
+            assertThat(keyPost(viewerKey, volumes + "/update", form("name", name, "quota_mb", "1")).statusCode())
+                .as("step 4: the viewer is refused for '%s'", name).isEqualTo(403);
+        }
         assertThat(keyPost(adminKey, volumes + "/update", form("name", "nope", "quota_mb", "1")).statusCode())
             .as("step 4: an unknown volume is 404").isEqualTo(404);
         assertThat((Object) volume(appId, "data").get(InstanceVolumeModel.QUOTA_BYTES))
-            .as("step 4: the refused redeclaration changed nothing").isEqualTo(VolumeOperations.quotaBytes(1024));
+            .as("step 4: the refused redeclarations changed nothing").isEqualTo(VolumeOperations.quotaBytes(1024));
 
-        // 5. Deleted with its data: refused to the viewer, done for the admin, and gone afterwards.
-        FakeHostVolumes.install();
-        try {
-            assertThat(keyPost(viewerKey, volumes + "/delete", form("name", "data")).statusCode())
-                .as("step 5: the viewer is refused").isEqualTo(403);
-            assertThat(volume(appId, "data")).as("step 5: and the volume stays").isNotNull();
-            HttpResponse<String> deleted = keyPost(adminKey, volumes + "/delete", form("name", "data"));
-            assertThat(deleted.statusCode()).as("step 5: deleted (%s)", deleted.body()).isEqualTo(200);
-            assertThat(deleted.body()).as("step 5: naming it").contains("\"status\":\"deleted\"")
-                .contains("\"name\":\"data\"");
-            assertThat(volume(appId, "data")).as("step 5: the declaration is gone").isNull();
-            assertThat(keyPost(adminKey, volumes + "/delete", form("name", "data")).statusCode())
-                .as("step 5: a second delete is the 404").isEqualTo(404);
-        } finally {
-            FakeHostVolumes.uninstall();
+        // 5. Deleted with its data: refused to the viewer (a known and an unknown name alike), done for the admin,
+        //    and gone afterwards.
+        for (String name : List.of("data", "nope")) {
+            assertThat(keyPost(viewerKey, volumes + "/delete", form("name", name)).statusCode())
+                .as("step 5: the viewer is refused for '%s'", name).isEqualTo(403);
         }
+        assertThat(volume(appId, "data")).as("step 5: and the volume stays").isNotNull();
+        HttpResponse<String> deleted = keyPost(adminKey, volumes + "/delete", form("name", "data"));
+        assertThat(deleted.statusCode()).as("step 5: deleted (%s)", deleted.body()).isEqualTo(200);
+        assertThat(deleted.body()).as("step 5: naming it").contains("\"status\":\"deleted\"")
+            .contains("\"name\":\"data\"");
+        assertThat(volume(appId, "data")).as("step 5: the declaration is gone").isNull();
+        assertThat(keyPost(adminKey, volumes + "/delete", form("name", "data")).statusCode())
+            .as("step 5: a second delete is the 404").isEqualTo(404);
     }
 
     private static String declaration(String name, String containerPath) {

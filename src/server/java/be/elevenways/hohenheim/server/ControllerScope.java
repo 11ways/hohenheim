@@ -39,6 +39,12 @@ public final class ControllerScope {
     public static final String KIND_BUILD = "build";
     public static final String KIND_PREVIEW = "preview";
     public static final String KIND_DBLINK = "dblink";
+    /**
+     * A short-lived helper container that binds one application's declared volumes while nothing serves it, so the
+     * file manager's write lane can reach them ({@code VolumeHelper}); the discriminator is the application id and a
+     * per-controller sequence.
+     */
+    public static final String KIND_FILES = "files";
 
     /**
      * An INSTANCE-to-database link network. Deliberately its own word rather than reusing

@@ -58,6 +58,13 @@ public final class FileVerbs {
         record(instanceId, HohenheimActivityAction.FILES_UPLOAD, path);
     }
 
+    /** A file was put into one declared volume over the API, before or after the first deploy. */
+    public void putInto(int instanceId, @NonNull String volumeRoot, @NonNull String relativePath,
+                        @NonNull Path source, long maxBytes) {
+        this.files.putFrom(instanceId, volumeRoot, relativePath, source, maxBytes);
+        record(instanceId, HohenheimActivityAction.FILES_UPLOAD, volumeRoot + "/" + relativePath);
+    }
+
     /** The automation API's write route replaced a file. */
     public void write(int instanceId, @NonNull String path, byte @NonNull [] content) {
         this.files.write(instanceId, path, content);

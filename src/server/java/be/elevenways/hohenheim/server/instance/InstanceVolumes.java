@@ -231,6 +231,27 @@ public final class InstanceVolumes {
     }
 
     /**
+     * {@link #declare}, the volume's host directory created on the owner's host first with its quota and its kind's
+     * volume owner, so files can be put into it before the owner's first deploy.
+     *
+     * AIDEV-NOTE: the directory comes BEFORE the row, so a host that cannot deliver a volume refuses the declaration
+     * by name instead of leaving one no deploy can mount; a declaration refused after it (a stale review) leaves an
+     * empty directory that the next deploy creates anyway.
+     *
+     * @throws Violations naming the backend when the owner's host cannot deliver a volume
+     */
+    public static @NonNull Row declareOnHost(int instanceId, @NonNull String name, @NonNull String containerPath,
+                                             @Nullable Long quotaBytes, boolean exclusive) {
+        String hostPath = hostPathFor(instanceId, name);
+        Row owner = Models.get(InstanceModel.class).findById(instanceId);
+        String serverName = ServerModel.canonicalNameOf(owner == null ? null : owner.get(InstanceModel.SERVER_ID));
+        InstanceKindHandler handler = owner == null ? null : InstanceKinds.handlerOf(owner);
+        Integer ownerUid = handler == null ? null : handler.volumeOwnerUid(instanceId, serverName);
+        materialize(operationsFor(requireServer(serverName)), hostPath, quotaBytes, ownerUid);
+        return declare(instanceId, name, containerPath, quotaBytes, exclusive);
+    }
+
+    /**
      * The bind mounts an owner's DECLARATIONS make, deriving nothing on the host.
      *
      * AIDEV-NOTE: THE one derivation of the mounted SET. {@link #mountsFor} materializes
@@ -320,19 +341,12 @@ public final class InstanceVolumes {
         for (Map.Entry<String, Row> mounted : rows.entrySet()) {
             String hostPath = mounted.getKey();
             Row volume = mounted.getValue();
-            operations.create(hostPath);
-            Long quota = volume.get(InstanceVolumeModel.QUOTA_BYTES);
-            if (quota != null && quota > 0) {
-                operations.setQuota(hostPath, quota);
-            }
+            materialize(operations, hostPath, volume.get(InstanceVolumeModel.QUOTA_BYTES), ownerUid);
             // The stored host path is EVIDENCE (see InstanceVolumeModel): re-stamp it so a
             // changed data_path shows up as a rewritten row rather than as a mount nobody
             // can find the directory of.
             if (volume.setIfChanged(InstanceVolumeModel.HOST_PATH, hostPath)) {
                 Models.get(InstanceVolumeModel.class).save(volume);
-            }
-            if (ownerUid != null) {
-                operations.own(hostPath, ownerUid);
             }
         }
 
@@ -624,6 +638,18 @@ public final class InstanceVolumes {
         return hostPath;
     }
 
+
+    /** Create one volume's host directory, apply its quota and hand it to the workload's uid when one is named. */
+    private static void materialize(@NonNull VolumeOperations operations, @NonNull String hostPath,
+                                    @Nullable Long quotaBytes, @Nullable Integer ownerUid) {
+        operations.create(hostPath);
+        if (quotaBytes != null && quotaBytes > 0) {
+            operations.setQuota(hostPath, quotaBytes);
+        }
+        if (ownerUid != null) {
+            operations.own(hostPath, ownerUid);
+        }
+    }
 
     private static @NonNull VolumeOperations operationsFor(@NonNull Row server) {
         return VolumeOperations.forServer(server);

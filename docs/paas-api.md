@@ -132,6 +132,7 @@ returned). Say so when delegating; the grant UI does not.
 | POST | `/api/v1/instances/{id}/volumes` | Declare a volume: `name`, `container_path`, optional `quota_mb`, `exclusive` (admin, with the app's `config` capability) |
 | POST | `/api/v1/instances/{id}/volumes/update` | Redeclare the volume `name`: only the fields sent change |
 | POST | `/api/v1/instances/{id}/volumes/delete` | Delete the volume `name` WITH its data |
+| POST | `/api/v1/instances/{id}/volumes/put?name=...&path=...` | Put the raw body as one file into the volume `name` at `path` (admin, with the app's `files.write` capability), also before the first deploy |
 | GET/POST | `/api/v1/environments/{id}/variables[/delete]` | Same shape, but ADMIN-ONLY (`hohenheim.admin.access`, as narrowed by the key's scopes) -- see Environment variables below |
 
 | GET | `/api/v1/databases` | Managed databases the key holds `view` on -- see Managed databases below |
@@ -564,15 +565,17 @@ that app's delete (`app_delete_has_followers`), server change (`app_server_chang
 
 ## App volumes
 
-An app's volumes are its Volumes tab over the API: the SAME three operations
+An app's volumes are its Volumes tab over the API: the SAME operations
 (`hohenheim:declare_volume`, `hohenheim:redeclare_volume`, `hohenheim:destroy_volume`,
-`VolumeOperations`) run through the operation pipeline, so their own gates decide: the
-admin permission, and for a declaration the app's `config` capability, asked again by the
-handlers (`VolumeDeclarationOperations`). The route resolves the app at `view` first, as
+`hohenheim:put_volume_file`, `VolumeOperations`) run through the operation pipeline, so their own gates decide: the
+admin permission, and the app's `config` capability for a declaration, a redeclaration and a delete, asked again by
+the handlers (`VolumeDeclarationOperations`). The route resolves the app at `view` first, as
 the instance lane does, so an app the key may not see is the uniform 404; a key that may
 see it reads its volumes (the /manage twin shows them read-only) and is refused every write
-with 403. A volume is named in the body (`name`), as a device is; a name the app does not
-declare is the 404. Rate limits: `hh_paas_read` on the list, `hh_paas_write` on the writes.
+with 403. A volume is named in the body (`name`), as a device is; the refusal on the app is
+asked BEFORE the name is looked up, so a refused key gets the same 403 for a declared and an
+undeclared name, and a name the app does not declare is the 404 only to a key that may write.
+Rate limits: `hh_paas_read` on the list, `hh_paas_write` on the writes.
 
 | Field | Type | Notes |
 | --- | --- | --- |
@@ -600,11 +603,50 @@ and the backend's own refusals are 422). A workspace's `home` refuses
 `volume_home_protected`. The server demands no phrase -- the dialog's typed name is a
 client interlock -- so `hoh volume delete` asks for the volume's name (`--yes` skips it).
 
-A declaration writes the record only. The directory is created, its quota applied, when
-the app's first release mounts it (`InstanceVolumes.mountsFor`, at deploy), and the file
-API (`/api/v1/instances/{id}/files`) reaches an app's volumes through its serving release's
-container, so files cannot be placed into a volume before the app's first deploy has
-passed.
+A declaration creates the volume's directory on the app's host first, with its quota and
+its kind's volume owner (`InstanceVolumes.declareOnHost`), then writes the record; a host
+whose volume backend cannot deliver a volume refuses the declaration by name
+(`volume_backend_unimplemented`, 422) instead of the first deploy.
+
+### Putting a file into a volume
+
+`POST /api/v1/instances/{id}/volumes/put?name=data&path=app.sqlite` writes the raw
+request body (any content type; `--data-binary @file`) as ONE file into the volume
+`name`, at `path` below the volume's `container_path`, over a file already there. It is
+`hohenheim:put_volume_file` through the pipeline: the admin permission, then the app's `files.write` capability, both
+asked before the volume is even looked up (a refused key gets the same 403 for a declared and an undeclared name) and
+BEFORE a byte of the body is read; a volume the app does not declare is the 404. Rate
+limit `hh_instance_files_write`.
+
+| Parameter | Notes |
+| --- | --- |
+| `name` | The declared volume, as on the other volume routes |
+| `path` | Relative, one canonical spelling (`a/b.db`, never `/a`, `a//b`, `./a` or `../a`), its parent directories already in the volume; anything else, a symlink anywhere on the way and a path landing in another volume nested inside refuse `files_path_refused` (422) |
+
+The body is streamed to disk, never buffered, and capped by the file manager's own limit
+(`hohenheim.files.max_file_kb`, 8 MiB by default): over it is `files_too_large` (422). The
+file is written by the file manager's write lane (`InstanceFiles.putFrom`): a file there
+keeps its mode, a new one is `0644`, and it is given to the owner of the directory it lands
+in, as the Files tab does. A path a declared config file manages refuses
+`files_managed_config`. The answer:
+
+```
+{"id":51,"volume":"data","path":"app.sqlite","bytes":40960,"status":"written"}
+```
+
+While a release serves the app, the file goes in through that release's container, as the
+file API (`/api/v1/instances/{id}/files`) does. While NOTHING serves it (before the first
+deploy, or after a failed one), Hohenheim starts a short-lived helper container on the
+app's host for the one write: the pinned Alpine image, no network, binding ONLY the app's
+declared volume directories at their container paths (the same set and directories the
+first release mounts), owner-labelled as the app so the container hardening admits exactly
+those binds, and removed when the write is done. No host path outside the app's volumes is
+ever reachable, and nothing is written on the host directly. So the order "declare, put the
+database and the key file, deploy" works with no host shell: `hoh volume declare 51 data
+/data`, `hoh volume put 51 data ./app.sqlite app.sqlite`, then deploy.
+
+The file API's other verbs (list, read, mkdir, rename, delete) still need a serving release
+(`app_not_serving`); only the put starts a helper.
 
 ## Managed databases
 
@@ -1033,6 +1075,7 @@ hoh volume list 51
 hoh volume declare 51 data /data quota_mb=512 [exclusive=true]   # admin, with the app's config capability
 hoh volume update 51 data quota_mb=1024
 hoh volume delete 51 data [--yes]     # deletes the data; asks for the volume name
+hoh volume put 51 data ./app.sqlite app.sqlite   # admin; also before the first deploy
 hoh access-list list | hoh access-list 31
 hoh access-list create Staff satisfy=all shared=true   # shared is admin-only
 hoh access-list rule add 31 basic_auth data.username=earl data.password=hunter2 enabled=true

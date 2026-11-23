@@ -18,6 +18,7 @@ import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.IntegerField;
+import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.validation.Violations;
@@ -75,6 +76,29 @@ public final class VolumeOperations {
         .gate(HohenheimSources.OPERATOR)
         .facts(OperationFact.DESTRUCTIVE, OperationFact.REACHES_OUTSIDE)
         .command(COMMAND.execution(CommandExecution.OUTSIDE_TRANSACTION)).register();
+
+    /** Where a put file lands: one relative path below the volume's mount, its parents already there. */
+    public static final StringField FILE_PATH = StringField.builder("path")
+        .label(HohenheimMicrocopy.INSTANCE_VOLUME.of("file_path")).required().build();
+    public static final FormSpec PUT_FORM = FormSpec.builder().add(FILE_PATH).build();
+
+    public record Placement(@Nullable String path) {}
+
+    private static final OperationInput<Placement> PUT_INPUT = OperationInput.of(PUT_FORM, Placement.class,
+        values -> new Placement(values.get(FILE_PATH)));
+
+    /**
+     * One file put into a declared volume, written over the file there; the file's bytes travel as the call's
+     * upload attachment, never as an input entry.
+     */
+    public static final Operation<Row, Placement, Void> PUT_FILE = Operation.declare(HohenheimIds.id("put_volume_file"))
+        .happened(OperationSentences.of("put_volume_file"))
+        .label(HohenheimMicrocopy.INSTANCE_VOLUME.of("put_file"))
+        .icon(Icon.of("upload")).one(SUBJECT)
+        .notForAssistants("the file it puts travels as the API call's raw body, which no tool input carries")
+        .gate(HohenheimSources.OPERATOR)
+        .facts(OperationFact.REACHES_OUTSIDE)
+        .input(PUT_INPUT).command(COMMAND.execution(CommandExecution.OUTSIDE_TRANSACTION)).register();
 
     private VolumeOperations() {}
 

@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceService;
+import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceFileSupport;
 import be.elevenways.hohenheim.server.util.PermissionBits;
@@ -284,17 +285,93 @@ public final class InstanceFiles {
     public void writeFrom(int instanceId, @NonNull String requestedPath, @NonNull Path source,
                           boolean replace, long maxBytes) {
         HohenheimAccess.requireOperationCapability(instanceId, WRITE);
+        requireWithin(source, maxBytes);
+        writeFrom(resolveOpened(instanceId), instanceId, requestedPath, source, replace);
+    }
+
+    /**
+     * {@link #writeFrom} into one declared volume, over the file there: through the serving release, or through a
+     * {@link VolumeHelper} binding the application's volumes while nothing serves it.
+     *
+     * AIDEV-NOTE: the helper is THE way a file reaches a volume before the first deploy, so only this verb opens
+     * one: a listing or an SFTP session of an application nothing serves still refuses {@code app_not_serving}
+     * rather than starting a container per request.
+     *
+     * @param volumeRoot   the container path the volume mounts at
+     * @param relativePath the file's path below it; a path landing in another volume nested inside refuses
+     */
+    public void putFrom(int instanceId, @NonNull String volumeRoot, @NonNull String relativePath,
+                        @NonNull Path source, long maxBytes) {
+        HohenheimAccess.requireOperationCapability(instanceId, WRITE);
+        requireWithin(source, maxBytes);
+        InstanceFilePath target = putPath(instanceId, volumeRoot, relativePath);
+        if (ApplicationReleases.workloadIdOf(instanceId) != null) {
+            putInto(resolveOpened(instanceId), instanceId, target, source);
+            return;
+        }
+        try (VolumeHelper helper = VolumeHelper.open(instanceId)) {
+            putInto(new Opened(helper.files(), helper.handle(), helper.ownerLabels(),
+                sortedRoots(helper.mountedPaths())), instanceId, target, source);
+        } catch (IOException e) {
+            throw failure(e);
+        }
+    }
+
+    /**
+     * Where a put of {@code relativePath} into the volume mounted at {@code volumeRoot} writes, checked against the
+     * application's declared volumes: what a transport asks before it reads a body or starts a helper.
+     *
+     * @throws Violations {@code files_path_refused} for a path that is no canonical relative one or lands in another
+     *                    volume nested inside
+     */
+    public static @NonNull InstanceFilePath putPath(int instanceId, @NonNull String volumeRoot,
+                                                    @NonNull String relativePath) {
+        // The root as a browse root is spelled (no trailing slash); a volume mounted at "/" is none.
+        Set<String> own = InstanceFilePath.rootsOf(List.of(volumeRoot));
+        if (own.isEmpty()) {
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_path_refused"));
+        }
+        String root = own.iterator().next();
+        return requireUnder(sortedRoots(new ArrayList<>(InstanceVolumes.declaredMounts(instanceId).values())), root,
+            root + "/" + relativePath);
+    }
+
+    private void putInto(@NonNull Opened opened, int instanceId, @NonNull InstanceFilePath target,
+                         @NonNull Path source) {
+        requireUnder(opened.roots(), target.volumeRoot(), target.absolute());
+        writeFrom(opened, instanceId, target.absolute(), source, true);
+    }
+
+    /**
+     * @return the parsed path
+     * @throws Violations {@code files_path_refused} unless the path parses under exactly {@code volumeRoot}
+     */
+    private static @NonNull InstanceFilePath requireUnder(@NonNull List<String> roots, @NonNull String volumeRoot,
+                                                          @NonNull String requestedPath) {
+        InstanceFilePath parsed = InstanceFilePath.parse(roots, requestedPath);
+        if (!parsed.volumeRoot().equals(volumeRoot)) {
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_path_refused"));
+        }
+        return parsed;
+    }
+
+    private void writeFrom(@NonNull Opened opened, int instanceId, @NonNull String requestedPath,
+                           @NonNull Path source, boolean replace) {
+        FileTarget target = fileTarget(opened, instanceId, requestedPath, replace);
+        try {
+            opened.files().writeFileFrom(opened.handle(), target.path().absolute(), source,
+                target.mode(), opened.ownerLabels());
+        } catch (IOException e) {
+            throw failure(e);
+        }
+    }
+
+    /** @throws Violations {@code files_too_large} for a spooled file over {@code maxBytes} */
+    private static void requireWithin(@NonNull Path source, long maxBytes) {
         try {
             if (Files.size(source) > maxBytes) {
                 throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_too_large").withArg("bytes", maxBytes));
             }
-        } catch (IOException e) {
-            throw failure(e);
-        }
-        FileTarget target = fileTarget(instanceId, requestedPath, replace);
-        try {
-            target.opened().files().writeFileFrom(target.opened().handle(), target.path().absolute(), source,
-                target.mode(), target.opened().ownerLabels());
         } catch (IOException e) {
             throw failure(e);
         }
@@ -390,8 +467,8 @@ public final class InstanceFiles {
      * driver lane and the containment walk are reached through it, so no verb can take the
      * one without the other.
      */
-    private record Opened(InstanceService.@NonNull Resolved resolved,
-                          @NonNull List<String> roots) {
+    private record Opened(@Nullable InstanceFileSupport support, @NonNull String handle,
+                          @NonNull Map<String, String> ownerLabels, @NonNull List<String> roots) {
 
         @NonNull InstanceFilePath parse(@NonNull String path) {
             return InstanceFilePath.parse(this.roots, path);
@@ -399,15 +476,10 @@ public final class InstanceFiles {
 
         /** @throws Violations {@code files_unsupported} when the driver cannot browse */
         @NonNull InstanceFileSupport files() {
-            return filesOf(this.resolved);
-        }
-
-        @NonNull String handle() {
-            return this.resolved.spec().handle();
-        }
-
-        @NonNull Map<String, String> ownerLabels() {
-            return this.resolved.spec().ownerLabels();
+            if (this.support == null) {
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_unsupported"));
+            }
+            return this.support;
         }
 
         /**
@@ -449,7 +521,11 @@ public final class InstanceFiles {
      * @param replace false when an existing file refuses
      */
     private @NonNull FileTarget fileTarget(int instanceId, @NonNull String requestedPath, boolean replace) {
-        Opened opened = resolveOpened(instanceId);
+        return fileTarget(resolveOpened(instanceId), instanceId, requestedPath, replace);
+    }
+
+    private @NonNull FileTarget fileTarget(@NonNull Opened opened, int instanceId, @NonNull String requestedPath,
+                                           boolean replace) {
         InstanceFilePath target = opened.parse(requestedPath);
         requireNotManaged(instanceId, target);
         InstanceFileSupport.Entry leaf = opened.walk(target);
@@ -505,11 +581,21 @@ public final class InstanceFiles {
      * AIDEV-NOTE: an application runs nothing itself, so its files are its serving release's mounts (the release
      * binds the application's volumes); the capability, the managed paths and the activity stay on the application.
      *
+     * AIDEV-NOTE: BOTH mount maps, because a spec has two and they are not alternatives:
+     * {@code volumes()} is the driver-managed named volume (docker_container, database,
+     * stack service) and {@code binds()} is the Hohenheim-owned host directory under the
+     * volume root (workspace, application -- see {@code InstanceVolumes}). Reading only
+     * the first left every WORKSPACE with an empty root set, which is the one kind whose
+     * whole point is browsing its own files.
+     *
      * @throws Violations {@code app_not_serving} for an application nothing serves
      */
     private @NonNull Opened resolveOpened(int instanceId) {
         InstanceService.Resolved resolved = this.instances.resolve(ApplicationReleases.requireWorkloadIdOf(instanceId));
-        return new Opened(resolved, sortedRoots(resolved));
+        List<String> mounted = new ArrayList<>(resolved.spec().volumes().values());
+        mounted.addAll(resolved.spec().binds().values());
+        return new Opened(resolved.runtime() instanceof InstanceFileSupport files ? files : null,
+            resolved.spec().handle(), resolved.spec().ownerLabels(), sortedRoots(mounted));
     }
 
     // -- containment ----------------------------------------------------------
@@ -596,30 +682,11 @@ public final class InstanceFiles {
 
     // -- plumbing -------------------------------------------------------------
 
-    /**
-     * Deepest root first, so a nested volume claims its own paths before its parent does.
-     *
-     * AIDEV-NOTE: BOTH mount maps, because a spec has two and they are not alternatives:
-     * {@code volumes()} is the driver-managed named volume (docker_container, database,
-     * stack service) and {@code binds()} is the Hohenheim-owned host directory under the
-     * volume root (workspace, application -- see {@code InstanceVolumes}). Reading only
-     * the first left every WORKSPACE with an empty root set, which is the one kind whose
-     * whole point is browsing its own files.
-     */
-    private static @NonNull List<String> sortedRoots(InstanceService.@NonNull Resolved resolved) {
-        List<String> mounted = new ArrayList<>(resolved.spec().volumes().values());
-        mounted.addAll(resolved.spec().binds().values());
+    /** Deepest root first, so a nested volume claims its own paths before its parent does. */
+    private static @NonNull List<String> sortedRoots(@NonNull List<String> mounted) {
         List<String> roots = new ArrayList<>(InstanceFilePath.rootsOf(mounted));
         roots.sort(Comparator.comparingInt(String::length).reversed().thenComparing(root -> root));
         return roots;
-    }
-
-    /** @throws Violations {@code files_unsupported} when the driver cannot browse at all */
-    private static @NonNull InstanceFileSupport filesOf(InstanceService.@NonNull Resolved resolved) {
-        if (resolved.runtime() instanceof InstanceFileSupport files) {
-            return files;
-        }
-        throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_unsupported"));
     }
 
     /** UTF-8 text convenience for the editor surfaces. */
