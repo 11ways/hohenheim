@@ -450,7 +450,10 @@ class AdminPagesTest extends HohenheimTestBase {
         assertThat(content).contains("Certificate (PEM)");
         assertThat(content).contains("Private key (PEM)");
         assertThat(content).contains("intermediate chain");
-        assertThat(content).doesNotContain("Renewal status");
+        // What a person sees: the raw HTML also carries the page's copy seed (the form spec's renewal group label
+        // ships in it for the browser), which is no sign that the group is drawn.
+        assertThat(page.locator("body").innerText()).as("the upload page shows no renewal status")
+            .doesNotContain("Renewal status");
         assertThat(page.locator("[data-path='challenge_type'], [data-path='dns_publisher']").count()).isZero();
         assertThat(page.locator("[data-path='auto_renew'], [data-group='renewal']").count()).isZero();
     }
