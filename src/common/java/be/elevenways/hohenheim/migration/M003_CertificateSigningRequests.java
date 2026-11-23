@@ -5,10 +5,11 @@ import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
- * Every schema change since the last published version: who holds a certificate's key, and the signing request a
- * requester-held certificate renews from.
+ * The schema changes after M002: who holds a certificate's key, and the signing request a requester-held certificate
+ * renews from.
  *
- * AIDEV-NOTE: UNPUBLISHED: every further schema change edits this migration until a live deploy publishes it. The
+ * AIDEV-NOTE: PUBLISHED: kuifje and robbedoes applied it on 2026-11-23, so it is frozen (pinned in
+ * migration-pins.txt). A schema change from now on is a new M004; never edit this one again. The
  * holder column carries the default every stored certificate already means (Hohenheim made its key), so existing rows
  * read as served exactly as before; the signing request is nullable because only a requester-held certificate keeps
  * one. down() undoes exactly what up() did.

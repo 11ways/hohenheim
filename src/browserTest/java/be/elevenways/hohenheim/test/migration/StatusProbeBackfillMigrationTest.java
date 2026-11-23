@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.test.migration;
 
 import be.elevenways.hohenheim.instance.StatusProbe;
-import be.elevenways.hohenheim.migration.HohenheimMigration;
 import be.elevenways.hohenheim.migration.M002_AfterBaseline;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.zenit.common.Zenit;
@@ -61,9 +60,11 @@ class StatusProbeBackfillMigrationTest {
                 + ",\"status_probe\":\"" + PROBE + "\"}");
             instance(datasource, 16, 5, "{\"image\":\"itzg/minecraft-server\"}");
 
-            // 2. The upgrade applies the one migration after the baseline.
+            // 2. The upgrade applies M002 and every migration of the stream after it, no other.
+            int upgrade = (int) InstallsAt.hohenheimMigrations(datasource.getDatasourceIdentifier()).stream()
+                .filter(migration -> migration.getVersion().compareTo(version) >= 0).count();
             assertThat(new MigrationRunner(datasource).migrate().requireSuccess().getAppliedCount())
-                .as("step 2: the upgrade applies one migration").isEqualTo(1);
+                .as("step 2: the upgrade applies M002 and the migrations after it").isEqualTo(upgrade);
 
             // 3. The starter servers without a probe got it, whatever their template is named; a cleared probe, an
             //    operator's template, another starter, the behind-Velocity backend (no game port of its own, its
@@ -84,9 +85,12 @@ class StatusProbeBackfillMigrationTest {
             assertThat(ledger(datasource)).as("step 3: the ledger names exactly the servers it wrote")
                 .containsExactly(10, 11);
 
-            // 4. The rollback takes the probe back from those two alone, and drops its ledger.
-            new MigrationRunner(datasource).rollback(MigrationKey.of(HohenheimMigration.STREAM, version))
-                .requireSuccess();
+            // 4. The rollback takes the probe back from those two alone, and drops its ledger. The stream is one
+            //    chain, so the migrations after M002 roll back with it (the runner rolls a batch back newest first).
+            List<MigrationKey> rolledBack = InstallsAt.hohenheimMigrations(datasource.getDatasourceIdentifier())
+                .stream().filter(migration -> migration.getVersion().compareTo(version) >= 0)
+                .map(MigrationKey::of).toList();
+            new MigrationRunner(datasource).rollback(rolledBack).requireSuccess();
             assertThat(settingsOf(datasource, 10)).as("step 4: taken back from the standalone server")
                 .doesNotContainKey(StatusProbe.SETTING).containsEntry("image", "itzg/minecraft-server");
             assertThat(settingsOf(datasource, 11)).as("step 4: taken back from the proxy server")

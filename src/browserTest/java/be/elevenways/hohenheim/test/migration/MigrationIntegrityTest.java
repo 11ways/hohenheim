@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test.migration;
 import be.elevenways.hohenheim.migration.HohenheimMigration;
 import be.elevenways.hohenheim.migration.M001_HohenheimBaseline;
 import be.elevenways.hohenheim.migration.M002_AfterBaseline;
+import be.elevenways.hohenheim.migration.M003_CertificateSigningRequests;
 import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationException;
 import be.elevenways.zenit.common.orm.migration.MigrationKey;
@@ -330,7 +331,8 @@ class MigrationIntegrityTest {
     void theBaselineRefusesARollbackAndKeepsTheSchema() throws Exception {
         SqliteDatasource datasource = emptyDatabase("rollback");
         // The chain up to its published migration, the least a runner admits of this stream.
-        List<Supplier<Migration>> chain = List.of(M001_HohenheimBaseline::new, M002_AfterBaseline::new);
+        List<Supplier<Migration>> chain = List.of(M001_HohenheimBaseline::new, M002_AfterBaseline::new,
+            M003_CertificateSigningRequests::new);
 
         // 1. Build the whole schema on its own; it depends on nothing outside itself.
         assertThat(new MigrationRunner(datasource, chain).migrate().isSuccess()).as("step 1: the schema builds")
@@ -339,9 +341,10 @@ class MigrationIntegrityTest {
         assertThat(created).as("step 1: the schema is not empty").isGreaterThan(50L);
 
         // 2. Rolling the chain back is refused up front at the baseline, and every table survives it, the published
-        //    migration's own included: no down() ran.
+        //    migrations' own included: no down() ran.
         assertThatThrownBy(() -> new MigrationRunner(datasource, chain).rollback(List.of(
-                MigrationKey.of(new M002_AfterBaseline()), MigrationKey.of(new M001_HohenheimBaseline()))))
+                MigrationKey.of(new M003_CertificateSigningRequests()), MigrationKey.of(new M002_AfterBaseline()),
+                MigrationKey.of(new M001_HohenheimBaseline()))))
             .as("step 2: the irreversible baseline refuses its rollback")
             .isInstanceOf(MigrationException.class);
         assertThat(scalar(datasource, SCHEMA_TABLES)).as("step 2: no table was dropped").isEqualTo(created);
@@ -393,8 +396,8 @@ class MigrationIntegrityTest {
             .isNotEmpty()
             .allSatisfy(entry -> assertThat(entry).endsWith(" stream=" + HohenheimMigration.STREAM));
         assertThat(found)
-            .as("step 1: and the stream is the published baseline, its published successor and the ONE unpublished"
-                + " migration after them")
+            .as("step 1: and the stream is the published baseline and its published successors (no migration is"
+                + " open)")
             .containsExactly("M001_HohenheimBaseline stream=" + HohenheimMigration.STREAM,
                 "M002_AfterBaseline stream=" + HohenheimMigration.STREAM,
                 "M003_CertificateSigningRequests stream=" + HohenheimMigration.STREAM);
