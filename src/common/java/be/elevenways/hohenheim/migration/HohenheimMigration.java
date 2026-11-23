@@ -10,7 +10,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  * AIDEV-NOTE: zenit chains every stream in version order (a115be18), so a migration declares
  * only its cross-stream edges, never its predecessor. The stream starts with ONE baseline, M001_HohenheimBaseline,
  * which squashed 001..019 on 2026-10-21 and is published (kuifje, robbedoes). The last published version is
- * M003_CertificateSigningRequests; the one open migration is M004_SiteOutages, which every further schema change edits
+ * M004_SiteOutages, so no migration is open: the next schema change creates M005, which every further change edits
  * until the next live deploy publishes it, and a second unpublished migration is never added.
  * MigrationIntegrityTest pins the list and that a migration at or below MigrationIntegrityTest.DEPLOYED_THROUGH is
  * never edited.
@@ -26,7 +26,7 @@ public abstract class HohenheimMigration extends Migration {
 
     /** The version Hohenheim's live hosts recorded last (kuifje, robbedoes, 2026-11-23); only a live deploy moves it. */
     @NonNull
-    public static final String PUBLISHED = "2026_11_19_000001";
+    public static final String PUBLISHED = "2026_11_23_000001";
 
     protected HohenheimMigration(@NonNull String version, @NonNull String name) {
         super(version, name);

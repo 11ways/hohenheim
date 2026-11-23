@@ -333,7 +333,7 @@ class MigrationIntegrityTest {
         SqliteDatasource datasource = emptyDatabase("rollback");
         // The chain up to its published migration, the least a runner admits of this stream.
         List<Supplier<Migration>> chain = List.of(M001_HohenheimBaseline::new, M002_AfterBaseline::new,
-            M003_CertificateSigningRequests::new);
+            M003_CertificateSigningRequests::new, M004_SiteOutages::new);
 
         // 1. Build the whole schema on its own; it depends on nothing outside itself.
         assertThat(new MigrationRunner(datasource, chain).migrate().isSuccess()).as("step 1: the schema builds")
@@ -344,8 +344,8 @@ class MigrationIntegrityTest {
         // 2. Rolling the chain back is refused up front at the baseline, and every table survives it, the published
         //    migrations' own included: no down() ran.
         assertThatThrownBy(() -> new MigrationRunner(datasource, chain).rollback(List.of(
-                MigrationKey.of(new M003_CertificateSigningRequests()), MigrationKey.of(new M002_AfterBaseline()),
-                MigrationKey.of(new M001_HohenheimBaseline()))))
+                MigrationKey.of(new M004_SiteOutages()), MigrationKey.of(new M003_CertificateSigningRequests()),
+                MigrationKey.of(new M002_AfterBaseline()), MigrationKey.of(new M001_HohenheimBaseline()))))
             .as("step 2: the irreversible baseline refuses its rollback")
             .isInstanceOf(MigrationException.class);
         assertThat(scalar(datasource, SCHEMA_TABLES)).as("step 2: no table was dropped").isEqualTo(created);
@@ -353,11 +353,12 @@ class MigrationIntegrityTest {
     }
 
     /**
-     * The open M004 adds the outage watch's own table, empty, so an existing site reads as never seen answering, and
-     * the app a container takes its image from, null on every existing container; its down() takes exactly both away.
+     * The published M004 adds the outage watch's own table, empty, so an existing site reads as never seen answering,
+     * and the app a container takes its image from, null on every existing container; its down() takes exactly both
+     * away.
      */
     @Test
-    void theOpenSiteOutagesMigrationAddsItsTableAndItsDownTakesItAway() throws Exception {
+    void theSiteOutagesMigrationAddsItsTableAndItsDownTakesItAway() throws Exception {
         SqliteDatasource datasource = emptyDatabase("site-outages");
         List<Supplier<Migration>> chain = List.of(M001_HohenheimBaseline::new, M002_AfterBaseline::new,
             M003_CertificateSigningRequests::new, M004_SiteOutages::new);
@@ -366,8 +367,12 @@ class MigrationIntegrityTest {
         String instances = "SELECT name FROM pragma_table_info('instances')";
 
         // 1. The chain through M004 builds, a site stored before it included, and the sites table keeps its columns.
-        assertThat(new MigrationRunner(datasource, chain.subList(0, 3)).migrate().isSuccess())
+        //    A runner admits no chain short of the published M004, so the database before it is the whole chain with
+        //    M004 rolled back.
+        assertThat(new MigrationRunner(datasource, chain).migrate().isSuccess())
             .as("step 1: the published chain builds").isTrue();
+        assertThat(new MigrationRunner(datasource, chain).rollback(MigrationKey.of(new M004_SiteOutages()))
+            .isSuccess()).as("step 1: and stands before M004").isTrue();
         datasource.rawUpdate("INSERT INTO sites (name, slug, upstream_kind) VALUES ('before', 'before',"
             + " 'hohenheim:instance')");
         List<String> siteColumns = columnsOf(datasource, sites);
@@ -445,8 +450,8 @@ class MigrationIntegrityTest {
             .isNotEmpty()
             .allSatisfy(entry -> assertThat(entry).endsWith(" stream=" + HohenheimMigration.STREAM));
         assertThat(found)
-            .as("step 1: and the stream is the published baseline, its published successors and the one open"
-                + " migration")
+            .as("step 1: and the stream is the published baseline and its published successors (no migration is"
+                + " open)")
             .containsExactly("M001_HohenheimBaseline stream=" + HohenheimMigration.STREAM,
                 "M002_AfterBaseline stream=" + HohenheimMigration.STREAM,
                 "M003_CertificateSigningRequests stream=" + HohenheimMigration.STREAM,

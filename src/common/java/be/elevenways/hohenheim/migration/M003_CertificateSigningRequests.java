@@ -9,10 +9,10 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  * renews from.
  *
  * AIDEV-NOTE: PUBLISHED: kuifje and robbedoes applied it on 2026-11-23, so it is frozen (pinned in
- * migration-pins.txt). A schema change from now on is a new M004; never edit this one again. The
- * holder column carries the default every stored certificate already means (Hohenheim made its key), so existing rows
- * read as served exactly as before; the signing request is nullable because only a requester-held certificate keeps
- * one. down() undoes exactly what up() did.
+ * migration-pins.txt); never edit this one again (the next schema change is a new migration after the published one).
+ * The holder column carries the default every stored certificate already means (Hohenheim made its key), so existing
+ * rows read as served exactly as before; the signing request is nullable because only a requester-held certificate
+ * keeps one. down() undoes exactly what up() did.
  *
  * @author Jelle De Loecker
  * @since  0.10.0

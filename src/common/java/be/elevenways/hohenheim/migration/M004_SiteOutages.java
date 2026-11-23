@@ -10,10 +10,11 @@ import java.util.List;
  * The schema changes after M003: the table in which the outage watch of an app's site remembers it between its sweeps,
  * and the app a Docker container takes its image from.
  *
- * AIDEV-NOTE: OPEN: no live host applied it yet, so it is the one migration after PUBLISHED and every schema change
- * until the next live deploy edits it. The table starts empty: an existing site reads as never seen answering, so the
- * first sweep after the upgrade alerts nothing. instances.image_app_id starts null on every row, so every existing
- * container keeps its own image. down() undoes exactly what up() did, the index before its column.
+ * AIDEV-NOTE: PUBLISHED: kuifje and robbedoes applied it on 2026-11-23, so it is frozen (pinned in
+ * migration-pins.txt). A schema change from now on is a new M005; never edit this one again. The table starts empty:
+ * an existing site reads as never seen answering, so the first sweep after the upgrade alerts nothing.
+ * instances.image_app_id starts null on every row, so every existing container keeps its own image. down() undoes
+ * exactly what up() did, the index before its column.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
