@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.protoblast.common.util.BlastString;
@@ -394,6 +395,23 @@ public class InstanceModel extends Model {
         IntegerField.builder().name("environment_id")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("environment"))
             .group(BASICS_GROUP)
+            .build());
+
+    /**
+     * The app (instances.id of a {@code hohenheim:application}) whose serving release's image this Docker container
+     * runs, or null for a container with an image of its own.
+     *
+     * AIDEV-NOTE: a real column, never a settings key, for the reason SiteModel gives: a key inside the polymorphic
+     * settings map is invisible to the reverse lookup, the delete guard and the tenant scope. Operator-only: it is not
+     * in TenantWrites' instance whitelist, and AppImageFollowers' write hook refuses a tenant create that places it.
+     * Nothing is copied from the app: every create resolves what the app serves at that moment
+     * (InstanceService.resolve), so nothing can drift. No relation and no foreign key, like environment_id.
+     */
+    public static final IntegerField IMAGE_APP_ID = SCHEMA.addField(
+        IntegerField.builder().name("image_app_id")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("image_from_app"))
+            .help(HohenheimMicrocopy.HELP.of("image_from_app")
+                .withArg("seconds", InstanceKindFields.STOP_GRACE_SECONDS))
             .build());
 
     /**

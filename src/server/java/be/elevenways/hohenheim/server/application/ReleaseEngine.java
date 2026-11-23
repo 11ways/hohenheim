@@ -69,6 +69,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.function.Supplier;
 
 import static be.elevenways.hohenheim.RawValues.trimmed;
@@ -266,6 +267,8 @@ public final class ReleaseEngine {
                 op.set(ReleaseOperationModel.IMAGE_ID, trimmed(desired.get(InstanceKindFields.IMAGE)));
                 finish(op,
                     ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), null, "deployed");
+                // After the outcome is staged: the line can never make a deploy that served look failed.
+                followersStep(op, applicationId);
                 return new ApplicationReleases.Release(instanceId, status);
             } catch (RuntimeException e) {
                 if (instanceId != null) {
@@ -384,9 +387,15 @@ public final class ReleaseEngine {
         // REFUSED while another operation of the application runs: a rollback is a person's
         // answer to what they see serving NOW, and queueing it behind a converge would roll
         // back whatever that converge left instead.
-        InstanceOperationLock.production().exclusive(applicationId,
-            InstanceOperationLock.Contention.REFUSE,
-            () -> DeployAttribution.run(trigger, () -> rollbackLocked(applicationId)));
+        try {
+            InstanceOperationLock.production().exclusive(applicationId,
+                InstanceOperationLock.Contention.REFUSE,
+                () -> DeployAttribution.run(trigger, () -> rollbackLocked(applicationId)));
+        } finally {
+            // Whatever serves now, also after a throw that came after the switch, is what the containers taking
+            // their image from this app run next (AppImageFollowers); reads only, so a refused rollback costs two.
+            AppImageFollowers.converge(applicationId);
+        }
         // AIDEV-NOTE: no proxy reload any more, and that is the point of the re-keying. A
         // flip no longer changes the ROUTE TABLE at all -- the site's route names an
         // application, and the instance upstream handler re-resolves the serving release's
@@ -449,6 +458,11 @@ public final class ReleaseEngine {
      * drain, retain, reclaim. Throws on ANY failure before the switch, always after
      * destroying the candidate -- a failed candidate never exists as a serving role,
      * never keeps a container, and its port claim dies with it.
+     *
+     * AIDEV-NOTE: a throw AFTER the candidate's flip to serving keeps the new release (fixed 2026-11-23): the catch
+     * destroys only a row that never served and restarts the prior release only while the candidate never took
+     * traffic. The exclusive branch used to destroy the candidate without that check and start the prior release
+     * again, so a throw after the flip left the app with no serving release at all.
      */
     private static ApplicationReleases.@NonNull Release gatedSwap(@NonNull DockerClient docker,
                                                                 @NonNull Row op, int applicationId,
@@ -462,6 +476,8 @@ public final class ReleaseEngine {
         InstanceService instances = new InstanceService();
         boolean exclusive = InstanceVolumes.hasExclusive(applicationId);
         boolean stoppedPrior = false;
+        boolean switched = false;
+        ApplicationReleases.Release released;
         try {
             if (exclusive) {
                 op.set(ReleaseOperationModel.RETIRED_INSTANCE_ID, servingId);
@@ -514,6 +530,7 @@ public final class ReleaseEngine {
             // its load-time value; that is what silently undid the volume heal and could
             // rewind claim_fence. See InstanceOperationGuard.stampRole.
             instances.assignRuntimeRole(candidateId, InstanceModel.ROLE_SERVING);
+            switched = true;
             candidate.set(InstanceModel.RUNTIME_ROLE, InstanceModel.ROLE_SERVING);
             instances.assignRuntimeRole(servingId, InstanceModel.ROLE_RETIRED);
             serving.set(InstanceModel.RUNTIME_ROLE, InstanceModel.ROLE_RETIRED);
@@ -527,9 +544,9 @@ public final class ReleaseEngine {
                     + " retained as the rollback target, draining");
             scheduleDrain(applicationId, op.get(ReleaseOperationModel.ID), servingId,
                 trimmed(desired.get(InstanceKindFields.IMAGE)), Db.currentOrDefault());
-            return new ApplicationReleases.Release(candidateId, candidateStatus);
+            released = new ApplicationReleases.Release(candidateId, candidateStatus);
         } catch (RuntimeException gateHeld) {
-            if (candidateId != null) {
+            if (candidateId != null && !switched) {
                 if (exclusive) {
                     // Never restart a writer until candidate teardown is confirmed.
                     instances.destroy(candidateId);
@@ -537,7 +554,8 @@ public final class ReleaseEngine {
                     destroyCandidateQuietly(candidateId);
                 }
             }
-            if (stoppedPrior) {
+            // Once the candidate took traffic it is the one writer: the prior release stays stopped.
+            if (stoppedPrior && !switched) {
                 instances.deploy(servingId);
                 ApplicationUpstreams.invalidate(applicationId);
             }
@@ -545,6 +563,26 @@ public final class ReleaseEngine {
                 .reasonOf(gateHeld),
                 "candidate refused: " + HohenheimViolations.reasonOf(gateHeld));
             throw gateHeld;
+        }
+        // Outside the gate's try, so nothing it does can reach the catch that undoes a release (S5 of 2026-11-23):
+        // still on the operation's thread and under the app's claim, after the drain was handed over.
+        followersStep(op, applicationId);
+        return released;
+    }
+
+    /**
+     * Names, in the operation's step log, the containers that take their image from this app and are restarted on the
+     * version that serves now; nothing when there are none, and never a failure of the operation.
+     */
+    private static void followersStep(@NonNull Row op, int applicationId) {
+        try {
+            String line = AppImageFollowers.stepLine(applicationId);
+            if (line != null) {
+                step(op, line);
+            }
+        } catch (RuntimeException unwritten) {
+            Blast.log("RELEASE: could not name the containers following application", applicationId, "-",
+                unwritten.getMessage());
         }
     }
 
@@ -617,11 +655,27 @@ public final class ReleaseEngine {
             }
         });
         try {
-            DRAINS.get().schedule(drain, waitMs);
-        } catch (IllegalStateException stopped) {
-            // The runtime stopped: the operation stays DRAINING and boot recovery finishes it.
+            // AIDEV-NOTE: a zero window is no window: handed over now, so the drain counts in the pool from the switch
+            // on. A timer due at once counts only from when it fires, and awaitDrainsIdle would answer idle in between.
+            if (waitMs <= 0) {
+                DRAINS.get().fireAndForget(drain);
+            } else {
+                DRAINS.get().schedule(drain, waitMs);
+            }
+        } catch (IllegalStateException | RejectedExecutionException stopped) {
+            // The runtime stopped (a hand-over racing the stop is refused): the operation stays DRAINING and boot
+            // recovery finishes it.
             Blast.log("RELEASE: drain of application", applicationId, "left to boot recovery -", stopped.getMessage());
         }
+    }
+
+    /**
+     * Waits until no drain whose window elapsed is queued or running; a window still pending is not waited for.
+     *
+     * @return false when a drain was still in flight at the timeout
+     */
+    public static boolean awaitDrainsIdle(@NonNull Duration timeout) {
+        return DRAINS.awaitIdle(timeout);
     }
 
     /**
@@ -958,9 +1012,12 @@ public final class ReleaseEngine {
     }
 
     private static @NonNull String servingImageOf(int applicationId) {
-        Row serving = ApplicationReleases.ownedServing(applicationId);
-        return serving != null
-            ? trimmed(ApplicationReleases.storedSettings(serving).get(InstanceKindFields.IMAGE)) : "";
+        return imageOf(ApplicationReleases.ownedServing(applicationId));
+    }
+
+    /** @return the image a release runs, as its stored settings name it (a local image id); "" for none */
+    static @NonNull String imageOf(@Nullable Row release) {
+        return release == null ? "" : trimmed(ApplicationReleases.storedSettings(release).get(InstanceKindFields.IMAGE));
     }
 
     // -- the health probe -----------------------------------------------------

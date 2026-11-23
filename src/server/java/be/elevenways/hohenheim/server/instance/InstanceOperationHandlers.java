@@ -45,6 +45,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
+import be.elevenways.hohenheim.server.cms.DeleteImpact;
 import be.elevenways.hohenheim.server.source.GitWebhookProvisioning;
 
 import be.elevenways.hohenheim.model.ServerModel;
@@ -53,6 +54,7 @@ import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.server.operation.InputScope;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
@@ -200,8 +202,11 @@ public final class InstanceOperationHandlers {
                 && capturable(instance))
             .authorize(HohenheimAccess.operatorOnly(OPERATOR_VERB))
             .handle(call -> new InstanceTemplateCapture().capture(instanceId(call)));
+        // Dead, with the reason on screen, for an app containers take their image from (new 2026-11-23: this
+        // operation had no availability before); the service refuses a direct invoke in the same words.
         OperationHandlers.attach(InstanceOperations.DESTROY_WITH_DATA).source(SUBJECTS)
             .applies(InstanceOperationHandlers::authored)
+            .availability(Availability.batch((instances, access) -> DeleteImpact.applicationsFollowed(instances)))
             .authorize(HohenheimAccess.operatorOnly(OPERATOR_VERB))
             .handle(call -> {
                 new InstanceService().destroyWithData(instanceId(call));
@@ -209,11 +214,11 @@ public final class InstanceOperationHandlers {
             });
         // The teardown funnel owns the accountability (the release engine, preview expiry and database teardown
         // record the same verb); generated rows are destroyed by their owning tier, never from an instance list. This
-        // is the operator's own Delete, the one REQUESTED destroy: it retries an unfinished one past its budget.
+        // is the operator's own Delete, the one REQUESTED destroy: it retries an unfinished one past its budget. Its
+        // dead reason is the permission's first, then the containers that take their image from an app.
         OperationHandlers.attach(InstanceOperations.DELETE).source(SUBJECTS)
             .applies(InstanceOperationHandlers::authored)
-            .availability((instance, access) -> HohenheimAccess.destroyUnavailableReason(access,
-                instance.get(InstanceModel.ID)))
+            .availability(Availability.<Row>batch(InstanceOperationHandlers::deleteRefusals))
             .handle(call -> {
                 new InstanceService().destroy(instanceId(call), UnfinishedDestroys.Policy.REQUESTED);
                 return 1;
@@ -310,6 +315,22 @@ public final class InstanceOperationHandlers {
         Map<Integer, Microcopy> reasons = new HashMap<>(InstanceDatabaseLinks.notReadyReasons(instanceIds));
         for (Integer deploying : ApplicationReleases.deployingAmong(instanceIds)) {
             reasons.putIfAbsent(deploying, HohenheimMicrocopy.DEPLOYMENTS.of("deploy_in_progress"));
+        }
+        return reasons;
+    }
+
+    /**
+     * The Delete's dead reasons over a page of instances: the destroy permission's first (HohenheimAccess), then the
+     * containers that take their image from an app, read once for the page (DeleteImpact.applicationsFollowed).
+     */
+    private static @NonNull List<@Nullable Microcopy> deleteRefusals(@NonNull List<? extends Row> instances,
+                                                                     @NonNull AccessContext access) {
+        List<Microcopy> followed = DeleteImpact.applicationsFollowed(instances);
+        List<Microcopy> reasons = new ArrayList<>(instances.size());
+        for (int at = 0; at < instances.size(); at++) {
+            Microcopy permission = HohenheimAccess.destroyUnavailableReason(access,
+                instances.get(at).get(InstanceModel.ID));
+            reasons.add(permission != null ? permission : followed.get(at));
         }
         return reasons;
     }

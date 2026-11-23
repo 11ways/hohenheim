@@ -354,7 +354,7 @@ class MigrationIntegrityTest {
 
     /**
      * The open M004 adds the outage watch's own table, empty, so an existing site reads as never seen answering, and
-     * its down() takes exactly that table away again.
+     * the app a container takes its image from, null on every existing container; its down() takes exactly both away.
      */
     @Test
     void theOpenSiteOutagesMigrationAddsItsTableAndItsDownTakesItAway() throws Exception {
@@ -363,6 +363,7 @@ class MigrationIntegrityTest {
             M003_CertificateSigningRequests::new, M004_SiteOutages::new);
         String outageTable = "SELECT COUNT(*) AS c FROM sqlite_master WHERE type = 'table' AND name = 'site_outages'";
         String sites = "SELECT name FROM pragma_table_info('sites')";
+        String instances = "SELECT name FROM pragma_table_info('instances')";
 
         // 1. The chain through M004 builds, a site stored before it included, and the sites table keeps its columns.
         assertThat(new MigrationRunner(datasource, chain.subList(0, 3)).migrate().isSuccess())
@@ -370,6 +371,7 @@ class MigrationIntegrityTest {
         datasource.rawUpdate("INSERT INTO sites (name, slug, upstream_kind) VALUES ('before', 'before',"
             + " 'hohenheim:instance')");
         List<String> siteColumns = columnsOf(datasource, sites);
+        List<String> instanceColumns = columnsOf(datasource, instances);
         MigrationRunnerResult applied = new MigrationRunner(datasource, chain).migrate();
         assertThat(applied.isSuccess()).as("step 1: M004 applies: %s", failureDetail(applied)).isTrue();
         assertThat(scalar(datasource, outageTable)).as("step 1: the table exists").isEqualTo(1L);
@@ -378,6 +380,8 @@ class MigrationIntegrityTest {
             .contains("id", "site_id", "up_seen_at", "down_since", "down_alerted_at");
         assertThat(columnsOf(datasource, sites)).as("step 1: the site itself gains no column")
             .containsExactlyElementsOf(siteColumns);
+        assertThat(columnsOf(datasource, instances)).as("step 1: an instance gains the app its image comes from")
+            .contains("image_app_id").hasSize(instanceColumns.size() + 1);
 
         // 2. The site stored before holds no outage: nothing to alert about.
         assertThat(scalar(datasource, "SELECT COUNT(*) AS c FROM site_outages"))
@@ -389,6 +393,8 @@ class MigrationIntegrityTest {
         assertThat(scalar(datasource, outageTable)).as("step 3: the table is gone").isEqualTo(0L);
         assertThat(columnsOf(datasource, sites)).as("step 3: the sites table is as it was")
             .containsExactlyElementsOf(siteColumns);
+        assertThat(columnsOf(datasource, instances)).as("step 3: and the instances table is as it was")
+            .containsExactlyElementsOf(instanceColumns);
         assertThat(scalar(datasource, "SELECT COUNT(*) AS c FROM sites")).as("step 3: the site survives")
             .isEqualTo(1L);
         datasource.close();

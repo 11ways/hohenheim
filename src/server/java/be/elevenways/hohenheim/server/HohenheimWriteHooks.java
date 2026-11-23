@@ -17,6 +17,7 @@ import be.elevenways.hohenheim.server.dns.DnsZoneCascades;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
+import be.elevenways.hohenheim.server.application.AppImageFollowers;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.dns.DnsClaimReleases;
 import be.elevenways.hohenheim.server.dns.DnsPeerMirrors;
@@ -176,6 +177,9 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // non-empty project cannot be deleted; an environment can only group records
         // its project OWNS (grouping never disagrees with the grants).
         ProjectGuards.install();
+        // A container may take its image only from an app of its own owner on its own server, operators only, and an
+        // app keeps its host and kind while containers take their image from it.
+        AppImageFollowers.installGuards();
         // An OWNED instance (a Docker site's lowered running release, a managed
         // database's lowered engine) carries derived attribution, is read-only outside
         // its owning tier's system scope, and a generatedOnly() kind cannot be authored

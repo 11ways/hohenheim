@@ -14,6 +14,8 @@ import be.elevenways.hohenheim.instance.InstanceKindInfo;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.instance.LiveFigureView;
+import be.elevenways.hohenheim.server.instance.ApplicationKind;
+import be.elevenways.hohenheim.server.instance.DockerContainerKind;
 import be.elevenways.hohenheim.server.instance.InstanceFigures;
 import be.elevenways.hohenheim.instance.ManagedByCell;
 import be.elevenways.hohenheim.model.BackupTargetModel;
@@ -473,6 +475,17 @@ public final class InstanceParts {
                 .emptyReason(InstanceParts::environmentEmptyReason)
                 .createPresets(InstanceParts::environmentPresets)
                 .build())
+            // The app whose serving version a Docker container runs instead of an image of its own: shown for that
+            // kind only (the showWhen below), offered to operators only (this is the admin form; the /manage form
+            // names neither), never created from here. It offers the apps; one on another server or of another owner
+            // is refused on the save in AppImageFollowers' words, since neither can be a rule over the instance
+            // source, which projects name and kind only.
+            .add(RelationPick.of(InstanceModel.IMAGE_APP_ID, InstanceModel.MODEL_ID)
+                .creatable(false).clearable(true)
+                .rulesFromContext(context -> Condition.all(Condition.test(InstanceModel.KIND.getName(),
+                    CoreTypes.EQUALS, Operand.of(ApplicationKind.ID.toString()))))
+                .emptyReason(context -> HohenheimMicrocopy.INSTANCE.of("image_app_empty"))
+                .build())
             .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.SETTINGS))
             .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.CRASH_POLICY))
             // Where its backups go is the instance's own choice (no installation default exists), so it stands in an
@@ -498,6 +511,8 @@ public final class InstanceParts {
                 InstanceModel.CRASH_POLICY.getName()))
             .showWhen(InstanceModel.RUNTIME_IMAGE_ID.getName(), InstanceModel.KIND.getName(),
                 InstanceKinds.kindsWhere(InstanceKindHandler::usesRuntimeImage).toArray(String[]::new))
+            .showWhen(InstanceModel.IMAGE_APP_ID.getName(), InstanceModel.KIND.getName(),
+                DockerContainerKind.ID.toString())
             .build();
     }
 

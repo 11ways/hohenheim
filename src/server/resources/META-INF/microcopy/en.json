@@ -8734,7 +8734,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Runs once before every deploy, in a temporary container made from the new version, with the app's variables and volumes. If it ends with an error or runs out of time, the deploy stops and the current version keeps serving. While it runs, Stop, Restart and Roll back of this app are refused. An app with an exclusive volume is stopped while the command runs. The command is ended at once when its time is up, and when Hohenheim itself restarts during it. Not run on a rollback, a restore, a preview or a restart. Split on spaces, no shell; \\{\\{KEY\\}\\} is not replaced, the variables are in the environment. Empty runs nothing.",
+      "text": "Runs once before every deploy, in a temporary container made from the new version, with the app's variables and volumes. If it ends with an error or runs out of time, the deploy stops and the current version keeps serving. While it runs, Stop, Restart and Roll back of this app are refused. An app with an exclusive volume is stopped while the command runs. The command is ended at once when its time is up, and when Hohenheim itself restarts during it. Not run on a rollback, a restore, a preview or a restart. Split on spaces, no shell; \\{\\{KEY\\}\\} is not replaced, the variables are in the environment. Empty runs nothing. Containers that take their image from this app keep running the old version until the deploy switches.",
       "scope": "help"
     }
   ],
@@ -8746,6 +8746,135 @@
     {
       "text": "From {$min} to {$max} seconds. Empty is {$default}.",
       "scope": "help"
+    }
+  ],
+  "image_from_app": [
+    {
+      "text": "Image from app",
+      "scope": "hohenheim_field"
+    },
+    {
+      "text": "Runs the image of the version this app serves, instead of an image of its own. After every deploy or rollback of the app this container is stopped and started again on that version, unless you stopped it yourself. Until the switch it keeps running the old version, also while a command before the deploy changes the database. A failed deploy leaves it on the old version; a rollback puts it on the older version and undoes no database change. Stopping the app does not stop this container. It is given {$seconds} seconds to stop. The app must be on the same server and have the same owner. Leave Container image and Image tag empty; the container keeps its own command, variables, limits and volumes.",
+      "scope": "help"
+    },
+    {
+      "text": "Image from app",
+      "scope": "instance_overview"
+    }
+  ],
+  "image_app_empty": {
+    "text": "No app yet.",
+    "scope": "instance"
+  },
+  "image_from_app_value": {
+    "text": "{$name}",
+    "scope": "instance_overview"
+  },
+  "image_from_app_behind": {
+    "text": "{$name}, this container is still on an older version",
+    "scope": "instance_overview"
+  },
+  "background_container": {
+    "text": "Background container",
+    "scope": "instance_overview"
+  },
+  "background_value": {
+    "text": "{$name}",
+    "scope": "instance_overview"
+  },
+  "background_value_state": {
+    "text": "{$name} ({$state})",
+    "scope": "instance_overview"
+  },
+  "background_value_behind": {
+    "text": "{$name}, still on an older version",
+    "scope": "instance_overview"
+  },
+  "image_from_app_unknown": {
+    "text": "The app this container takes its image from no longer exists, or is not an app.",
+    "scope": "violations"
+  },
+  "image_from_app_kind": {
+    "text": "Only a Docker container can take its image from an app.",
+    "scope": "violations"
+  },
+  "image_and_image_from_app": {
+    "text": "Leave Container image and Image tag empty when the image comes from an app.",
+    "scope": "violations"
+  },
+  "image_from_app_other_owner": {
+    "text": "{$app} has another owner. A container can only take the image of an app of its own owner.",
+    "scope": "violations"
+  },
+  "image_from_app_other_server": {
+    "text": "{$app} runs on another server. A container can only take the image of an app on its own server.",
+    "scope": "violations"
+  },
+  "image_from_app_not_deployed": {
+    "text": "{$app} has not been deployed yet, so there is no image to run. Deploy the app first.",
+    "scope": "violations"
+  },
+  "app_server_change_has_followers": {
+    "text": "This app cannot go to another server while these containers take their image from it: {$containers}. Clear \"Image from app\" on them first.",
+    "scope": "violations"
+  },
+  "app_kind_change_has_followers": {
+    "text": "This app cannot become another kind while these containers take their image from it: {$containers}. Clear \"Image from app\" on them first.",
+    "scope": "violations"
+  },
+  "app_delete_has_followers": {
+    "text": "This app cannot be deleted while these containers take their image from it: {$containers}. Delete them or give them another image first.",
+    "scope": "violations"
+  },
+  "migrate_follows_app": {
+    "text": "{$name} takes its image from {$app} and can only run on that app's server.",
+    "scope": "violations"
+  },
+  "restore_follows_app": {
+    "text": "This backup is of a container that takes its image from {$app}. A copy would be a second container of it. Restore it onto the container itself.",
+    "scope": "violations"
+  },
+  "followed_app": [
+    {
+      "text": "Restarted on its app's version",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": "Restarted on the version {$app} now serves",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_app": "true"
+    },
+    {
+      "text": "{$subject} was restarted on the version its app now serves",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "app_follow_refused": [
+    {
+      "text": "Not restarted on its app's new version",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": "Not restarted on the new version of {$app}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_app": "true"
+    },
+    {
+      "text": "Not restarted on the new version of {$app}: {$reason}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_app": "true",
+      "has_reason": "true"
+    },
+    {
+      "text": "{$subject} was not restarted on the new version of its app",
+      "scope": "hohenheim",
+      "target": "happened"
     }
   ],
   "drain_seconds": [

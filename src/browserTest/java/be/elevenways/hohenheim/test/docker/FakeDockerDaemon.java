@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.docker;
 
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerStreamConnection;
 import be.elevenways.hohenheim.server.docker.DockerStreamTransport;
@@ -13,6 +14,8 @@ import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.Egress;
+import be.elevenways.hohenheim.server.runtime.ImageIdentity;
+import be.elevenways.hohenheim.server.runtime.ImageIdentitySupport;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.LinkNetworkSupport;
 import be.elevenways.hohenheim.server.runtime.NetworkPosture;
@@ -138,6 +141,15 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
     /** Consumed by the next start: a writer that appears while the daemon is working. */
     private @Nullable Runnable duringNextStart;
 
+    /** Consumed by the next create of the runtime face: thrown unchecked before anything is made. */
+    private volatile @Nullable RuntimeException failNextCreate;
+
+    /**
+     * owner record ({@code model#id}) -> the most containers its owner labels named at once, sampled after every
+     * create and start of either face: the daemon's own count of "never two at once".
+     */
+    private final Map<String, Integer> peakOwned = new LinkedHashMap<>();
+
     /** One exec the daemon ran inside a container: the container, the command and its environment. */
     public record Exec(@NonNull String handle, @NonNull List<String> command, @NonNull List<String> env) {
     }
@@ -201,6 +213,34 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
      */
     public void duringNextStart(@NonNull Runnable work) {
         this.duringNextStart = work;
+    }
+
+    /**
+     * The NEXT create of the runtime face throws {@code death} unchecked before it makes anything: a controller that
+     * dies inside a deploy, which no catch of the deploy stamps (a killed process stamps nothing).
+     */
+    public void failNextCreate(@NonNull RuntimeException death) {
+        this.failNextCreate = death;
+    }
+
+    /**
+     * The most containers this instance record ever owned at once on this daemon, sampled after every create and
+     * start; 0 when it never had one.
+     */
+    public synchronized int peakContainersOf(int instanceId) {
+        return this.peakOwned.getOrDefault(InstanceModel.MODEL_ID + "#" + instanceId, 0);
+    }
+
+    /** Samples {@link #peakOwned} from the workloads held now. */
+    private synchronized void samplePeaks() {
+        Map<String, Integer> owned = new LinkedHashMap<>();
+        for (Workload workload : List.copyOf(this.workloads.values())) {
+            OwnerLabels.Owner owner = OwnerLabels.parse(workload.labels);
+            if (owner != null) {
+                owned.merge(owner.model() + "#" + owner.id(), 1, Integer::sum);
+            }
+        }
+        owned.forEach((key, count) -> this.peakOwned.merge(key, count, Math::max));
     }
 
     /** The NEXT one-shot the daemon API starts exits with this code after printing {@code output}. */
@@ -401,7 +441,15 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
         return new FakeReleaseRuntime();
     }
 
-    private final class FakeReleaseRuntime implements InstanceRuntime, LinkNetworkSupport, PreDeploySupport {
+    private final class FakeReleaseRuntime implements InstanceRuntime, LinkNetworkSupport, PreDeploySupport,
+            ImageIdentitySupport {
+
+        /** The image a created workload runs, as the daemon identifies it (its local id). */
+        @Override
+        public @NonNull ImageIdentity imageIdentity(@NonNull InstanceSpec spec) throws IOException {
+            Workload workload = require(spec.handle());
+            return new ImageIdentity(workload.image, digestOf(workload.image));
+        }
 
         /**
          * The one-shot runs through the REAL Docker driver over this daemon's API face, so its container body (the
@@ -456,6 +504,11 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
         @Override
         public @NonNull String create(@NonNull InstanceSpec spec) throws IOException {
             OwnerLabels.Owner owner = OwnerLabels.parse(spec.ownerLabels());
+            RuntimeException death = FakeDockerDaemon.this.failNextCreate;
+            if (death != null) {
+                FakeDockerDaemon.this.failNextCreate = null;
+                throw death;
+            }
             if (owner == null) {
                 throw new IOException("spec without owner labels");
             }
@@ -487,6 +540,7 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
                 FakeDockerDaemon.this.nextHealth = null;
             }
             FakeDockerDaemon.this.calls.add("create:" + spec.handle());
+            samplePeaks();
             return spec.handle();
         }
 
@@ -498,6 +552,7 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
             }
             workload.running = true;
             FakeDockerDaemon.this.calls.add("start:" + handle);
+            samplePeaks();
             Runnable during = FakeDockerDaemon.this.duringNextStart;
             FakeDockerDaemon.this.duringNextStart = null;
             if (during != null) {
@@ -837,6 +892,7 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
             this.workloads.put(name, created);
             this.createBodies.put(name, request);
             this.calls.add("create:" + name);
+            samplePeaks();
             return json(201, Map.of("Id", name));
         }
         if ("POST".equals(method) && path.startsWith("/containers/") && path.endsWith("/start")) {

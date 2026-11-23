@@ -170,8 +170,13 @@ public final class InstanceMigrations {
                                                   @NonNull String name,
                                                   @NonNull Resolved resolved,
                                                   boolean sourceTransportable) {
-        // The kind-on-host verdict FIRST, as migrateTo asks it: a host of the wrong runtime is never asked for a
-        // client below.
+        // A container that takes its image from an app first: no host but its app's can run it, whatever it offers.
+        Microcopy followsApp = followsAppRefusal(resolved);
+        if (followsApp != null) {
+            return followsApp;
+        }
+        // The kind-on-host verdict FIRST of the host's own, as migrateTo asks it: a host of the wrong runtime is
+        // never asked for a client below.
         Microcopy placement = InstancePlacement.kindRefusalOn(serverId, resolved.handler(),
             resolved.row().get(InstanceModel.QUOTA_BUCKET), InstanceModel.settingsOf(resolved.row()));
         if (placement != null) {
@@ -207,6 +212,23 @@ public final class InstanceMigrations {
         return null;
     }
 
+    /**
+     * A container that takes its image from an app runs only on that app's server (the image is a local id of that
+     * daemon), so it is refused by name and keeps running where it is; moving the two together is not offered.
+     *
+     * @return the refusal, or null for a container with an image of its own
+     */
+    private static @Nullable Microcopy followsAppRefusal(@NonNull Resolved resolved) {
+        Integer applicationId = resolved.row().get(InstanceModel.IMAGE_APP_ID);
+        if (applicationId == null) {
+            return null;
+        }
+        Row app = Models.get(InstanceModel.class).findById(applicationId);
+        return HohenheimViolations.instanceRefusalText("migrate_follows_app", resolved.row(), null)
+            .withArg("app", app == null ? String.valueOf(applicationId) : String.valueOf((Object) app.get(
+                InstanceModel.NAME)));
+    }
+
     // -- single-instance migration ---------------------------------------------
 
     /**
@@ -218,6 +240,11 @@ public final class InstanceMigrations {
      */
     public int migrate(int instanceId) {
         Resolved resolved = this.instances.resolve(instanceId);
+        // Before the placement chooser, so an evacuation names the container by this refusal, never by "no host".
+        Microcopy followsApp = followsAppRefusal(resolved);
+        if (followsApp != null) {
+            throw Violations.ofForm(followsApp);
+        }
         String bucket = resolved.row().get(InstanceModel.QUOTA_BUCKET);
         int target = InstancePlacement.chooseForBucket(bucket == null ? "" : bucket,
             InstancePlacement.Workload.of(resolved.handler(), resolved.row()),
@@ -256,6 +283,11 @@ public final class InstanceMigrations {
         }
         if (targetServerId == resolved.serverId()) {
             throw HohenheimViolations.instanceRefusal("migrate_same_host", resolved.row(), null);
+        }
+        // The one host a container that takes its image from an app can run on is its app's.
+        Microcopy followsApp = followsAppRefusal(resolved);
+        if (followsApp != null) {
+            throw Violations.ofForm(followsApp);
         }
         // THE kind-on-host verdict the survey shows beside this host (destinationsFor), so the two cannot disagree.
         Microcopy placement = InstancePlacement.kindRefusalOn(targetServerId, resolved.handler(),

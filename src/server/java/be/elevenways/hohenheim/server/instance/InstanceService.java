@@ -12,16 +12,20 @@ import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
+import be.elevenways.hohenheim.server.application.AppImageFollowers;
 import be.elevenways.hohenheim.server.application.ApplicationDeploys;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.application.ApplicationUpstreams;
 import be.elevenways.hohenheim.HohenheimCapabilities;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
+import be.elevenways.hohenheim.server.cms.DeleteImpact;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
+import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.InstanceDatabaseNetworks;
 import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.host.HostAdmission;
@@ -32,7 +36,7 @@ import be.elevenways.hohenheim.server.runtime.FileStagingSupport;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
-import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
+import be.elevenways.hohenheim.server.runtime.ImageIdentitySupport;
 import be.elevenways.hohenheim.server.runtime.PreDeploySupport;
 import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
 import be.elevenways.hohenheim.server.runtime.WorkloadAttribution;
@@ -241,8 +245,7 @@ public final class InstanceService {
     private @NonNull InstanceStatus deployNow(int instanceId, @NonNull DeployTrigger trigger) {
         // Above the fold, so all three lanes and every surface -- row action, automation
         // API, schedule chain -- answer the same way.
-        requireDeployAdmitted(instanceId);
-        startAttachedDatabases(instanceId, trigger);
+        admitDeploy(instanceId, trigger);
         // A release-managed record owns no container: deploying it means checking the
         // source out and converging a RELEASE. The branch is here, after the gate and
         // before any driver work, so every existing power surface deploys an application
@@ -256,7 +259,13 @@ public final class InstanceService {
         if (WorkspaceBuilds.deploysSource(liveRow(instanceId))) {
             return new WorkspaceBuilds(this).deploy(instanceId, null, null, trigger).status();
         }
-        return deployWorkloadNow(instanceId, trigger, null);
+        return deployWorkloadNow(instanceId, trigger, null, false);
+    }
+
+    /** The admission every deploy of {@link #deploy} and {@link #restart} asks first, and the databases it needs up. */
+    private void admitDeploy(int instanceId, @NonNull DeployTrigger trigger) {
+        requireDeployAdmitted(instanceId);
+        startAttachedDatabases(instanceId, trigger);
     }
 
     /**
@@ -317,7 +326,7 @@ public final class InstanceService {
                                                   @NonNull RestoreVolumes restoreVolumes) {
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimCapabilities.CONFIG);
         return operation(instanceId,
-            () -> deployWorkloadNow(instanceId, DeployTrigger.SYSTEM, restoreVolumes));
+            () -> deployWorkloadNow(instanceId, DeployTrigger.SYSTEM, restoreVolumes, false));
     }
 
     /**
@@ -373,13 +382,19 @@ public final class InstanceService {
 
     /** {@link #deployWorkload(int)} on a named trigger; the workload half enforces it too. */
     @NonNull InstanceStatus deployWorkload(int instanceId, @NonNull DeployTrigger trigger) {
-        return operation(instanceId, () -> deployWorkloadNow(instanceId, trigger, null));
+        return operation(instanceId, () -> deployWorkloadNow(instanceId, trigger, null, false));
     }
 
-    /** {@link #deployWorkload}'s body; the operation lock is the wrapper's job. */
+    /**
+     * {@link #deployWorkload}'s body; the operation lock is the wrapper's job.
+     *
+     * @param haltFirst whether the running workload is halted after the whole admission and before the create: the
+     *                  restart of a record that owns its container, which never writes {@code stopped}
+     */
     private @NonNull InstanceStatus deployWorkloadNow(int instanceId,
                                                       @NonNull DeployTrigger trigger,
-                                                      @Nullable RestoreVolumes restoreVolumes) {
+                                                      @Nullable RestoreVolumes restoreVolumes,
+                                                      boolean haltFirst) {
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimCapabilities.POWER);
         // Read BEFORE resolve derives the environment (InstanceDatabaseLinks.credentialGenerations says why), and
         // recorded on the attachments once the workload is up: what its health compares a password change against.
@@ -410,6 +425,10 @@ public final class InstanceService {
             HostAdmission.requireInstancePlacement(resolved.serverId(),
                 resolved.handler().isolation(),
                 resolved.row().get(InstanceModel.QUOTA_BUCKET));
+        }
+        // A restart's stop half: after every gate above, so a refused restart leaves the workload running.
+        if (haltFirst) {
+            haltForRestart(resolved, instanceId);
         }
         InstanceConsoles.Watch watch = null;
         try {
@@ -546,28 +565,63 @@ public final class InstanceService {
         InstanceOperationGuard.requireOperable(resolved.row());
         this.leases.requireFence(resolved.serverId());
         try {
-            // The console half of a stop: mark the coming exit OBSERVED (crash
-            // detection must not fire on an operator stop), then try the template's
-            // stop command over stdin. The daemon stop below runs either way -- it is
-            // the daemon's idempotent no-op after a successful console stop, and the
-            // enforcement (SIGTERM, then SIGKILL after grace) when there was none.
-            InstanceConsoles.markStopExpected(instanceId);
-            InstanceShell.closeSessionsOf(instanceId, InstanceShell.EndReason.WORKLOAD_ENDED);
-            boolean graceful = InstanceConsoles.tryGracefulStop(resolved, instanceId, 10, this.leases);
-            if (graceful) {
-                Blast.log("INSTANCE: stop of", resolved.spec().handle(),
-                    "settled via the console stop command");
-            }
-            resolved.runtime().stop(resolved.spec().handle(), 10);
-            this.beforeOutcomeWrite.run();
+            halt(resolved, instanceId);
             stampGuarded(resolved, InstanceModel.STATUS_STOPPED);
             // The claims stay: see the method's doc.
             recordPower(instanceId, HohenheimActivityAction.STOPPED, resolved);
         } catch (IOException e) {
-            stampGuardedError(resolved, HohenheimActivityAction.WORKLOAD_STOP_FAILED, e.getMessage());
-            PortLedger.releaseOwner(InstanceModel.MODEL_ID, instanceId);
-            throw HohenheimViolations.instanceRefusal("instance_stop_failed", resolved.row(), e);
+            throw stopFailed(resolved, instanceId, e);
         }
+    }
+
+    /**
+     * The stop of a workload, shared by a Stop and a restart's halt: the coming exit marked OBSERVED (crash detection
+     * must not fire on an operator stop), shells ended, the template's stop command tried over stdin, then the
+     * daemon's stop -- its idempotent no-op after a successful console stop, and the enforcement (SIGTERM, then
+     * SIGKILL after the grace) when there was none.
+     *
+     * @throws IOException when the daemon did not confirm the stop
+     */
+    private void halt(@NonNull Resolved resolved, int instanceId) throws IOException {
+        InstanceConsoles.markStopExpected(instanceId);
+        InstanceShell.closeSessionsOf(instanceId, InstanceShell.EndReason.WORKLOAD_ENDED);
+        boolean graceful = InstanceConsoles.tryGracefulStop(resolved, instanceId,
+            InstanceKindFields.STOP_GRACE_SECONDS, this.leases);
+        if (graceful) {
+            Blast.log("INSTANCE: stop of", resolved.spec().handle(),
+                "settled via the console stop command");
+        }
+        resolved.runtime().stop(resolved.spec().handle(), InstanceKindFields.STOP_GRACE_SECONDS);
+        this.beforeOutcomeWrite.run();
+    }
+
+    /**
+     * A restart's halt: the workload stopped, recorded as the stop it is, and the status left as it was until the
+     * deploy's own outcome stamp.
+     *
+     * AIDEV-NOTE: a daemon that answers "no such container" means nothing runs, and the deploy goes on to create it;
+     * that tolerance is the restart's alone, so a Stop of an absent container keeps refusing as it always did.
+     *
+     * @throws Violations {@code instance_stop_failed}, the record stamped {@code error}, as a Stop refuses
+     */
+    private void haltForRestart(@NonNull Resolved resolved, int instanceId) {
+        try {
+            halt(resolved, instanceId);
+        } catch (IOException e) {
+            if (e instanceof DockerClient.ApiException answered && answered.isNotFound()) {
+                Blast.log("INSTANCE: restart of", resolved.spec().handle(), "found no container; creating it");
+                return;
+            }
+            throw stopFailed(resolved, instanceId, e);
+        }
+        recordPower(instanceId, HohenheimActivityAction.STOPPED, resolved);
+    }
+
+    /** A stop the daemon did not confirm: the record stamped {@code error}, its claims parked, the refusal named. */
+    private @NonNull Violations stopFailed(@NonNull Resolved resolved, int instanceId, @NonNull IOException e) {
+        stampGuardedError(resolved, HohenheimActivityAction.WORKLOAD_STOP_FAILED, e.getMessage());
+        PortLedger.releaseOwner(InstanceModel.MODEL_ID, instanceId);
+        return HohenheimViolations.instanceRefusal("instance_stop_failed", resolved.row(), e);
     }
 
     /**
@@ -631,6 +685,12 @@ public final class InstanceService {
             OwnedInstances.requireRemovable(stored);
         }
         if (releaseManaged(instanceId)) {
+            // Containers that take their image from this app would be left running nothing: refused by name, in the
+            // words the panel's dead Delete shows (DeleteImpact.applicationsFollowed). Only an app pays the read.
+            Microcopy followed = stored == null ? null : DeleteImpact.applicationsFollowed(List.of(stored)).get(0);
+            if (followed != null) {
+                throw Violations.ofForm(followed);
+            }
             ApplicationReleases.destroyFor(instanceId, policy);
             GitCheckout.discard(InstanceModel.MODEL_ID, instanceId);
             InstanceExposure.disableForDestroyedInstance(instanceId);
@@ -874,12 +934,10 @@ public final class InstanceService {
      */
     private void pinResolvedImage(@NonNull Resolved resolved, @NonNull InstanceSpec spec)
             throws IOException {
-        String observed = null;
-        if (resolved.runtime() instanceof NativeSnapshotSupport support) {
-            observed = support.imageIdentity(spec).id();
-        } else if (resolved.runtime() instanceof VolumeSnapshotSupport support) {
-            observed = support.imageIdentity(spec).id();
+        if (!(resolved.runtime() instanceof ImageIdentitySupport support)) {
+            return;
         }
+        String observed = support.imageIdentity(spec).id();
         if (observed == null || observed.isBlank()
                 || observed.equals(resolved.row().get(InstanceModel.IMAGE_FINGERPRINT))) {
             return;
@@ -941,11 +999,16 @@ public final class InstanceService {
 
     // -- resolution -----------------------------------------------------------
 
+    /**
+     * @param imageRefusal why a container that takes its image from an app can run nothing now
+     *                     ({@link AppImageFollowers#sourceOf}), or null
+     */
     public record Resolved(@NonNull Row row, @NonNull InstanceKindHandler handler,
                            @NonNull InstanceRuntime runtime,
                            @NonNull InstanceSpec spec, int serverId,
                            @NonNull Map<String, String> variables,
-                           @NonNull Map<String, Object> settings) {
+                           @NonNull Map<String, Object> settings,
+                           @Nullable Microcopy imageRefusal) {
 
         /** @return the daemon's status of this workload, read now; never throws */
         public @NonNull InstanceStatus liveStatus() {
@@ -956,9 +1019,15 @@ public final class InstanceService {
          * Asked by every path that creates a workload from this spec; a verb on a workload that exists, or never will,
          * does not need an image.
          *
-         * @throws Violations {@code instance_image_required} for a blank image the kind's settings do not allow
+         * @throws Violations the reason a container that takes its image from an app can run nothing now, on
+         *         {@code image_app_id}; else {@code instance_image_required} for a blank image the kind's settings
+         *         do not allow
          */
         public void requireImage() {
+            if (this.imageRefusal != null) {
+                throw Violations.ofField(InstanceModel.IMAGE_APP_ID.getName(),
+                    this.row.get(InstanceModel.IMAGE_APP_ID), this.imageRefusal);
+            }
             if (this.spec.image().isBlank() && !this.handler.allowsBlankImage(this.settings)) {
                 throw Violations.ofField("settings.image", "",
                     HohenheimMicrocopy.VIOLATIONS.of("instance_image_required"));
@@ -1219,13 +1288,13 @@ public final class InstanceService {
      * Stop and deploy again, in one verb.
      *
      * AIDEV-NOTE: THE restart composition, and there is exactly one: the restart operation
-     * ({@code InstanceOperations.RESTART}) runs it from every surface. It used to live
+     * ({@code InstanceOperations.RESTART}) runs it from every surface, and so does a container following its app's
+     * new version (AppImageFollowers). It used to live
      * inline in the scheduled power action and nowhere else, so the CMS surface
      * that wanted a restart button had to either hand-roll the pair (two independent
      * gate checks, two toasts, and a UI-side window where the workload is down with
-     * nothing recording why) or grow a schedule to press it. stop() is idempotent when
-     * the workload is already stopped and deploy() is create-plus-start, so the pair IS
-     * the restart -- but the pair belongs to the service every surface funnels through.
+     * nothing recording why) or grow a schedule to press it. The pair belongs to the
+     * service every surface funnels through.
      * Both halves ask {@link HohenheimCapabilities#POWER} themselves; this method deliberately
      * adds no gate of its own, so a restart can never be a wider door than a stop.
      */
@@ -1236,17 +1305,29 @@ public final class InstanceService {
     /**
      * {@link #restart(int)} on a named trigger, for the surfaces where a person asked.
      *
-     * AIDEV-NOTE: the deploy half runs AFTER a stop that stamped {@code stopped}, so a
-     * restart on a trigger that may not start a stopped workload would refuse its own
-     * second half. No such surface exists -- a forge push never restarts -- and the
-     * refusal is the honest outcome if one is ever wired.
+     * AIDEV-NOTE: a record that owns its container (not release-managed, not a source-deploying workspace) restarts
+     * HALT-THEN-DEPLOY since 2026-11-23: every gate of the deploy first, then the halt, then the create, and no
+     * {@code stopped} is written in between. Its stop and its deploy are still recorded, so a person's Restart reads
+     * the same; what changed is that a controller stopped or killed between the two halves leaves a record that
+     * claims {@code running} over a container that is gone, which the status sweep corrects and restarts (or reports),
+     * instead of a {@code stopped} no boot could tell from an operator's Stop. The two folded kinds keep
+     * stop-then-deploy: their stop and their deploy are a release's or a build's, and their deploy half runs AFTER a
+     * stop that stamped {@code stopped}, so a restart on a trigger that may not start a stopped workload would refuse
+     * its own second half there. No such surface exists -- a forge push never restarts.
      */
     public void restart(int instanceId, @NonNull DeployTrigger trigger) {
         // ONE hold across both halves: another operation must not land between the stop
         // and the start and find the workload down for a reason nobody recorded.
         operation(instanceId, () -> {
-            stop(instanceId);
-            deploy(instanceId, trigger);
+            Row row = liveRow(instanceId);
+            if (row != null && !InstanceKinds.isReleaseManaged(row.get(InstanceModel.KIND))
+                    && !WorkspaceBuilds.deploysSource(row)) {
+                admitDeploy(instanceId, trigger);
+                deployWorkloadNow(instanceId, trigger, null, true);
+            } else {
+                stop(instanceId);
+                deploy(instanceId, trigger);
+            }
             return null;
         });
     }
@@ -1297,12 +1378,23 @@ public final class InstanceService {
         Map<String, String> derived = DatabaseEnvInjection.envForInstance(instanceId, null);
         Map<String, String> variables = InstanceVariables.layered(derived, declared);
         settings = instanceVariables.applyToSettings(settings, declared, derived);
+        // A container that takes its image from an app runs what that app serves NOW: injected here, in the one place
+        // a spec is built, so nothing is copied onto the record and nothing can drift. A refusal leaves the image as
+        // stored (empty for every container the write guard admitted) and rides Resolved, so a create answers in its
+        // words and a stop or delete still resolves.
+        AppImageFollowers.Source source = AppImageFollowers.sourceOf(row);
+        if (source != null && source.refusal() == null) {
+            settings = new LinkedHashMap<>(settings);
+            settings.put(InstanceKindFields.IMAGE, source.image());
+            settings.remove("tag");
+        }
         InstanceSpec spec = handler.specFor(instanceId, settings);
         // The record's pinned resolved image identity rides the spec: a driver that
         // resolves by fingerprint recreates an ABSENT workload from the pin, never by
-        // re-resolving the mutable alias (cleared on image change by the write hook).
+        // re-resolving the mutable alias (cleared on image change by the write hook). A
+        // container following an app never: its pin is what it ran, not what it must run.
         String pinned = row.get(InstanceModel.IMAGE_FINGERPRINT);
-        if (pinned != null && !pinned.isBlank()) {
+        if (source == null && pinned != null && !pinned.isBlank()) {
             spec = spec.withImageFingerprint(pinned);
         }
         // THE canonical host key -- null folds to the local daemon, any other spelling
@@ -1317,7 +1409,7 @@ public final class InstanceService {
             : ServerModel.RUNTIME_DOCKER;
         InstanceKinds.requireRuntimeMatch(serverName, hostRuntime, handler.supportedRuntimes());
         return new Resolved(row, handler, runtimeFor(handler, serverName), spec, serverId,
-            variables, settings);
+            variables, settings, source == null ? null : source.refusal());
     }
 
     /**

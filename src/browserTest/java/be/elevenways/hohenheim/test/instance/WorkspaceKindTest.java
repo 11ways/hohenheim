@@ -351,7 +351,7 @@ class WorkspaceKindTest {
                 Models.get(InstanceModel.class).findById(id),
                 InstanceKinds.getHandler(KIND), runtime,
                 InstanceKinds.getHandler(KIND).specFor(id, settings),
-                ServerModel.localServerId(), Map.of(), settings);
+                ServerModel.localServerId(), Map.of(), settings, null);
 
             BuildLog log = new BuildLog(64 * 1024);
             String commit = new WorkspaceBuilds().checkout(resolved, "main", settings, log);

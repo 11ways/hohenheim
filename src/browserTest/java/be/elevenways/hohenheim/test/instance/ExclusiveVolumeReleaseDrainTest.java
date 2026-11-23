@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -31,6 +32,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
  * An application whose volume is exclusive swaps releases stop-before-start: the prior release is stopped while it
@@ -130,6 +132,43 @@ class ExclusiveVolumeReleaseDrainTest {
                     .as("step 4: and holds no port claim").isEmpty();
                 assertThat(PortLedger.claimsOf(InstanceModel.MODEL_ID, second))
                     .as("step 4: while v2 holds one").isNotEmpty();
+            } finally {
+                ApplicationReleases.destroyFor(applicationId);
+                setBackend(VolumeBackend.UNCHECKED);
+            }
+        });
+    }
+
+    /**
+     * A throw AFTER the switch of an exclusive-volume app keeps the new release serving: the gate's catch used to
+     * destroy the candidate that had just taken the traffic and start the prior writer again, leaving the app with no
+     * serving release at all (and two writers, had the prior one still been there).
+     */
+    @Test
+    void aThrowAfterTheSwitchKeepsTheNewReleaseServing() {
+        Db.run(datasource, () -> {
+            setBackend(VolumeBackend.BTRFS);
+            int applicationId = application("exclusive-after-switch", "v1");
+            InstanceVolumes.declare(applicationId, "data", "/data", null, true);
+            try {
+                // 1. v1 serves.
+                ApplicationReleases.converge(applicationId, Map.of());
+                int first = ApplicationReleases.ownedServing(applicationId).get(InstanceModel.ID);
+
+                // 2. v2's switch throws after the candidate took the traffic: the prior release vanished under it.
+                setSettings(applicationId, "v2");
+                daemon.duringNextStart(() -> Models.get(InstanceModel.class).find()
+                    .where(InstanceModel.ID.eq(first)).assign(InstanceModel.DELETED_AT, Now.instant()).updateAll());
+                assertThat(catchThrowable(() -> ApplicationReleases.converge(applicationId, Map.of())))
+                    .as("step 2: the deploy fails after its switch").isNotNull();
+
+                // 3. THE ASSERTION: the candidate is kept serving, its container running.
+                Row serving = ApplicationReleases.ownedServing(applicationId);
+                assertThat(serving).as("step 3: a release still serves").isNotNull();
+                int second = serving.get(InstanceModel.ID);
+                assertThat(second).as("step 3: the new one").isNotEqualTo(first);
+                assertThat(daemon.isRunning(FakeDockerDaemon.handleOf(second)))
+                    .as("step 3: and its container runs").isTrue();
             } finally {
                 ApplicationReleases.destroyFor(applicationId);
                 setBackend(VolumeBackend.UNCHECKED);

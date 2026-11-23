@@ -419,6 +419,7 @@ refused `unknown_template` rather than falling into the other lane):
 | `environment_id` | integer | Grouping only; the environment's project must have the same owner set (`environment_project_mismatch`) |
 | `crash_policy` | enum | `none` (default) or `restart` |
 | `backup_target_id` | integer | |
+| `image_app_id` | integer | `hohenheim:docker_container` only: the app whose serving release's image the container runs instead of its own `settings.image`/`settings.tag` (both must be empty, `image_and_image_from_app`). Same server and same owner as the app (`image_from_app_other_server`, `image_from_app_other_owner`); operator-only, a tenant write is refused (`tenant_field_frozen`). See "A container that follows an app" below |
 | `settings.*` | per kind | The kind's own schema; an undeclared setting is refused (`unknown_field`) |
 
 Settings per kind (every key optional unless said otherwise):
@@ -508,6 +509,17 @@ enough to destroy it: a caller holding only `view` gets a **422**
 `instance_not_permitted` (the refusal never says which capability is missing, so it is
 no capability oracle) while an unrelated id gets the uniform 404. A failed teardown is
 also a 422 (`instance_destroy_failed`) and leaves the record alive.
+
+### A container that follows an app
+
+A container with `image_app_id` set runs the image of the release its app serves at each start, and is stopped and
+started again on the new version after every deploy or rollback of the app (`followed_app` on its activity), unless
+it was stopped by hand. There is never more than one container per record. What a client does NOT get: the stop
+grace is 10 seconds, the restart follows a few seconds after the app's switch (not atomically), the container keeps
+running when the app is stopped, and it cannot be migrated (`migrate_follows_app`). While a container follows an app,
+that app's delete (`app_delete_has_followers`), server change (`app_server_change_has_followers`) and kind change
+(`app_kind_change_has_followers`) are refused, and a backup of the container cannot be restored to a new instance
+(`restore_follows_app`). A start before the app's first deploy is refused `image_from_app_not_deployed`.
 
 ## Managed databases
 

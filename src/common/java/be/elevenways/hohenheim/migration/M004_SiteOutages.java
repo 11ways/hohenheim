@@ -7,11 +7,13 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import java.util.List;
 
 /**
- * The schema changes after M003: the table in which the outage watch of an app's site remembers it between its sweeps.
+ * The schema changes after M003: the table in which the outage watch of an app's site remembers it between its sweeps,
+ * and the app a Docker container takes its image from.
  *
  * AIDEV-NOTE: OPEN: no live host applied it yet, so it is the one migration after PUBLISHED and every schema change
  * until the next live deploy edits it. The table starts empty: an existing site reads as never seen answering, so the
- * first sweep after the upgrade alerts nothing. down() undoes exactly what up() did.
+ * first sweep after the upgrade alerts nothing. instances.image_app_id starts null on every row, so every existing
+ * container keeps its own image. down() undoes exactly what up() did, the index before its column.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -34,10 +36,18 @@ public final class M004_SiteOutages extends HohenheimMigration {
             table.timestamps();
             table.unique("site_outages_site_id_unique", List.of("site_id"));
         });
+        builder.alterTable("instances", table -> {
+            table.addColumn("image_app_id", ColumnType.INTEGER, column -> column.nullable(true));
+            table.addIndex("instances_image_app_id_index", List.of("image_app_id"));
+        });
     }
 
     @Override
     public void down(@NonNull MigrationBuilder builder) {
+        builder.alterTable("instances", table -> {
+            table.dropIndex("instances_image_app_id_index");
+            table.dropColumn("image_app_id");
+        });
         builder.dropTable("site_outages");
     }
 }

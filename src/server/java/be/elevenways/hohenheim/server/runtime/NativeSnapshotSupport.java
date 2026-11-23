@@ -24,7 +24,7 @@ import java.util.Map;
  * LXD/Incus/Proxmox nightly-snapshot semantic. That difference is this interface's
  * declared contract, not a per-call option.
  */
-public interface NativeSnapshotSupport extends WorkloadAttribution {
+public interface NativeSnapshotSupport extends WorkloadAttribution, ImageIdentitySupport {
 
     /**
      * Create the named daemon-side snapshot of the instance (running or stopped).
@@ -126,11 +126,4 @@ public interface NativeSnapshotSupport extends WorkloadAttribution {
      */
     record ImportedDevice(@NonNull String name, @NonNull DeviceType type, @Nullable String source) {
     }
-
-    /**
-     * The image identity the workload actually runs (for the backup manifest).
-     *
-     * @throws IOException when the workload is absent or the daemon unreachable
-     */
-    @NonNull ImageIdentity imageIdentity(@NonNull InstanceSpec spec) throws IOException;
 }

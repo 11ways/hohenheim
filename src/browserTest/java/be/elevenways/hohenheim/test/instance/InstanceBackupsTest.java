@@ -1446,6 +1446,40 @@ class InstanceBackupsTest {
         return id;
     }
 
+    /**
+     * A backup of a container that takes its image from an app is refused a restore to a NEW record, in words and
+     * before anything is made: the copy would be a second container of that app.
+     */
+    @Test
+    void aBackupOfAContainerTakingAnAppsImageIsNeverRestoredBesideIt() {
+        Db.run(datasource, () -> {
+            InstanceService service = new InstanceService();
+            InstanceBackups backups = new InstanceBackups();
+            int instanceId = instanceRecord("backup-follower", hostId);
+            service.deploy(instanceId);
+            // The reference written past the write guards (a hook-free update), so this lane's native kind carries
+            // it into the backup's profile; what the restore judges is the profile alone.
+            Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(instanceId))
+                .assign(InstanceModel.IMAGE_APP_ID, Integer.MAX_VALUE).updateAll();
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 0);
+            try {
+                int backupId = backups.backupNow(instanceId, targetId, target);
+                long before = Models.get(InstanceModel.class).find().withTrashed().count();
+
+                // 1. Refused by name, and no record was made (none created and destroyed either).
+                assertThat(violationKeys(catchThrowable(() -> backups.restoreToNew(backupId, "follower-copy",
+                    hostId)))).as("step 1: a copy of a follower is refused").isEqualTo("restore_follows_app ");
+                assertThat(Models.get(InstanceModel.class).find().withTrashed().count())
+                    .as("step 1: no instance record was made").isEqualTo(before);
+            } finally {
+                Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 7);
+                Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(instanceId))
+                    .assign(InstanceModel.IMAGE_APP_ID, (Integer) null).updateAll();
+                service.destroy(instanceId);
+            }
+        });
+    }
+
     // -- fixtures -------------------------------------------------------------
 
     private static String remoteKeyOf(int backupId) {

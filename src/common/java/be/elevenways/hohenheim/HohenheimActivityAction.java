@@ -107,6 +107,13 @@ public enum HohenheimActivityAction implements ActivityAction {
      * last probe's failure.
      */
     RESTARTED_UNANSWERED("restarted_unanswered"),
+    /** A container that takes its image from an app was restarted on the version that app now serves. */
+    FOLLOWED_APP("followed_app"),
+    /**
+     * A switch of an app could not restart a container that takes its image from it, which keeps running the version
+     * it ran; the detail is the refusal's own reason.
+     */
+    APP_FOLLOW_REFUSED("app_follow_refused"),
     /** A visitor signed in to a protected site; its actor is the person as the provider named them. */
     SITE_SIGNED_IN("site_signed_in"),
     BACKUP("backup"),
@@ -170,6 +177,8 @@ public enum HohenheimActivityAction implements ActivityAction {
 
     /** A text key: a name, path, hostname or command as the act named it. */
     public static final String NAME_KEY = "name";
+    /** The name of the app a container takes its image from. */
+    public static final String APP_KEY = "app";
     public static final String SOURCE_KEY = "source";
     public static final String MANUAL_KEY = "manual";
     public static final String HOSTNAMES_KEY = "hostnames";
@@ -427,6 +436,9 @@ public enum HohenheimActivityAction implements ActivityAction {
             case APP_UPDATE_FAILED, BACKUP_FAILED, RENEWAL_FAILED, RESTARTED_UNANSWERED ->
                 FactShape.of(FactShape.optionalKey(REASON_KEY, CoreTypes.TEXT));
             case QUARANTINED -> FactShape.of(FactShape.optionalKey(REASON_KEY, CoreTypes.TEXT));
+            case FOLLOWED_APP -> FactShape.of(FactShape.key(APP_KEY, CoreTypes.TEXT));
+            case APP_FOLLOW_REFUSED -> FactShape.of(FactShape.key(APP_KEY, CoreTypes.TEXT),
+                FactShape.optionalKey(REASON_KEY, CoreTypes.TEXT));
             case HOST_KEY_PINNED, HOST_KEY_VERIFIED -> FactShape.of(FactShape.key(LANE_KEY, CoreTypes.TEXT),
                 FactShape.key(FINGERPRINT_KEY, CoreTypes.TEXT));
             case HOST_KEY_REPINNED -> FactShape.of(FactShape.key(LANE_KEY, CoreTypes.TEXT),
@@ -525,7 +537,8 @@ public enum HohenheimActivityAction implements ActivityAction {
             case CONSOLE_COMMAND, DEVICE_ATTACHED, DEVICE_RESIZED, DEVICE_DETACHED, TEMPLATE_CAPTURED, VOLUME_DECLARED,
                  VOLUME_REDECLARED, APP_UPDATED, APP_UPDATE_FAILED, PREVIEW_TRIGGERED, RESTORED_SNAPSHOT, EXEC,
                  EXEC_ENDED, MIGRATED, FILES_SAVE, FILES_UPLOAD, FILES_MKDIR, FILES_RENAME, FILES_DELETE, FILES_WRITE,
-                 DELETED_DATA, SETTLED_INTERRUPTED, RECONCILED, RESTARTED_UNANSWERED, BACKUP, BACKUP_FAILED, SNAPSHOT,
+                 DELETED_DATA, SETTLED_INTERRUPTED, RECONCILED, RESTARTED_UNANSWERED, FOLLOWED_APP, APP_FOLLOW_REFUSED,
+                 BACKUP, BACKUP_FAILED, SNAPSHOT,
                  SHELL_OPEN, SHELL_CLOSE, WORKLOAD_EXITED, WORKLOAD_CRASH_LOOPED, WORKLOAD_START_FAILED,
                  WORKLOAD_ISOLATION_REFUSED, WORKLOAD_NEVER_READY, WORKLOAD_STOP_FAILED, WORKLOAD_REMOVE_FAILED,
                  WORKLOAD_RESTORE_FAILED, WORKLOAD_RESTORE_INTERRUPTED, WORKLOAD_COPY_LOST,

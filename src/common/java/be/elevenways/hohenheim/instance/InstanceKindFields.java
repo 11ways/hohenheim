@@ -49,6 +49,14 @@ public final class InstanceKindFields {
     /** That command's time limit in seconds, declared and carried the same way. */
     public static final String PRE_DEPLOY_TIMEOUT = "pre_deploy_timeout";
 
+    /**
+     * The seconds a workload is given to exit on SIGTERM before SIGKILL, by every stop and by the halt of a restart.
+     *
+     * AIDEV-NOTE: the one home of the number: the stop lane reads it and the "Image from app" help names it as an
+     * argument, so the help can never promise another grace than the stop gives.
+     */
+    public static final int STOP_GRACE_SECONDS = 10;
+
     private InstanceKindFields() {
     }
 

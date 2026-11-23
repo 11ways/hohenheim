@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
+import be.elevenways.hohenheim.server.application.AppImageFollowers;
 import be.elevenways.hohenheim.server.application.ArtifactDeploys;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.auth.types.ProteusRealmOptInTargets;
@@ -245,6 +246,9 @@ public class ServerMain {
         BOOT_RECOVERY.get().fireAndForget(() -> {
             ArtifactDeploys.recoverInterrupted();
             ReleaseEngine.recoverInterrupted();
+            // After the recovery it depends on: what serves is settled, so the containers taking their image from an
+            // app that a stop left behind a switch are restarted on it now.
+            AppImageFollowers.convergeAll();
         });
         // Preview lifetimes are one-shot record schedules: a deadline missed
         // while down fires at the framework sweeper's next pass, no boot sweep.

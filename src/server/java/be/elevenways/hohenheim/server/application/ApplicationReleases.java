@@ -163,9 +163,15 @@ public final class ApplicationReleases {
      */
     public static @NonNull Release converge(int applicationId, @NonNull Map<String, Object> overrides,
                                             boolean liftRollbackPin) {
-        return InstanceOperationLock.production().exclusive(applicationId,
-            InstanceOperationLock.Contention.QUEUE,
-            () -> convergeLocked(applicationId, overrides, liftRollbackPin));
+        try {
+            return InstanceOperationLock.production().exclusive(applicationId,
+                InstanceOperationLock.Contention.QUEUE,
+                () -> convergeLocked(applicationId, overrides, liftRollbackPin));
+        } finally {
+            // Every exit, a throw after the switch included: the containers taking their image from this app follow
+            // what serves now (AppImageFollowers reads two rows and queues their restarts on their own claims).
+            AppImageFollowers.converge(applicationId);
+        }
     }
 
     /**
@@ -176,9 +182,14 @@ public final class ApplicationReleases {
      */
     public static @NonNull Release restore(int applicationId, @NonNull String verifiedImageId,
                                            InstanceService.@NonNull RestoreVolumes restoreVolumes) {
-        return DeployAttribution.supply(DeployTrigger.SYSTEM, () -> InstanceOperationLock.production().exclusive(
-            applicationId, InstanceOperationLock.Contention.QUEUE,
-            () -> restoreLocked(applicationId, verifiedImageId, restoreVolumes)));
+        try {
+            return DeployAttribution.supply(DeployTrigger.SYSTEM, () -> InstanceOperationLock.production().exclusive(
+                applicationId, InstanceOperationLock.Contention.QUEUE,
+                () -> restoreLocked(applicationId, verifiedImageId, restoreVolumes)));
+        } finally {
+            // A restore makes a NEW app no container can name yet; asked anyway, so every switch door asks.
+            AppImageFollowers.converge(applicationId);
+        }
     }
 
     /** {@link #restore}'s body; the caller holds the application's operation lock. */

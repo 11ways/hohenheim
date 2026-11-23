@@ -84,8 +84,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * policy. The fake stands in for the kind's runtime, so container hardening, the
  * private network and its kernel chains are not exercised at all.
  *
- * the image fingerprint pin ({@code pinResolvedImage}), which needs a driver that
- * reports an image identity; the fake deliberately reports none.
+ * the image fingerprint pin's DRIVER half: the fake reports the identity of the image a container was created
+ * from (ImageIdentitySupport), so the record's pin is written, but no real daemon resolves an alias to it.
  *
  * a real image, a real pull and a real build. The digest here is derived from the
  * reference, so it proves the engine PINS and RE-USES a digest, never that a

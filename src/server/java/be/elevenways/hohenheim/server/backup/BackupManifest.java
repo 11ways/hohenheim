@@ -198,6 +198,9 @@ public record BackupManifest(int version,
      * @param runtimeImage      the runtime image the record names, as its identity (re-bound by name, like an
      *                          application's); null when it names none, for an application (whose own entry carries
      *                          it) and in an older manifest
+     * @param imageAppName      the app a container took its image from, by name: a restore to a NEW record is refused
+     *                          with it, since a copy would be a second container of that app; null when it took none,
+     *                          and in an older manifest
      */
     public record InstanceProfile(@Nullable TemplateRef template,
                                   @NonNull String crashPolicy,
@@ -205,7 +208,8 @@ public record BackupManifest(int version,
                                   @Nullable String backupTargetName,
                                   @NonNull List<VariableEntry> variables,
                                   @NonNull List<FileEntry> files,
-                                  @Nullable Map<String, Object> runtimeImage) {}
+                                  @Nullable Map<String, Object> runtimeImage,
+                                  @Nullable String imageAppName) {}
 
     /**
      * The settings map a restore stores: a git source in a manifest older than {@link #VERSION_AUTO_DEPLOY_ON} whose
@@ -297,6 +301,9 @@ public record BackupManifest(int version,
             instance.put("backup_target", this.profile.backupTargetName());
             if (this.profile.runtimeImage() != null) {
                 instance.put("runtime_image", this.profile.runtimeImage());
+            }
+            if (this.profile.imageAppName() != null) {
+                instance.put("image_app", this.profile.imageAppName());
             }
         }
         root.put("instance", instance);
@@ -705,7 +712,7 @@ public record BackupManifest(int version,
             }
         }
         return new InstanceProfile(template, crashPolicy, environment, backupTarget,
-            List.copyOf(variables), List.copyOf(files), runtimeImage);
+            List.copyOf(variables), List.copyOf(files), runtimeImage, Texts.stringOrNull(instance.get("image_app")));
     }
 
     private static @NonNull String requireText(@Nullable Object value, @NonNull String field)

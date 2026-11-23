@@ -18,6 +18,7 @@ import be.elevenways.hohenheim.model.InstanceVolumeModel;
 import be.elevenways.hohenheim.model.Retention;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.HohenheimRefusalReason;
@@ -752,6 +753,13 @@ public final class InstanceBackups {
                     "the backup's template " + templateId + " is not its instance's approved "
                         + tenant.templateId());
             }
+            // A copy of a container that takes its image from an app would be a second container of that app: refused
+            // in words before anything is made. Restore it onto the container itself (unchanged); an older manifest
+            // names no app and restores as it always did.
+            if (profile != null && profile.imageAppName() != null) {
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("restore_follows_app")
+                    .withArg("app", profile.imageAppName()));
+            }
             Map<String, Object> settings = InstanceKindFields.typedNumbers(InstanceModel.SETTINGS, manifest.kind(),
                 manifest.restoredSettings(InstanceModel.SETTINGS.resolveSchemaForSiblingValue(manifest.kind())));
             int serverId = serverSpelling != null
@@ -1481,12 +1489,16 @@ public final class InstanceBackups {
         Integer runtimeImageId = row.get(InstanceModel.RUNTIME_IMAGE_ID);
         Row runtimeImage = runtimeImageId != null && !InstanceKinds.isReleaseManaged(row.get(InstanceModel.KIND))
             ? Models.get(RuntimeImageModel.class).findById(runtimeImageId) : null;
+        Integer imageAppId = row.get(InstanceModel.IMAGE_APP_ID);
+        Row imageApp = imageAppId == null ? null : StoredRows.byId(Models.get(InstanceModel.class), imageAppId);
         return new InstanceProfile(template,
             crashPolicy != null ? crashPolicy : InstanceModel.CRASH_NONE,
             environmentName(row.get(InstanceModel.ENVIRONMENT_ID)),
             targetName(row.get(InstanceModel.BACKUP_TARGET_ID)),
             List.copyOf(variables), List.copyOf(files),
-            runtimeImage != null ? runtimeIdentity(runtimeImage) : null);
+            runtimeImage != null ? runtimeIdentity(runtimeImage) : null,
+            imageAppId == null ? null
+                : imageApp != null ? String.valueOf((Object) imageApp.get(InstanceModel.NAME)) : imageAppId.toString());
     }
 
     /** The grouping environment's name, or null when unset or dangling. */

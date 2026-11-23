@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.zenit.common.text.Texts;
+import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.quota.ChargedDimension.Charge;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
@@ -32,6 +33,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.HohenheimCapabilities;
+import be.elevenways.hohenheim.server.application.AppImageFollowers;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
@@ -73,6 +75,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Overview tab on an instance, and the record's own front door: the app composition ({@link AppOverview}) over the
@@ -265,6 +268,7 @@ public final class InstanceOverview {
             }
         }
         facts.addAll(databaseFacts(instance.get(InstanceModel.ID), panelSlug, delegated, locales, resolver));
+        facts.addAll(imageAppFacts(instance, panelSlug, delegated, locales, resolver));
         facts.add(backupFact(instance, locales, resolver));
         return facts;
     }
@@ -333,6 +337,66 @@ public final class InstanceOverview {
                 .toUrl()));
         }
         return facts;
+    }
+
+    /**
+     * The lines of an image taken from an app: on an app, one "Background container" line per container taking its
+     * image from it, in name order; on such a container, one "Image from app" line. A quiet one is its name alone;
+     * words are added only when it is not running or still on an older version, and a refused one reads its reason,
+     * which names the app itself. Linked for the operator, plain text for a delegate, who reads a line only while
+     * both records have their owner.
+     *
+     * AIDEV-NOTE: an app's lines cost one read of its containers and one of its serving release, however many there
+     * are (AppImageFollowers.olderVersionAmong); a delegate's owner check is one grant read per line.
+     */
+    private static @NonNull List<WidgetFact> imageAppFacts(@NonNull Row instance, @NonNull String panelSlug,
+                                                           boolean delegated, @NonNull LocaleChain locales,
+                                                           @Nullable MessageResolver resolver) {
+        List<WidgetFact> facts = new ArrayList<>();
+        int instanceId = instance.get(InstanceModel.ID);
+        if (ApplicationKind.ID.toString().equals(instance.get(InstanceModel.KIND))) {
+            List<Row> followers = AppImageFollowers.followersAmong(List.of(instanceId))
+                .getOrDefault(instanceId, List.of());
+            Set<Integer> older = AppImageFollowers.olderVersionAmong(instanceId, followers);
+            String label = HohenheimMicrocopy.INSTANCE_OVERVIEW.of("background_container").resolve(locales, resolver);
+            for (Row follower : followers) {
+                int followerId = follower.get(InstanceModel.ID);
+                if (delegated && !HohenheimAccess.sameOwner(InstanceModel.MODEL_ID, followerId, instanceId)) {
+                    continue;
+                }
+                InstanceStatus status = InstanceStatus.forToken(follower.get(InstanceModel.STATUS));
+                Microcopy value = status != null && status != InstanceStatus.RUNNING
+                    ? HohenheimMicrocopy.INSTANCE_OVERVIEW.of("background_value_state")
+                        .withArg("state", status.label().withFilter("case", "sentence"))
+                    : older.contains(followerId) ? HohenheimMicrocopy.INSTANCE_OVERVIEW.of("background_value_behind")
+                    : HohenheimMicrocopy.INSTANCE_OVERVIEW.of("background_value");
+                facts.add(relatedFact(label, value.withArg("name", follower.get(InstanceModel.NAME)), followerId,
+                    panelSlug, delegated, locales, resolver));
+            }
+        }
+        AppImageFollowers.Reading reading = AppImageFollowers.readingOf(instance);
+        if (reading == null || (delegated && (reading.app() == null || !HohenheimAccess.sameOwner(
+                InstanceModel.MODEL_ID, instanceId, reading.app().get(InstanceModel.ID))))) {
+            return facts;
+        }
+        String label = HohenheimMicrocopy.INSTANCE_OVERVIEW.of("image_from_app").resolve(locales, resolver);
+        Microcopy value = reading.refusal() != null ? reading.refusal()
+            : (reading.olderVersion() ? HohenheimMicrocopy.INSTANCE_OVERVIEW.of("image_from_app_behind")
+                : HohenheimMicrocopy.INSTANCE_OVERVIEW.of("image_from_app_value"))
+                .withArg("name", reading.app().get(InstanceModel.NAME));
+        facts.add(reading.app() == null ? WidgetFact.of(label, value.resolve(locales, resolver))
+            : relatedFact(label, value, reading.app().get(InstanceModel.ID), panelSlug, delegated, locales, resolver));
+        return facts;
+    }
+
+    /** One Details line naming a related instance: linked to its overview for the operator, plain for a delegate. */
+    private static @NonNull WidgetFact relatedFact(@NonNull String label, @NonNull Microcopy value, int relatedId,
+                                                   @NonNull String panelSlug, boolean delegated,
+                                                   @NonNull LocaleChain locales, @Nullable MessageResolver resolver) {
+        String words = value.resolve(locales, resolver);
+        return delegated ? WidgetFact.of(label, words)
+            : WidgetFact.link(label, words,
+                CmsRoutes.subpage(panelSlug, HohenheimSlugs.INSTANCES, relatedId, RecordOverview.SLUG).toUrl());
     }
 
     /**

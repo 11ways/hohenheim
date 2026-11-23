@@ -17,10 +17,12 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.application.AppImageFollowers;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviderGuards;
 import be.elevenways.hohenheim.server.database.DatabaseEngines;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.dns.DnsNames;
+import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.project.ProjectGuards;
 import be.elevenways.hohenheim.server.proxy.HostnamePatterns;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
@@ -183,6 +185,31 @@ public final class DeleteImpact {
         return databasesInUse(List.of(database)).get(0);
     }
 
+    /**
+     * An app that containers take their image from cannot be deleted: they would run nothing. The record's Delete and
+     * Delete with data are drawn dead with this reason, and InstanceService.destroy refuses in the same words.
+     *
+     * @return per instance: the containers taking their image from it, named; null for one without (and for every
+     *         row that is no app, which costs no read)
+     */
+    public static @NonNull List<@Nullable Microcopy> applicationsFollowed(@NonNull List<? extends Row> instances) {
+        List<Integer> applications = new ArrayList<>();
+        for (Row instance : instances) {
+            Integer id = instance.get(InstanceModel.ID);
+            if (id != null && ApplicationKind.ID.toString().equals(instance.get(InstanceModel.KIND))) {
+                applications.add(id);
+            }
+        }
+        Map<Integer, List<Row>> following = AppImageFollowers.followersAmong(applications);
+        List<Microcopy> reasons = new ArrayList<>(instances.size());
+        for (Row instance : instances) {
+            List<Row> followers = following.getOrDefault(instance.get(InstanceModel.ID), List.of());
+            reasons.add(followers.isEmpty() ? null : HohenheimMicrocopy.VIOLATIONS.of("app_delete_has_followers")
+                .withArg("containers", workloadNames(followers)));
+        }
+        return reasons;
+    }
+
     /** @return per engine: the databases still living on it, named */
     static @NonNull List<@Nullable Microcopy> enginesInUse(@NonNull List<? extends Row> engines) {
         Map<Integer, List<Row>> hosting = KeyedRows.byAsked(Models.get(DatabaseModel.class).find(),
@@ -289,7 +316,8 @@ public final class DeleteImpact {
         return workloadNames(liveInstancesOf(databaseId));
     }
 
-    private static @NonNull String workloadNames(@NonNull List<Row> instances) {
+    /** @return the names of these instances joined for a sentence, in row order */
+    public static @NonNull String workloadNames(@NonNull List<Row> instances) {
         List<String> workloads = new ArrayList<>();
         for (Row instance : instances) {
             workloads.add(String.valueOf((Object) instance.get(InstanceModel.NAME)));

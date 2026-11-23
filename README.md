@@ -551,6 +551,26 @@ What runs is an **instance**. Instance kinds are discovered the same way
 | `database_container` | The engine container a managed database lowers onto. Written only by the record that owns it: a `dedicated` database, or the shared **database engine** serving many logical databases. |
 | `stack_service`      | One service of a compose-style stack.                  |
 
+### A background worker beside an app ("Image from app")
+
+A worker that must run the same build as an app (a queue consumer, a scheduler) is a `docker_container` whose
+**Image from app** (`image_app_id`) names that app. It runs the image of the release the app serves, with its own
+command, variables, limits and volumes, and leaves Container image and Image tag empty. After every deploy or
+rollback of the app it is stopped and started again on the new version, unless an operator stopped it. One record is
+one container, and every start holds the record's claim, so there are never two at once. Operators only: a tenant
+can neither set nor clear the reference. What it does NOT do:
+
+- It is stopped with SIGTERM and 10 seconds of grace before SIGKILL, like every container stop.
+- It follows a few seconds after the app's switch, not atomically: the new app and the old worker run together for
+  that moment, and during the command before a deploy the old worker runs against the changing database.
+- It keeps running when the app is stopped.
+- It cannot be moved to another server (move, evacuation) while it follows; the app cannot change server or kind,
+  and cannot be deleted, while a container follows it. A backup of it restores onto the container itself, never as a
+  new record (a copy would be a second worker).
+
+The app and the worker share variables through an Environment of their project; the worker reads them at its next
+start, which every deploy is.
+
 ## Git-backed provisioning
 
 A git source is a property of the **application** or **workspace** instance, not

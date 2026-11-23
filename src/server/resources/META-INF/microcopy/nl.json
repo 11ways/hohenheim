@@ -8734,7 +8734,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Loopt een keer voor elke uitrol, in een tijdelijke container van de nieuwe versie, met de variabelen en volumes van de app. Eindigt de opdracht met een fout of is de tijd om, dan stopt de uitrol en blijft de huidige versie draaien. Zolang de opdracht loopt, worden Stoppen, Herstarten en Terugrollen van deze app geweigerd. Een app met een exclusief volume ligt stil terwijl de opdracht loopt. De opdracht wordt meteen afgebroken als de tijd om is, en ook als Hohenheim zelf herstart terwijl ze loopt. Loopt niet bij terugrollen, herstellen, een preview of een herstart. Gesplitst op spaties, zonder shell; \\{\\{KEY\\}\\} wordt niet vervangen, de variabelen staan in de omgeving. Leeg voert niets uit.",
+      "text": "Loopt een keer voor elke uitrol, in een tijdelijke container van de nieuwe versie, met de variabelen en volumes van de app. Eindigt de opdracht met een fout of is de tijd om, dan stopt de uitrol en blijft de huidige versie draaien. Zolang de opdracht loopt, worden Stoppen, Herstarten en Terugrollen van deze app geweigerd. Een app met een exclusief volume ligt stil terwijl de opdracht loopt. De opdracht wordt meteen afgebroken als de tijd om is, en ook als Hohenheim zelf herstart terwijl ze loopt. Loopt niet bij terugrollen, herstellen, een preview of een herstart. Gesplitst op spaties, zonder shell; \\{\\{KEY\\}\\} wordt niet vervangen, de variabelen staan in de omgeving. Leeg voert niets uit. Containers die hun image van deze app nemen, blijven de oude versie draaien tot de uitrol omschakelt.",
       "scope": "help"
     }
   ],
@@ -8746,6 +8746,135 @@
     {
       "text": "Van {$min} tot {$max} seconden. Leeg is {$default}.",
       "scope": "help"
+    }
+  ],
+  "image_from_app": [
+    {
+      "text": "Image van app",
+      "scope": "hohenheim_field"
+    },
+    {
+      "text": "Draait de image van de versie die deze app aanbiedt, in plaats van een eigen image. Na elke uitrol of terugrol van de app wordt deze container gestopt en op die versie opnieuw gestart, tenzij u hem zelf stopte. Tot de omschakeling blijft hij de oude versie draaien, ook terwijl een opdracht voor de uitrol de database wijzigt. Een mislukte uitrol laat hem op de oude versie; een terugrol zet hem op de oudere versie en draait geen wijziging in de database terug. De app stoppen stopt deze container niet. Hij krijgt {$seconds} seconden om te stoppen. De app moet op dezelfde server staan en dezelfde eigenaar hebben. Laat Container-image en Image-tag leeg; de container houdt zijn eigen opdracht, variabelen, limieten en volumes.",
+      "scope": "help"
+    },
+    {
+      "text": "Image van app",
+      "scope": "instance_overview"
+    }
+  ],
+  "image_app_empty": {
+    "text": "Nog geen app.",
+    "scope": "instance"
+  },
+  "image_from_app_value": {
+    "text": "{$name}",
+    "scope": "instance_overview"
+  },
+  "image_from_app_behind": {
+    "text": "{$name}, deze container draait nog een oudere versie",
+    "scope": "instance_overview"
+  },
+  "background_container": {
+    "text": "Achtergrondcontainer",
+    "scope": "instance_overview"
+  },
+  "background_value": {
+    "text": "{$name}",
+    "scope": "instance_overview"
+  },
+  "background_value_state": {
+    "text": "{$name} ({$state})",
+    "scope": "instance_overview"
+  },
+  "background_value_behind": {
+    "text": "{$name}, nog op een oudere versie",
+    "scope": "instance_overview"
+  },
+  "image_from_app_unknown": {
+    "text": "De app waarvan deze container zijn image neemt, bestaat niet meer of is geen app.",
+    "scope": "violations"
+  },
+  "image_from_app_kind": {
+    "text": "Alleen een Docker-container kan zijn image van een app nemen.",
+    "scope": "violations"
+  },
+  "image_and_image_from_app": {
+    "text": "Laat Container-image en Image-tag leeg wanneer de image van een app komt.",
+    "scope": "violations"
+  },
+  "image_from_app_other_owner": {
+    "text": "{$app} heeft een andere eigenaar. Een container kan alleen de image nemen van een app van dezelfde eigenaar.",
+    "scope": "violations"
+  },
+  "image_from_app_other_server": {
+    "text": "{$app} draait op een andere server. Een container kan alleen de image nemen van een app op dezelfde server.",
+    "scope": "violations"
+  },
+  "image_from_app_not_deployed": {
+    "text": "{$app} is nog niet uitgerold, dus er is geen image om te draaien. Rol eerst de app uit.",
+    "scope": "violations"
+  },
+  "app_server_change_has_followers": {
+    "text": "Deze app kan niet naar een andere server zolang deze containers er hun image van nemen: {$containers}. Maak bij hen eerst \"Image van app\" leeg.",
+    "scope": "violations"
+  },
+  "app_kind_change_has_followers": {
+    "text": "Deze app kan geen ander soort worden zolang deze containers er hun image van nemen: {$containers}. Maak bij hen eerst \"Image van app\" leeg.",
+    "scope": "violations"
+  },
+  "app_delete_has_followers": {
+    "text": "Deze app kan niet verwijderd worden zolang deze containers er hun image van nemen: {$containers}. Verwijder ze of geef ze eerst een andere image.",
+    "scope": "violations"
+  },
+  "migrate_follows_app": {
+    "text": "{$name} neemt zijn image van {$app} en kan alleen op de server van die app draaien.",
+    "scope": "violations"
+  },
+  "restore_follows_app": {
+    "text": "Deze back-up is van een container die zijn image van {$app} neemt. Een kopie zou er een tweede container van zijn. Zet de back-up terug op de container zelf.",
+    "scope": "violations"
+  },
+  "followed_app": [
+    {
+      "text": "Herstart op de versie van zijn app",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": "Herstart op de versie die {$app} nu aanbiedt",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_app": "true"
+    },
+    {
+      "text": "{$subject} is herstart op de versie die zijn app nu aanbiedt",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "app_follow_refused": [
+    {
+      "text": "Niet herstart op de nieuwe versie van zijn app",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": "Niet herstart op de nieuwe versie van {$app}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_app": "true"
+    },
+    {
+      "text": "Niet herstart op de nieuwe versie van {$app}: {$reason}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_app": "true",
+      "has_reason": "true"
+    },
+    {
+      "text": "{$subject} is niet herstart op de nieuwe versie van zijn app",
+      "scope": "hohenheim",
+      "target": "happened"
     }
   ],
   "drain_seconds": [

@@ -789,4 +789,76 @@ class InstanceTemplatePolicyTest extends HohenheimHttpTestBase {
         writes.forEach((key, value) -> assertThat(String.valueOf(stored.get(key)))
             .as("step 2: an operator sets %s", key).isEqualTo(String.valueOf(value)));
     }
+
+    /**
+     * The app a Docker container takes its image from is operator-only: a tenant may neither place it on a create
+     * (from an approved template, so only the reference is new) nor set or clear it on a container it configures,
+     * through the model write the panel, the API and the assistant tools share; the operator's same write lands.
+     */
+    @Test
+    void aContainersImageAppIsOperatorOnly() {
+        Model instances = Models.get(InstanceModel.class);
+        int approvedId = template(PREFIX + "image-app-approved", true, alpineSettings());
+        int[] ids = new int[2];
+        TenantConduits.as(adminPrincipal, () -> {
+            Row app = instances.createEmptyRow();
+            app.set(InstanceModel.NAME, PREFIX + "image-app-app");
+            app.set(InstanceModel.KIND, "hohenheim:application");
+            app.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+            app.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "alpine", "tag", "latest")));
+            instances.save(app);
+            ids[0] = app.get(InstanceModel.ID);
+            Row container = instances.createEmptyRow();
+            container.set(InstanceModel.NAME, PREFIX + "image-app-container");
+            container.set(InstanceModel.KIND, "hohenheim:docker_container");
+            container.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+            container.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("command", "sleep 300")));
+            instances.save(container);
+            ids[1] = container.get(InstanceModel.ID);
+        });
+
+        // 1. A tenant's create from an approved template that names an app: refused on the reference, nothing stored.
+        Throwable created = catchThrowable(() -> TenantConduits.as(tenantPrincipal, () -> {
+            Row row = instances.createEmptyRow();
+            row.set(InstanceModel.NAME, PREFIX + "image-app-create");
+            row.set(InstanceModel.KIND, "hohenheim:docker_container");
+            row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(alpineSettings()));
+            row.set(InstanceModel.TEMPLATE_ID, approvedId);
+            row.set(InstanceModel.IMAGE_APP_ID, ids[0]);
+            instances.save(row);
+        }));
+        assertThat(violationKeys(created)).as("step 1: a tenant may not place the reference on a create")
+            .contains("image_app_id=tenant_field_frozen");
+        assertThat(instances.find().where(InstanceModel.NAME.eq(PREFIX + "image-app-create")).count())
+            .as("step 1: the refused create persisted nothing").isZero();
+
+        // 2. A tenant configuring the container may not set it.
+        RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, ids[1],
+            HohenheimCapabilities.CONFIG, true);
+        Throwable updated = catchThrowable(() -> TenantConduits.as(tenantPrincipal, () -> {
+            Row row = instances.findById(ids[1]);
+            row.set(InstanceModel.IMAGE_APP_ID, ids[0]);
+            instances.save(row);
+        }));
+        assertThat(violationKeys(updated)).as("step 2: a tenant may not set the reference")
+            .contains("image_app_id=").contains("tenant_field_frozen");
+        assertThat((Object) instances.findById(ids[1]).get(InstanceModel.IMAGE_APP_ID))
+            .as("step 2: nothing stored").isNull();
+
+        // 3. The operator's same write lands, and the tenant may not clear (or so keep a different) one either.
+        TenantConduits.as(adminPrincipal, () -> {
+            Row row = instances.findById(ids[1]);
+            row.set(InstanceModel.IMAGE_APP_ID, ids[0]);
+            instances.save(row);
+        });
+        assertThat((Object) instances.findById(ids[1]).get(InstanceModel.IMAGE_APP_ID))
+            .as("step 3: an operator sets it").isEqualTo(ids[0]);
+        Throwable cleared = catchThrowable(() -> TenantConduits.as(tenantPrincipal, () -> {
+            Row row = instances.findById(ids[1]);
+            row.set(InstanceModel.IMAGE_APP_ID, null);
+            instances.save(row);
+        }));
+        assertThat(violationKeys(cleared)).as("step 3: a tenant may not clear it")
+            .contains("image_app_id=").contains("tenant_field_frozen");
+    }
 }

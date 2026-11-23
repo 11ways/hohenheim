@@ -159,6 +159,14 @@ public final class InstanceImagePolicy {
         return readings;
     }
 
+    /**
+     * Whether a settings value declares no image of its own: every judged member reads as it does in empty settings,
+     * so a container that takes its image from an app ({@code AppImageFollowers}) carries no image, tag or origin.
+     */
+    public static boolean declaresNoImage(@Nullable Object settings) {
+        return readJudged(settings).equals(readJudged(null));
+    }
+
     /** @return one kind setting of a settings value as trimmed text, null when absent or blank */
     static @Nullable String settingText(@Nullable Object settings, @NonNull String key) {
         return settings instanceof Map<?, ?> map ? Texts.trimmedOrNull(map.get(key)) : null;

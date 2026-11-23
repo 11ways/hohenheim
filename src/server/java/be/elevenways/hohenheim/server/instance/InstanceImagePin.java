@@ -10,9 +10,10 @@ import java.util.Objects;
 
 /**
  * Couples the pinned resolved image fingerprint to the DECLARED image: any write that
- * changes kind, image or tag clears the pin, on every writer (form, API, revision
- * restore, direct save) -- otherwise an absent-workload recreate would silently
- * revive the OLD image while the record claims the new one.
+ * changes kind, image, tag or the app the image is taken from clears the pin, on every
+ * writer (form, API, revision restore, direct save) -- otherwise an absent-workload
+ * recreate would silently revive the OLD image while the record claims the new one, and
+ * a container pointed at another app would read as behind that app on the first app's image.
  */
 public final class InstanceImagePin {
 
@@ -44,7 +45,9 @@ public final class InstanceImagePin {
                 && Objects.equals(InstanceImagePolicy.settingText(settings, InstanceKindFields.IMAGE),
                     InstanceImagePolicy.settingText(storedSettings, InstanceKindFields.IMAGE))
                 && Objects.equals(InstanceImagePolicy.settingText(settings, "tag"),
-                    InstanceImagePolicy.settingText(storedSettings, "tag"));
+                    InstanceImagePolicy.settingText(storedSettings, "tag"))
+                && Objects.equals(row.afterWrite(InstanceModel.IMAGE_APP_ID, stored),
+                    stored.get(InstanceModel.IMAGE_APP_ID));
             if (!unchanged) {
                 row.set(InstanceModel.IMAGE_FINGERPRINT, null);
             }

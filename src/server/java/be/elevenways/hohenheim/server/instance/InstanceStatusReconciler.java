@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.BootSettle;
+import be.elevenways.hohenheim.server.application.AppImageFollowers;
 import be.elevenways.hohenheim.server.application.ApplicationUpstreams;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
@@ -13,9 +14,13 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.history.History;
+import be.elevenways.zenit.common.orm.datasource.Datasource;
+import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
+import be.elevenways.zenit.common.security.ExecutionIdentity;
+import be.elevenways.zenit.common.security.SystemPurpose;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -257,6 +262,12 @@ public final class InstanceStatusReconciler {
                 "runs, but the daemon reports its workload killed for out-of-memory");
         }
         if (!changed) {
+            // The sweep's door of the containers that take their image from an app: a confirmed-running one still on
+            // an older version than its app serves follows now (a switch's own attempt was refused or never queued).
+            // The row is in hand, so every other record pays nothing; a record in error is never swept here.
+            if (InstanceModel.STATUS_RUNNING.equals(stored)) {
+                AppImageFollowers.followFromSweep(fresh);
+            }
             return new Outcome(instanceId, Verdict.CONFIRMED, stored, state);
         }
         if (crashed) {
@@ -327,35 +338,114 @@ public final class InstanceStatusReconciler {
      */
     static void redeployInBackground(@NonNull InstanceService instances, int instanceId, int serverId,
                                      @NonNull String name, @NonNull Set<String> from) {
-        // The background pool carries the reconciler's datasource and declared system identity, and a runtime stop
-        // waits for the redeploy before the datasources close.
+        redeployInBackground(instances, instanceId, name, new CrashRestart(serverId, name, from));
+    }
+
+    /**
+     * A redeploy decided away from the record's claim: decided again under it, then run, and a refusal recorded.
+     *
+     * @author Jelle De Loecker
+     * @since  0.10.0
+     */
+    public interface BackgroundRedeploy {
+
+        /** @return what the redeploy is, for the log ("automatic restart") */
+        @NonNull String what();
+
+        /** @return the system purpose the redeploy runs detached under, or null to keep the caller's identity */
+        @Nullable SystemPurpose purpose();
+
+        /** @return whether the record, read fresh under its claim, still wants the redeploy */
+        boolean stillWanted(@NonNull Row current);
+
+        /** The redeploy itself, under the record's claim. */
+        void run(@NonNull InstanceService instances, int instanceId);
+
+        /** Records a refusal of {@link #run}, under the record's claim still. */
+        void refused(@NonNull InstanceService instances, int instanceId, @NonNull RuntimeException refused);
+    }
+
+    /**
+     * THE background redeploy of one record: queued on the background pool, waiting for the record's claim, decided
+     * again under it from a fresh read, run, and a refusal recorded as the redeploy says.
+     *
+     * AIDEV-NOTE: the one home of this composition. The crash policy's restart, a hung workload's restart and a
+     * container following its app's new version (AppImageFollowers) all queue here, so a record has exactly one
+     * shape of background redeploy and every one of them serializes on the same claim.
+     */
+    public static void redeployInBackground(@NonNull InstanceService instances, int instanceId, @NonNull String name,
+                                            @NonNull BackgroundRedeploy redeploy) {
+        // The background pool carries the caller's datasource and identity, and a runtime stop waits for the redeploy
+        // before the datasources close; a redeploy with a purpose of its own runs detached under it instead.
         HandlerSupport.inBackground(() -> {
-            try {
-                // AIDEV-NOTE: the caller may still hold this record's claim when it queues the restart. The new
-                // thread must wait for that claim to leave, then deploy re-entrantly under its own queued claim.
-                instances.operations().exclusive(instanceId, InstanceOperationLock.Contention.QUEUE, () -> {
-                    Row current = Models.get(InstanceModel.class).findById(instanceId);
-                    if (current == null || !from.contains(current.get(InstanceModel.STATUS))) {
-                        Blast.log("INSTANCE RECONCILE: automatic restart of instance", name,
-                            "dropped: its status moved on while it waited");
-                        return;
-                    }
-                    try {
-                        instances.deploy(instanceId);
-                    } catch (RuntimeException refused) {
-                        Blast.log("INSTANCE RECONCILE: automatic restart of instance", name,
-                            "refused:", refused.getMessage());
-                        // Under the claim still: the refusal becomes the record's ERROR cause, where the record
-                        // read "Not running" with no reason.
-                        InstanceOperationGuard.stampRestartRefused(instances.leases(), instanceId, serverId,
-                            name, from, refused);
-                    }
-                });
-            } catch (RuntimeException refused) {
-                Blast.log("INSTANCE RECONCILE: automatic restart of instance", name,
-                    "refused:", refused.getMessage());
+            SystemPurpose purpose = redeploy.purpose();
+            if (purpose == null) {
+                redeployUnderClaim(instances, instanceId, name, redeploy);
+                return;
             }
+            Datasource datasource = Db.currentOrDefault();
+            ExecutionIdentity.runDetachedAsSystem(purpose, () -> HandlerSupport.inScope(datasource,
+                () -> redeployUnderClaim(instances, instanceId, name, redeploy)));
         });
+    }
+
+    /** {@link #redeployInBackground}'s body on the pool's thread. */
+    private static void redeployUnderClaim(@NonNull InstanceService instances, int instanceId, @NonNull String name,
+                                           @NonNull BackgroundRedeploy redeploy) {
+        try {
+            // AIDEV-NOTE: the caller may still hold this record's claim when it queues the redeploy. The new thread
+            // must wait for that claim to leave, then deploy re-entrantly under its own queued claim.
+            instances.operations().exclusive(instanceId, InstanceOperationLock.Contention.QUEUE, () -> {
+                Row current = Models.get(InstanceModel.class).findById(instanceId);
+                if (current == null || !redeploy.stillWanted(current)) {
+                    Blast.log("INSTANCE RECONCILE:", redeploy.what(), "of instance", name,
+                        "dropped: its status moved on while it waited");
+                    return;
+                }
+                try {
+                    redeploy.run(instances, instanceId);
+                } catch (RuntimeException refused) {
+                    Blast.log("INSTANCE RECONCILE:", redeploy.what(), "of instance", name, "refused:",
+                        refused.getMessage());
+                    redeploy.refused(instances, instanceId, refused);
+                }
+            });
+        } catch (RuntimeException refused) {
+            Blast.log("INSTANCE RECONCILE:", redeploy.what(), "of instance", name, "refused:", refused.getMessage());
+        }
+    }
+
+    /** The crash policy's automatic restart: a deploy, its refusal the record's ERROR cause. */
+    private record CrashRestart(int serverId, @NonNull String name, @NonNull Set<String> from)
+            implements BackgroundRedeploy {
+
+        @Override
+        public @NonNull String what() {
+            return "automatic restart";
+        }
+
+        @Override
+        public @Nullable SystemPurpose purpose() {
+            return null;
+        }
+
+        @Override
+        public boolean stillWanted(@NonNull Row current) {
+            return this.from.contains(current.get(InstanceModel.STATUS));
+        }
+
+        @Override
+        public void run(@NonNull InstanceService instances, int instanceId) {
+            instances.deploy(instanceId);
+        }
+
+        @Override
+        public void refused(@NonNull InstanceService instances, int instanceId, @NonNull RuntimeException refused) {
+            // Under the claim still: the refusal becomes the record's ERROR cause, where the record read "Not
+            // running" with no reason.
+            InstanceOperationGuard.stampRestartRefused(instances.leases(), instanceId, this.serverId, this.name,
+                this.from, refused);
+        }
     }
 
     /**

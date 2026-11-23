@@ -20,7 +20,7 @@ import java.util.Map;
  * materialized daemon names -- a backup restored to a NEW instance carries the same
  * logical names onto differently-materialized volumes.
  */
-public interface VolumeSnapshotSupport {
+public interface VolumeSnapshotSupport extends ImageIdentitySupport {
 
     /** One captured volume payload: which volume, where it mounts, and the tar written. */
     record CapturedVolume(@NonNull String name, @NonNull String containerPath,
@@ -63,11 +63,4 @@ public interface VolumeSnapshotSupport {
     void removeVolumesForRestore(@NonNull InstanceSpec spec,
                                  @NonNull Map<String, String> logicalVolumes,
                                  @NonNull Collection<String> names) throws IOException;
-
-    /**
-     * The image identity the workload actually runs (for the backup manifest).
-     *
-     * @throws IOException when the workload is absent or the daemon unreachable
-     */
-    @NonNull ImageIdentity imageIdentity(@NonNull InstanceSpec spec) throws IOException;
 }

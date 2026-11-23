@@ -60,7 +60,7 @@ class BackupArchiveTest {
                         "secret = \"{{FORWARDING_SECRET}}\"", "0640", null),
                     new BackupManifest.FileEntry("/config/forced-hosts.toml",
                         "generated", "0644", "game_domain")),
-                Map.of("name", "debian-13", "docker_image", "hohenheim/debian-13:1")), null);
+                Map.of("name", "debian-13", "docker_image", "hohenheim/debian-13:1"), "tadoma-cloud"), null);
     }
 
     private Path buildArchive(EncryptionKeyring keyring, byte[] payload) throws IOException {
@@ -118,6 +118,9 @@ class BackupArchiveTest {
         assertThat(profile.runtimeImage())
             .as("step 3: the runtime image the record names survives as its identity")
             .isEqualTo(Map.of("name", "debian-13", "docker_image", "hohenheim/debian-13:1"));
+        assertThat(profile.imageAppName())
+            .as("step 3: the app a container took its image from survives by name, what a restore to new refuses on")
+            .isEqualTo("tadoma-cloud");
 
         // 4. Payload extracts byte-identical.
         Map<String, Path> tars = BackupArchive.extractVolumes(opened, tmp.resolve("out"));

@@ -43,6 +43,8 @@ public final class HohenheimSystemPurposes {
     public static final @NonNull SystemPurpose SYSTEM_USERS = declare("system_users");
     /** An app's deploy starting a database workload it is attached to that is down. */
     public static final @NonNull SystemPurpose DATABASE_START = declare("database_start");
+    /** A container that takes its image from an app restarted on the version its app now serves. */
+    public static final @NonNull SystemPurpose IMAGE_FOLLOW = declare("image_follow");
 
     private HohenheimSystemPurposes() {
     }
