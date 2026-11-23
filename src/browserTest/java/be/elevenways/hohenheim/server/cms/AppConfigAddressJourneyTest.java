@@ -38,7 +38,7 @@ class AppConfigAddressJourneyTest extends HohenheimTestBase {
             .as("step 1: then how the connection behaves, open, the protocol pin last")
             .extracting(FormSection::startsCollapsed, FormSection::entryNames)
             .containsExactly(false, List.of("websocket_upgrade", "rewrite_location", "ignore_certificates",
-                "request_timeout", "delay", "upstream_protocol"));
+                "request_timeout", "idle_timeout", "delay", "upstream_protocol"));
         assertThat(unsectioned(StaticUpstreamKind.SETTINGS_SCHEMA))
             .as("step 1: static files lead with the folder, then the fallback file and the not-found page")
             .containsExactly("root_path", "fallback_file", "not_found_page");

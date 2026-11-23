@@ -38,6 +38,8 @@ final class RouteEntry {
     final boolean globalForce;
     final int requestDelayMs;
     final int requestTimeoutMs;
+    /** The idle time after which an exchange on which no byte moved is cut; 0 = none (ExchangeIdleTimeout). */
+    final int idleTimeoutMs;
     final boolean hstsEnabled;
     final boolean hstsSubdomains;
     final List<HeaderRule> customHeaders;
@@ -93,6 +95,8 @@ final class RouteEntry {
             siteSettings != null ? siteSettings.get(UpstreamSettings.DELAY) : null);
         this.requestTimeoutMs = parseRequestTimeout(
             siteSettings != null ? siteSettings.get(UpstreamSettings.REQUEST_TIMEOUT) : null);
+        this.idleTimeoutMs = parseIdleTimeout(
+            siteSettings != null ? siteSettings.get(UpstreamSettings.IDLE_TIMEOUT) : null);
         this.hstsEnabled = domain != null && Boolean.TRUE.equals(domain.get(SiteDomainModel.HSTS_ENABLED));
         this.hstsSubdomains = domain != null && Boolean.TRUE.equals(domain.get(SiteDomainModel.HSTS_SUBDOMAINS));
         this.customHeaders = parseHeaderRules(domain != null ? domain.get(SiteDomainModel.CUSTOM_HEADERS) : null);
@@ -171,6 +175,14 @@ final class RouteEntry {
             if (seconds > 0) return seconds * 1000;
         }
         return DEFAULT_REQUEST_TIMEOUT_MS;
+    }
+
+    /** idle_timeout site setting in seconds: absent, 0 or negative = no idle limit. */
+    private static int parseIdleTimeout(Object value) {
+        if (value instanceof Number number && number.intValue() > 0) {
+            return number.intValue() * 1000;
+        }
+        return 0;
     }
 
     private static int parsePositiveInt(Object value) {

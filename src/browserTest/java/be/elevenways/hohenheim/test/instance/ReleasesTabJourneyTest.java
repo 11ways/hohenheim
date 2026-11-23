@@ -205,7 +205,8 @@ class ReleasesTabJourneyTest extends HohenheimTestBase {
             TestSession tenant = sessionFor(tenantId);
             HttpResponse<String> own = httpGet(manageUrl(shop), tenant.token());
             assertThat(own.statusCode()).as("step 6: the tenant's own Releases render").isEqualTo(200);
-            assertThat(own.body()).as("step 6: with its releases").contains("1111aaaa").contains("3333cccc");
+            assertThat(own.body()).as("step 6: with its releases").contains("1111aaaa").contains("3333cccc")
+                .as("step 6: and the way back, on /manage as on /admin").contains("Roll back to release 3333cccc");
             assertThat(httpGet(manageUrl(other), tenant.token()).statusCode())
                 .as("step 6: another application's releases are missing, never forbidden").isEqualTo(404);
             assertThat(httpGet("/manage/instances", tenant.token()).body())

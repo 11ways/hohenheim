@@ -107,12 +107,22 @@ final class UpstreamProxyClient implements ProxyClient {
                 .set(UndertowOptions.ENDPOINT_IDENTIFICATION_ALGORITHM, "").getMap()
             : plan.options();
 
+        // A cut exchange (ExchangeIdleTimeout) was already answered: ProxyHandler's retry after the cut closed the
+        // upstream must not dial for nobody.
+        if (ExchangeIdleTimeout.refusesDial(exchange)) {
+            return;
+        }
         DialOutcome outcome = exchange.getAttachment(DIAL_OUTCOME);
         client.connect(new ClientCallback<ClientConnection>() {
             @Override
             public void completed(ClientConnection connection) {
                 if (outcome != null) {
                     outcome.record(true);
+                }
+                if (!ExchangeIdleTimeout.upstreamOpened(exchange, connection)) {
+                    // Cut while this dial was in flight: the exchange is answered, so the connection only closes.
+                    IoUtils.safeClose(connection);
+                    return;
                 }
                 ServerConnection serverConn = exchange.getConnection();
                 serverConn.addCloseListener(sc -> IoUtils.safeClose(connection));
@@ -134,7 +144,9 @@ final class UpstreamProxyClient implements ProxyClient {
                     outcome.record(false);
                 }
                 plan.advance();
-                callback.failed(exchange);
+                if (!ExchangeIdleTimeout.refusesDial(exchange)) {
+                    callback.failed(exchange);
+                }
             }
         }, uri, exchange.getIoThread(), ssl,
            exchange.getConnection().getByteBufferPool(),

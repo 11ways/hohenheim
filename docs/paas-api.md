@@ -256,8 +256,10 @@ Settings per kind (every key optional unless said otherwise):
 
 - `hohenheim:address`: `forward_scheme` (`http`/`https`), `forward_host`,
   `forward_port` (integer), `socket` (a unix socket path, instead of host+port),
-  `upstream_protocol` (`http1`/`h2`), `request_timeout` (seconds),
-  `websocket_upgrade` (default true), `ignore_certificates` (default false),
+  `upstream_protocol` (`http1`/`h2`), `request_timeout` (seconds, 0 to 3600, 0 = no
+  limit), `idle_timeout` (seconds, 0 to 3600: ends a request on which no byte moved in
+  either direction for that long; unset or 0 = no idle limit; not applied once a
+  connection is upgraded), `websocket_upgrade` (default true), `ignore_certificates` (default false),
   `rewrite_location` (default TRUE: upstream `Location` headers are rewritten with
   the forwarded Host, so a domain that rewrites `Host` to an internal name wants
   `settings.rewrite_location=false`), `delay` (ms).

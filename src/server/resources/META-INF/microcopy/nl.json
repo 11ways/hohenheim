@@ -702,6 +702,16 @@
       "scope": "help"
     }
   ],
+  "idle_timeout": [
+    {
+      "text": "Time-out bij stilte",
+      "scope": "hohenheim_field"
+    },
+    {
+      "text": "Breekt een aanvraag af wanneer er zoveel seconden geen byte passeerde, in geen van beide richtingen, van 0 tot {$max}. Leeg of 0 zet geen limiet op stilte. De time-out van de aanvraag begrenst nog altijd de hele aanvraag: zet die op 0 voor lange uploads en streams. Geldt niet meer zodra een verbinding is opgewaardeerd (WebSocket).",
+      "scope": "help"
+    }
+  ],
   "rewrite_location": [
     {
       "text": "Location-headers herschrijven",

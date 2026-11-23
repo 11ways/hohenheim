@@ -71,6 +71,8 @@ public final class InstanceUpstreamKind implements UpstreamKindHandler {
     public static final IntegerField REQUEST_TIMEOUT = SETTINGS_SCHEMA.addField(
         UpstreamSettings.requestTimeout());
 
+    public static final IntegerField IDLE_TIMEOUT = SETTINGS_SCHEMA.addField(UpstreamSettings.idleTimeout());
+
     @Override public Identifier typeId() { return ID; }
 
     @Override public String getDisplayName() { return "Instance"; }

@@ -702,6 +702,16 @@
       "scope": "help"
     }
   ],
+  "idle_timeout": [
+    {
+      "text": "Idle timeout",
+      "scope": "hohenheim_field"
+    },
+    {
+      "text": "Ends a request when no byte moved in either direction for this many seconds, from 0 to {$max}. Empty or 0 sets no idle limit. The request timeout still limits the whole request: set that to 0 for long uploads and streams. Not applied once a connection is upgraded (WebSocket).",
+      "scope": "help"
+    }
+  ],
   "rewrite_location": [
     {
       "text": "Rewrite Location headers",

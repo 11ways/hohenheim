@@ -625,6 +625,7 @@ public class SiteDispatcher implements HttpHandler {
             // publish a half-built response. Handlers that build their OWN response (a
             // redirect's 302 + Location, a static file, an error page) must not be committed
             // out from under them.
+            ExchangeIdleTimeout.install(exchange, entry.idleTimeoutMs);
             EagerResponseCommit.install(exchange);
             try {
                 timedProxyHandler.handleRequest(exchange);

@@ -80,6 +80,8 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
     public static final IntegerField REQUEST_TIMEOUT = SETTINGS_SCHEMA.addField(
         UpstreamSettings.requestTimeout());
 
+    public static final IntegerField IDLE_TIMEOUT = SETTINGS_SCHEMA.addField(UpstreamSettings.idleTimeout());
+
     public static final BooleanField WEBSOCKET_UPGRADE = SETTINGS_SCHEMA.addField(
         BooleanField.builder("websocket_upgrade").defaultValue(true)
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("websocket_upgrade"))
@@ -111,7 +113,7 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
     static {
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.open(HohenheimFormSections.FORWARDING,
             List.of(WEBSOCKET_UPGRADE.getName(), REWRITE_LOCATION.getName(), IGNORE_CERTIFICATES.getName(),
-                REQUEST_TIMEOUT.getName(), DELAY.getName(), UPSTREAM_PROTOCOL.getName())));
+                REQUEST_TIMEOUT.getName(), IDLE_TIMEOUT.getName(), DELAY.getName(), UPSTREAM_PROTOCOL.getName())));
     }
 
     @Override

@@ -5,6 +5,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
+import be.elevenways.hohenheim.server.proxy.ExchangeIdleTimeout;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.proxy.SiteDispatcher;
 import be.elevenways.hohenheim.server.tls.UpstreamTrust;
@@ -45,9 +46,16 @@ import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SNIHostName;
 import javax.net.ssl.SNIServerName;
 import javax.net.ssl.SSLContext;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.math.BigInteger;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
@@ -58,13 +66,17 @@ import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static be.elevenways.hohenheim.test.ProxyTestSupport.*;
@@ -651,6 +663,432 @@ class UpstreamProtocolTest {
         assertThat(rawRequest(proxyPort, "unlimited.test", "/"))
             .contains("200")
             .contains("slow-upstream");
+    }
+
+    // -------------------------------------------------------------------
+    // Idle timeout
+    // -------------------------------------------------------------------
+
+    /** The gap between two trickled bytes: well inside the 1 s idle time the journey sets. */
+    private static final Duration TRICKLE = Duration.ofMillis(300);
+
+    /** What a raw HTTP/1.1 client read: the bytes, whether the connection ended (EOF or reset), and when. */
+    private record RawAnswer(String text, boolean ended, long millis) {
+
+        String statusLine() {
+            int end = this.text.indexOf("\r\n");
+            return end < 0 ? this.text : this.text.substring(0, end);
+        }
+    }
+
+    /**
+     * A raw HTTP/1.1 upstream, one request per connection, whose path picks its behaviour: {@code /silent} never
+     * answers, {@code /started} sends its headers and one chunk and then nothing, {@code /trickle-down} sends five
+     * chunks one {@link #TRICKLE} apart ({@code /trickle-long} eight), {@code /trickle-up} and {@code /large} read the
+     * whole body first, {@code /slow} answers after 1.5 s, {@code /upgrade} switches protocols and speaks again after
+     * 1.5 s of silence.
+     *
+     * AIDEV-NOTE: raw sockets, not Undertow, because the journey must see the PROXY close its upstream connection: a
+     * blocking read here returns -1 the moment it does, where a server framework only notices on its next write.
+     */
+    private static final class RawUpstream implements AutoCloseable {
+
+        private final ServerSocket server;
+        private final Map<String, CompletableFuture<Void>> closed = new ConcurrentHashMap<>();
+        private final Map<String, AtomicInteger> dials = new ConcurrentHashMap<>();
+        private final AtomicLong firstBodyByteAt = new AtomicLong();
+
+        RawUpstream() throws IOException {
+            this.server = new ServerSocket(0, 50, InetAddress.getLoopbackAddress());
+            Thread acceptor = new Thread(this::accept, "raw-upstream-accept");
+            acceptor.setDaemon(true);
+            acceptor.start();
+        }
+
+        int port() {
+            return this.server.getLocalPort();
+        }
+
+        /** @return completed once the proxy closed the connection that asked for {@code path} */
+        CompletableFuture<Void> closedFor(String path) {
+            return this.closed.computeIfAbsent(path, any -> new CompletableFuture<>());
+        }
+
+        /** @return how many connections asked for {@code path} */
+        int dialsFor(String path) {
+            AtomicInteger count = this.dials.get(path);
+            return count == null ? 0 : count.get();
+        }
+
+        private void accept() {
+            while (!this.server.isClosed()) {
+                try {
+                    Socket socket = this.server.accept();
+                    Thread worker = new Thread(() -> serve(socket), "raw-upstream-conn");
+                    worker.setDaemon(true);
+                    worker.start();
+                } catch (IOException stopped) {
+                    return;
+                }
+            }
+        }
+
+        private void serve(Socket socket) {
+            try (socket) {
+                // Past Undertow's 10 s drain, so a held connection sees the proxy's final close.
+                socket.setSoTimeout(20_000);
+                InputStream in = socket.getInputStream();
+                OutputStream out = socket.getOutputStream();
+                String head = readHead(in);
+                String path = head.substring(head.indexOf(' ') + 1, head.indexOf(' ', head.indexOf(' ') + 1));
+                this.dials.computeIfAbsent(path, any -> new AtomicInteger()).incrementAndGet();
+                if (path.startsWith("/silent")) {
+                    awaitClose(in, path);
+                } else if (path.startsWith("/started")) {
+                    out.write(CHUNKED_OK);
+                    writeChunk(out, "part-one");
+                    awaitClose(in, path);
+                } else if (path.startsWith("/trickle-down") || path.startsWith("/trickle-long")) {
+                    out.write(CHUNKED_OK);
+                    int chunks = path.startsWith("/trickle-long") ? 8 : 5;
+                    for (int index = 1; index <= chunks; index++) {
+                        if (index > 1) {
+                            Pace.sleep(TRICKLE);
+                        }
+                        writeChunk(out, "t" + index);
+                    }
+                    out.write("0\r\n\r\n".getBytes(StandardCharsets.US_ASCII));
+                    out.flush();
+                } else if (path.startsWith("/trickle-up") || path.startsWith("/large")) {
+                    long length = contentLength(head);
+                    long read = 0;
+                    byte[] buffer = new byte[65536];
+                    while (read < length) {
+                        int count = in.read(buffer);
+                        if (count < 0) {
+                            break;
+                        }
+                        if (read == 0 && count > 0) {
+                            this.firstBodyByteAt.compareAndSet(0, Now.monotonicNanos());
+                        }
+                        read += count;
+                    }
+                    answer(out, "got-" + read);
+                } else if (path.startsWith("/slow")) {
+                    Pace.sleep(Duration.ofMillis(1500));
+                    answer(out, "slow-done");
+                } else if (path.startsWith("/upgrade")) {
+                    out.write(("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                        + "Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=\r\n\r\n")
+                        .getBytes(StandardCharsets.US_ASCII));
+                    out.flush();
+                    Pace.sleep(Duration.ofMillis(1500));
+                    out.write("tunnel-alive".getBytes(StandardCharsets.US_ASCII));
+                    out.flush();
+                    awaitClose(in, path);
+                }
+            } catch (IOException | InterruptedException | RuntimeException ended) {
+                // The proxy hung up or the test is over; the futures already say what the journey needs.
+            }
+        }
+
+        private void awaitClose(InputStream in, String path) throws IOException {
+            try {
+                while (in.read() >= 0) {
+                    // Drain whatever the proxy still sends until it closes.
+                }
+            } catch (SocketTimeoutException stillOpen) {
+                return;
+            } catch (IOException reset) {
+                // A reset is a close too.
+            }
+            closedFor(path).complete(null);
+        }
+
+        private static String readHead(InputStream in) throws IOException {
+            ByteArrayOutputStream head = new ByteArrayOutputStream();
+            int matched = 0;
+            while (matched < 4) {
+                int next = in.read();
+                if (next < 0) {
+                    throw new IOException("closed before the request head ended");
+                }
+                head.write(next);
+                matched = next == "\r\n\r\n".charAt(matched) ? matched + 1 : (next == '\r' ? 1 : 0);
+            }
+            return head.toString(StandardCharsets.US_ASCII);
+        }
+
+        private static long contentLength(String head) {
+            for (String line : head.split("\r\n")) {
+                if (line.toLowerCase(Locale.ROOT).startsWith("content-length:")) {
+                    return Long.parseLong(line.substring(line.indexOf(':') + 1).trim());
+                }
+            }
+            return 0;
+        }
+
+        /** The head of a 200 whose body follows in chunks. */
+        private static final byte[] CHUNKED_OK =
+            "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n".getBytes(StandardCharsets.US_ASCII);
+
+        private static void writeChunk(OutputStream out, String text) throws IOException {
+            String chunk = Integer.toHexString(text.length()) + "\r\n" + text + "\r\n";
+            out.write(chunk.getBytes(StandardCharsets.US_ASCII));
+            out.flush();
+        }
+
+        private static void answer(OutputStream out, String body) throws IOException {
+            out.write(("HTTP/1.1 200 OK\r\nContent-Length: " + body.length() + "\r\n\r\n" + body)
+                .getBytes(StandardCharsets.US_ASCII));
+            out.flush();
+        }
+
+        @Override
+        public void close() throws IOException {
+            this.server.close();
+        }
+    }
+
+    /** One raw HTTP/1.1 exchange: a GET, or a POST whose {@code trickled} body bytes go one per {@link #TRICKLE}. */
+    private static RawAnswer raw(int port, String host, String path, int trickled) throws Exception {
+        try (Socket socket = new Socket("127.0.0.1", port)) {
+            socket.setSoTimeout(5000);
+            Now.Stopwatch took = Now.stopwatch();
+            OutputStream out = socket.getOutputStream();
+            StringBuilder head = new StringBuilder(trickled > 0 ? "POST " : "GET ").append(path)
+                .append(" HTTP/1.1\r\nHost: ").append(host).append("\r\nConnection: close\r\n");
+            if (trickled > 0) {
+                head.append("Content-Length: ").append(trickled).append("\r\n");
+            }
+            out.write(head.append("\r\n").toString().getBytes(StandardCharsets.US_ASCII));
+            out.flush();
+            for (int index = 0; index < trickled; index++) {
+                if (index > 0) {
+                    Pace.sleep(TRICKLE);
+                }
+                out.write('x');
+                out.flush();
+            }
+            ByteArrayOutputStream seen = new ByteArrayOutputStream();
+            boolean ended = true;
+            try {
+                InputStream in = socket.getInputStream();
+                byte[] buffer = new byte[4096];
+                int count;
+                while ((count = in.read(buffer)) >= 0) {
+                    seen.write(buffer, 0, count);
+                }
+            } catch (SocketTimeoutException stillOpen) {
+                ended = false;
+            } catch (IOException reset) {
+                // A reset ends the connection as an EOF does.
+            }
+            return new RawAnswer(seen.toString(StandardCharsets.US_ASCII), ended, took.elapsedNanos() / 1_000_000);
+        }
+    }
+
+    /** @return the status and body of an h2c stream, or "reset" when it failed before its end */
+    private static CompletableFuture<String> h2Stream(ClientConnection connection, DefaultByteBufferPool pool,
+                                                      String host, String path) {
+        CompletableFuture<String> result = new CompletableFuture<>();
+        ClientRequest request = new ClientRequest();
+        request.setMethod(Methods.GET);
+        request.setPath(path);
+        request.getRequestHeaders().put(Headers.HOST, host);
+        connection.sendRequest(request, new ClientCallback<ClientExchange>() {
+            @Override
+            public void completed(ClientExchange exchange) {
+                exchange.setResponseListener(new ClientCallback<ClientExchange>() {
+                    @Override
+                    public void completed(ClientExchange response) {
+                        new StringReadChannelListener(pool) {
+                            @Override
+                            protected void stringDone(String body) {
+                                result.complete(response.getResponse().getResponseCode() + " " + body);
+                            }
+
+                            @Override
+                            protected void error(IOException e) {
+                                result.complete("reset");
+                            }
+                        }.setup(response.getResponseChannel());
+                    }
+
+                    @Override
+                    public void failed(IOException e) {
+                        result.complete("reset");
+                    }
+                });
+            }
+
+            @Override
+            public void failed(IOException e) {
+                result.complete("reset");
+            }
+        });
+        return result;
+    }
+
+    /**
+     * An idle timeout ends an exchange on which nothing moved, in either direction and on both protocols, closes its
+     * upstream, and leaves alone what keeps moving, what sets no idle time and what was upgraded; the request timeout
+     * still ends the whole exchange as before. Guards (pass before the change): steps 6, 7 and 8.
+     *
+     * AIDEV-NOTE: the upstream closes are asked last (step 9). Undertow's ClientConnection.close is a CLEAN close:
+     * with a request in flight its shutdown reaches no FIN, so it drains until io.undertow.max-drain-time (10 s) and
+     * then closes for good. Undertow's own request timeout closes its upstream the same way.
+     */
+    @Test
+    void anIdleTimeoutCutsASilentExchangeAndClosesItsUpstreamJourney() throws Exception {
+        APP.renewDatabase();
+        try (RawUpstream upstream = new RawUpstream()) {
+            int port = upstream.port();
+            setupSiteWithDomain("hohenheim:address", "idle.test", "exact", Map.of("forward_host", "127.0.0.1",
+                "forward_port", port, "request_timeout", 0, "idle_timeout", 1, "websocket_upgrade", true));
+            setupSiteWithDomain("hohenheim:address", "unset.test", "exact", Map.of("forward_host", "127.0.0.1",
+                "forward_port", port, "request_timeout", 0));
+            setupSiteWithDomain("hohenheim:address", "total.test", "exact", Map.of("forward_host", "127.0.0.1",
+                "forward_port", port, "request_timeout", 1, "idle_timeout", 3));
+            proxy = startProxy();
+            int proxyPort = httpPort(proxy);
+
+            // 1. HTTP/1.1, a silent upstream, nothing answered yet: the exchange is answered with the request timeout's
+            //    own status (step 7 compares). Its upstream closes in step 9.
+            // 2. The response started, then silence: the client's connection ends after the part it got, and the
+            //    upstream is closed (step 9). Both are asked together.
+            CompletableFuture<RawAnswer> silent = CompletableFuture.supplyAsync(() -> rawQuietly(proxyPort,
+                "idle.test", "/silent/1", 0));
+            CompletableFuture<RawAnswer> started = CompletableFuture.supplyAsync(() -> rawQuietly(proxyPort,
+                "idle.test", "/started/2", 0));
+            RawAnswer idleCut = silent.get(6, TimeUnit.SECONDS);
+            assertThat(idleCut.statusLine()).as("step 1: answered by the cut").startsWith("HTTP/1.1 5");
+            assertThat(idleCut.millis()).as("step 1: after the idle time, not a later limit").isLessThan(3000);
+            RawAnswer startedCut = started.get(6, TimeUnit.SECONDS);
+            assertThat(startedCut.text()).as("step 2: the part sent before the silence arrived")
+                .startsWith("HTTP/1.1 200").contains("part-one");
+            assertThat(startedCut.ended()).as("step 2: the connection ended, no read timed out").isTrue();
+            assertThat(startedCut.text()).as("step 2: never the end of a chunked body").doesNotContain("\r\n0\r\n");
+
+            // 3. A response trickling a chunk every 300 ms for 1.2 s is never cut.
+            assertThat(raw(proxyPort, "idle.test", "/trickle-down/3", 0).text())
+                .as("step 3: a moving response completes").startsWith("HTTP/1.1 200").contains("t5");
+
+            // 4. Neither is an upload trickling a byte every 300 ms.
+            assertThat(raw(proxyPort, "idle.test", "/trickle-up/4", 5).text())
+                .as("step 4: a moving upload completes").startsWith("HTTP/1.1 200").contains("got-5");
+
+            // 5. HTTP/2: the silent stream is reset alone, a sibling that keeps moving on the same connection
+            //    completes; the silent stream's upstream closes in step 9.
+            XnioWorker worker = Xnio.getInstance().createWorker(OptionMap.create(Options.WORKER_IO_THREADS, 2));
+            DefaultByteBufferPool pool = new DefaultByteBufferPool(true, 8192);
+            ClientConnection connection = null;
+            try {
+                connection = UndertowClient.getInstance()
+                    .connect(URI.create("h2c-prior://127.0.0.1:" + proxyPort), worker, pool, OptionMap.EMPTY)
+                    .get();
+                CompletableFuture<String> quiet = h2Stream(connection, pool, "idle.test", "/started/5");
+                CompletableFuture<String> moving = h2Stream(connection, pool, "idle.test", "/trickle-down/5");
+                assertThat(quiet.get(6, TimeUnit.SECONDS)).as("step 5: the silent stream is reset")
+                    .isEqualTo("reset");
+                assertThat(moving.get(6, TimeUnit.SECONDS)).as("step 5: its sibling completes")
+                    .isEqualTo("200 t1t2t3t4t5");
+            } finally {
+                if (connection != null) {
+                    connection.close();
+                }
+                worker.shutdownNow();
+            }
+
+            // 6. No idle setting: an exchange silent for 1.5 s completes and installs no idle state; every exchange
+            //    above left none behind either.
+            long installed = ExchangeIdleTimeout.installedStates();
+            assertThat(raw(proxyPort, "unset.test", "/slow/6", 0).text())
+                .as("step 6: unset cuts nothing").startsWith("HTTP/1.1 200").contains("slow-done");
+            assertThat(ExchangeIdleTimeout.installedStates()).as("step 6: and installs no idle state")
+                .isEqualTo(installed);
+            assertThat(ExchangeIdleTimeout.liveStates()).as("step 6: no armed idle timer outlives its exchange")
+                .isZero();
+
+            // 7. The request timeout still ends the whole exchange: a silent one at 1 s, before its 3 s idle time,
+            //    with the status the idle cut gave, and a moving one too (its last chunk would come at 2.1 s).
+            CompletableFuture<RawAnswer> totalSilent = CompletableFuture.supplyAsync(() -> rawQuietly(proxyPort,
+                "total.test", "/silent/7", 0));
+            CompletableFuture<RawAnswer> totalMoving = CompletableFuture.supplyAsync(() -> rawQuietly(proxyPort,
+                "total.test", "/trickle-long/7", 0));
+            RawAnswer timedOut = totalSilent.get(6, TimeUnit.SECONDS);
+            assertThat(timedOut.millis()).as("step 7: the request timeout, not the idle one").isLessThan(2500);
+            assertThat(idleCut.statusLine()).as("step 7: the idle cut answers as the request timeout does")
+                .isEqualTo(timedOut.statusLine());
+            assertThat(totalMoving.get(6, TimeUnit.SECONDS).text()).as("step 7: a moving exchange is ended too")
+                .contains("t1").doesNotContain("t8");
+
+            // 8. An upgraded connection is not cut: its tunnel speaks again after 1.5 s of silence.
+            try (Socket socket = new Socket("127.0.0.1", proxyPort)) {
+                socket.setSoTimeout(4000);
+                socket.getOutputStream().write(("GET /upgrade/8 HTTP/1.1\r\nHost: idle.test\r\nConnection: Upgrade\r\n"
+                    + "Upgrade: websocket\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+                    + "Sec-WebSocket-Version: 13\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+                socket.getOutputStream().flush();
+                InputStream in = socket.getInputStream();
+                ByteArrayOutputStream seen = new ByteArrayOutputStream();
+                byte[] buffer = new byte[1024];
+                int count;
+                while (!seen.toString(StandardCharsets.US_ASCII).contains("tunnel-alive")
+                        && (count = in.read(buffer)) >= 0) {
+                    seen.write(buffer, 0, count);
+                }
+                assertThat(seen.toString(StandardCharsets.US_ASCII)).as("step 8: switched")
+                    .startsWith("HTTP/1.1 101")
+                    .as("step 8: and the silent tunnel still carries bytes").contains("tunnel-alive");
+            }
+
+            // 9. Every cut closed its upstream, within Undertow's drain bound, and the retry Undertow starts after
+            //    closing an idempotent request's upstream never dialed again.
+            for (String path : List.of("/silent/1", "/started/2", "/started/5")) {
+                upstream.closedFor(path).get(15, TimeUnit.SECONDS);
+                assertThat(upstream.dialsFor(path)).as("step 9: %s was dialed once", path).isEqualTo(1);
+            }
+        }
+    }
+
+    /** {@link #raw}, for an async step; a failure surfaces through the future. */
+    private static RawAnswer rawQuietly(int port, String host, String path, int trickled) {
+        try {
+            return raw(port, host, path, trickled);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /** A large upload streams through: the upstream reads its first byte before the client wrote its last. */
+    @Test
+    void aLargeUploadStreamsThroughUnbuffered() throws Exception {
+        APP.renewDatabase();
+        try (RawUpstream upstream = new RawUpstream()) {
+            setupSiteWithDomain("hohenheim:address", "large.test", "exact", Map.of("forward_host", "127.0.0.1",
+                "forward_port", upstream.port(), "request_timeout", 0));
+            proxy = startProxy();
+            long size = 100L * 1024 * 1024;
+            try (Socket socket = new Socket("127.0.0.1", httpPort(proxy))) {
+                socket.setSoTimeout(20_000);
+                OutputStream out = socket.getOutputStream();
+                out.write(("POST /large HTTP/1.1\r\nHost: large.test\r\nConnection: close\r\nContent-Length: " + size
+                    + "\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+                byte[] block = new byte[1024 * 1024];
+                for (long sent = 0; sent < size; sent += block.length) {
+                    out.write(block);
+                }
+                out.flush();
+                long lastSentAt = Now.monotonicNanos();
+                String answer = new String(socket.getInputStream().readAllBytes(), StandardCharsets.US_ASCII);
+                // 1. Every byte arrived.
+                assertThat(answer).as("step 1: the upstream read the whole body").contains("got-" + size);
+                // 2. And it arrived while the client was still sending: the proxy holds no copy of the body.
+                assertThat(upstream.firstBodyByteAt.get()).as("step 2: the first byte reached the upstream first")
+                    .isPositive().isLessThan(lastSentAt);
+            }
+        }
     }
 
     // -------------------------------------------------------------------

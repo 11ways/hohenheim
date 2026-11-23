@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.sitetype;
 
 import be.elevenways.hohenheim.server.upstream.kinds.AddressUpstreamKind;
+import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.RedirectUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.StaticUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.UpstreamSettings;
@@ -14,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * The upstream settings several kinds share have one declaring home: the protocol tokens are
  * the enum's, an unknown one fails closed while every stored production value still parses,
- * and the delay every kind offers is the one field the dispatcher reads by the one key.
+ * and the delay and the idle timeout are each one field the dispatcher reads by one key.
  */
 class UpstreamSettingVocabularyTest {
 
@@ -52,5 +53,14 @@ class UpstreamSettingVocabularyTest {
         assertThat(StaticUpstreamKind.DELAY.getName()).as("step 1: static").isEqualTo(UpstreamSettings.DELAY);
         assertThat(RedirectUpstreamKind.DELAY.getName()).as("step 1: redirect").isEqualTo(UpstreamSettings.DELAY);
         assertThat(AddressUpstreamKind.DELAY.getName()).as("step 1: address").isEqualTo(UpstreamSettings.DELAY);
+    }
+
+    @Test
+    void theIdleTimeoutIsOneSettingUnderOneKey() {
+        // Step 1: both kinds that offer it store it under the key the dispatcher reads.
+        assertThat(AddressUpstreamKind.IDLE_TIMEOUT.getName()).as("step 1: address")
+            .isEqualTo(UpstreamSettings.IDLE_TIMEOUT);
+        assertThat(InstanceUpstreamKind.IDLE_TIMEOUT.getName()).as("step 1: app")
+            .isEqualTo(UpstreamSettings.IDLE_TIMEOUT);
     }
 }

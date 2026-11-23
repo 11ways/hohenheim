@@ -93,7 +93,7 @@ wants one -- there is no `dead` kind any more.
 Field names are the stored setting keys. Defaults are those declared on the field builder.
 
 **Address** (was Proxy): `forward_scheme` (http/https), `forward_host`, `forward_port`,
-`upstream_protocol` (http1 / h2-for-gRPC), `request_timeout` (s), `websocket_upgrade`
+`upstream_protocol` (http1 / h2-for-gRPC), `request_timeout` (s), `idle_timeout` (s), `websocket_upgrade`
 (default true), `ignore_certificates` (default false), `rewrite_location` (default true),
 `socket` (PathField), `delay` (ms).
 Socket mode WINS over host/port when set and is reached through a loopback TCP-to-AF_UNIX
@@ -140,14 +140,20 @@ unparseable), `preserve_path` (default false), `delay` (ms). A target that is no
 
 **Instance**: `port` (which declared port of the instance to serve; blank = its single
 publication), `scheme` (http/https), `websocket_upgrade` (default true), `request_timeout`
-(s). It absorbs the serving half of the deleted `docker` site type. `InstanceUpstreamHandler`
+(s), `idle_timeout` (s). It absorbs the serving half of the deleted `docker` site type. `InstanceUpstreamHandler`
 RESOLVES the serving release's published loopback port off the port ledger and forwards
 there; it converges nothing, so a routing reload can no longer block on a build. The
 resolution is generation-keyed (`ApplicationUpstreams`): a release flip bumps the
 application's generation and the handler re-resolves on its next request, which is what
 makes a swap visible without rebuilding the route table. A site whose `instance_id` is null
 is a `FaultedSiteHandler`; an application with nothing serving answers 503 and reports DOWN.
-`request_timeout` rides the generic `RouteEntry` reading of the site settings.
+`request_timeout` rides the generic `RouteEntry` reading of the site settings, and so does `idle_timeout`:
+unset or 0 installs nothing; set, `ExchangeIdleTimeout` cuts an exchange on which no byte moved in either
+direction for that long, through the same two branches as Undertow's own request timeout (close the upstream,
+then close the downstream connection, one stream on HTTP/2, or answer 504; a request that is not idempotent gets
+the 503 Undertow's own failure path answers when the upstream closes, as on its request timeout). An upgraded
+connection is not covered. The upstream connection is closed through Undertow's clean close, which with a request in
+flight drains for up to 10 s (`io.undertow.max-drain-time`) before it closes, as on the request timeout.
 
 **Dev namespace**: `registration_token` (secret). The matched wildcard's first label picks a
 live `DevLease`; a name with no lease renders the dev-offline page. `SiteResource` mints a

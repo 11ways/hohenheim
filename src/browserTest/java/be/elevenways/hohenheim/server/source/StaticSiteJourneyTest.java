@@ -186,7 +186,8 @@ class StaticSiteJourneyTest extends HohenheimTestBase {
         form.put(InstanceModel.KIND.getName(), kind);
         form.put("serverId", ServerModel.localServerId());
         form.put(InstanceModel.SETTINGS.getName(), Map.of("repository_url", upstream.toString(), "branch", "main",
-            "build_command", "mkdir -p out && cp index.html out/", "output_directory", "out",
+            "build_command", "mkdir -p out && cp index.html out/ && echo " + MARK + "-not-found > out/404.html",
+            "output_directory", "out",
             "build_image", TestImages.ALPINE));
         form.put(PutOnline.HTTPS.getName(), PutOnline.HTTPS_LATER);
         Long runId = OperationPipeline.invoke(OperationRequest.of(PutOnline.PUT_WORKLOAD_ONLINE,
@@ -213,6 +214,21 @@ class StaticSiteJourneyTest extends HohenheimTestBase {
             .as("step 4: the proxy serves the built page").contains("200").contains(MARK + "-one");
         assertThat(ProxyTestSupport.rawRequest(port, HOSTNAME, "/.git/config"))
             .as("step 4: the checkout's hidden files are not served").doesNotContain("[core]");
+
+        // 4b. The built site's own 404 page answers a missing address with the 404 status, and a response header set
+        //     on the site's address rides every answer, the 404 included.
+        Row address = Models.get(SiteDomainModel.class).find().where(SiteDomainModel.HOSTNAME.eq(HOSTNAME)).first();
+        assertThat(address).as("step 4b: the site's address").isNotNull();
+        address.set(SiteDomainModel.RESPONSE_HEADERS, Map.of("X-Static-Journey", MARK));
+        Models.get(SiteDomainModel.class).save(address);
+        proxy.getDispatcher().reloadRoutes();
+        assertThat(ProxyTestSupport.rawRequest(port, HOSTNAME, "/"))
+            .as("step 4b: the page carries the address's response header").startsWith("HTTP/1.1 200")
+            .contains("X-Static-Journey: " + MARK);
+        assertThat(ProxyTestSupport.rawRequest(port, HOSTNAME, "/no-such-page"))
+            .as("step 4b: a missing address is the site's own 404 page, with the 404 status")
+            .startsWith("HTTP/1.1 404").contains(MARK + "-not-found")
+            .contains("X-Static-Journey: " + MARK);
 
         // 5. A push: the scheduled check reads the new head and deploys it.
         Files.writeString(upstream.resolve("index.html"), "<h1>" + MARK + "-two</h1>\n");
