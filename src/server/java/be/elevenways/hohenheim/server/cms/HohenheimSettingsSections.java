@@ -63,10 +63,11 @@ public enum HohenheimSettingsSections {
     // "Framework (advanced)" because the people an installation serves read it.
     BRAND(label -> SettingsPage.frameworkGroup("brand", label, Brands.BRAND), "brand",
         HohenheimMicrocopy.SETTINGS_SECTION.of("section_brand")),
-    // The installation's own plumbing: its roles, where it keeps files, what it logs, how it confines host processes.
+    // The installation's own plumbing: its name among the servers it is linked to, its roles, where it keeps files,
+    // what it logs, how it confines host processes.
     INSTALLATION("installation", HohenheimMicrocopy.SETTINGS_SECTION.of("section_installation"),
-        HohenheimSettings.Roles.GROUP, HohenheimSettings.Storage.GROUP, HohenheimSettings.Logging.GROUP,
-        HohenheimSettings.Process.GROUP);
+        HohenheimSettings.Cluster.GROUP, HohenheimSettings.Roles.GROUP, HohenheimSettings.Storage.GROUP,
+        HohenheimSettings.Logging.GROUP, HohenheimSettings.Process.GROUP);
 
     private final String key;
     private final Microcopy label;

@@ -114,6 +114,10 @@ public final class HohenheimWidgets {
     public static final DisplayWidget TENANT_USAGE = register("tenant_usage", HohenheimTemplateIds.WIDGET_TENANT_USAGE,
         HohenheimMicrocopy.TENANT_USAGE.of("title"), "gauge");
 
+    /** A join code just issued, shown once inside the Servers page's card that lets another Hohenheim manage it. */
+    public static final DisplayWidget JOIN_CODE = register("join_code", HohenheimTemplateIds.WIDGET_JOIN_CODE,
+        HohenheimMicrocopy.LINKED_SERVER.of("linked_server_join_code"), "key");
+
     private HohenheimWidgets() {
     }
 

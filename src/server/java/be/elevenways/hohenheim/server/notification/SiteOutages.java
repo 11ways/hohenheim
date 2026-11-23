@@ -30,7 +30,7 @@ import java.util.Map;
 
 /**
  * The outage watch of the sites apps serve: one "stopped answering" alert when an app that was seen answering has not
- * answered for {@link #DOWN_AFTER}, and one "answers again" alert once it answered two sweeps in a row.
+ * answered for {@link Alerts#DOWN_AFTER}, and one "answers again" alert once it answered two sweeps in a row.
  *
  * AIDEV-NOTE: the state is one {@link SiteOutageModel} row per site, so a restarted controller repeats nothing and a
  * second sweeper over the same database sends nothing twice: up_seen_at (the observed up an outage needs, the row's
@@ -59,9 +59,6 @@ import java.util.Map;
  * @since  0.10.0
  */
 public final class SiteOutages {
-
-    /** How long an app that answered must stay down before it alerts. */
-    public static final Duration DOWN_AFTER = Duration.ofMinutes(2);
 
     private SiteOutages() {
     }
@@ -178,7 +175,7 @@ public final class SiteOutages {
                     if (upSeen.isAfter(downSince)) {
                         asRead(outage).assign(SiteOutageModel.UP_SEEN_AT, downSince).updateAll();
                     }
-                } else if (Duration.between(downSince, now).compareTo(DOWN_AFTER) >= 0) {
+                } else if (Duration.between(downSince, now).compareTo(Alerts.DOWN_AFTER) >= 0) {
                     stoppedAnswering(site, outage, application, named, downSince, now);
                 }
             }
@@ -216,7 +213,7 @@ public final class SiteOutages {
                 .withArg("duration", Duration.between(downSince, upSeen)));
     }
 
-    /** A site down for {@link #DOWN_AFTER}: the latch is taken once, and only its taker sends. */
+    /** A site down for {@link Alerts#DOWN_AFTER}: the latch is taken once, and only its taker sends. */
     private static void stoppedAnswering(@NonNull Row site, @NonNull Row outage, @NonNull Row application,
                                          boolean named, @NonNull Instant downSince, @NonNull Instant now) {
         int won = asRead(outage).assign(SiteOutageModel.DOWN_ALERTED_AT, now).updateAll();

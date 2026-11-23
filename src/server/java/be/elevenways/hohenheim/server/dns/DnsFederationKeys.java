@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.dns;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.dns.DnsPeerKeyResponse;
 import be.elevenways.hohenheim.model.DnsPeerModel;
+import be.elevenways.hohenheim.server.MachineName;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -49,23 +50,14 @@ public final class DnsFederationKeys {
 
     /**
      * @return the name this instance announces to peers: the configured federation
-     *         name, else the system hostname, else a constant
+     *         name, else the machine's host name ({@link MachineName#hostName})
      */
     public static @NonNull String localName() {
         String configured = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Dns.FEDERATION_NAME);
         if (configured != null && !configured.isBlank()) {
             return configured.trim();
         }
-        try {
-            String hostname = InetAddress.getLocalHost().getHostName();
-            if (hostname != null && !hostname.isBlank()) {
-                return hostname.trim();
-            }
-        }
-        catch (Exception unresolvable) {
-            // A host that cannot name itself still federates; it just gets the constant.
-        }
-        return "hohenheim";
+        return MachineName.hostName();
     }
 
     /**

@@ -64,6 +64,7 @@ public final class HohenheimSlugs {
     public static final String INSTANCE_VOLUMES = "instance-volumes";
     public static final String INSTANCES = "instances";
     public static final String INSTANCES_FROM_TEMPLATE = "instances-from-template";
+    public static final String LINKED_SERVERS = "linked-servers";
     public static final String NOTIFICATIONS = "notifications";
     public static final String PREVIEWS = "previews";
     public static final String PROJECT_MEMBERS = "project-members";
@@ -95,6 +96,7 @@ public final class HohenheimSlugs {
     /** The sidebar clusters: each is the row's URL, which lands on the first member the viewer may open. */
     public static final class Cluster {
 
+        public static final String CLUSTER = "cluster";
         public static final String ACCESS = "access";
         public static final String CONFIGURE = "configure";
         public static final String DOMAIN_NAMES = "domain-names";

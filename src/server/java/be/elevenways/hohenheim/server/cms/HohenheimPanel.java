@@ -39,11 +39,11 @@ public final class HohenheimPanel extends Panel {
     public static final Permission ACCESS = HohenheimSources.ADMIN_ACCESS;
 
     // AIDEV-NOTE: the sidebar is EIGHT entries in one unlabelled block, in this order:
-    // Dashboard, Apps, Databases, Hosts, Domains, Access, Activity, Settings. It names what an
+    // Dashboard, Apps, Databases, Servers, Domains, Access, Activity, Settings. It names what an
     // operator comes to DO, never a table: Apps reads sites, instances and stacks as one list (AppDirectory), and
-    // Domains, Access, Activity and Settings are clusters (zenit-cms PanelCluster): one sidebar row each, their
-    // members drawn as the tabs of every member's page. A member keeps its own route, gates and breadcrumbs, and the
-    // command palette still lists it under its cluster.
+    // Servers, Domains, Access, Activity and Settings are clusters (zenit-cms PanelCluster): one sidebar row each,
+    // their members drawn as the tabs of every member's page. A member keeps its own route, gates and breadcrumbs,
+    // and the command palette still lists it under its cluster.
     //
     // AIDEV-NOTE: an entry that is neither one of the eight nor a cluster member is showInNav(false), which removes
     // the sidebar row and NOTHING else, and it keeps a declared way in: Sites, Instances, Stacks and Projects from the
@@ -170,6 +170,8 @@ public final class HohenheimPanel extends Panel {
             peers.add(ServerParts.admin());
             peers.add(ReconcileFindingParts.admin());
         }
+        // The Hohenheims this one is linked to, this server first: installation-wide, on every node.
+        peers.add(LinkedServerParts.admin());
         addIf(peers, DnsZoneParts.admin(), Role.DNS);
         addIf(peers, DnsRecordParts.admin(), Role.DNS);
         addIf(peers, DnsPeerParts.admin(), Role.DNS);
@@ -223,6 +225,9 @@ public final class HohenheimPanel extends Panel {
         peers.add(AppParts.admin(present(peers, HohenheimSlugs.SITES, HohenheimSlugs.INSTANCES, HohenheimSlugs.STACKS,
                 HohenheimSlugs.PROJECTS), present(peers, AppDirectory.sourceEntrySlugs()),
             present(peers, HohenheimSlugs.PUT_ONLINE).isEmpty() ? null : HohenheimSlugs.PUT_ONLINE));
+        // In tab order: the linked Hohenheim servers, then this server's hosts (only where host workloads run).
+        addCluster(peers, cluster("servers", HohenheimSlugs.Cluster.CLUSTER, "server", 40),
+            HohenheimSlugs.LINKED_SERVERS, HohenheimSlugs.SERVERS);
         // In tab order: addresses, certificates, DNS zones, released addresses.
         addCluster(peers, cluster("domain_names", HohenheimSlugs.Cluster.DOMAIN_NAMES, "globe", 50),
             HohenheimSlugs.DOMAINS,

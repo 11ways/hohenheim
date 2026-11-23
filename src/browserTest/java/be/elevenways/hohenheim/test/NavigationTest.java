@@ -82,7 +82,7 @@ class NavigationTest extends HohenheimTestBase {
         // AdminNavigationJourneyTest owns the full inventory and the clusters' members; here the rendered sidebar
         // names each of the eight entries and offers no demoted peer.
         String sidebarText = page.locator("pl-app-sidebar").textContent();
-        for (String entry : List.of("Dashboard", "Apps", "Databases", "Hosts", "Domains", "Access", "Activity",
+        for (String entry : List.of("Dashboard", "Apps", "Databases", "Servers", "Domains", "Access", "Activity",
                 "Settings")) {
             assertThat(sidebarText).as("the sidebar names " + entry).contains(entry);
         }

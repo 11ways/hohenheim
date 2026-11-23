@@ -45,6 +45,8 @@ public final class HohenheimSystemPurposes {
     public static final @NonNull SystemPurpose DATABASE_START = declare("database_start");
     /** A container that takes its image from an app restarted on the version its app now serves. */
     public static final @NonNull SystemPurpose IMAGE_FOLLOW = declare("image_follow");
+    /** A join code redeemed by another Hohenheim: the code was the gate, and the row of its master is made. */
+    public static final @NonNull SystemPurpose CLUSTER_JOIN = declare("cluster_join");
 
     private HohenheimSystemPurposes() {
     }

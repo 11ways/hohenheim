@@ -188,7 +188,7 @@ test one end-to-end: inline `NotificationDispatcher` + `webhook://default` + a l
 The INSTALL schema starts from one baseline migration plus `M002_AfterBaseline` (`2026_10_23_000001`, published
 on kuifje and robbedoes 2026-11-08, pinned), `M003_CertificateSigningRequests` (`2026_11_19_000001`) and
 `M004_SiteOutages` (`2026_11_23_000001`, both published on kuifje and robbedoes 2026-11-23, pinned); at most ONE
-unpublished migration follows them (none yet),
+unpublished migration follows them (`M005_LinkedServers`, `2026_11_23_000002`),
 `src/common/java/be/elevenways/hohenheim/migration/M001_HohenheimBaseline.java`
 (version `2026_10_21_000001`, name `hohenheim_baseline`: the workspace's squash-baseline
 convention), GENERATED on 2026-10-21 by folding
@@ -227,8 +227,8 @@ those citations are history, not files you will find.
   (`tools/deploy-host.sh` reminds it); a pin is never regenerated to make a red
   build green. Comments and formatting are outside the digest.
 - A chain has at most ONE migration newer than its last published (live-deployed) version.
-  `M004_SiteOutages` is published and frozen, so the next schema change creates `M005_...` with a LATER dated version
-  than `2026_11_23_000001`; every further change edits that M005 until a live deploy publishes it (raising the mark).
+  `M004_SiteOutages` is published and frozen; `M005_LinkedServers` is the open one, so a schema change edits it
+  until a live deploy publishes it (raising the mark).
   Use the ORM DSL (`alterTable` + `addColumn`/`dropColumn`), never raw SQL.
   Existing rows are real, so a column added to a populated table is nullable or
   carries a default, and a backfill is a `builder.data(...)` step -- never a

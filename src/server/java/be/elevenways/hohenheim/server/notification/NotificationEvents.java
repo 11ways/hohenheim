@@ -62,7 +62,11 @@ public enum NotificationEvents {
     /** SiteOutages raises this ONCE per outage, when an app's site that answered has not answered for two minutes. */
     SITE_DOWN("site_down"),
     /** SiteOutages raises this when an alerted app's site answered two sweeps in a row again. */
-    SITE_RECOVERED("site_recovered");
+    SITE_RECOVERED("site_recovered"),
+    /** LinkedServers raises this ONCE per run of failed calls, when a linked server stops answering. */
+    LINKED_SERVER_DOWN("linked_server_down"),
+    /** LinkedServers raises this when a linked server that stopped answering answers again. */
+    LINKED_SERVER_RECOVERED("linked_server_recovered");
 
     /** Every declared event token, in declaration order; DERIVED, never hand-listed. */
     public static final List<String> ALL =

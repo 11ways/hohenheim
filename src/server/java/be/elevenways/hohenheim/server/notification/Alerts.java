@@ -18,6 +18,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -43,6 +44,12 @@ public final class Alerts {
 
     /** What an alert about the installation as a whole is about (a control-plane backup, a listener, a budget). */
     public static final String INSTALLATION = "installation";
+
+    /**
+     * How long something that answered must stay silent before its "stopped answering" alert is sent: an app's site
+     * (SiteOutages) and a linked Hohenheim server (LinkedServers) alike.
+     */
+    public static final Duration DOWN_AFTER = Duration.ofMinutes(2);
 
     /**
      * @return what an alert about one record is about, the scope of its repeat key: the same record is the same

@@ -10,10 +10,12 @@ import be.elevenways.zenit.common.security.PrincipalKinds;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
- * The principals Hohenheim records beside core's and zenit-auth's: a build hook, named by its record.
+ * The principals Hohenheim records beside core's and zenit-auth's: a build hook and a linked server, each named by its
+ * record.
  *
- * AIDEV-NOTE: a hook carries no authority of its own (core's StoredRecordPrincipal); it is only WHO a deploy is
- * accountable to, so a release started by a hook names the hook instead of a person or the bare system.
+ * AIDEV-NOTE: neither carries authority of its own (core's StoredRecordPrincipal). A hook is only WHO a deploy is
+ * accountable to, so a release started by a hook names the hook instead of a person or the bare system; a linked
+ * server is which server a link key proved, the identity of the work its call starts here.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -22,13 +24,20 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 public enum HohenheimPrincipalKind implements PrincipalKind {
 
     /** A build hook's secret URL; its reference id is the hook's id. */
-    BUILD_HOOK;
+    BUILD_HOOK("build_hook"),
+
+    /** Another Hohenheim presenting its link key; its reference id is its linked server row's id. */
+    LINKED_SERVER("linked_server");
 
     static {
         PrincipalKinds.declare(values());
     }
 
-    private final Identifier id = HohenheimIds.id("build_hook");
+    private final Identifier id;
+
+    HohenheimPrincipalKind(@NonNull String path) {
+        this.id = HohenheimIds.id(path);
+    }
 
     @Override
     public @NonNull Identifier id() {
@@ -37,7 +46,10 @@ public enum HohenheimPrincipalKind implements PrincipalKind {
 
     @Override
     public @NonNull Microcopy label() {
-        return HohenheimMicrocopy.BUILD_HOOK.of("build_hook_singular");
+        return switch (this) {
+            case BUILD_HOOK -> HohenheimMicrocopy.BUILD_HOOK.of("build_hook_singular");
+            case LINKED_SERVER -> HohenheimMicrocopy.LINKED_SERVER.of("linked_server_singular");
+        };
     }
 
     @Override
@@ -52,10 +64,13 @@ public enum HohenheimPrincipalKind implements PrincipalKind {
 
     @Override
     public @NonNull Identifier credentialModel() {
-        return BuildHookModel.MODEL_ID;
+        return switch (this) {
+            case BUILD_HOOK -> BuildHookModel.MODEL_ID;
+            case LINKED_SERVER -> LinkedServerModel.MODEL_ID;
+        };
     }
 
-    /** A hook is a machine the owner pointed at a URL, never a person. */
+    /** Both are machines: a URL the owner pointed somewhere, another server. */
     @Override
     public boolean human() {
         return false;

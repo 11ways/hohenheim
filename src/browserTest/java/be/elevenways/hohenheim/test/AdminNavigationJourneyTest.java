@@ -40,7 +40,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The admin sidebar, end to end: eight entries in one block, four of them clusters whose
+ * The admin sidebar, end to end: eight entries in one block, five of them clusters whose
  * members are tabs, every entry explaining itself, and every entry demoted OUT of the sidebar still reachable at its
  * URL and linked from the surface that adopted it.
  *
@@ -52,12 +52,14 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
 
     /** The sidebar, in the order it renders: one unlabelled block. */
     private static final List<String> EXPECTED_SIDEBAR = List.of("dashboard", HohenheimSlugs.APPS, "databases",
-        "servers",
+        HohenheimSlugs.Cluster.CLUSTER,
         HohenheimSlugs.Cluster.DOMAIN_NAMES, HohenheimSlugs.Cluster.ACCESS, HohenheimSlugs.Cluster.LOG,
         HohenheimSlugs.Cluster.CONFIGURE);
 
     /** Each cluster's members, in the order its tabs show them. */
     private static final Map<String, List<String>> EXPECTED_CLUSTERS = Map.of(
+        // The linked Hohenheim servers first, then this server's hosts.
+        HohenheimSlugs.Cluster.CLUSTER, List.of(HohenheimSlugs.LINKED_SERVERS, "servers"),
         HohenheimSlugs.Cluster.DOMAIN_NAMES, List.of("domains", "certificates", "dns-zones", "released-claims"),
         // Roles stay a member (their pages stand under Access) but no tab: zenit-auth's People list reaches them.
         HohenheimSlugs.Cluster.ACCESS, List.of("access-lists", "bans", "users", "auth-providers", "spamservice"),
@@ -102,7 +104,7 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
         List<PanelNav.Section> sections = PanelNav.sections(admin, operator);
         assertThat(sections).as("step 1: one block, no groups").hasSize(1);
         assertThat(sections.get(0).entries().stream().map(PanelEntry::slug).toList())
-            .as("step 1: Dashboard, Apps, Databases, Hosts, Domains, Access, Activity, Settings")
+            .as("step 1: Dashboard, Apps, Databases, Servers, Domains, Access, Activity, Settings")
             .containsExactlyElementsOf(EXPECTED_SIDEBAR);
         assertThat(sections.get(0).group().labelled())
             .as("step 1: the block renders without a heading")
@@ -308,7 +310,7 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
             "instance-quotas", HohenheimSlugs.APPS,
             "dns-peers", HohenheimSlugs.Cluster.DOMAIN_NAMES,
             "spamservice-clients", HohenheimSlugs.Cluster.ACCESS,
-            "reconcile-findings", "servers");
+            "reconcile-findings", HohenheimSlugs.Cluster.CLUSTER);
         for (Map.Entry<String, String> expected : titledUnder.entrySet()) {
             String sidebarLabel = admin.entryBySlug(expected.getValue()).label()
                 .tryResolve(LocaleChain.ofTags("en"), MessageResolvers.getDefault());

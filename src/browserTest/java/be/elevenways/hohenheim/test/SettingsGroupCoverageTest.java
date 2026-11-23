@@ -70,7 +70,9 @@ class SettingsGroupCoverageTest {
         "hosts",
         // SFTP to app files: its own group beside "files", because every value is host-only
         // and read once when the server starts, while the file manager's bounds are ordinary admin settings.
-        "sftp");
+        "sftp",
+        // This server's name among the Hohenheims it is linked to (docs/cluster.md).
+        "cluster");
 
     @Test
     void everyDeclaredSettingsGroupIsGuaranteedBeforeValuesLoad() {

@@ -19,6 +19,7 @@ import be.elevenways.hohenheim.server.task.CheckDnsDelegations;
 import be.elevenways.hohenheim.server.task.MirrorDnsPeers;
 import be.elevenways.hohenheim.server.task.ObserveInstanceDisk;
 import be.elevenways.hohenheim.server.task.ProbeDnsSecondaries;
+import be.elevenways.hohenheim.server.task.ProbeLinkedServers;
 import be.elevenways.hohenheim.server.task.ReapIncusControllers;
 import be.elevenways.hohenheim.server.task.ReclaimDockerImages;
 import be.elevenways.hohenheim.server.task.ReconcileDockerResources;
@@ -93,6 +94,7 @@ class HohenheimTaskBootstrapTest {
         ObserveInstanceDisk.class,
         PollGitSources.class,
         ProbeDnsSecondaries.class,
+        ProbeLinkedServers.class,
         ReapIncusControllers.class,
         ReclaimDockerImages.class,
         ReconcileDockerResources.class,

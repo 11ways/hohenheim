@@ -124,6 +124,7 @@ public final class AttentionCollector {
             dockerForeignResources(items);
         }
         failedTasks(items);
+        ClusterAttention.linkedServers(items);
         controlPlaneBackupDestination(items);
         sftpServer(items);
         proteusSignIn(items);

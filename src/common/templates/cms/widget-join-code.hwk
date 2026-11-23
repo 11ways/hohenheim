@@ -1,0 +1,10 @@
+{#- The join code just issued, inside the card Let another Hohenheim manage this server: shown this once, large (a
+    person types it on the other server), through plumage's one-time reveal (the code with Copy, a reload shows
+    nothing), with until when it is valid. -#}
+{% declare widget: WidgetInstance %}
+{% declare data: JoinCodeShown = null %}
+{% if data != null %}
+<pl-one-time-secret variant="success" size="lg" heading={% t("linked_server_join_code", scope: "linked_server") %}
+                    warning={% t("linked_server_code_shown", scope: "linked_server", until: data.until) %}
+                    value={% data.code %} data-hh-join-code></pl-one-time-secret>
+{% /if %}

@@ -1096,6 +1096,31 @@ public class HohenheimSettings {
             HohenheimIds.id("proteus_private_networks"), "hohenheim.proxy_auth.proteus_allow_private_networks");
     }
 
+    // --- Linked Hohenheim servers (the cluster) ---
+    public abstract class Cluster {
+        public static final SettingGroup GROUP = HOHENHEIM.createGroup("cluster")
+            .label(Microcopy.of("settings.hohenheim.cluster.label"))
+            .describe(Microcopy.of("settings.hohenheim.cluster.help"))
+            .icon("server");
+
+        /**
+         * This server's own name: the first row of the Servers list, and what it tells a server it links to.
+         *
+         * AIDEV-NOTE: no existing setting names the server itself (brand.name names the application, the same on
+         * every server), so linking reads this one; empty, the server is named after its machine's host name up to
+         * the first dot (LinkedServers.ownName, MachineName), so a name is never blank and linking never waits for it.
+         */
+        public static final SettingDefinition<String> NAME = GROUP.buildSetting("name", String.class)
+            .label("This server's name")
+            .description("What this Hohenheim is called in the Servers list and on the servers it is linked to, "
+                + "such as Robbedoes. Empty, it is named after its machine's host name")
+            .build();
+
+        /** Explicit operator opt-in for linked servers whose address is on a private network. */
+        public static final Consumer ALLOW_PRIVATE_NETWORKS = PrivateNetworkOptIn.consumer(
+            HohenheimIds.id("cluster_private_networks"), "hohenheim.cluster.allow_private_networks");
+    }
+
     // --- Per-owner consumption caps (the reservation ledger's policy side) ---
     public abstract class Quota {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("quota")
