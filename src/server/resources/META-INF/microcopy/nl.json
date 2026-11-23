@@ -1193,6 +1193,16 @@
     "text": "De beheerde spamservice is ingeschakeld maar meldt status \"{$state}\"",
     "scope": "attention_detail"
   },
+  "proteus_sign_in_held_back": [
+    {
+      "text": "Aanmelden via Proteus wordt niet aangeboden",
+      "scope": "attention_title"
+    },
+    {
+      "text": "Aanmelden via Proteus staat aan zonder vereiste machtiging en wordt daarom niet aangeboden: het zou iedereen binnenlaten die de Proteus-realm kent. Vul de Proteus-machtiging in die iemand moet hebben en herstart Hohenheim.",
+      "scope": "attention_detail"
+    }
+  ],
   "listener_port_privileged": {
     "text": "Poort {$port} vereist rechten die dit proces niet heeft. Geef de service van Hohenheim de capability CAP_NET_BIND_SERVICE, of zet {$setting} op een poort vanaf 1024.",
     "scope": "attention_detail"
@@ -15273,13 +15283,15 @@
   "settings.hohenheim.auth_proteus.access_key.label": "Toegangssleutel",
   "settings.hohenheim.auth_proteus.access_key.help": "Toegangssleutel van de Proteus-realm.",
   "settings.hohenheim.auth_proteus.authenticator.label": "Authenticator",
-  "settings.hohenheim.auth_proteus.authenticator.help": "Slug van de Proteus-authenticator.",
+  "settings.hohenheim.auth_proteus.authenticator.help": "Slug van de Proteus-authenticator. Laat dit leeg om mensen naar de eigen aanmeldpagina van de Proteus-realm te sturen.",
   "settings.hohenheim.auth_proteus.enabled.label": "Proteus-SSO",
   "settings.hohenheim.auth_proteus.enabled.help": "Biedt Proteus single sign-on aan als aanmeldoptie.",
   "settings.hohenheim.auth_proteus.endpoint.label": "Proteus-endpoint",
   "settings.hohenheim.auth_proteus.endpoint.help": "URL van de Proteus-realmserver.",
   "settings.hohenheim.auth_proteus.realm_client.label": "Realmclient",
   "settings.hohenheim.auth_proteus.realm_client.help": "Slug van de Proteus-realmclient.",
+  "settings.hohenheim.auth_proteus.required_permission.label": "Vereiste machtiging",
+  "settings.hohenheim.auth_proteus.required_permission.help": "De Proteus-machtiging die iemand moet hebben om zich hier aan te melden, zoals hohenheim.robbedoes; een wildcard die deze dekt, zoals hohenheim.*, telt mee. Zonder deze wordt aanmelden via Proteus niet aangeboden.",
   "settings.hohenheim.backup.max_archive_mb.label": "Max. archiefgrootte",
   "settings.hohenheim.backup.max_archive_mb.help": "Bovengrens voor een vastgelegd volumearchief, dat via het geheugen van de controller loopt; een groter volume weigert een snapshot.",
   "settings.hohenheim.backup.retention.label": "Bewaarde back-ups",

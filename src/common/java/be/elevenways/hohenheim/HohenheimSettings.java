@@ -1044,9 +1044,18 @@ public class HohenheimSettings {
             .restartRequired()
             .build();
 
+        // AIDEV-NOTE: no default. Unset, no authenticator is sent and the person lands on the realm's own login page;
+        // the old default "password" named an authenticator no Proteus serves.
         public static final SettingDefinition<String> AUTHENTICATOR = GROUP.buildSetting("authenticator", String.class)
-            .defaultValue("password")
-            .description("Proteus authenticator slug")
+            .description("Proteus authenticator slug; empty lands on the realm's own login page")
+            .restartRequired()
+            .build();
+
+        // AIDEV-NOTE: fail closed. Proteus sign-in switched on without it is not offered at all (ProteusSignIn), so a
+        // sign-in that admits everybody the realm knows cannot be configured.
+        public static final SettingDefinition<String> REQUIRED_PERMISSION = GROUP
+            .buildSetting("required_permission", String.class)
+            .description("Proteus permission a person must hold to sign in; wildcards that cover it count")
             .restartRequired()
             .build();
     }

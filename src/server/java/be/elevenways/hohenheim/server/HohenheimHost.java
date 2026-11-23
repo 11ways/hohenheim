@@ -2,24 +2,19 @@ package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.HohenheimChannels;
 import be.elevenways.hohenheim.HohenheimEndpoints;
-import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.ProteusRealmSuggestions;
+import be.elevenways.hohenheim.server.auth.ProteusSignIn;
 import be.elevenways.hohenheim.server.cli.OfflineBoot;
 import be.elevenways.zenit.auth.AuthSettings;
 import be.elevenways.zenit.auth.server.AuthRegistry;
 import be.elevenways.zenit.auth.server.AuthRequirement;
-import be.elevenways.zenit.auth.server.identity.AutoProvisioningSink;
-import be.elevenways.zenit.auth.server.identity.IdentityProviderRegistry;
-import be.elevenways.zenit.auth.server.identity.proteus.ProteusClient;
-import be.elevenways.zenit.auth.server.identity.proteus.ProteusIdentityProvider;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.migration.MigrationCapableDatasource;
 import be.elevenways.zenit.server.HostBoot;
 import be.elevenways.zenit.server.cli.OfflineCommand;
 import be.elevenways.zenit.server.cli.OfflineCommands;
-import be.elevenways.zenit.server.net.OutboundUrlGuard;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
@@ -84,9 +79,9 @@ public final class HohenheimHost implements HostBoot {
     /**
      * zenit-auth (session store, CSRF, middleware, /login + /setup + /account + /admin) is the discovered
      * ZenitAuthModule, installed at the MODULES stage over the default datasource just registered. Password login is
-     * native; Proteus SSO is added here when configured. The users/roles resources live in HohenheimPanel's security
-     * group, so zenit-auth's own default panel would be a second UI over the same records: the module's drain reads
-     * this setting, so it is set before the stages.
+     * native; Proteus SSO is added by ProteusSignIn when configured. The users/roles resources live in HohenheimPanel's
+     * security group, so zenit-auth's own default panel would be a second UI over the same records: the module's drain
+     * reads this setting, so it is set before the stages.
      *
      * Everything an incoming request needs (client script location, endpoint handlers, panels, the security engine)
      * is installed by the discovered HohenheimHostWiring module at the MODULES stage, which completes before the
@@ -96,7 +91,7 @@ public final class HohenheimHost implements HostBoot {
     public void beforeStages() {
         Zenit.SETTINGS_VALUES.setValue(AuthSettings.CMS_AUTO_PANEL, false);
         installAuthBaselines();
-        registerProteusIfConfigured();
+        ProteusSignIn.registerIfConfigured();
     }
 
     // baseline("/") is a catch-all (zenit-auth 620125d): every admin path requires login except
@@ -112,26 +107,5 @@ public final class HohenheimHost implements HostBoot {
         // of 2026-08-15 stands: holding a permission includes granting it, so an admin may mint a peer admin. Do not
         // reintroduce the asymmetry without the owner saying so. PermissionVocabularyTest is the guard.
         ProteusRealmSuggestions.register();
-    }
-
-    // Register the Proteus realm as an SSO option when configured; password login is always available.
-    private static void registerProteusIfConfigured() {
-        if (!HohenheimSettings.isOn(HohenheimSettings.AuthProteus.ENABLED)) {
-            return;
-        }
-        String endpoint = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.AuthProteus.ENDPOINT);
-        String realmClient = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.AuthProteus.REALM_CLIENT);
-        String accessKey = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.AuthProteus.ACCESS_KEY);
-        if (endpoint == null || endpoint.isBlank() || realmClient == null || realmClient.isBlank()
-            || accessKey == null || accessKey.isBlank()) {
-            return;
-        }
-        String authenticator = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.AuthProteus.AUTHENTICATOR);
-        IdentityProviderRegistry.register(
-            new ProteusIdentityProvider("proteus", "Proteus",
-                // The operator's own setting: any address (a realm on this host or the LAN), still pinned.
-                new ProteusClient(endpoint, realmClient, accessKey, OutboundUrlGuard.ANY_ADDRESS), authenticator,
-                false),
-            AutoProvisioningSink.builder().build());
     }
 }

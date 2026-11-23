@@ -1193,6 +1193,16 @@
     "text": "The managed spam service is enabled but reports state \"{$state}\"",
     "scope": "attention_detail"
   },
+  "proteus_sign_in_held_back": [
+    {
+      "text": "Proteus sign-in is not offered",
+      "scope": "attention_title"
+    },
+    {
+      "text": "Proteus sign-in is switched on without a required permission, so it is not offered: it would let in everyone the Proteus realm knows. Name the Proteus permission a person must hold, then restart Hohenheim.",
+      "scope": "attention_detail"
+    }
+  ],
   "listener_port_privileged": {
     "text": "Port {$port} needs privileges this process does not have. Give Hohenheim's service the CAP_NET_BIND_SERVICE capability, or set {$setting} to a port of 1024 or higher.",
     "scope": "attention_detail"
@@ -15273,13 +15283,15 @@
   "settings.hohenheim.auth_proteus.access_key.label": "Access key",
   "settings.hohenheim.auth_proteus.access_key.help": "Access key of the Proteus realm.",
   "settings.hohenheim.auth_proteus.authenticator.label": "Authenticator",
-  "settings.hohenheim.auth_proteus.authenticator.help": "Slug of the Proteus authenticator.",
+  "settings.hohenheim.auth_proteus.authenticator.help": "Slug of the Proteus authenticator. Leave it empty to send people to the Proteus realm's own login page.",
   "settings.hohenheim.auth_proteus.enabled.label": "Proteus SSO",
   "settings.hohenheim.auth_proteus.enabled.help": "Offers Proteus single sign-on as a login option.",
   "settings.hohenheim.auth_proteus.endpoint.label": "Proteus endpoint",
   "settings.hohenheim.auth_proteus.endpoint.help": "URL of the Proteus realm server.",
   "settings.hohenheim.auth_proteus.realm_client.label": "Realm client",
   "settings.hohenheim.auth_proteus.realm_client.help": "Slug of the Proteus realm client.",
+  "settings.hohenheim.auth_proteus.required_permission.label": "Required permission",
+  "settings.hohenheim.auth_proteus.required_permission.help": "The Proteus permission a person must hold to sign in here, such as hohenheim.robbedoes; a wildcard they hold that covers it, such as hohenheim.*, counts. Without it, Proteus sign-in is not offered.",
   "settings.hohenheim.backup.max_archive_mb.label": "Max archive size",
   "settings.hohenheim.backup.max_archive_mb.help": "Upper bound for one captured volume archive, which is buffered through controller memory; a larger volume refuses to snapshot.",
   "settings.hohenheim.backup.retention.label": "Backup retention",

@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.OnboardingStage;
 import be.elevenways.hohenheim.model.ReconcileFindingModel;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.hohenheim.server.HohenheimRoles;
+import be.elevenways.hohenheim.server.auth.ProteusSignIn;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.hohenheim.server.docker.DockerHealth;
 import be.elevenways.hohenheim.server.files.HohenheimSftp;
@@ -125,6 +126,7 @@ public final class AttentionCollector {
         failedTasks(items);
         controlPlaneBackupDestination(items);
         sftpServer(items);
+        proteusSignIn(items);
         if (HohenheimRoles.enabled(Role.DNS)) {
             DnsAttention.dnsIssues(items);
         }
@@ -171,6 +173,24 @@ public final class AttentionCollector {
     public static @NonNull RouteTarget sftpSettingsTarget() {
         return CmsRoutes.settingsAnchor(ADMIN, SettingsPage.DEFAULT_SLUG,
             HohenheimSettingsSections.APPS.anchorOf(HohenheimSettings.Sftp.GROUP));
+    }
+
+    /**
+     * Proteus sign-in was switched on without a required permission, so it is not offered: it would admit everybody
+     * the realm signs in.
+     *
+     * AIDEV-NOTE: role-free like the panel's sign-in itself; the item stays until a boot with the permission set.
+     */
+    public static void proteusSignIn(@NonNull List<AttentionItem> items) {
+        if (!ProteusSignIn.heldBack()) {
+            return;
+        }
+        items.add(item(AttentionSeverity.WARNING, "lock",
+            HohenheimMicrocopy.ATTENTION_TITLE.of("proteus_sign_in_held_back"),
+            HohenheimMicrocopy.ATTENTION_DETAIL.of("proteus_sign_in_held_back"),
+            CmsRoutes.settingsAnchor(ADMIN, SettingsPage.DEFAULT_SLUG,
+                HohenheimSettingsSections.SIGNIN.anchorOf(HohenheimSettings.AuthProteus.GROUP)),
+            HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_settings")));
     }
 
     /**
