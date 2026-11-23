@@ -894,6 +894,15 @@ public class SiteDispatcher implements HttpHandler {
     }
 
     /**
+     * Whether the site's upstream answered its last dial, a visitor's or the dispatcher's own probe.
+     *
+     * @return null while nothing dialled it since the last route load; a value outlives targets that went away
+     */
+    public @Nullable Boolean lastDialAnswered(int siteId) {
+        return this.upstreamAnswered.get(siteId);
+    }
+
+    /**
      * Full teardown, called from ProxyServer.stop(): destroys every routed handler
      * (reaping managed child processes) before stopping the internal schedulers.
      */

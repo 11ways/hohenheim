@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.migration.HohenheimMigration;
 import be.elevenways.hohenheim.migration.M001_HohenheimBaseline;
 import be.elevenways.hohenheim.migration.M002_AfterBaseline;
 import be.elevenways.hohenheim.migration.M003_CertificateSigningRequests;
+import be.elevenways.hohenheim.migration.M004_SiteOutages;
 import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationException;
 import be.elevenways.zenit.common.orm.migration.MigrationKey;
@@ -351,6 +352,48 @@ class MigrationIntegrityTest {
         datasource.close();
     }
 
+    /**
+     * The open M004 adds the outage watch's own table, empty, so an existing site reads as never seen answering, and
+     * its down() takes exactly that table away again.
+     */
+    @Test
+    void theOpenSiteOutagesMigrationAddsItsTableAndItsDownTakesItAway() throws Exception {
+        SqliteDatasource datasource = emptyDatabase("site-outages");
+        List<Supplier<Migration>> chain = List.of(M001_HohenheimBaseline::new, M002_AfterBaseline::new,
+            M003_CertificateSigningRequests::new, M004_SiteOutages::new);
+        String outageTable = "SELECT COUNT(*) AS c FROM sqlite_master WHERE type = 'table' AND name = 'site_outages'";
+        String sites = "SELECT name FROM pragma_table_info('sites')";
+
+        // 1. The chain through M004 builds, a site stored before it included, and the sites table keeps its columns.
+        assertThat(new MigrationRunner(datasource, chain.subList(0, 3)).migrate().isSuccess())
+            .as("step 1: the published chain builds").isTrue();
+        datasource.rawUpdate("INSERT INTO sites (name, slug, upstream_kind) VALUES ('before', 'before',"
+            + " 'hohenheim:instance')");
+        List<String> siteColumns = columnsOf(datasource, sites);
+        MigrationRunnerResult applied = new MigrationRunner(datasource, chain).migrate();
+        assertThat(applied.isSuccess()).as("step 1: M004 applies: %s", failureDetail(applied)).isTrue();
+        assertThat(scalar(datasource, outageTable)).as("step 1: the table exists").isEqualTo(1L);
+        assertThat(columnsOf(datasource, "SELECT name FROM pragma_table_info('site_outages')"))
+            .as("step 1: one row per site, what the watch remembers")
+            .contains("id", "site_id", "up_seen_at", "down_since", "down_alerted_at");
+        assertThat(columnsOf(datasource, sites)).as("step 1: the site itself gains no column")
+            .containsExactlyElementsOf(siteColumns);
+
+        // 2. The site stored before holds no outage: nothing to alert about.
+        assertThat(scalar(datasource, "SELECT COUNT(*) AS c FROM site_outages"))
+            .as("step 2: an existing site holds no state").isEqualTo(0L);
+
+        // 3. Its down() takes exactly the table away, and the site stays.
+        assertThat(new MigrationRunner(datasource, chain).rollback(MigrationKey.of(new M004_SiteOutages()))
+            .isSuccess()).as("step 3: the rollback succeeds").isTrue();
+        assertThat(scalar(datasource, outageTable)).as("step 3: the table is gone").isEqualTo(0L);
+        assertThat(columnsOf(datasource, sites)).as("step 3: the sites table is as it was")
+            .containsExactlyElementsOf(siteColumns);
+        assertThat(scalar(datasource, "SELECT COUNT(*) AS c FROM sites")).as("step 3: the site survives")
+            .isEqualTo(1L);
+        datasource.close();
+    }
+
     @Test
     void shippedSettingsDoNotDowngradeMigrationIntegrity() {
         // 1. The framework ships the strict posture.
@@ -396,11 +439,12 @@ class MigrationIntegrityTest {
             .isNotEmpty()
             .allSatisfy(entry -> assertThat(entry).endsWith(" stream=" + HohenheimMigration.STREAM));
         assertThat(found)
-            .as("step 1: and the stream is the published baseline and its published successors (no migration is"
-                + " open)")
+            .as("step 1: and the stream is the published baseline, its published successors and the one open"
+                + " migration")
             .containsExactly("M001_HohenheimBaseline stream=" + HohenheimMigration.STREAM,
                 "M002_AfterBaseline stream=" + HohenheimMigration.STREAM,
-                "M003_CertificateSigningRequests stream=" + HohenheimMigration.STREAM);
+                "M003_CertificateSigningRequests stream=" + HohenheimMigration.STREAM,
+                "M004_SiteOutages stream=" + HohenheimMigration.STREAM);
 
         // 2. The deployed high-water mark. Every migration at or below DEPLOYED_THROUGH is
         //    APPLIED somewhere, so its structural checksum is recorded in that install's

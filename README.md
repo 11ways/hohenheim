@@ -723,9 +723,12 @@ notes: [`docs/dev-tunnel.md`](docs/dev-tunnel.md).
 
 ## Notifications
 
-Hohenheim can send notifications (certificate expiry, deploy results, site-down
-alerts, attached-database problems) to configured channels. Manage them under
-the Notifications page; each channel subscribes to a closed set of event types.
+Hohenheim can send notifications (certificate expiry, deploy results, attached-database problems, and an app that
+stopped answering its site and answers again) to configured channels. Manage them under the Notifications page; a
+channel receives the event types it lists, and every event when it lists none. An app alerts once when its site,
+after it was seen answering, has not answered for two minutes, and once when it answers again; an app that was
+never deployed, is switched off, stopped or deploying never alerts, and sites that forward to an outside address,
+serve a folder or redirect are not watched.
 
 ## Native IP banning
 

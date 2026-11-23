@@ -23,7 +23,6 @@ import be.elevenways.hohenheim.server.application.SpecSnapshots;
 import be.elevenways.zenit.server.security.SecureTokens;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
-import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.instance.InstanceService;
@@ -79,43 +78,23 @@ class ApplicationReleaseTest {
     static final ServedApp APP = HohenheimServedApp.app();
 
     private static SqlDatasource datasource;
+    private static FakeApps lane;
     private static FakeDockerDaemon daemon;
-    private static Integer savedProbeTimeout;
-    private static Integer savedProbeInterval;
-    private static Integer savedDrain;
-    private static String savedDataPath;
 
     @BeforeAll
     static void setUp() throws Exception {
         datasource = APP.database();
-        daemon = new FakeDockerDaemon();
-        daemon.install();
-        savedProbeTimeout = Zenit.SETTINGS_VALUES.getValue(
-            HohenheimSettings.Releases.PROBE_TIMEOUT_SECONDS);
-        savedProbeInterval = Zenit.SETTINGS_VALUES.getValue(
-            HohenheimSettings.Releases.PROBE_INTERVAL_MS);
-        savedDrain = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Releases.DRAIN_SECONDS);
-        savedDataPath = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);
-        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Releases.PROBE_TIMEOUT_SECONDS, 2);
-        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Releases.PROBE_INTERVAL_MS, 50);
-        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, 0);
-        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, "/srv/hoh-test");
-        Db.run(datasource, HostFixtures::admitLocal);
+        lane = FakeApps.install(datasource);
+        daemon = lane.daemon();
     }
 
     @AfterAll
     static void tearDown() {
-        FakeDockerDaemon.restore();
-        if (daemon != null) {
-            daemon.close();
+        if (lane != null) {
+            lane.close();
+            lane = null;
             daemon = null;
         }
-        Zenit.SETTINGS_VALUES.setValue(
-            HohenheimSettings.Releases.PROBE_TIMEOUT_SECONDS, savedProbeTimeout);
-        Zenit.SETTINGS_VALUES.setValue(
-            HohenheimSettings.Releases.PROBE_INTERVAL_MS, savedProbeInterval);
-        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, savedDrain);
-        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, savedDataPath);
     }
 
     /**
@@ -124,7 +103,7 @@ class ApplicationReleaseTest {
     @Test
     void anApplicationDeploysFlipsAndRollsBackWhileItsSiteKeepsAnswering() {
         Db.run(datasource, () -> {
-            int applicationId = application("shop", "v1");
+            int applicationId = FakeApps.application("shop", "v1");
             int siteId = siteExposing(applicationId, "shop");
             try {
                 // 1. The application is NOT a container. Deploying it generates one.
@@ -178,7 +157,7 @@ class ApplicationReleaseTest {
                 // 4. A SECOND DEPLOY flips: a new release serves, the old one is retired
                 //    and kept as the rollback target, and the site follows WITHOUT anyone
                 //    rebuilding the route table.
-                setSettings(applicationId, "v2");
+                FakeApps.setSettings(applicationId, "v2");
                 ApplicationReleases.Release second =
                     ApplicationReleases.converge(applicationId, Map.of());
                 int secondId = ApplicationReleases.ownedServing(applicationId)
@@ -265,7 +244,7 @@ class ApplicationReleaseTest {
         Double savedRatio = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Capacity.MEMORY_OVERCOMMIT_RATIO);
         int host = ServerModel.localServerId();
         Db.run(datasource, () -> {
-            int applicationId = application("full", "v1");
+            int applicationId = FakeApps.application("full", "v1");
             try {
                 // 1. The first release books its footprint on the host, and the host is then made full: 1 MB free.
                 ApplicationReleases.converge(applicationId, Map.of());
@@ -280,7 +259,7 @@ class ApplicationReleaseTest {
                     .as("step 1: the host's budget leaves one megabyte free").isEqualTo(booked + 1);
 
                 // 2. An update still lands: the candidate is admitted against the release it replaces.
-                setSettings(applicationId, "v2");
+                FakeApps.setSettings(applicationId, "v2");
                 ApplicationReleases.converge(applicationId, Map.of());
                 Row second = ApplicationReleases.ownedServing(applicationId);
                 assertThat((Object) second.get(InstanceModel.ID))
@@ -340,7 +319,7 @@ class ApplicationReleaseTest {
     @Test
     void aReleaseReadsFinishedOnlyOnceItsOperationLetGoOfTheApplication() {
         Db.run(datasource, () -> {
-            int applicationId = application("settling", "v1");
+            int applicationId = FakeApps.application("settling", "v1");
             try {
                 // 1. A deploy verb holds the application around its converge, as ApplicationDeploys and
                 //    ArtifactDeploys do: while the verb still holds it, the release it made reads in flight.
@@ -361,7 +340,7 @@ class ApplicationReleaseTest {
 
                 // 3. A second release flips and drains on its own thread. A client waits for it to read succeeded
                 //    and rolls back at once: the rollback, which refuses a busy application, is admitted.
-                setSettings(applicationId, "v2");
+                FakeApps.setSettings(applicationId, "v2");
                 ApplicationReleases.converge(applicationId, Map.of());
                 await("step 3: the second release reads succeeded after its drain", () ->
                     ReleaseOperationModel.LIFECYCLE.is(latestOp(applicationId).get(ReleaseOperationModel.STATUS),
@@ -386,7 +365,7 @@ class ApplicationReleaseTest {
     @Test
     void aSiteWithNothingServingIsHonestlyDown() {
         Db.run(datasource, () -> {
-            int applicationId = application("never-deployed", "v1");
+            int applicationId = FakeApps.application("never-deployed", "v1");
             int siteId = siteExposing(applicationId, "never-deployed");
             try {
                 InstanceUpstreamHandler handler =
@@ -413,7 +392,7 @@ class ApplicationReleaseTest {
     @Test
     void everyReleaseMountsTheApplicationsOwnVolumeDirectory() {
         Db.run(datasource, () -> {
-            int applicationId = application("stateful", "v1");
+            int applicationId = FakeApps.application("stateful", "v1");
             try {
                 // 1. A declared volume's host path is keyed to the APPLICATION. Deriving it
                 //    from the release would hand every deploy an empty directory.
@@ -477,10 +456,10 @@ class ApplicationReleaseTest {
     @Test
     void everyReleaseOperationRecordsWhatStartedItAndWhatItDeployed() {
         Db.run(datasource, () -> {
-            int applicationId = application("attributed", "v1");
-            int restoredId = application("attributed-restored", "v1");
+            int applicationId = FakeApps.application("attributed", "v1");
+            int restoredId = FakeApps.application("attributed-restored", "v1");
             Row withSecret = Models.get(InstanceModel.class).findById(applicationId);
-            Map<String, Object> secretSettings = settingsFor("v1");
+            Map<String, Object> secretSettings = FakeApps.settingsFor("v1");
             secretSettings.put("environment_variables", Map.of("DB_PASSWORD", "attribution-secret-value"));
             withSecret.set(InstanceModel.SETTINGS, secretSettings);
             Models.get(InstanceModel.class).save(withSecret);
@@ -517,7 +496,7 @@ class ApplicationReleaseTest {
                     .as("step 1: the stored form is recognisable").matches("hmac:[0-9a-f]{12}");
 
                 // 2. A person pressing Deploy (SiteControlHandlers runs InstanceService.deploy MANUAL as its caller).
-                setSettings(applicationId, "v2");
+                FakeApps.setSettings(applicationId, "v2");
                 Accountability.runAs(Accountability.ofActor(person, AccountabilityOrigin.WEB),
                     () -> new InstanceService().deploy(applicationId, DeployTrigger.MANUAL));
                 Row manual = latestOp(applicationId);
@@ -528,7 +507,7 @@ class ApplicationReleaseTest {
                 await("step 2: the deploy settles", () -> ReleaseSettling.settled(applicationId));
 
                 // 3. The automation API (PaasApi.queueDeploy) deploys on a background thread; the key holder rides it.
-                setSettings(applicationId, "v3");
+                FakeApps.setSettings(applicationId, "v3");
                 int beforeApi = latestOp(applicationId).get(ReleaseOperationModel.ID);
                 Accountability.runAs(Accountability.ofActor(keyHolder, AccountabilityOrigin.WEB),
                     () -> ApplicationDeploys.deployInBackground(applicationId, null, DeployTrigger.API));
@@ -543,7 +522,7 @@ class ApplicationReleaseTest {
                     .as("step 3: accountable to the key holder across the thread hop").isEqualTo(keyHolder);
 
                 // 4. A forge push (SourceDeploys on GitWebhookHandler's signed, system-run delivery).
-                setSettings(applicationId, "v4");
+                FakeApps.setSettings(applicationId, "v4");
                 ApplicationDeploys.deploy(applicationId, "main", "0123456789abcdef0123", DeployTrigger.WEBHOOK);
                 Row push = latestOp(applicationId);
                 assertThat(push.get(ReleaseOperationModel.TRIGGER))
@@ -568,7 +547,7 @@ class ApplicationReleaseTest {
                 await("step 5: the rollback settles", () -> ReleaseSettling.settled(applicationId));
 
                 // 6. A lane that enters no attribution records the system trigger, never a person's.
-                setSettings(applicationId, "v5");
+                FakeApps.setSettings(applicationId, "v5");
                 ApplicationReleases.converge(applicationId, Map.of());
                 Row unattributed = latestOp(applicationId);
                 assertThat(unattributed.get(ReleaseOperationModel.TRIGGER))
@@ -597,31 +576,6 @@ class ApplicationReleaseTest {
     }
 
     // -- fixtures --------------------------------------------------------------
-
-    /** An authored application record with an image source the fake daemon answers for. */
-    private static int application(String name, String tag) {
-        Row application = Models.get(InstanceModel.class).createEmptyRow();
-        application.set(InstanceModel.NAME, name);
-        application.set(InstanceModel.KIND, ApplicationKind.ID.toString());
-        application.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
-        application.set(InstanceModel.SETTINGS, settingsFor(tag));
-        Models.get(InstanceModel.class).save(application);
-        return application.get(InstanceModel.ID);
-    }
-
-    private static void setSettings(int applicationId, String tag) {
-        Row application = Models.get(InstanceModel.class).findById(applicationId);
-        application.set(InstanceModel.SETTINGS, settingsFor(tag));
-        Models.get(InstanceModel.class).save(application);
-    }
-
-    private static Map<String, Object> settingsFor(String tag) {
-        Map<String, Object> settings = new LinkedHashMap<>();
-        settings.put("image", "fake/app");
-        settings.put("tag", tag);
-        settings.put("container_port", 8080);
-        return settings;
-    }
 
     /** A site whose one upstream is this application. */
     private static int siteExposing(int applicationId, String slug) {

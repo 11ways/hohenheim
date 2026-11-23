@@ -180,3 +180,9 @@ table migration:be.elevenways.hohenheim@2026_11_19_000001
   name certificate_signing_requests
   op add_column:certificates:key_holder|string|null=true|uniq=false|pk=false|auto=false|def=lit:hohenheim|len=32|prec=null,null
   op add_column:certificates:signing_request_pem|text|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null
+table migration:be.elevenways.hohenheim@2026_11_23_000001
+  checksum bfd05fb45cd9c6f04cb50944f1d915f06d832536d774f747ae10e4eb4e5a2bc8
+  class be.elevenways.hohenheim.migration.M004_SiteOutages
+  name site_outages
+  op add_index:site_outages:site_outages_site_id_unique(site_id):unique
+  op create_table:site_outages[id|integer|null=false|uniq=true|pk=true|auto=true|def=none|len=null|prec=null,null,site_id|integer|null=false|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null|ref=sites.id:null:null,up_seen_at|datetime|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null,down_since|datetime|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null,down_alerted_at|datetime|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null,created_at|datetime|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null,updated_at|datetime|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null]

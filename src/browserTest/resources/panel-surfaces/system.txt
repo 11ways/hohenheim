@@ -13,7 +13,7 @@ tab history at=0 landing=false view=false
 control CREATE%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
 control CREATE%20format at=1 kind=zenitforms:form/select input=select required=true readonly=false options=slack,discord,generic binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20url at=2 kind=zenitforms:control/string input=secret required=true readonly=false options= binding=
-control CREATE%20events at=3 kind=zenitforms:form/array input=text required=false readonly=false options=cert_renewal_failed,cert_expiring,deploy_failed,backup_failed,process_crash_loop,instance_crash_loop,stack_health,host_unreachable,auto_ban_budget_exhausted,spamservice_outage,spamservice_recovered,proxy_listener_down,workload_isolation,dns_secondary_stale,dns_delegation_broken,database_move_leftover,data_integrity binding=min:0,max:-1,tags:false,closed:true
+control CREATE%20events at=3 kind=zenitforms:form/array input=text required=false readonly=false options=cert_renewal_failed,cert_expiring,deploy_failed,backup_failed,process_crash_loop,instance_crash_loop,stack_health,host_unreachable,auto_ban_budget_exhausted,spamservice_outage,spamservice_recovered,proxy_listener_down,workload_isolation,dns_secondary_stale,dns_delegation_broken,database_move_leftover,data_integrity,site_down,site_recovered binding=min:0,max:-1,tags:false,closed:true
 
 case admin.notifications.tenant admin notifications tenant v2
 admission - verdict=zenit:forbidden
@@ -84,11 +84,11 @@ tab history at=0 landing=false view=false
 control CREATE%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
 control CREATE%20format at=1 kind=zenitforms:form/select input=select required=true readonly=false options=slack,discord,generic binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20url at=2 kind=zenitforms:control/string input=secret required=true readonly=false options= binding=
-control CREATE%20events at=3 kind=zenitforms:form/array input=text required=false readonly=false options=cert_renewal_failed,cert_expiring,deploy_failed,backup_failed,process_crash_loop,instance_crash_loop,stack_health,host_unreachable,auto_ban_budget_exhausted,spamservice_outage,spamservice_recovered,proxy_listener_down,workload_isolation,dns_secondary_stale,dns_delegation_broken,database_move_leftover,data_integrity binding=min:0,max:-1,tags:false,closed:true
+control CREATE%20events at=3 kind=zenitforms:form/array input=text required=false readonly=false options=cert_renewal_failed,cert_expiring,deploy_failed,backup_failed,process_crash_loop,instance_crash_loop,stack_health,host_unreachable,auto_ban_budget_exhausted,spamservice_outage,spamservice_recovered,proxy_listener_down,workload_isolation,dns_secondary_stale,dns_delegation_broken,database_move_leftover,data_integrity,site_down,site_recovered binding=min:0,max:-1,tags:false,closed:true
 control EDIT%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
 control EDIT%20format at=1 kind=zenitforms:form/select input=select required=true readonly=false options=slack,discord,generic binding=searchable:false,clearable:true,presentation:DEFAULT
 control EDIT%20url at=2 kind=zenitforms:control/string input=secret required=true readonly=false options= binding=
-control EDIT%20events at=3 kind=zenitforms:form/array input=text required=false readonly=false options=cert_renewal_failed,cert_expiring,deploy_failed,backup_failed,process_crash_loop,instance_crash_loop,stack_health,host_unreachable,auto_ban_budget_exhausted,spamservice_outage,spamservice_recovered,proxy_listener_down,workload_isolation,dns_secondary_stale,dns_delegation_broken,database_move_leftover,data_integrity binding=min:0,max:-1,tags:false,closed:true
+control EDIT%20events at=3 kind=zenitforms:form/array input=text required=false readonly=false options=cert_renewal_failed,cert_expiring,deploy_failed,backup_failed,process_crash_loop,instance_crash_loop,stack_health,host_unreachable,auto_ban_budget_exhausted,spamservice_outage,spamservice_recovered,proxy_listener_down,workload_isolation,dns_secondary_stale,dns_delegation_broken,database_move_leftover,data_integrity,site_down,site_recovered binding=min:0,max:-1,tags:false,closed:true
 
 case admin.backup-targets.operator.target admin backup-targets operator v2
 admission - verdict=admitted

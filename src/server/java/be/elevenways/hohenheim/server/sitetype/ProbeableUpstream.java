@@ -7,8 +7,10 @@ import java.util.List;
 /**
  * A site handler whose upstreams are fixed hosts and ports the proxy may check on its own, without a visitor.
  *
- * AIDEV-NOTE: only operator-configured fixed upstreams implement this. A tenant-owned address is vetted per request
- * against public-only rules, and a unix socket or placeholder target has no single address, so neither is probed.
+ * AIDEV-NOTE: only upstreams no tenant supplies implement this: an operator-configured fixed address, or the loopback
+ * port the controller itself resolved for an instance (InstanceUpstreamHandler). A tenant-owned address is vetted per
+ * request against public-only rules, and a unix socket or placeholder target has no single address, so neither is
+ * probed.
  *
  * @author Jelle De Loecker
  * @since  0.1.0

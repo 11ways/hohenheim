@@ -1,16 +1,19 @@
 package be.elevenways.hohenheim.server.application;
 
+import be.elevenways.hohenheim.server.sitetype.ProbeableUpstream;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.UpstreamForwarder;
 import be.elevenways.hohenheim.server.sitetype.UpstreamTarget;
 import be.elevenways.hohenheim.server.sitetype.WebSocketUpgrades;
+import be.elevenways.protoblast.common.time.Now;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.Headers;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.net.URI;
+import java.util.List;
 
 /**
  * Serves a hostname from the SERVING RELEASE of the application the site names -- the
@@ -34,8 +37,13 @@ import java.net.URI;
  * generation here at all. Only the negative case is retried: it costs at most one resolution
  * per interval while the site is already down, whereas expiring a held ADDRESS would put a
  * database read on the request path this cache exists to keep off it.
+ *
+ * AIDEV-NOTE: it is PROBEABLE ({@link ProbeableUpstream}): the dispatcher's own probe round connects to the resolved
+ * loopback port every 30 seconds, so a port that refuses reads down without a visitor (the app page's verdict, the
+ * dashboard, the outage alert) and reads up again the same way. The probe only reads {@link #current()}; serving a
+ * request is unchanged.
  */
-public final class InstanceUpstreamHandler implements SiteRequestHandler {
+public final class InstanceUpstreamHandler implements SiteRequestHandler, ProbeableUpstream {
 
     /** How long a "nothing is serving" answer is trusted before it is asked again. */
     private static final long NEGATIVE_RETRY_NANOS = 2_000_000_000L;
@@ -47,8 +55,8 @@ public final class InstanceUpstreamHandler implements SiteRequestHandler {
 
     private volatile ApplicationUpstreams.Resolution resolution;
 
-    /** When the held resolution was taken (nanoTime); read only while that answer is NULL. */
-    private volatile long negativeSince;
+    /** When the held resolution was taken; read only while that answer is NULL. */
+    private volatile Now.@NonNull Stopwatch negativeSince = Now.stopwatch();
 
     public InstanceUpstreamHandler(int siteId, int applicationId) {
         this(siteId, applicationId, true, "http");
@@ -102,11 +110,21 @@ public final class InstanceUpstreamHandler implements SiteRequestHandler {
         return current() == null ? SiteHealth.DOWN : SiteHealth.UP;
     }
 
+    /** @return the resolved loopback address, empty while nothing serves or the address names no port */
+    @Override
+    public @NonNull List<Target> probeTargets() {
+        URI target = current();
+        if (target == null || target.getHost() == null || target.getPort() <= 0) {
+            return List.of();
+        }
+        return List.of(new Target(target.getHost(), target.getPort()));
+    }
+
     /** The upstream this request must go to, re-resolved when the application flipped. */
     public @Nullable URI current() {
         ApplicationUpstreams.Resolution held = this.resolution;
         boolean expiredNegative = held.upstream() == null
-            && System.nanoTime() - this.negativeSince >= NEGATIVE_RETRY_NANOS;
+            && this.negativeSince.elapsedNanos() >= NEGATIVE_RETRY_NANOS;
         if (expiredNegative
                 || held.generation() != ApplicationUpstreams.generationOf(this.applicationId)) {
             held = ApplicationUpstreams.resolve(this.applicationId, this.scheme);
@@ -117,7 +135,7 @@ public final class InstanceUpstreamHandler implements SiteRequestHandler {
 
     /** Keep a resolution together with the moment it was taken. */
     private void hold(ApplicationUpstreams.@NonNull Resolution resolved) {
-        this.negativeSince = System.nanoTime();
+        this.negativeSince = Now.stopwatch();
         this.resolution = resolved;
     }
 }

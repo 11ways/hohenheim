@@ -15073,6 +15073,54 @@
     "text": "Verweesde databaserijen",
     "scope": "notification_event"
   },
+  "site_recovered": {
+    "text": "Een app antwoordt weer",
+    "scope": "notification_event"
+  },
+  "site_down_subject": {
+    "text": "App {$name} antwoordt niet meer",
+    "scope": "alert"
+  },
+  "site_down_subject_at": {
+    "text": "App {$name} antwoordt niet meer op {$address}",
+    "scope": "alert"
+  },
+  "site_down_body": {
+    "text": "{$name} antwoordde eerder en antwoordt niet meer sinds {$since :datetime}. {$detail}",
+    "scope": "alert"
+  },
+  "site_down_nothing_serving": {
+    "text": "Er draait geen versie van de app.",
+    "scope": "alert"
+  },
+  "site_down_refused": {
+    "text": "De app weigert verbindingen op haar poort.",
+    "scope": "alert"
+  },
+  "site_recovered_subject": {
+    "text": "App {$name} antwoordt weer",
+    "scope": "alert"
+  },
+  "site_recovered_subject_at": {
+    "text": "App {$name} antwoordt weer op {$address}",
+    "scope": "alert"
+  },
+  "site_recovered_body": {
+    "text": "De app antwoordde {$duration :duration style=hours precision=second} niet.",
+    "scope": "alert"
+  },
+  "watch_site_outages": [
+    {
+      "text": "Letten op apps die niet meer antwoorden",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Stuurt een melding wanneer een app die antwoordde twee minuten niet meer antwoordt, en een wanneer ze weer antwoordt.",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
   "setting_reclaim_min_age": {
     "text": "Bewaar images minstens 1 uur",
     "scope": "violations"
@@ -17936,6 +17984,10 @@
     {
       "text": "Wat het serveert, antwoordt niet.",
       "scope": "attention_detail"
+    },
+    {
+      "text": "Een app antwoordt niet meer",
+      "scope": "notification_event"
     }
   ],
   "site_degraded": [

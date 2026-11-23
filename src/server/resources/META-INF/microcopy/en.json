@@ -15073,6 +15073,54 @@
     "text": "Orphaned database rows",
     "scope": "notification_event"
   },
+  "site_recovered": {
+    "text": "An app answers again",
+    "scope": "notification_event"
+  },
+  "site_down_subject": {
+    "text": "App {$name} stopped answering",
+    "scope": "alert"
+  },
+  "site_down_subject_at": {
+    "text": "App {$name} stopped answering at {$address}",
+    "scope": "alert"
+  },
+  "site_down_body": {
+    "text": "{$name} answered before and has not answered since {$since :datetime}. {$detail}",
+    "scope": "alert"
+  },
+  "site_down_nothing_serving": {
+    "text": "No version of the app is running.",
+    "scope": "alert"
+  },
+  "site_down_refused": {
+    "text": "The app refuses connections on its port.",
+    "scope": "alert"
+  },
+  "site_recovered_subject": {
+    "text": "App {$name} answers again",
+    "scope": "alert"
+  },
+  "site_recovered_subject_at": {
+    "text": "App {$name} answers again at {$address}",
+    "scope": "alert"
+  },
+  "site_recovered_body": {
+    "text": "It did not answer for {$duration :duration style=hours precision=second}.",
+    "scope": "alert"
+  },
+  "watch_site_outages": [
+    {
+      "text": "Watch for apps that stopped answering",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Sends one alert when an app that was answering stays down for two minutes, and one when it answers again.",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
   "setting_reclaim_min_age": {
     "text": "Keep images for at least 1 hour",
     "scope": "violations"
@@ -17936,6 +17984,10 @@
     {
       "text": "What it serves does not answer.",
       "scope": "attention_detail"
+    },
+    {
+      "text": "An app stopped answering",
+      "scope": "notification_event"
     }
   ],
   "site_degraded": [

@@ -58,7 +58,11 @@ public enum NotificationEvents {
      * The control-plane database holds rows that violate its declared foreign keys
      * (HohenheimDatabase's boot check); writes touching them fail until repaired.
      */
-    DATA_INTEGRITY("data_integrity");
+    DATA_INTEGRITY("data_integrity"),
+    /** SiteOutages raises this ONCE per outage, when an app's site that answered has not answered for two minutes. */
+    SITE_DOWN("site_down"),
+    /** SiteOutages raises this when an alerted app's site answered two sweeps in a row again. */
+    SITE_RECOVERED("site_recovered");
 
     /** Every declared event token, in declaration order; DERIVED, never hand-listed. */
     public static final List<String> ALL =

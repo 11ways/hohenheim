@@ -232,7 +232,7 @@ public class SiteModel extends Model {
     }
 
     /**
-     * Remove the domain, protected-path and redirect rows of every site a pending delete will remove.
+     * Remove the domain, protected-path, redirect and outage rows of every site a pending delete will remove.
      *
      * A remove hook fires ONCE for the whole delete with a criteria-only context whose row
      * is null, so the doomed ids come from the context's own capture of the pending delete
@@ -254,6 +254,8 @@ public class SiteModel extends Model {
                 .where(ProtectedPathModel.SITE_ID.in(doomed)).delete();
             Models.get(SiteRedirectModel.class).find()
                 .where(SiteRedirectModel.SITE_ID.in(doomed)).delete();
+            Models.get(SiteOutageModel.class).find()
+                .where(SiteOutageModel.SITE_ID.in(doomed)).delete();
             // AIDEV-NOTE: database attachments used to cascade here too. They no longer
             // belong to a site at all -- the APPLICATION owns them (instance_databases), and
             // it outlives every site that exposed it, so deleting a site must not touch

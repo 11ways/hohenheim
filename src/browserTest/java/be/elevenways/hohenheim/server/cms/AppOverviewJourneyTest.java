@@ -409,6 +409,60 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
         }
     }
 
+    /**
+     * A site whose workload's published port refuses is an error page before any visitor, and live again once the
+     * port answers: the proxy's own probe dials the resolved port of an instance upstream too.
+     */
+    @Test
+    void anInstanceSiteWhosePortRefusesIsAnErrorPageBeforeAnyVisitor() throws Exception {
+        int port = FreePorts.tcpAndUdp();
+        Row instance = instance("app-journey-port");
+        int id = instance.get(InstanceModel.ID);
+        Row site = ProxyTestSupport.setupInstanceSite("app-journey-port-site", "app-journey-port-site", id);
+        domain(site, "port.app-journey.test", false);
+        HostFixtures.LocalHostState localBefore = HostFixtures.captureLocal();
+        ProxyServer previous = ServerMain.getProxyServer();
+        ProxyServer proxy = null;
+        try {
+            HostFixtures.makeLocalPlaceable(16L * 1024);
+            instance.set(InstanceModel.STATUS, InstanceModel.STATUS_RUNNING);
+            Models.get(InstanceModel.class).save(instance);
+            PortLedger.claim(ServerModel.localServerId(), PublishedPort.LOOPBACK, port, "tcp", InstanceModel.MODEL_ID,
+                id, "app journey");
+            proxy = ProxyTestSupport.startProxy();
+            ServerMain.adoptProxyServer(proxy);
+            ProxyServer running = proxy;
+
+            // 1. It runs and nothing listens on its port. No visitor asked, but the probe dials the port the proxy
+            //    resolved: the overview already says visitors get an error page, and why.
+            Poll.until("step 1: the probe finds the refusing port", Duration.ofSeconds(10), () -> {
+                running.getDispatcher().probeUpstreams();
+                return overviewHealth(site, "broken");
+            });
+            assertThat(adminGet(overview(site)).body()).as("step 1: the verdict names what visitors get")
+                .contains("Visitors get an error page")
+                .contains("What it serves does not answer.")
+                .doesNotContain("Live at");
+
+            // 2. The port answers: the next probe reads it live again, still with no visitor.
+            try (ServerSocket upstream = new ServerSocket(port, 50, InetAddress.getLoopbackAddress())) {
+                Poll.until("step 2: the probe finds the port answering", Duration.ofSeconds(10), () -> {
+                    running.getDispatcher().probeUpstreams();
+                    return overviewHealth(site, "ok");
+                });
+            }
+        } finally {
+            ServerMain.adoptProxyServer(previous);
+            if (proxy != null) {
+                proxy.stop();
+            }
+            localBefore.restore();
+            PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, id);
+            HardDeletes.row(Models.get(SiteModel.class), site);
+            HardDeletes.row(Models.get(InstanceModel.class), instance);
+        }
+    }
+
     @Test
     void aWorkloadsOverviewSaysWhatItUsesSinceWhenAndWhatItHolds() throws Exception {
         List<Runnable> cleanup = new ArrayList<>();

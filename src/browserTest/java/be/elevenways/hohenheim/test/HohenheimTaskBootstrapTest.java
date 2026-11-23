@@ -32,6 +32,7 @@ import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.hohenheim.server.task.UpdateSystemUsers;
 import be.elevenways.hohenheim.server.task.VerifyIncusIsolation;
 import be.elevenways.hohenheim.server.task.VerifyWorkloadIsolation;
+import be.elevenways.hohenheim.server.task.WatchSiteOutages;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduleKind;
 import be.elevenways.zenit.common.task.ScheduledTask;
@@ -105,7 +106,8 @@ class HohenheimTaskBootstrapTest {
         UpdateSystemIpAddresses.class,
         UpdateSystemUsers.class,
         VerifyIncusIsolation.class,
-        VerifyWorkloadIsolation.class);
+        VerifyWorkloadIsolation.class,
+        WatchSiteOutages.class);
 
     private static TaskService service;
 
