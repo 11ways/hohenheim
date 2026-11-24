@@ -65,6 +65,7 @@ public final class InstanceOperations {
     public static final Operation<Row, Void, PowerResult> START = Operation.declare(HohenheimIds.id("start_instance"))
         .happened(OperationSentences.of("start_instance"))
         .label(HohenheimMicrocopy.POWER_OPERATION.of("start").withFallback("Start"))
+        .description(HohenheimMicrocopy.HOHENHEIM.of("start_instance_description"))
         .icon(Icon.of("play"))
         .one(INSTANCE)
         .verb(HohenheimVerbs.START)
@@ -91,6 +92,7 @@ public final class InstanceOperations {
     public static final Operation<Row, Void, Void> DEPLOY = Operation.declare(HohenheimIds.id("deploy_instance"))
         .happened(OperationSentences.of("deploy_instance"))
         .label(HohenheimMicrocopy.INSTANCE.of("deploy").withFallback("Deploy"))
+        .description(HohenheimMicrocopy.HOHENHEIM.of("deploy_instance_description"))
         .icon(Icon.of("play"))
         .one(INSTANCE)
         .verb(HohenheimVerbs.DEPLOY)
@@ -105,6 +107,7 @@ public final class InstanceOperations {
     public static final Operation<Row, Void, PowerResult> STOP = Operation.declare(HohenheimIds.id("stop_instance"))
         .happened(OperationSentences.of("stop_instance"))
         .label(HohenheimMicrocopy.POWER_OPERATION.of("stop").withFallback("Stop"))
+        .description(HohenheimMicrocopy.HOHENHEIM.of("stop_instance_description"))
         .icon(Icon.of("stop"))
         .one(INSTANCE)
         .verb(HohenheimVerbs.STOP)
@@ -118,6 +121,7 @@ public final class InstanceOperations {
         Operation.declare(HohenheimIds.id("restart_instance"))
             .happened(OperationSentences.of("restart_instance"))
             .label(HohenheimMicrocopy.POWER_OPERATION.of("restart").withFallback("Restart"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("restart_instance_description"))
             .icon(Icon.of("rotate-right"))
             .one(INSTANCE)
             .verb(HohenheimVerbs.RESTART)
@@ -130,6 +134,7 @@ public final class InstanceOperations {
     public static final Operation<Row, Void, Integer> BACKUP = Operation.declare(HohenheimIds.id("backup_instance"))
         .happened(OperationSentences.of("backup_instance"))
         .label(HohenheimMicrocopy.SCHEDULE_ACTION.of("backup").withFallback("Backup"))
+        .description(HohenheimMicrocopy.HOHENHEIM.of("backup_instance_description"))
         .icon(Icon.of("box-archive"))
         .one(INSTANCE)
         .verb(HohenheimVerbs.BACK_UP)
@@ -148,6 +153,7 @@ public final class InstanceOperations {
         Operation.declare(HohenheimIds.id("connect_push_webhook"))
             .happened(OperationSentences.of("connect_push_webhook"))
             .label(HohenheimMicrocopy.DEPLOYMENTS.of("connect_webhook"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("connect_push_webhook_description"))
             .icon(Icon.of("plug"))
             .one(INSTANCE)
             .verb(HohenheimVerbs.CONNECT_WEBHOOK)
@@ -160,12 +166,14 @@ public final class InstanceOperations {
     /** The snapshot's optional note. */
     public static final StringField NOTE = StringField.builder("note")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("snapshot_note"))
+        .help(HohenheimMicrocopy.HELP.of("snapshot_note"))
         .build();
 
     public static final Operation<Row, SnapshotInput, Integer> SNAPSHOT =
         Operation.declare(HohenheimIds.id("snapshot_instance"))
             .happened(OperationSentences.of("snapshot_instance"))
             .label(HohenheimMicrocopy.SCHEDULE_ACTION.of("snapshot").withFallback("Snapshot"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("snapshot_instance_description"))
             .icon(Icon.of("camera"))
             .one(INSTANCE)
             .verb(HohenheimVerbs.SNAPSHOT)
@@ -184,6 +192,7 @@ public final class InstanceOperations {
     /** The console line to send. */
     public static final StringField COMMAND = StringField.builder("command")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("console_line"))
+        .help(HohenheimMicrocopy.HELP.of("console_line"))
         .required()
         .build();
 
@@ -195,6 +204,7 @@ public final class InstanceOperations {
         Operation.declare(HohenheimIds.id("console_command_instance"))
             .happened(OperationSentences.of("console_command_instance"))
             .label(HohenheimMicrocopy.SCHEDULE_ACTION.of("console_command").withFallback("Console command"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("console_command_instance_description"))
             .icon(Icon.of("terminal"))
             .one(INSTANCE)
             .verb(HohenheimVerbs.CONSOLE_COMMAND)
@@ -213,6 +223,7 @@ public final class InstanceOperations {
     /** The program the exec tab runs. */
     public static final StringField EXEC_COMMAND = StringField.builder("command")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("exec_command"))
+        .help(HohenheimMicrocopy.HELP.of("exec_command"))
         .required()
         .build();
 
@@ -227,6 +238,7 @@ public final class InstanceOperations {
         Operation.declare(HohenheimIds.id("exec_instance"))
             .happened(OperationSentences.of("exec_instance"))
             .label(HohenheimMicrocopy.INSTANCE_EXEC.of("run").withFallback("Run"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("exec_instance_description"))
             .icon(Icon.of("code"))
             .one(INSTANCE)
             .verb(HohenheimVerbs.EXEC)
@@ -250,6 +262,7 @@ public final class InstanceOperations {
         Operation.declare(HohenheimIds.id("rollback_instance"))
             .happened(OperationSentences.of("rollback_instance"))
             .label(HohenheimMicrocopy.INSTANCE.of("rollback").withFallback("Roll back"))
+            .description(HohenheimMicrocopy.INSTANCE.of("rollback_hint"))
             .icon(Icon.of("clock-rotate-left"))
             .one(INSTANCE)
             .verb(HohenheimVerbs.ROLL_BACK)
@@ -269,6 +282,7 @@ public final class InstanceOperations {
         Operation.declare(HohenheimIds.id("install_instance"))
             .happened(OperationSentences.of("install_instance"))
             .label(HohenheimMicrocopy.INSTANCE.of("install").withFallback("Install"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("install_instance_description"))
             .icon(Icon.of("wand-magic-sparkles"))
             .one(INSTANCE)
             .verb(HohenheimVerbs.INSTALL)
@@ -285,6 +299,7 @@ public final class InstanceOperations {
         Operation.declare(HohenheimIds.id("reinstall_instance"))
             .happened(OperationSentences.of("reinstall_instance"))
             .label(HohenheimMicrocopy.INSTANCE.of("reinstall").withFallback("Reinstall"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("reinstall_instance_description"))
             .icon(Icon.of("rotate"))
             .one(INSTANCE)
             .verb(HohenheimVerbs.REINSTALL)
@@ -301,6 +316,7 @@ public final class InstanceOperations {
         Operation.declare(HohenheimIds.id("capture_template"))
             .happened(OperationSentences.of("capture_template"))
             .label(HohenheimMicrocopy.INSTANCE.of("capture_template").withFallback("Capture as template"))
+            .description(HohenheimMicrocopy.INSTANCE.of("capture_template_hint"))
             .icon(Icon.of("box-archive"))
             .one(INSTANCE)
             .verb(HohenheimVerbs.CAPTURE_TEMPLATE)
@@ -318,6 +334,7 @@ public final class InstanceOperations {
         Operation.declare(HohenheimIds.id("destroy_instance_data"))
             .happened(OperationSentences.of("destroy_instance_data"))
             .label(HohenheimMicrocopy.INSTANCE.of("delete_with_data").withFallback("Delete with data"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("destroy_instance_data_description"))
             .icon(Icon.of("trash-can"))
             .one(INSTANCE)
             .verb(HohenheimVerbs.DELETE_WITH_DATA)
@@ -336,6 +353,7 @@ public final class InstanceOperations {
     public static final Operation<Row, Void, Integer> DELETE = Operation.declare(HohenheimIds.id("delete_instance"))
         .happened(OperationSentences.of("delete_instance"))
         .label(CmsMicrocopy.of("delete"))
+        .description(HohenheimMicrocopy.HOHENHEIM.of("delete_instance_description"))
         .icon(Icon.TRASH)
         .one(INSTANCE)
         .verb(OperationVerb.DELETE)
@@ -394,6 +412,7 @@ public final class InstanceOperations {
      */
     public static final StringField DRIVE_MEDIA = StringField.builder(INSTALL_MEDIA.getName())
         .label(HohenheimMicrocopy.INSTANCE_DEVICE.of("drive_media"))
+        .help(HohenheimMicrocopy.HELP.of("drive_media"))
         .build();
 
     /**
@@ -407,6 +426,7 @@ public final class InstanceOperations {
         Operation.declare(HohenheimIds.id("attach_install_media"))
             .happened(OperationSentences.of("attach_install_media"))
             .label(HohenheimMicrocopy.INSTANCE_DEVICE.of("add_media"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("attach_install_media_description"))
             .icon(Icon.of("compact-disc"))
             .one(INSTANCE)
             .verb(HohenheimVerbs.ATTACH_MEDIA)
@@ -431,6 +451,7 @@ public final class InstanceOperations {
         Operation.declare(HohenheimIds.id("detach_install_media"))
             .happened(OperationSentences.of("detach_install_media"))
             .label(HohenheimMicrocopy.INSTANCE_DEVICE.of("remove_media"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("detach_install_media_description"))
             .icon(Icon.of("compact-disc"))
             .one(INSTANCE)
             .verb(HohenheimVerbs.DETACH_MEDIA)
@@ -487,9 +508,10 @@ public final class InstanceOperations {
         Operation.declare(HohenheimIds.id("app_update_instance"))
             .happened(OperationSentences.of("app_update_instance"))
             .label(HohenheimMicrocopy.SCHEDULE_ACTION.of("app_update").withFallback("App update"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("app_update_instance_description"))
             .icon(Icon.of("arrow-up-from-bracket"))
             .one(INSTANCE)
-            .verb(HohenheimVerbs.UPDATE_APP)
+            .verb(HohenheimVerbs.RUN_UPDATE_SCRIPT)
             .gate(gate(HohenheimCapabilities.CONFIG))
             .result(String.class)
             .command(COMMAND_FACET)

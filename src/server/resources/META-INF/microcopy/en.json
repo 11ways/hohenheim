@@ -3215,10 +3215,10 @@
     "text": "Clone",
     "scope": "site"
   },
-  "clone_name": {
-    "text": "Name of the copy",
-    "scope": "site"
-  },
+  "clone_name": [
+    {"text": "Name of the copy", "scope": "site"},
+    {"text": "The name of the copy.", "scope": "help"}
+  ],
   "databases": [
     {
       "text": "Databases",
@@ -7613,10 +7613,10 @@
     "text": "Generated entropy",
     "scope": "hohenheim_field"
   },
-  "variable_value": {
-    "text": "Value",
-    "scope": "hohenheim_field"
-  },
+  "variable_value": [
+    {"text": "Value", "scope": "hohenheim_field"},
+    {"text": "The plain value the variable holds.", "scope": "help"}
+  ],
   "variable_secret_value": {
     "text": "Secret value",
     "scope": "hohenheim_field"
@@ -7815,10 +7815,10 @@
     "text": "The values this instance starts with. A secret left blank keeps the value set on the template.",
     "scope": "instance_from_template"
   },
-  "instance_name": {
-    "text": "Instance name",
-    "scope": "instance_from_template"
-  },
+  "instance_name": [
+    {"text": "Instance name", "scope": "instance_from_template"},
+    {"text": "The new app's name.", "scope": "help"}
+  ],
   "host": [
     {
       "text": "Host",
@@ -8122,29 +8122,22 @@
     }
   ],
   "exec_command": [
-    {
-      "text": "Command to run",
-      "scope": "hohenheim_field"
-    }
+    {"text": "Command to run", "scope": "hohenheim_field"},
+    {"text": "The program to run inside the app, with its arguments.", "scope": "help"}
   ],
   "console_line": [
-    {
-      "text": "Console command",
-      "scope": "hohenheim_field"
-    },
-    {
-      "text": "Console line",
-      "scope": "readiness_kind"
-    }
+    {"text": "Console command", "scope": "hohenheim_field"},
+    {"text": "Console line", "scope": "readiness_kind"},
+    {"text": "The line sent to the app's main process, as if typed in its console.", "scope": "help"}
   ],
   "power_operation": {
     "text": "Operation",
     "scope": "hohenheim_field"
   },
-  "snapshot_note": {
-    "text": "Snapshot note",
-    "scope": "hohenheim_field"
-  },
+  "snapshot_note": [
+    {"text": "Snapshot note", "scope": "hohenheim_field"},
+    {"text": "Words kept with the snapshot, to recognise it by later; left empty, none.", "scope": "help"}
+  ],
   "unknown_instance": {
     "text": "Unknown instance",
     "scope": "violations"
@@ -9928,10 +9921,10 @@
     "text": "The ISO the machine starts its installer from, one of the install media on its host.",
     "scope": "instance_device"
   },
-  "drive_media": {
-    "text": "ISO",
-    "scope": "instance_device"
-  },
+  "drive_media": [
+    {"text": "ISO", "scope": "instance_device"},
+    {"text": "The ISO to put in the drive: the name of an ISO on the machine's host.", "scope": "help"}
+  ],
   "media_in_drive": {
     "text": "{$media} is in the drive. The machine starts from it before its own disk until you detach it.",
     "scope": "instance_device"
@@ -19041,10 +19034,10 @@
     "text": "removal",
     "scope": "capability"
   },
-  "exec_instance_description": {
-    "text": "running commands in it",
-    "scope": "capability"
-  },
+  "exec_instance_description": [
+    {"text": "running commands in it", "scope": "capability"},
+    {"text": "Runs one command inside the running app, beside its main process, and answers its output and exit code. The command can read and change the app's data.", "scope": "hohenheim"}
+  ],
   "snapshots_instance_description": {
     "text": "snapshots",
     "scope": "capability"
@@ -19887,7 +19880,10 @@
     {"text": "Lines", "scope": "hohenheim_field"},
     {"text": "How many of the newest lines to read; left empty, the usual window.", "scope": "help"}
   ],
-  "history_page": {"text": "Page", "scope": "hohenheim_field"},
+  "history_page": [
+    {"text": "Page", "scope": "hohenheim_field"},
+    {"text": "Which page of the history to read, 1 being the newest; left empty, the newest.", "scope": "help"}
+  ],
   "variable_holds_secret": {"text": "This key holds a secret, which an assistant cannot replace; remove it first if a plain value should take its place", "scope": "violations"},
   "variable_holds_value": {"text": "This key already holds a value; a generated secret never replaces one, as nobody could get the old value back", "scope": "violations"},
   "linked_server_singular": {"text": "Server", "scope": "linked_server"},
@@ -19990,5 +19986,72 @@
   "settings.hohenheim.cluster.label": "Linked servers",
   "settings.hohenheim.cluster.help": "What this Hohenheim is called on the servers it is linked to",
   "settings.hohenheim.cluster.name.label": "This server's name",
-  "settings.hohenheim.cluster.name.help": "What this Hohenheim is called in the Servers list and on the servers it is linked to, such as Robbedoes. Empty, it is named after its machine's host name."
+  "settings.hohenheim.cluster.name.help": "What this Hohenheim is called in the Servers list and on the servers it is linked to, such as Robbedoes. Empty, it is named after its machine's host name.",
+  "start_instance_description": {"text": "Starts the stopped app the way a deploy starts it, without changing its settings or its data. Refused while a database the app uses is not ready.", "scope": "hohenheim"},
+  "stop_instance_description": {"text": "Stops the app. Its data, volumes and ports are kept, so start brings it back; an app that is already stopped stays as it is.", "scope": "hohenheim"},
+  "restart_instance_description": {"text": "Stops the app and starts it again with its current settings; its data is kept. An app whose releases Hohenheim manages starts again as a fresh deploy.", "scope": "hohenheim"},
+  "deploy_instance_description": {"text": "Puts the app's newest version online, in the background. An app or static site is built, its pre-deploy command runs, the new version starts beside the old one, is checked over HTTP and takes over; a failed step leaves the old version serving. A workspace builds from its repository and restarts; other kinds start their workload again.", "scope": "hohenheim"},
+  "backup_instance_description": {"text": "Backs the app's volumes up to its backup target now. The app is stopped while its data is copied and started again before the upload.", "scope": "hohenheim"},
+  "connect_push_webhook_description": {"text": "Registers the push webhook at the git provider the app's source comes from, or brings it up to date, so a push starts a deploy. Stores a webhook secret when the app has none.", "scope": "hohenheim"},
+  "snapshot_instance_description": {"text": "Takes a snapshot of the app's volumes on its host, which restore can put back later. The app is stopped while the copy is made and started again afterwards.", "scope": "hohenheim"},
+  "install_instance_description": {"text": "Runs the install step of the app's template, or resumes or retries it, while that install is not done.", "scope": "hohenheim"},
+  "reinstall_instance_description": {"text": "Runs the template's install step again as the template's data policy says: preserve runs it over the existing volumes; clear first removes the workload and its volumes, which cannot be undone.", "scope": "hohenheim"},
+  "destroy_instance_data_description": {"text": "Deletes the app and removes its volumes and their data from the host. This cannot be undone; delete keeps the data.", "scope": "hohenheim"},
+  "delete_instance_description": {"text": "Deletes the app: its container is removed and its ports released. Its volumes and their data stay on the host, where the reconciler reports them; delete with data removes those too.", "scope": "hohenheim"},
+  "attach_install_media_description": {"text": "Puts an ISO that is on the machine's host into the machine's drive, to boot an installer from. Only for a virtual machine with no ISO attached.", "scope": "hohenheim"},
+  "detach_install_media_description": {"text": "Takes every ISO out of the machine's drives; the ISO files stay on the host.", "scope": "hohenheim"},
+  "console_command_instance_description": {"text": "Sends one line to the app's main process, as if typed in its console. Nothing else changes.", "scope": "hohenheim"},
+  "app_update_instance_description": {"text": "Runs the update script of the app's template inside the running app and answers its output. It changes no setting. Refused when the template has no update script or the app is not running.", "scope": "hohenheim"},
+  "delete_backup_description": {"text": "Deletes the backup: its file is removed from the backup target, then its record. It cannot be restored afterwards.", "scope": "hohenheim"},
+  "restore_snapshot_description": {"text": "Puts the snapshot back: every volume of the app is replaced by the snapshot's contents, so files written since the snapshot are lost.", "scope": "hohenheim"},
+  "delete_snapshot_description": {"text": "Deletes the snapshot and its stored copy; the app is not touched.", "scope": "hohenheim"},
+  "detach_device_description": {"text": "Removes this device from the app it is attached to; the app's data stays.", "scope": "hohenheim"},
+  "delete_instance_database_description": {"text": "Removes the link between the app and the database; the database and its data are not touched.", "scope": "hohenheim"},
+  "create_instance_from_template_description": {"text": "Creates a new app from this template, with the name, project and values for the template's variables given. Only an administrator chooses its host.", "scope": "hohenheim"},
+  "approve_template_description": {"text": "Approves the template after checking its install and update scripts, so apps can be made from it.", "scope": "hohenheim"},
+  "unapprove_template_description": {"text": "Withdraws the template's approval. The template and the apps made from it stay.", "scope": "hohenheim"},
+  "destroy_volume_description": {"text": "Removes the volume's directory and its data from the host, then its record. This cannot be undone; a workspace's home volume is refused.", "scope": "hohenheim"},
+  "expire_preview_description": {"text": "Ends the preview deployment now: its app is removed, its generated address and DNS records go, and its checkout is deleted.", "scope": "hohenheim"},
+  "read_instance_log_description": {"text": "Reads the newest lines the app printed.", "scope": "hohenheim"},
+  "list_instance_deploys_description": {"text": "Lists the app's deploys and builds, newest first, a page at a time, each by its code, so their logs can be read.", "scope": "hohenheim"},
+  "read_build_log_description": {"text": "Reads the stored log of one build.", "scope": "hohenheim"},
+  "read_deploy_log_description": {"text": "Reads the stored log of one deploy.", "scope": "hohenheim"},
+  "list_instance_variables_description": {"text": "Lists the app's environment variables. A plain one shows its value; a secret shows only that it is set.", "scope": "hohenheim"},
+  "set_instance_variable_description": {"text": "Sets a plain environment variable of the app. The app sees it from its next deploy; nothing is restarted. A key that holds a secret is refused.", "scope": "hohenheim"},
+  "unset_instance_variable_description": {"text": "Removes an environment variable of the app. The app stops seeing it from its next deploy; nothing is restarted.", "scope": "hohenheim"},
+  "generate_instance_secret_description": {"text": "Has the server make a random secret for a key that holds no value yet; the value is never shown. The app sees it from its next deploy.", "scope": "hohenheim"},
+  "delete_game_domain_description": {"text": "Deletes this game domain mapping and the records it generated.", "scope": "hohenheim"},
+  "enable_site_description": {"text": "Switches the site on, so its addresses answer again.", "scope": "hohenheim"},
+  "disable_site_description": {"text": "Switches the site off: its addresses stop answering, while its settings and the app behind it are kept. The panel's own site is refused.", "scope": "hohenheim"},
+  "stop_forcing_https_description": {"text": "Stops redirecting to HTTPS on the site's addresses that have no working certificate, so they answer over HTTP. Addresses with a working certificate are left alone.", "scope": "hohenheim"},
+  "clone_site_description": {"text": "Makes a switched-off copy of the site under a new name, with its upstream, settings, sign-in provider and access list.", "scope": "hohenheim"},
+  "manage_update_site_description": {"text": "Changes the site's name, description or whether it is on. Only the fields given change.", "scope": "hohenheim"},
+  "delete_site_description": {"text": "Deletes the site and its preview deployments; its addresses stop answering. Its certificates and the app behind it are kept.", "scope": "hohenheim"},
+  "check_address_reach_description": {"text": "Checks again whether the address reaches this server from outside, forgetting the last answer.", "scope": "hohenheim"},
+  "delete_access_rule_description": {"text": "Deletes the access rule; deleting a group deletes every rule inside it.", "scope": "hohenheim"},
+  "build_hook_revoke_description": {"text": "Revokes the build hook: its URL then answers as an unknown one. This cannot be undone; make a new hook instead.", "scope": "hohenheim"},
+  "delete_dns_zone_description": {"text": "Deletes the DNS zone and its records; this server stops answering for it.", "scope": "hohenheim"},
+  "delete_dns_peer_description": {"text": "Removes the DNS peer, so zones are no longer transferred to or from it.", "scope": "hohenheim"},
+  "delete_database_description": {"text": "Deletes the database with its data: its own container and volume, or its database and user on a shared engine. Refused while an app still uses it. This cannot be undone.", "scope": "hohenheim"},
+  "delete_database_engine_description": {"text": "Deletes the database engine: its container and the data volume its databases sat on are removed. Refused while databases still sit on it. This cannot be undone.", "scope": "hohenheim"},
+  "delete_database_dump_description": {"text": "Deletes the dump: its file is removed from the backup target, then its record. Refused while it is still uploading.", "scope": "hohenheim"},
+  "stop_stack_description": {"text": "Stops the stack's containers, the ones others depend on last. Volumes and settings are kept.", "scope": "hohenheim"},
+  "delete_stack_description": {"text": "Deletes the stack: its containers and network are removed; its volumes stay on the host.", "scope": "hohenheim"},
+  "delete_stack_service_description": {"text": "Deletes the service and its container from the stack. Refused while another service depends on it.", "scope": "hohenheim"},
+  "delete_server_description": {"text": "Removes the host from this panel and withdraws this panel's trust on it; the host and what runs on it are not touched. Refused while records still use it.", "scope": "hohenheim"},
+  "delete_runtime_image_description": {"text": "Deletes this custom runtime image from the list. Refused while an app uses it.", "scope": "hohenheim"},
+  "delete_project_description": {"text": "Deletes the project and the roles it owns. Refused while the project still owns records.", "scope": "hohenheim"},
+  "remove_orphan_description": {"text": "Removes the leftover workload the reconciler found on the host. Volumes are never removed this way.", "scope": "hohenheim"},
+  "refresh_stack_description": {"text": "Reads the stack's live state from its host and answers its status; it changes nothing.", "scope": "hohenheim"},
+  "test_git_provider_description": {"text": "Tests the git connection by listing its repositories, and answers how many or why it failed; it changes nothing.", "scope": "hohenheim"},
+  "test_backup_target_description": {"text": "Checks whether the backup target can be reached, and answers why not when it cannot; it changes nothing.", "scope": "hohenheim"},
+  "test_channel_description": {"text": "Sends a test alert through the notification channel.", "scope": "hohenheim"},
+  "cordon_server_description": {"text": "Cordons the host: no new work is placed on it, while what already runs there keeps running.", "scope": "hohenheim"},
+  "drain_server_description": {"text": "Moves every app off this cordoned host: each is stopped, moved to another host and started there. An app that cannot move is named and left alone.", "scope": "hohenheim"},
+  "uncordon_server_description": {"text": "Ends the host's cordon, so new work may be placed on it again.", "scope": "hohenheim"},
+  "reap_controller_objects_description": {"text": "Removes the network objects other Hohenheim controllers left on this Incus host. Objects of this controller, and objects a workload still uses, are never removed.", "scope": "hohenheim"},
+  "template_project": {"text": "The project the new app belongs to.", "scope": "help"},
+  "certificate_name": {"text": "The name the certificate is listed under; left empty, its first hostname.", "scope": "help"},
+  "site_name": {"text": "The site's name, as the panel lists it.", "scope": "help"},
+  "site_description": {"text": "A note about the site, for the people who manage it.", "scope": "help"}
 }

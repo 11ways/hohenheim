@@ -57,6 +57,7 @@ public final class InstanceLogOperations {
         Operation.declare(HohenheimIds.id("read_instance_log"))
             .happened(OperationSentences.of("read_instance_log"))
             .label(HohenheimMicrocopy.INSTANCE.of("read_log"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("read_instance_log_description"))
             .icon(Icon.of("terminal"))
             .one(InstanceOperations.INSTANCE)
             .verb(HohenheimVerbs.READ_LOG)
@@ -101,6 +102,7 @@ public final class InstanceLogOperations {
     /** Which page of the deploy history to read. */
     public static final IntegerField PAGE = IntegerField.builder("page")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("history_page"))
+        .help(HohenheimMicrocopy.HELP.of("history_page"))
         .build();
 
     /** The app's deploys and the builds that never became one, newest first: what its Deploys tab lists. */
@@ -108,6 +110,7 @@ public final class InstanceLogOperations {
         Operation.declare(HohenheimIds.id("list_instance_deploys"))
             .happened(OperationSentences.of("list_instance_deploys"))
             .label(HohenheimMicrocopy.INSTANCE.of("list_deploys"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("list_instance_deploys_description"))
             .icon(Icon.of("rocket"))
             .one(InstanceOperations.INSTANCE)
             .verb(HohenheimVerbs.LIST_DEPLOYS)
@@ -126,6 +129,7 @@ public final class InstanceLogOperations {
         Operation.declare(HohenheimIds.id("read_build_log"))
             .happened(OperationSentences.of("read_build_log"))
             .label(HohenheimMicrocopy.BUILD_OPERATION.of("read_log"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("read_build_log_description"))
             .icon(Icon.of("file-lines"))
             .one(BUILD)
             .verb(HohenheimVerbs.READ_LOG)
@@ -139,6 +143,7 @@ public final class InstanceLogOperations {
         Operation.declare(HohenheimIds.id("read_deploy_log"))
             .happened(OperationSentences.of("read_deploy_log"))
             .label(HohenheimMicrocopy.RELEASE_OPERATION.of("read_log"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("read_deploy_log_description"))
             .icon(Icon.of("file-lines"))
             .one(DEPLOY)
             .verb(HohenheimVerbs.READ_LOG)

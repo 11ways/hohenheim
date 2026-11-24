@@ -76,6 +76,7 @@ public class InstanceVariableModel extends Model {
     public static final StringField KEY = SCHEMA.addField(StringField.builder().name("key")
         .required()
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("variable_key"))
+        .help(HohenheimMicrocopy.HELP.of("variable_key"))
         .build());
 
     public static final EnumField KIND = SCHEMA.addField(EnumField.builder("kind")
@@ -89,6 +90,7 @@ public class InstanceVariableModel extends Model {
 
     public static final TextField PLAIN_VALUE = SCHEMA.addField(TextField.builder().name("plain_value")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("variable_value"))
+        .help(HohenheimMicrocopy.HELP.of("variable_value"))
         .build());
 
     // secret() masks it on every form surface and keeps it out of derived surfaces;

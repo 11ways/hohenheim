@@ -55,6 +55,7 @@ public class SiteModel extends Model {
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("name"))
+        .help(HohenheimMicrocopy.HELP.of("site_name"))
         .build());
     public static final StringField SLUG = SCHEMA.addField(StringField.builder().name("slug")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("slug"))
@@ -128,6 +129,7 @@ public class SiteModel extends Model {
 
     public static final StringField DESCRIPTION = SCHEMA.addField(StringField.builder().name("description")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("description"))
+        .help(HohenheimMicrocopy.HELP.of("site_description"))
         .build());
     public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
         .value(STATUS_ACTIVE, v -> v.displayName("Active")

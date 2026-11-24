@@ -118,6 +118,7 @@ public final class DatabaseDumpParts {
         Operation.declare(HohenheimIds.id("delete_database_dump"))
             .happened(OperationSentences.of("delete_database_dump"))
             .label(HohenheimMicrocopy.DATABASE_DUMP.of("dump_delete"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("delete_database_dump_description"))
             .icon(Icon.TRASH)
             .one(DUMP)
             .verb(OperationVerb.DELETE)

@@ -72,6 +72,7 @@ public final class VolumeOperations {
     public static final Operation<Row, Void, Void> DESTROY = Operation.declare(HohenheimIds.id("destroy_volume"))
         .happened(OperationSentences.of("destroy_volume"))
         .label(HohenheimMicrocopy.INSTANCE_VOLUME.of("destroy"))
+        .description(HohenheimMicrocopy.HOHENHEIM.of("destroy_volume_description"))
         .icon(Icon.of("trash-can")).one(SUBJECT).verb(OperationVerb.DELETE)
         .gate(HohenheimSources.OPERATOR)
         .facts(OperationFact.DESTRUCTIVE, OperationFact.REACHES_OUTSIDE)

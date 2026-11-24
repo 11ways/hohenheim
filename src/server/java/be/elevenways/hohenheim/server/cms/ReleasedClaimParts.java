@@ -72,6 +72,7 @@ public final class ReleasedClaimParts {
     public static final Operation<Row, Void, Void> LIFT = Operation.declare(HohenheimIds.id("lift_quarantine"))
         .happened(OperationSentences.of("lift_quarantine"))
         .label(HohenheimMicrocopy.RELEASED_CLAIM.of("lift"))
+        .description(HohenheimMicrocopy.RELEASED_CLAIM.of("lift_hint"))
         .icon(Icon.of("unlock"))
         .one(SUBJECT)
         .verb(HohenheimVerbs.LIFT)
@@ -165,7 +166,6 @@ public final class ReleasedClaimParts {
             HohenheimMicrocopy.RELEASED_CLAIM.of("lift_confirm"), ActionStyle.DESTRUCTIVE);
         return PanelAction.<Row, Void>places(LIFT, ActionPlacement.ROW, (request, result) ->
                 CmsActionResult.refreshWithToast(HohenheimMicrocopy.RELEASED_CLAIM.of("lifted_toast")))
-            .description(HohenheimMicrocopy.RELEASED_CLAIM.of("lift_hint"))
             .confirmation(lift)
             .dynamicConfirmation(claim -> lift.withTypedConfirmation(claim.get(ReleasedRouteClaimModel.HOSTNAME)))
             .build();

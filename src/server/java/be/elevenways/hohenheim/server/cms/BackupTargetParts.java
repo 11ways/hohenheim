@@ -62,6 +62,7 @@ public final class BackupTargetParts {
         Operation.declare(HohenheimIds.id("test_backup_target"))
             .happened(OperationSentences.of("test_backup_target"))
             .label(HohenheimMicrocopy.BACKUP_TARGET.of("test_connection"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("test_backup_target_description"))
             .icon(Icon.of("plug-circle-check"))
             .one(SUBJECT)
             .verb(HohenheimVerbs.TEST)

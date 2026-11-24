@@ -90,6 +90,7 @@ public final class NotificationChannelParts {
     public static final Operation<Row, Void, DeliveryOutcome> TEST = Operation.declare(HohenheimIds.id("test_channel"))
         .happened(OperationSentences.of("test_channel"))
         .label(HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("test"))
+        .description(HohenheimMicrocopy.HOHENHEIM.of("test_channel_description"))
         .icon(Icon.of("paper-plane"))
         .one(SUBJECT)
         .verb(HohenheimVerbs.TEST)

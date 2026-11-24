@@ -106,6 +106,7 @@ public final class InstanceBackupOperations {
         Operation.declare(HohenheimIds.id("delete_backup"))
             .happened(OperationSentences.of("delete_backup"))
             .label(CmsMicrocopy.of("delete"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("delete_backup_description"))
             .icon(Icon.TRASH)
             .one(BACKUP)
             .verb(OperationVerb.DELETE)

@@ -17,19 +17,27 @@ The key is shown once; revoke it on the same page.
 
 ## What the tools are
 
-The tools are not written by hand. Each one is an operation the panel already
-places (deploy an app, renew a certificate, switch a site off), or the list of a
-record source the panel already reads, and its name, description and hints come
-from that operation's verb and the kind of record it acts on (`site_pause`,
-`certificate_renew`, `site_list`). Each call goes through the same gate, checks
-and history as the panel's button, so an assistant can never do more than its
-key's owner.
+- `read` reads any record in full by its code, `history` tells what happened to
+  one, and `list` lists the records of one kind (`list` with `kind` `site`,
+  `app`, `server`, `user`, ...), each by its code, a page at a time; most kinds
+  take a search word, so a hostname or an app's name leads to its code in one
+  call.
+- Every other tool is one operation the panel already places (deploy an app,
+  renew a certificate, switch a site off), named after the kind of record it
+  acts on and what it does (`site_pause`, `certificate_renew`). Its description
+  is the operation's own written description, the text the panel shows beside
+  the same action, and its arguments are named and described in its schema.
+  Not yet described: a template's own variables when an app is made from it,
+  and the DNS publishing choice of a certificate order.
+- Each call goes through the same gate, checks and history as the panel's
+  button, so an assistant can never do more than its key's owner, and a tool
+  the key's owner may not use is not listed.
 
 Records are named by short codes, never by internal ids: `S14` is a site, `AP33`
 an app, `SR2` a server, `Z8` a DNS zone, `C12` a certificate, `RL5` a deploy. The
-list tools show the codes and most take a search word, so a hostname
-(`address_list`) or an app's name (`app_list`) leads to its code in one call; the
-`read` tool reads any record by its code.
+server's instructions name every kind's letters, and say once what the
+`version` argument of a changing tool does: the version a read showed (`v8`),
+so a record changed since is refused instead of overwritten.
 
 Work that outlives a call, such as deploying an app or rolling it back
 (`app_deploy`, `app_roll_back`), answers at once with the code of its run

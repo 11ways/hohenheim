@@ -48,9 +48,12 @@ import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.ApiKeyService;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.data.RecordSource;
+import be.elevenways.zenit.common.data.RecordSourceRegistry;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationRunStatus;
 import be.elevenways.zenit.common.operation.OperationRunModel;
+import be.elevenways.zenit.common.operation.Operations;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.security.PrincipalRef;
@@ -103,6 +106,90 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
     /** A run's code, as a background tool's answer names it. */
     private static final Pattern RUN_CODE = Pattern.compile("RUN\\d+");
 
+    /** The Hohenheim operations and sources kept from assistants, sorted; a later landing removes lines, never adds. */
+    private static final String[] KEPT = {
+        "hohenheim:access_rule_add", "hohenheim:access_rule_add_inside", "hohenheim:acknowledge_posture",
+        "hohenheim:build_hook_create", "hohenheim:build_hook_regenerate", "hohenheim:change_database_password",
+        "hohenheim:confirm_host_key", "hohenheim:confirm_incus_cert", "hohenheim:create_game_domain",
+        "hohenheim:create_site", "hohenheim:declare_volume", "hohenheim:delete_dns_record",
+        "hohenheim:delete_schedule", "hohenheim:delete_schedule_step", "hohenheim:dyndns_revoke",
+        "hohenheim:dyndns_token", "hohenheim:edit_remote_dns_record", "hohenheim:lift_ban",
+        "hohenheim:linked_server_add", "hohenheim:linked_server_check", "hohenheim:linked_server_offer_join",
+        "hohenheim:linked_server_remove",
+        "hohenheim:migrate_instance", "hohenheim:open_framebuffer", "hohenheim:open_shell",
+        "hohenheim:protect_path", "hohenheim:put_address_online", "hohenheim:put_machine_online",
+        "hohenheim:put_online", "hohenheim:put_service_online", "hohenheim:put_stream_online",
+        "hohenheim:put_volume_file", "hohenheim:put_workload_online", "hohenheim:put_workload_service_online",
+        "hohenheim:redeclare_volume", "hohenheim:repin_host_key", "hohenheim:repin_incus_cert",
+        "hohenheim:restore_backup", "hohenheim:restore_backup_in_place", "hohenheim:restore_database_dump",
+        "hohenheim:restore_database_dump_in_place", "hohenheim:rollback_release", "hohenheim:rotate_host_key",
+        "hohenheim:rotate_incus_cert", "hohenheim:route_notification_events", "hohenheim:run_schedule",
+        "hohenheim:scan_host_key", "hohenheim:scan_incus_cert", "hohenheim:site_deploy_from_repository",
+        "hohenheim:spamservice_key_create", "hohenheim:spamservice_key_enable", "hohenheim:spamservice_key_revoke",
+        "hohenheim:spamservice_mark_ham", "hohenheim:spamservice_mark_spam", "hohenheim:spamservice_rescore",
+        "hohenheim:update_game_domain", "hohenheim:update_site", "source hohenheim:access_list@admin",
+        "source hohenheim:access_list@admin_picker", "source hohenheim:access_rule@admin",
+        "source hohenheim:access_rule@admin_picker", "source hohenheim:auth_provider@admin",
+        "source hohenheim:backup_target@admin", "source hohenheim:backup_target@admin_picker",
+        "source hohenheim:ban", "source hohenheim:ban@admin", "source hohenheim:ban@admin_picker",
+        "source hohenheim:build_hook@admin", "source hohenheim:build_operation",
+        "source hohenheim:build_operation@admin", "source hohenheim:build_operation@admin_picker",
+        "source hohenheim:certificate@admin", "source hohenheim:certificate@admin_picker",
+        "source hohenheim:database@admin", "source hohenheim:database@admin_picker",
+        "source hohenheim:database_dump@admin", "source hohenheim:database_engine@admin",
+        "source hohenheim:dns_peer@admin", "source hohenheim:dns_record", "source hohenheim:dns_record@admin",
+        "source hohenheim:dns_record@admin_picker", "source hohenheim:dns_zone@admin",
+        "source hohenheim:dns_zone_peer@admin", "source hohenheim:environment@admin",
+        "source hohenheim:environment_variable@admin", "source hohenheim:game_domain@admin",
+        "source hohenheim:git_provider@admin", "source hohenheim:git_provider@admin_picker",
+        "source hohenheim:instance@admin", "source hohenheim:instance@admin_picker",
+        "source hohenheim:instance_backup@admin", "source hohenheim:instance_database@admin",
+        "source hohenheim:instance_database@admin_picker", "source hohenheim:instance_device@admin",
+        "source hohenheim:instance_device@admin_picker", "source hohenheim:instance_file@admin",
+        "source hohenheim:instance_quota@admin", "source hohenheim:instance_schedule@admin",
+        "source hohenheim:instance_schedule@admin_picker", "source hohenheim:instance_schedule_run@admin",
+        "source hohenheim:instance_schedule_step@admin", "source hohenheim:instance_snapshot@admin",
+        "source hohenheim:instance_template@admin", "source hohenheim:instance_template@admin_picker",
+        "source hohenheim:instance_template_database@admin", "source hohenheim:instance_template_file@admin",
+        "source hohenheim:instance_template_variable@admin", "source hohenheim:instance_template_volume@admin",
+        "source hohenheim:instance_variable@admin", "source hohenheim:instance_volume@admin",
+        "source hohenheim:instance_volume@admin_picker", "source hohenheim:manage_access_list@manage",
+        "source hohenheim:manage_access_list@manage_picker", "source hohenheim:manage_access_rule@manage",
+        "source hohenheim:manage_access_rule@manage_picker", "source hohenheim:manage_build_hook@manage",
+        "source hohenheim:manage_certificate@manage", "source hohenheim:manage_certificate@manage_picker",
+        "source hohenheim:manage_database@manage", "source hohenheim:manage_database@manage_picker",
+        "source hohenheim:manage_dns_record@manage", "source hohenheim:manage_dns_record@manage_picker",
+        "source hohenheim:manage_git_provider@manage", "source hohenheim:manage_git_provider@manage_picker",
+        "source hohenheim:manage_instance@manage", "source hohenheim:manage_instance@manage_picker",
+        "source hohenheim:manage_instance_backup@manage", "source hohenheim:manage_instance_database@manage",
+        "source hohenheim:manage_instance_database@manage_picker", "source hohenheim:manage_instance_device@manage",
+        "source hohenheim:manage_instance_device@manage_picker", "source hohenheim:manage_instance_schedule@manage",
+        "source hohenheim:manage_instance_schedule@manage_picker",
+        "source hohenheim:manage_instance_schedule_step@manage", "source hohenheim:manage_instance_snapshot@manage",
+        "source hohenheim:manage_instance_template@manage",
+        "source hohenheim:manage_instance_template@manage_picker",
+        "source hohenheim:manage_instance_variable@manage", "source hohenheim:manage_instance_volume@manage",
+        "source hohenheim:manage_instance_volume@manage_picker",
+        "source hohenheim:manage_preview_deployment@manage",
+        "source hohenheim:manage_preview_deployment@manage_picker", "source hohenheim:manage_project@manage",
+        "source hohenheim:manage_project@manage_picker", "source hohenheim:manage_protected_path@manage",
+        "source hohenheim:manage_protected_path@manage_picker", "source hohenheim:manage_site@manage",
+        "source hohenheim:manage_site@manage_picker", "source hohenheim:manage_site_domain@manage",
+        "source hohenheim:manage_site_domain@manage_picker", "source hohenheim:manage_site_redirect@manage",
+        "source hohenheim:manage_site_redirect@manage_picker", "source hohenheim:notification_channel@admin",
+        "source hohenheim:preview_deployment@admin", "source hohenheim:preview_deployment@admin_picker",
+        "source hohenheim:project@admin", "source hohenheim:project@admin_picker",
+        "source hohenheim:protected_path@admin", "source hohenheim:protected_path@admin_picker",
+        "source hohenheim:reconcile_finding@admin", "source hohenheim:release_operation",
+        "source hohenheim:release_operation@admin", "source hohenheim:release_operation@admin_picker",
+        "source hohenheim:released_claim@admin", "source hohenheim:runtime_image@admin",
+        "source hohenheim:runtime_image@admin_picker", "source hohenheim:server@admin",
+        "source hohenheim:server@admin_picker", "source hohenheim:site@admin", "source hohenheim:site@admin_picker",
+        "source hohenheim:site_domain@admin", "source hohenheim:site_domain@admin_picker",
+        "source hohenheim:site_redirect@admin", "source hohenheim:site_redirect@admin_picker",
+        "source hohenheim:spamservice_system_users", "source hohenheim:stack@admin",
+        "source hohenheim:stack_file@admin", "source hohenheim:stack_service@admin"};
+
     @AfterAll
     static void cleanUp() {
         SiteModel sites = Models.get(SiteModel.class);
@@ -130,6 +217,56 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
         List<String> unlisted = McpCoverage.unlisted("hohenheim", HohenheimMcpModule.tools()).stream()
             .map(source -> source.id().toString()).toList();
         assertThat(unlisted).as("sources no tool lists and none keeps from assistants").isEmpty();
+    }
+
+    /**
+     * Words: every operation is placed once, every Hohenheim operation says more than its label, and every argument
+     * declares its shape and its words; what is left is pinned by name, so the list can only shrink.
+     *
+     * AIDEV-NOTE: the left-overs are zenit-auth's (its account operations and fields), a template's own variables
+     * (their names are per template) and a field shown only for one choice of another, whose shape core's schema puts
+     * under its condition alone.
+     */
+    @Test
+    void everyToolSaysWhatItDoesOnce() {
+        McpHostServer server = McpHostServers.get(HohenheimMcpModule.SERVER_NAME);
+        assertThat(server).as("the one connection is registered").isNotNull();
+        assertThat(McpCoverage.placedTwice(server)).as("operations placed by two tools").isEmpty();
+        List<String> undescribed = McpCoverage.undescribed(server);
+        System.out.println("MCP operations said only by their label: " + undescribed);
+        assertThat(undescribed).as("no Hohenheim operation is said only by its label")
+            .noneMatch(line -> line.contains(": hohenheim:"));
+        AccessContext operator = TenantConduits.operator();
+        List<String> loose = McpCoverage.looseParameters(server, operator);
+        List<String> bare = McpCoverage.undescribedParameters(server, operator);
+        System.out.println("MCP arguments of no declared shape: " + loose + "; without words: " + bare);
+        assertThat(loose).as("arguments of no declared shape")
+            .containsExactlyInAnyOrder("app_template_create_app.variables", "certificate_create.dns_publisher",
+                "address_order_certificate.dns_publisher", "certificate_reissue.dns_publisher");
+        assertThat(bare).as("arguments without words")
+            .containsExactlyInAnyOrder("app_template_create_app.environmentId", "app_template_create_app.variables",
+                "certificate_create.dns_publisher", "address_order_certificate.dns_publisher",
+                "certificate_reissue.dns_publisher", "user_create.email", "user_create.display_name",
+                "user_invite.email", "user_invite.display_name", "user_set_picture.picture");
+    }
+
+    /** The operations and sources kept from assistants, by id: a new one fails here, a tool given to one shrinks it. */
+    @Test
+    void theExcusesOnlyShrink() {
+        List<String> kept = new ArrayList<>();
+        for (Operation<?, ?, ?> operation : Operations.registry()) {
+            if ("hohenheim".equals(operation.id().getNamespace()) && operation.notForAssistants() != null) {
+                kept.add(operation.id().toString());
+            }
+        }
+        for (RecordSourceRegistry.Entry entry : RecordSourceRegistry.INSTANCE.registryEntries()) {
+            RecordSource<?> source = entry.source();
+            if ("hohenheim".equals(source.id().getNamespace()) && source.notForAssistants() != null) {
+                kept.add("source " + source.id());
+            }
+        }
+        System.out.println("MCP kept from assistants (" + kept.size() + "): " + kept);
+        assertThat(kept.stream().sorted().toList()).as("what is kept from assistants").containsExactly(KEPT);
     }
 
     /** Every tool that deploys (a start, a restart, a deploy, a rollback) asks under the API trigger, known at boot. */
@@ -181,14 +318,14 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
 
         // 2. The tools derive from the sources, the operations and zenit-auth's accounts; an app is an app.
         assertThat(session.toolNames()).as("step 2: the tools")
-            .contains("read", "site_list", "site_pause", "site_resume", "app_start", "app_deploy", "run_read",
+            .contains("read", "list", "site_pause", "site_resume", "app_start", "app_deploy", "run_read",
                 "certificate_renew", "user_whoami");
 
         // 3. Listing sites by a word names the site by its code; reading that code reads the site.
         String code = RecordCodes.codes(SiteModel.MODEL_ID, List.of(String.valueOf(siteId)), operator)
             .get(String.valueOf(siteId));
         assertThat(code).as("step 3: the new site has a code").matches("S\\d+");
-        McpHttpSession.Answer listed = session.call("site_list", Map.of("search", name));
+        McpHttpSession.Answer listed = session.call("list", Map.of("kind", "site", "search", name));
         assertThat(listed.error()).as("step 3: " + listed.text()).isFalse();
         assertThat(listed.text()).as("step 3: the list").contains(code).contains(name);
         McpHttpSession.Answer read = session.call("read", Map.of("ids", List.of(code)));
@@ -253,12 +390,12 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             McpHttpSession session = presetSession(server, endpoint, customerId, "Mcp Customer");
 
             // 2. His list holds his app and its status, and no other tenant's app; his site's list its status.
-            McpHttpSession.Answer listed = session.call("app_list", Map.of("search", PREFIX));
+            McpHttpSession.Answer listed = session.call("list", Map.of("kind", "app", "search", PREFIX));
             assertThat(listed.error()).as("step 2: " + listed.text()).isFalse();
             assertThat(listed.text()).as("step 2: his app, with its status").contains(appCode).contains(name)
                 .containsAnyOf(MicrocopyText.say(InstanceStatus.CREATED.label()), InstanceModel.STATUS_CREATED)
                 .doesNotContain(otherName).doesNotContain(otherCode);
-            McpHttpSession.Answer sites = session.call("site_list", Map.of("search", name));
+            McpHttpSession.Answer sites = session.call("list", Map.of("kind", "site", "search", name));
             assertThat(sites.text()).as("step 2: his site, with its status").contains(siteCode)
                 .containsAnyOf(MicrocopyText.say(HohenheimMicrocopy.SITE_STATUS.of(SiteModel.STATUS_ACTIVE)),
                     SiteModel.STATUS_ACTIVE);
@@ -274,7 +411,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             // 4. His tools are his app's, each named "app", never "instance"; not one operator verb is offered to him.
             List<String> tools = session.toolNames();
             System.out.println("MCP tools of a customer: " + String.join(", ", tools));
-            assertThat(tools).as("step 4: his tools").contains("read", "app_list", "app_deploy", "app_roll_back",
+            assertThat(tools).as("step 4: his tools").contains("read", "list", "app_deploy", "app_roll_back",
                 OperationRunOperations.READ.assistantName(), InstanceOperations.START.assistantName(),
                 InstanceOperations.RESTART.assistantName(), InstanceLogOperations.READ_LOG.assistantName(),
                 InstanceLogOperations.LIST_DEPLOYS.assistantName(),

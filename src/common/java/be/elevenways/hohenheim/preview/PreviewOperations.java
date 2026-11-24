@@ -37,6 +37,7 @@ public final class PreviewOperations {
     public static final Operation<Row, Void, String> EXPIRE = Operation.declare(HohenheimIds.id("expire_preview"))
         .happened(OperationSentences.of("expire_preview"))
         .label(HohenheimMicrocopy.SCHEDULE_ACTION.of("expire_preview").withFallback("Expire preview"))
+        .description(HohenheimMicrocopy.HOHENHEIM.of("expire_preview_description"))
         .icon(Icon.of("hourglass-end"))
         .one(PREVIEW)
         .verb(HohenheimVerbs.EXPIRE)

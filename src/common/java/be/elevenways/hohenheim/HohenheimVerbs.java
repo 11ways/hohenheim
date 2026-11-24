@@ -76,9 +76,9 @@ public final class HohenheimVerbs {
     /** Runs one program inside the subject and answers its exit code and output. */
     public static final OperationVerb EXEC = OperationVerb.declare(HohenheimVerbs.class, "exec", Effect.WRITES);
 
-    /** Runs the in-place update script of the app the subject runs. */
-    public static final OperationVerb UPDATE_APP = OperationVerb.declare(HohenheimVerbs.class, "update_app",
-        Effect.WRITES);
+    /** Runs the update script of the subject's template inside the running subject. */
+    public static final OperationVerb RUN_UPDATE_SCRIPT = OperationVerb.declare(HohenheimVerbs.class,
+        "run_update_script", Effect.WRITES);
 
     /** Restores the subject (a backup, a dump) into a new record beside its source. */
     public static final OperationVerb RESTORE_TO_NEW = OperationVerb.declare(HohenheimVerbs.class, "restore_to_new",

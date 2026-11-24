@@ -48,6 +48,7 @@ public final class RuntimeImageParts {
             Operation.declare(HohenheimIds.id("delete_runtime_image"))
         .happened(OperationSentences.of("delete_runtime_image"))
         .label(CmsMicrocopy.of("delete"))
+        .description(HohenheimMicrocopy.HOHENHEIM.of("delete_runtime_image_description"))
         .one(SubjectType.record(RuntimeImageModel.REF))
         .verb(OperationVerb.DELETE)
         .gate(HohenheimSources.OPERATOR)

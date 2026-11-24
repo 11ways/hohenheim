@@ -47,6 +47,7 @@ public final class SiteOperations {
     public static final Operation<Row, Void, Void> ENABLE = Operation.declare(HohenheimIds.id("enable_site"))
         .happened(OperationSentences.of("enable_site"))
         .label(HohenheimMicrocopy.SITE.of("enable").withFallback("Enable"))
+        .description(HohenheimMicrocopy.HOHENHEIM.of("enable_site_description"))
         .icon(Icon.of("power-off"))
         .one(SITE)
         .verb(OperationVerb.RESUME)
@@ -59,6 +60,7 @@ public final class SiteOperations {
     public static final Operation<Row, Void, Void> DISABLE = Operation.declare(HohenheimIds.id("disable_site"))
         .happened(OperationSentences.of("disable_site"))
         .label(HohenheimMicrocopy.SITE.of("disable").withFallback("Disable"))
+        .description(HohenheimMicrocopy.HOHENHEIM.of("disable_site_description"))
         .icon(Icon.of("power-off"))
         .one(SITE)
         .verb(OperationVerb.PAUSE)
@@ -76,6 +78,7 @@ public final class SiteOperations {
         Operation.declare(HohenheimIds.id("stop_forcing_https"))
             .happened(OperationSentences.of("stop_forcing_https"))
             .label(HohenheimMicrocopy.SITE.of("stop_forcing_https").withFallback("Stop forcing HTTPS"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("stop_forcing_https_description"))
             .icon(Icon.of("unlock"))
             .one(SITE)
             .verb(HohenheimVerbs.STOP_FORCING_HTTPS)
@@ -87,6 +90,7 @@ public final class SiteOperations {
     /** The copy's name, the one thing a clone asks. */
     public static final StringField CLONE_NAME = StringField.builder("name")
         .label(HohenheimMicrocopy.SITE.of("clone_name"))
+        .help(HohenheimMicrocopy.HELP.of("clone_name"))
         .required()
         .build();
 
@@ -94,6 +98,7 @@ public final class SiteOperations {
     public static final Operation<Row, CloneInput, Integer> CLONE = Operation.declare(HohenheimIds.id("clone_site"))
         .happened(OperationSentences.of("clone_site"))
         .label(HohenheimMicrocopy.SITE.of("clone").withFallback("Clone"))
+        .description(HohenheimMicrocopy.HOHENHEIM.of("clone_site_description"))
         .icon(Icon.of("copy"))
         .one(SITE)
         .verb(HohenheimVerbs.CLONE)

@@ -102,6 +102,7 @@ public final class ServerParts {
     public static final Operation<Row, Void, Integer> DELETE = Operation.declare(HohenheimIds.id("delete_server"))
         .happened(OperationSentences.of("delete_server"))
         .label(CmsMicrocopy.of("delete"))
+        .description(HohenheimMicrocopy.HOHENHEIM.of("delete_server_description"))
         .one(SubjectType.record(ServerModel.REF)).verb(OperationVerb.DELETE)
         .gate(HohenheimSources.OPERATOR)
         .result(Integer.class).facts(OperationFact.DESTRUCTIVE).command(CmsCommands.TRANSACTIONAL).register();

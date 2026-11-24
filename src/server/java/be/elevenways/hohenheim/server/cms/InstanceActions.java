@@ -264,7 +264,6 @@ final class InstanceActions {
             .startedRunOpens(Row.class, InstanceDeploymentsPage::tabOf)
             .inlineInRow(false)
             .disabledWhen((row, access) -> OwnedInstances.placementReasonOf(row, false, access))
-            .description(HohenheimMicrocopy.INSTANCE.of("rollback_hint"))
             .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.INSTANCE.of("rollback"),
                 HohenheimMicrocopy.INSTANCE.of("rollback_confirm"), ActionStyle.DESTRUCTIVE))
             .build();
@@ -376,7 +375,6 @@ final class InstanceActions {
                 (panel, id) -> CmsRoutes.detail(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCE_TEMPLATES, id).toUrl(),
                 HohenheimMicrocopy.INSTANCE.of("capture_template"),
                 HohenheimMicrocopy.INSTANCE.of("capture_template_confirm"))
-            .description(HohenheimMicrocopy.INSTANCE.of("capture_template_hint"))
             .build();
     }
 

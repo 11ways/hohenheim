@@ -16,6 +16,7 @@ import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
@@ -55,34 +56,40 @@ import be.elevenways.hohenheim.source.GitProviderOperations;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostServer;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostServers;
+import be.elevenways.zenit.ai.server.mcp.host.McpListTool;
 import be.elevenways.zenit.ai.server.mcp.host.McpRecordTools;
 import be.elevenways.zenit.ai.server.mcp.host.McpToolSet;
 import be.elevenways.zenit.auth.server.mcp.AuthMcp;
 import be.elevenways.zenit.common.ZenitModule;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
+import be.elevenways.zenit.common.operation.AssistantNoun;
 import be.elevenways.zenit.common.operation.Operation;
+import be.elevenways.zenit.common.operation.OperationRunModel;
 import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
 import be.elevenways.zenit.common.orm.code.RecordCodeKinds;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.server.operation.OperationRunOperations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 /**
- * Hohenheim's one assistant connection, {@code /zn/mcp/hohenheim}: its record sources listed, its operations placed
- * under the names their verbs and nouns derive (a background one answering its run's code, followed with
- * {@code run_read}), and zenit-auth's account tools, admitted by a key with the scope {@code mcp:hohenheim}, which the
- * API keys page offers as the "Hohenheim assistant" preset.
+ * Hohenheim's one assistant connection, {@code /zn/mcp/hohenheim}: its record sources listed by the one {@code list}
+ * tool, its operations placed under the names their verbs and nouns derive (a background one answering its run's
+ * code, followed with {@code run_read}), and zenit-auth's account tools, admitted by a key with the scope
+ * {@code mcp:hohenheim}, which the API keys page offers as the "Hohenheim assistant" preset.
  *
  * AIDEV-NOTE: nothing here names a tool, a permission or a scope: the names derive from each operation's verb and noun
  * (McpToolSet), every call is the operation's own gate and authorizer, and the preset is zenit-ai's. An operation or
  * source missing from these lists is a gap HohenheimMcpTest pins; one an assistant must never get declares why on
- * itself (notForAssistants), not here.
+ * itself (notForAssistants), not here. zenit-auth's tools are this server's own collection, not an included server:
+ * its lists join {@code list}, and no {@code /zn/mcp/auth} route is registered beside this one.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -139,7 +146,6 @@ public final class HohenheimMcpModule implements ZenitModule {
     /** Registers the server once per process; a second call changes nothing. */
     public static synchronized void install() {
         if (McpHostServers.get(SERVER_NAME) != null) return;
-        AuthMcp.install();
         List<RecordSource<?>> sources = new ArrayList<>();
         for (Identifier model : LISTED) {
             // A source a role leaves out (backup targets without the instance role) is no tool there.
@@ -201,8 +207,42 @@ public final class HohenheimMcpModule implements ZenitModule {
         }
         tools = set.build();
         McpHostServers.register(McpHostServer.builder(SERVER_NAME)
-            .collections(McpRecordTools.shared(), tools)
-            .includes(McpHostServers.get(AuthMcp.SERVER_NAME))
+            .collections(McpRecordTools.shared(), McpListTool.over(tools, AuthMcp.tools()))
+            .codeExamples(code(SiteModel.MODEL_ID, 14), code(InstanceModel.MODEL_ID, 33),
+                code(DnsZoneModel.MODEL_ID, 7))
+            .saysVersionOnce()
+            .instructions(codes(),
+                "list with a kind lists its records by their codes; read reads records in full by their codes;"
+                    + " history tells what happened to one.",
+                "Deploy an app with " + InstanceOperations.DEPLOY.assistantName() + " and follow its run with "
+                    + OperationRunOperations.READ.assistantName() + "; when a step failed, "
+                    + InstanceLogOperations.LIST_DEPLOYS.assistantName() + " names the build and the deploy, and "
+                    + InstanceLogOperations.READ_BUILD_LOG.assistantName() + " and "
+                    + InstanceLogOperations.READ_DEPLOY_LOG.assistantName() + " read their logs.")
             .build());
+    }
+
+    /** @return the code the model's kind spells for a number, as the instructions give an example of */
+    private static @NonNull String code(@NonNull Identifier model, long number) {
+        return ((RecordCodeBehaviour.Allocated) Objects.requireNonNull(RecordCodeKinds.of(model))).spell(number);
+    }
+
+    /**
+     * @return the sentence naming every Hohenheim code by its letters and its kind, and a run's, read from the code
+     *     kinds themselves
+     */
+    private static @NonNull String codes() {
+        List<String> named = new ArrayList<>();
+        List<Identifier> models = new ArrayList<>();
+        for (Identifier model : RecordCodeKinds.models()) {
+            if (HohenheimIds.PRODUCT.namespace().equals(model.getNamespace())) models.add(model);
+        }
+        models.add(OperationRunModel.MODEL_ID);
+        for (Identifier model : models) {
+            if (RecordCodeKinds.of(model) instanceof RecordCodeBehaviour.Allocated kind) {
+                named.add(kind.prefix() + " " + AssistantNoun.of(model));
+            }
+        }
+        return "Codes start with their kind's letters: " + String.join(", ", named) + ".";
     }
 }

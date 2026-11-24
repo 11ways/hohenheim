@@ -142,6 +142,7 @@ public final class DomainParts {
             Operation.declare(HohenheimIds.id("check_address_reach"))
         .happened(OperationSentences.of("check_address_reach"))
         .label(HohenheimMicrocopy.SITE_DOMAINS.of("check_reach"))
+        .description(HohenheimMicrocopy.HOHENHEIM.of("check_address_reach_description"))
         .icon(Icon.of("rotate"))
         .one(SUBJECT)
         .verb(HohenheimVerbs.TEST)

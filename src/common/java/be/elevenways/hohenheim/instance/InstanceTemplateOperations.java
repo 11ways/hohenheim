@@ -50,7 +50,8 @@ public final class InstanceTemplateOperations {
     public static final SubjectType<Row> TEMPLATE = SubjectType.record(InstanceTemplateModel.REF);
 
     public static final StringField NAME = StringField.builder("name").required()
-        .label(HohenheimMicrocopy.INSTANCE_FROM_TEMPLATE.of("instance_name")).build();
+        .label(HohenheimMicrocopy.INSTANCE_FROM_TEMPLATE.of("instance_name"))
+        .help(HohenheimMicrocopy.HELP.of("instance_name")).build();
 
     /** The host; an operator's choice, fixed to null for everyone else (InstancePlacement decides). */
     public static final IntegerField SERVER_ID = IntegerField.builder("serverId")
@@ -58,7 +59,8 @@ public final class InstanceTemplateOperations {
         .help(HohenheimMicrocopy.INSTANCE_FROM_TEMPLATE.of("host_help")).build();
 
     public static final IntegerField PROJECT_ID = IntegerField.builder("projectId")
-        .label(HohenheimMicrocopy.INSTANCE_FROM_TEMPLATE.of("project")).build();
+        .label(HohenheimMicrocopy.INSTANCE_FROM_TEMPLATE.of("project"))
+        .help(HohenheimMicrocopy.HELP.of("template_project")).build();
 
     /** No picker offers an environment here: every placement fixes it to null. */
     public static final IntegerField ENVIRONMENT_ID = IntegerField.builder("environmentId").build();
@@ -83,6 +85,7 @@ public final class InstanceTemplateOperations {
         Operation.declare(HohenheimIds.id("create_instance_from_template"))
             .happened(OperationSentences.of("create_instance_from_template"))
             .label(HohenheimMicrocopy.INSTANCE_TEMPLATE.of("create_instance"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("create_instance_from_template_description"))
             .icon(Icon.of("plus"))
             .one(TEMPLATE)
             .verb(HohenheimVerbs.CREATE_APP)
@@ -106,6 +109,7 @@ public final class InstanceTemplateOperations {
         Operation.declare(HohenheimIds.id("approve_template"))
             .happened(OperationSentences.of("approve_template"))
             .label(HohenheimMicrocopy.INSTANCE_TEMPLATE.of("approve"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("approve_template_description"))
             .icon(Icon.of("circle-check"))
             .one(TEMPLATE)
             .verb(OperationVerb.APPROVE)
@@ -118,6 +122,7 @@ public final class InstanceTemplateOperations {
         Operation.declare(HohenheimIds.id("unapprove_template"))
             .happened(OperationSentences.of("unapprove_template"))
             .label(HohenheimMicrocopy.INSTANCE_TEMPLATE.of("unapprove"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("unapprove_template_description"))
             .icon(Icon.of("circle-xmark"))
             .one(TEMPLATE)
             .verb(OperationVerb.DECLINE)

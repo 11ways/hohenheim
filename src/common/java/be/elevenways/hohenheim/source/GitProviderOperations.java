@@ -35,6 +35,7 @@ public final class GitProviderOperations {
         Operation.declare(HohenheimIds.id("test_git_provider"))
             .happened(OperationSentences.of("test_git_provider"))
             .label(HohenheimMicrocopy.GIT_PROVIDER.of("test_connection"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("test_git_provider_description"))
             .icon(Icon.of("plug-circle-check"))
             .one(PROVIDER)
             .verb(HohenheimVerbs.CHECK)

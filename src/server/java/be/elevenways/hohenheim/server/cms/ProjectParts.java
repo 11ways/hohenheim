@@ -75,6 +75,7 @@ public final class ProjectParts {
     public static final Operation<Row, Void, Integer> DELETE = Operation.declare(HohenheimIds.id("delete_project"))
         .happened(OperationSentences.of("delete_project"))
         .label(CmsMicrocopy.of("delete"))
+        .description(HohenheimMicrocopy.HOHENHEIM.of("delete_project_description"))
         .one(SUBJECT).verb(OperationVerb.DELETE).gate(HohenheimSources.OPERATOR)
         .result(Integer.class).facts(OperationFact.DESTRUCTIVE).command(CmsCommands.TRANSACTIONAL).register();
 

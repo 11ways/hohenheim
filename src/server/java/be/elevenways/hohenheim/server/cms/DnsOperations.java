@@ -37,6 +37,7 @@ public final class DnsOperations {
             Operation.declare(HohenheimIds.id("delete_dns_zone"))
         .happened(OperationSentences.of("delete_dns_zone"))
         .label(CmsMicrocopy.of("delete")).icon(Icon.TRASH).one(ZONE).verb(OperationVerb.DELETE)
+        .description(HohenheimMicrocopy.HOHENHEIM.of("delete_dns_zone_description"))
         .gate(OperationGate.open()).facts(OperationFact.DESTRUCTIVE).result(Integer.class)
         .command(CmsCommands.TRANSACTIONAL).register();
     public static final Operation<Row, Void, Integer> DELETE_RECORD =
@@ -50,6 +51,7 @@ public final class DnsOperations {
             Operation.declare(HohenheimIds.id("delete_dns_peer"))
         .happened(OperationSentences.of("delete_dns_peer"))
         .label(CmsMicrocopy.of("delete")).icon(Icon.TRASH).one(PEER).verb(OperationVerb.DELETE)
+        .description(HohenheimMicrocopy.HOHENHEIM.of("delete_dns_peer_description"))
         .gate(OperationGate.open()).facts(OperationFact.DESTRUCTIVE).result(Integer.class)
         .command(CmsCommands.TRANSACTIONAL).register();
     public static final Operation<Row, Void, CmsActionResult> CHECK_HEALTH =

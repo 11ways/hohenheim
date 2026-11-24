@@ -138,6 +138,7 @@ public final class BuildHookParts {
             Operation.declare(HohenheimIds.id("build_hook_revoke"))
         .happened(OperationSentences.of("build_hook_revoke"))
         .label(HohenheimMicrocopy.BUILD_HOOK.of("build_hook_revoke"))
+        .description(HohenheimMicrocopy.HOHENHEIM.of("build_hook_revoke_description"))
         .icon(Icon.of("xmark"))
         .one(SUBJECT)
         .verb(HohenheimVerbs.REVOKE)

@@ -93,6 +93,7 @@ public final class GameDomainOperations {
         Operation.declare(HohenheimIds.id("delete_game_domain"))
             .happened(OperationSentences.of("delete_game_domain"))
             .label(HohenheimMicrocopy.GAME_DOMAIN.of("delete"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("delete_game_domain_description"))
             .one(MAPPING)
             .verb(OperationVerb.DELETE)
             .facts(OperationFact.DESTRUCTIVE)

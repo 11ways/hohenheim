@@ -3215,10 +3215,10 @@
     "text": "Dupliceren",
     "scope": "site"
   },
-  "clone_name": {
-    "text": "Naam van de kopie",
-    "scope": "site"
-  },
+  "clone_name": [
+    {"text": "Naam van de kopie", "scope": "site"},
+    {"text": "De naam van de kopie.", "scope": "help"}
+  ],
   "databases": [
     {
       "text": "Databanken",
@@ -7613,10 +7613,10 @@
     "text": "Gegenereerde entropie",
     "scope": "hohenheim_field"
   },
-  "variable_value": {
-    "text": "Waarde",
-    "scope": "hohenheim_field"
-  },
+  "variable_value": [
+    {"text": "Waarde", "scope": "hohenheim_field"},
+    {"text": "De gewone waarde van de variabele.", "scope": "help"}
+  ],
   "variable_secret_value": {
     "text": "Geheime waarde",
     "scope": "hohenheim_field"
@@ -7815,10 +7815,10 @@
     "text": "De waarden waarmee deze instantie start. Een geheim dat je leeg laat, behoudt de waarde van het sjabloon.",
     "scope": "instance_from_template"
   },
-  "instance_name": {
-    "text": "Instantienaam",
-    "scope": "instance_from_template"
-  },
+  "instance_name": [
+    {"text": "Instantienaam", "scope": "instance_from_template"},
+    {"text": "De naam van de nieuwe app.", "scope": "help"}
+  ],
   "host": [
     {
       "text": "Host",
@@ -8122,29 +8122,22 @@
     }
   ],
   "exec_command": [
-    {
-      "text": "Uit te voeren commando",
-      "scope": "hohenheim_field"
-    }
+    {"text": "Uit te voeren commando", "scope": "hohenheim_field"},
+    {"text": "Het programma dat in de app uitgevoerd wordt, met zijn argumenten.", "scope": "help"}
   ],
   "console_line": [
-    {
-      "text": "Consolecommando",
-      "scope": "hohenheim_field"
-    },
-    {
-      "text": "Consoleregel",
-      "scope": "readiness_kind"
-    }
+    {"text": "Consolecommando", "scope": "hohenheim_field"},
+    {"text": "Consoleregel", "scope": "readiness_kind"},
+    {"text": "De regel die naar het hoofdproces van de app gaat, alsof die in de console getypt werd.", "scope": "help"}
   ],
   "power_operation": {
     "text": "Actie",
     "scope": "hohenheim_field"
   },
-  "snapshot_note": {
-    "text": "Snapshotnotitie",
-    "scope": "hohenheim_field"
-  },
+  "snapshot_note": [
+    {"text": "Snapshotnotitie", "scope": "hohenheim_field"},
+    {"text": "Woorden die bij de snapshot bewaard worden, om ze later te herkennen; leeg gelaten, geen.", "scope": "help"}
+  ],
   "unknown_instance": {
     "text": "Onbekende instantie",
     "scope": "violations"
@@ -9928,10 +9921,10 @@
     "text": "De ISO waarvan de machine haar installatieprogramma start, een van de installatiemedia op haar host.",
     "scope": "instance_device"
   },
-  "drive_media": {
-    "text": "ISO",
-    "scope": "instance_device"
-  },
+  "drive_media": [
+    {"text": "ISO", "scope": "instance_device"},
+    {"text": "De ISO voor het station: de naam van een ISO op de host van de machine.", "scope": "help"}
+  ],
   "media_in_drive": {
     "text": "{$media} zit in het station. De machine start ervan voor haar eigen schijf tot je het ontkoppelt.",
     "scope": "instance_device"
@@ -19041,10 +19034,10 @@
     "text": "verwijderen",
     "scope": "capability"
   },
-  "exec_instance_description": {
-    "text": "er commando's in uitvoeren",
-    "scope": "capability"
-  },
+  "exec_instance_description": [
+    {"text": "er commando's in uitvoeren", "scope": "capability"},
+    {"text": "Voert één commando uit in de draaiende app, naast het hoofdproces, en antwoordt met de uitvoer en de exitcode. Het commando kan de gegevens van de app lezen en wijzigen.", "scope": "hohenheim"}
+  ],
   "snapshots_instance_description": {
     "text": "snapshots",
     "scope": "capability"
@@ -19887,7 +19880,10 @@
     {"text": "Regels", "scope": "hohenheim_field"},
     {"text": "Hoeveel van de nieuwste regels u leest; leeg gelaten, het gewone venster.", "scope": "help"}
   ],
-  "history_page": {"text": "Pagina", "scope": "hohenheim_field"},
+  "history_page": [
+    {"text": "Pagina", "scope": "hohenheim_field"},
+    {"text": "Welke pagina van de geschiedenis te lezen, 1 is de nieuwste; leeg gelaten, de nieuwste.", "scope": "help"}
+  ],
   "variable_holds_secret": {"text": "Deze sleutel bevat een geheim, dat een assistent niet kan vervangen; verwijder het eerst als er een gewone waarde in de plaats moet komen", "scope": "violations"},
   "variable_holds_value": {"text": "Deze sleutel bevat al een waarde; een gegenereerd geheim vervangt die nooit, omdat niemand de oude waarde terug kan krijgen", "scope": "violations"},
   "linked_server_singular": {"text": "Server", "scope": "linked_server"},
@@ -19990,5 +19986,72 @@
   "settings.hohenheim.cluster.label": "Gekoppelde servers",
   "settings.hohenheim.cluster.help": "Hoe deze Hohenheim heet op de servers waaraan hij gekoppeld is",
   "settings.hohenheim.cluster.name.label": "Naam van deze server",
-  "settings.hohenheim.cluster.name.help": "Hoe deze Hohenheim heet in de lijst Servers en op de servers waaraan hij gekoppeld is, zoals Robbedoes. Leeg krijgt hij de hostnaam van zijn machine."
+  "settings.hohenheim.cluster.name.help": "Hoe deze Hohenheim heet in de lijst Servers en op de servers waaraan hij gekoppeld is, zoals Robbedoes. Leeg krijgt hij de hostnaam van zijn machine.",
+  "start_instance_description": {"text": "Start de gestopte app zoals een deploy dat doet, zonder de instellingen of de gegevens te wijzigen. Geweigerd zolang een database van de app niet klaar is.", "scope": "hohenheim"},
+  "stop_instance_description": {"text": "Stopt de app. Gegevens, volumes en poorten blijven bewaard, zodat starten hem terugbrengt; een app die al gestopt is, blijft zoals hij is.", "scope": "hohenheim"},
+  "restart_instance_description": {"text": "Stopt de app en start hem opnieuw met de huidige instellingen; de gegevens blijven bewaard. Een app waarvan Hohenheim de releases beheert, start opnieuw als een nieuwe deploy.", "scope": "hohenheim"},
+  "deploy_instance_description": {"text": "Zet de nieuwste versie van de app online, op de achtergrond. Een app of statische site wordt gebouwd, het pre-deploy-commando draait, de nieuwe versie start naast de oude, wordt over HTTP gecontroleerd en neemt over; een mislukte stap laat de oude versie draaien. Een werkruimte bouwt vanuit haar repository en herstart; andere soorten starten hun workload opnieuw.", "scope": "hohenheim"},
+  "backup_instance_description": {"text": "Maakt nu een back-up van de volumes van de app naar haar back-updoel. De app wordt gestopt terwijl de gegevens gekopieerd worden en weer gestart voor het uploaden.", "scope": "hohenheim"},
+  "connect_push_webhook_description": {"text": "Registreert de push-webhook bij de git-provider waar de bron van de app vandaan komt, of werkt hem bij, zodat een push een deploy start. Bewaart een webhookgeheim als de app er nog geen heeft.", "scope": "hohenheim"},
+  "snapshot_instance_description": {"text": "Neemt een snapshot van de volumes van de app op haar host, die herstellen later kan terugzetten. De app wordt gestopt tijdens het kopiëren en daarna weer gestart.", "scope": "hohenheim"},
+  "install_instance_description": {"text": "Voert de installatiestap van het sjabloon van de app uit, of hervat of herhaalt die, zolang die installatie niet klaar is.", "scope": "hohenheim"},
+  "reinstall_instance_description": {"text": "Voert de installatiestap van het sjabloon opnieuw uit zoals het gegevensbeleid van het sjabloon zegt: bewaren voert hem uit over de bestaande volumes; wissen verwijdert eerst de workload en de volumes, wat niet ongedaan kan worden.", "scope": "hohenheim"},
+  "destroy_instance_data_description": {"text": "Verwijdert de app en wist de volumes en hun gegevens van de host. Dit kan niet ongedaan worden; verwijderen bewaart de gegevens.", "scope": "hohenheim"},
+  "delete_instance_description": {"text": "Verwijdert de app: de container verdwijnt en de poorten komen vrij. De volumes en hun gegevens blijven op de host, waar de reconciler ze meldt; verwijderen met gegevens wist die ook.", "scope": "hohenheim"},
+  "attach_install_media_description": {"text": "Plaatst een ISO van de host van de machine in het station van de machine, om een installatieprogramma van op te starten. Alleen voor een virtuele machine zonder ISO.", "scope": "hohenheim"},
+  "detach_install_media_description": {"text": "Haalt elke ISO uit de stations van de machine; de ISO-bestanden blijven op de host.", "scope": "hohenheim"},
+  "console_command_instance_description": {"text": "Stuurt één regel naar het hoofdproces van de app, alsof die in de console getypt werd. Verder verandert er niets.", "scope": "hohenheim"},
+  "app_update_instance_description": {"text": "Voert het updatescript van het sjabloon van de app uit in de draaiende app en antwoordt met de uitvoer. Het wijzigt geen instelling. Geweigerd als het sjabloon geen updatescript heeft of de app niet draait.", "scope": "hohenheim"},
+  "delete_backup_description": {"text": "Verwijdert de back-up: het bestand wordt van het back-updoel gewist, daarna het record. Ze kan daarna niet meer hersteld worden.", "scope": "hohenheim"},
+  "restore_snapshot_description": {"text": "Zet de snapshot terug: elk volume van de app wordt vervangen door de inhoud van de snapshot, dus bestanden die sindsdien geschreven zijn, gaan verloren.", "scope": "hohenheim"},
+  "delete_snapshot_description": {"text": "Verwijdert de snapshot en de bewaarde kopie; de app blijft onaangeroerd.", "scope": "hohenheim"},
+  "detach_device_description": {"text": "Verwijdert dit apparaat uit de app waaraan het hangt; de gegevens van de app blijven.", "scope": "hohenheim"},
+  "delete_instance_database_description": {"text": "Verwijdert de koppeling tussen de app en de database; de database en haar gegevens blijven onaangeroerd.", "scope": "hohenheim"},
+  "create_instance_from_template_description": {"text": "Maakt een nieuwe app van dit sjabloon, met de opgegeven naam, het project en waarden voor de variabelen van het sjabloon. Alleen een beheerder kiest de host.", "scope": "hohenheim"},
+  "approve_template_description": {"text": "Keurt het sjabloon goed na controle van de installatie- en updatescripts, zodat er apps van gemaakt kunnen worden.", "scope": "hohenheim"},
+  "unapprove_template_description": {"text": "Trekt de goedkeuring van het sjabloon in. Het sjabloon en de apps die ervan gemaakt zijn, blijven.", "scope": "hohenheim"},
+  "destroy_volume_description": {"text": "Wist de map van het volume en de gegevens van de host, daarna het record. Dit kan niet ongedaan worden; het thuisvolume van een werkruimte wordt geweigerd.", "scope": "hohenheim"},
+  "expire_preview_description": {"text": "Beëindigt de previewdeployment nu: de app wordt verwijderd, het gegenereerde adres en de DNS-records verdwijnen en de checkout wordt gewist.", "scope": "hohenheim"},
+  "read_instance_log_description": {"text": "Leest de nieuwste regels die de app schreef.", "scope": "hohenheim"},
+  "list_instance_deploys_description": {"text": "Toont de deploys en builds van de app, nieuwste eerst, een pagina per keer, elk met zijn code, zodat hun logs gelezen kunnen worden.", "scope": "hohenheim"},
+  "read_build_log_description": {"text": "Leest het bewaarde log van één build.", "scope": "hohenheim"},
+  "read_deploy_log_description": {"text": "Leest het bewaarde log van één deploy.", "scope": "hohenheim"},
+  "list_instance_variables_description": {"text": "Toont de omgevingsvariabelen van de app. Een gewone toont haar waarde; een geheime toont alleen dat ze ingesteld is.", "scope": "hohenheim"},
+  "set_instance_variable_description": {"text": "Stelt een gewone omgevingsvariabele van de app in. De app ziet ze vanaf de volgende deploy; er wordt niets herstart. Een sleutel met een geheim wordt geweigerd.", "scope": "hohenheim"},
+  "unset_instance_variable_description": {"text": "Verwijdert een omgevingsvariabele van de app. De app ziet ze vanaf de volgende deploy niet meer; er wordt niets herstart.", "scope": "hohenheim"},
+  "generate_instance_secret_description": {"text": "Laat de server een willekeurig geheim maken voor een sleutel die nog geen waarde heeft; de waarde wordt nooit getoond. De app ziet het vanaf de volgende deploy.", "scope": "hohenheim"},
+  "delete_game_domain_description": {"text": "Verwijdert deze koppeling van een gamedomein en de records die ze aanmaakte.", "scope": "hohenheim"},
+  "enable_site_description": {"text": "Zet de site aan, zodat haar adressen weer antwoorden.", "scope": "hohenheim"},
+  "disable_site_description": {"text": "Zet de site uit: haar adressen antwoorden niet meer, terwijl de instellingen en de app erachter bewaard blijven. De eigen site van het paneel wordt geweigerd.", "scope": "hohenheim"},
+  "stop_forcing_https_description": {"text": "Stopt het doorsturen naar HTTPS op de adressen van de site zonder werkend certificaat, zodat ze over HTTP antwoorden. Adressen met een werkend certificaat blijven ongewijzigd.", "scope": "hohenheim"},
+  "clone_site_description": {"text": "Maakt een uitgeschakelde kopie van de site onder een nieuwe naam, met haar upstream, instellingen, aanmeldprovider en toegangslijst.", "scope": "hohenheim"},
+  "manage_update_site_description": {"text": "Wijzigt de naam, de beschrijving of de aan/uit-stand van de site. Alleen de opgegeven velden veranderen.", "scope": "hohenheim"},
+  "delete_site_description": {"text": "Verwijdert de site en haar previewdeployments; haar adressen antwoorden niet meer. De certificaten en de app erachter blijven.", "scope": "hohenheim"},
+  "check_address_reach_description": {"text": "Controleert opnieuw of het adres deze server van buitenaf bereikt, en vergeet het vorige antwoord.", "scope": "hohenheim"},
+  "delete_access_rule_description": {"text": "Verwijdert de toegangsregel; een groep verwijderen verwijdert elke regel erin.", "scope": "hohenheim"},
+  "build_hook_revoke_description": {"text": "Trekt de build-hook in: de URL antwoordt daarna als een onbekende. Dit kan niet ongedaan worden; maak in de plaats een nieuwe hook.", "scope": "hohenheim"},
+  "delete_dns_zone_description": {"text": "Verwijdert de DNS-zone en haar records; deze server antwoordt er niet meer voor.", "scope": "hohenheim"},
+  "delete_dns_peer_description": {"text": "Verwijdert de DNS-peer, zodat er geen zones meer naar of van die peer overgedragen worden.", "scope": "hohenheim"},
+  "delete_database_description": {"text": "Verwijdert de database met haar gegevens: haar eigen container en volume, of haar database en gebruiker op een gedeelde engine. Geweigerd zolang een app ze nog gebruikt. Dit kan niet ongedaan worden.", "scope": "hohenheim"},
+  "delete_database_engine_description": {"text": "Verwijdert de database-engine: de container en het datavolume van haar databases worden gewist. Geweigerd zolang er nog databases op staan. Dit kan niet ongedaan worden.", "scope": "hohenheim"},
+  "delete_database_dump_description": {"text": "Verwijdert de dump: het bestand wordt van het back-updoel gewist, daarna het record. Geweigerd zolang hij nog uploadt.", "scope": "hohenheim"},
+  "stop_stack_description": {"text": "Stopt de containers van de stack, die waarvan andere afhangen als laatste. Volumes en instellingen blijven.", "scope": "hohenheim"},
+  "delete_stack_description": {"text": "Verwijdert de stack: de containers en het netwerk verdwijnen; de volumes blijven op de host.", "scope": "hohenheim"},
+  "delete_stack_service_description": {"text": "Verwijdert de dienst en de container uit de stack. Geweigerd zolang een andere dienst ervan afhangt.", "scope": "hohenheim"},
+  "delete_server_description": {"text": "Verwijdert de host uit dit paneel en trekt het vertrouwen van dit paneel erop in; de host en wat erop draait blijven onaangeroerd. Geweigerd zolang records hem nog gebruiken.", "scope": "hohenheim"},
+  "delete_runtime_image_description": {"text": "Verwijdert deze eigen runtime-image uit de lijst. Geweigerd zolang een app ze gebruikt.", "scope": "hohenheim"},
+  "delete_project_description": {"text": "Verwijdert het project en de rollen die het bezit. Geweigerd zolang het project nog records bezit.", "scope": "hohenheim"},
+  "remove_orphan_description": {"text": "Verwijdert de achtergebleven workload die de reconciler op de host vond. Volumes worden zo nooit verwijderd.", "scope": "hohenheim"},
+  "refresh_stack_description": {"text": "Leest de live toestand van de stack op de host en antwoordt met de status; er verandert niets.", "scope": "hohenheim"},
+  "test_git_provider_description": {"text": "Test de git-verbinding door de repositories op te sommen, en antwoordt hoeveel of waarom het mislukte; er verandert niets.", "scope": "hohenheim"},
+  "test_backup_target_description": {"text": "Controleert of het back-updoel bereikbaar is, en antwoordt waarom niet als het niet kan; er verandert niets.", "scope": "hohenheim"},
+  "test_channel_description": {"text": "Stuurt een testmelding via het meldingskanaal.", "scope": "hohenheim"},
+  "cordon_server_description": {"text": "Zet de host apart: er wordt geen nieuw werk op geplaatst, terwijl wat er al draait blijft draaien.", "scope": "hohenheim"},
+  "drain_server_description": {"text": "Verhuist elke app van deze apart gezette host: elke app wordt gestopt, naar een andere host verplaatst en daar gestart. Een app die niet kan verhuizen, wordt genoemd en blijft ongemoeid.", "scope": "hohenheim"},
+  "uncordon_server_description": {"text": "Beëindigt het apart zetten van de host, zodat er weer nieuw werk op geplaatst mag worden.", "scope": "hohenheim"},
+  "reap_controller_objects_description": {"text": "Verwijdert de netwerkobjecten die andere Hohenheim-controllers op deze Incus-host achterlieten. Objecten van deze controller, en objecten die een workload nog gebruikt, worden nooit verwijderd.", "scope": "hohenheim"},
+  "template_project": {"text": "Het project waartoe de nieuwe app behoort.", "scope": "help"},
+  "certificate_name": {"text": "De naam waaronder het certificaat getoond wordt; leeg gelaten, de eerste hostnaam.", "scope": "help"},
+  "site_name": {"text": "De naam van de site, zoals het paneel ze toont.", "scope": "help"},
+  "site_description": {"text": "Een notitie over de site, voor wie ze beheert.", "scope": "help"}
 }

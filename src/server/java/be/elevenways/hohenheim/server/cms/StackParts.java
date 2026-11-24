@@ -316,7 +316,6 @@ public final class StackParts {
             HohenheimMicrocopy.STACK.of("purge_volumes_confirm_generic"), ActionStyle.DESTRUCTIVE);
         return List.of(
             PanelAction.<Row, Void>places(StackOperations.DEPLOY, ActionPlacement.ROW, queued("deploy_queued"))
-                .description(HohenheimMicrocopy.STACK.of("deploy_hint"))
                 .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.STACK.of("deploy"),
                     HohenheimMicrocopy.STACK.of("deploy_confirm"), ActionStyle.DEFAULT))
                 .build(),
@@ -325,7 +324,6 @@ public final class StackParts {
                     HohenheimMicrocopy.STACK.of("stop_confirm"), ActionStyle.DEFAULT))
                 .build(),
             PanelAction.<Row, Void>places(StackOperations.ROLLBACK, ActionPlacement.ROW, queued("rollback_queued"))
-                .description(HohenheimMicrocopy.STACK.of("rollback_hint"))
                 .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.STACK.of("rollback"),
                     HohenheimMicrocopy.STACK.of("rollback_confirm"), ActionStyle.DEFAULT))
                 .build(),
@@ -334,7 +332,6 @@ public final class StackParts {
             // record-less fallback the builder demands next to a dynamic confirmation.
             PanelAction.<Row, Void>places(StackOperations.PURGE_VOLUMES, ActionPlacement.ROW,
                     queued("purge_volumes_queued"))
-                .description(HohenheimMicrocopy.STACK.of("purge_volumes_hint"))
                 .style(ActionStyle.DESTRUCTIVE)
                 .inlineInRow(false)
                 .confirmation(purge)
@@ -349,7 +346,6 @@ public final class StackParts {
             // Disk reclaim is per DAEMON, not per stack, so it belongs on the page rather than on a row.
             PanelAction.<Row, Void>places(StackOperations.RECLAIM_IMAGES, ActionPlacement.HEADER,
                     queued("reclaim_images_started"))
-                .description(HohenheimMicrocopy.STACK.of("reclaim_images_hint"))
                 .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.STACK.of("reclaim_images"),
                     HohenheimMicrocopy.STACK.of("reclaim_images_confirm"), ActionStyle.DEFAULT))
                 .build());

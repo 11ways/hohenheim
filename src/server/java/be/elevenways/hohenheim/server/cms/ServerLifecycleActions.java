@@ -84,7 +84,8 @@ final class ServerLifecycleActions {
                     .of("acknowledge_body").withArg("name", row.get(ServerModel.NAME)))
                     .withTypedConfirmation(row.get(ServerModel.NAME)))
                 .build(),
-            place("probe_server", HohenheimMicrocopy.SERVER.of("probe_now"), verb(HohenheimVerbs.TEST), row -> {
+            place("probe_server", HohenheimMicrocopy.SERVER.of("probe_now"), verb(HohenheimVerbs.TEST,
+                HohenheimMicrocopy.SERVER.of("probe_now_hint")), row -> {
                 String name = row.get(ServerModel.NAME);
                 String label = ServerModel.isIncus(row) ? "Incus" : "Docker";
                 ServerService.Summary summary = new ServerService().probeAndStore(name);
@@ -97,25 +98,27 @@ final class ServerLifecycleActions {
                     .withArg("summary", formatSummary(summary, label));
             // Check again is the host page's one verb: it measures everything a probe does and the
             // hourly sweep keeps the contact and the memory reading fresh, so the bare probe waits in the More menu.
-            }, row -> true).description(HohenheimMicrocopy.SERVER.of("probe_now_hint")).icon(Icon.of("heart-pulse"))
+            }, row -> true).icon(Icon.of("heart-pulse"))
                 .inlineInRow(false)
                 .inlineOnRecord(false).build(),
-            place("check_host", HohenheimMicrocopy.SERVER.of("check_and_admit"), verb(HohenheimVerbs.ADMIT),
+            place("check_host", HohenheimMicrocopy.SERVER.of("check_and_admit"), verb(HohenheimVerbs.ADMIT,
+                HohenheimMicrocopy.SERVER.of("check_and_admit_hint")),
                 ServerLifecycleActions::checkHost,
                 row -> true)
                 .dynamicLabel(row -> HohenheimMicrocopy.SERVER.of(awaitsAdmission(row) ? "check_and_admit"
                     : "check_again"))
-                .description(HohenheimMicrocopy.SERVER.of("check_and_admit_hint"))
                 // The first inline verb leads by position, not by a filled style (InstanceActions' deploy note).
                 .icon(Icon.of("stethoscope")).build(),
-            place("cordon_server", HohenheimMicrocopy.SERVER.of("cordon"), verb(OperationVerb.PAUSE), row -> {
+            place("cordon_server", HohenheimMicrocopy.SERVER.of("cordon"), verb(OperationVerb.PAUSE,
+                HohenheimMicrocopy.HOHENHEIM.of("cordon_server_description")), row -> {
                 setAdmission(row, ServerModel.ADMISSION_CORDONED, HohenheimActivityAction.ADMISSION_CORDONED);
                 return HohenheimMicrocopy.SERVER.of("host_cordoned").withArg("name", row.get(ServerModel.NAME));
             }, row -> ServerModel.ADMISSION_ADMITTED.equals(row.get(ServerModel.ADMISSION)))
                 .icon(Icon.of("circle-pause")).style(ActionStyle.DESTRUCTIVE)
                 .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.SERVER.of("cordon"),
                     HohenheimMicrocopy.SERVER.of("cordon_confirm"), ActionStyle.DESTRUCTIVE)).build(),
-            place("drain_server", HohenheimMicrocopy.SERVER.of("drain"), verb(HohenheimVerbs.DRAIN), row -> {
+            place("drain_server", HohenheimMicrocopy.SERVER.of("drain"), verb(HohenheimVerbs.DRAIN,
+                HohenheimMicrocopy.HOHENHEIM.of("drain_server_description")), row -> {
                 // AIDEV-NOTE: fenced updateAll writes fire no hook; InstanceMigrations records the moves explicitly.
                 InstanceMigrations.DrainReport report = new InstanceMigrations().drain(row.get(ServerModel.ID));
                 if (report.complete()) return HohenheimMicrocopy.SERVER.of("host_drained")
@@ -129,14 +132,16 @@ final class ServerLifecycleActions {
                 .icon(Icon.of("truck-arrow-right")).style(ActionStyle.DESTRUCTIVE)
                 .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.SERVER.of("drain"),
                     HohenheimMicrocopy.SERVER.of("drain_confirm"), ActionStyle.DESTRUCTIVE)).build(),
-            place("uncordon_server", HohenheimMicrocopy.SERVER.of("uncordon"), verb(OperationVerb.RESUME), row -> {
+            place("uncordon_server", HohenheimMicrocopy.SERVER.of("uncordon"), verb(OperationVerb.RESUME,
+                HohenheimMicrocopy.HOHENHEIM.of("uncordon_server_description")), row -> {
                 HostAdmission.requireAdmittable(row);
                 setAdmission(row, ServerModel.ADMISSION_ADMITTED, HohenheimActivityAction.ADMISSION_UNCORDONED);
                 return HohenheimMicrocopy.SERVER.of("host_admitted").withArg("name", row.get(ServerModel.NAME));
             }, row -> ServerModel.ADMISSION_CORDONED.equals(row.get(ServerModel.ADMISSION)))
                 .icon(Icon.of("circle-play")).build(),
             place("reap_controller_objects", HohenheimMicrocopy.SERVER.of("reap_controller_objects"),
-                builder -> builder.verb(HohenheimVerbs.REAP).facts(OperationFact.DESTRUCTIVE), row -> {
+                builder -> builder.verb(HohenheimVerbs.REAP).facts(OperationFact.DESTRUCTIVE)
+                    .description(HohenheimMicrocopy.HOHENHEIM.of("reap_controller_objects_description")), row -> {
                 IncusReaper.Reaped[] reaped = {ReapIncusControllers.reapIncludingUnstamped(row)};
                 return HohenheimMicrocopy.SERVER.of("controller_objects_reaped")
                     .withArg("name", row.get(ServerModel.NAME))
@@ -164,9 +169,9 @@ final class ServerLifecycleActions {
             (request, told) -> CmsActionResult.refreshWithToast(told));
     }
 
-    /** @return the declaration naming the operation's assistant tool by the verb */
-    static UnaryOperator<Operation.Builder<Row, Void, Microcopy>> verb(OperationVerb verb) {
-        return builder -> builder.verb(verb);
+    /** @return the declaration naming the operation's assistant tool by the verb, and saying what it does */
+    static UnaryOperator<Operation.Builder<Row, Void, Microcopy>> verb(OperationVerb verb, Microcopy description) {
+        return builder -> builder.verb(verb).description(description);
     }
 
     /** @return the declaration keeping the operation from assistants, and why */

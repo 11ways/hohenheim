@@ -149,6 +149,7 @@ public final class AccessRuleParts {
     public static final Operation<Row, Void, Void> TOGGLE = Operation.declare(HohenheimIds.id("access_rule_toggle"))
         .happened(OperationSentences.of("access_rule_toggle"))
         .label(HohenheimMicrocopy.ACCESS_RULE.of("toggle"))
+        .description(HohenheimMicrocopy.ACCESS_RULE.of("toggle_hint"))
         .icon(Icon.of("power-off"))
         .one(SUBJECT)
         .verb(AuthAdminOperations.Verbs.TOGGLE_ENABLED)
@@ -162,6 +163,7 @@ public final class AccessRuleParts {
         Operation.declare(HohenheimIds.id("delete_access_rule"))
             .happened(OperationSentences.of("delete_access_rule"))
             .label(CmsMicrocopy.of("delete"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("delete_access_rule_description"))
             .icon(Icon.TRASH)
             .one(SUBJECT)
             .verb(OperationVerb.DELETE)
@@ -310,7 +312,6 @@ public final class AccessRuleParts {
             // The button says what the CLICK does, not what the field is called.
             .dynamicLabel(rule -> HohenheimMicrocopy.ACCESS_RULE.of(
                 Boolean.TRUE.equals(rule.get(AccessRuleModel.ENABLED)) ? "switch_off" : "switch_on"))
-            .description(HohenheimMicrocopy.ACCESS_RULE.of("toggle_hint"))
             .build();
     }
 

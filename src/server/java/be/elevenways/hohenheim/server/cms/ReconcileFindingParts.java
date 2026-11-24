@@ -56,6 +56,7 @@ public final class ReconcileFindingParts {
     public static final Operation<Row, Void, Void> REMOVE = Operation.declare(HohenheimIds.id("remove_orphan"))
         .happened(OperationSentences.of("remove_orphan"))
         .label(HohenheimMicrocopy.RECONCILE_FINDING.of("remove_orphan"))
+        .description(HohenheimMicrocopy.HOHENHEIM.of("remove_orphan_description"))
         .one(SubjectType.record(ReconcileFindingModel.REF)).verb(OperationVerb.DELETE)
         .gate(HohenheimSources.OPERATOR)
         .facts(OperationFact.DESTRUCTIVE, OperationFact.REACHES_OUTSIDE).command(CmsCommands.EXTERNAL).register();

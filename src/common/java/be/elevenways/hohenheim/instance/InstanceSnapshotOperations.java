@@ -29,12 +29,14 @@ public final class InstanceSnapshotOperations {
     public static final Operation<Row, Void, Void> RESTORE = Operation.declare(HohenheimIds.id("restore_snapshot"))
         .happened(OperationSentences.of("restore_snapshot"))
         .label(HohenheimMicrocopy.INSTANCE_SNAPSHOT.of("restore"))
+        .description(HohenheimMicrocopy.HOHENHEIM.of("restore_snapshot_description"))
         .icon(Icon.of("clock-rotate-left")).one(SNAPSHOT).verb(HohenheimVerbs.RESTORE_IN_PLACE)
         .gate(OperationGate.open())
         .facts(OperationFact.DESTRUCTIVE, OperationFact.REACHES_OUTSIDE).command(COMMAND).register();
     public static final Operation<Row, Void, Integer> DELETE = Operation.declare(HohenheimIds.id("delete_snapshot"))
         .happened(OperationSentences.of("delete_snapshot"))
         .label(CmsMicrocopy.of("delete")).icon(Icon.TRASH)
+        .description(HohenheimMicrocopy.HOHENHEIM.of("delete_snapshot_description"))
         .one(SNAPSHOT).verb(OperationVerb.DELETE).gate(OperationGate.open()).result(Integer.class)
         .facts(OperationFact.DESTRUCTIVE, OperationFact.REACHES_OUTSIDE).command(COMMAND).register();
     private InstanceSnapshotOperations() {}

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.instance;
 
 import be.elevenways.hohenheim.activity.OperationSentences;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimVerbs;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
@@ -38,6 +39,7 @@ public final class InstanceAttachmentOperations {
         Operation.declare(HohenheimIds.id("detach_device"))
             .happened(OperationSentences.of("detach_device"))
             .label(CmsMicrocopy.of("delete"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("detach_device_description"))
             .icon(Icon.TRASH)
             .one(DEVICE)
             .verb(HohenheimVerbs.DETACH)
@@ -52,6 +54,7 @@ public final class InstanceAttachmentOperations {
         Operation.declare(HohenheimIds.id("delete_instance_database"))
             .happened(OperationSentences.of("delete_instance_database"))
             .label(CmsMicrocopy.of("delete"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("delete_instance_database_description"))
             .icon(Icon.TRASH)
             .one(DATABASE_LINK)
             .verb(OperationVerb.DELETE)

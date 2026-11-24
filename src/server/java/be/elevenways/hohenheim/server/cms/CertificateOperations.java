@@ -76,6 +76,7 @@ public final class CertificateOperations {
 
     static final StringField NICE_NAME = StringField.builder("nice_name")
         .label(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("name"))
+        .help(HohenheimMicrocopy.HELP.of("certificate_name"))
         .placeholder("example.com")
         .build();
 
