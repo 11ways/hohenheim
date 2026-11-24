@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.DatabaseDumpModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -27,6 +28,7 @@ import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.cms.DatabaseDumpParts;
 import be.elevenways.hohenheim.server.cms.PutOnline;
 import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
+import be.elevenways.hohenheim.server.instance.DockerContainerKind;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.mcp.HohenheimMcpModule;
 import be.elevenways.hohenheim.test.application.FakeApps;
@@ -348,6 +350,80 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             .plaintext();
         assertThat(McpHttpSession.initializeStatus(endpoint, bearer(plainKey))).as("step 6: no admission")
             .isNotEqualTo(200);
+    }
+
+    /**
+     * Roel's question: an operator reads an app in full, as the operator panel's form shows it, so an existing app
+     * can be the example for a new one: what it runs (image, tag, command), its port and its health check, a setting
+     * left at its default said so, and a secret setting only as set; the customer holding the same app reads only what
+     * the customer panel shows him.
+     */
+    @Test
+    void anAppReadsInFullAsItsReadersPanelShowsIt() throws Exception {
+        URI endpoint = URI.create(baseUrl() + "/zn/mcp/" + HohenheimMcpModule.SERVER_NAME);
+        McpHostServer server = Objects.requireNonNull(McpHostServers.routed(HohenheimMcpModule.SERVER_NAME));
+        try (FakeApps apps = FakeApps.install((SqlDatasource) Models.get(InstanceModel.class)
+                .getResolvedDatasource())) {
+            AccessContext operator = TenantConduits.operator();
+            String workerName = PREFIX + "worker-" + letters();
+            Row worker = Models.get(InstanceModel.class).createEmptyRow();
+            worker.set(InstanceModel.NAME, workerName);
+            worker.set(InstanceModel.KIND, DockerContainerKind.ID.toString());
+            worker.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+            Map<String, Object> workerSettings = new LinkedHashMap<>();
+            workerSettings.put("image", "fake/worker");
+            workerSettings.put("tag", "1.4");
+            workerSettings.put("command", "worker --queue mail");
+            workerSettings.put("container_port", 8080);
+            workerSettings.put("environment_variables", new LinkedHashMap<>(Map.of("API_TOKEN", SECRET)));
+            worker.set(InstanceModel.SETTINGS, workerSettings);
+            worker.set(InstanceModel.CRASH_POLICY, InstanceModel.CRASH_RESTART);
+            Models.get(InstanceModel.class).save(worker);
+            int workerId = worker.get(InstanceModel.ID);
+            String shopName = PREFIX + "shop-" + letters();
+            int shopId = application(shopName);
+            Row shop = Models.get(InstanceModel.class).findById(shopId);
+            Map<String, Object> shopSettings = new LinkedHashMap<>(FakeApps.settingsFor("v1"));
+            shopSettings.put("health_path", "/up");
+            shopSettings.put("environment_variables", new LinkedHashMap<>(Map.of("API_TOKEN", SECRET)));
+            shop.set(InstanceModel.SETTINGS, shopSettings);
+            Models.get(InstanceModel.class).save(shop);
+            String workerCode = code(InstanceModel.MODEL_ID, workerId, operator);
+            String shopCode = code(InstanceModel.MODEL_ID, shopId, operator);
+            McpHttpSession operatorSession = presetSession(server, endpoint,
+                TenantConduits.operatorUser().get(UserModel.ID), "Test Admin");
+
+            // 1. The operator's read of the docker container says what it runs, its port, a setting left at its
+            //    default, and its secret environment as set, never its value.
+            McpHttpSession.Answer read = operatorSession.call("read", Map.of("ids", List.of(workerCode)));
+            assertThat(read.error()).as("step 1: " + read.text()).isFalse();
+            System.out.println("A docker container app read in full (" + read.text().length() + " characters):\n"
+                + read.text());
+            assertThat(read.text()).as("step 1: the container in full").contains(workerCode + " (app)")
+                .contains(workerName).contains("Container image: fake/worker").contains("Image tag: 1.4")
+                .contains("Container command: worker --queue mail").contains("Container port: 8080")
+                .contains("(default)").contains("Environment variables: set").contains("status: ")
+                .doesNotContain(SECRET);
+
+            // 2. The operator's read of the application says its image, port and health check, its secret as set.
+            McpHttpSession.Answer readShop = operatorSession.call("read", Map.of("ids", List.of(shopCode)));
+            assertThat(readShop.error()).as("step 2: " + readShop.text()).isFalse();
+            assertThat(readShop.text()).as("step 2: the application in full").contains("Container image: fake/app")
+                .contains("Container port: 8080").contains("Health path: /up").contains("Environment variables: set")
+                .doesNotContain(SECRET);
+
+            // 3. The customer holding the container reads what the customer panel shows him: its name and status,
+            //    none of the operator form's settings.
+            UUID customerId = user(PREFIX + letters() + "@surface.test", "Mcp Full Read");
+            RecordGrants.grant(GrantSubjectType.USER, customerId, InstanceModel.MODEL_ID, workerId,
+                HohenheimCapabilities.MANAGE, true);
+            McpHttpSession customer = presetSession(server, endpoint, customerId, "Mcp Full Read");
+            McpHttpSession.Answer his = customer.call("read", Map.of("ids", List.of(workerCode)));
+            assertThat(his.error()).as("step 3: " + his.text()).isFalse();
+            assertThat(his.text()).as("step 3: the customer panel's fields").contains(workerName).contains("status: ")
+                .doesNotContain("Container image").doesNotContain("fake/worker").doesNotContain("worker --queue")
+                .doesNotContain("Environment variables").doesNotContain(SECRET);
+        }
     }
 
     /**

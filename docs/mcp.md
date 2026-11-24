@@ -17,11 +17,14 @@ The key is shown once; revoke it on the same page.
 
 ## What the tools are
 
-- `read` reads any record in full by its code, `history` tells what happened to
-  one, and `list` lists the records of one kind (`list` with `kind` `site`,
-  `app`, `server`, `user`, ...), each by its code, a page at a time; most kinds
-  take a search word, so a hostname or an app's name leads to its code in one
-  call.
+- `read` reads any record in full by its code: every field and kind setting of
+  the form the reader's own panel shows (an operator the admin form, a customer
+  the /manage one), a setting at its default marked so, a related record by its
+  code and name, a secret only as set or not set; an app's variables are read
+  with `app_list_variables`. `history` tells what happened to one, and `list`
+  lists the records of one kind (`list` with `kind` `site`, `app`, `server`,
+  `user`, ...), each by its code, a page at a time; most kinds take a search
+  word, so a hostname or an app's name leads to its code in one call.
 - Every other tool is one operation the panel already places (deploy an app,
   renew a certificate, switch a site off), named after the kind of record it
   acts on and what it does (`site_pause`, `certificate_renew`). Its description

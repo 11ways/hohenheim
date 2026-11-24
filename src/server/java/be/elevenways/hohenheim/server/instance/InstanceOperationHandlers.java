@@ -38,6 +38,7 @@ import be.elevenways.zenit.server.operation.OperationCall;
 import be.elevenways.zenit.server.operation.Applicability;
 import be.elevenways.zenit.server.operation.Availability;
 import be.elevenways.zenit.server.operation.OperationHandlers;
+import be.elevenways.zenit.server.operation.RecordReadLines;
 import be.elevenways.zenit.server.task.record.SchedulePlacements;
 import be.elevenways.zenit.server.task.record.RecordSchedules;
 import be.elevenways.zenit.server.task.record.StepFailure;
@@ -236,6 +237,15 @@ public final class InstanceOperationHandlers {
             .applies(InstanceOperationHandlers::authored)
             .handle(call -> new InstanceVariableOperations.Variables(InstanceVariables.listed(
                 Models.get(InstanceVariableModel.class).findByInstanceId(instanceId(call)))));
+        // An app's variables are rows of their own, never a field of its form: a read of the app names the tool that
+        // lists them (plain ones with their values, secret ones as set) to whoever may call it.
+        String listVariables = Objects.requireNonNull(InstanceVariableOperations.LIST_VARIABLES.assistantName());
+        RecordReadLines.register(InstanceModel.MODEL_ID, InstanceOperationHandlers.class, (keys, access) -> {
+            if (!InstanceVariableOperations.LIST_VARIABLES.gate().admits(access)) return Map.of();
+            Map<String, List<RecordReadLines.Line>> lines = new HashMap<>();
+            for (String key : keys) lines.put(key, List.of(new RecordReadLines.Line("variables", listVariables)));
+            return lines;
+        });
         OperationHandlers.attach(InstanceVariableOperations.SET_VARIABLE).source(SUBJECTS)
             .applies(InstanceOperationHandlers::authored)
             .handle(InstanceOperationHandlers::setVariable);
