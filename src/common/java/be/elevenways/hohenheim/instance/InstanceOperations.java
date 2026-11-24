@@ -542,7 +542,8 @@ public final class InstanceOperations {
     private InstanceOperations() {
     }
 
-    static @NonNull OperationGate gate(@NonNull String capability) {
+    /** @return the gate admitting a caller holding the capability on the app, refusing in the app's own words */
+    public static @NonNull OperationGate gate(@NonNull String capability) {
         return OperationGate.open().subjectCapability(capability)
             .refusing(HohenheimRefusalReason.INSTANCE_NOT_PERMITTED);
     }

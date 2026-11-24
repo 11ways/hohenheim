@@ -321,7 +321,7 @@ public final class ReleaseEngine {
                 if (protecting) {
                     Blast.log("RELEASE: application", applicationId, "release failed before a candidate"
                         + " existed; the prior release keeps serving -", ReleaseStepLog.reasonOf(op, e));
-                    return new ApplicationReleases.Release(servingId, oldLive);
+                    return new ApplicationReleases.Release(servingId, oldLive, e);
                 }
                 throw e;
             }
@@ -360,7 +360,7 @@ public final class ReleaseEngine {
                 }
                 Blast.log("RELEASE: application", applicationId, "candidate refused -",
                     ReleaseStepLog.reasonOf(op, e), "- the prior release keeps serving");
-                return new ApplicationReleases.Release(servingId, prior);
+                return new ApplicationReleases.Release(servingId, prior, e);
             }
         });
     }

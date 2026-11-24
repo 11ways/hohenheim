@@ -88,7 +88,9 @@ public final class InstanceTemplateOperations {
             .description(HohenheimMicrocopy.HOHENHEIM.of("create_instance_from_template_description"))
             .icon(Icon.of("plus"))
             .one(TEMPLATE)
-            .verb(HohenheimVerbs.CREATE_APP)
+            .verb(HohenheimVerbs.CREATE_FROM_TEMPLATE)
+            // The tool is named after what it makes, an app, not its subject (the template).
+            .assistantNoun("app")
             .gate(OperationGate.open())
             .input(OperationInput.of(INPUT, CreateFromTemplate.class, values -> new CreateFromTemplate(
                 values.get(NAME), values.get(HOST_ID), values.get(PROJECT_ID), values.get(ENVIRONMENT_ID),

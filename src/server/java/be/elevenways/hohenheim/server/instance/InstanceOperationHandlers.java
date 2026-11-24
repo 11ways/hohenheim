@@ -44,6 +44,7 @@ import be.elevenways.zenit.server.task.record.RecordSchedules;
 import be.elevenways.zenit.server.task.record.StepFailure;
 import be.elevenways.hohenheim.instance.InstanceOperations.MigrateInput;
 import be.elevenways.hohenheim.instance.InstanceVariableOperations;
+import be.elevenways.hohenheim.instance.VariableKind;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -254,6 +255,9 @@ public final class InstanceOperationHandlers {
         OperationHandlers.attach(InstanceVariableOperations.GENERATE_SECRET).source(SUBJECTS)
             .applies(InstanceOperationHandlers::authored)
             .handle(InstanceOperationHandlers::generateSecret);
+        OperationHandlers.attach(InstanceVariableOperations.SET_VARIABLES).source(SUBJECTS)
+            .applies(InstanceOperationHandlers::authored)
+            .handle(InstanceOperationHandlers::setVariables);
         // Sessions, offered and never invoked: their sockets ask offered() (see InstanceOperations.OPEN_SHELL).
         OperationHandlers.attach(InstanceOperations.OPEN_SHELL).applies(InstanceOperationHandlers::authored)
             .handle(InstanceOperationHandlers::session);
@@ -505,6 +509,62 @@ public final class InstanceOperationHandlers {
         new InstanceVariables().generateSecret(instanceId, key);
         InstanceVariables.recordSet(instanceId, key);
         return key;
+    }
+
+    /**
+     * Applies the four lists of a batch in one transaction, through the same one-key writes the single operations run:
+     * a plain set refuses a key holding a secret, a secret replaces what the key held, a generate refuses a key holding
+     * a value, an unset refuses a key holding nothing; one refusal writes nothing.
+     *
+     * @return the keys changed, in the order given, never a value
+     * @throws Violations {@code variables_none_given} for a batch of no list, plus every one-key refusal
+     */
+    private static @NonNull String setVariables(
+            @NonNull OperationCall<Row, InstanceVariableOperations.SetVariablesInput> call) {
+        InstanceVariableOperations.SetVariablesInput input = Objects.requireNonNull(call.input(), "the batch's input");
+        if (empty(input.set()) && empty(input.secret()) && empty(input.generate()) && empty(input.unset())) {
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("variables_none_given"));
+        }
+        int instanceId = instanceId(call);
+        InstanceVariables variables = new InstanceVariables();
+        List<String> changed = new ArrayList<>();
+        Models.get(InstanceVariableModel.class).getResolvedDatasource().withTransaction(tx -> {
+            for (Map<?, ?> entry : entries(input.set())) {
+                String key = text(entry.get("key"));
+                variables.setPlainValue(instanceId, key, text(entry.get("value")));
+                changed.add(key);
+            }
+            for (Map<?, ?> entry : entries(input.secret())) {
+                String key = text(entry.get("key"));
+                variables.setValue(instanceId, null, key, VariableKind.SECRET.token(), text(entry.get("value")));
+                changed.add(key);
+            }
+            for (Object key : input.generate() == null ? List.of() : input.generate()) {
+                variables.generateSecret(instanceId, text(key));
+                changed.add(text(key));
+            }
+            for (Object key : input.unset() == null ? List.of() : input.unset()) {
+                variables.unset(instanceId, text(key));
+            }
+        });
+        for (String key : changed) InstanceVariables.recordSet(instanceId, key);
+        List<String> all = new ArrayList<>(changed);
+        if (input.unset() != null) for (Object key : input.unset()) all.add(text(key));
+        return String.join(", ", all);
+    }
+
+    private static boolean empty(@Nullable List<?> list) {
+        return list == null || list.isEmpty();
+    }
+
+    private static @NonNull List<Map<?, ?>> entries(@Nullable List<?> list) {
+        List<Map<?, ?>> entries = new ArrayList<>();
+        if (list != null) for (Object entry : list) if (entry instanceof Map<?, ?> map) entries.add(map);
+        return entries;
+    }
+
+    private static @NonNull String text(@Nullable Object value) {
+        return value == null ? "" : String.valueOf(value).strip();
     }
 
     /**

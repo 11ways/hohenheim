@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.hohenheim.instance.InstanceBackupOperations;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
@@ -23,11 +24,13 @@ import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.mcp.HohenheimMcpModule;
 import be.elevenways.hohenheim.test.application.FakeApps;
 import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
+import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.zenit.ai.server.mcp.host.McpCoverage;
+import be.elevenways.zenit.ai.server.mcp.host.McpDescribeTool;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostServer;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostServers;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostTool;
@@ -57,9 +60,11 @@ import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.CredentialPresets;
 import be.elevenways.zenit.common.security.KnownValueRedactor;
+import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import be.elevenways.zenit.server.operation.OperationRunOperations;
 import be.elevenways.zenit.server.operation.RecordCodes;
 import be.elevenways.zenit.test.support.DatasourceProbe;
+import be.elevenways.zenit.test.support.TestAccessContexts;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 
@@ -192,24 +197,77 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
     }
 
     /**
-     * Coverage: what is still neither placed nor kept out is exactly what zenit core declares in Hohenheim's namespace
-     * with no way to give it a verb: a row delete keeping its published id, TreeOrderOperations' two moves, and the
-     * site's history operations (recover, restore a revision, place and remove a revision mark).
+     * Coverage: every operation an assistant may run is reached by exactly ONE tool and argument value; what is still
+     * neither placed nor kept out is pinned by id, so the list only shrinks.
+     *
+     * AIDEV-NOTE: the three one-key variable operations are left for the panel's history of past calls; variable_set
+     * runs their batch (set_instance_variables). The rest is what zenit core declares in Hohenheim's namespace with no
+     * verb, as before.
      */
     @Test
-    void everyOperationIsAToolOrSaysWhyNot() {
-        assertThat(HohenheimMcpModule.tools()).as("the boot module built the tools").isNotNull();
-        List<String> uncovered = McpCoverage.uncovered("hohenheim", HohenheimMcpModule.tools()).stream()
+    void everyPlacedOperationIsReachedByOneToolAndValue() {
+        McpHostServer server = Objects.requireNonNull(McpHostServers.get(HohenheimMcpModule.SERVER_NAME));
+        assertThat(HohenheimMcpModule.tools()).as("step 1: the boot module built the tools").isNotNull();
+        List<String> uncovered = McpCoverage.uncovered("hohenheim", HohenheimMcpModule.tools(),
+                Objects.requireNonNull(HohenheimMcpModule.declared())).stream()
             .map(operation -> operation.id().toString()).sorted().toList();
-        assertThat(uncovered).as("operations no tool places and none keeps from assistants")
+        assertThat(uncovered).as("step 1: operations no tool places and none keeps from assistants")
             .containsExactly("hohenheim:access_rule_move_down", "hohenheim:access_rule_move_up",
-                "hohenheim:delete_auth_provider", "hohenheim:delete_environment", "hohenheim:site_hold_place",
+                "hohenheim:delete_auth_provider", "hohenheim:delete_environment",
+                "hohenheim:generate_instance_secret", "hohenheim:set_instance_variable", "hohenheim:site_hold_place",
                 "hohenheim:site_hold_remove", "hohenheim:site_label_place", "hohenheim:site_label_remove",
                 "hohenheim:site_pinned_place", "hohenheim:site_pinned_remove", "hohenheim:site_recover",
-                "hohenheim:site_restore_revision");
+                "hohenheim:site_restore_revision", "hohenheim:unset_instance_variable");
         List<String> unlisted = McpCoverage.unlisted("hohenheim", HohenheimMcpModule.tools()).stream()
             .map(source -> source.id().toString()).toList();
-        assertThat(unlisted).as("sources no tool lists and none keeps from assistants").isEmpty();
+        assertThat(unlisted).as("step 1: sources no tool lists and none keeps from assistants").isEmpty();
+
+        // 2. Each placed operation is reached once: by one tool, and by one route of it (one kind and value).
+        assertThat(McpCoverage.placedTwice(server)).as("step 2: operations placed by two tools").isEmpty();
+        Map<Operation<?, ?, ?>, String> reached = new LinkedHashMap<>();
+        for (McpHostTool tool : Objects.requireNonNull(HohenheimMcpModule.declared()).tools()) {
+            assertThat(tool.operations()).as("step 2: " + tool.name() + " places each operation once")
+                .doesNotHaveDuplicates();
+            for (Operation<?, ?, ?> operation : tool.operations()) {
+                assertThat(reached.put(operation, tool.name())).as("step 2: " + operation.id() + " once").isNull();
+            }
+        }
+
+        // 3. No tool takes an object of undeclared members; a kind's map setting is a typed list of its entries.
+        AccessContext operator = TenantConduits.operator();
+        List<String> maps = List.of("app_create_from_template.variables", "certificate_create.dns_publisher",
+            "address_order_certificate.dns_publisher", "certificate_reissue.dns_publisher");
+        List<String> loose = McpCoverage.looseParameters(server, operator);
+        System.out.println("MCP arguments of no declared members: " + loose);
+        assertThat(loose).as("step 3: arguments of no declared shape").isSubsetOf(maps);
+
+        // 4. Every hand-declared tool and each of its arguments is described, in English and in Dutch.
+        Set<String> declared = new HashSet<>();
+        for (McpHostTool tool : Objects.requireNonNull(HohenheimMcpModule.declared()).tools()) {
+            declared.add(tool.name());
+        }
+        declared.add(McpDescribeTool.NAME);
+        Map<String, String> english = new LinkedHashMap<>();
+        for (String language : List.of("en", "nl")) {
+            AccessContext reader = AccessContext.of(TestAccessContexts.attributeConduit(LocaleChain.ofTags(language),
+                new ShippedCatalogs()), operator.principal(), operator.permissionChecker());
+            for (McpHostTool tool : McpCoverage.offered(server, reader)) {
+                if (!declared.contains(tool.name())) continue;
+                String said = tool.description(reader);
+                assertThat(said).as("step 4: " + tool.name() + " in " + language).isNotBlank()
+                    .doesNotStartWith("mcp_").isNotEqualTo(tool.name());
+                if ("en".equals(language)) english.put(tool.name(), said);
+                else assertThat(said).as("step 4: " + tool.name() + " says it in Dutch")
+                    .isNotEqualTo(english.get(tool.name()));
+                Map<?, ?> properties = (Map<?, ?>) tool.inputSchema(reader).get("properties");
+                properties.forEach((argument, shape) -> assertThat(((Map<?, ?>) shape).get("description"))
+                    .as("step 4: " + tool.name() + "." + argument + " in " + language).isInstanceOf(String.class)
+                    .asString().isNotBlank());
+            }
+        }
+        assertThat(english.keySet()).as("step 4: the operator is offered every declared tool")
+            .containsExactlyInAnyOrderElementsOf(declared);
+        System.out.println("MCP live tools of an operator: " + McpCoverage.offered(server, operator).size());
     }
 
     /**
@@ -248,17 +306,8 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
         List<String> undescribed = McpCoverage.undescribed(server);
         System.out.println("MCP operations said only by their label: " + undescribed);
         assertThat(undescribed).as("no operation is said only by its label").isEmpty();
-        AccessContext operator = TenantConduits.operator();
-        List<String> loose = McpCoverage.looseParameters(server, operator);
-        List<String> bare = McpCoverage.undescribedParameters(server, operator);
-        System.out.println("MCP arguments of no declared shape: " + loose + "; without words: " + bare);
-        assertThat(loose).as("arguments of no declared shape")
-            .containsExactlyInAnyOrder("app_template_create_app.variables", "certificate_create.dns_publisher",
-                "address_order_certificate.dns_publisher", "certificate_reissue.dns_publisher");
-        assertThat(bare).as("arguments without words")
-            .containsExactlyInAnyOrder("app_template_create_app.environmentId", "app_template_create_app.variables",
-                "certificate_create.dns_publisher", "address_order_certificate.dns_publisher",
-                "certificate_reissue.dns_publisher");
+        System.out.println("MCP arguments without words: " + McpCoverage.undescribedParameters(server,
+            TenantConduits.operator()));
     }
 
     /** The operations and sources kept from assistants, by id: a new one fails here, a tool given to one shrinks it. */
@@ -283,23 +332,16 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
     /** Every tool that deploys (a start, a restart, a deploy, a rollback) asks under the API trigger, known at boot. */
     @Test
     void everyDeployingToolHasItsTrigger() {
-        assertThat(HohenheimMcpModule.tools()).as("the boot module built the tools").isNotNull();
-        List<Operation<?, ?, ?>> deployingOperations = List.of(InstanceOperations.START, InstanceOperations.RESTART,
-            InstanceOperations.DEPLOY, InstanceOperations.ROLLBACK);
-        Set<String> deploying = new HashSet<>();
-        for (Operation<?, ?, ?> operation : deployingOperations) {
-            if (operation.assistantName() != null) deploying.add(operation.assistantName());
+        assertThat(HohenheimMcpModule.declared()).as("the boot module built the tools").isNotNull();
+        Set<Operation<?, ?, ?>> placed = new HashSet<>();
+        for (McpHostTool tool : Objects.requireNonNull(HohenheimMcpModule.declared()).tools()) {
+            placed.addAll(tool.operations());
         }
-        List<String> placed = new ArrayList<>();
-        for (McpHostTool tool : Objects.requireNonNull(HohenheimMcpModule.tools()).tools()) {
-            if (deploying.contains(tool.name())) {
-                placed.add(tool.name());
-                assertThat(InstanceOperationHandlers.triggerOf(McpToolSurface.MCP_TOOL))
-                    .as(tool.name() + " deploys under the API trigger").isEqualTo(DeployTrigger.API);
-            }
-        }
-        assertThat(placed).as("the start, the restart, the deploy and the rollback are tools")
-            .containsExactlyInAnyOrderElementsOf(deploying).hasSize(deployingOperations.size());
+        assertThat(placed).as("the start, the restart, the deploy and the rollback are routes of the tools")
+            .contains(InstanceOperations.START, InstanceOperations.RESTART, InstanceOperations.DEPLOY,
+                InstanceOperations.ROLLBACK);
+        assertThat(InstanceOperationHandlers.triggerOf(McpToolSurface.MCP_TOOL)).as("they deploy under the API trigger")
+            .isEqualTo(DeployTrigger.API);
     }
 
     @Test
@@ -329,7 +371,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
 
         // 2. The tools derive from the sources, the operations and zenit-auth's accounts; an app is an app.
         assertThat(session.toolNames()).as("step 2: the tools")
-            .contains("read", "list", "site_pause", "site_resume", "app_start", "app_deploy", "run_read",
+            .contains("read", "list", "describe", "site_pause", "site_resume", "power", "deploy", "run_read",
                 "certificate_renew", "user_whoami");
 
         // 3. Listing sites by a word names the site by its code; reading that code reads the site.
@@ -496,36 +538,31 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             // 4. His tools are his app's, each named "app", never "instance"; not one operator verb is offered to him.
             List<String> tools = session.toolNames();
             System.out.println("MCP tools of a customer: " + String.join(", ", tools));
-            assertThat(tools).as("step 4: his tools").contains("read", "list", "app_deploy", "app_roll_back",
-                OperationRunOperations.READ.assistantName(), InstanceOperations.START.assistantName(),
-                InstanceOperations.RESTART.assistantName(), InstanceLogOperations.READ_LOG.assistantName(),
+            assertThat(tools).as("step 4: his tools").contains("read", "list", "describe", "deploy", "roll_back",
+                OperationRunOperations.READ.assistantName(), "power", "logs",
                 InstanceLogOperations.LIST_DEPLOYS.assistantName(),
-                InstanceLogOperations.READ_BUILD_LOG.assistantName(),
-                InstanceVariableOperations.LIST_VARIABLES.assistantName(),
-                InstanceVariableOperations.SET_VARIABLE.assistantName(),
-                InstanceVariableOperations.UNSET_VARIABLE.assistantName(),
-                InstanceVariableOperations.GENERATE_SECRET.assistantName());
+                InstanceVariableOperations.LIST_VARIABLES.assistantName(), "variable_set");
             assertThat(tools).as("step 4: no tool is named after an instance")
                 .noneMatch(tool -> tool.startsWith("instance_"));
             for (Operation<?, ?, ?> operatorOnly : List.of(InstanceOperations.INSTALL, InstanceOperations.REINSTALL,
-                    InstanceOperations.CAPTURE_TEMPLATE, InstanceOperations.DESTROY_WITH_DATA,
-                    InstanceOperations.ATTACH_INSTALL_MEDIA, InstanceOperations.DETACH_INSTALL_MEDIA,
-                    InstanceOperations.CONNECT_WEBHOOK, InstanceTemplateOperations.APPROVE_TEMPLATE,
-                    InstanceTemplateOperations.UNAPPROVE_TEMPLATE, DatabaseDumpParts.DELETE,
-                    InstanceLogOperations.READ_DEPLOY_LOG)) {
+                    InstanceOperations.CAPTURE_TEMPLATE, InstanceOperations.ATTACH_INSTALL_MEDIA,
+                    InstanceOperations.DETACH_INSTALL_MEDIA, InstanceOperations.CONNECT_WEBHOOK,
+                    InstanceTemplateOperations.APPROVE_TEMPLATE, InstanceTemplateOperations.UNAPPROVE_TEMPLATE)) {
                 assertThat(operatorOnly.assistantName()).as("step 4: " + operatorOnly.id() + " is a tool").isNotNull();
                 assertThat(tools).as("step 4: " + operatorOnly.id() + " is not offered to him")
                     .doesNotContain(operatorOnly.assistantName());
             }
+            assertThat(session.call("delete", Map.of("code", appCode, "with_data", true)).error())
+                .as("step 4: an operator's delete with data is refused him").isTrue();
 
             // 5. He starts his app, then restarts it: both deploy under the API trigger, said and stored.
-            for (Operation<?, ?, ?> power : List.of(InstanceOperations.START, InstanceOperations.RESTART)) {
-                McpHttpSession.Answer powered = session.call(power.assistantName(), Map.of("id", appCode));
+            for (String action : List.of("start", "restart")) {
+                McpHttpSession.Answer powered = session.call("power", Map.of("code", appCode, "action", action));
                 assertThat(powered.error()).as("step 5: " + powered.text()).isFalse();
-                assertThat(powered.text()).as("step 5: " + power.assistantName() + " answers the trigger")
+                assertThat(powered.text()).as("step 5: power " + action + " answers the trigger")
                     .contains("(" + DeployTrigger.API.word() + ")");
                 assertThat(newestRelease(appId).get(ReleaseOperationModel.TRIGGER))
-                    .as("step 5: " + power.assistantName() + " recorded the API trigger")
+                    .as("step 5: power " + action + " recorded the API trigger")
                     .isEqualTo(DeployTrigger.API.word());
             }
 
@@ -533,8 +570,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             Row serving = Objects.requireNonNull(ApplicationReleases.ownedServing(appId), "step 6: a release serves");
             daemon.print(FakeDockerDaemon.handleOf(serving.get(InstanceModel.ID)),
                 "booting\ntoken=" + SECRET + " ready\nlistening\n");
-            McpHttpSession.Answer log = session.call(InstanceLogOperations.READ_LOG.assistantName(),
-                Map.of("id", appCode, "lines", 50));
+            McpHttpSession.Answer log = session.call("logs", Map.of("code", appCode, "lines", 50));
             assertThat(log.error()).as("step 6: " + log.text()).isFalse();
             assertThat(log.text()).as("step 6: the log, its secret masked").contains("listening")
                 .contains("token=" + KnownValueRedactor.PLACEHOLDER + " ready").doesNotContain(SECRET);
@@ -564,8 +600,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             assertThat(List.of(probe.queriesAgainst(ReleaseOperationModel.MODEL_ID),
                 probe.queriesAgainst(BuildOperationModel.MODEL_ID)))
                 .as("step 7: the list reads as much with two more builds").isEqualTo(fewer);
-            McpHttpSession.Answer buildLog = session.call(InstanceLogOperations.READ_BUILD_LOG.assistantName(),
-                Map.of("id", buildCode));
+            McpHttpSession.Answer buildLog = session.call("logs", Map.of("code", buildCode));
             assertThat(buildLog.text()).as("step 7: his build's own output").contains("npm ERR! the build of the shop");
             McpHttpSession.Answer failed = session.call("read", Map.of("ids", List.of(failedCode, buildCode)));
             assertThat(failed.error()).as("step 7: " + failed.text()).isFalse();
@@ -574,19 +609,19 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                 .doesNotContain("exit 1 in /tmp/build-ws").doesNotContain("sha256:");
 
             // 8. A plain variable set, listed and removed; the secret listed as set alone, and never replaced.
-            McpHttpSession.Answer set = session.call(InstanceVariableOperations.SET_VARIABLE.assistantName(),
-                Map.of("id", appCode, "key", "GREETING", "plain_value", "hello"));
+            McpHttpSession.Answer set = session.call("variable_set", Map.of("owner", appCode,
+                "set", List.of(Map.of("key", "GREETING", "value", "hello"))));
             assertThat(set.error()).as("step 8: " + set.text()).isFalse();
             String listVariables = InstanceVariableOperations.LIST_VARIABLES.assistantName();
             assertThat(session.call(listVariables, Map.of("id", appCode)).text()).as("step 8: the list")
                 .contains("GREETING = hello").contains("API_TOKEN (secret, set)").doesNotContain(SECRET);
-            McpHttpSession.Answer overSecret = session.call(InstanceVariableOperations.SET_VARIABLE.assistantName(),
-                Map.of("id", appCode, "key", "API_TOKEN", "plain_value", "plain"));
+            McpHttpSession.Answer overSecret = session.call("variable_set", Map.of("owner", appCode,
+                "set", List.of(Map.of("key", "API_TOKEN", "value", "plain"))));
             assertThat(overSecret.error()).as("step 8: a secret is never turned plain").isTrue();
             assertThat(new InstanceVariables().valuesFor(appId)).as("step 8: the secret stays")
                 .containsEntry("API_TOKEN", SECRET);
-            McpHttpSession.Answer unset = session.call(InstanceVariableOperations.UNSET_VARIABLE.assistantName(),
-                Map.of("id", appCode, "key", "GREETING"));
+            McpHttpSession.Answer unset = session.call("variable_set", Map.of("owner", appCode,
+                "unset", List.of("GREETING")));
             assertThat(unset.error()).as("step 8: " + unset.text()).isFalse();
             assertThat(session.call(listVariables, Map.of("id", appCode)).text()).as("step 8: removed")
                 .doesNotContain("GREETING");
@@ -596,13 +631,13 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             McpHttpSession viewer = presetSession(server, endpoint, viewerId, "Mcp Viewer");
             assertThat(viewer.call(listVariables, Map.of("id", appCode)).text()).as("step 8: a viewer lists")
                 .contains("API_TOKEN (secret, set)");
-            assertThat(viewer.call(InstanceVariableOperations.SET_VARIABLE.assistantName(),
-                Map.of("id", appCode, "key", "GREETING", "plain_value", "hello")).error())
+            assertThat(viewer.call("variable_set", Map.of("owner", appCode,
+                "set", List.of(Map.of("key", "GREETING", "value", "hello")))).error())
                 .as("step 8: and is refused the set").isTrue();
 
             // 8b. The server makes a secret for a key holding none: nobody is sent it, and it never replaces a value.
-            String generate = InstanceVariableOperations.GENERATE_SECRET.assistantName();
-            McpHttpSession.Answer generated = session.call(generate, Map.of("id", appCode, "key", "SESSION_KEY"));
+            McpHttpSession.Answer generated = session.call("variable_set", Map.of("owner", appCode,
+                "generate", List.of("SESSION_KEY")));
             assertThat(generated.error()).as("step 8b: " + generated.text()).isFalse();
             String made = new InstanceVariables().valuesFor(appId).get("SESSION_KEY");
             assertThat(made).as("step 8b: a value was made").isNotBlank();
@@ -610,29 +645,45 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                 .contains("SESSION_KEY").doesNotContain(made);
             assertThat(session.call(listVariables, Map.of("id", appCode)).text()).as("step 8b: listed as a set secret")
                 .contains("SESSION_KEY (secret, set)").doesNotContain(made);
-            assertThat(session.call(generate, Map.of("id", appCode, "key", "API_TOKEN")).error())
+            assertThat(session.call("variable_set", Map.of("owner", appCode, "generate", List.of("API_TOKEN"))).error())
                 .as("step 8b: a held value is never replaced").isTrue();
             assertThat(new InstanceVariables().valuesFor(appId)).as("step 8b: the secret stays")
                 .containsEntry("API_TOKEN", SECRET).containsEntry("SESSION_KEY", made);
-            assertThat(viewer.call(generate, Map.of("id", appCode, "key", "VIEWER_KEY")).error())
+            assertThat(viewer.call("variable_set", Map.of("owner", appCode, "generate", List.of("VIEWER_KEY"))).error())
                 .as("step 8b: a viewer is refused").isTrue();
 
             // 9. Another tenant's app answers as an app that does not exist.
             String missing = "AP999999";
-            for (Operation<?, ?, ?> asked : List.of(InstanceOperations.START, InstanceLogOperations.READ_LOG,
-                    InstanceLogOperations.LIST_DEPLOYS, InstanceVariableOperations.LIST_VARIABLES)) {
-                McpHttpSession.Answer foreign = session.call(asked.assistantName(), Map.of("id", otherCode));
-                McpHttpSession.Answer none = session.call(asked.assistantName(), Map.of("id", missing));
-                assertThat(foreign.error()).as("step 9: " + asked.assistantName() + " refused").isTrue();
+            Map<String, Map<String, Object>> asked = new LinkedHashMap<>();
+            asked.put("power", Map.of("action", "start"));
+            asked.put("logs", Map.of());
+            for (Map.Entry<String, Map<String, Object>> call : asked.entrySet()) {
+                Map<String, Object> foreignArgs = new LinkedHashMap<>(call.getValue());
+                foreignArgs.put("code", otherCode);
+                Map<String, Object> noneArgs = new LinkedHashMap<>(call.getValue());
+                noneArgs.put("code", missing);
+                McpHttpSession.Answer foreign = session.call(call.getKey(), foreignArgs);
+                McpHttpSession.Answer none = session.call(call.getKey(), noneArgs);
+                assertThat(foreign.error()).as("step 9: " + call.getKey() + " refused").isTrue();
                 assertThat(foreign.text().replace(otherCode, "<code>"))
-                    .as("step 9: " + asked.assistantName() + " says what it says of none")
+                    .as("step 9: " + call.getKey() + " says what it says of none")
+                    .isEqualTo(none.text().replace(missing, "<code>"));
+            }
+            for (Operation<?, ?, ?> reading : List.of(InstanceLogOperations.LIST_DEPLOYS,
+                    InstanceVariableOperations.LIST_VARIABLES)) {
+                McpHttpSession.Answer foreign = session.call(reading.assistantName(), Map.of("id", otherCode));
+                McpHttpSession.Answer none = session.call(reading.assistantName(), Map.of("id", missing));
+                assertThat(foreign.error()).as("step 9: " + reading.assistantName() + " refused").isTrue();
+                assertThat(foreign.text().replace(otherCode, "<code>"))
+                    .as("step 9: " + reading.assistantName() + " says what it says of none")
                     .isEqualTo(none.text().replace(missing, "<code>"));
             }
 
             // 10. A backup and a snapshot are refused, without naming what he lacks.
-            for (Operation<?, ?, ?> withheld : List.of(InstanceOperations.BACKUP, InstanceOperations.SNAPSHOT)) {
-                McpHttpSession.Answer refused = session.call(withheld.assistantName(), Map.of("id", appCode));
-                assertThat(refused.error()).as("step 10: " + withheld.assistantName() + " refused").isTrue();
+            for (Map.Entry<String, String> withheld : Map.of("back_up", "code",
+                    Objects.requireNonNull(InstanceOperations.SNAPSHOT.assistantName()), "id").entrySet()) {
+                McpHttpSession.Answer refused = session.call(withheld.getKey(), Map.of(withheld.getValue(), appCode));
+                assertThat(refused.error()).as("step 10: " + withheld.getKey() + " refused").isTrue();
                 assertThat(refused.text()).as("step 10: without naming the capability")
                     .doesNotContain(HohenheimCapabilities.BACKUPS).doesNotContain(HohenheimCapabilities.SNAPSHOTS);
             }
@@ -640,21 +691,21 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             // 11. The operator reads the failed deploy's step log, which no customer is offered.
             McpHttpSession operatorSession = presetSession(server, endpoint,
                 TenantConduits.operatorUser().get(UserModel.ID), "Test Admin");
-            McpHttpSession.Answer stepLog = operatorSession.call(InstanceLogOperations.READ_DEPLOY_LOG.assistantName(),
-                Map.of("id", failedCode));
+            McpHttpSession.Answer stepLog = operatorSession.call("logs", Map.of("code", failedCode));
             assertThat(stepLog.error()).as("step 11: " + stepLog.text()).isFalse();
             assertThat(stepLog.text()).as("step 11: the step log").contains(steps);
             List<String> operatorTools = operatorSession.toolNames();
-            System.out.println("MCP tools of an operator: " + String.join(", ", operatorTools));
+            System.out.println("MCP tools of an operator (" + operatorTools.size() + "): "
+                + String.join(", ", operatorTools));
             assertThat(operatorTools).as("step 11: the operator's tools hold the runs and no instance name")
-                .contains("app_deploy", "app_roll_back", OperationRunOperations.READ.assistantName())
+                .contains("deploy", "roll_back", OperationRunOperations.READ.assistantName())
                 .noneMatch(tool -> tool.startsWith("instance_"));
 
             // 12. He deploys his app's next version by its tool: the call answers its run's code at once, he follows
             //     the run to its end, and his deploy list holds the new deploy, recorded under the API trigger.
             FakeApps.setSettings(appId, "v2");
             settle("step 12");
-            String deployRun = startedRun(session, InstanceOperations.DEPLOY, appCode, "step 12");
+            String deployRun = startedRun(session, "deploy", appCode, "step 12");
             assertThat(followed(session, deployRun, "step 12").text()).as("step 12: the run ended well")
                 .contains("status: " + OperationRunStatus.SUCCEEDED.storageKey()).contains("subject: " + appCode);
             Row deployed = newestRelease(appId);
@@ -667,7 +718,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
 
             // 13. He rolls it back the same way: a run he follows to its end, a rollback in his deploy list.
             settle("step 13");
-            String rollbackRun = startedRun(session, InstanceOperations.ROLLBACK, appCode, "step 13");
+            String rollbackRun = startedRun(session, "roll_back", appCode, "step 13");
             assertThat(followed(session, rollbackRun, "step 13").text()).as("step 13: the run ended well")
                 .contains("status: " + OperationRunStatus.SUCCEEDED.storageKey()).contains("subject: " + appCode);
             Row rolledBack = newestRelease(appId);
@@ -697,6 +748,190 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                     .as("step 14: nor does a read of " + run)
                     .isEqualTo(rival.call("read", Map.of("ids", List.of(noRun))).text().replace(noRun, "<code>"));
             }
+        }
+    }
+
+    /**
+     * Roel's job by tools alone, as an administrator's key: describe what an app takes, create a Docker container from
+     * an image with a command and no port, set six variables (three secret) in one call, read it, change its command,
+     * merge its volumes and clear a setting; an application deployed and followed by its run, its log read, stopped
+     * and started, whose next version's failing pre-deploy command does not take over from the release serving;
+     * delete with its data; and the same create refused to a person who is no administrator, in the words the spec
+     * quotes.
+     *
+     * AIDEV-NOTE: the runs are the application's: a Docker container deploys on its own private network, whose
+     * kernel policy the fake daemon does not model (WorkloadNetworkPolicy refuses it with nftables off), while a
+     * release runs on the shared bridge the fake serves.
+     */
+    @Test
+    void anAdministratorRunsAnAppByToolsAlone() throws Exception {
+        URI endpoint = URI.create(baseUrl() + "/zn/mcp/" + HohenheimMcpModule.SERVER_NAME);
+        McpHostServer server = Objects.requireNonNull(McpHostServers.routed(HohenheimMcpModule.SERVER_NAME));
+        Pattern appCodes = Pattern.compile("AP\\d+");
+        // The panel's own create places the app: the local host needs a fresh memory reading to be chosen, and a
+        // data root that can hold a quota for the application of step 6 (a kind that mounts volumes).
+        HostFixtures.LocalHostState local = HostFixtures.captureLocal();
+        try (FakeApps apps = FakeApps.install((SqlDatasource) Models.get(InstanceModel.class)
+                .getResolvedDatasource())) {
+            FakeDockerDaemon daemon = apps.daemon();
+            // The application's log is read from what it printed; it asks no console (crash policy none).
+            daemon.keepConsoleLogs();
+            HostFixtures.makeLocalPlaceable(16L * 1024);
+            HostFixtures.giveLocalVolumeQuota();
+            McpHttpSession admin = presetSession(server, endpoint, TenantConduits.operatorUser().get(UserModel.ID),
+                "Test Admin");
+
+            // 1. describe kind=app names the tool that creates one and what creating needs.
+            McpHttpSession.Answer kind = admin.call("describe", Map.of("kind", "app"));
+            assertThat(kind.error()).as("step 1: " + kind.text()).isFalse();
+            assertThat(kind.text()).as("step 1: the create tools and the calls on one")
+                .contains("app_docker_container_set").contains("name").contains("power code=AP12 action=stop");
+
+            // 2. A Docker container app from an image, with a command and no port; nothing is deployed.
+            String name = PREFIX + "worker-" + letters();
+            Map<String, Object> create = Map.of("name", name, "image", "fake/app", "tag", "v1", "command",
+                "worker --queue mail", "volumes", List.of(Map.of("name", "data", "container_path", "/data")),
+                "request", UUID.randomUUID().toString());
+            McpHttpSession.Answer created = admin.call("app_docker_container_set", create);
+            assertThat(created.error()).as("step 2: " + created.text()).isFalse();
+            Matcher made = appCodes.matcher(created.text());
+            assertThat(made.find()).as("step 2: the answer names the app: " + created.text()).isTrue();
+            String code = made.group();
+            int appId = Integer.parseInt(Objects.requireNonNull(RecordCodes.keyOfCode(InstanceModel.MODEL_ID, code)));
+            assertThat(Models.get(InstanceModel.class).findById(appId).get(InstanceModel.STATUS))
+                .as("step 2: created, not deployed").isEqualTo(InstanceModel.STATUS_CREATED);
+            assertThat(admin.call("app_docker_container_set", create).text())
+                .as("step 2: the same request answers the first result, creating nothing").contains(code);
+            assertThat(Models.get(InstanceModel.class).find().where(InstanceModel.NAME.eq(name)).count())
+                .as("step 2: one app").isEqualTo(1L);
+            McpHttpSession.Answer described = admin.call("describe", Map.of("code", code));
+            assertThat(described.text()).as("step 2: describe names the change tool of its own kind only")
+                .contains("app_docker_container_set code=" + code).doesNotContain("app_static_site_set")
+                .doesNotContain("app_application_set");
+
+            // 3. Six variables in one call, three of them secret; the answer names keys, never a value.
+            List<String> secrets = List.of("s3cret-one-" + letters(), "s3cret-two-" + letters(),
+                "s3cret-three-" + letters());
+            McpHttpSession.Answer variables = admin.call("variable_set", Map.of("owner", code,
+                "set", List.of(Map.of("key", "MODE", "value", "worker"), Map.of("key", "QUEUE", "value", "mail"),
+                    Map.of("key", "REGION", "value", "eu")),
+                "secret", List.of(Map.of("key", "API_TOKEN", "value", secrets.get(0)),
+                    Map.of("key", "DB_PASSWORD", "value", secrets.get(1)),
+                    Map.of("key", "SMTP_PASSWORD", "value", secrets.get(2)))));
+            assertThat(variables.error()).as("step 3: " + variables.text()).isFalse();
+            assertThat(variables.text()).as("step 3: the keys, never a value").contains("SMTP_PASSWORD")
+                .doesNotContain(secrets.get(0)).doesNotContain(secrets.get(1)).doesNotContain(secrets.get(2));
+            assertThat(new InstanceVariables().valuesFor(appId)).as("step 3: all six stored")
+                .containsEntry("MODE", "worker").containsEntry("API_TOKEN", secrets.get(0)).hasSize(6);
+
+            // 4. Its read shows every setting, its variables plain and the secrets as set.
+            McpHttpSession.Answer read = admin.call("read", Map.of("ids", List.of(code)));
+            assertThat(read.error()).as("step 4: " + read.text()).isFalse();
+            assertThat(read.text()).as("step 4: the settings").contains("Container image: fake/app")
+                .contains("Container command: worker --queue mail");
+            String listed = admin.call(InstanceVariableOperations.LIST_VARIABLES.assistantName(),
+                Map.of("id", code)).text();
+            assertThat(listed).as("step 4: the variables").contains("MODE = worker")
+                .contains("API_TOKEN (secret, set)");
+            for (String secret : secrets) {
+                assertThat(read.text() + listed).as("step 4: no secret comes out").doesNotContain(secret);
+            }
+
+            // 5. Its command changes alone; the rest stays as it was.
+            McpHttpSession.Answer changed = admin.call("app_docker_container_set", Map.of("code", code,
+                "command", "worker --queue jobs"));
+            assertThat(changed.error()).as("step 5: " + changed.text()).isFalse();
+            assertThat(changed.text()).as("step 5: what changed").contains("command");
+            assertThat(admin.call("read", Map.of("ids", List.of(code))).text()).as("step 5: the new command")
+                .contains("Container command: worker --queue jobs").contains("Container image: fake/app");
+            assertThat(admin.call("app_docker_container_set", Map.of("code", code, "host", "SR1")).text())
+                .as("step 5: a create-only argument is refused on a change").contains("host")
+                .contains("creating");
+            // A map setting merges by its entries: one volume added by name, another removed.
+            assertThat(admin.call("app_docker_container_set", Map.of("code", code, "volumes", List.of(
+                    Map.of("name", "cache", "container_path", "/cache"), Map.of("name", "data", "remove", true))))
+                .error()).as("step 5: the volumes changed").isFalse();
+            assertThat(RawValues.map(RawValues.map(Models.get(InstanceModel.class).findById(appId)
+                    .get(InstanceModel.SETTINGS)).get("volumes")))
+                .as("step 5: merged by name").containsExactly(Map.entry("cache", "/cache"));
+            assertThat(admin.call("app_static_site_set", Map.of("code", code, "name", name)).text())
+                .as("step 5: a code of another kind names its own tool").contains("app_docker_container_set")
+                .contains("change_kind");
+            // A setting the form lets be empty is cleared by null; an argument that is not "or null" refuses null.
+            Map<String, Object> cleared = new LinkedHashMap<>();
+            cleared.put("code", code);
+            cleared.put("command", null);
+            McpHttpSession.Answer clearing = admin.call("app_docker_container_set", cleared);
+            assertThat(clearing.error()).as("step 5: null clears " + clearing.text()).isFalse();
+            assertThat(RawValues.map(Models.get(InstanceModel.class).findById(appId).get(InstanceModel.SETTINGS))
+                .get("command")).as("step 5: the command is cleared").isNull();
+            Map<String, Object> unasked = new LinkedHashMap<>();
+            unasked.put("code", code);
+            unasked.put("request", null);
+            McpHttpSession.Answer refusedNull = admin.call("app_docker_container_set", unasked);
+            assertThat(refusedNull.error()).as("step 5: null refused " + refusedNull.text()).isTrue();
+            assertThat(refusedNull.text()).as("step 5: in one sentence")
+                .contains("request takes no null; leave it out instead.");
+
+            // 6. An application, created, deployed and followed by its run; its log; power stop, then start.
+            McpHttpSession.Answer shop = admin.call("app_application_set", Map.of("name", PREFIX + "shop-"
+                + letters(), "image", "fake/app", "tag", "v1", "container_port", 8080,
+                "pre_deploy_command", "migrate", "crash_policy", InstanceModel.CRASH_NONE));
+            assertThat(shop.error()).as("step 6: " + shop.text()).isFalse();
+            Matcher shopMade = appCodes.matcher(shop.text());
+            assertThat(shopMade.find()).as("step 6: the shop's code").isTrue();
+            String shopCode = shopMade.group();
+            int shopId = Integer.parseInt(Objects.requireNonNull(RecordCodes.keyOfCode(InstanceModel.MODEL_ID,
+                shopCode)));
+            settle("step 6");
+            daemon.answerNextOneShot(0, "migrated\n");
+            assertThat(followed(admin, startedRun(admin, "deploy", shopCode, "step 6"), "step 6").text())
+                .as("step 6: the first release serves").contains("status: " + OperationRunStatus.SUCCEEDED
+                    .storageKey());
+            Row first = Objects.requireNonNull(ApplicationReleases.ownedServing(shopId), "step 6: one serves");
+            daemon.print(FakeDockerDaemon.handleOf(first.get(InstanceModel.ID)), "listening on 8080\n");
+            McpHttpSession.Answer log = admin.call("logs", Map.of("code", shopCode));
+            assertThat(log.error()).as("step 6: " + log.text()).isFalse();
+            assertThat(log.text()).as("step 6: the log it printed").contains("listening on 8080");
+            settle("step 6");
+            for (String action : List.of("stop", "start")) {
+                McpHttpSession.Answer powered = admin.call("power", Map.of("code", shopCode, "action", action));
+                assertThat(powered.error()).as("step 6: power " + action + ": " + powered.text()).isFalse();
+            }
+            settle("step 6");
+
+            // 7. Its next version's pre-deploy command fails: it does not take over from the release serving.
+            Row serving = Objects.requireNonNull(ApplicationReleases.ownedServing(shopId), "step 7: one serves");
+            assertThat(admin.call("app_application_set", Map.of("code", shopCode, "tag", "v2")).error())
+                .as("step 7: the next version").isFalse();
+            daemon.answerNextOneShot(1, "column legacy_token does not exist\n");
+            String failing = startedRun(admin, "deploy", shopCode, "step 7");
+            assertThat(followed(admin, failing, "step 7").text()).as("step 7: the deploy failed")
+                .doesNotContain("status: " + OperationRunStatus.SUCCEEDED.storageKey());
+            assertThat(Objects.requireNonNull(ApplicationReleases.ownedServing(shopId)).get(InstanceModel.ID))
+                .as("step 7: the old release still serves").isEqualTo(serving.get(InstanceModel.ID));
+            settle("step 7");
+
+            // 8. delete with its data.
+            for (String deleted : List.of(code, shopCode)) {
+                McpHttpSession.Answer gone = admin.call("delete", Map.of("code", deleted, "with_data", true));
+                assertThat(gone.error()).as("step 8: " + gone.text()).isFalse();
+            }
+            assertThat(admin.call("delete", Map.of("code", code, "force", true)).text())
+                .as("step 8: force is not an app's").contains("force");
+
+            // 9. The same create, for a person who is no administrator, is refused in the spec's words.
+            UUID customerId = user(PREFIX + letters() + "@surface.test", "Mcp Creator");
+            McpHttpSession customer = presetSession(server, endpoint, customerId, "Mcp Creator");
+            McpHttpSession.Answer refused = customer.call("app_docker_container_set", Map.of("name", name,
+                "image", "fake/app"));
+            assertThat(refused.error()).as("step 9: refused").isTrue();
+            assertThat(refused.text()).as("step 9: in the spec's words")
+                .contains("Only an administrator creates an app without a template");
+            assertThat(customer.call("app_docker_container_set", Map.of("image", "fake/app")).text())
+                .as("step 9: a create without its name").contains("To create a Docker container app, give name.");
+        } finally {
+            local.restore();
         }
     }
 
@@ -841,10 +1076,8 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
     }
 
     /** @return the code of the run a background tool's call started on the app, as its answer names it */
-    private static String startedRun(McpHttpSession session, Operation<?, ?, ?> operation, String appCode,
-                                     String step) {
-        McpHttpSession.Answer started = session.call(Objects.requireNonNull(operation.assistantName()),
-            Map.of("id", appCode));
+    private static String startedRun(McpHttpSession session, String tool, String appCode, String step) {
+        McpHttpSession.Answer started = session.call(tool, Map.of("code", appCode));
         assertThat(started.error()).as(step + ": " + started.text()).isFalse();
         Matcher run = RUN_CODE.matcher(started.text());
         assertThat(run.find()).as(step + ": the answer names its run: " + started.text()).isTrue();

@@ -7,7 +7,6 @@ import be.elevenways.hohenheim.cluster.ClusterEndpoints;
 import be.elevenways.hohenheim.cluster.JoinRefusal;
 import be.elevenways.hohenheim.cluster.LinkRole;
 import be.elevenways.hohenheim.cluster.LinkState;
-import be.elevenways.hohenheim.instance.InstanceVariableOperations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.LinkedServerModel;
@@ -486,8 +485,8 @@ class LinkedServersJourneyTest {
 
             // 3. A write on the master is made on Kuifje: the master's record of Kuifje is in step when it answers,
             //    and Kuifje's history credits the person, through the master.
-            McpHttpSession.Answer set = master.call(InstanceVariableOperations.SET_VARIABLE.assistantName(),
-                Map.of("id", appCode, "key", "GREETING", "plain_value", "carried"));
+            McpHttpSession.Answer set = master.call("variable_set",
+                Map.of("owner", appCode, "set", List.of(Map.of("key", "GREETING", "value", "carried"))));
             assertThat(set.error()).as("step 3: set " + set.text()).isFalse();
             assertThat(kuifje.ask("variables " + appKey)).as("step 3: written on Kuifje")
                 .isEqualTo("variables GREETING=carried");
@@ -518,8 +517,8 @@ class LinkedServersJourneyTest {
             McpHttpSession.Answer refused = McpHttpSession.open(McpHttpSession.endpoint(APP.port(),
                 HohenheimMcpModule.SERVER_NAME), bearer(ApiKeyService.create(stranger, "cluster-stranger",
                 List.of(McpScopes.server(HohenheimMcpModule.SERVER_NAME), "*"), null).plaintext()))
-                .call(InstanceVariableOperations.SET_VARIABLE.assistantName(),
-                    Map.of("id", appCode, "key", "GREETING", "plain_value", "stranger"));
+                .call("variable_set",
+                    Map.of("owner", appCode, "set", List.of(Map.of("key", "GREETING", "value", "stranger"))));
             assertThat(refused.error()).as("step 5: refused").isTrue();
             assertThat(refused.text()).as("step 5: in words")
                 .isEqualTo("You have no account on Kuifje. Sign in there with Proteus once; nothing was changed.");

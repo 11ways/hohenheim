@@ -6,7 +6,11 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimVerbs;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
+import be.elevenways.zenit.common.edit.FormJsonSchema;
 import be.elevenways.zenit.common.edit.FormSpec;
+import be.elevenways.zenit.common.edit.JsonSchemaType;
+import be.elevenways.zenit.common.edit.JsonValue;
+import be.elevenways.zenit.common.edit.submit.JsonSchemaValidator.Keyword;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
 import be.elevenways.zenit.common.operation.OperationFact;
@@ -16,7 +20,10 @@ import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * An app's own variables read and written one key at a time: the list, a plain value set, a secret generated, a key
@@ -131,6 +138,68 @@ public final class InstanceVariableOperations {
             .gate(InstanceOperations.gate(HohenheimCapabilities.CONFIG))
             .input(OperationInput.of(FormSpec.builder().add(InstanceVariableModel.KEY).build(), GenerateInput.class,
                 values -> new GenerateInput(values.get(InstanceVariableModel.KEY))))
+            .result(String.class)
+            .command(COMMAND)
+            .register();
+
+    /**
+     * The batch's input: each list as given, null when left out.
+     *
+     * @param set      plain values, each {@code {key, value}}
+     * @param secret   secret values, each {@code {key, value}}
+     * @param generate keys to fill with a generated secret
+     * @param unset    keys to remove
+     */
+    public record SetVariablesInput(@Nullable List<?> set, @Nullable List<?> secret, @Nullable List<?> generate,
+                                    @Nullable List<?> unset) {
+    }
+
+    /** A list of {@code {key, value}} objects, both texts; a secret one marks the list and its values write-only. */
+    private static @NonNull Map<String, Object> keyValues(boolean secret) {
+        Map<String, Object> text = FormJsonSchema.property(JsonSchemaType.STRING, null, null);
+        Map<String, Object> items = FormJsonSchema.object(Map.of("key", text, "value", secret ? writeOnly(text) : text),
+            List.of("key", "value"));
+        Map<String, Object> list = FormJsonSchema.array(items);
+        return secret ? writeOnly(list) : list;
+    }
+
+    /** @return the node marked write-only: its value is written, never shown again */
+    private static @NonNull Map<String, Object> writeOnly(@NonNull Map<String, Object> node) {
+        Map<String, Object> marked = new LinkedHashMap<>(node);
+        marked.put(Keyword.WRITE_ONLY.token(), true);
+        return Collections.unmodifiableMap(marked);
+    }
+
+    /** A list of keys. */
+    private static @NonNull Map<String, Object> keys() {
+        return FormJsonSchema.array(FormJsonSchema.property(JsonSchemaType.STRING, null, null));
+    }
+
+    public static final JsonValue SET = JsonValue.of("set").schema(keyValues(false))
+        .help(HohenheimMicrocopy.HOHENHEIM.of("variables_set_help")).build();
+    public static final JsonValue SECRET = JsonValue.of("secret").schema(keyValues(true))
+        .help(HohenheimMicrocopy.HOHENHEIM.of("variables_secret_help")).build();
+    public static final JsonValue GENERATE = JsonValue.of("generate").schema(keys())
+        .help(HohenheimMicrocopy.HOHENHEIM.of("variables_generate_help")).build();
+    public static final JsonValue UNSET = JsonValue.of("unset").schema(keys())
+        .help(HohenheimMicrocopy.HOHENHEIM.of("variables_unset_help")).build();
+
+    /**
+     * Sets, replaces, generates and removes several of the app's variables in one write, all or nothing; answers the
+     * keys it changed, never a value.
+     */
+    public static final Operation<Row, SetVariablesInput, String> SET_VARIABLES =
+        Operation.declare(HohenheimIds.id("set_instance_variables"))
+            .happened(OperationSentences.of("set_instance_variables"))
+            .label(HohenheimMicrocopy.INSTANCE_VARIABLE.of("set_many"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("set_instance_variables_description"))
+            .icon(Icon.of("pen"))
+            .one(InstanceOperations.INSTANCE)
+            .gate(InstanceOperations.gate(HohenheimCapabilities.CONFIG))
+            .input(OperationInput.of(FormSpec.builder().add(SET).add(SECRET).add(GENERATE).add(UNSET).build(),
+                SetVariablesInput.class, values -> new SetVariablesInput((List<?>) values.get(SET.name()),
+                    (List<?>) values.get(SECRET.name()), (List<?>) values.get(GENERATE.name()),
+                    (List<?>) values.get(UNSET.name()))))
             .result(String.class)
             .command(COMMAND)
             .register();

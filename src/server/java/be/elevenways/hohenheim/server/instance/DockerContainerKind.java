@@ -21,6 +21,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.DoubleField;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.IntegerField;
+import be.elevenways.zenit.common.orm.field.MapEntries;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.StringMapField;
 import be.elevenways.zenit.common.orm.model.Schema;
@@ -144,7 +145,9 @@ public final class DockerContainerKind implements InstanceKindHandler {
     // hohenheim-instance-{id}-vol-{name}, owner-labelled at birth.
     public static final StringMapField VOLUMES = SETTINGS_SCHEMA.addField(
         StringMapField.builder("volumes").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("volumes"))
-            .help(HohenheimMicrocopy.HELP.of("instance_volumes")).build());
+            .help(HohenheimMicrocopy.HELP.of("instance_volumes"))
+            .entries(MapEntries.keyedBy("name", HohenheimMicrocopy.HELP.of("volume_entry_name"))
+                .value("container_path", HohenheimMicrocopy.HELP.of("volume_entry_path"))).build());
 
     public static final IntegerField MEMORY_LIMIT_MB = SETTINGS_SCHEMA.addField(InstanceKindFields.memoryLimit());
 

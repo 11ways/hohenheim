@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.ports;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.zenit.common.edit.JsonSchemaType;
+import be.elevenways.zenit.common.orm.field.MapEntries;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.protoblast.common.util.BlastString;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -122,6 +124,29 @@ public record PublishedPort(@NonNull String name, @Nullable Integer hostPort, in
             map.put(port.name(), port.spec());
         }
         return map;
+    }
+
+    /**
+     * @return the typed entries a JSON caller writes the map in, each joined into Docker's spelling and judged by
+     *     {@link #parse} as a typed spelling is
+     */
+    public static @NonNull MapEntries entries() {
+        return MapEntries.keyedBy("name", HohenheimMicrocopy.HELP.of("port_entry_name"))
+            .member("container_port", JsonSchemaType.INTEGER, HohenheimMicrocopy.HELP.of("port_entry_container"))
+            .member("protocol", List.of(TCP, UDP), HohenheimMicrocopy.HELP.of("port_entry_protocol"))
+            .member("host_port", JsonSchemaType.INTEGER, HohenheimMicrocopy.HELP.of("port_entry_host"))
+            .member("loopback", JsonSchemaType.BOOLEAN, HohenheimMicrocopy.HELP.of("port_entry_loopback"))
+            .joinedBy((name, values) -> {
+                String host = values.get("host_port") instanceof Number number ? String.valueOf(number.longValue())
+                    : null;
+                String container = values.get("container_port") instanceof Number number
+                    ? String.valueOf(number.longValue()) : "";
+                String protocol = values.get("protocol") == null ? TCP : String.valueOf(values.get("protocol"));
+                String published = (host == null ? "" : host + ":") + container + "/" + protocol;
+                boolean loopback = Boolean.TRUE.equals(values.get("loopback"));
+                return parse(name, loopback ? LOOPBACK + ":" + (host == null ? ":" : "") + published : published)
+                    .spec();
+            });
     }
 
     /**

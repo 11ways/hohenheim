@@ -98,7 +98,7 @@ public final class ApplicationKind implements InstanceKindHandler {
     public static final StringMapField BUILD_ARGUMENTS = SETTINGS_SCHEMA.addField(
         StringMapField.builder("build_arguments")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("build_arguments"))
-            .help(HohenheimMicrocopy.HELP.of("build_arguments")).build());
+            .help(HohenheimMicrocopy.HELP.of("build_arguments")).entries(InstanceKindFields.keyValues()).build());
 
     public static final IntegerField CONTAINER_PORT = SETTINGS_SCHEMA.addField(
         IntegerField.builder().name("container_port")
@@ -112,7 +112,8 @@ public final class ApplicationKind implements InstanceKindHandler {
 
     public static final StringField WORKDIR = SETTINGS_SCHEMA.addField(
         PathField.builder().name("workdir")
-            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("workdir")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("workdir"))
+            .help(HohenheimMicrocopy.HELP.of("app_workdir")).build());
 
     /** Path the release health gate probes before a candidate may take traffic. */
     public static final StringField HEALTH_PATH = SETTINGS_SCHEMA.addField(

@@ -2,22 +2,18 @@ package be.elevenways.hohenheim.server.mcp;
 
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSources;
-import be.elevenways.hohenheim.instance.InstanceAttachmentOperations;
-import be.elevenways.hohenheim.instance.InstanceBackupOperations;
 import be.elevenways.hohenheim.instance.InstanceLogOperations;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.instance.InstanceSnapshotOperations;
 import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
 import be.elevenways.hohenheim.instance.InstanceVariableOperations;
-import be.elevenways.hohenheim.instance.VolumeOperations;
-import be.elevenways.hohenheim.game.GameDomainOperations;
 import be.elevenways.hohenheim.model.*;
-import be.elevenways.hohenheim.preview.PreviewOperations;
 import be.elevenways.hohenheim.server.HohenheimHostWiring;
 import be.elevenways.hohenheim.server.cms.*;
 import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.hohenheim.source.GitProviderOperations;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.ai.server.mcp.host.McpDescribeTool;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostServer;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostServers;
 import be.elevenways.zenit.ai.server.mcp.host.McpListTool;
@@ -66,6 +62,9 @@ public final class HohenheimMcpModule implements ZenitModule {
     /** The tools {@link #install()} built, for the coverage check. */
     private static volatile @Nullable McpToolSet tools;
 
+    /** The hand-declared tools {@link #install()} built, for the coverage check. */
+    private static volatile @Nullable HohenheimTools declared;
+
     /** The models whose sources the server lists, in the order its tools are offered. */
     private static final List<Identifier> LISTED = List.of(SiteModel.MODEL_ID, SiteDomainModel.MODEL_ID,
         ProtectedPathModel.MODEL_ID, SiteRedirectModel.MODEL_ID, AccessListModel.MODEL_ID, AccessRuleModel.MODEL_ID,
@@ -102,9 +101,14 @@ public final class HohenheimMcpModule implements ZenitModule {
         }
     }
 
-    /** @return Hohenheim's own tools, null before {@link #install()}: what its coverage is judged against */
+    /** @return Hohenheim's own derived tools, null before {@link #install()}: what its coverage is judged against */
     public static @Nullable McpToolSet tools() {
         return tools;
+    }
+
+    /** @return Hohenheim's hand-declared tools, null before {@link #install()} */
+    public static @Nullable HohenheimTools declared() {
+        return declared;
     }
 
     /** Registers the server once per process; a second call changes nothing. */
@@ -116,41 +120,25 @@ public final class HohenheimMcpModule implements ZenitModule {
             RecordSource<?> source = RecordSourceRegistry.INSTANCE.declaredFor(model);
             if (source != null) sources.add(source);
         }
+        // AIDEV-NOTE: an operation a hand-declared tool routes (HohenheimTools) is placed there and never here, so
+        // each is reached by exactly one tool and argument value (HohenheimMcpTest pins it).
         List<Operation<?, ?, ?>> placed = new ArrayList<>(List.of(
-            InstanceOperations.DEPLOY, InstanceOperations.ROLLBACK,
-            InstanceOperations.BACKUP, InstanceOperations.CONNECT_WEBHOOK, InstanceOperations.SNAPSHOT,
+            InstanceOperations.CONNECT_WEBHOOK, InstanceOperations.SNAPSHOT,
             InstanceOperations.INSTALL, InstanceOperations.REINSTALL, InstanceOperations.CAPTURE_TEMPLATE,
-            InstanceOperations.DESTROY_WITH_DATA, InstanceOperations.DELETE, InstanceOperations.ATTACH_INSTALL_MEDIA,
-            InstanceOperations.DETACH_INSTALL_MEDIA, InstanceBackupOperations.DELETE_BACKUP,
-            InstanceSnapshotOperations.RESTORE,
-            InstanceSnapshotOperations.DELETE, InstanceAttachmentOperations.DETACH_DEVICE,
-            InstanceAttachmentOperations.DELETE_DATABASE_LINK, InstanceTemplateOperations.CREATE_INSTANCE_FROM_TEMPLATE,
+            InstanceOperations.ATTACH_INSTALL_MEDIA, InstanceOperations.DETACH_INSTALL_MEDIA,
+            InstanceSnapshotOperations.RESTORE, InstanceTemplateOperations.CREATE_INSTANCE_FROM_TEMPLATE,
             InstanceTemplateOperations.APPROVE_TEMPLATE, InstanceTemplateOperations.UNAPPROVE_TEMPLATE,
-            VolumeOperations.DESTROY, GameDomainOperations.DELETE,
             SiteOperations.ENABLE, SiteOperations.DISABLE, SiteOperations.STOP_FORCING_HTTPS, SiteOperations.CLONE,
-            SiteWrites.MANAGE_UPDATE, SiteWrites.DELETE, DomainParts.CHECK_REACH,
+            SiteWrites.MANAGE_UPDATE, DomainParts.CHECK_REACH,
             CertificateOperations.REQUEST, CertificateOperations.REQUEST_FOR_DOMAIN, CertificateOperations.REISSUE,
             CertificateOperations.CONTINUE_DNS, CertificateOperations.RENEW, AccessRuleParts.TOGGLE,
-            AccessRuleParts.DELETE, BuildHookParts.REVOKE, DnsOperations.DELETE_ZONE, DnsOperations.DELETE_PEER,
-            DatabaseParts.DELETE, DatabaseParts.MOVE_TO_SHARED, DatabaseParts.FINISH_OLD_ENGINE,
-            DatabaseParts.BACK_UP_NOW, DatabaseParts.FORCE_DELETE, DatabaseParts.DELETE_ENGINE,
-            DatabaseParts.FORCE_DELETE_ENGINE,
-            DatabaseDumpParts.DELETE, StackOperations.DEPLOY, StackOperations.STOP, StackOperations.ROLLBACK,
-            StackOperations.PURGE_VOLUMES, StackOperations.RECLAIM_IMAGES, StackOperations.DELETE_STACK,
-            StackOperations.DELETE_SERVICE,
-            HostParts.DELETE, RuntimeImageParts.DELETE, ProjectParts.DELETE, ReconcileFindingParts.REMOVE,
-            ReleasedClaimParts.LIFT, SpamserviceOperations.START, SpamserviceOperations.STOP,
-            SpamserviceOperations.RESTART));
+            DatabaseParts.MOVE_TO_SHARED, DatabaseParts.FINISH_OLD_ENGINE,
+            StackOperations.PURGE_VOLUMES, StackOperations.RECLAIM_IMAGES,
+            SpamserviceOperations.START, SpamserviceOperations.STOP, SpamserviceOperations.RESTART));
         McpToolSet.Builder set = McpToolSet.builder()
             .lists(sources.toArray(new RecordSource<?>[0]))
             .places(placed.toArray(new Operation<?, ?, ?>[0]))
-            .answersWith(InstanceOperations.START, HohenheimMcpAnswers::power)
-            .answersWith(InstanceOperations.STOP, HohenheimMcpAnswers::power)
-            .answersWith(InstanceOperations.RESTART, HohenheimMcpAnswers::power)
-            .answersWith(InstanceOperations.CONSOLE_COMMAND, HohenheimMcpAnswers::output)
-            .answersWith(InstanceOperations.EXEC, HohenheimMcpAnswers::exec)
             .answersWith(InstanceOperations.APP_UPDATE, HohenheimMcpAnswers::output)
-            .answersWith(PreviewOperations.EXPIRE, HohenheimMcpAnswers::output)
             .answersWith(StackOperations.REFRESH, HohenheimMcpAnswers::output)
             .answersWith(SpamserviceOperations.TEST, HohenheimMcpAnswers::output)
             .answersWith(GitProviderOperations.TEST_CONNECTION, HohenheimMcpAnswers::connection)
@@ -158,31 +146,31 @@ public final class HohenheimMcpModule implements ZenitModule {
             .answersWith(NotificationChannelParts.TEST, HohenheimMcpAnswers::delivered)
             .answersWith(DnsOperations.CHECK_HEALTH, HohenheimMcpAnswers::told)
             .answersWith(DnsOperations.NEGOTIATE_KEY, HohenheimMcpAnswers::told)
-            .answersWith(InstanceLogOperations.READ_LOG, HohenheimMcpAnswers::log)
             .answersWith(InstanceLogOperations.LIST_DEPLOYS, HohenheimMcpAnswers::deploys)
-            .answersWith(InstanceLogOperations.READ_BUILD_LOG, HohenheimMcpAnswers::log)
-            .answersWith(InstanceLogOperations.READ_DEPLOY_LOG, HohenheimMcpAnswers::log)
-            .answersWith(InstanceVariableOperations.LIST_VARIABLES, HohenheimMcpAnswers::variables)
-            .answersWith(InstanceVariableOperations.SET_VARIABLE, HohenheimMcpAnswers::variableWritten)
-            .answersWith(InstanceVariableOperations.UNSET_VARIABLE, HohenheimMcpAnswers::variableWritten)
-            .answersWith(InstanceVariableOperations.GENERATE_SECRET, HohenheimMcpAnswers::variableWritten);
+            .answersWith(InstanceVariableOperations.LIST_VARIABLES, HohenheimMcpAnswers::variables);
         for (var operation : HostParts.lifecycleForAssistants()) {
             set.answersWith(operation, HohenheimMcpAnswers::said);
         }
         tools = set.build();
+        HohenheimTools hand = HohenheimTools.build();
+        declared = hand;
         McpHostServers.register(McpHostServer.builder(SERVER_NAME)
-            .collections(McpRecordTools.shared(), McpListTool.over(tools, AuthMcp.tools()))
+            .collections(McpRecordTools.shared(), McpListTool.over(tools, AuthMcp.tools()), hand,
+                McpDescribeTool.over(SERVER_NAME, hand.tools()))
             .codeExamples(code(SiteModel.MODEL_ID, 14), code(InstanceModel.MODEL_ID, 33),
                 code(DnsZoneModel.MODEL_ID, 7))
             .saysVersionOnce()
+            // The opening words of the spec (scratch render.py HEAD); the version's sentence is saysVersionOnce's.
             .instructions(codes(),
-                "list with a kind lists its records by their codes; read reads records in full by their codes;"
-                    + " history tells what happened to one.",
-                "Deploy an app with " + InstanceOperations.DEPLOY.assistantName() + " and follow its run with "
-                    + OperationRunOperations.READ.assistantName() + "; when a step failed, "
-                    + InstanceLogOperations.LIST_DEPLOYS.assistantName() + " names the build and the deploy, and "
-                    + InstanceLogOperations.READ_BUILD_LOG.assistantName() + " and "
-                    + InstanceLogOperations.READ_DEPLOY_LOG.assistantName() + " read their logs.")
+                "A HOST is a machine apps run on.",
+                "request is your own id for a call: the same id again answers the first result instead of acting"
+                    + " twice.",
+                "A _set tool that takes code creates a record when code is left out and changes only what you send"
+                    + " when it is given. A _set tool without code sets a thing named by its own key (a variable):"
+                    + " the same key again changes it; each such tool says how its thing is taken away.",
+                "Creating an app does not deploy it: call deploy and follow its run with "
+                    + OperationRunOperations.READ.assistantName() + "; describe with a code says what you can do to"
+                    + " that record now, each as the exact tool call.")
             .build());
     }
 

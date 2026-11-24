@@ -195,6 +195,7 @@ public class InstanceModel extends Model {
     // User data, NOT localized (names are the user's own words).
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("name"))
+        .help(HohenheimMicrocopy.HELP.of("app_name"))
         .group(BASICS_GROUP)
         .build());
 

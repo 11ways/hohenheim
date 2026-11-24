@@ -251,7 +251,11 @@ public final class InstanceService {
         // before any driver work, so every existing power surface deploys an application
         // with nothing wired at the call site.
         if (releaseManaged(instanceId)) {
-            return ApplicationDeploys.deploy(instanceId, null, null, trigger).status();
+            ApplicationReleases.Release release = ApplicationDeploys.deploy(instanceId, null, null, trigger);
+            // A new release refused while the prior one kept serving is a deploy that did not happen: said so,
+            // never answered as the status of the release that still serves.
+            if (release.refused() != null) throw release.refused();
+            return release.status();
         }
         // The workspace's own fold, on exactly the same terms: WorkspaceBuilds stays THE
         // mechanism and brings the workload up through deployWorkload below, so this is a

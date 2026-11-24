@@ -89,8 +89,18 @@ public final class ApplicationReleases {
     private ApplicationReleases() {
     }
 
-    /** The outcome of one convergence pass: the release instance and its live status. */
-    public record Release(int instanceId, @NonNull InstanceStatus status) {
+    /**
+     * The outcome of one convergence pass: the release instance and its live status.
+     *
+     * @param refused why the new release never took over while the prior one kept serving (its pre-deploy command or
+     *                its health gate refused it); null when the pass deployed what it was asked to
+     */
+    public record Release(int instanceId, @NonNull InstanceStatus status, @Nullable RuntimeException refused) {
+
+        /** A pass that deployed what it was asked to. */
+        public Release(int instanceId, @NonNull InstanceStatus status) {
+            this(instanceId, status, null);
+        }
     }
 
     /**

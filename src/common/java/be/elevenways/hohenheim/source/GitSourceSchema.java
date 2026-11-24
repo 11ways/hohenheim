@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.source;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.zenit.common.edit.EditView;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
@@ -209,7 +210,8 @@ public final class GitSourceSchema {
         // secret(): redacted on derived surfaces.
         schema.addField(offered(StringMapField.builder(BUILD_ENVIRONMENT_VARIABLES)
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("build_environment_variables"))
-            .help(HohenheimMicrocopy.HELP.of("build_environment_variables")).secret(), offers, Offer.BUILD_ENVIRONMENT)
+            .help(HohenheimMicrocopy.HELP.of("build_environment_variables")).entries(InstanceKindFields.keyValues())
+            .secret(), offers, Offer.BUILD_ENVIRONMENT)
             .build());
 
         /* Opt-in: pull-request webhook events create/update/destroy preview deployments. */
@@ -233,7 +235,8 @@ public final class GitSourceSchema {
         // must never see production secrets or data by default.
         schema.addField(offered(StringMapField.builder(PREVIEW_ENVIRONMENT_VARIABLES)
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("preview_environment_variables"))
-            .help(HohenheimMicrocopy.HELP.of("preview_environment_variables")).secret(), offers, Offer.PREVIEWS)
+            .help(HohenheimMicrocopy.HELP.of("preview_environment_variables")).entries(InstanceKindFields.keyValues())
+            .secret(), offers, Offer.PREVIEWS)
             .build());
 
         return schema;

@@ -12,6 +12,7 @@ import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.NumberField;
 import be.elevenways.zenit.common.orm.field.SchemaField;
 import be.elevenways.zenit.common.orm.field.StringField;
+import be.elevenways.zenit.common.orm.field.MapEntries;
 import be.elevenways.zenit.common.orm.field.StringMapField;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.validation.Violations;
@@ -69,7 +70,13 @@ public final class InstanceKindFields {
     public static @NonNull StringMapField environmentVariables() {
         return StringMapField.builder(ENVIRONMENT_VARIABLES)
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("environment_variables"))
-            .help(HohenheimMicrocopy.HELP.of("environment_variables")).secret().build();
+            .help(HohenheimMicrocopy.HELP.of("environment_variables")).entries(keyValues()).secret().build();
+    }
+
+    /** @return the entry shape of a map of names to plain texts (variables, build arguments) */
+    public static @NonNull MapEntries keyValues() {
+        return MapEntries.keyedBy("key", HohenheimMicrocopy.HELP.of("map_entry_key"))
+            .value("value", HohenheimMicrocopy.HELP.of("map_entry_value"));
     }
 
     public static @NonNull IntegerField memoryLimit() {
@@ -102,7 +109,8 @@ public final class InstanceKindFields {
 
     private static @NonNull StringMapField publishedPorts(@NonNull Microcopy help) {
         return StringMapField.builder(PublishedPort.FIELD)
-            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("published_ports")).help(help).build();
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("published_ports")).help(help)
+            .entries(PublishedPort.entries()).build();
     }
 
     /** The SRV service a game address publishes for the game port, such as {@code minecraft}. */

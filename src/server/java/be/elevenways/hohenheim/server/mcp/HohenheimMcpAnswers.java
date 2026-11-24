@@ -135,9 +135,15 @@ final class HohenheimMcpAnswers {
         return response.untrusted("variables", rows.toString().stripTrailing());
     }
 
-    /** The key a variable write changed, and when the app sees it. */
-    static @NonNull McpResponse variableWritten(@NonNull McpToolContext context, @Nullable String key) {
-        return McpResponse.create().untrustedLine("variable: ", "key", key)
+    /** The keys a variable write changed, and when the app sees them. */
+    static @NonNull McpResponse variableWritten(@NonNull McpToolContext context, @Nullable String keys) {
+        return McpResponse.create().untrustedLine("variables: ", "keys", keys)
             .line(context.text().words(HohenheimMicrocopy.INSTANCE_VARIABLE.of("reaches_at_deploy")));
+    }
+
+    /** The settings a change wrote; none when it sent nothing that differs. */
+    static @NonNull McpResponse changed(@NonNull McpToolContext context, @Nullable String settings) {
+        return McpResponse.create().line("changed: " + (settings == null || settings.isBlank() ? "nothing"
+            : settings));
     }
 }

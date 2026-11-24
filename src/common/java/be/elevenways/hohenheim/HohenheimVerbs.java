@@ -138,9 +138,9 @@ public final class HohenheimVerbs {
     public static final OperationVerb RECLAIM_IMAGES = OperationVerb.declare(HohenheimVerbs.class, "reclaim_images",
         Effect.DESTROYS);
 
-    /** Puts a new app online from the subject (a template). */
-    public static final OperationVerb CREATE_APP = OperationVerb.declare(HohenheimVerbs.class, "create_app",
-        Effect.WRITES);
+    /** Creates a new app from the subject (a template): with the noun "app", the tool app_create_from_template. */
+    public static final OperationVerb CREATE_FROM_TEMPLATE = OperationVerb.declare(HohenheimVerbs.class,
+        "create_from_template", Effect.WRITES);
 
     /** Puts a new service online from the subject (a template), reached on its ports. */
     public static final OperationVerb PUT_SERVICE_ONLINE = OperationVerb.declare(HohenheimVerbs.class,
