@@ -92,7 +92,7 @@ public final class InstanceKindFields {
     }
 
     public static @NonNull EnumField consoleKind() {
-        return ConsoleKind.fieldBuilder()
+        return ConsoleKind.fieldBuilder().inputName("console_mode")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("console_kind"))
             .help(HohenheimMicrocopy.HELP.of("console_kind")).build();
     }

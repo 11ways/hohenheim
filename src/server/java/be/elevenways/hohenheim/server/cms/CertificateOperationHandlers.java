@@ -63,12 +63,14 @@ public final class CertificateOperationHandlers {
         OperationHandlers.attach(CertificateOperations.REQUEST_FOR_DOMAIN).authorize(admin())
             .applies(Applicability.batch((domains, access, source) -> certifiable(domains)))
             .availability((domain, access) -> letsEncryptUnavailable())
+            .patchBase((domain, access) -> CertificateOperations.prefilledOrder(Objects.requireNonNull(domain)))
             .handle(call -> order(require(call.input()), call.subjectAccess(), null));
         OperationHandlers.attach(CertificateOperations.REISSUE).authorize(admin())
             // A requester-held certificate re-orders only from a new signing request of its requester's.
             .applies(cert -> CertificateModel.PROVIDER_LETSENCRYPT.equals(cert.get(CertificateModel.PROVIDER))
                 && CertificateModel.keyHeldHere(cert))
             .availability((cert, access) -> letsEncryptUnavailable())
+            .patchBase((cert, access) -> CertificateOperations.reorderOf(Objects.requireNonNull(cert)))
             .handle(call -> order(require(call.input()), call.subjectAccess(), call.subject()));
         OperationHandlers.attach(CertificateOperations.CONTINUE_DNS).authorize(admin())
             .applies(cert -> {

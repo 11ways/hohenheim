@@ -129,9 +129,7 @@ public final class HohenheimMcpModule implements ZenitModule {
             InstanceSnapshotOperations.RESTORE, InstanceTemplateOperations.CREATE_INSTANCE_FROM_TEMPLATE,
             InstanceTemplateOperations.APPROVE_TEMPLATE, InstanceTemplateOperations.UNAPPROVE_TEMPLATE,
             SiteOperations.ENABLE, SiteOperations.DISABLE, SiteOperations.STOP_FORCING_HTTPS, SiteOperations.CLONE,
-            SiteWrites.MANAGE_UPDATE, DomainParts.CHECK_REACH,
-            CertificateOperations.REQUEST, CertificateOperations.REQUEST_FOR_DOMAIN, CertificateOperations.REISSUE,
-            CertificateOperations.CONTINUE_DNS, CertificateOperations.RENEW, AccessRuleParts.TOGGLE,
+            AccessRuleParts.TOGGLE,
             DatabaseParts.MOVE_TO_SHARED, DatabaseParts.FINISH_OLD_ENGINE,
             StackOperations.PURGE_VOLUMES, StackOperations.RECLAIM_IMAGES,
             SpamserviceOperations.START, SpamserviceOperations.STOP, SpamserviceOperations.RESTART));
@@ -144,7 +142,6 @@ public final class HohenheimMcpModule implements ZenitModule {
             .answersWith(GitProviderOperations.TEST_CONNECTION, HohenheimMcpAnswers::connection)
             .answersWith(BackupTargetParts.TEST, HohenheimMcpAnswers::tested)
             .answersWith(NotificationChannelParts.TEST, HohenheimMcpAnswers::delivered)
-            .answersWith(DnsOperations.CHECK_HEALTH, HohenheimMcpAnswers::told)
             .answersWith(DnsOperations.NEGOTIATE_KEY, HohenheimMcpAnswers::told)
             .answersWith(InstanceLogOperations.LIST_DEPLOYS, HohenheimMcpAnswers::deploys)
             .answersWith(InstanceVariableOperations.LIST_VARIABLES, HohenheimMcpAnswers::variables);

@@ -68,7 +68,7 @@ class RateLimitBudgetIsolationTest extends HohenheimHttpTestBase {
 
     private HttpResponse<String> request() throws Exception {
         return adminPostForm(ApiSupport.requestCertificateTarget(), ApiSupport.form(
-            "domains", "isolation.rate-limit.test", "nice_name", "rate-limit-isolation", "challenge_type", "http")
+            "hostnames", "isolation.rate-limit.test", "name", "rate-limit-isolation", "challenge", "http")
             + "&" + ApiSupport.invokeTransport());
     }
 }

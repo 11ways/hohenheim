@@ -55,25 +55,25 @@ public final class UpstreamSettings {
      * spelling the number, so the sentence and the validator cannot drift apart.
      */
     static @NonNull IntegerField requestTimeout() {
-        return bounded(REQUEST_TIMEOUT, "s", REQUEST_TIMEOUT_MIN_SECONDS, REQUEST_TIMEOUT_MAX_SECONDS);
+        return bounded(REQUEST_TIMEOUT, "s", REQUEST_TIMEOUT_MIN_SECONDS, REQUEST_TIMEOUT_MAX_SECONDS).build();
     }
 
     /** A fresh idle-timeout field, bounded as the request timeout is; no default, so unset sets no idle limit. */
     static @NonNull IntegerField idleTimeout() {
-        return bounded(IDLE_TIMEOUT, "s", 0, REQUEST_TIMEOUT_MAX_SECONDS);
+        return bounded(IDLE_TIMEOUT, "s", 0, REQUEST_TIMEOUT_MAX_SECONDS).build();
     }
 
     /** A fresh delay field, honoured generically by the dispatcher's per-route delay scheduler. */
     static @NonNull IntegerField delay() {
-        return bounded(DELAY, "ms", 0, DELAY_MAX_MILLIS);
+        return bounded(DELAY, "ms", 0, DELAY_MAX_MILLIS).inputName("delay_ms").build();
     }
 
     /** The one shape of these fields: a bounded integer whose label and help are keyed by its stored name. */
-    private static @NonNull IntegerField bounded(@NonNull String key, @NonNull String suffix, int min, int max) {
+    private static IntegerField.@NonNull Builder bounded(@NonNull String key, @NonNull String suffix, int min,
+                                                         int max) {
         return IntegerField.builder().name(key).suffix(suffix)
             .validator(Range.of(min, max))
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of(key))
-            .help(HohenheimMicrocopy.HELP.of(key).withArg("max", max))
-            .build();
+            .help(HohenheimMicrocopy.HELP.of(key).withArg("max", max));
     }
 }

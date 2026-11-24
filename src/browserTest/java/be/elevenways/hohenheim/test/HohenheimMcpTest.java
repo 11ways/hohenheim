@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.instance.InstanceLogOperations;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
@@ -12,19 +13,24 @@ import be.elevenways.hohenheim.instance.InstanceBackupOperations;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.server.HandlerSupport;
+import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.cms.DatabaseDumpParts;
 import be.elevenways.hohenheim.server.cms.HostParts;
 import be.elevenways.hohenheim.server.cms.PutOnline;
 import be.elevenways.hohenheim.server.cms.StackOperations;
+import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
 import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
 import be.elevenways.hohenheim.server.instance.DockerContainerKind;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.mcp.HohenheimMcpModule;
+import be.elevenways.hohenheim.server.proxy.ProxyServer;
+import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
 import be.elevenways.hohenheim.test.application.FakeApps;
 import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.hohenheim.test.host.HostFixtures;
+import be.elevenways.hohenheim.test.tls.FakeAcmeServer;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.time.Now;
@@ -45,6 +51,7 @@ import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
+import be.elevenways.zenit.common.edit.FormEntry;
 import be.elevenways.zenit.common.operation.AssistantNoun;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationRunStatus;
@@ -55,6 +62,7 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -77,6 +85,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
@@ -113,7 +122,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
         "hohenheim:delete_schedule", "hohenheim:delete_schedule_step", "hohenheim:dyndns_revoke",
         "hohenheim:dyndns_token", "hohenheim:edit_remote_dns_record", "hohenheim:lift_ban",
         "hohenheim:linked_server_add", "hohenheim:linked_server_check", "hohenheim:linked_server_offer_join",
-        "hohenheim:linked_server_remove",
+        "hohenheim:linked_server_remove", "hohenheim:manage_update_site",
         "hohenheim:migrate_instance", "hohenheim:open_framebuffer", "hohenheim:open_shell",
         "hohenheim:protect_path", "hohenheim:put_address_online", "hohenheim:put_machine_online",
         "hohenheim:put_online", "hohenheim:put_service_online", "hohenheim:put_stream_online",
@@ -235,8 +244,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
 
         // 3. No tool takes an object of undeclared members; a kind's map setting is a typed list of its entries.
         AccessContext operator = TenantConduits.operator();
-        List<String> maps = List.of("app_create_from_template.variables", "certificate_create.dns_publisher",
-            "address_order_certificate.dns_publisher", "certificate_reissue.dns_publisher");
+        List<String> maps = List.of("app_create_from_template.variables", "certificate_order.dns_publisher");
         List<String> loose = McpCoverage.looseParameters(server, operator);
         System.out.println("MCP arguments of no declared members: " + loose);
         assertThat(loose).as("step 3: arguments of no declared shape").isSubsetOf(maps);
@@ -308,6 +316,48 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
         assertThat(undescribed).as("no operation is said only by its label").isEmpty();
         System.out.println("MCP arguments without words: " + McpCoverage.undescribedParameters(server,
             TenantConduits.operator()));
+    }
+
+    /**
+     * Words: an argument goes by the name its field declares for people, never by a stored column name that differs
+     * from it (nice_name is name), and no argument says a word the tool rules forbid (domain, ssl, letsencrypt).
+     */
+    @Test
+    void everyArgumentGoesByItsNameForPeople() {
+        McpHostServer server = Objects.requireNonNull(McpHostServers.get(HohenheimMcpModule.SERVER_NAME));
+        AccessContext operator = TenantConduits.operator();
+        Set<String> stored = new TreeSet<>();
+        Set<String> declared = new HashSet<>();
+        for (McpHostTool tool : Objects.requireNonNull(HohenheimMcpModule.declared()).tools()) {
+            declared.add(tool.name());
+            for (Operation<?, ?, ?> operation : tool.operations()) {
+                for (FormEntry entry : operation.input().form().entries()) {
+                    Field<?, ?> field = entry.field();
+                    if (field != null && !field.getName().equals(field.getInputName())) stored.add(field.getName());
+                }
+            }
+        }
+        assertThat(stored).as("step 1: the stored names that go by another name")
+            .contains("nice_name", "force_ssl", "custom_headers", "more_backends", "port_protocol", "delay");
+        // Whole words of a name: "hsts_subdomains" names subdomains, never a domain for an address.
+        List<String> forbidden = List.of("domain", "domains", "ssl", "letsencrypt", "server");
+        int arguments = 0;
+        for (McpHostTool tool : McpCoverage.offered(server, operator)) {
+            if (!declared.contains(tool.name())) continue;
+            Map<?, ?> properties = (Map<?, ?>) tool.inputSchema(operator).get("properties");
+            for (Object argument : properties.keySet()) {
+                String name = tool.name() + "." + argument;
+                assertThat(stored).as("step 2: " + name + " is a stored name").doesNotContain(String.valueOf(argument));
+                for (String word : String.valueOf(argument).split("_")) {
+                    assertThat(forbidden).as("step 2: " + name + " says " + word).doesNotContain(word);
+                }
+                for (String prefix : List.of("nice_", "custom_", "more_")) {
+                    assertThat(String.valueOf(argument)).as("step 2: " + name).doesNotStartWith(prefix);
+                }
+                arguments++;
+            }
+        }
+        assertThat(arguments).as("step 2: the hand-declared tools' arguments were read").isGreaterThan(100);
     }
 
     /** The operations and sources kept from assistants, by id: a new one fails here, a tool given to one shrinks it. */
@@ -839,7 +889,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
 
             // 5. Its command changes alone; the rest stays as it was.
             McpHttpSession.Answer changed = admin.call("app_docker_container_set", Map.of("code", code,
-                "command", "worker --queue jobs"));
+                "command", "worker --queue jobs", "console_mode", "plain", "protocol", "tcp"));
             assertThat(changed.error()).as("step 5: " + changed.text()).isFalse();
             assertThat(changed.text()).as("step 5: what changed").contains("command");
             assertThat(admin.call("read", Map.of("ids", List.of(code))).text()).as("step 5: the new command")
@@ -933,6 +983,229 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
         } finally {
             local.restore();
         }
+    }
+
+    /**
+     * Roel's job, second half, by tools alone as an administrator's key: an application put on a site, an address
+     * added to it, a certificate ordered for that address from the test's certificate authority, an A and a TXT
+     * record set in one call, listed, changed and removed, a record Hohenheim made refused, the site and the address
+     * read in full, the site described, deleted to the trash; then a site serving files.
+     */
+    @Test
+    void anAdministratorSetsUpASiteByToolsAlone() throws Exception {
+        URI endpoint = URI.create(baseUrl() + "/zn/mcp/" + HohenheimMcpModule.SERVER_NAME);
+        McpHostServer server = Objects.requireNonNull(McpHostServers.routed(HohenheimMcpModule.SERVER_NAME));
+        AccessContext operator = TenantConduits.operator();
+        HostFixtures.LocalHostState local = HostFixtures.captureLocal();
+        ProxyServer adopted = ServerMain.getProxyServer() == null ? new ProxyServer() : null;
+        if (adopted != null) ServerMain.adoptProxyServer(adopted);
+        String savedDirectory = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Ssl.ACME_DIRECTORY_URL);
+        String savedEmail = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_EMAIL);
+        Integer zoneId = null;
+        try (FakeApps apps = FakeApps.install((SqlDatasource) Models.get(InstanceModel.class)
+                .getResolvedDatasource()); FakeAcmeServer ca = new FakeAcmeServer()) {
+            HostFixtures.makeLocalPlaceable(16L * 1024);
+            HostFixtures.giveLocalVolumeQuota();
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Ssl.LETSENCRYPT_ENABLED, true);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Ssl.ACME_DIRECTORY_URL, ca.directoryUrl());
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Ssl.LETSENCRYPT_EMAIL, "acme-test@example.com");
+            McpHttpSession admin = presetSession(server, endpoint, TenantConduits.operatorUser().get(UserModel.ID),
+                "Test Admin");
+
+            // 1. An application (landing 1's tool), then a site serving it, without an address yet.
+            McpHttpSession.Answer made = admin.call("app_application_set", Map.of("name", PREFIX + "web-"
+                + letters(), "image", "fake/app", "tag", "v1", "container_port", 8080));
+            assertThat(made.error()).as("step 1: " + made.text()).isFalse();
+            String app = found(Pattern.compile("AP\\d+"), made.text(), "step 1: the app's code");
+            String siteName = PREFIX + "shop-" + letters();
+            McpHttpSession.Answer site = admin.call("site_app_set", Map.of("name", siteName, "app", app,
+                "request_timeout", 120, "request", UUID.randomUUID().toString()));
+            assertThat(site.error()).as("step 1: " + site.text()).isFalse();
+            String siteCode = found(Pattern.compile("S\\d+"), site.text(), "step 1: the site's code");
+            int siteId = Integer.parseInt(Objects.requireNonNull(RecordCodes.keyOfCode(SiteModel.MODEL_ID,
+                siteCode)));
+            Row stored = Models.get(SiteModel.class).findById(siteId);
+            assertThat(stored.get(SiteModel.UPSTREAM_KIND)).as("step 1: an app site")
+                .isEqualTo(InstanceUpstreamKind.ID.toString());
+            assertThat(String.valueOf(RawValues.map(stored.get(SiteModel.SETTINGS)).get("request_timeout")))
+                .as("step 1: its setting").isEqualTo("120");
+            assertThat(admin.call("site_app_set", Map.of("name", siteName)).text())
+                .as("step 1: a create without its app").contains("give name and app");
+            assertThat(admin.call("site_static_files_set", Map.of("code", siteCode, "root_path", "/tmp")).text())
+                .as("step 1: a code of another kind names its own tool").contains("site_app_set")
+                .contains("change_kind");
+            // A change sends one setting; every other stays.
+            assertThat(admin.call("site_app_set", Map.of("code", siteCode, "idle_timeout", 900)).error())
+                .as("step 1: one setting changed").isFalse();
+            Map<String, Object> settings = RawValues.map(Models.get(SiteModel.class).findById(siteId)
+                .get(SiteModel.SETTINGS));
+            assertThat(String.valueOf(settings.get("idle_timeout")) + " " + settings.get("request_timeout"))
+                .as("step 1: merged").isEqualTo("900 120");
+
+            // 2. An address on the site.
+            String hostname = letters() + "-shop.mcp-journey.test";
+            McpHttpSession.Answer address = admin.call("address_set", Map.of("site", siteCode, "hostname",
+                hostname, "response_headers", List.of(Map.of("name", "X-Frame-Options", "value", "DENY"))));
+            assertThat(address.error()).as("step 2: " + address.text()).isFalse();
+            String addressCode = found(Pattern.compile("D\\d+"), address.text(), "step 2: the address's code");
+            assertThat(admin.call("address_set", Map.of("code", addressCode, "site", siteCode)).text())
+                .as("step 2: the site is given only when creating").contains("site").contains("creating");
+            McpHttpSession.Answer secured = admin.call("address_set", Map.of("code", addressCode, "hsts", true,
+                "force_https", false, "match", "exact", "exclude_from_lets_encrypt", false, "request_headers",
+                List.of(Map.of("name", "X-Shop", "value", "1"))));
+            assertThat(secured.error()).as("step 2: a change " + secured.text()).isFalse();
+            assertThat(secured.text()).as("step 2: what changed, by its names for people").contains("hsts")
+                .contains("request_headers").doesNotContain("hsts_enabled").doesNotContain("custom_headers");
+            Row secure = Models.get(SiteDomainModel.class).find().where(SiteDomainModel.HOSTNAME.eq(hostname)).first();
+            assertThat(secure.get(SiteDomainModel.HSTS_ENABLED)).as("step 2: stored under its column").isEqualTo(true);
+            assertThat(RawValues.map(secure.get(SiteDomainModel.CUSTOM_HEADERS))).as("step 2: the request header")
+                .containsEntry("X-Shop", "1");
+            assertThat(admin.call("address_set", Map.of("code", addressCode, "hsts_enabled", true)).text())
+                .as("step 2: the stored name is no argument").contains("hsts_enabled");
+            // The app site's own settings under their names for people.
+            McpHttpSession.Answer forwarding = admin.call("site_app_set", Map.of("code", siteCode,
+                "forward_scheme", "http"));
+            assertThat(forwarding.error()).as("step 2: the app site's forwarding " + forwarding.text()).isFalse();
+            assertThat(forwarding.text()).as("step 2: the site's code and what changed").contains(siteCode)
+                .contains("forward_scheme");
+            assertThat(RawValues.map(Models.get(SiteModel.class).findById(siteId).get(SiteModel.SETTINGS)))
+                .as("step 2: stored under its key").containsEntry("scheme", "http");
+            assertThat(admin.call("site_app_set", Map.of("code", siteCode, "port", "web")).error())
+                .as("step 2: the port nothing honours is no argument").isTrue();
+
+            // 3. A certificate for the address, ordered with a manual DNS challenge, so nothing must reach this host.
+            McpHttpSession.Answer ordered = admin.call("certificate_order", Map.of("address", addressCode,
+                "challenge", CertificateModel.CHALLENGE_DNS, "name", "journey shop", "dns_publisher",
+                CertificateModel.DNS_PUBLISHER_MANUAL));
+            assertThat(ordered.error()).as("step 3: " + ordered.text()).isFalse();
+            found(Pattern.compile("C\\d+"), ordered.text(), "step 3: the certificate's code");
+            assertThat(Models.get(CertificateModel.class).find()
+                    .where(CertificateModel.DOMAIN_NAMES_TEXT.eq(hostname)).count())
+                .as("step 3: ordered for the address's hostname").isEqualTo(1L);
+            assertThat(admin.call("certificate_order", Map.of("address", addressCode, "code", "C1")).text())
+                .as("step 3: one record at a time").contains("Give only one of code, address.");
+
+            // 4. An A and a TXT record in one call, in an existing zone.
+            zoneId = zone(letters() + ".mcp-journey.test");
+            String zone = code(DnsZoneModel.MODEL_ID, zoneId, operator);
+            McpHttpSession.Answer set = admin.call("dns_record_set", Map.of("dns_zone", zone, "records", List.of(
+                Map.of("name", "shop", "type", "A", "values", List.of(Map.of("value", "203.0.113.10"))),
+                Map.of("name", "@", "type", "TXT", "ttl", 300, "values", List.of(Map.of("value", "hello"))))));
+            assertThat(set.error()).as("step 4: " + set.text()).isFalse();
+            assertThat(set.text()).as("step 4: what was added").contains("shop A: 1 added");
+            String listed = admin.call("dns_record_list", Map.of("dns_zone", zone)).text();
+            assertThat(listed).as("step 4: both listed").contains("shop A").contains("203.0.113.10")
+                .contains("@ TXT 300").contains("hello");
+
+            // 5. The A record changed, the TXT record removed.
+            assertThat(admin.call("dns_record_set", Map.of("dns_zone", zone, "records", List.of(
+                Map.of("name", "shop", "type", "A", "values", List.of(Map.of("value", "203.0.113.11"))),
+                Map.of("name", "@", "type", "TXT", "remove", true)))).error()).as("step 5: set").isFalse();
+            String after = admin.call("dns_record_list", Map.of("dns_zone", zone, "type", "A")).text();
+            assertThat(after).as("step 5: the new value only").contains("203.0.113.11").doesNotContain("203.0.113.10");
+            assertThat(admin.call("dns_record_list", Map.of("dns_zone", zone)).text()).as("step 5: no TXT left")
+                .doesNotContain("hello");
+
+            // 6. A record Hohenheim made itself (a certificate proof) is refused.
+            Row proof = Models.get(DnsRecordModel.class).createEmptyRow();
+            proof.set(DnsRecordModel.ZONE_ID, zoneId);
+            proof.set(DnsRecordModel.NAME, "_acme-challenge");
+            proof.set(DnsRecordModel.TYPE, DnsRecordModel.TYPE_TXT);
+            proof.set(DnsRecordModel.VALUE, "proof");
+            proof.set(DnsRecordModel.ENABLED, true);
+            GeneratedDnsRecords.as(new GeneratedDnsRecords.Attribution(GeneratedDnsRecords.SOURCE_ACME,
+                SiteDomainModel.MODEL_ID.toString(), 1), () -> Models.get(DnsRecordModel.class).save(proof));
+            McpHttpSession.Answer generated = admin.call("dns_record_set", Map.of("dns_zone", zone, "records",
+                List.of(Map.of("name", "_acme-challenge", "type", "TXT", "values", List.of(Map.of("value",
+                    "forged"))))));
+            assertThat(generated.error()).as("step 6: refused " + generated.text()).isTrue();
+            assertThat(Models.get(DnsRecordModel.class).findById(proof.get(DnsRecordModel.ID)))
+                .as("step 6: the proof stays").isNotNull();
+
+            // 7. The site and the address read in full; describe names the exact calls.
+            String read = admin.call("read", Map.of("ids", List.of(siteCode, addressCode))).text();
+            assertThat(read).as("step 7: the reads").contains(siteName).contains(app).contains(hostname);
+            assertThat(RawValues.map(Models.get(SiteDomainModel.class).find().where(SiteDomainModel.HOSTNAME
+                .eq(hostname)).first().get(SiteDomainModel.RESPONSE_HEADERS)))
+                .as("step 7: the header stored").containsEntry("X-Frame-Options", "DENY");
+            assertThat(admin.call("describe", Map.of("code", siteCode)).text()).as("step 7: describe")
+                .contains("site_app_set code=" + siteCode).contains("delete code=" + siteCode)
+                .doesNotContain("site_proxy_set");
+
+            // 8. delete sends the site to the trash.
+            McpHttpSession.Answer deleted = admin.call("delete", Map.of("code", siteCode));
+            assertThat(deleted.error()).as("step 8: " + deleted.text()).isFalse();
+            assertThat(Models.get(SiteModel.class).find().where(SiteModel.ID.eq(siteId)).first())
+                .as("step 8: in the trash").isNull();
+
+            // 9. A site serving a folder, with its missing page.
+            McpHttpSession.Answer files = admin.call("site_static_files_set", Map.of("name", PREFIX + "files-"
+                + letters(), "root_path", "/tmp", "autoindex", false, "missing_page", "404.html"));
+            assertThat(files.error()).as("step 9: " + files.text()).isFalse();
+            String filesCode = found(Pattern.compile("S\\d+"), files.text(), "step 9: the site's code");
+            assertThat(admin.call("read", Map.of("ids", List.of(filesCode))).text()).as("step 9: its folder")
+                .contains("/tmp");
+            assertThat(admin.call("delete", Map.of("code", app, "with_data", true)).error())
+                .as("step 9: the app deleted").isFalse();
+
+            // 10. A proxy site to two backends, and a redirect site; both changed by their names for people.
+            McpHttpSession.Answer proxy = admin.call("site_proxy_set", Map.of("name", PREFIX + "proxy-" + letters(),
+                "forward_host", "203.0.113.20", "forward_port", 8080, "backends", List.of("203.0.113.21:8080"),
+                "forward_scheme", "http", "delay_ms", 0));
+            assertThat(proxy.error()).as("step 10: " + proxy.text()).isFalse();
+            String proxyCode = found(Pattern.compile("S\\d+"), proxy.text(), "step 10: the proxy's code");
+            McpHttpSession.Answer added = admin.call("site_proxy_set", Map.of("code", proxyCode, "backends",
+                List.of("203.0.113.21:8080", "203.0.113.22:8080")));
+            assertThat(added.error()).as("step 10: a backend added " + added.text()).isFalse();
+            Row proxied = Models.get(SiteModel.class).findById(Integer.parseInt(Objects.requireNonNull(
+                RecordCodes.keyOfCode(SiteModel.MODEL_ID, proxyCode))));
+            assertThat(RawValues.map(proxied.get(SiteModel.SETTINGS)).get("more_backends"))
+                .as("step 10: one backend per line").isEqualTo("203.0.113.21:8080\n203.0.113.22:8080");
+            McpHttpSession.Answer redirect = admin.call("site_redirect_set", Map.of("name", PREFIX + "go-"
+                + letters(), "target_url", "https://example.com/", "delay_ms", 10));
+            assertThat(redirect.error()).as("step 10: " + redirect.text()).isFalse();
+            String redirectCode = found(Pattern.compile("S\\d+"), redirect.text(), "step 10: the redirect's code");
+            assertThat(admin.call("site_redirect_set", Map.of("code", redirectCode, "target_url",
+                "https://example.org/")).error()).as("step 10: its target changed").isFalse();
+            for (String other : List.of(proxyCode, redirectCode)) {
+                assertThat(admin.call("delete", Map.of("code", other)).error()).as("step 10: " + other + " trashed")
+                    .isFalse();
+            }
+        } finally {
+            if (zoneId != null) {
+                // The proof is Hohenheim's own record: only its system scope takes it away.
+                int zone = zoneId;
+                GeneratedDnsRecords.as(new GeneratedDnsRecords.Attribution(GeneratedDnsRecords.SOURCE_ACME,
+                    SiteDomainModel.MODEL_ID.toString(), 1), () -> Models.get(DnsRecordModel.class).find()
+                        .where(DnsRecordModel.ZONE_ID.eq(zone)).delete());
+                HardDeletes.byId(Models.get(DnsZoneModel.class), zoneId);
+            }
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Ssl.ACME_DIRECTORY_URL, savedDirectory);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Ssl.LETSENCRYPT_EMAIL, savedEmail);
+            if (adopted != null) ServerMain.adoptProxyServer(null);
+            local.restore();
+        }
+    }
+
+    /** @return the first match of the pattern in an answer, asserted present */
+    private static String found(Pattern pattern, String text, String step) {
+        Matcher matcher = pattern.matcher(text);
+        assertThat(matcher.find()).as(step + ": " + text).isTrue();
+        return matcher.group();
+    }
+
+    /** @return a new primary zone of this origin */
+    private static int zone(String origin) {
+        Row zone = Models.get(DnsZoneModel.class).createEmptyRow();
+        zone.set(DnsZoneModel.ORIGIN, origin);
+        zone.set(DnsZoneModel.ENABLED, true);
+        zone.set(DnsZoneModel.DEFAULT_TTL, 3600);
+        zone.set(DnsZoneModel.NEGATIVE_TTL, 300);
+        zone.set(DnsZoneModel.SOA_REFRESH, 7200);
+        zone.set(DnsZoneModel.SOA_RETRY, 3600);
+        zone.set(DnsZoneModel.SOA_EXPIRE, 1209600);
+        Models.get(DnsZoneModel.class).save(zone);
+        return zone.get(DnsZoneModel.ID);
     }
 
     /**

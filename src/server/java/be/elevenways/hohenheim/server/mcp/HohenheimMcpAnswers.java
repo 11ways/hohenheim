@@ -141,9 +141,18 @@ final class HohenheimMcpAnswers {
             .line(context.text().words(HohenheimMicrocopy.INSTANCE_VARIABLE.of("reaches_at_deploy")));
     }
 
-    /** The settings a change wrote; none when it sent nothing that differs. */
-    static @NonNull McpResponse changed(@NonNull McpToolContext context, @Nullable String settings) {
-        return McpResponse.create().line("changed: " + (settings == null || settings.isBlank() ? "nothing"
-            : settings));
+    /** The record a change wrote and the settings it wrote, as its writer says them ({@code S20 changed: name}). */
+    static @NonNull McpResponse changed(@NonNull McpToolContext context, @Nullable String said) {
+        return McpResponse.create().line(said == null ? "" : said);
+    }
+
+    /** A zone's record lines; their names and values are what someone typed, so they come as untrusted text. */
+    static @NonNull McpResponse records(@NonNull McpToolContext context, @Nullable String records) {
+        return McpResponse.create().untrusted("records", records == null ? "" : records);
+    }
+
+    /** What setting a zone's records added, changed, kept and removed, one line per name and type. */
+    static @NonNull McpResponse recordsSet(@NonNull McpToolContext context, @Nullable String said) {
+        return McpResponse.create().untrusted("records", said == null ? "" : said);
     }
 }

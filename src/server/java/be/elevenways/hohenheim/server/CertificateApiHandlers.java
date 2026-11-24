@@ -118,8 +118,8 @@ final class CertificateApiHandlers {
                 return null;
             }
             // The dialog's own input; the names default to the address itself, as the row's dialog opens with it.
-            Map<String, Object> order = new LinkedHashMap<>(FormSubmissionRawValues.fromConduit(conduit));
-            order.putIfAbsent("domains", String.valueOf((Object) domain.get(SiteDomainModel.HOSTNAME)));
+            Map<String, Object> order = CertificateOperations.apiOrder(FormSubmissionRawValues.fromConduit(conduit),
+                String.valueOf((Object) domain.get(SiteDomainModel.HOSTNAME)));
             Integer certId;
             try {
                 certId = OperationPipeline.invoke(OperationRequest.of(CertificateOperations.REQUEST_FOR_DOMAIN,

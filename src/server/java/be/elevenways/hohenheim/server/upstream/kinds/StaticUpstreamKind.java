@@ -61,7 +61,8 @@ public class StaticUpstreamKind implements UpstreamKindHandler {
             .help(HohenheimMicrocopy.HELP.of("fallback_file")).build());
 
     public static final StringField NOT_FOUND_PAGE = SETTINGS_SCHEMA.addField(
-        PathField.builder().name("not_found_page").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("not_found_page"))
+        PathField.builder().name("not_found_page").inputName("missing_page")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("not_found_page"))
             .help(HohenheimMicrocopy.HELP.of("not_found_page")).placeholder("404.html").build());
 
     // The folder and the fallback file are the decision; what a

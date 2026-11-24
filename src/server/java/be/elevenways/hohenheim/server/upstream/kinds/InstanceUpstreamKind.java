@@ -55,7 +55,7 @@ public final class InstanceUpstreamKind implements UpstreamKindHandler {
             .build());
 
     public static final EnumField SCHEME = SETTINGS_SCHEMA.addField(
-        EnumField.builder("scheme")
+        EnumField.builder("scheme").inputName("forward_scheme")
             .value("http", "HTTP", HohenheimMicrocopy.UPSTREAM_SCHEME.of("http"))
             .value("https", "HTTPS", HohenheimMicrocopy.UPSTREAM_SCHEME.of("https"))
             .defaultValue("http")

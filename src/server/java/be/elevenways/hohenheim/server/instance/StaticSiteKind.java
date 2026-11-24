@@ -61,7 +61,7 @@ public final class StaticSiteKind implements InstanceKindHandler {
 
     /** The page answered with a 404, relative to the output folder; empty uses the site's own 404.html. */
     public static final StringField NOT_FOUND_PAGE = SETTINGS_SCHEMA.addField(
-        PathField.builder().name("not_found_page")
+        PathField.builder().name("not_found_page").inputName("missing_page")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("not_found_page"))
             .help(HohenheimMicrocopy.HELP.of("not_found_page")).build());
 

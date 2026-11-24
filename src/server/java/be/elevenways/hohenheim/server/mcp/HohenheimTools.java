@@ -10,17 +10,24 @@ import be.elevenways.hohenheim.instance.InstanceSnapshotOperations;
 import be.elevenways.hohenheim.instance.InstanceVariableOperations;
 import be.elevenways.hohenheim.instance.VolumeOperations;
 import be.elevenways.hohenheim.preview.PreviewOperations;
+import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.server.cms.AccessRuleParts;
+import be.elevenways.hohenheim.server.cms.AddressWrites;
 import be.elevenways.hohenheim.server.cms.AppKindWrites;
 import be.elevenways.hohenheim.server.cms.BuildHookParts;
+import be.elevenways.hohenheim.server.cms.CertificateOperations;
 import be.elevenways.hohenheim.server.cms.DatabaseDumpParts;
 import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.cms.DnsOperations;
+import be.elevenways.hohenheim.server.cms.DnsRecordSets;
+import be.elevenways.hohenheim.server.cms.DomainParts;
+import be.elevenways.hohenheim.server.cms.KindSettingsWrites;
 import be.elevenways.hohenheim.server.cms.HostParts;
 import be.elevenways.hohenheim.server.cms.ProjectParts;
 import be.elevenways.hohenheim.server.cms.ReconcileFindingParts;
 import be.elevenways.hohenheim.server.cms.ReleasedClaimParts;
 import be.elevenways.hohenheim.server.cms.RuntimeImageParts;
+import be.elevenways.hohenheim.server.cms.SiteKindWrites;
 import be.elevenways.hohenheim.server.cms.SiteWrites;
 import be.elevenways.hohenheim.server.cms.StackOperations;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -49,6 +56,8 @@ public final class HohenheimTools extends McpToolCollection {
     private static final String ACTION = "action";
     private static final String CONSOLE = "console";
     private static final String OWNER = "owner";
+    private static final String DNS_ZONE = "dns_zone";
+    private static final String ADDRESS = "address";
 
     private HohenheimTools() {
         for (McpHostTool tool : declared()) this.addTool(tool);
@@ -135,15 +144,58 @@ public final class HohenheimTools extends McpToolCollection {
             .subject(OWNER, words("mcp_code_variables"))
             .route(InstanceVariableOperations.SET_VARIABLES, HohenheimMcpAnswers::variableWritten)
             .build();
+        McpHostTool test = McpCodeTool.builder("test", words("mcp_tool_test"), writes())
+            .code(words("mcp_code_test"))
+            .route(DomainParts.CHECK_REACH, null)
+            .route(DnsOperations.CHECK_HEALTH, HohenheimMcpAnswers::told)
+            .build();
+        // DNS records have no code: they are read and set by their zone, each by its name and type.
+        McpHostTool recordList = McpCodeTool.builder("dns_record_list", words("mcp_tool_dns_record_list"),
+                McpHostTool.Annotations.ofReadOnly())
+            .subject(DNS_ZONE, words("mcp_code_dns_zone_read"))
+            .route(DnsRecordSets.LIST, HohenheimMcpAnswers::records)
+            .build();
+        McpHostTool recordSet = McpCodeTool.builder("dns_record_set", words("mcp_tool_dns_record_set"), writes())
+            .subject(DNS_ZONE, words("mcp_code_dns_zone_set"))
+            .route(DnsRecordSets.SET, HohenheimMcpAnswers::recordsSet)
+            .build();
+        McpHostTool address = McpCodeTool.builder("address_set", words("mcp_tool_address_set"), writes())
+            .code(words("mcp_code_address"))
+            .creates(AddressWrites.CREATE, null, List.of(AddressWrites.SITE, SiteDomainModel.HOSTNAME.getName()),
+                words("address_thing"))
+            .route(AddressWrites.CHANGE, HohenheimMcpAnswers::changed)
+            .build();
+        // A new certificate for names, one for an address (address=D4), or the same one ordered again (code=C8).
+        McpHostTool order = McpCodeTool.builder("certificate_order", words("mcp_tool_certificate_order"), writes())
+            .code(words("mcp_code_certificate_order"))
+            .creates(CertificateOperations.REQUEST, null, CertificateOperations.DOMAINS.getInputName(),
+                words("certificate_thing"))
+            .route(CertificateOperations.REISSUE, null)
+            .routeBy(ADDRESS, words("mcp_address_certificate_order"), CertificateOperations.REQUEST_FOR_DOMAIN, null)
+            .build();
+        // A waiting manual DNS order is finished, any other Let's Encrypt certificate renewed: as the record stands.
+        McpHostTool renew = McpCodeTool.builder("certificate_renew", words("mcp_tool_certificate_renew"), writes())
+            .code(words("mcp_code_certificate_renew"))
+            .route(CertificateOperations.RENEW, null)
+            .routeByState(CertificateOperations.CONTINUE_DNS, null)
+            .build();
         List<McpHostTool> tools = new ArrayList<>(List.of(logs, delete, deploy, rollBack, power, backUp,
-            exec, variables));
-        for (AppKindWrites.KindWrites kind : AppKindWrites.all()) {
-            String name = AppKindWrites.toolName(kind.kind());
-            tools.add(McpCodeTool.builder(name, words("mcp_tool_" + name), writes())
+            exec, variables, test, recordList, recordSet, address, order, renew));
+        for (KindSettingsWrites.Kind kind : AppKindWrites.all()) {
+            tools.add(McpCodeTool.builder(kind.tool(), words("mcp_tool_" + kind.tool()), writes())
                 .code(words("mcp_code_set"))
-                .creates(kind.create(), null, "name", kind.thing())
+                .creates(kind.create(), null, kind.needs(), kind.thing())
                 .route(kind.change(), HohenheimMcpAnswers::changed)
                 // describe code=AP12 names its own kind's tool only; a call still turns another kind (change_kind).
+                .describedFor(kind::holds)
+                .build());
+        }
+        for (KindSettingsWrites.Kind kind : SiteKindWrites.all()) {
+            tools.add(McpCodeTool.builder(kind.tool(), words("mcp_tool_" + kind.tool()), writes())
+                .code(words("mcp_code_site"))
+                .creates(kind.create(), null, kind.needs(), kind.thing())
+                .route(kind.change(), HohenheimMcpAnswers::changed)
+                // describe code=S20 names its own kind's tool only; a call still turns another kind (change_kind).
                 .describedFor(kind::holds)
                 .build());
         }

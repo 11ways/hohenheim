@@ -71,7 +71,7 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
 
     /** Further host[:port] backends, one per line: requests take turns among them all and pass a silent one over. */
     public static final TextField MORE_BACKENDS = SETTINGS_SCHEMA.addField(
-        TextField.builder("more_backends")
+        TextField.builder("more_backends").lines().inputName("backends")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("more_backends"))
             .help(HohenheimMicrocopy.HELP.of("more_backends")).build());
 

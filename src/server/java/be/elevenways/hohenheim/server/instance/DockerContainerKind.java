@@ -100,7 +100,7 @@ public final class DockerContainerKind implements InstanceKindHandler {
     // Loopback/tcp/no-fixed-port = record-after ephemeral (unchanged behaviour); any
     // other combination derives the PRE-ALLOCATION strategy (claim before create).
     public static final EnumField PORT_PROTOCOL = SETTINGS_SCHEMA.addField(
-        EnumField.builder("port_protocol")
+        EnumField.builder("port_protocol").inputName("protocol")
             .value("tcp", v -> v.displayName("TCP").icon("right-left")
                 .label(HohenheimMicrocopy.PORT_PROTOCOL.of("tcp")))
             .value("udp", v -> v.displayName("UDP").icon("paper-plane")

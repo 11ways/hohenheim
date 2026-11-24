@@ -139,8 +139,8 @@ class CertificateRequestJourneyTest extends HohenheimTestBase {
             String invoke = CmsRoutes.invoke(HohenheimSlugs.ADMIN, HohenheimSlugs.DOMAINS,
                     CertificateOperations.REQUEST_FOR_DOMAIN.id())
                 .with(CmsEndpoints.SUBJECT_PARAM, String.valueOf((Object) domain.get(SiteDomainModel.ID))).toUrl();
-            HttpResponse<String> ordered = adminPostForm(invoke, ApiSupport.form("domains", host,
-                "nice_name", "request-journey-landing", "challenge_type", CertificateModel.CHALLENGE_DNS,
+            HttpResponse<String> ordered = adminPostForm(invoke, ApiSupport.form("hostnames", host,
+                "name", "request-journey-landing", "challenge", CertificateModel.CHALLENGE_DNS,
                 "dns_publisher", CertificateModel.DNS_PUBLISHER_MANUAL) + "&" + ApiSupport.invokeTransport());
             Row certificate = certificateNamed(host);
             assertThat(certificate).as("step 1: the order wrote its certificate (answered %s)", ordered.statusCode())
@@ -165,7 +165,7 @@ class CertificateRequestJourneyTest extends HohenheimTestBase {
 
     private HttpResponse<String> request(String hostname) throws Exception {
         return adminPostForm(ApiSupport.requestCertificateTarget(), ApiSupport.form(
-            "domains", hostname, "nice_name", "request-journey", "challenge_type", "http") + "&"
+            "hostnames", hostname, "name", "request-journey", "challenge", "http") + "&"
             + ApiSupport.invokeTransport());
     }
 

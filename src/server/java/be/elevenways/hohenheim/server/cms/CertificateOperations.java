@@ -68,24 +68,26 @@ public final class CertificateOperations {
 
     private static final StringField DOMAIN_NAME = StringField.builder("domain").placeholder("example.com").build();
 
-    static final ListField<String> DOMAINS = ListField.<String>builder(DOMAIN_NAME)
+    public static final ListField<String> DOMAINS = ListField.<String>builder(DOMAIN_NAME)
         .name("domains")
+        .inputName("hostnames")
         .label(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("domains"))
         .help(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("domains_help"))
         .build();
 
-    static final StringField NICE_NAME = StringField.builder("nice_name")
+    static final StringField NICE_NAME = StringField.builder("nice_name").inputName("name")
         .label(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("name"))
         .help(HohenheimMicrocopy.HELP.of("certificate_name"))
         .placeholder("example.com")
         .build();
 
-    static final StringField EMAIL = StringField.builder("letsencrypt_email")
+    static final StringField EMAIL = StringField.builder("letsencrypt_email").inputName("email")
         .label(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("account_email"))
         .help(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("account_email_help"))
         .build();
 
     public static final EnumField CHALLENGE = CertificateModel.challengeTypeField()
+        .inputName("challenge")
         .defaultValue(CertificateModel.CHALLENGE_HTTP)
         .label(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("validation"))
         .help(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("validation_help"))
@@ -97,13 +99,14 @@ public final class CertificateOperations {
         .help(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("dns_mode_help"))
         .build();
 
+    // The dialog's, the HTTP API's and the assistant's one input: each entry goes by its field's input name.
     private static final FormSpec INPUT = FormSpec.builder()
-        .add(Array.of(DOMAINS, DOMAIN_NAME).minCount(1).build())
-        .add(NICE_NAME)
-        .add(EMAIL)
-        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(CHALLENGE))
+        .add(Array.of(DOMAINS, DOMAIN_NAME).minCount(1).build().named(DOMAINS.getInputName()))
+        .add(FieldFormEntryRegistry.INSTANCE.deriveInputEntry(NICE_NAME))
+        .add(FieldFormEntryRegistry.INSTANCE.deriveInputEntry(EMAIL))
+        .add(FieldFormEntryRegistry.INSTANCE.deriveInputEntry(CHALLENGE))
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(DNS_PUBLISHER))
-        .showWhen(DNS_PUBLISHER.getName(), CHALLENGE.getName(), CertificateModel.CHALLENGE_DNS)
+        .showWhen(DNS_PUBLISHER.getName(), CHALLENGE.getInputName(), CertificateModel.CHALLENGE_DNS)
         .build();
 
     private static final OperationInput<Order> ORDER = OperationInput.of(INPUT, Order.class, values -> new Order(
@@ -123,6 +126,7 @@ public final class CertificateOperations {
         .gate(OperationGate.open())
         .input(ORDER)
         .result(Integer.class)
+        .createdRecord(CertificateModel.MODEL_ID, id -> id)
         .facts(OperationFact.REACHES_OUTSIDE)
         .rateLimit(HohenheimEndpoints.LE_REQUEST_LIMIT)
         .command(CmsCommands.EXTERNAL)
@@ -139,7 +143,10 @@ public final class CertificateOperations {
             .verb(HohenheimVerbs.ORDER_CERTIFICATE)
             .gate(OperationGate.open())
             .input(ORDER)
+            // An assistant's order may leave out what the row's dialog prefills: its hostname and its site's name.
+            .patchable()
             .result(Integer.class)
+            .createdRecord(CertificateModel.MODEL_ID, id -> id)
             .facts(OperationFact.REACHES_OUTSIDE)
             .rateLimit(HohenheimEndpoints.LE_REQUEST_LIMIT)
             .command(CmsCommands.EXTERNAL)
@@ -156,7 +163,10 @@ public final class CertificateOperations {
         .verb(HohenheimVerbs.REISSUE)
         .gate(OperationGate.open())
         .input(ORDER)
+        // An assistant's re-order may leave out what the dialog prefills: what the certificate was last issued for.
+        .patchable()
         .result(Integer.class)
+        .createdRecord(CertificateModel.MODEL_ID, id -> id)
         .facts(OperationFact.REACHES_OUTSIDE)
         .rateLimit(HohenheimEndpoints.LE_REQUEST_LIMIT)
         .command(CmsCommands.EXTERNAL)
@@ -310,15 +320,44 @@ public final class CertificateOperations {
             HohenheimSlugs.CERTIFICATES, certificateId).toUrl()));
     }
 
+    /**
+     * @return an HTTP API order as the order's input takes it: the API names its fields as they are stored
+     *     (domains, nice_name, letsencrypt_email, challenge_type), the input by their input names
+     */
+    public static @NonNull Map<String, Object> apiOrder(@NonNull Map<String, Object> posted, @NonNull String hostname) {
+        Map<String, Object> order = INPUT.byEntryNames(posted);
+        order.putIfAbsent(DOMAINS.getInputName(), hostname);
+        return order;
+    }
+
+    /** @return the order a domain row's dialog opens with, the base an assistant's order for it lands on */
+    static @NonNull Order prefilledOrder(@NonNull Row domain) {
+        return orderOf(prefill(domain));
+    }
+
+    /** @return the re-order a certificate's dialog opens with, the base an assistant's re-order lands on */
+    static @NonNull Order reorderOf(@NonNull Row cert) {
+        return orderOf(reorder(cert));
+    }
+
+    /** @return the order the dialog's prefilled values say, read as the input form names its entries */
+    private static @NonNull Order orderOf(@NonNull Map<String, Object> values) {
+        Object domains = values.get(DOMAINS.getInputName());
+        return new Order(PrimitiveCoercion.toTrimmedTextList(domains == null ? List.of() : domains),
+            (String) values.get(NICE_NAME.getInputName()), (String) values.get(EMAIL.getInputName()),
+            (String) values.get(CHALLENGE.getInputName()), (String) values.get(DNS_PUBLISHER.getName()));
+    }
+
     private static @NonNull Map<String, Object> prefill(@Nullable Row domain) {
         Map<String, Object> values = new LinkedHashMap<>();
         if (domain == null) {
             return values;
         }
         String hostname = domain.get(SiteDomainModel.HOSTNAME);
-        values.put(DOMAINS.getName(), hostname == null ? List.of() : List.of(hostname));
+        values.put(DOMAINS.getInputName(), hostname == null ? List.of() : List.of(hostname));
         Row site = Models.get(SiteModel.class).findById(domain.get(SiteDomainModel.SITE_ID));
-        values.put(NICE_NAME.getName(), site != null ? String.valueOf((Object) site.get(SiteModel.NAME)) : hostname);
+        values.put(NICE_NAME.getInputName(), site != null ? String.valueOf((Object) site.get(SiteModel.NAME))
+            : hostname);
         return values;
     }
 
@@ -328,11 +367,12 @@ public final class CertificateOperations {
             return values;
         }
         String stored = cert.get(CertificateModel.DOMAIN_NAMES_TEXT);
-        values.put(DOMAINS.getName(), stored == null || stored.isBlank() ? List.of() : List.of(stored.split(",")));
-        values.put(NICE_NAME.getName(), trimmed(cert.get(CertificateModel.NICE_NAME)));
-        values.put(EMAIL.getName(), trimmed(cert.get(CertificateModel.LETSENCRYPT_EMAIL)));
+        values.put(DOMAINS.getInputName(), stored == null || stored.isBlank() ? List.of()
+            : List.of(stored.split(",")));
+        values.put(NICE_NAME.getInputName(), trimmed(cert.get(CertificateModel.NICE_NAME)));
+        values.put(EMAIL.getInputName(), trimmed(cert.get(CertificateModel.LETSENCRYPT_EMAIL)));
         String challenge = trimmed(cert.get(CertificateModel.CHALLENGE_TYPE));
-        values.put(CHALLENGE.getName(), challenge.isEmpty() ? CertificateModel.CHALLENGE_HTTP : challenge);
+        values.put(CHALLENGE.getInputName(), challenge.isEmpty() ? CertificateModel.CHALLENGE_HTTP : challenge);
         String publisher = trimmed(cert.get(CertificateModel.DNS_PUBLISHER));
         values.put(DNS_PUBLISHER.getName(), publisher.isEmpty() ? CertificateModel.DNS_PUBLISHER_MANUAL : publisher);
         return values;
@@ -341,37 +381,22 @@ public final class CertificateOperations {
     /**
      * One coerced order; the components are named as the input form names its entries.
      *
-     * @param domains           the names to certify, at least one
-     * @param nice_name         the certificate's display name; the first name when blank
-     * @param letsencrypt_email the ACME account email, null for the installation's own
-     * @param challenge_type    {@link CertificateModel#CHALLENGE_HTTP} or {@link CertificateModel#CHALLENGE_DNS}
-     * @param dns_publisher     the DNS-01 publisher, read only for a DNS challenge
+     * @param hostnames the names to certify, at least one
+     * @param name      the certificate's display name; the first name when blank
+     * @param email     the ACME account email, null for the installation's own
+     * @param challenge {@link CertificateModel#CHALLENGE_HTTP} or {@link CertificateModel#CHALLENGE_DNS}
+     * @param dns_publisher the DNS-01 publisher, read only for a DNS challenge
      */
-    public record Order(@NonNull List<String> domains, @Nullable String nice_name, @Nullable String letsencrypt_email,
-                        @Nullable String challenge_type, @Nullable String dns_publisher) {
+    public record Order(@NonNull List<String> hostnames, @Nullable String name, @Nullable String email,
+                        @Nullable String challenge, @Nullable String dns_publisher) {
 
         public Order {
-            domains = List.copyOf(domains);
-        }
-
-        /** @return the names to certify */
-        public @NonNull List<String> hostnames() {
-            return this.domains;
+            hostnames = List.copyOf(hostnames);
         }
 
         /** @return the display name, or null */
         public @Nullable String niceName() {
-            return this.nice_name;
-        }
-
-        /** @return the account email, or null */
-        public @Nullable String email() {
-            return this.letsencrypt_email;
-        }
-
-        /** @return the challenge type, or null */
-        public @Nullable String challenge() {
-            return this.challenge_type;
+            return this.name;
         }
 
         /** @return the DNS-01 publisher, or null */

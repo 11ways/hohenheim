@@ -213,7 +213,7 @@ class DnsAdminTest extends HohenheimTestBase {
     void certificateRequestRefusesHostedDnsUnlessServing() throws Exception {
         // No DNS server runs in this test boot, so the hosted-DNS publisher cannot answer the challenge.
         var refused = adminPostForm(ApiSupport.requestCertificateTarget(), ApiSupport.form(
-            "domains", "hosted.dns-admin.test", "challenge_type", "dns", "dns_publisher", "internal")
+            "hostnames", "hosted.dns-admin.test", "challenge", "dns", "dns_publisher", "internal")
             + "&" + ApiSupport.invokeTransport());
         assertThat(refused.statusCode()).as("step 1: the order is refused, never placed").isEqualTo(422);
         assertThat(refused.body()).as("step 1: and names the missing DNS server")

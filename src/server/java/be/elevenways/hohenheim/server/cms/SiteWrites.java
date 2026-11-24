@@ -169,9 +169,8 @@ public final class SiteWrites {
     public record ManageInput(@Nullable String name, @Nullable Boolean enabled, @Nullable String description) {
     }
 
-    /** Why the operator's create and edit are kept from assistants; the delegated edit is placed. */
-    private static final String ADMIN_FORM_PICKS = "its form picks the app with a relation picker and takes the"
-        + " upstream kind's own settings, which no tool input projects yet; its tool comes once one does";
+    /** Why the panel's create and saves are kept from assistants: the site tools of each upstream kind post them. */
+    private static final String KIND_TOOLS = "the site tools of each upstream kind (SiteKindWrites) post this form";
 
     /** Creates a site and, when the form carried one, its first hostname, atomically. Its result is the site's id. */
     public static final Operation<Void, CreateInput, Integer> CREATE =
@@ -179,7 +178,7 @@ public final class SiteWrites {
             .label(CmsMicrocopy.of("create"))
             .happened(ChangeOp.CREATE.happened())
             .noSubject()
-            .notForAssistants(ADMIN_FORM_PICKS)
+            .notForAssistants(KIND_TOOLS)
             .gate(OperationGate.open())
             .input(OperationInput.of(ADMIN_FORM, CreateInput.class, v -> new CreateInput(
                 v.get(SiteModel.NAME), v.get(CREATE_HOSTNAME), v.get(SiteModel.UPSTREAM_KIND),
@@ -196,7 +195,7 @@ public final class SiteWrites {
             .happened(OperationSentences.of("update_site"))
             .label(CmsMicrocopy.of("save"))
             .one(SiteOperations.SITE)
-            .notForAssistants(ADMIN_FORM_PICKS)
+            .notForAssistants(KIND_TOOLS)
             .gate(OperationGate.open())
             .input(OperationInput.of(ADMIN_FORM.forView(EditView.EDIT), EditInput.class, v -> new EditInput(
                 v.get(SiteModel.NAME), v.get(SiteModel.UPSTREAM_KIND), v.get(SiteModel.INSTANCE_ID),
@@ -214,6 +213,7 @@ public final class SiteWrites {
             .label(CmsMicrocopy.of("save"))
             .description(HohenheimMicrocopy.HOHENHEIM.of("manage_update_site_description"))
             .one(SiteOperations.SITE)
+            .notForAssistants(KIND_TOOLS)
             .verb(OperationVerb.UPDATE)
             .gate(OperationGate.open())
             .input(OperationInput.of(MANAGE_FORM, ManageInput.class, v -> new ManageInput(

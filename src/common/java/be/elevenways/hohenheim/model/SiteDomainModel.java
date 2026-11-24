@@ -58,6 +58,12 @@ public class SiteDomainModel extends Model {
      */
     public static final String MATCH_REGEX = "regex";
 
+    /** @return a header map's entries: the header's name and its value, empty to remove the header */
+    private static @NonNull MapEntries headerEntries() {
+        return MapEntries.keyedBy("name", HohenheimMicrocopy.HELP.of("header_entry_name"))
+            .value("value", HohenheimMicrocopy.HELP.of("header_entry_value"));
+    }
+
     /**
      * THE domain match-type vocabulary, declared ONCE for every column that stores it:
      * {@link #MATCH_TYPE} here and {@link ReleasedRouteClaimModel#MATCH_TYPE} (a released
@@ -183,6 +189,7 @@ public class SiteDomainModel extends Model {
         .build());
     public static final EnumField MATCH_TYPE = SCHEMA.addField(matchTypeField()
         .defaultValue(MATCH_EXACT)
+        .inputName("match")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("match_type"))
         .help(HohenheimMicrocopy.HELP.of("match_type"))
         .build());
@@ -210,6 +217,7 @@ public class SiteDomainModel extends Model {
      */
     public static final BooleanField FORCE_SSL = SCHEMA.addField(BooleanField.builder("force_ssl")
         .defaultValue(false)
+        .inputName("force_https")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("force_ssl"))
         .help(HohenheimMicrocopy.HELP.of("force_ssl"))
         .build());
@@ -241,6 +249,7 @@ public class SiteDomainModel extends Model {
             .build());
     public static final BooleanField HSTS_ENABLED = SCHEMA.addField(BooleanField.builder("hsts_enabled")
         .defaultValue(false)
+        .inputName("hsts")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("hsts_enabled"))
         .help(HohenheimMicrocopy.HELP.of("hsts_enabled"))
         .build());
@@ -251,16 +260,20 @@ public class SiteDomainModel extends Model {
         .build());
     // Ordered header-name -> value maps (empty value = delete the header on forward).
     public static final StringMapField CUSTOM_HEADERS = SCHEMA.addField(StringMapField.builder("custom_headers")
+        .inputName("request_headers")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("custom_headers"))
         .help(HohenheimMicrocopy.HELP.of("custom_headers"))
+        .entries(headerEntries())
         .build());
     public static final StringMapField RESPONSE_HEADERS = SCHEMA.addField(StringMapField.builder("response_headers")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("response_headers"))
         .help(HohenheimMicrocopy.HELP.of("response_headers"))
+        .entries(headerEntries())
         .build());
     public static final BooleanField EXCLUDE_FROM_LETSENCRYPT =
             SCHEMA.addField(BooleanField.builder("exclude_from_letsencrypt")
         .defaultValue(false)
+        .inputName("exclude_from_lets_encrypt")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("exclude_from_letsencrypt"))
         .help(HohenheimMicrocopy.HELP.of("exclude_from_letsencrypt"))
         .build());
