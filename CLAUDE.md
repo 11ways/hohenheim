@@ -188,9 +188,9 @@ test one end-to-end: inline `NotificationDispatcher` + `webhook://default` + a l
 The INSTALL schema starts from one baseline migration plus `M002_AfterBaseline` (`2026_10_23_000001`, published
 on kuifje and robbedoes 2026-11-08, pinned), `M003_CertificateSigningRequests` (`2026_11_19_000001`) and
 `M004_SiteOutages` (`2026_11_23_000001`, both published on kuifje and robbedoes 2026-11-23, pinned) and
-`M005_LinkedServers` (`2026_11_23_000002`) and `M006_SharedRecords` (`2026_11_23_000003`, both applied on starfleet,
-robbedoes and kuifje 2026-11-24, pinned); at most ONE unpublished migration follows them (`M007_LinkConfirmations`,
-`2026_11_24_000001`),
+`M005_LinkedServers` (`2026_11_23_000002`), `M006_SharedRecords` (`2026_11_23_000003`) and `M007_LinkConfirmations`
+(`2026_11_24_000001`, all three applied on starfleet, robbedoes and kuifje 2026-11-24, pinned); no migration is open,
+so a schema change is a NEW migration, at most ONE unpublished one after them,
 `src/common/java/be/elevenways/hohenheim/migration/M001_HohenheimBaseline.java`
 (version `2026_10_21_000001`, name `hohenheim_baseline`: the workspace's squash-baseline
 convention), GENERATED on 2026-10-21 by folding
@@ -220,7 +220,7 @@ those citations are history, not files you will find.
   under `database.migration_integrity=fail`. The rule is ONE declared fact plus a
   committed table: `MigrationIntegrityTest.DEPLOYED_THROUGH` is the highest
   version every install that must keep booting has applied or adopted (`HohenheimMigration.PUBLISHED`,
-  `2026_11_23_000003` since the deploy of 2026-11-24; the baseline was pinned from the day it landed),
+  `2026_11_24_000001` since the deploy of 2026-11-24 about 12:00; the baseline was pinned from the day it landed),
   and `src/browserTest/resources/migration-pins.txt` carries one
   `<class><TAB><digest>` line per migration at or below it. Editing a pinned
   migration fails the build naming both digests; a migration below the mark with
@@ -229,8 +229,8 @@ those citations are history, not files you will find.
   (`tools/deploy-host.sh` reminds it); a pin is never regenerated to make a red
   build green. Comments and formatting are outside the digest.
 - A chain has at most ONE migration newer than its last published (live-deployed) version.
-  `M006_SharedRecords` is published and frozen; `M007_LinkConfirmations` is the open one, so a schema change edits it
-  until a live deploy publishes it.
+  M001 to M007 are applied on the live hosts, published and frozen; none is open, so a schema change is a NEW
+  migration (`M008_...`), which further changes edit until a live deploy publishes it.
   Use the ORM DSL (`alterTable` + `addColumn`/`dropColumn`), never raw SQL.
   Existing rows are real, so a column added to a populated table is nullable or
   carries a default, and a backfill is a `builder.data(...)` step -- never a

@@ -16,11 +16,12 @@ import java.time.Instant;
 /**
  * The schema changes after M006: when each side's link to another Hohenheim was confirmed.
  *
- * AIDEV-NOTE: UNPUBLISHED: every further schema change edits this migration until a live deploy publishes it (then
- * raise HohenheimMigration.PUBLISHED and pin it in migration-pins.txt). Every link made before confirmed_at existed
- * was made in one go by both sides, so its data step stamps it confirmed at the moment it was made (created_at, or
- * the migration's own moment for a row that never recorded one): a link left unconfirmed would be undone by the
- * joining side (LinkedServers). A link made after starts unconfirmed. down() drops the column, which is all up() added.
+ * AIDEV-NOTE: PUBLISHED: starfleet, robbedoes and kuifje applied it on 2026-11-24 (pinned in migration-pins.txt), so
+ * it is frozen; never edit this one again: a schema change is a NEW migration. Every link made before confirmed_at
+ * existed was made in one go by both sides, so its data step stamps it confirmed at the moment it was made
+ * (created_at, or the migration's own moment for a row that never recorded one): a link left unconfirmed would be
+ * undone by the joining side (LinkedServers). A link made after starts unconfirmed. down() drops the column, which is
+ * all up() added.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
