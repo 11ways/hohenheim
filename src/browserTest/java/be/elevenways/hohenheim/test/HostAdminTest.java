@@ -42,7 +42,7 @@ class HostAdminTest extends HohenheimTestBase {
         long serversBefore = Models.get(HostModel.class).find().count();
 
         // 2. Rendering the list shows it, and writes nothing.
-        navigateToApp("/admin/servers");
+        navigateToApp("/admin/hosts");
         waitForHydration();
 
         String body = page.locator("body").textContent();
@@ -64,7 +64,7 @@ class HostAdminTest extends HohenheimTestBase {
         assertThat((Object) local.get(HostModel.ID)).isEqualTo(seeded.get(HostModel.ID));
 
         // 4. The row-title target is the bespoke Overview page: structured state, no form.
-        navigateToApp("/admin/servers/" + local.get(HostModel.ID) + "/page/overview");
+        navigateToApp("/admin/hosts/" + local.get(HostModel.ID) + "/page/overview");
         waitForHydration();
 
         assertThat(page.locator(".hh-server-overview").count())
@@ -91,7 +91,7 @@ class HostAdminTest extends HohenheimTestBase {
         Models.get(HostModel.class).save(host);
         try {
             page.setViewportSize(1280, 900);
-            navigateToApp("/admin/servers");
+            navigateToApp("/admin/hosts");
             waitForHydration();
 
             // 2. The time follows the words in the same run: it starts on or below the words' last line.
@@ -120,7 +120,7 @@ class HostAdminTest extends HohenheimTestBase {
     /** SSH-target round trip, argument-injection refusal and the implicit local host's guards. */
     @Test
     void hostWritesRoundTripAndGuardTheLocalHost() throws Exception {
-        var create = adminPostForm("/admin/servers/new", "name=edge-9&ssh_target=deploy%40edge9.example");
+        var create = adminPostForm("/admin/hosts/new", "name=edge-9&ssh_target=deploy%40edge9.example");
         assertThat(create.statusCode()).isIn(200, 302, 303);
 
         Row row = Models.get(HostModel.class).find()
@@ -130,14 +130,14 @@ class HostAdminTest extends HohenheimTestBase {
         assertThat((String) row.get(HostModel.MODE)).isEqualTo("ssh");
         Integer id = row.get(HostModel.ID);
 
-        var update = adminPostEdit("/admin/servers/" + id, "name=edge-9&ssh_target=ops%40edge9.example");
+        var update = adminPostEdit("/admin/hosts/" + id, "name=edge-9&ssh_target=ops%40edge9.example");
         assertThat(update.statusCode()).isIn(200, 302, 303);
 
         Row updated = Models.get(HostModel.class).findById(id);
         assertThat((String) updated.get(HostModel.SSH_TARGET)).isEqualTo("ops@edge9.example");
 
         // An argument-injecting SSH target is refused outright.
-        adminPostForm("/admin/servers/new", "name=evil&ssh_target=-oProxyCommand%3Dcalc");
+        adminPostForm("/admin/hosts/new", "name=evil&ssh_target=-oProxyCommand%3Dcalc");
         Row evil = Models.get(HostModel.class).find()
             .where(HostModel.NAME.eq("evil")).first();
         assertThat(evil).isNull();
@@ -147,7 +147,7 @@ class HostAdminTest extends HohenheimTestBase {
         assertThat(local).isNotNull();
         Integer localId = local.get(HostModel.ID);
 
-        var smuggled = assertNotStale(adminPostEdit("/admin/servers/" + localId,
+        var smuggled = assertNotStale(adminPostEdit("/admin/hosts/" + localId,
             "name=local&ssh_target=evil%40host"));
         assertThat(smuggled.statusCode())
             .as("the local host's save lands with its read-only ssh_target withheld, not refused as stale")
@@ -157,7 +157,7 @@ class HostAdminTest extends HohenheimTestBase {
             .as("the implicit local host must not accept an SSH target")
             .isNull();
 
-        adminPostForm("/admin/servers/" + localId + "/delete", confirmed(""));
+        adminPostForm("/admin/hosts/" + localId + "/delete", confirmed(""));
         assertThat(Models.get(HostModel.class).findById(localId))
             .as("the implicit local host must not be deletable")
             .isNotNull();
@@ -173,14 +173,14 @@ class HostAdminTest extends HohenheimTestBase {
     void postureEditThroughTheFormLandsOnTheLocalHost() throws Exception {
         // 1. Remote hosts: posture rides the ordinary update path. The host is this test's
         //    own, so the journey never depends on another test having run first.
-        var edgeCreate = adminPostForm("/admin/servers/new",
+        var edgeCreate = adminPostForm("/admin/hosts/new",
             "name=edge-posture&ssh_target=deploy%40edge-posture.example");
         assertThat(edgeCreate.statusCode()).as("step 1: the remote host is created")
             .isIn(200, 302, 303);
         Row edge = Models.get(HostModel.class).find()
             .where(HostModel.NAME.eq("edge-posture")).first();
         assertThat(edge).as("step 1: the created remote host exists").isNotNull();
-        var edgeUpdate = adminPostEdit("/admin/servers/" + edge.get(HostModel.ID),
+        var edgeUpdate = adminPostEdit("/admin/hosts/" + edge.get(HostModel.ID),
             "name=edge-posture&ssh_target=ops%40edge-posture.example&posture=dedicated");
         assertThat(edgeUpdate.statusCode()).isIn(200, 302, 303);
         assertThat((String) Models.get(HostModel.class)
@@ -209,7 +209,7 @@ class HostAdminTest extends HohenheimTestBase {
         local.set(HostModel.POSTURE, HostModel.POSTURE_TRUSTED_ONLY);
         Models.get(HostModel.class).save(local);
 
-        var update = adminPostEdit("/admin/servers/" + localId,
+        var update = adminPostEdit("/admin/hosts/" + localId,
             "name=local&ssh_target=evil%40intruder.example&posture=shared_container");
         assertThat(update.statusCode()).isIn(200, 302, 303);
 

@@ -26,6 +26,12 @@ public enum LinkState {
     /** It answered the last call, running this server's version. */
     REACHABLE("reachable", HealthTone.OK),
 
+    /**
+     * The join is made on this side but not yet proven held on the other (LinkedServers): confirmed by the first status
+     * call between the two, undone when it is not confirmed in time.
+     */
+    JOINING("joining", HealthTone.UNKNOWN),
+
     /** Nothing was asked of it yet. */
     NOT_CHECKED("not_checked", HealthTone.UNKNOWN),
 
@@ -78,7 +84,7 @@ public enum LinkState {
         Microcopy label = HohenheimMicrocopy.LINKED_SERVER.of("linked_server_state_" + this.token);
         return switch (this) {
             case NOT_ANSWERING, REFUSING -> label.withArg("since", Objects.requireNonNullElse(since, Instant.EPOCH));
-            case REACHABLE, NOT_CHECKED, OTHER_SERVER, OTHER_VERSION, RESTORED -> label;
+            case REACHABLE, JOINING, NOT_CHECKED, OTHER_SERVER, OTHER_VERSION, RESTORED -> label;
         };
     }
 
@@ -88,6 +94,9 @@ public enum LinkState {
      * @return the verdict of that server's row
      */
     public static @NonNull LinkState of(@NonNull Row row, @NonNull String ownVersion) {
+        if (row.get(LinkedServerModel.CONFIRMED_AT) == null) {
+            return JOINING;
+        }
         LinkFailure failure = LinkFailure.byToken(row.get(LinkedServerModel.LAST_FAILURE));
         if (failure != null) {
             return switch (failure) {

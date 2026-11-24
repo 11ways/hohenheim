@@ -25,7 +25,7 @@ import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
  */
 class ClusterSurfacesBrowserTest extends HohenheimTestBase {
 
-    private static final String ENTRY = HohenheimSlugs.LINKED_SERVERS;
+    private static final String ENTRY = HohenheimSlugs.SERVERS;
     private static AccessContext operator;
     private static AccessContext tenant;
 

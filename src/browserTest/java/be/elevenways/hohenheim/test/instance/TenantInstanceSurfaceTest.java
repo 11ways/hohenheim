@@ -930,7 +930,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
                 .as("step 1: and it really does carry the host name, a link keyed on the"
                     + " numeric server id, and the daemon's own error text")
                 .contains(PREFIX + "inventory-host-01")
-                .contains("/admin/servers/" + hostId)
+                .contains("/admin/hosts/" + hostId)
                 .contains("pull access denied");
 
             // 2. THE PROJECTION: the same record, the same page class, under /manage.
@@ -945,7 +945,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
                 .as("step 2: and NOTHING of the host: not its name, not a route carrying"
                     + " its numeric id, on either panel's spelling")
                 .doesNotContain(PREFIX + "inventory-host-01")
-                .doesNotContain("/servers/" + hostId);
+                .doesNotContain("/hosts/" + hostId);
 
             // 3. The daemon's own text is a raw runtime error, and the install BADGE is
             //    what tells the tenant the install failed. State the difference: the fact

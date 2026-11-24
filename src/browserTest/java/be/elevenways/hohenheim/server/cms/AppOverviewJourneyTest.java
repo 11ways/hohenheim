@@ -171,7 +171,7 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
 
             // 3. Its fix is the host's page, where Check and admit lives.
             assertThat(blocked).as("step 3: the fix leads to the host")
-                .contains("/admin/servers/" + serverId + "/page/overview");
+                .contains("/admin/hosts/" + serverId + "/page/overview");
 
             // 4. The instances list draws the same verdict.
             String list = adminGet("/admin/instances" + listQuery("name = \"app-journey-workload\"")).body();

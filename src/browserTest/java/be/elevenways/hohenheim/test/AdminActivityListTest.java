@@ -291,7 +291,7 @@ class AdminActivityListTest extends HohenheimTestBase {
         //    tab; the sentence names it by its live title.
         assertThat(defaultList.body())
             .as("step 6: the sentence links the record's front door")
-            .contains("/admin/servers/" + operatorHost + "/open");
+            .contains("/admin/hosts/" + operatorHost + "/open");
 
         // 6b. A model BOTH panels mount (sites: the admin resource and its /manage narrowing) still links into THIS
         //     panel: the admin activity list never sends an operator to /manage, whatever order the framework's

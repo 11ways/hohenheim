@@ -180,7 +180,7 @@ class PartialWriteContractTest extends HohenheimHttpTestBase {
             gitSiteId, SiteModel.NAME.getName(), PREFIX + "renamed site"));
         cases.add(new Case("manage/sites", patch(HohenheimSlugs.MANAGE, gitSiteId), Models.get(SiteModel.class),
             gitSiteId, SiteModel.DESCRIPTION.getName(), "a note the operator typed"));
-        cases.add(new Case("admin/servers", patch(HohenheimSlugs.ADMIN, "servers", serverId),
+        cases.add(new Case("admin/hosts", patch(HohenheimSlugs.ADMIN, HohenheimSlugs.HOSTS, serverId),
                 Models.get(HostModel.class),
             serverId, HostModel.NAME.getName(), PREFIX + "renamed-host"));
         cases.add(new Case("admin/auth-providers", patch(HohenheimSlugs.ADMIN, HohenheimSlugs.AUTH_PROVIDERS,

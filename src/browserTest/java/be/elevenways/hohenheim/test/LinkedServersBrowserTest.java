@@ -74,17 +74,21 @@ class LinkedServersBrowserTest extends HohenheimTestBase {
         // 1. The sidebar's Servers lands on the linked servers, under the cluster's heading, with the Hosts tab.
         navigateToApp("/admin/" + HohenheimSlugs.Cluster.CLUSTER);
         waitForHydration();
-        page.waitForCondition(() -> page.url().endsWith("/admin/" + HohenheimSlugs.LINKED_SERVERS));
+        page.waitForCondition(() -> page.url().endsWith("/admin/" + HohenheimSlugs.SERVERS));
         assertThat(page.locator("h1").first().textContent()).as("step 1: the cluster heads the page")
             .contains("Servers");
         String tabs = page.locator("[data-cms-cluster-tabs]").first().textContent();
         assertThat(tabs).as("step 1: the Servers and Hosts tabs").contains("Servers").contains("Hosts");
-        // The page's own verbs stand in its heading, never on the card's tool line.
-        Locator heading = page.locator("pl-page-header-actions[data-cms-verbs-in-header]");
-        assertThat(heading.getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions()
-            .setName("Add a Hohenheim server")).count()).as("step 1: Add stands in the heading").isEqualTo(1);
-        assertThat(page.locator(".cms-list-card").getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions()
-            .setName("Add a Hohenheim server")).count()).as("step 1: and not on the card's tools").isZero();
+        // The page's own verbs stand beside the cluster's name, above its tabs (board FO119 screen 10), never under
+        // the tabs nor on the card's tool line.
+        Locator heading = page.locator("[data-cms-cluster-header] pl-page-header-actions[data-cms-cluster-links]");
+        Locator add = heading.getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions()
+            .setName("Add a Hohenheim server"));
+        assertThat(add.count()).as("step 1: Add stands in the cluster's heading").isEqualTo(1);
+        assertThat(add.boundingBox().y).as("step 1: above the tabs")
+            .isLessThan(page.locator("[data-cms-cluster-tabs] [data-cms-record-tabs]").first().boundingBox().y);
+        assertThat(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Add a Hohenheim server"))
+            .count()).as("step 1: and nowhere else, neither under the tabs nor on the card's tools").isEqualTo(1);
 
         // 2. This server is the first row: its name, "This server" in muted text under it (never a badge), reachable,
         //    under the column head "Server"; the list repeats no sentence of the page's own; an unmanaged server
@@ -126,8 +130,8 @@ class LinkedServersBrowserTest extends HohenheimTestBase {
         BoundedAssertions.assertThat(form).isHidden();
 
         // 4. Let another Hohenheim manage this server, a button beside Add, shows the code in the card under the
-        //    list, grouped in fours with Copy and until when it is valid; a reload shows it no more, the card then
-        //    says one waits.
+        //    list as a plain card (no alert around it, board FO119 screen 12), grouped in fours with Copy and until
+        //    when it is valid; a reload shows it no more, the card then says one waits.
         assertThat(page.locator("[data-cms-header-overflow]").count())
             .as("step 4: no More menu holds a header action").isZero();
         page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions()
@@ -138,18 +142,19 @@ class LinkedServersBrowserTest extends HohenheimTestBase {
             .containsPattern("[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}").contains("Shown once, valid until");
         assertThat(shown.locator("pl-code").getAttribute("size")).as("step 4: drawn at the read-off size")
             .isEqualTo("xl");
+        assertThat(shown.locator("pl-alert").count()).as("step 4: no alert around the code").isZero();
         assertThat(shown.getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions().setName("Copy")).count())
             .as("step 4: the code can be copied").isPositive();
         shown.scrollIntoViewIfNeeded();
         shoot("server-join-code");
-        navigateToApp("/admin/" + HohenheimSlugs.LINKED_SERVERS);
+        navigateToApp("/admin/" + HohenheimSlugs.SERVERS);
         waitForHydration();
         assertThat(page.locator("[data-hh-join-code]").count()).as("step 4: shown once only").isZero();
         assertThat(page.content()).as("step 4: the card says a code waits").contains("A join code is waiting");
 
         // 5. With its name setting empty this server is named after its machine.
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Cluster.NAME, null);
-        navigateToApp("/admin/" + HohenheimSlugs.LINKED_SERVERS);
+        navigateToApp("/admin/" + HohenheimSlugs.SERVERS);
         waitForHydration();
         assertThat(page.content()).as("step 5: the machine's name, the setting's no more")
             .contains(MachineName.firstLabel()).doesNotContain("Robbedoes");
@@ -173,6 +178,7 @@ class LinkedServersBrowserTest extends HohenheimTestBase {
         kuifje.set(LinkedServerModel.REMOTE_TOKEN, "kuifje-token");
         kuifje.set(LinkedServerModel.BUILD, LinkedServers.ownVersion());
         kuifje.set(LinkedServerModel.LAST_SEEN_AT, Now.instant());
+        kuifje.set(LinkedServerModel.CONFIRMED_AT, Now.instant());
         kuifje.set(LinkedServerModel.APPS, 12);
         kuifje.set(LinkedServerModel.SITES, 6);
         kuifje.set(LinkedServerModel.IN_STEP_SINCE, Now.instant());
@@ -193,7 +199,7 @@ class LinkedServersBrowserTest extends HohenheimTestBase {
             InstanceTemplateModel.MODEL_ID, List.of(new SharedRow("1", null, "WordPress", "{}")))));
         try {
             // 1. The list shows every server's own counts: this server's read now, Kuifje's as it last said.
-            navigateToApp("/admin/" + HohenheimSlugs.LINKED_SERVERS);
+            navigateToApp("/admin/" + HohenheimSlugs.SERVERS);
             waitForHydration();
             assertThat(page.locator("pl-table-head[data-column='apps']").textContent()).as("step 1: Apps")
                 .contains("Apps");
@@ -205,8 +211,13 @@ class LinkedServersBrowserTest extends HohenheimTestBase {
             assertThat(row.locator("pl-table-cell[data-column='sites']").textContent().trim())
                 .as("step 1: Kuifje's own sites").isEqualTo("6");
             for (String verb : List.of("Check now", "Remove")) {
-                BoundedAssertions.assertThat(row.getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions()
-                    .setName(verb).setExact(true))).isVisible();
+                Locator button = row.getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions()
+                    .setName(verb).setExact(true));
+                BoundedAssertions.assertThat(button).isVisible();
+                // Both small outlined buttons (board FO119 screen 10), never Remove as plain words.
+                assertThat(row.locator(".cms-row-action-lane pl-button[data-action-id]")
+                    .filter(new Locator.FilterOptions().setHasText(verb)).getAttribute("variant"))
+                    .as("step 1: %s is outlined", verb).isEqualTo("outline");
             }
             shoot("servers-counts");
 
@@ -214,7 +225,7 @@ class LinkedServersBrowserTest extends HohenheimTestBase {
             //    server remembers of it, kind by kind in the reader's words (apps, hosts and templates, never the
             //    models' own names), the cards one under the other and how changes arrive in a line under them.
             row.getByRole(AriaRole.LINK, new Locator.GetByRoleOptions().setName("Kuifje")).first().click();
-            page.waitForCondition(() -> page.url().contains("/" + HohenheimSlugs.LINKED_SERVERS + "/"));
+            page.waitForCondition(() -> page.url().contains("/" + HohenheimSlugs.SERVERS + "/"));
             waitForHydration();
             String serverPage = URI.create(page.url()).getPath();
             assertThat(page.locator("[data-cms-trail] pl-breadcrumb-item").allTextContents().stream()

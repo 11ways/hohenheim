@@ -18,8 +18,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * certificate-checked https call of one Hohenheim reaches the other's plain listener.
  *
  * AIDEV-NOTE: test support of the two-server journey; production never terminates TLS here. The target port can move
- * (a restarted server listens on another port), and {@link #accepted()} counts the connections that reached it, the
- * evidence that nothing was sent.
+ * (a restarted server listens on another port), {@link #accepted()} counts the connections that reached it, the
+ * evidence that nothing was sent, and {@link #dropAnswers} loses what the target answers: the request arrives, the
+ * caller is cut off at the first byte of the answer.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -30,6 +31,7 @@ final class TlsRelay implements AutoCloseable {
     private final AtomicInteger accepted = new AtomicInteger();
     private volatile int target;
     private volatile @Nullable SSLContext context;
+    private volatile boolean dropAnswers;
 
     private TlsRelay(@NonNull ServerSocket listener) {
         this.listener = listener;
@@ -55,6 +57,11 @@ final class TlsRelay implements AutoCloseable {
     /** Relays later connections to {@code targetPort}. */
     void retarget(int targetPort) {
         this.target = targetPort;
+    }
+
+    /** Delivers later requests but cuts their caller off when the answer starts, instead of relaying it. */
+    void dropAnswers(boolean drop) {
+        this.dropAnswers = drop;
     }
 
     /** @return how many connections reached the relay so far */
@@ -92,7 +99,14 @@ final class TlsRelay implements AutoCloseable {
                 close(tls);
                 return;
             }
-            Thread.ofVirtual().start(() -> pump(upstream, tls));
+            boolean drop = this.dropAnswers;
+            Thread.ofVirtual().start(() -> {
+                if (drop) {
+                    loseAnswer(upstream, tls);
+                } else {
+                    pump(upstream, tls);
+                }
+            });
             pump(tls, upstream);
         } catch (IOException failed) {
             close(raw);
@@ -112,6 +126,25 @@ final class TlsRelay implements AutoCloseable {
         } finally {
             close(from);
             close(to);
+        }
+    }
+
+    /** Reads the answer to its end and hands the caller none of it: the caller is cut off at its first byte. */
+    private static void loseAnswer(@NonNull Socket from, @NonNull Socket caller) {
+        try (InputStream in = from.getInputStream()) {
+            byte[] buffer = new byte[8192];
+            boolean cut = false;
+            while (in.read(buffer) >= 0) {
+                if (!cut) {
+                    close(caller);
+                    cut = true;
+                }
+            }
+        } catch (IOException ended) {
+            // Either side closed.
+        } finally {
+            close(from);
+            close(caller);
         }
     }
 

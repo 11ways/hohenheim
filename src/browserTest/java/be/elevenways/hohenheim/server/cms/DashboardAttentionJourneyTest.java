@@ -231,7 +231,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             assertThat(say(reopened.detail())).as("step 6: the step presents it").isEqualTo(say(staleRoot.detail()));
             assertThat(say(reopened.action())).as("step 6: with a fresh check").isEqualTo("Check again");
             assertThat(reopened.target().toUrl()).as("step 6: leading to the host's Overview")
-                .isEqualTo("/admin/servers/" + local + "/open");
+                .isEqualTo("/admin/hosts/" + local + "/open");
             assertThat(rootOf(stale.attention(), localHost)).as("step 6: the band does not repeat it").isNull();
 
             // 7. The first app goes online (a website serving its visitors): the checklist retires, and
@@ -264,7 +264,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             assertThat(tile(dashboard, "apps")).as("step 8: the apps, live and with a problem, by their verdicts")
                 .contains("href=\"/admin/apps\"").contains(">3<").contains("1 live").doesNotContain("with a problem");
             assertThat(tile(dashboard, "hosts")).as("step 8: the hosts, tallied by their standing")
-                .contains("href=\"/admin/servers\"").contains(">1<").contains("1 refuses new apps");
+                .contains("href=\"/admin/hosts\"").contains(">1<").contains("1 refuses new apps");
             assertThat(tile(dashboard, "certificates")).as("step 8: no certificate, so no line about one")
                 .contains("href=\"/admin/certificates\"").contains(">0<").doesNotContain("class=\"description\"");
             assertThat(tile(dashboard, "backups")).as("step 8: nothing backed up says so")
@@ -501,7 +501,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
                 .as("step 8: and in Dutch").contains("hostsleutel van " + PREFIX + "phoenix");
             assertThat(say(keyItem.action())).as("step 8: its remedy is the action").isEqualTo("Confirm its host key");
             assertThat(keyItem.target().toUrl()).as("step 8: on the host's page")
-                .isEqualTo("/admin/servers/" + phoenix.get(HostModel.ID) + "/open");
+                .isEqualTo("/admin/hosts/" + phoenix.get(HostModel.ID) + "/open");
         } finally {
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.FORCE_HTTPS, forceHttps);
             ServerMain.adoptProxyServer(previous);
@@ -976,7 +976,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
                 .assign(HostModel.LAST_ERROR_KIND, "docker_absent")
                 .assign(HostModel.LAST_ERROR, "bash: line 1: docker: command not found")
                 .bypassBehaviours().updateAll();
-            assertThat(adminGet("/admin/servers/" + lost.get(HostModel.ID) + "/page/overview").body())
+            assertThat(adminGet("/admin/hosts/" + lost.get(HostModel.ID) + "/page/overview").body())
                 .as("step 6: the host's last error leads with its kind, the raw text as the technical line")
                 .contains("Docker not found")
                 .contains("Technically: bash: line 1: docker: command not found")

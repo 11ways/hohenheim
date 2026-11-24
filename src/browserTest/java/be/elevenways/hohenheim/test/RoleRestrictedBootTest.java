@@ -128,7 +128,7 @@ class RoleRestrictedBootTest {
         assertThat(slugs)
             .as("step 5: disabled roles' peers are gone from the peer list")
             .doesNotContain("sites", "domains", "certificates", "stacks",
-                "databases", "database-engines", "instances", "servers", "bans", "spamservice");
+                "databases", "database-engines", "instances", "hosts", "bans", "spamservice");
 
         // 6. Omitted slugs 404 over real HTTP -- the routes are GONE, not merely
         //    hidden from the nav. The enabled peers answer 200 with the same
@@ -146,7 +146,7 @@ class RoleRestrictedBootTest {
             assertThat(statusOf(client, port, session, "/admin/settings"))
                 .as("step 6: the settings page answers 200 for an admin").isEqualTo(200);
             for (String gone : List.of("/admin/stacks", "/admin/databases",
-                    "/admin/instances", "/admin/servers", "/admin/sites", "/admin/bans")) {
+                    "/admin/instances", "/admin/hosts", "/admin/sites", "/admin/bans")) {
                 assertThat(statusOf(client, port, session, gone))
                     .as("step 6: %s must 404 (route gone), not render or redirect", gone)
                     .isEqualTo(404);

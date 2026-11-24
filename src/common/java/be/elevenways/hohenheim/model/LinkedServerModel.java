@@ -108,6 +108,13 @@ public class LinkedServerModel extends Model {
     /** The kinds one side shares and the other does not (the two builds differ), model ids joined by commas. */
     public static final TextField SKIPPED = SCHEMA.addField(TextField.builder().name("skipped").build());
 
+    /**
+     * When this link was proven held on the other side too: on a managed server by its master's first status call or
+     * answer, on a master only by the other server answering its call. Null while the join is not confirmed.
+     */
+    public static final DateTimeField CONFIRMED_AT = SCHEMA.addField(DateTimeField.builder().name("confirmed_at")
+        .build());
+
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 

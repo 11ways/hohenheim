@@ -227,7 +227,7 @@ public final class HohenheimPanel extends Panel {
             present(peers, HohenheimSlugs.PUT_ONLINE).isEmpty() ? null : HohenheimSlugs.PUT_ONLINE));
         // In tab order: the linked Hohenheim servers, then this server's hosts (only where host workloads run).
         addCluster(peers, cluster("servers", HohenheimSlugs.Cluster.CLUSTER, "server", 40),
-            HohenheimSlugs.LINKED_SERVERS, HohenheimSlugs.HOSTS);
+            HohenheimSlugs.SERVERS, HohenheimSlugs.HOSTS);
         // In tab order: addresses, certificates, DNS zones, released addresses.
         addCluster(peers, cluster("domain_names", HohenheimSlugs.Cluster.DOMAIN_NAMES, "globe", 50),
             HohenheimSlugs.DOMAINS,

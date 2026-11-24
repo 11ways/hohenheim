@@ -197,10 +197,11 @@ table migration:be.elevenways.hohenheim@2026_11_23_000002
   op create_table:linked_server_codes[id|uuid|null=false|uniq=true|pk=true|auto=false|def=none|len=null|prec=null,null,owner_id|uuid|null=false|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null,code_digest|text|null=false|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null,expires_at|datetime|null=false|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null,used_at|datetime|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null,created_at|datetime|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null,updated_at|datetime|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null]
   op create_table:linked_servers[id|uuid|null=false|uniq=true|pk=true|auto=false|def=none|len=null|prec=null,null,name|string|null=false|uniq=false|pk=false|auto=false|def=none|len=100|prec=null,null,role|string|null=false|uniq=false|pk=false|auto=false|def=none|len=20|prec=null,null,base_url|string|null=false|uniq=false|pk=false|auto=false|def=none|len=500|prec=null,null,link_key|text|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null,link_key_digest|string|null=true|uniq=false|pk=false|auto=false|def=none|len=128|prec=null,null,remote_token|string|null=true|uniq=false|pk=false|auto=false|def=none|len=32|prec=null,null,build|string|null=true|uniq=false|pk=false|auto=false|def=none|len=100|prec=null,null,last_seen_at|datetime|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null,failing_since|datetime|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null,last_failure|string|null=true|uniq=false|pk=false|auto=false|def=none|len=32|prec=null,null,alerted_at|datetime|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null,created_at|datetime|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null,updated_at|datetime|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null]
 table migration:be.elevenways.hohenheim@2026_11_23_000003
-  checksum 2bfa737432655b197f5fcf4df32133849e6568667d78ab375dc58ef5e88ceebb
+  checksum 38a06a41eb6eebdb0d8b5350f6c18d1b466ff0b39954525be2fd71b2e8307672
   class be.elevenways.hohenheim.migration.M006_SharedRecords
   name shared_records
   op add_column:linked_servers:apps|integer|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null
+  op add_column:linked_servers:confirmed_at|datetime|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null
   op add_column:linked_servers:in_step_since|datetime|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null
   op add_column:linked_servers:restored_at|datetime|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null
   op add_column:linked_servers:sites|integer|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null
@@ -246,3 +247,4 @@ table migration:be.elevenways.hohenheim@2026_11_23_000003
   op data:birth hohenheim:stack generation@1
   op data:birth hohenheim:stack_file generation@1
   op data:birth hohenheim:stack_service generation@1
+  op data:confirm every link made before a link could wait for its confirmation@1

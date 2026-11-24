@@ -756,7 +756,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
     void theHostMediaTabIsAdminAndIncusOnlyAndProtectsReferencedMedia() throws Exception {
         // 1. The tab renders for an admin on an INCUS host. The fixture daemon is
         //    unreachable, so the page states that by name instead of failing.
-        var tab = adminGet("/admin/servers/" + hostId + "/page/install-media");
+        var tab = adminGet("/admin/hosts/" + hostId + "/page/install-media");
         assertThat(tab.statusCode())
             .as("step 1: the Install media tab renders on an incus host").isEqualTo(200);
 
@@ -769,7 +769,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
         Models.get(HostModel.class).save(docker);
         Integer dockerId = docker.get(HostModel.ID);
         try {
-            assertThat(adminGet("/admin/servers/" + dockerId
+            assertThat(adminGet("/admin/hosts/" + dockerId
                     + "/page/install-media").statusCode())
                 .as("step 2: a docker host answers 404 for the media tab").isEqualTo(404);
         } finally {
@@ -789,7 +789,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
         Models.get(HostModel.class).save(unenrolled);
         Integer unenrolledId = unenrolled.get(HostModel.ID);
         try {
-            var trustRefused = adminGet("/admin/servers/" + unenrolledId
+            var trustRefused = adminGet("/admin/hosts/" + unenrolledId
                 + "/page/install-media");
             assertThat(trustRefused.statusCode())
                 .as("step 2b: an un-enrolled host's media tab renders (200), never 500s")
@@ -879,14 +879,14 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
             // 1. THE CONTROL: this really is an admin. A neighbouring tab on the very
             //    same record answers, so step 2 is about the media permission and not
             //    about a principal who can reach nothing.
-            assertThat(httpGet("/admin/servers/" + hostId + "/page/overview",
+            assertThat(httpGet("/admin/hosts/" + hostId + "/page/overview",
                     operator.token()).statusCode())
                 .as("step 1: the operator IS an admin -- another server tab answers")
                 .isEqualTo(200);
 
             // 2. HIDE: the tab is filtered out of the record's own tab strip, so the
             //    surface never offers an affordance that could only refuse.
-            var overview = httpGet("/admin/servers/" + hostId + "/page/overview",
+            var overview = httpGet("/admin/hosts/" + hostId + "/page/overview",
                 operator.token());
             assertThat(overview.body())
                 .as("step 2: the media tab is not offered in the tab strip")
@@ -896,7 +896,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
             //     framework's requiredPermission lane (visibleFor is the 404 one), and
             //     it is the right shape here -- the tab's EXISTENCE is public product
             //     knowledge, only this host's media is not.
-            assertThat(httpGet("/admin/servers/" + hostId + "/page/install-media",
+            assertThat(httpGet("/admin/hosts/" + hostId + "/page/install-media",
                     operator.token()).statusCode())
                 .as("step 2b: an admin denied the media permission cannot open the tab")
                 .isEqualTo(403);
@@ -922,7 +922,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
                 denial.get(be.elevenways.zenit.auth.model.GrantModel.ID));
             TestSession granted = sessionFor(operatorId);
 
-            assertThat(httpGet("/admin/servers/" + hostId + "/page/install-media",
+            assertThat(httpGet("/admin/hosts/" + hostId + "/page/install-media",
                     granted.token()).statusCode())
                 .as("step 4: the media permission is what opens the tab")
                 .isEqualTo(200);

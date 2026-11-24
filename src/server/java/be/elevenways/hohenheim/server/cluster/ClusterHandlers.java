@@ -121,7 +121,10 @@ public final class ClusterHandlers {
         ClusterEndpoints.TOOL.setHandler(ClusterHandlers::tool);
         ClusterEndpoints.JOIN.setHandler(ClusterHandlers::join);
         ClusterEndpoints.STATUS.setHandler(conduit -> {
-            if (LinkedServers.byKey(keyOf(conduit)) == null) {
+            Row row = LinkedServers.byKey(keyOf(conduit));
+            // A master asking proves it holds the link, so the joining side's row is confirmed; one this side already
+            // undid is unknown. A master's own row is confirmed only by an answer to its own call (LinkedServers).
+            if (row == null || LinkedServers.roleOf(row) == LinkRole.MANAGED_BY && !LinkedServers.confirmed(row)) {
                 return unknownKey(conduit);
             }
             return new JsonResult<>(LinkedServers.ownStatus());

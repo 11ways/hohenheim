@@ -47,7 +47,7 @@ class AdminListPresentationTest extends HohenheimHttpTestBase {
      * the way that happens again is a resource quietly losing its declaration.
      */
     private static final Set<String> SEARCHABLE_ADMIN_SLUGS = Set.of(
-        "sites", "instances", "servers", "databases", "certificates", "projects",
+        "sites", "instances", "hosts", "databases", "certificates", "projects",
         "environments", "environment-variables", "stacks", "instance-templates",
         "git-providers", "notifications", "dns-peers", "dns-records", "previews",
         "access-lists", "dns-zones", "bans", "domains", "instance-snapshots",
@@ -201,7 +201,7 @@ class AdminListPresentationTest extends HohenheimHttpTestBase {
 
         // 5. A host is found by an address that was stored and, before the search box, rendered
         //    nowhere at all.
-        String byIp = adminGet("/admin/servers?text=198.51.100.44").body();
+        String byIp = adminGet("/admin/hosts?text=198.51.100.44").body();
         assertThat(byIp).as("step 5: the host is found by its public address")
             .contains("wavea-host");
 
@@ -262,7 +262,7 @@ class AdminListPresentationTest extends HohenheimHttpTestBase {
         //    the FOLDED filter bar (zenit-cms 155b9bc), which a pristine server render
         //    leaves out entirely; an active ?q= narrowing forces the bar open, so both this
         //    step and the positive control in step 4 read a render where it COULD appear.
-        String hosts = adminGet("/admin/servers?q=" + FORCING_QUERY).body();
+        String hosts = adminGet("/admin/hosts?q=" + FORCING_QUERY).body();
         assertThat(hosts).as("step 1: the hosts list renders").contains("cms-list-card");
         assertThat(hosts).as("step 1: hosts offer no advanced filter")
             .doesNotContain("data-cms-advanced-toggle");

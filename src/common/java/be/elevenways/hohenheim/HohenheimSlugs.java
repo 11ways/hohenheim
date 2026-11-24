@@ -44,6 +44,8 @@ public final class HohenheimSlugs {
     public static final String ENVIRONMENTS = "environments";
     public static final String GAME_DOMAINS = "game-domains";
     public static final String GIT_PROVIDERS = "git-providers";
+    /** The hosts list: the machines apps run on (HostModel, its table still "servers"). */
+    public static final String HOSTS = "hosts";
     public static final String INBOX = "inbox";
     public static final String INSTANCE_BACKUPS = "instance-backups";
     public static final String INSTANCE_DATABASES = "instance-databases";
@@ -64,7 +66,6 @@ public final class HohenheimSlugs {
     public static final String INSTANCE_VOLUMES = "instance-volumes";
     public static final String INSTANCES = "instances";
     public static final String INSTANCES_FROM_TEMPLATE = "instances-from-template";
-    public static final String LINKED_SERVERS = "linked-servers";
     public static final String NOTIFICATIONS = "notifications";
     public static final String PREVIEWS = "previews";
     public static final String PROJECT_MEMBERS = "project-members";
@@ -76,8 +77,8 @@ public final class HohenheimSlugs {
     public static final String RELEASED_CLAIMS = "released-claims";
     public static final String RELEASES = "releases";
     public static final String RUNTIME_IMAGES = "runtime-images";
-    /** The hosts list; its address keeps the stored slug "servers" until panel slugs can move with their old address. */
-    public static final String HOSTS = "servers";
+    /** The Servers list: this Hohenheim and every Hohenheim it is linked to (LinkedServerModel). */
+    public static final String SERVERS = "servers";
     public static final String SITES = "sites";
     public static final String SPAMSERVICE = "spamservice";
     public static final String SPAMSERVICE_CLIENTS = "spamservice-clients";

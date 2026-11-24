@@ -27,6 +27,17 @@ master remembers of the servers it manages. Lists that mix servers and pages of 
    makes its row of the master, takes its code numbers from it (see "One code per thing") and renumbers; any failure
    rolls all of that back and refuses the join. Both servers then hold a row in `linked_servers`: the master one with
    role `manages`, the managed server one with role `managed_by`.
+4. The two commit apart: the managed server before it answers, the master after the answer arrived. So each row is
+   made unconfirmed and both sides say "Joining, not confirmed yet" until a status call proves the other side holds
+   it (`confirmed_at`): the managed server's row is confirmed by its master's status call, or by its master answering
+   its own; the master's row only by the managed server answering the master's call, so a confirmed master row means a
+   confirmed managed row. The master's add makes that call at once, so a join that went well is confirmed before the
+   add answers. When it cannot be confirmed, each side undoes its own row by itself, nobody repairs anything: the
+   managed server undoes a join not confirmed within five minutes at its next failing check (its master's row goes,
+   its numbering goes back to its own sequence as leaving does, the renumbered codes keep their new numbers and their
+   old spellings), and the master forgets an unconfirmed row as soon as the other side refuses its key. A server whose
+   join was undone can be joined again with a fresh code. The master's add that heard no answer says so, and that
+   the other server undoes a join it took within those five minutes.
 
 Every creation of a link row, the join answered on the managed server and the add on the master, runs one at a
 time under one core lease (`hohenheim:cluster_link`), its checks inside it: one master, a managed server manages
@@ -88,6 +99,7 @@ every minute too, so its return is noticed within a minute. **Check now** asks a
 | State | When |
 | --- | --- |
 | Reachable | it answered the last status call with the identity that joined, running this version |
+| Joining, not confirmed yet | the join is made here, and no status call between the two has proven the other side holds it |
 | Not checked yet | it was never asked |
 | Does not answer since ... | nothing was sent, nothing came back in time, or nothing readable came back |
 | Refuses this server since ... | it answered, refusing this server's key |
@@ -186,7 +198,8 @@ The master records a join's grant void (core `CodeGrants.grantJoining`) and puts
 adds the joined server's row (`CodeGrants.joined`). A refused or abandoned join leaves a void grant: its numbers are
 never handed out again, and the master answers that a code among them lives on no linked server.
 A join the managed server kept while the master never recorded it (the master's add lost the answer) leaves the
-managed server's codes in such a void grant as well: the master answers that they live on no linked server.
+managed server's codes in such a void grant as well: the master answers that they live on no linked server. The
+managed server undoes such a join itself once it was not confirmed in time (see "Joining").
 
 ## Assistants
 

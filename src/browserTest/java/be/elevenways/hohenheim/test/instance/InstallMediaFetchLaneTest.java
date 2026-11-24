@@ -103,7 +103,7 @@ class InstallMediaFetchLaneTest extends HohenheimTestBase {
 
         // 3. The tab renders the running fetch inside its live region, and no timer element that
         //    would re-navigate the whole tab is left anywhere.
-        String tab = adminGet("/admin/servers/" + hostId + "/page/install-media").body();
+        String tab = adminGet("/admin/hosts/" + hostId + "/page/install-media").body();
         assertThat(tab).as("step 3: the running fetch is listed")
             .contains("data-fetch-name=\"" + PREFIX + "iso\"");
         assertThat(tab).as("step 3: inside the live region that follows it").contains("<hh-install-media");
@@ -119,7 +119,7 @@ class InstallMediaFetchLaneTest extends HohenheimTestBase {
 
         // 5. A settled tab lists the ending, and the live re-read answers the SAME view the tab
         //    rendered: the region can never draw a fetch differently after an update.
-        String settled = adminGet("/admin/servers/" + hostId + "/page/install-media").body();
+        String settled = adminGet("/admin/hosts/" + hostId + "/page/install-media").body();
         assertThat(settled).as("step 5: the ending stays listed")
             .contains("data-fetch-name=\"" + PREFIX + "iso\"");
         InstallMediaView view = HostMediaTab.view(host);
@@ -132,7 +132,7 @@ class InstallMediaFetchLaneTest extends HohenheimTestBase {
                     .isEqualTo(InstallMediaFetchState.READY.label());
                 assertThat(fetch.percent()).as("step 5: a settled fetch draws no bar").isNull();
             });
-        assertThat(adminGet("/admin/servers/" + hostId + "/page/install-media").statusCode())
+        assertThat(adminGet("/admin/hosts/" + hostId + "/page/install-media").statusCode())
             .as("step 5: the page the live part is a piece of answers the admin").isEqualTo(200);
     }
 
@@ -148,7 +148,7 @@ class InstallMediaFetchLaneTest extends HohenheimTestBase {
             .as("step 1: the fetch ended failed").isEqualTo(InstallMediaFetchState.FAILED.token());
         assertThat((String) failed.get(InstallMediaFetchModel.ERROR))
             .as("step 1: with the transfer's reason").isEqualTo("download answered HTTP 404");
-        assertThat(adminGet("/admin/servers/" + hostId + "/page/install-media").body())
+        assertThat(adminGet("/admin/hosts/" + hostId + "/page/install-media").body())
             .as("step 1: the reason reaches the tab").contains("download answered HTTP 404");
 
         // 1b. A download past the install-media cap ends FAILED in the refusal's own words, its cap worded as a size.
@@ -254,7 +254,7 @@ class InstallMediaFetchLaneTest extends HohenheimTestBase {
         Models.get(HostModel.class).save(docker);
         int dockerId = docker.get(HostModel.ID);
         try {
-            assertThat(adminGet("/admin/servers/" + dockerId + "/page/install-media").statusCode())
+            assertThat(adminGet("/admin/hosts/" + dockerId + "/page/install-media").statusCode())
                 .as("step 3: a Docker host's tab is not found, so is its part").isEqualTo(404);
         } finally {
             Models.get(HostModel.class).delete(dockerId);
@@ -282,7 +282,7 @@ class InstallMediaFetchLaneTest extends HohenheimTestBase {
         try {
             // 1. Open the tab: the running fetch is drawn with its progress bar.
             String row = "hh-install-media [data-fetch-name=\"" + name + "\"]";
-            navigateToApp("/admin/servers/" + hostId + "/page/install-media");
+            navigateToApp("/admin/hosts/" + hostId + "/page/install-media");
             waitForHydration();
             assertThat(countElements(row + " pl-progress"))
                 .as("step 1: the running fetch shows its progress").isEqualTo(1);
@@ -339,7 +339,7 @@ class InstallMediaFetchLaneTest extends HohenheimTestBase {
             try {
                 // 1. Open the tab: the pool holds nothing yet.
                 String medium = "hh-install-media [data-medium-name=\"" + name + "\"]";
-                navigateToApp("/admin/servers/" + socketHostId + "/page/install-media");
+                navigateToApp("/admin/hosts/" + socketHostId + "/page/install-media");
                 waitForHydration();
                 assertThat(countElements(medium)).as("step 1: the pool holds no upload yet").isZero();
 

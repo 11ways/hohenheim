@@ -378,7 +378,7 @@ class InstanceOverviewTest extends HohenheimTestBase {
             //    with no lever is only half an answer.
             assertThat(blocked)
                 .as("step 3: and links to the host that must be fixed")
-                .contains("/admin/servers/" + serverId + "/page/overview");
+                .contains("/admin/hosts/" + serverId + "/page/overview");
 
             // 4. Deploy is STILL offered: keep-and-explain, pinned against a later
             //    well-meaning hide. The button is what proves the refusal is about the

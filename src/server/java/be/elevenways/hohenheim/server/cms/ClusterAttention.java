@@ -54,7 +54,7 @@ public final class ClusterAttention {
                     .withArg("since", Objects.requireNonNullElse(row.get(LinkedServerModel.FAILING_SINCE),
                         Instant.EPOCH)),
                 failure == null ? null : failure.label(),
-                CmsRoutes.list(ADMIN, HohenheimSlugs.LINKED_SERVERS),
+                CmsRoutes.list(ADMIN, HohenheimSlugs.SERVERS),
                 HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_linked_servers")));
         }
     }

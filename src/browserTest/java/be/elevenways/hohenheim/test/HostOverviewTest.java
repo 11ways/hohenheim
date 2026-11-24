@@ -64,7 +64,7 @@ class HostOverviewTest extends HohenheimTestBase {
 
         // 2. THE DEFECT. Render the detail form and read the record back.
         long constructions = DockerClient.constructionCount();
-        HttpResponse<String> detail = adminGet("/admin/servers/" + hostId);
+        HttpResponse<String> detail = adminGet("/admin/hosts/" + hostId);
         assertThat(detail.statusCode()).as("step 2: the detail form renders").isEqualTo(200);
 
         Row after = Models.get(HostModel.class).findById(hostId);
@@ -92,7 +92,7 @@ class HostOverviewTest extends HohenheimTestBase {
     @Test
     void theEditFormCarriesOnlyEditableFields() throws Exception {
         int hostId = enrollHost("overview-edit-form");
-        HttpResponse<String> detail = adminGet("/admin/servers/" + hostId);
+        HttpResponse<String> detail = adminGet("/admin/hosts/" + hostId);
         assertThat(detail.statusCode()).isEqualTo(200);
         for (String fake : List.of("live_overview", "host_key_state", "identity_public_key",
                 "kernel_isolation_state", "incus_cert_state", "incus_client_cert")) {
@@ -116,14 +116,14 @@ class HostOverviewTest extends HohenheimTestBase {
     @Test
     void theTrustNoticeRendersOnCreateOnly() throws Exception {
         int hostId = enrollHost("overview-trust-notice");
-        HttpResponse<String> detail = adminGet("/admin/servers/" + hostId);
+        HttpResponse<String> detail = adminGet("/admin/hosts/" + hostId);
         assertThat(detail.statusCode()).isEqualTo(200);
         assertThat(detail.body())
             .withFailMessage("the EDIT form still renders the 'trust_notice' pseudo-field"
                 + " -- consent copy belongs on the enrolment form only")
             .doesNotContain("data-path=\"trust_notice");
 
-        HttpResponse<String> create = adminGet("/admin/servers/new");
+        HttpResponse<String> create = adminGet("/admin/hosts/new");
         assertThat(create.statusCode()).as("the create form renders").isEqualTo(200);
         assertThat(create.body())
             .as("positive anchor: the CREATE form still states what enrolling grants,"
@@ -137,7 +137,7 @@ class HostOverviewTest extends HohenheimTestBase {
      */
     @Test
     void choosingIncusShowsTheIncusTrustNotice() {
-        navigateToApp("/admin/servers/new");
+        navigateToApp("/admin/hosts/new");
         waitForHydration();
         String docker = "[data-path='trust_notice_docker']";
         String incus = "[data-path='trust_notice_incus']";
@@ -173,7 +173,7 @@ class HostOverviewTest extends HohenheimTestBase {
             .isNotEqualTo(englishNotice);
 
         // 2. A Dutch browser's create form states what enrolling grants in Dutch, and never in English.
-        HttpResponse<String> create = sendRequest(requestTo("/admin/servers/new").GET()
+        HttpResponse<String> create = sendRequest(requestTo("/admin/hosts/new").GET()
             .header("Cookie", sessionCookieHeader(sessionToken))
             .header("Accept-Language", "nl"));
         assertThat(create.statusCode()).as("step 2: the create form renders").isEqualTo(200);
@@ -212,7 +212,7 @@ class HostOverviewTest extends HohenheimTestBase {
 
         // 2. THE DEFECT: pre-fix this page did not exist (404), so the evidence above
         //    was stored and readable by no operator.
-        HttpResponse<String> overview = adminGet("/admin/servers/" + hostId + "/page/overview");
+        HttpResponse<String> overview = adminGet("/admin/hosts/" + hostId + "/page/overview");
         assertThat(overview.statusCode())
             .withFailMessage("step 2: the server overview page does not exist -- the"
                 + " stored preflight report is rendered nowhere (HTTP %s)",
@@ -255,7 +255,7 @@ class HostOverviewTest extends HohenheimTestBase {
         assertThat(mine).as("step 5: this host has an action").isNotNull();
         assertThat(bookkeeping).as("step 5: and a bookkeeping action before it").isNotNull().isNotEqualTo(mine);
 
-        String withBand = adminGet("/admin/servers/" + hostId + "/page/overview").body();
+        String withBand = adminGet("/admin/hosts/" + hostId + "/page/overview").body();
         assertThat(withBand).as("step 5: the overview carries a recent-activity band")
             .contains("Recent activity");
         assertThat(withBand).as("step 5: it links this host's own entry")
@@ -288,7 +288,7 @@ class HostOverviewTest extends HohenheimTestBase {
         HostPreflight.store("overview-capacity", new HostPreflight.Report(List.of(),
             Map.of(HostPreflight.MEM_TOTAL_FACT, 16L * 1024 * 1024 * 1024),
             true, Now.instant().minus(Duration.ofDays(365)), null));
-        HttpResponse<String> stale = adminGet("/admin/servers/" + hostId + "/page/overview");
+        HttpResponse<String> stale = adminGet("/admin/hosts/" + hostId + "/page/overview");
         assertThat(stale.statusCode()).isEqualTo(200);
         // The unmeasured posture is the usage widget's own built-in state now (the page
         // used to spell it in a bespoke template branch); the SEMANTIC assertion is
@@ -309,7 +309,7 @@ class HostOverviewTest extends HohenheimTestBase {
         HostPreflight.store("overview-capacity", new HostPreflight.Report(List.of(),
             Map.of(HostPreflight.MEM_TOTAL_FACT, 16L * 1024 * 1024 * 1024),
             true, Now.instant(), null));
-        HttpResponse<String> fresh = adminGet("/admin/servers/" + hostId + "/page/overview");
+        HttpResponse<String> fresh = adminGet("/admin/hosts/" + hostId + "/page/overview");
         String[] widgets = fresh.body().split("class=\"widget widget-usage\"", -1);
         assertThat(widgets.length - 1).as("step 2: a memory and a disk widget").isEqualTo(2);
         assertThat(widgets[1])
@@ -337,7 +337,7 @@ class HostOverviewTest extends HohenheimTestBase {
         Integer instanceId = instances.find()
             .where(InstanceModel.NAME.eq("overview-holder")).first().get(InstanceModel.ID);
 
-        HttpResponse<String> overview = adminGet("/admin/servers/" + hostId + "/page/overview");
+        HttpResponse<String> overview = adminGet("/admin/hosts/" + hostId + "/page/overview");
         assertThat(overview.body())
             .as("the workload renders by name").contains("overview-holder");
         assertThat(overview.body())
@@ -362,7 +362,7 @@ class HostOverviewTest extends HohenheimTestBase {
         host.set(HostModel.QUARANTINE_REASON, "host key contradicted the pinned identity");
         Models.get(HostModel.class).save(host);
 
-        HttpResponse<String> overview = adminGet("/admin/servers/" + hostId + "/page/overview");
+        HttpResponse<String> overview = adminGet("/admin/hosts/" + hostId + "/page/overview");
         String body = overview.body();
         // The banner is the framework's alert widget now, so it is identified by the
         // copy it carries rather than by a hand-written data attribute.
@@ -377,7 +377,7 @@ class HostOverviewTest extends HohenheimTestBase {
         cleared.set(HostModel.QUARANTINED_AT, (Instant) null);
         cleared.set(HostModel.QUARANTINE_REASON, (String) null);
         Models.get(HostModel.class).save(cleared);
-        assertThat(adminGet("/admin/servers/" + hostId + "/page/overview").body())
+        assertThat(adminGet("/admin/hosts/" + hostId + "/page/overview").body())
             .as("positive anchor: an unquarantined host renders no banner")
             .doesNotContain(QUARANTINE_TITLE);
     }
@@ -388,7 +388,7 @@ class HostOverviewTest extends HohenheimTestBase {
      */
     @Test
     void theHostsListRendersAStructuredStatusCell() throws Exception {
-        HttpResponse<String> list = adminGet("/admin/servers");
+        HttpResponse<String> list = adminGet("/admin/hosts");
         assertThat(list.statusCode()).isEqualTo(200);
         assertThat(list.body())
             .as("the host_status cell renders the structured partial")
@@ -400,7 +400,7 @@ class HostOverviewTest extends HohenheimTestBase {
 
     /** Enroll a never-probed remote host through the create form; each test owns its own. */
     private int enrollHost(String name) throws Exception {
-        var create = adminPostForm("/admin/servers/new",
+        var create = adminPostForm("/admin/hosts/new",
             "name=" + name + "&ssh_target=nobody%40" + name + ".hohenheim-test.invalid");
         assertThat(create.statusCode()).as("host %s enrolls", name).isIn(200, 302, 303);
         Row host = Models.get(HostModel.class).findByName(name);

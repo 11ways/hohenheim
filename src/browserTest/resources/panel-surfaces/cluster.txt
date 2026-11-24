@@ -1,4 +1,4 @@
-case admin.linked-servers.operator admin linked-servers operator v2
+case admin.servers.operator admin servers operator v2
 admission - verdict=admitted
 chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=false
 column name at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext=note relation=false
@@ -13,5 +13,5 @@ header hohenheim:linked_server_add at=1 verb=invoke band=inline style=PRIMARY di
 tab overview at=0 landing=false view=false
 tab remembered at=1 landing=false view=false
 
-case admin.linked-servers.tenant admin linked-servers tenant v2
+case admin.servers.tenant admin servers tenant v2
 admission - verdict=zenit:forbidden

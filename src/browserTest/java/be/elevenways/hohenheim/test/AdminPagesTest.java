@@ -880,7 +880,7 @@ class AdminPagesTest extends HohenheimTestBase {
             // Drawn ONCE: by the open admission step that presents the item, or by the band when no step is
             // open, never by both.
             // The host's front door (its Overview, where Check and admit reads), never its Configuration form.
-            String host = "[href='/admin/servers/" + local.get(HostModel.ID) + "/open']";
+            String host = "[href='/admin/hosts/" + local.get(HostModel.ID) + "/open']";
             var hostLinks = page.locator(".hh-attention-item > a.hh-attention-target" + host
                 + ", .hh-onboarding-step a.hh-onboarding-action" + host);
             assertThat(hostLinks.count())

@@ -243,7 +243,7 @@ public final class LinkedServerParts {
             // Check now and Remove side by side in a linked server's row, as on its page.
             .inlineRowActions(2)
             .build();
-        return PanelResource.builder(HohenheimIds.id("linked_server"), HohenheimSlugs.LINKED_SERVERS, SUBJECT)
+        return PanelResource.builder(HohenheimIds.id("linked_server"), HohenheimSlugs.SERVERS, SUBJECT)
             // The cluster's own name: a record's trail then names the cluster and its landing once (Servers / Kuifje).
             .label(HohenheimMicrocopy.NAV_CLUSTER.of("servers"))
             .recordLabel(SERVER)
@@ -253,9 +253,11 @@ public final class LinkedServerParts {
             .list(ResourceList.store(table, StorePages.inMemory(table, access -> rows(),
                     (row, column) -> values(row).get(column.name())),
                     LiveFeed.of(AccessContext::isAccount, LinkedServerModel.MODEL_ID))
-                // Add a Hohenheim server and the join code's button stand in the page's heading, the card's tool
-                // line left to what works on the rows; a row keeps Check now and Remove as buttons.
-                .chrome(ListChrome.MINIMAL.withVerbInHeader(true).withRowActionKept(true))
+                // Add a Hohenheim server and the join code's button stand beside the cluster's name, before its tabs
+                // (board FO119 screen 10), the card's tool line left to what works on the rows; a row keeps Check now
+                // and Remove as buttons.
+                .chrome(ListChrome.MINIMAL.withVerbInHeader(true).withVerbInClusterHeading(true)
+                    .withRowActionKept(true))
                 .rowLinkToTab(RecordOverview.SLUG)
                 .widgetsBelow(LinkedServerParts::joinCard)
                 .build())
@@ -314,6 +316,7 @@ public final class LinkedServerParts {
                 (request, state) -> CmsActionResult.refreshWithToast(
                     HohenheimMicrocopy.LINKED_SERVER.of("linked_server_checked")))
             .label(HohenheimMicrocopy.LINKED_SERVER.of("linked_server_check"))
+            .style(ActionStyle.OUTLINE)
             .icon(Icon.of("rotate"))
             .hiddenWhen(ServerRow::own)
             .build();
@@ -333,6 +336,7 @@ public final class LinkedServerParts {
                 })
             .label(HohenheimMicrocopy.LINKED_SERVER.of("linked_server_remove"))
             .icon(Icon.of("link-slash"))
+            .style(ActionStyle.OUTLINE)
             .inDestructiveTail(false)
             .hiddenWhen(ServerRow::own)
             .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.LINKED_SERVER.of("linked_server_remove"),
@@ -413,9 +417,14 @@ public final class LinkedServerParts {
         Microcopy title = HohenheimMicrocopy.LINKED_SERVER.of("linked_server_offer_join");
         Row master = LinkedServers.master();
         if (master != null) {
+            String name = String.valueOf((Object) master.get(LinkedServerModel.NAME));
+            if (master.get(LinkedServerModel.CONFIRMED_AT) == null) {
+                return card(title, HohenheimMicrocopy.LINKED_SERVER.of("linked_server_joining_from")
+                    .withArg("name", name));
+            }
             Instant since = Objects.requireNonNullElse(master.get(LinkedServerModel.CREATED_AT), Instant.EPOCH);
             return card(title, HohenheimMicrocopy.LINKED_SERVER.of("linked_server_managed_from")
-                .withArg("name", String.valueOf((Object) master.get(LinkedServerModel.NAME))).withArg("since", since));
+                .withArg("name", name).withArg("since", since));
         }
         if (LinkedServers.managesAny()) {
             return WidgetTree.empty();

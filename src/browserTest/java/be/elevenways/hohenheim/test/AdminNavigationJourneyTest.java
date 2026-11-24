@@ -59,7 +59,7 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
     /** Each cluster's members, in the order its tabs show them. */
     private static final Map<String, List<String>> EXPECTED_CLUSTERS = Map.of(
         // The linked Hohenheim servers first, then this server's hosts.
-        HohenheimSlugs.Cluster.CLUSTER, List.of(HohenheimSlugs.LINKED_SERVERS, "servers"),
+        HohenheimSlugs.Cluster.CLUSTER, List.of(HohenheimSlugs.SERVERS, HohenheimSlugs.HOSTS),
         HohenheimSlugs.Cluster.DOMAIN_NAMES, List.of("domains", "certificates", "dns-zones", "released-claims"),
         // Roles stay a member (their pages stand under Access) but no tab: zenit-auth's People list reaches them.
         HohenheimSlugs.Cluster.ACCESS, List.of("access-lists", "bans", "users", "auth-providers", "spamservice"),
@@ -200,7 +200,7 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
         assertThat(adminGet("/admin/environments").body())
             .as("step 6: the Environments list heads to its variables")
             .contains("/admin/environment-variables");
-        assertThat(adminGet("/admin/servers").body())
+        assertThat(adminGet("/admin/hosts").body())
             .as("step 6: the Hosts list heads to the reconciler's findings")
             .contains("/admin/reconcile-findings");
         assertThat(adminGet("/admin/dns-zones").body())
@@ -325,8 +325,8 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
         //     its create action (a scratch with roles.databases/instances/stacks off had neither row).
         assertThat(adminGet("/admin/databases").body())
             .as("step 13: the Databases list offers its create action").contains("/admin/databases/new");
-        assertThat(adminGet("/admin/servers").body())
-            .as("step 13: the Hosts list offers its create action").contains("/admin/servers/new");
+        assertThat(adminGet("/admin/hosts").body())
+            .as("step 13: the Hosts list offers its create action").contains("/admin/hosts/new");
     }
 
     /** A sidebar entry's description resolves in both shipped locales, never to its raw key. */

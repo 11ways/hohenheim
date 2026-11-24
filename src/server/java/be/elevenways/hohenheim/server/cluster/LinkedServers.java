@@ -52,6 +52,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
@@ -81,6 +82,20 @@ import java.util.concurrent.CompletableFuture;
  *
  * AIDEV-NOTE: a sweep asks its servers at the same time ({@link #CHECKS}, at most {@link #CHECKS_AT_ONCE}), each
  * writing its own row: up to that many silent servers cost one call deadline together, not one each in turn.
+ *
+ * AIDEV-NOTE: a join commits on two servers apart: the joining server commits its master's row, the grants and the
+ * renumbering, answers, and only then does the master write its row of that server. So each side's row is made
+ * UNCONFIRMED (confirmed_at null). The joining side's row is confirmed by a status call its master makes (proof the
+ * master holds its row; the STATUS handler answers only once {@link #confirmed} stamped it, so an answer never comes
+ * from a row just undone) or by its own call the master answers; the master's row is confirmed ONLY by an answer to
+ * its own status call, never by a call it receives: so a confirmed master row implies a confirmed joining row. The
+ * master's add makes that call at once. Only the joining side undoes by time: a join not confirmed within
+ * {@link #CONFIRM_WITHIN} is undone at its next failing check (the master's row, then back to the own numbering
+ * with CodeBlocks.leave; the renumbered codes keep their new numbers and old spellings, the master's grant stays void
+ * and its numbers unused). The master forgets an unconfirmed row the other side refuses (that side never confirmed,
+ * and it undid its join or never kept it). Both undoes delete only a row still unconfirmed, so a confirmation that
+ * wins the race keeps the link. A master's unconfirmed row whose server stays unreachable says so ("Joining, not
+ * confirmed yet") until the two speak again, which settles it either way: no side can know more without that call.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -121,6 +136,9 @@ public final class LinkedServers {
 
     /** How long a join may take here before it is refused: half the deadline the master waits for its answer. */
     private static final Duration JOIN_ANSWER_WITHIN = LinkCalls.DEADLINE.dividedBy(2);
+
+    /** How long a joining server waits for its join to be confirmed before its next failing check undoes it. */
+    public static final Duration CONFIRM_WITHIN = Duration.ofMinutes(5);
 
     /** How many linked servers one sweep asks at the same time; the rest wait their turn in the sweep. */
     static final int CHECKS_AT_ONCE = 8;
@@ -336,10 +354,9 @@ public final class LinkedServers {
 
     /**
      * Answers a master's join under the creation lease: the code is redeemed within the asking address's failure
-     * budget, and inside the code's transaction this server's row of its master is made, with the key this server
-     * presents to it, and its code numbers are taken from that master (ClusterCodes.join); a failure there rolls all
-     * of it back and refuses the join.
-     *
+     * budget, and inside the code's transaction this server's row of its master is made, unconfirmed, with the key this
+     * server presents to it, and its code numbers are taken from that master (ClusterCodes.join); a failure there rolls
+     * all of it back and refuses the join. The master's first status call confirms the row ({@link #confirmed}).
      *
      * @param body  the master's name, address, controller token, version, the key this server shall present to it, its
      *              ticket for the code numbers and the code
@@ -422,11 +439,21 @@ public final class LinkedServers {
         if (lease == null) {
             throw Violations.ofForm(JoinRefusal.BUSY.message());
         }
+        Row server;
         try {
-            return addHolding(name, address, code);
+            server = addHolding(name, address, code);
         } finally {
             lease.release();
         }
+        // The confirming call, outside the lease: a creation waiting behind this one waits one call, not two.
+        Row checked = check(server);
+        if (byId(server.get(LinkedServerModel.ID)) == null) {
+            // That server refused the link it just answered: it holds none, so neither does this one.
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("linked_server_join_unanswered")
+                .withArg("address", String.valueOf((Object) server.get(LinkedServerModel.BASE_URL)))
+                .withArg("window", CONFIRM_WITHIN));
+        }
+        return checked;
     }
 
     private static @NonNull Row addHolding(@Nullable String name, @Nullable String address, @Nullable String code) {
@@ -473,8 +500,9 @@ public final class LinkedServers {
         body.put("ticket", ClusterCodes.ticket(id, theirKey));
         LinkCalls.Answer answer = LinkCalls.join(baseUrl, body);
         if (!(answer instanceof LinkCalls.Answered answered)) {
+            // That server may have joined and lost only its answer: it undoes the join itself once unconfirmed.
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("linked_server_join_unanswered")
-                .withArg("address", baseUrl));
+                .withArg("address", baseUrl).withArg("window", CONFIRM_WITHIN));
         }
         Map<String, Object> joined = answered.body();
         if (answered.status() != 200) {
@@ -485,6 +513,20 @@ public final class LinkedServers {
                 case HAS_MASTER, MANAGES_OTHERS, BUSY, UNREADABLE, CODES -> Violations.ofForm(refusal.message());
             };
         }
+        return recorded(id, trimmed, baseUrl, theirKey, joined);
+    }
+
+    /**
+     * Writes the master's row of a server whose join it answered, unconfirmed, in force with that join's grants, and
+     * asks for that server's records; the add's commit, which a master stopping right after leaves unconfirmed.
+     *
+     * @param theirKey the key the master minted for that server to present here
+     * @param joined   that server's answer to the join
+     * @return the new row
+     * @throws Violations when the answer carries no key or identity
+     */
+    static @NonNull Row recorded(@NonNull UUID id, @NonNull String name, @NonNull String baseUrl,
+                                 @NonNull String theirKey, @NonNull Map<String, Object> joined) {
         String token = text(joined.get("token"));
         String key = text(joined.get("key"));
         if (token == null || key == null) {
@@ -492,7 +534,7 @@ public final class LinkedServers {
         }
         Row server = Models.get(LinkedServerModel.class).createEmptyRow();
         server.set(LinkedServerModel.ID, id);
-        server.set(LinkedServerModel.NAME, trimmed);
+        server.set(LinkedServerModel.NAME, name);
         server.set(LinkedServerModel.ROLE, LinkRole.MANAGES.token());
         server.set(LinkedServerModel.BASE_URL, baseUrl);
         server.set(LinkedServerModel.LINK_KEY, key);
@@ -555,6 +597,7 @@ public final class LinkedServers {
         List<CompletableFuture<Boolean>> checks = new ArrayList<>();
         for (Row row : all()) {
             if (stopsSending(row)) {
+                undoUnconfirmed(row, null);
                 continue;
             }
             CompletableFuture<Void> started;
@@ -585,12 +628,13 @@ public final class LinkedServers {
 
     /**
      * Asks one linked server who answers at its address and writes what came back; asks nothing of one another
-     * database answers for.
+     * database answers for. An answer confirms an unconfirmed link; a failure may undo one ({@link #undoUnconfirmed}).
      *
-     * @return the row as it stands after the call
+     * @return the row as it stands after the call; the row as read when the call undid the link
      */
     public static @NonNull Row check(@NonNull Row row) {
         if (stopsSending(row)) {
+            undoUnconfirmed(row, null);
             return row;
         }
         UUID id = row.get(LinkedServerModel.ID);
@@ -598,12 +642,56 @@ public final class LinkedServers {
             row.get(LinkedServerModel.LINK_KEY));
         LinkFailure failure = failureOf(row, answer);
         if (failure == null) {
+            confirmed(row);
             answered(row, ((LinkCalls.Answered) answer).body());
-        } else {
+        } else if (!undoUnconfirmed(row, failure)) {
             failed(row, failure);
         }
         Row now = byId(id);
         return now == null ? row : now;
+    }
+
+    /**
+     * Confirms a link the other side proved it holds (on the joining side: its master asked with its key; on either
+     * side: the other answered this server's key); a link confirmed before stays as it was.
+     *
+     * @return whether the link stands, confirmed; false once this side undid it, so its key is answered as unknown
+     */
+    public static boolean confirmed(@NonNull Row row) {
+        if (row.get(LinkedServerModel.CONFIRMED_AT) != null) {
+            return true;
+        }
+        if (write(row).and(LinkedServerModel.CONFIRMED_AT.isNull()).assign(LinkedServerModel.CONFIRMED_AT,
+                Now.instant()).updateAll() > 0) {
+            return true;
+        }
+        Row now = byId(row.get(LinkedServerModel.ID));
+        return now != null && now.get(LinkedServerModel.CONFIRMED_AT) != null;
+    }
+
+    /**
+     * Undoes a link that was never confirmed and cannot be any more: on the joining side once its join is older than
+     * {@link #CONFIRM_WITHIN} and its check failed (or nothing is sent there); on the master's side when the other side
+     * refuses its key, as it does once it undid the join or never kept it.
+     *
+     * @param failure why the check failed; null for a server nothing is sent to
+     * @return whether the link was undone
+     */
+    private static boolean undoUnconfirmed(@NonNull Row row, @Nullable LinkFailure failure) {
+        if (row.get(LinkedServerModel.CONFIRMED_AT) != null) {
+            return false;
+        }
+        Instant made = Objects.requireNonNullElse(row.get(LinkedServerModel.CREATED_AT), Instant.EPOCH);
+        boolean undone = switch (roleOf(row)) {
+            case MANAGED_BY -> !Now.instant().isBefore(made.plus(CONFIRM_WITHIN));
+            case MANAGES -> failure == LinkFailure.REFUSED;
+            case null -> false;
+        };
+        if (!undone || !forget(row, true)) {
+            return false;
+        }
+        Blast.log("CLUSTER: the link with", row.get(LinkedServerModel.NAME), "was never confirmed and is undone");
+        return true;
     }
 
     /** @return why the call failed, null when the server that joined answered */
@@ -712,13 +800,29 @@ public final class LinkedServers {
      * this server's code numbers to its own sequence again (ClusterCodes.left).
      */
     private static void forget(@NonNull Row row) {
+        forget(row, false);
+    }
+
+    /**
+     * {@link #forget(Row)}, of a row still unconfirmed alone when asked: a confirmation that won the race keeps it.
+     *
+     * @return whether the row was removed
+     */
+    private static boolean forget(@NonNull Row row, boolean onlyUnconfirmed) {
         UUID id = row.get(LinkedServerModel.ID);
-        Models.get(LinkedServerModel.class).getResolvedDatasource().withTransaction(transaction -> {
-            Models.get(LinkedServerModel.class).find().where(LinkedServerModel.ID.eq(id)).delete();
+        return Models.get(LinkedServerModel.class).getResolvedDatasource().inTransaction(() -> {
+            QueryBuilder<Row> rows = Models.get(LinkedServerModel.class).find().where(LinkedServerModel.ID.eq(id));
+            if (onlyUnconfirmed) {
+                rows = rows.and(LinkedServerModel.CONFIRMED_AT.isNull());
+            }
+            if (rows.delete() == 0) {
+                return false;
+            }
             ClusterRecords.forget(id);
             if (roleOf(row) == LinkRole.MANAGED_BY) {
                 ClusterCodes.left();
             }
+            return true;
         });
     }
 

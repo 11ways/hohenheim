@@ -83,9 +83,9 @@ class HostDiskAttentionTest {
                 assertThat(hosts).as("step 4: the full host errs, the warm one warns, nothing else")
                     .containsExactlyInAnyOrder(
                         "error Disk almost full on disk-full | 96% in use, 4 GB free of 100 GB. " + ADVICE
-                            + " -> /admin/servers/" + full + "/open",
+                            + " -> /admin/hosts/" + full + "/open",
                         "warning Disk almost full on disk-warm | 87% in use, 13 GB free of 100 GB. " + ADVICE
-                            + " -> /admin/servers/" + warm + "/open");
+                            + " -> /admin/hosts/" + warm + "/open");
 
                 // 5. Without host workloads the hosts' disks are not this installation's to watch.
                 assertThat(raised(false, store -> new DiskSpace(100 * GIB, 50 * GIB), new ArrayList<>()))
@@ -99,7 +99,7 @@ class HostDiskAttentionTest {
                     .as("step 6: the unmeasured controller says nothing, the full local host still errs")
                     .filteredOn(item -> item.contains(" on disk-local") || item.contains("The disk holding"))
                     .containsExactly("error Disk almost full on disk-local | 98% in use, 2 GB free of 100 GB. "
-                        + ADVICE + " -> /admin/servers/" + local + "/open");
+                        + ADVICE + " -> /admin/hosts/" + local + "/open");
             } finally {
                 for (int id : made) {
                     HardDeletes.byId(Models.get(HostModel.class), id);

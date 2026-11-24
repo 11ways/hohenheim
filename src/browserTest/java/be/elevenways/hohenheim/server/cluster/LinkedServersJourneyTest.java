@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.cluster.JoinRefusal;
 import be.elevenways.hohenheim.cluster.LinkRole;
 import be.elevenways.hohenheim.cluster.LinkState;
 import be.elevenways.hohenheim.instance.InstanceVariableOperations;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.LinkedServerModel;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
@@ -118,10 +119,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  * Two real Hohenheims linked end to end: this JVM's served app is the master Robbedoes, a forked JVM is Kuifje; they
  * join with a one-time code, check each other, alert past the outage grace when one stops and again when it answers,
  * refuse another database at the address, part with and without the other side answering, make one link at a time,
- * and refuse what the one-master rule and the join code forbid; a sweep asks silent servers at the same time. The
- * master keeps its own record of what Kuifje has, its rows read a page at a time over the link. Kuifje takes its
- * code numbers from the master: joining renumbers it, and it makes things from its blocks while the master is silent.
- *
+ * undo a join whose confirmation never came on both sides by themselves, and refuse what the one-master rule and the
+ * join code forbid; a sweep asks silent servers at the same time. The master keeps its own record of what Kuifje has,
+ * its rows read a page at a time over the link. Kuifje takes its code numbers from the master: joining renumbers it,
+ * and it makes things from its blocks while the master is silent.
  * AIDEV-NOTE: each side reaches the other the way production does, an https call through its one pinned fetcher:
  * the other's host name is an OutboundFixture TLS stub routed to a TlsRelay in front of the other's plain port. Time
  * is moved (Now.setOffset), never waited for. Alerts are counted at a webhook channel (inline delivery), as
@@ -392,7 +393,7 @@ class LinkedServersJourneyTest {
             //    presenting its own valid key to the master's generations is 403. Changed and codes answer only a
             //    server the called one manages: the master presenting its valid key to Kuifje's is 403.
             String cookie = after("session ", kuifje.ask("session"));
-            String panel = "/admin/" + HohenheimSlugs.LINKED_SERVERS;
+            String panel = "/admin/" + HohenheimSlugs.SERVERS;
             assertThat(statusAtKuifje(kuifje, panel, cookie, false)).as("step 7: the cookie signs the administrator in")
                 .isEqualTo(200);
             assertThat(statusAtKuifje(kuifje, panel, null, false)).as("step 7: nobody is signed in without it")
@@ -888,20 +889,81 @@ class LinkedServersJourneyTest {
                 .startsWith("rows Robbedoes|managed_by|").doesNotContain(";");
             assertThat(remove(only())).isEqualTo(LinkedServers.Removal.LEFT.token());
 
-            // 10. Refusals, each in words: a second master, a managed server adding one, a master getting a master,
+            // 10. The answer of a join is lost on its way back (the master's relay cuts it off): Kuifje committed the
+            //     link, the master holds none and says Kuifje did not answer. Kuifje says it is joining, not
+            //     confirmed, and a refused check inside the window keeps it; past the window its next check undoes
+            //     the join by itself: no master, its own numbering again, the app's new code kept and its old
+            //     spelling still naming it, the master's grant void. A fresh code then joins again, confirmed at once.
+            awaitSyncs();
+            String[] lostApp = after("app ", kuifje.ask("app lost-answer-app")).split(" ");
+            String lost = codeOf(kuifje.ask("offer"));
+            relay.dropAnswers(true);
+            try {
+                assertThat(refusedAdd(lost)).as("step 10: the master heard no answer")
+                    .startsWith(CHILD_ADDRESS + " did not answer.");
+            } finally {
+                relay.dropAnswers(false);
+            }
+            assertThat(LinkedServers.all()).as("step 10: the master holds no link").isEmpty();
+            String joining = "rows Robbedoes|managed_by|" + LinkState.JOINING.token() + "|";
+            assertThat(kuifje.ask("rows")).as("step 10: Kuifje is joining, not confirmed").startsWith(joining);
+            String renumbered = after("code ", kuifje.ask("code " + InstanceModel.MODEL_ID + " " + lostApp[0]));
+            assertThat(renumbered).as("step 10: the join renumbered the app").isNotEqualTo(lostApp[1]);
+            assertThat(voidGrantHolds(renumbered)).as("step 10: in a grant the master never put in force").isTrue();
+            assertThat(kuifje.ask("probe")).as("step 10: refused inside the window, it stays joining")
+                .startsWith(joining);
+            assertThat(kuifje.ask("offset 6")).isEqualTo("ok");
+            assertThat(kuifje.ask("probe")).as("step 10: past the window Kuifje undoes the join").isEqualTo("rows -");
+            assertThat(kuifje.ask("offset 0")).isEqualTo("ok");
+            assertThat(after("code ", kuifje.ask("code " + InstanceModel.MODEL_ID + " " + lostApp[0])))
+                .as("step 10: the app keeps its new code").isEqualTo(renumbered);
+            assertThat(kuifje.ask("key-of " + InstanceModel.MODEL_ID + " " + lostApp[1]))
+                .as("step 10: its old spelling still names it").isEqualTo("key " + lostApp[0]);
+            assertThat(CodeHomes.peerOf(renumbered)).as("step 10: its code lives on no server here").isNull();
+            assertThat(add(codeOf(kuifje.ask("offer")))).as("step 10: a fresh code joins again").isEqualTo("Kuifje");
+            assertThat(stateOf(only())).as("step 10: confirmed on the master").isEqualTo(LinkState.REACHABLE);
+            assertThat(kuifje.ask("rows")).as("step 10: and on Kuifje")
+                .startsWith("rows Robbedoes|managed_by|reachable|");
+            assertThat(remove(only())).isEqualTo(LinkedServers.Removal.LEFT.token());
+
+            // 11. The master records the link and stops before its confirming call (the add's commit alone, as a
+            //     master that stopped right after it leaves it), and Kuifje cannot reach it: both sides say joining.
+            //     Past the window Kuifje undoes its join; the master, reaching Kuifje again, is refused and forgets
+            //     its unconfirmed row. Neither side is left linked alone, and nobody repaired anything.
+            awaitSyncs();
+            UUID heldId = Uuids.v7();
+            String heldKey = SecureTokens.randomToken(32);
+            LinkCalls.Answered held = (LinkCalls.Answered) LinkCalls.join(CHILD_ADDRESS,
+                joinBody(codeOf(kuifje.ask("offer")), heldId, heldKey));
+            assertThat(held.status()).as("step 11: Kuifje took the join").isEqualTo(200);
+            assertThat(kuifje.ask("cut")).isEqualTo("ok");
+            LinkedServers.recorded(heldId, "Kuifje", CHILD_ADDRESS, heldKey, held.body());
+            assertThat(stateOf(only())).as("step 11: the master's row is not confirmed").isEqualTo(LinkState.JOINING);
+            assertThat(kuifje.ask("rows")).as("step 11: nor Kuifje's").startsWith(joining);
+            assertThat(kuifje.ask("offset 6")).isEqualTo("ok");
+            assertThat(kuifje.ask("probe")).as("step 11: past the window, its master out of reach, Kuifje undoes it")
+                .isEqualTo("rows -");
+            assertThat(kuifje.ask("offset 0")).isEqualTo("ok");
+            assertThat(kuifje.ask("mend")).isEqualTo("ok");
+            awaitSyncs();
+            LinkedServers.sweep();
+            assertThat(LinkedServers.all()).as("step 11: refused by Kuifje, the master forgets its unconfirmed row")
+                .isEmpty();
+
+            // 12. Refusals, each in words: a second master, a managed server adding one, a master getting a master,
             //     then a wrong, a used and an expired code, and the spent failure budget.
             String used = codeOf(kuifje.ask("offer"));
             add(used);
-            assertThat(kuifje.ask("offer")).as("step 10: a managed server gets no second master")
+            assertThat(kuifje.ask("offer")).as("step 12: a managed server gets no second master")
                 .isEqualTo("refused " + english(JoinRefusal.HAS_MASTER.message()));
             assertThat(kuifje.ask("add Gaston https://gaston.cluster.test WWWW-WWWW-WWWW"))
-                .as("step 10: a managed server adds no server")
+                .as("step 12: a managed server adds no server")
                 .isEqualTo("refused This server is managed by Robbedoes; a managed server manages no other servers.");
             // An operation a fact keeps from running is offered dead with its reason, and refused in those words.
             DomainRefusal mastered = assertThrows(DomainRefusal.class, () -> OperationPipeline.invoke(
                 OperationRequest.of(LinkedServerParts.OFFER_JOIN, CmsPlacementSurface.ADMIN_ACTION)
                     .caller(TestAccessContexts.allAllowed())));
-            assertThat(english(mastered.shown())).as("step 10: a master gets no master")
+            assertThat(english(mastered.shown())).as("step 12: a master gets no master")
                 .isEqualTo(english(JoinRefusal.MANAGES_OTHERS.message()));
             remove(only());
             // The master's own address is refused before anything is sent.
@@ -910,24 +972,24 @@ class LinkedServersJourneyTest {
                     .caller(TestAccessContexts.allAllowed())
                     .form(Map.of("name", "Self", "address", "https://" + MASTER_HOST,
                         "join_code", "WWWW-WWWW-WWWW"))))))
-                .as("step 10: this server's own address")
+                .as("step 12: this server's own address")
                 .isEqualTo("This is this server's own address. Enter the address of the other Hohenheim.");
 
             // The expired code first, then Kuifje's clock stays ahead: the failure budget only ever moves forward.
             String late = codeOf(kuifje.ask("offer"));
             assertThat(kuifje.ask("offset 11")).isEqualTo("ok");
-            assertThat(refusedAdd(late)).as("step 10: an expired code")
+            assertThat(refusedAdd(late)).as("step 12: an expired code")
                 .isEqualTo(english(JoinRefusal.EXPIRED.message()));
-            assertThat(refusedAdd("WWWW-WWWW-WWWW")).as("step 10: a wrong code")
+            assertThat(refusedAdd("WWWW-WWWW-WWWW")).as("step 12: a wrong code")
                 .isEqualTo(english(JoinRefusal.NO_SUCH_CODE.message()));
-            assertThat(refusedAdd(used)).as("step 10: a used code")
+            assertThat(refusedAdd(used)).as("step 12: a used code")
                 .isEqualTo(english(JoinRefusal.NO_SUCH_CODE.message()));
             refusedAdd("WWWW-WWWW-WWWX");
             refusedAdd("WWWW-WWWW-WWWY");
             String right = codeOf(kuifje.ask("offer"));
-            assertThat(refusedAdd(right)).as("step 10: the budget is spent, so even the right code is not looked at")
+            assertThat(refusedAdd(right)).as("step 12: the budget is spent, so even the right code is not looked at")
                 .isEqualTo(english(JoinRefusal.TOO_MANY_TRIES.message()));
-            assertThat(LinkedServers.all()).as("step 10: no refused join linked anything").isEmpty();
+            assertThat(LinkedServers.all()).as("step 12: no refused join linked anything").isEmpty();
         } finally {
             kuifje.close();
         }
@@ -992,7 +1054,7 @@ class LinkedServersJourneyTest {
         }
     }
 
-    /** Plants a server this master manages at {@code address}, as an add leaves it before its first check. */
+    /** Plants a confirmed server this master manages at {@code address}, as an add leaves it before its first check. */
     private static void plant(String name, String address) {
         Row row = Models.get(LinkedServerModel.class).createEmptyRow();
         row.set(LinkedServerModel.ID, Uuids.v7());
@@ -1001,6 +1063,7 @@ class LinkedServersJourneyTest {
         row.set(LinkedServerModel.BASE_URL, address);
         row.set(LinkedServerModel.LINK_KEY, SecureTokens.randomToken(32));
         row.set(LinkedServerModel.REMOTE_TOKEN, "silent-" + name);
+        row.set(LinkedServerModel.CONFIRMED_AT, Now.instant());
         Models.get(LinkedServerModel.class).insert(row, Change.PLAIN);
     }
 
@@ -1042,7 +1105,11 @@ class LinkedServersJourneyTest {
      *         code numbers
      */
     private static Map<String, Object> joinBody(String code) {
-        String key = SecureTokens.randomToken(32);
+        return joinBody(code, Uuids.v7(), SecureTokens.randomToken(32));
+    }
+
+    /** @return a join's body as Robbedoes sends it for the row {@code id}, Kuifje to present {@code key} to it */
+    private static Map<String, Object> joinBody(String code, UUID id, String key) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("code", code);
         body.put("name", "Robbedoes");
@@ -1050,7 +1117,7 @@ class LinkedServersJourneyTest {
         body.put("token", ControllerIdentity.token());
         body.put("build", LinkedServers.ownVersion());
         body.put("key", key);
-        body.put("ticket", ClusterCodes.ticket(Uuids.v7(), key));
+        body.put("ticket", ClusterCodes.ticket(id, key));
         return body;
     }
 

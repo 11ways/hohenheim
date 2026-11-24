@@ -15,7 +15,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  * key to hand {@code SeedContext.ensure}, and {@link HostModel#localHostId()} IS the
  * must-exist create-if-missing derivation (re-run every boot, so a lost row comes back).
  * It used to be reached from {@code ServerResource.listRows} and {@code HostOptions
- * .refresh}, which made a GET render of /admin/servers perform an INSERT with full write
+ * .refresh}, which made a GET render of /admin/hosts perform an INSERT with full write
  * hooks; the form path had already been named as the same defect once (see
  * {@link HostService#clientFor}). Populating the server-name registry here too means the
  * first render finds it fresh instead of repopulating shared state mid-request.

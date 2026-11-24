@@ -339,7 +339,7 @@ class AdminUiScreenshotTest extends HohenheimTestBase {
         capture("/admin/sites/new?upstream_kind=hohenheim%3Ainstance&instance_id="
             + applicationId, "site-create-expose-prefill");
         capture("/admin/runtime-images", "runtime-images-list");
-        capture("/admin/servers/" + dockerHostId + "/page/overview", "host-overview");
+        capture("/admin/hosts/" + dockerHostId + "/page/overview", "host-overview");
         capture("/admin/dashboard", "dashboard");
         capture("/admin/" + ActivitySources.ENTRY_SLUG, "activity-log");
         capture("/admin/" + SettingsPage.DEFAULT_SLUG, "settings");

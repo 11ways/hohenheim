@@ -167,7 +167,7 @@ final class LinkedServerPage {
             Long count = counts.get(model.getModelId());
             if (count != null && count > 0) {
                 placed.add(PlacedKind.of(panel, walk, model, new RememberedKind(kindWords(model, locales, resolver),
-                    count, CmsRoutes.subpage(panelSlug, HohenheimSlugs.LINKED_SERVERS, key, Remembered.SLUG)
+                    count, CmsRoutes.subpage(panelSlug, HohenheimSlugs.SERVERS, key, Remembered.SLUG)
                         .with(KIND, model.getModelId().toString()))));
             }
         }
@@ -312,7 +312,7 @@ final class LinkedServerPage {
             }
             String panelSlug = CmsSupport.panelSlug(conduit);
             RouteTarget next = kept.next() == null ? null
-                : CmsRoutes.subpage(panelSlug, HohenheimSlugs.LINKED_SERVERS, key, SLUG)
+                : CmsRoutes.subpage(panelSlug, HohenheimSlugs.SERVERS, key, SLUG)
                     .with(KIND, model.getModelId().toString()).with(AFTER, kept.next());
             String heading = HohenheimMicrocopy.LINKED_SERVER.of("linked_server_remembered_heading")
                 .withArg("kind", kindWords(model, locales, resolver)).withArg("own", LinkedServers.ownName())
@@ -320,7 +320,7 @@ final class LinkedServerPage {
             Map<String, Object> vars = new HashMap<>();
             vars.put("title", heading);
             vars.put("page", new RememberedNames(heading, names, next,
-                CmsRoutes.subpage(panelSlug, HohenheimSlugs.LINKED_SERVERS, key, RecordOverview.SLUG)));
+                CmsRoutes.subpage(panelSlug, HohenheimSlugs.SERVERS, key, RecordOverview.SLUG)));
             vars.put("head", this.recordHead(conduit));
             return new RenderTemplateResult(HohenheimTemplateIds.LINKED_SERVER_REMEMBERED, vars);
         }
